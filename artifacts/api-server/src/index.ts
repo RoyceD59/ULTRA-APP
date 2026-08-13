@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
+import { sendViaResend } from "./lib/resend.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -293,7 +294,61 @@ async function applyStartupMigrations(): Promise<void> {
   logger.info("Startup migration: team_library_docs table ensured");
 }
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+async function checkProductionSecurityConfig(): Promise<void> {
+  if (process.env["NODE_ENV"] !== "production") return;
+
+  // Check env-var first (fast path — no DB hit required)
+  const hasEnvSecret = Boolean(process.env["MPESA_WEBHOOK_SECRET"]);
+  if (hasEnvSecret) return;
+
+  // Check DB (admin may have set the secret from the admin panel)
+  let hasDbSecret = false;
+  try {
+    const row = await pool.query<{ mpesa_webhook_secret_enc: string | null }>(
+      "SELECT mpesa_webhook_secret_enc FROM team_settings WHERE id = 'singleton' LIMIT 1"
+    );
+    hasDbSecret = Boolean(row.rows[0]?.mpesa_webhook_secret_enc);
+  } catch {
+    // Table may not exist on a brand-new deployment; the migration above creates it.
+    // If the query fails, treat it as "not set" and send the alert anyway.
+  }
+
+  if (hasDbSecret) return;
+
+  // Neither env var nor DB secret is configured — alert the team.
+  logger.warn(
+    "SECURITY WARNING: MPESA_WEBHOOK_SECRET is not set in production. " +
+    "Sending alert email to the team inbox."
+  );
+
+  sendViaResend({
+    from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
+    to:      "info@ucfilters.com",
+    subject: "⚠️ Security misconfiguration: M-Pesa webhook secret is missing",
+    text: [
+      "The Ultra Clear API server has started in production mode without an",
+      "M-Pesa webhook secret configured.",
+      "",
+      "Impact: Any internet client can POST a forged 'paid' callback to",
+      "  /api/payments/mpesa/callback",
+      "and trigger fraudulent order fulfilment without making a real payment.",
+      "",
+      "Action required:",
+      "  1. Log in to the admin panel (Admin → Payment Settings).",
+      "  2. Set the M-Pesa Webhook Secret to a strong random string.",
+      "     You can generate one with: openssl rand -hex 32",
+      "  3. The new secret takes effect immediately — no server restart needed.",
+      "",
+      "Alternatively, set the MPESA_WEBHOOK_SECRET environment variable and",
+      "redeploy the server.",
+      "",
+      "This alert fires once per server startup while the secret remains unset.",
+    ].join("\n"),
+    meta: { template: "security_misconfiguration_alert" },
+  }).catch((err) => {
+    logger.error({ err }, "Failed to send security misconfiguration alert email");
+  });
+}
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -309,7 +364,12 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 applyStartupMigrations()
-  .then(() => {
+  .then(async () => {
+    // Fire-and-forget — a failure here must not prevent the server from starting.
+    checkProductionSecurityConfig().catch((err) => {
+      logger.error({ err }, "Security config check failed");
+    });
+
     const server = app.listen(port, (err?: Error) => {
       if (err) {
         logger.error({ err }, "Error listening on port");

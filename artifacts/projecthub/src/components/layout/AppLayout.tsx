@@ -4,6 +4,7 @@ import {
   Bot, Leaf, MessageSquareOff, Contact2, BellRing, Activity,
   Webhook, ShoppingBag, LogOut, KeyRound, Loader2, Shield,
   UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets, BookOpen,
+  AlertTriangle, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -24,7 +25,6 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-
 const ALL_NAVIGATION = [
   { name: "Dashboard",        href: "/",                slug: "dashboard"       as PageSlug, icon: LayoutDashboard },
   { name: "Projects",         href: "/projects",        slug: "projects"        as PageSlug, icon: FolderKanban },
@@ -110,8 +110,38 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
-// ─── Recovery order count hook ────────────────────────────────────────────────
+/**
+ * Checks whether any critical security settings are missing.
+ * Only runs for admin users; silently returns false for non-admins.
+ * Re-fetches every 60 s so the banner disappears as soon as the admin fixes the issue.
+ */
+function useSecurityWarnings(): { mpesaSecretMissing: boolean } {
+  const [mpesaSecretMissing, setMpesaSecretMissing] = useState(false);
 
+  useEffect(() => {
+    if (!isTeamAdmin()) return;
+
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+    function check() {
+      fetch(`${base}/api/admin/payment-settings`, {
+        headers: { Authorization: `Bearer ${getTeamToken() ?? ""}` },
+      })
+        .then(r => r.ok ? r.json() as Promise<{ mpesaWebhookSecret: { source: string } }> : Promise.resolve(null))
+        .then(data => {
+          if (data) setMpesaSecretMissing(data.mpesaWebhookSecret?.source === "none");
+        })
+        .catch(() => { /* non-critical */ });
+    }
+
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { mpesaSecretMissing };
+}
 /** Fetches the count of unresolved webhook recovery orders for the nav badge.
  *  Silently returns 0 on any error (the badge is a convenience, not critical). */
 function useRecoveryOrderCount(): number {
@@ -145,9 +175,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const [changePassOpen, setChangePassOpen] = useState(false);
+  const [securityBannerDismissed, setSecurityBannerDismissed] = useState(false);
   const admin = isTeamAdmin();
   const user = getTeamUser();
   const recoveryCount = useRecoveryOrderCount();
+  const { mpesaSecretMissing } = useSecurityWarnings();
+  const showSecurityBanner = admin && mpesaSecretMissing && !securityBannerDismissed;
 
   // Filter nav to pages the current user can access
   const navigation = ALL_NAVIGATION.filter((item) => canView(item.slug));
@@ -289,6 +322,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {showSecurityBanner && (
+          <SecurityMisconfigBanner onDismiss={() => setSecurityBannerDismissed(true)} />
+        )}
         <header className="h-16 border-b bg-background/80 backdrop-blur-md flex items-center justify-between px-8 flex-shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-4" />
           <div className="flex items-center gap-2">
@@ -312,6 +348,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <ChangePasswordDialog open={changePassOpen} onClose={() => setChangePassOpen(false)} />
+    </div>
+  );
+}
+
+function SecurityMisconfigBanner({
+  onDismiss,
+}: {
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-destructive/10 border-b border-destructive/20 text-sm text-destructive">
+      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+      <span className="flex-1">
+        <strong>Security misconfiguration:</strong> The M-Pesa webhook secret is not set.
+        Forged payment callbacks could trigger fraudulent order fulfilment.{" "}
+        <Link href="/admin/payment-settings" className="underline font-medium hover:opacity-80">
+          Fix in Payment Settings →
+        </Link>
+      </span>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss security warning"
+        className="flex-shrink-0 p-0.5 rounded hover:bg-destructive/20 transition-colors"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
