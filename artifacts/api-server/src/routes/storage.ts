@@ -12,13 +12,28 @@ import {
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-// ─── Upload constraints ───────────────────────────────────────────────────────
+// ─── Upload allowlist ─────────────────────────────────────────────────────────
+// Only these MIME types may receive a presigned PUT URL. Everything else is
+// rejected before a URL is minted so unsafe files (executables, HTML, SVG with
+// XSS payloads, etc.) never land in the storage bucket.
 const IMAGE_TYPES = new Set([
-  "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  // iOS devices often produce HEIC/HEIF; safe to allow, rejected at serve time
+  // if not image/* (forced to octet-stream attachment).
+  "image/heic",
+  "image/heif",
 ]);
 const VIDEO_TYPES = new Set([
-  "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
+  "video/mp4",
+  "video/quicktime",
+  // Android devices commonly produce webm/3gpp; both are safe container formats.
+  "video/webm",
+  "video/3gpp",
 ]);
+const PDF_TYPES = new Set(["application/pdf"]);
 
 /**
  * POST /api/uc/uploads/request-url
@@ -45,14 +60,17 @@ router.post("/uc/uploads/request-url", async (req: Request, res: Response): Prom
 
   const isImage = IMAGE_TYPES.has(contentType);
   const isVideo = VIDEO_TYPES.has(contentType);
-  if (!isImage && !isVideo) {
-    res.status(400).json({ error: `Unsupported file type: ${contentType}` });
+  const isPdf   = PDF_TYPES.has(contentType);
+  if (!isImage && !isVideo && !isPdf) {
+    res.status(400).json({
+      error: `File type not allowed: ${contentType}. Accepted types are images (JPEG, PNG, WebP, GIF), videos (MP4, QuickTime), and PDFs.`,
+    });
     return;
   }
   const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
   if (size <= 0 || size > maxBytes) {
     res.status(400).json({
-      error: `File too large — ${isVideo ? "videos" : "images"} must be under ${Math.round(maxBytes / 1024 / 1024)} MB`,
+      error: `File too large — ${isVideo ? "videos" : "images and PDFs"} must be under ${Math.round(maxBytes / 1024 / 1024)} MB`,
     });
     return;
   }
@@ -60,7 +78,7 @@ router.post("/uc/uploads/request-url", async (req: Request, res: Response): Prom
   try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-    res.json({ uploadURL, objectPath, kind: isVideo ? "video" : "photo" });
+    res.json({ uploadURL, objectPath, kind: isVideo ? "video" : isPdf ? "document" : "photo" });
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
