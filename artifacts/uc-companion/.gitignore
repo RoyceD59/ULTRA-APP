@@ -3,6 +3,13 @@
 # dependencies
 node_modules/
 
+# Un-ignore test doubles in hooks/node_modules/.
+# Node.js resolves these first for files in hooks/ (nearest-node_modules rule),
+# giving the test runner and the module-under-test the same stub instance.
+# Metro never sees them: hooks/node_modules is in metro.config.js blockList.
+!hooks/node_modules/
+!hooks/node_modules/**
+
 # Expo
 .expo/
 dist/
