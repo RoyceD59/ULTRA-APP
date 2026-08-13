@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, Users, Bell,
   Bot, Leaf, MessageSquareOff, Contact2, BellRing, Activity,
   Webhook, ShoppingBag, LogOut, KeyRound, Loader2, Shield,
-  UserCog, ChevronDown, BellOff, CreditCard,
+  UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,6 +38,8 @@ const ALL_NAVIGATION = [
   { name: "System Status",    href: "/system",          slug: "system"          as PageSlug, icon: Activity },
   { name: "Webhook Tester",   href: "/webhook",         slug: "webhook"         as PageSlug, icon: Webhook },
   { name: "Orders",           href: "/orders",          slug: "orders"          as PageSlug, icon: ShoppingBag },
+  { name: "Tickets",          href: "/tickets",         slug: "tickets"         as PageSlug, icon: Wrench },
+  { name: "Water Tests",      href: "/water-tests",     slug: "water-tests"     as PageSlug, icon: Droplets },
   { name: "Notif. Failures",  href: "/uc-notifications", slug: "uc-notifications" as PageSlug, icon: BellOff },
 ];
 

@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   ShoppingBag, AlertTriangle, Package, RefreshCw, Lock, AlertCircle,
-  LogOut, Copy, Check, ExternalLink, Filter, X,
+  LogOut, Copy, Check, ExternalLink, Filter, X, Download,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
@@ -268,6 +268,35 @@ function OrderCard({ order }: { order: AdminOrder }) {
 
 function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [recoveryOnly, setRecoveryOnly] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  async function downloadCsv() {
+    setExporting(true);
+    try {
+      const res = await fetch(`${BASE}/api/uc/admin/orders.csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        onLogout();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob    = await res.blob();
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const anchor  = document.createElement("a");
+      anchor.href     = URL.createObjectURL(blob);
+      anchor.download = `orders-${dateStr}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(anchor.href);
+    } catch {
+      // silent — button re-enables
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const { data: orders, isLoading, isError, refetch, isFetching } = useQuery<AdminOrder[]>({
     queryKey: ["admin-orders", token],
@@ -327,6 +356,16 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
                 {recoveryOrders.length}
               </span>
             )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={downloadCsv}
+            disabled={exporting || isLoading}
+            title="Download all orders as CSV"
+          >
+            <Download className={`w-4 h-4 mr-2 ${exporting ? "animate-pulse" : ""}`} />
+            {exporting ? "Downloading…" : "Download CSV"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />

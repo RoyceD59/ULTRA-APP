@@ -29,6 +29,8 @@ export const PAGES = [
   { slug: "system",           label: "System Status" },
   { slug: "webhook",          label: "Webhook Tester" },
   { slug: "orders",           label: "Orders" },
+  { slug: "tickets",          label: "Tickets" },
+  { slug: "water-tests",      label: "Water Tests" },
   { slug: "uc-notifications", label: "Notification Failures" },
 ] as const;
 
