@@ -2,12 +2,13 @@
  * Scheduled jobs for the AI Monitor and maintenance tasks.
  * - Daily 08:00 UTC: push project report to Ultra Clear AI orchestrator.
  * - Daily 02:00 UTC: prune old uc_ai_feedback rows beyond retention window.
+ * - Daily 03:00 UTC: prune old uc_notification_log rows (sent=30d, failed=90d).
  * - Daily 06:00 UTC: sync contacts from Google Sheets; alerts team on failure.
  */
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateReport, setLatestReport } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, sheetSyncsTable, membersTable, ucOrdersTable } from "@workspace/db";
+import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable } from "@workspace/db";
 import { lt, lte, desc, eq, and, or } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import { sendViaResend } from "./resend.js";
@@ -85,6 +86,62 @@ export function startScheduler() {
 
   logger.info(
     "Scheduler: daily AI feedback pruning job registered (02:00 UTC, default 90-day retention)",
+  );
+
+  // ─── Daily 03:00 UTC: prune old notification log rows ────────────────────
+  // Successful sends are pruned after UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS
+  // (default 30).  Failed rows are kept longer — UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS
+  // (default 90) — so the team has time to investigate and retry.
+  cron.schedule("0 3 * * *", async () => {
+    const successDays = Math.max(
+      1,
+      parseInt(process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"] ?? "30", 10) || 30,
+    );
+    const failureDays = Math.max(
+      1,
+      parseInt(process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"] ?? "90", 10) || 90,
+    );
+
+    const successCutoff = new Date(Date.now() - successDays * 24 * 60 * 60 * 1000);
+    const failureCutoff = new Date(Date.now() - failureDays * 24 * 60 * 60 * 1000);
+
+    logger.info(
+      { successDays, failureDays, successCutoff, failureCutoff },
+      "Scheduler: pruning old notification log rows",
+    );
+
+    try {
+      // Prune successful rows beyond the shorter retention window
+      const deletedSuccess = await db
+        .delete(ucNotificationLogTable)
+        .where(
+          and(
+            eq(ucNotificationLogTable.status, "sent"),
+            lt(ucNotificationLogTable.sentAt, successCutoff),
+          ),
+        );
+
+      // Prune failed rows beyond the longer retention window
+      const deletedFailure = await db
+        .delete(ucNotificationLogTable)
+        .where(
+          and(
+            eq(ucNotificationLogTable.status, "failed"),
+            lt(ucNotificationLogTable.sentAt, failureCutoff),
+          ),
+        );
+
+      logger.info(
+        { deletedSuccess, deletedFailure },
+        "Scheduler: notification log pruning complete",
+      );
+    } catch (err) {
+      logger.error({ err }, "Scheduler: notification log pruning failed");
+    }
+  }, { timezone: "UTC" });
+
+  logger.info(
+    "Scheduler: daily notification log pruning job registered (03:00 UTC, sent=30d / failed=90d default retention)",
   );
 
   // ─── Daily 06:00 UTC: sync contacts from Google Sheets ───────────────────
