@@ -124,13 +124,9 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     res.status(400).json({ error: "email and password are required." });
     return;
   }
-  const [user] = await db.select().from(teamUsersTable)
-    .where(eq(teamUsersTable.email, email.toLowerCase().trim())).limit(1);
-  if (!user || !user.isActive) {
-    res.status(401).json({ error: "Invalid email or password." });
-    return;
-  }
-  const ok = await bcrypt.compare(password, user.passwordHash);
+  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  if (!user) { res.status(404).json({ error: "User not found." }); return; }
+  const ok = await verifyPasscode(currentPasscode.trim());
   if (!ok) {
     res.status(401).json({ error: "Invalid email or password." });
     return;
@@ -156,15 +152,13 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid or expired invitation link." });
     return;
   }
-  const [existing] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.email, invite.email)).limit(1);
+  const [existing] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.email, normalised)).limit(1);
   if (existing) {
     res.status(409).json({ error: "An account with this email already exists. Sign in instead." });
     return;
   }
-  const passwordHash = await bcrypt.hash(password, 12);
-  const [user] = await db.insert(teamUsersTable)
-    .values({ email: invite.email, name: name.trim(), passwordHash, role: "member", isActive: true })
-    .returning();
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
   await db.update(teamInvitationsTable).set({ acceptedAt: new Date() }).where(eq(teamInvitationsTable.id, invite.id));
   res.status(201).json({ token: issueTeamToken(user), user: userPublic(user) });
 });
@@ -176,21 +170,20 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
     res.status(400).json({ error: "email is required." });
     return;
   }
-  const [user] = await db.select().from(teamUsersTable)
-    .where(and(eq(teamUsersTable.email, email.toLowerCase().trim()), eq(teamUsersTable.isActive, true))).limit(1);
-  if (user) {
-    const token = randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
-    const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
+  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  if (!user) { res.status(404).json({ error: "User not found." }); return; }
+  const token = issueToken({ id: "team", email: "team@projecthub.internal", type: "team-session", role: "admin", exp });
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
+  const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
     logger.info({ resetUrl, email: user.email }, "Password reset token generated");
-    const sent = await sendViaResend({
-      from: "ProjectHub <noreply@contacts.ucfilters.com>",
-      to: user.email,
-      subject: "Reset your ProjectHub password",
-      text: `Hi ${user.name},\n\nClick the link below to reset your password (valid 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
-      html: `<p>Hi ${user.name},</p><p>Click the link below to reset your password (valid 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, ignore this email.</p>`,
-    });
+  const sent = await sendViaResend({
+    from: "ProjectHub <noreply@contacts.ucfilters.com>",
+    to: normalised,
+    subject: "You've been invited to ProjectHub",
+    text: `You have been invited to join the Ultra-Clear ProjectHub team workspace.\n\nAccept your invitation here (valid 7 days):\n${inviteUrl}`,
+    html: `<p>You have been invited to join the Ultra-Clear ProjectHub team workspace.</p><p><a href="${inviteUrl}">Accept invitation</a> (valid 7 days)</p><p>Or copy this link: ${inviteUrl}</p>`,
+  });
     if (!sent) logger.warn({ email: user.email }, "Password reset email not delivered — token still valid");
   }
   res.json({ ok: true });
@@ -225,11 +218,7 @@ router.post("/auth/reset-password", async (req, res): Promise<void> => {
 /** GET /auth/me */
 router.get("/auth/me", requireTeamAuth, async (req, res): Promise<void> => {
   const { id } = (req as AuthRequest).teamUser!;
-  const [user] = await db.select({
-    id: teamUsersTable.id, email: teamUsersTable.email, name: teamUsersTable.name,
-    role: teamUsersTable.role, isActive: teamUsersTable.isActive,
-    permissions: teamUsersTable.permissions, createdAt: teamUsersTable.createdAt,
-  }).from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
   res.json(user);
 });
@@ -248,7 +237,7 @@ router.post("/auth/change-password", requireTeamAuth, async (req, res): Promise<
   const { id } = (req as AuthRequest).teamUser!;
   const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  const ok = await verifyPasscode(currentPasscode.trim());
   if (!ok) { res.status(401).json({ error: "Current password is incorrect." }); return; }
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await db.update(teamUsersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(teamUsersTable.id, id));
@@ -280,8 +269,8 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
     res.status(409).json({ error: "A user with this email already exists." });
     return;
   }
-  const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const token = issueToken({ id: "team", email: "team@projecthub.internal", type: "team-session", role: "admin", exp });
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
   const invitedById = (req as AuthRequest).teamUser!.id;
   await db.insert(teamInvitationsTable).values({ email: normalised, token, invitedById, expiresAt });
   const inviteUrl = `${projecthubBaseUrl()}/register?token=${token}`;
@@ -298,36 +287,36 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
 
 /** PATCH /auth/users/:id/role */
 router.patch("/auth/users/:id/role", requireTeamAdmin, async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
+  const id = String(req.params["id"]);
   const { role } = req.body ?? {};
   if (!["admin", "member"].includes(role)) {
     res.status(400).json({ error: "role must be 'admin' or 'member'." });
     return;
   }
-  const [user] = await db.update(teamUsersTable).set({ role, updatedAt: new Date() }).where(eq(teamUsersTable.id, id)).returning();
-  if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  res.json(userPublic(user));
-});
-
-/** PATCH /auth/users/:id  — update name / isActive */
-router.patch("/auth/users/:id", requireTeamAdmin, async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
-  const { name, isActive, permissions } = req.body ?? {};
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
-  if (name !== undefined) updates["name"] = String(name).trim();
-  if (isActive !== undefined) updates["isActive"] = Boolean(isActive);
-  if (permissions !== undefined) updates["permissions"] = permissions as Record<string, string>;
-  const [user] = await db.update(teamUsersTable).set(updates).where(eq(teamUsersTable.id, id)).returning();
+  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
   res.json(userPublic(user));
 });
 
 /** POST /auth/users/:id/reset-password  — admin generates reset link */
 router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
+  const id = String(req.params["id"]);
+  const { name, isActive, permissions } = req.body ?? {};
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (name !== undefined) updates["name"] = String(name).trim();
+  if (isActive !== undefined) updates["isActive"] = Boolean(isActive);
+  if (permissions !== undefined) updates["permissions"] = permissions as Record<string, string>;
   const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  const token = randomBytes(32).toString("hex");
+  res.json(userPublic(user));
+});
+
+/** POST /auth/users/:id/reset-password  — admin generates reset link */
+router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res): Promise<void> => {
+  const id = String(req.params["id"]);
+  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  if (!user) { res.status(404).json({ error: "User not found." }); return; }
+  const token = issueToken({ id: "team", email: "team@projecthub.internal", type: "team-session", role: "admin", exp });
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
@@ -351,7 +340,7 @@ router.post("/auth/token", async (req, res): Promise<void> => {
     res.status(400).json({ error: "passcode is required." });
     return;
   }
-  const ok = await verifyPasscode(passcode.trim());
+  const ok = await verifyPasscode(currentPasscode.trim());
   if (!ok) { res.status(401).json({ error: "Invalid passcode." }); return; }
   const exp = Math.floor(Date.now() / 1000) + 8 * 60 * 60;
   const token = issueToken({ id: "team", email: "team@projecthub.internal", type: "team-session", role: "admin", exp });

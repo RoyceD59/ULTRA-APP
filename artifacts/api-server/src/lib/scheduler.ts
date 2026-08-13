@@ -259,9 +259,97 @@ export function startScheduler() {
   logger.info("Scheduler: stale recovery order digest job registered (07:00 UTC)");
 }
 
-// ─── Stale recovery order digest ──────────────────────────────────────────────
-// Exported so unit tests can invoke the job body directly without a cron tick.
+/**
+ * Delete notification log rows that have exceeded the configured retention window.
+ *
+ * Retention is controlled by two environment variables:
+ *   UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS  (default 30)  — rows with status='sent'
+ *   UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS  (default 90)  — rows with status='failed'
+ *
+ * Failed rows are kept longer so the team has time to investigate and retry.
+ * Existing rows are always unaffected until they age past the cutoff.
+ *
+ * @internal — exported for tests; called by the daily 03:00 UTC cron job.
+ */
+/**
+ * Parse an env-var retention value strictly.
+ *
+ * Accepts only plain positive integers expressed as a bare decimal string
+ * (e.g. "30", "90", "7").  Rejects — and falls back to `defaultDays` for:
+ *   • non-numeric strings  ("banana")
+ *   • values with suffixes ("7days")
+ *   • scientific notation  ("1e3")   — parseInt would accept these
+ *   • zero or below        ("0", "-5")
+ *
+ * This prevents accidental premature deletion of audit rows when a team member
+ * sets a typo like "7days" in their deployment environment.
+ */
+function parseRetentionDays(raw: string | undefined, defaultDays: number): number {
+  if (!raw) return defaultDays;
+  const trimmed = raw.trim();
+  // Only allow a non-empty string of ASCII digits (no sign, no dot, no exponent)
+  if (!/^\d+$/.test(trimmed)) return defaultDays;
+  const n = Number(trimmed);
+  if (!Number.isInteger(n) || n < 1) return defaultDays;
+  return n;
+}
 
+export async function runNotificationLogPruning(): Promise<{
+  deletedSuccess: number;
+  deletedFailure: number;
+}> {
+  const successDays = parseRetentionDays(
+    process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"],
+    30,
+  );
+  const failureDays = parseRetentionDays(
+    process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"],
+    90,
+  );
+
+  const successCutoff = new Date(Date.now() - successDays * 24 * 60 * 60 * 1000);
+  const failureCutoff = new Date(Date.now() - failureDays * 24 * 60 * 60 * 1000);
+
+  logger.info(
+    { successDays, failureDays, successCutoff, failureCutoff },
+    "Scheduler: pruning old notification log rows",
+  );
+
+  try {
+    // Prune successful rows beyond the shorter retention window
+    const successResult = await db
+      .delete(ucNotificationLogTable)
+      .where(
+        and(
+          eq(ucNotificationLogTable.status, "sent"),
+          lt(ucNotificationLogTable.sentAt, successCutoff),
+        ),
+      );
+
+    // Prune failed rows beyond the longer retention window
+    const failureResult = await db
+      .delete(ucNotificationLogTable)
+      .where(
+        and(
+          eq(ucNotificationLogTable.status, "failed"),
+          lt(ucNotificationLogTable.sentAt, failureCutoff),
+        ),
+      );
+
+    const deletedSuccess = (successResult as { rowCount?: number }).rowCount ?? 0;
+    const deletedFailure = (failureResult as { rowCount?: number }).rowCount ?? 0;
+
+    logger.info(
+      { deletedSuccess, deletedFailure },
+      "Scheduler: notification log pruning complete",
+    );
+
+    return { deletedSuccess, deletedFailure };
+  } catch (err) {
+    logger.error({ err }, "Scheduler: notification log pruning failed");
+    throw err;
+  }
+}
 /** @internal */
 export async function runStaleRecoveryOrderDigest(): Promise<void> {
   logger.info("Scheduler: checking for stale webhook-recovery orders");

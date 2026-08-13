@@ -131,22 +131,89 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     res.status(400).json({ error: "title, fileName, fileSize, fileType, and uploadId are required" });
     return;
   }
+
   try {
     // 1. Look up the pending slot.
     const [slot] = await db
       .select()
       .from(teamLibraryPendingUploadsTable)
-      .where(eq(teamLibraryPendingUploadsTable.id, uploadId))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+      .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId))
       .limit(1);
 
-    let gcsFile;
-    let gcsFile;
-  const allowedType = ALLOWED_MIME_PREFIXES.some((p) => fileType.startsWith(p));
-    const declaredCategory = ALLOWED_MIME_PREFIXES.find((p) => slot.declaredType.startsWith(p));
+    if (!slot) {
+      res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
+      return;
+    }
+    // 2. Ownership check.
+    if (slot.uploadedBy !== member.email) {
+      res.status(403).json({ error: "Upload slot belongs to a different user" });
+      return;
+    }
+    // 3. Consumed check.
+    if (slot.consumed) {
+      res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
+      return;
+    }
+    // 4. Expiry check.
+    if (new Date() > slot.expiresAt) {
+      res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
+      return;
+    }
 
+    // 5. Verify the object actually landed in GCS.
+    let gcsFile;
+    try {
+      gcsFile = await storage.getObjectEntityFile(slot.objectPath);
+    } catch {
+      res.status(422).json({ error: "Uploaded file not found in storage — upload may have failed" });
+      return;
+    }
+
+    // 6. Size / type guard using GCS metadata as ground truth.
+    const [gcsMeta] = await gcsFile.getMetadata();
+    const actualContentType = String((gcsMeta as Record<string, unknown>)["contentType"] ?? "");
+    const actualSize = Number((gcsMeta as Record<string, unknown>)["size"] ?? 0);
+
+    if (actualSize > MAX_FILE_BYTES) {
+      res.status(422).json({ error: "Uploaded file exceeds maximum allowed size" });
+      return;
+    }
+    const allowedType = ALLOWED_MIME_PREFIXES.some((p) => fileType.startsWith(p));
+    if (!allowedType) {
+      res.status(422).json({ error: "File type not allowed" });
+      return;
+    }
+    // Ensure the declared MIME category matches GCS's detected one (coarse check).
+    const declaredCategory = ALLOWED_MIME_PREFIXES.find((p) => slot.declaredType.startsWith(p));
     const actualCategory   = ALLOWED_MIME_PREFIXES.find((p) => actualContentType.startsWith(p));
-  const docId = String(req.params["id"] ?? "");
-    const [saved] = await db.select().from(teamLibraryDocsTable).where(eq(teamLibraryDocsTable.id as any, docId));
+    if (declaredCategory && actualCategory && declaredCategory !== actualCategory) {
+      res.status(422).json({ error: "File MIME type does not match the declared type" });
+      return;
+    }
+
+    // 7. Promote to docs table and mark slot consumed.
+    const doc = {
+      id:         randomUUID(),
+      title:      title.trim().slice(0, 200),
+      fileName:   fileName.slice(0, 255),
+      fileSize:   actualSize || fileSize,
+      fileType:   actualContentType || fileType.slice(0, 100),
+      objectPath: slot.objectPath,   // server-issued path, never from the client
+      uploadedBy: member.email,
+    };
+    await db.insert(teamLibraryDocsTable).values(doc);
+    await db
+      .update(teamLibraryPendingUploadsTable)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+      .set({ consumed: true })
+      .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId));
+
+    const [saved] = await db
+      .select()
+      .from(teamLibraryDocsTable)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+      .where(eq(teamLibraryDocsTable.id as any, doc.id));
     res.status(201).json(saved);
   } catch (err) {
     console.error("[library] DB insert error:", err);
@@ -175,15 +242,21 @@ router.get("/library/docs", async (req: Request, res: Response): Promise<void> =
 router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<void> => {
   const member = requireMember(res, req.headers["authorization"]);
   if (!member) return;
+  if (member.role !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
 
-  const docId = String(req.params["id"] ?? "");
+  const docId = String(req.params["id"]);
   try {
     const [doc] = await db.select().from(teamLibraryDocsTable)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
       .where(eq(teamLibraryDocsTable.id as any, docId));
     if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
-    const file = await storage.getObjectEntityFile(doc.objectPath);
+    // Delete from GCS (non-fatal if already gone)
+    try {
+      const file = await storage.getObjectEntityFile(doc.objectPath);
       await file.delete();
     } catch {
       // Object already deleted or not found — continue with metadata cleanup.
@@ -205,7 +278,7 @@ router.get("/library/download/:id", async (req: Request, res: Response): Promise
   const member = requireMember(res, req.headers["authorization"]);
   if (!member) return;
 
-  const docId = String(req.params["id"] ?? "");
+  const docId = String(req.params["id"]);
   try {
     const [doc] = await db.select().from(teamLibraryDocsTable)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
@@ -228,9 +301,3 @@ router.get("/library/download/:id", async (req: Request, res: Response): Promise
 });
 
 export default router;
-
-      const [gcsMeta] = await gcsFile.getMetadata();
-
-    let actualContentType: string;
-
-    let actualSize: number;
