@@ -155,8 +155,9 @@ function parseSuggestions(raw: string): { reply: string; suggestions: string[] }
 /**
  * Extract and verify the Bearer JWT from the Authorization header.
  * Returns the numeric user id on success, or null on failure.
+ * Exported for unit tests.
  */
-function authenticatedUserId(authHeader: string | undefined): number | null {
+export function authenticatedUserId(authHeader: string | undefined): number | null {
   const claims = verifyToken(authHeader);
   if (!claims) return null;
   const numericId = Number(claims.id);
@@ -176,8 +177,9 @@ const rateLimitMap = new Map<number, number[]>(); // userId → [timestamps]
 /**
  * Returns true when the user has exceeded the allowed rate.
  * Side-effect: records this request timestamp if allowed.
+ * Exported for unit tests.
  */
-function isRateLimited(userId: number): boolean {
+export function isRateLimited(userId: number): boolean {
   const now = Date.now();
   const cutoff = now - RATE_WINDOW_MS;
 
