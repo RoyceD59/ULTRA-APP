@@ -292,6 +292,23 @@ async function applyStartupMigrations(): Promise<void> {
     )
   `);
   logger.info("Startup migration: team_library_docs table ensured");
+
+  // Pending upload slots — server-issued records that bind a presigned GCS path
+  // to the member who requested it.  POST /library/docs validates the uploadId
+  // from this table before promoting the record to team_library_docs.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS team_library_pending_uploads (
+      id            text         PRIMARY KEY,
+      object_path   text         NOT NULL,
+      uploaded_by   text         NOT NULL,
+      consumed      boolean      NOT NULL DEFAULT false,
+      created_at    timestamptz  NOT NULL DEFAULT now(),
+      expires_at    timestamptz  NOT NULL,
+      declared_size integer      NOT NULL,
+      declared_type text         NOT NULL
+    )
+  `);
+  logger.info("Startup migration: team_library_pending_uploads table ensured");
 }
 
 async function checkProductionSecurityConfig(): Promise<void> {

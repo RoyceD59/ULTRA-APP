@@ -123,14 +123,15 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
     if (!file || !title.trim()) return;
 
     try {
-      // Step 1: request presigned URL
+      // Step 1: request presigned URL — server creates the upload slot and returns
+      // an opaque uploadId.  We never touch objectPath; the server controls it.
       setStage("uploading");
       setProgress(10);
-      const { uploadURL, objectPath } = await apiFetch("/api/library/request-upload", {
+      const { uploadURL, uploadId } = await apiFetch("/api/library/request-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileName: file.name, fileSize: file.size, fileType: file.type }),
-      }).then(r => r.json()) as { uploadURL: string; objectPath: string };
+      }).then(r => r.json()) as { uploadURL: string; uploadId: string };
 
       // Step 2: upload directly to GCS via presigned URL (no auth header — signed URL is self-authenticating)
       setProgress(30);
@@ -146,7 +147,8 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
         xhr.send(file);
       });
 
-      // Step 3: save metadata
+      // Step 3: finalise — send uploadId (not objectPath) so the server can
+      // verify ownership, expiry, and actual GCS metadata before promoting.
       setProgress(90);
       setStage("saving");
       const doc = await apiFetch("/api/library/docs", {
@@ -154,7 +156,7 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(), fileName: file.name,
-          fileSize: file.size, fileType: file.type, objectPath,
+          fileSize: file.size, fileType: file.type, uploadId,
         }),
       }).then(r => r.json()) as LibraryDoc;
 
