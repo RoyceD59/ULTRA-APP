@@ -43,7 +43,7 @@ const ADDRESS_FIELDS: FieldDef[] = [
 export default function CheckoutScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, clearCart, cartHydrated } = useCart();
   const { user } = useAuth();
   const api = useApi();
 
@@ -612,6 +612,14 @@ export default function CheckoutScreen() {
         <TouchableOpacity onPress={() => { attemptRef.current++; if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setMpesaWaiting(false); setProcessing(false); }}>
           <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!cartHydrated) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
