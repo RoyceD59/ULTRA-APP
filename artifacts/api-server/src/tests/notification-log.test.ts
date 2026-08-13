@@ -135,6 +135,27 @@ describe("sendSms — notification log", () => {
     }
   });
 
+  it("(i-sms) writes status=failed when fetch rejects with a network-level error", async () => {
+    const networkError = new Error("getaddrinfo ENOTFOUND api.africastalking.com");
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw networkError; };
+
+    try {
+      const { sendSms } = await import("../lib/sms.js");
+      sendSms("+254712000005", "Hello network-fail", { template: "order_confirmation", orderId: 77 });
+      await waitTick();
+
+      assert.equal(insertedRows.length, 1, "one log row should be inserted for a network error");
+      assert.equal(insertedRows[0]!["status"], "failed");
+      assert.ok(
+        String(insertedRows[0]!["errorMessage"]).includes("getaddrinfo ENOTFOUND"),
+        "errorMessage should include the network error text",
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
   it("(h-sms) writes status=failed when AT credentials are absent", async () => {
     // Temporarily remove credentials
     const savedKey  = process.env["AT_API_KEY"];
