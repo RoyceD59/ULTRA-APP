@@ -55,6 +55,12 @@ export default function CheckoutScreen() {
   });
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [showMpesaModal, setShowMpesaModal] = useState(false);
+  // `processing` is plain React state — it is NOT persisted across process
+  // restarts.  If the user force-quits the app while processing is true (e.g.
+  // during a Stripe browser open or a Paystack verify call), the OS tears down
+  // the JS heap and useState(false) runs fresh on the next launch.  The checkout
+  // button therefore cannot be stuck disabled after a force-quit.
+  // See docs/checkout-retry-test-plan.md §§ 8-10 for the manual test checklist.
   const [processing, setProcessing] = useState(false);
   const [mpesaWaiting, setMpesaWaiting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
