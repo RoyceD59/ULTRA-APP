@@ -12,6 +12,7 @@
   "include": [
     "hooks/__tests__/**/*.mts",
     "hooks/useNotifications.ts",
-    "hooks/mpesaStatusClassifier.ts"
+    "hooks/mpesaStatusClassifier.ts",
+    "hooks/mpesaRetryGuard.ts"
   ]
 }

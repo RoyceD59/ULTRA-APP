@@ -14,6 +14,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import { type CodeValidationResult } from '@/hooks/useApi';
 import { classifyMpesaStatus } from '@/hooks/mpesaStatusClassifier';
+import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 
 const DELIVERY_FEE = 500;
 
@@ -231,35 +232,49 @@ export default function CheckoutScreen() {
     //             new push.
     const priorRef = lastCheckoutRequestIdRef.current;
     if (priorRef) {
+      // ── Double-charge guard ────────────────────────────────────────────────
+      // Query the prior push status, then let decideRetryGuard map it to one
+      // of three actions:
+      //   use_prior   → push confirmed paid; create order from it, no new push
+      //   resume_poll → push still live (pending / network error); keep polling
+      //   fresh_push  → push definitively failed; safe to send a new push
+      let guardResult: Awaited<ReturnType<typeof api.mpesaStatus>> | null = null;
+      let queryFailed = false;
       try {
-        const priorStatus = await api.mpesaStatus(priorRef);
-        if (attemptRef.current !== thisAttempt) return; // cancelled while querying
-        if (priorStatus.status === 'success') {
-          // Original push succeeded — use it; no new charge needed.
-          // Do NOT clear the ref until createOrder succeeds: if order creation
-          // fails (network blip) the ref must survive so the next retry
-          // re-detects this confirmed payment and retries createOrder rather
-          // than sending a new STK push.
-          const orderCreated = await createOrder('mpesa', priorRef);
-          if (orderCreated) lastCheckoutRequestIdRef.current = null;
-          else setProcessing(false); // createOrder reset its own UI; ensure spinner off
-          return;
-        }
-        if (priorStatus.status !== 'failed') {
-          // Pending (or unexpected status) — resume polling the existing push.
-          // Do NOT issue a new STK push; the original may still succeed.
-          startMpesaPoll(priorRef, thisAttempt);
-          return;
-        }
-        // Definitive failure — safe to clear and send a new push below.
-        lastCheckoutRequestIdRef.current = null;
+        guardResult = await api.mpesaStatus(priorRef);
       } catch {
-        // Status query failed (network error) — we cannot confirm the original
-        // push is dead, so resume polling it rather than risking a double charge.
-        if (attemptRef.current !== thisAttempt) return;
-        startMpesaPoll(priorRef, thisAttempt);
+        queryFailed = true;
+      }
+      if (attemptRef.current !== thisAttempt) return; // cancelled while querying
+
+      const guardAction = decideRetryGuard(
+        priorRef,
+        queryFailed || !guardResult
+          ? { ok: false }
+          : { ok: true, response: guardResult },
+      );
+
+      if (guardAction.kind === 'use_prior') {
+        // Original push confirmed paid — create the order from it.
+        // Do NOT clear the ref until createOrder succeeds: if order creation
+        // fails (network blip) the ref must survive so the next retry
+        // re-detects this confirmed payment and retries createOrder rather
+        // than sending a new STK push.
+        const orderCreated = await createOrder('mpesa', guardAction.priorRef);
+        if (orderCreated) lastCheckoutRequestIdRef.current = null;
+        else setProcessing(false);
         return;
       }
+
+      if (guardAction.kind === 'resume_poll') {
+        // Push still in-flight (pending or network error) — resume polling.
+        // Do NOT issue a new STK push; the original may still succeed.
+        startMpesaPoll(guardAction.priorRef, thisAttempt);
+        return;
+      }
+
+      // fresh_push — definitive failure; clear the ref and send a new push below.
+      lastCheckoutRequestIdRef.current = null;
     }
 
     // ── Issue a new STK push ─────────────────────────────────────────────────
