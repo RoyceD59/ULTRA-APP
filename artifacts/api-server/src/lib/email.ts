@@ -415,9 +415,9 @@ export function buildOrderReceiptEmail(params: {
           const safeQty   = i.quantity != null                      ? String(i.quantity)   : "—";
           const safeTotal = i.total    != null && i.total    !== "" ? fmt(i.total)         : "—";
           return `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${safeName}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${safeQty}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">${safeTotal}</td>
+          <td class="uc-item-name" style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${safeName}</td>
+          <td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;text-align:center;white-space:nowrap;">${safeQty}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${safeTotal}</td>
         </tr>`;
         }
       )
@@ -441,15 +441,26 @@ export function buildOrderReceiptEmail(params: {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Your Ultra Clear Order #${orderId}</title>
+  <style>
+    @media only screen and (max-width: 620px) {
+      .uc-outer { padding: 0 !important; }
+      .uc-card  { width: 100% !important; border-radius: 0 !important; }
+      .uc-hd    { padding: 20px 16px !important; }
+      .uc-body  { padding: 20px 16px !important; }
+      .uc-ft    { padding: 16px !important; }
+      .uc-item-name { word-break: break-word; }
+      .uc-meta-right { font-size: 12px !important; }
+    }
+  </style>
 </head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:32px 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" class="uc-outer" style="background:#f9fafb;padding:32px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;">
+      <table width="600" cellpadding="0" cellspacing="0" class="uc-card" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">
 
         <!-- Header -->
         <tr>
-          <td style="background:#0D4FA8;padding:28px 32px;">
+          <td class="uc-hd" style="background:#0D4FA8;padding:28px 32px;">
             <h1 style="margin:0;color:#ffffff;font-size:22px;">Ultra Clear Filters</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Certified clean water for every Kenyan</p>
           </td>
@@ -457,7 +468,7 @@ export function buildOrderReceiptEmail(params: {
 
         <!-- Body -->
         <tr>
-          <td style="padding:32px;">
+          <td class="uc-body" style="padding:32px;">
             <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">Order Confirmed ✅</h2>
             <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">
               Hi ${firstName}, thank you for your order! Here's your receipt.
@@ -466,16 +477,16 @@ export function buildOrderReceiptEmail(params: {
             <!-- Order meta -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
               <tr>
-                <td style="padding:6px 0;color:#6b7280;font-size:13px;">Order number</td>
-                <td style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">#${orderId}</td>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Order number</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">#${orderId}</td>
               </tr>
               <tr>
-                <td style="padding:6px 0;color:#6b7280;font-size:13px;">Payment</td>
-                <td style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${payLabel}</td>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Payment</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${payLabel}</td>
               </tr>
               <tr>
-                <td style="padding:6px 0;color:#6b7280;font-size:13px;">Delivery to</td>
-                <td style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${addrText}</td>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top;">Delivery to</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${addrText}</td>
               </tr>
             </table>
 
@@ -483,9 +494,9 @@ export function buildOrderReceiptEmail(params: {
             <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
               <thead>
                 <tr style="background:#f3f4f6;">
-                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;">ITEM</th>
-                  <th style="padding:10px 12px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;">QTY</th>
-                  <th style="padding:10px 12px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;">TOTAL</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;min-width:0;">ITEM</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap;width:36px;">QTY</th>
+                  <th style="padding:10px 12px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap;">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
@@ -493,7 +504,7 @@ export function buildOrderReceiptEmail(params: {
                 ${discountRow}
                 <tr style="background:#f9fafb;">
                   <td colspan="2" style="padding:12px;font-weight:700;color:#111827;">Total</td>
-                  <td style="padding:12px;font-weight:700;color:#0D4FA8;text-align:right;font-size:16px;">${fmt(total)}</td>
+                  <td style="padding:12px;font-weight:700;color:#0D4FA8;text-align:right;font-size:16px;white-space:nowrap;">${fmt(total)}</td>
                 </tr>
               </tbody>
             </table>
@@ -511,7 +522,7 @@ export function buildOrderReceiptEmail(params: {
 
         <!-- Footer -->
         <tr>
-          <td style="background:#f3f4f6;padding:20px 32px;text-align:center;">
+          <td class="uc-ft" style="background:#f3f4f6;padding:20px 32px;text-align:center;">
             <p style="margin:0;color:#9ca3af;font-size:12px;">
               © 2026 UCFilters Ltd · Nairobi, Kenya ·
               <a href="https://ucfilters.co.ke" style="color:#6b7280;">ucfilters.co.ke</a>
