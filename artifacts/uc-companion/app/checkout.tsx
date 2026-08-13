@@ -56,6 +56,12 @@ export default function CheckoutScreen() {
   const [processing, setProcessing] = useState(false);
   const [mpesaWaiting, setMpesaWaiting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Monotonically incrementing attempt counter.  Each call to handleMpesa captures
+  // its own `thisAttempt` value in closure scope.  Every async step checks
+  // `attemptRef.current === thisAttempt` before acting, so stale callbacks from a
+  // prior attempt (cancelled, timed-out, or already settled) are silently discarded
+  // regardless of when their in-flight network requests resolve.
+  const attemptRef = useRef(0);
 
   // Promo / referral code
   const [promoInput, setPromoInput] = useState('');
@@ -89,16 +95,32 @@ export default function CheckoutScreen() {
       Alert.alert('Invalid number', 'Enter a valid Safaricom number (e.g. 0712 345 678)');
       return;
     }
+    // Stamp this attempt with a unique ID captured in closure scope.
+    // Every async step checks thisAttempt === attemptRef.current before acting,
+    // so if Cancel / timeout / a new retry increments the counter while a
+    // network request is in-flight, the stale callback simply returns.
+    const thisAttempt = ++attemptRef.current;
     setProcessing(true);
     try {
       const r = await api.mpesaSTKPush(mpesaPhone, total, `cart_${Date.now()}`);
+      // STK push resolved — verify this attempt is still active (not cancelled
+      // while the request was in-flight).
+      if (attemptRef.current !== thisAttempt) return;
       setShowMpesaModal(false);
       setMpesaWaiting(true);
       let attempts = 0;
-      pollRef.current = setInterval(async () => {
+      // `settled` prevents two near-simultaneous poll ticks from both reaching
+      // createOrder / clearInterval after an await.
+      let settled = false;
+      const intervalId = setInterval(async () => {
+        // Discard if a newer attempt has started (cancel, retry, or timeout).
+        if (attemptRef.current !== thisAttempt) { clearInterval(intervalId); return; }
+        if (settled) return;
         attempts++;
         if (attempts > 20) {
-          clearInterval(pollRef.current!);
+          settled = true;
+          clearInterval(intervalId);
+          if (pollRef.current === intervalId) pollRef.current = null;
           setMpesaWaiting(false);
           setProcessing(false);
           Alert.alert(
@@ -117,11 +139,19 @@ export default function CheckoutScreen() {
         }
         try {
           const status = await api.mpesaStatus(r.checkoutRequestId);
+          // Re-check after the await — cancel / new retry may have fired while
+          // the network request was in-flight.
+          if (attemptRef.current !== thisAttempt) return;
+          if (settled) return;
           if (status.status === 'success') {
-            clearInterval(pollRef.current!);
+            settled = true;
+            clearInterval(intervalId);
+            if (pollRef.current === intervalId) pollRef.current = null;
             await createOrder('mpesa', r.checkoutRequestId);
           } else if (status.status === 'failed') {
-            clearInterval(pollRef.current!);
+            settled = true;
+            clearInterval(intervalId);
+            if (pollRef.current === intervalId) pollRef.current = null;
             setMpesaWaiting(false);
             setProcessing(false);
             // Distinguish transient network errors from definitive declines so the
@@ -153,8 +183,11 @@ export default function CheckoutScreen() {
           }
         } catch { /* keep polling */ }
       }, 3000);
+      pollRef.current = intervalId;
     } catch {
+      if (attemptRef.current !== thisAttempt) return;
       setProcessing(false);
+      // The modal stays open so the phone number is preserved for a retry.
       Alert.alert(
         'M-Pesa Unavailable',
         'Failed to send the M-Pesa request. You can try again or place your order with Cash on Delivery.',
@@ -343,7 +376,7 @@ export default function CheckoutScreen() {
           A prompt has been sent to {mpesaPhone}. Enter your M-Pesa PIN to complete payment.
         </Text>
         <ActivityIndicator color="#00A651" size="large" />
-        <TouchableOpacity onPress={() => { if (pollRef.current) clearInterval(pollRef.current); setMpesaWaiting(false); }}>
+        <TouchableOpacity onPress={() => { attemptRef.current++; if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setMpesaWaiting(false); setProcessing(false); }}>
           <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
         </TouchableOpacity>
       </View>
