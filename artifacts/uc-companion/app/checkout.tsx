@@ -295,9 +295,17 @@ export default function CheckoutScreen() {
       // completed while the user was on the timeout screen.
       lastCheckoutRequestIdRef.current = r.checkoutRequestId;
       startMpesaPoll(r.checkoutRequestId, thisAttempt);
-    } catch {
+    } catch (e) {
       if (attemptRef.current !== thisAttempt) return;
       setProcessing(false);
+      // Rate-limited: tell the user to wait rather than offering an immediate retry.
+      if (e instanceof ApiError && e.rateLimited) {
+        Alert.alert(
+          'Too Many Attempts',
+          e.message || 'Too many attempts. Please wait a minute before trying again.',
+        );
+        return;
+      }
       // The modal stays open so the phone number is preserved for a retry.
       Alert.alert(
         'M-Pesa Unavailable',
@@ -336,6 +344,14 @@ export default function CheckoutScreen() {
       }
     } catch (e) {
       setProcessing(false);
+      // Rate-limited: tell the user to wait rather than offering an immediate retry.
+      if (e instanceof ApiError && e.rateLimited) {
+        Alert.alert(
+          'Too Many Attempts',
+          e.message || 'Too many attempts. Please wait a minute before trying again.',
+        );
+        return;
+      }
       // Distinguish a transient server/network blip (retryable) from a permanent failure.
       const isRetryable = e instanceof ApiError ? e.retryable : true;
       if (isRetryable) {
@@ -426,6 +442,14 @@ export default function CheckoutScreen() {
       }
     } catch (e) {
       setProcessing(false);
+      // Rate-limited: tell the user to wait rather than offering an immediate retry.
+      if (e instanceof ApiError && e.rateLimited) {
+        Alert.alert(
+          'Too Many Attempts',
+          e.message || 'Too many attempts. Please wait a minute before trying again.',
+        );
+        return;
+      }
       // Distinguish a transient server blip (retryable) from a permanent decline.
       const isRetryable = e instanceof ApiError ? e.retryable : true;
       if (isRetryable) {
@@ -467,6 +491,14 @@ export default function CheckoutScreen() {
       setProcessing(false);
     } catch (e) {
       setProcessing(false);
+      // Rate-limited: tell the user to wait rather than offering an immediate retry.
+      if (e instanceof ApiError && e.rateLimited) {
+        Alert.alert(
+          'Too Many Attempts',
+          e.message || 'Too many attempts. Please wait a minute before trying again.',
+        );
+        return;
+      }
       // Init failed — no payment session was created, so "Try again" safely
       // re-enters handlePaystack() to start a completely fresh attempt.
       const isRetryable = e instanceof ApiError ? e.retryable : true;

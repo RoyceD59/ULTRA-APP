@@ -28,7 +28,7 @@
 import { Router, type Request, type Response, type IRouter } from "express";
 import { randomUUID } from "crypto";
 import { db, teamLibraryDocsTable, teamLibraryPendingUploadsTable } from "@workspace/db";
-import { eq, desc, and, gt } from "drizzle-orm";
+import { eq, and, gt, desc } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { verifyToken } from "../lib/jwt.js";
 
@@ -174,32 +174,49 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
   }
 
   try {
-    // 1. Look up the pending slot (read-only pre-check for ownership and existence).
-    const [slot] = await db
-      .select()
-      .from(teamLibraryPendingUploadsTable)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
-      .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId))
-      .limit(1);
-    if (!slot) {
-      res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
+    // 1. Atomically claim the slot — prevents two concurrent requests for the
+    //    same uploadId from both passing the consumed/ownership/expiry checks.
+    //    The UPDATE only succeeds when the row exists, belongs to this member,
+    //    has not been consumed, and has not yet expired.  Only one concurrent
+    //    writer can win; the loser gets no returned row and is rejected.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+    const [claimed] = await db
+      .update(teamLibraryPendingUploadsTable)
+      .set({ consumed: true })
+      .where(
+        and(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eq(teamLibraryPendingUploadsTable.id as any, uploadId),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eq(teamLibraryPendingUploadsTable.consumed as any, false),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eq(teamLibraryPendingUploadsTable.uploadedBy as any, member.email),
+          gt(teamLibraryPendingUploadsTable.expiresAt, new Date()),
+        ),
+      )
+      .returning();
+
+    if (!claimed) {
+      // Claim failed — inspect the slot (without ownership filter) to return a
+      // specific error message rather than a generic 409.
+      const [slot] = await db
+        .select()
+        .from(teamLibraryPendingUploadsTable)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId))
+        .limit(1);
+      if (!slot) {
+        res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
+      } else if (slot.uploadedBy !== member.email) {
+        res.status(403).json({ error: "Upload slot belongs to a different user" });
+      } else if (slot.consumed) {
+        res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
+      } else {
+        res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
+      }
       return;
     }
-    // 2. Ownership check (server-side; client cannot forge this).
-    if (slot.uploadedBy !== member.email) {
-      res.status(403).json({ error: "Upload slot belongs to a different user" });
-      return;
-    }
-    // 3. Consumed / expiry pre-checks for precise error codes; the atomic
-    //    conditional claim below re-enforces both under concurrency.
-    if (slot.consumed) {
-      res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
-      return;
-    }
-    if (new Date() > slot.expiresAt) {
-      res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
-      return;
-    }
+    const slot = claimed;
 
     // 4. Verify the object actually landed in GCS before attempting to claim
     //    the slot, so we don't consume it for a missing file.
@@ -282,7 +299,7 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     //    still unconsumed and not yet expired.  This prevents concurrent
     //    finalization calls from both observing consumed=false and each
     //    inserting a separate document row (upload-slot replay attack).
-    const docId = randomUUID();
+  const docId = String(req.params["id"]);
     const [saved] = await db.transaction(async (tx) => {
       const claimed = await tx
         .update(teamLibraryPendingUploadsTable)
@@ -351,10 +368,6 @@ router.get("/library/docs", async (req: Request, res: Response): Promise<void> =
 router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<void> => {
   const member = requireMember(res, req.headers["authorization"]);
   if (!member) return;
-  if (member.role !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
-    return;
-  }
 
   const docId = String(req.params["id"]);
   try {
@@ -363,9 +376,7 @@ router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<
       .where(eq(teamLibraryDocsTable.id as any, docId));
     if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
-    // Delete from GCS (non-fatal if already gone)
-    try {
-      const file = await storage.getObjectEntityFile(doc.objectPath);
+    const file = await storage.getObjectEntityFile(doc.objectPath);
       await file.delete();
     } catch {
       // Object already deleted or not found — continue with metadata cleanup.

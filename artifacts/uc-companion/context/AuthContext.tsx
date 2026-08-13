@@ -95,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json() as { token?: string; user?: UCUser; error?: string };
+      if (res.status === 429) return { success: false, error: data.error || 'Too many attempts. Please wait a minute before trying again.' };
       if (!res.ok || data.error) return { success: false, error: data.error || 'Login failed' };
       const u = data.user!;
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
@@ -117,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(d),
       });
       const data = await res.json() as { token?: string; user?: UCUser; error?: string };
+      if (res.status === 429) return { success: false, error: data.error || 'Too many attempts. Please wait a minute before trying again.' };
       if (!res.ok || data.error) return { success: false, error: data.error || 'Registration failed' };
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user!));

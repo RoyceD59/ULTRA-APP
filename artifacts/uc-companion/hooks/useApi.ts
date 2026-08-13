@@ -20,13 +20,18 @@ export class ApiError extends Error {
   /** Raw parsed response body */
   body: Record<string, unknown>;
 
+  /** True when the server returned 429 — caller should prompt the user to wait */
+  rateLimited: boolean;
+
   constructor(message: string, status: number, body: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.rateLimited = status === 429;
     // Explicit server flag wins; fall back to treating any 5xx as retryable so a
     // server that forgets to include the flag still produces the right behaviour.
-    this.retryable = body['retryable'] === true || status >= 500;
+    // Rate-limited requests are not retryable — the user must wait.
+    this.retryable = !this.rateLimited && (body['retryable'] === true || status >= 500);
     this.body = body;
   }
 }
