@@ -71,7 +71,7 @@ export default function ProductsScreen() {
   const router = useRouter();
   const api = useApi();
   const insets = useSafeAreaInsets();
-  const { items, totalItems, totalPrice, addItem } = useCart();
+  const { items, totalItems, totalPrice, addItem, refreshCart } = useCart();
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
@@ -80,9 +80,9 @@ export default function ProductsScreen() {
   const hasItems = items.length > 0;
   const basketSkus = items.map(i => i.sku).filter(Boolean).join(',');
 
-  // Re-evaluate on every tab focus
-  const [, setFocusTick] = useState(0);
-  useFocusEffect(useCallback(() => { setFocusTick(t => t + 1); }, []));
+  // Re-sync cart from AsyncStorage on every tab focus so the bar always shows
+  // the live item count/total even when items were added from another screen.
+  useFocusEffect(useCallback(() => { refreshCart(); }, [refreshCart]));
 
   // Animated transitions: 1 = basket-has-items view, 0 = empty view
   const basketAnim = useRef(new Animated.Value(hasItems ? 1 : 0)).current;

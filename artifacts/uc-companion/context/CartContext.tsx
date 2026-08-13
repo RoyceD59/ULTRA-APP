@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface CartItem {
@@ -18,6 +18,8 @@ interface CartContextValue {
   removeItem: (id: number) => void;
   updateQty: (id: number, qty: number) => void;
   clearCart: () => void;
+  /** Re-read cart from AsyncStorage.  Call on tab focus to guarantee fresh data. */
+  refreshCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextValue>({
@@ -28,6 +30,7 @@ const CartContext = createContext<CartContextValue>({
   removeItem: () => {},
   updateQty: () => {},
   clearCart: () => {},
+  refreshCart: async () => {},
 });
 
 const CART_KEY = 'uc_cart_v1';
@@ -35,11 +38,16 @@ const CART_KEY = 'uc_cart_v1';
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  useEffect(() => {
-    AsyncStorage.getItem(CART_KEY)
-      .then(data => { if (data) setItems(JSON.parse(data)); })
-      .catch(() => {});
+  const loadFromStorage = useCallback(async () => {
+    try {
+      const data = await AsyncStorage.getItem(CART_KEY);
+      if (data) setItems(JSON.parse(data));
+    } catch { /* ignore */ }
   }, []);
+
+  useEffect(() => {
+    loadFromStorage();
+  }, [loadFromStorage]);
 
   const persist = (next: CartItem[]) => {
     setItems(next);
@@ -70,7 +78,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, totalItems, totalPrice, addItem, removeItem, updateQty, clearCart }}>
+    <CartContext.Provider value={{ items, totalItems, totalPrice, addItem, removeItem, updateQty, clearCart, refreshCart: loadFromStorage }}>
       {children}
     </CartContext.Provider>
   );
