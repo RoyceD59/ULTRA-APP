@@ -357,3 +357,297 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
     assert.equal(rowCells[item2Start + 3], "1099",                     "item_2_total must be 1099");
   });
 });
+
+// ── Symmetric-count edge case ─────────────────────────────────────────────────
+
+const SYMMETRIC_EMAIL = "orders-csv-symmetric-test@ucfilters-test.internal";
+
+// Unique sentinel status that will never appear in real orders, used as a
+// ?status= filter so every CSV request in this suite sees exactly our two
+// fixtures regardless of whatever else is in the shared database.
+const SYMMETRIC_STATUS = "sym-csv-test-two-items-each";
+
+let symmetricUserId: number;
+let symmetricOrderIds: number[] = [];
+
+describe("GET /api/uc/admin/orders.csv — symmetric item count (no padding needed)", () => {
+  before(async () => {
+    // Insert a test admin user
+    const [inserted] = await db
+      .insert(ucUsersTable)
+      .values({
+        email: SYMMETRIC_EMAIL,
+        passwordHash: "test-hash-not-real",
+        firstName: "Symmetric",
+        lastName: "Test",
+        isAdmin: false,
+      })
+      .returning({ id: ucUsersTable.id });
+    if (!inserted) throw new Error("Failed to insert symmetric test user");
+    symmetricUserId = inserted.id;
+
+    process.env["UC_ADMIN_EMAILS"] = SYMMETRIC_EMAIL;
+
+    // Order C — two line items; sentinel status isolates this suite's result set
+    const [orderC] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(symmetricUserId),
+        status: SYMMETRIC_STATUS,
+        total: "4598",
+        currency: "KES",
+        paymentMethod: "cod",
+        paymentReference: "",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {
+          firstName: "Alpha",
+          lastName: "Sym",
+          address1: "3 Alpha St",
+          city: "Nairobi",
+          country: "KE",
+          phone: "+254700000003",
+        },
+        webhookRecovery: false,
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderC) throw new Error("Failed to insert order C");
+
+    // Order D — also two line items; same sentinel status
+    const [orderD] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(symmetricUserId),
+        status: SYMMETRIC_STATUS,
+        total: "5998",
+        currency: "KES",
+        paymentMethod: "mpesa",
+        paymentReference: `TEST-SYM-${Date.now()}`,
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {
+          firstName: "Beta",
+          lastName: "Sym",
+          address1: "4 Beta Ave",
+          city: "Mombasa",
+          country: "KE",
+          phone: "+254700000004",
+        },
+        webhookRecovery: false,
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderD) throw new Error("Failed to insert order D");
+
+    symmetricOrderIds = [orderC.id, orderD.id];
+
+    // Two line items on order C
+    await db.insert(ucOrderItemsTable).values([
+      {
+        orderId: orderC.id,
+        productId: 1,
+        name: "Hydra Flux",
+        quantity: 1,
+        total: "3499",
+      },
+      {
+        orderId: orderC.id,
+        productId: 22,
+        name: "Bottle Filter Cartridge",
+        quantity: 1,
+        total: "1099",
+      },
+    ]);
+
+    // Two line items on order D (different products)
+    await db.insert(ucOrderItemsTable).values([
+      {
+        orderId: orderD.id,
+        productId: 11,
+        name: "Sweet Home",
+        quantity: 1,
+        total: "3699",
+      },
+      {
+        orderId: orderD.id,
+        productId: 23,
+        name: "Faucet Filter Cartridge",
+        quantity: 1,
+        total: "1999",
+      },
+    ]);
+  });
+
+  after(async () => {
+    if (symmetricOrderIds.length > 0) {
+      await db
+        .delete(ucOrderItemsTable)
+        .where(inArray(ucOrderItemsTable.orderId, symmetricOrderIds));
+      await db
+        .delete(ucOrdersTable)
+        .where(inArray(ucOrdersTable.id, symmetricOrderIds));
+    }
+    if (symmetricUserId) {
+      await db
+        .delete(ucUsersTable)
+        .where(eq(ucUsersTable.id, symmetricUserId));
+    }
+    delete process.env["UC_ADMIN_EMAILS"];
+  });
+
+  // All requests use ?status=SYMMETRIC_STATUS so only our two fixture orders
+  // appear in the response, regardless of whatever else is in the shared DB.
+  const csvUrl = `/api/uc/admin/orders.csv?status=${SYMMETRIC_STATUS}`;
+
+  it("returns 200 with CSV content-type", async () => {
+    const { status, headers } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+    assert.equal(status, 200);
+    assert.ok(
+      headers.get("content-type")?.startsWith("text/csv"),
+      `Expected text/csv, got: ${headers.get("content-type")}`,
+    );
+  });
+
+  it("result set contains exactly 2 rows — one per fixture order", async () => {
+    const { text } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const dataLines = lines.slice(1);
+    assert.equal(dataLines.length, 2, `Expected exactly 2 data rows, got ${dataLines.length}`);
+  });
+
+  it("header has exactly 2 × COLS_PER_ITEM item columns (maxItems = 2)", async () => {
+    const { text } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const headerCells = parseCsvRow(lines[0]!);
+    const itemColCount = headerCells.length - STATIC_COL_COUNT;
+
+    assert.equal(
+      itemColCount,
+      2 * COLS_PER_ITEM,
+      `Expected ${2 * COLS_PER_ITEM} item columns in header, got ${itemColCount}`,
+    );
+  });
+
+  it("all rows have the same column count as the header", async () => {
+    const { text } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length;
+    const dataLines = lines.slice(1);
+
+    assert.equal(dataLines.length, 2, `Expected 2 data rows, got ${dataLines.length}`);
+
+    for (const row of dataLines) {
+      const cells = parseCsvRow(row);
+      assert.equal(
+        cells.length,
+        totalHeaderCols,
+        `Row for order ${cells[0]} has ${cells.length} columns, expected ${totalHeaderCols}`,
+      );
+    }
+  });
+
+  it("every item column is populated — no spurious empty padding", async () => {
+    const { text } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length;
+    const dataLines = lines.slice(1);
+
+    assert.equal(dataLines.length, 2, `Expected 2 data rows, got ${dataLines.length}`);
+
+    for (const row of dataLines) {
+      const cells = parseCsvRow(row);
+      assert.equal(cells.length, totalHeaderCols);
+
+      // All item columns (both slots) must be non-empty strings
+      const itemCells = cells.slice(STATIC_COL_COUNT);
+      for (let i = 0; i < itemCells.length; i++) {
+        assert.notEqual(
+          itemCells[i],
+          "",
+          `Order ${cells[0]}: item cell [${i}] must not be empty (no spurious padding)`,
+        );
+      }
+    }
+  });
+
+  it("order C item columns match its two inserted line items", async () => {
+    const { text } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const rowC = lines.slice(1).find(l => {
+      const cells = parseCsvRow(l);
+      return cells[0] !== undefined && Number(cells[0]) === symmetricOrderIds[0];
+    });
+    assert.ok(rowC, "Could not find order C row in CSV");
+
+    const cells = parseCsvRow(rowC!);
+    const i1 = STATIC_COL_COUNT;
+    assert.equal(cells[i1],     "1",                      "order C item_1_productId");
+    assert.equal(cells[i1 + 1], "Hydra Flux",             "order C item_1_name");
+    assert.equal(cells[i1 + 2], "1",                      "order C item_1_qty");
+    assert.equal(cells[i1 + 3], "3499",                   "order C item_1_total");
+
+    const i2 = STATIC_COL_COUNT + COLS_PER_ITEM;
+    assert.equal(cells[i2],     "22",                     "order C item_2_productId");
+    assert.equal(cells[i2 + 1], "Bottle Filter Cartridge","order C item_2_name");
+    assert.equal(cells[i2 + 2], "1",                      "order C item_2_qty");
+    assert.equal(cells[i2 + 3], "1099",                   "order C item_2_total");
+  });
+
+  it("order D item columns match its two inserted line items", async () => {
+    const { text } = await apiFetch(csvUrl, {
+      headers: {
+        Authorization: authHeader({ id: symmetricUserId, email: SYMMETRIC_EMAIL }),
+      },
+    });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const rowD = lines.slice(1).find(l => {
+      const cells = parseCsvRow(l);
+      return cells[0] !== undefined && Number(cells[0]) === symmetricOrderIds[1];
+    });
+    assert.ok(rowD, "Could not find order D row in CSV");
+
+    const cells = parseCsvRow(rowD!);
+    const i1 = STATIC_COL_COUNT;
+    assert.equal(cells[i1],     "11",                      "order D item_1_productId");
+    assert.equal(cells[i1 + 1], "Sweet Home",              "order D item_1_name");
+    assert.equal(cells[i1 + 2], "1",                       "order D item_1_qty");
+    assert.equal(cells[i1 + 3], "3699",                    "order D item_1_total");
+
+    const i2 = STATIC_COL_COUNT + COLS_PER_ITEM;
+    assert.equal(cells[i2],     "23",                      "order D item_2_productId");
+    assert.equal(cells[i2 + 1], "Faucet Filter Cartridge", "order D item_2_name");
+    assert.equal(cells[i2 + 2], "1",                       "order D item_2_qty");
+    assert.equal(cells[i2 + 3], "1999",                    "order D item_2_total");
+  });
+});
