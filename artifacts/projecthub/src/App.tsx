@@ -32,6 +32,7 @@ import OrdersPage from '@/pages/orders';
 import UcNotificationFailuresPage from '@/pages/uc-notification-failures';
 // Admin pages
 import AdminUsersPage from '@/pages/admin/users';
+import AdminPaymentSettingsPage from '@/pages/admin/payment-settings';
 
 const queryClient = new QueryClient();
 
@@ -140,6 +141,9 @@ function Router() {
               {/* Admin-only */}
               <Route path="/admin/users">
                 <AdminGuard><AdminUsersPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/payment-settings">
+                <AdminGuard><AdminPaymentSettingsPage /></AdminGuard>
               </Route>
               <Route component={NotFound} />
             </Switch>

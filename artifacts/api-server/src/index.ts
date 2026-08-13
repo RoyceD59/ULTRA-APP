@@ -75,6 +75,14 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: team_settings table ensured");
 
+  // Add mpesa_webhook_secret_enc column (AES-256-GCM encrypted M-Pesa webhook secret).
+  // This allows admins to rotate the secret from the admin panel without a server restart.
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS mpesa_webhook_secret_enc text;
+  `);
+  logger.info("Startup migration: team_settings.mpesa_webhook_secret_enc column ensured");
+
   // Partial unique index on payment_reference — prevents duplicate orders for
   // the same Paystack (or other) reference.  Excludes empty strings so COD
   // orders (no reference) are unaffected.

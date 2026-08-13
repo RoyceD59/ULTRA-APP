@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { createHmac } from "node:crypto";
 import { db } from "@workspace/db";
-import { ucOrdersTable, mpesaStkInitiationsTable } from "@workspace/db";
+import { ucOrdersTable, mpesaStkInitiationsTable, teamSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { decryptSecret } from "../lib/secret-crypto.js";
 import type Stripe from "stripe";
 import { sendViaResend } from "../lib/resend.js";
 import { sendSms } from "../lib/sms.js";
@@ -44,6 +45,59 @@ function alertTeamRecoveryOrder(params: {
 }
 
 const router = Router();
+
+// ─── M-Pesa webhook secret — DB-backed with env-var fallback ──────────────────
+// The secret is read at request time so admins can rotate it from the admin
+// panel without restarting the server. A short in-process cache (60 s TTL) keeps
+// the per-request DB cost negligible.
+
+interface SecretCache {
+  value: string | null;
+  expiresAt: number;
+}
+let _mpesaSecretCache: SecretCache | null = null;
+
+export async function getMpesaWebhookSecret(): Promise<string | null> {
+  const now = Date.now();
+  if (_mpesaSecretCache && _mpesaSecretCache.expiresAt > now) {
+    return _mpesaSecretCache.value;
+  }
+
+  let value: string | null = null;
+
+  try {
+    const [row] = await db
+      .select({ mpesaWebhookSecretEnc: teamSettingsTable.mpesaWebhookSecretEnc })
+      .from(teamSettingsTable)
+      .where(eq(teamSettingsTable.id, "singleton"))
+      .limit(1);
+
+    if (row?.mpesaWebhookSecretEnc) {
+      value = decryptSecret(row.mpesaWebhookSecretEnc);
+      if (value === null) {
+        console.error(
+          "[M-Pesa] Failed to decrypt DB webhook secret — falling back to env var"
+        );
+      }
+    }
+  } catch (err) {
+    console.error("[M-Pesa] DB read for webhook secret failed — falling back to env var:", err);
+  }
+
+  // Env-var fallback (backwards-compat for existing deployments)
+  if (value === null) {
+    value = process.env["MPESA_WEBHOOK_SECRET"] ?? null;
+  }
+
+  // Cache for 60 seconds
+  _mpesaSecretCache = { value, expiresAt: now + 60_000 };
+  return value;
+}
+
+// Expose a cache-bust helper so the admin settings route can invalidate after a rotation.
+export function invalidateMpesaSecretCache(): void {
+  _mpesaSecretCache = null;
+}
 
 // Lazy Stripe — only when STRIPE_SECRET_KEY is present
 let _stripe: Stripe | null = null;
@@ -154,9 +208,11 @@ router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void
           // protection against arbitrary callers forging "paid" callbacks.
           // The callback handler also accepts Authorization: Bearer <secret> for
           // curl/Postman testing where you control the headers directly.
-          CallBackURL: (() => {
+          //
+          // The secret is fetched from the DB (admin-rotatable) with env-var fallback.
+          CallBackURL: await (async () => {
               const base = `${process.env["API_BASE_URL"] || "https://team-horizon--jerryaroyce.replit.app"}/api/payments/mpesa/callback`;
-              const secret = process.env["MPESA_WEBHOOK_SECRET"];
+              const secret = await getMpesaWebhookSecret();
               return secret ? `${base}?token=${encodeURIComponent(secret)}` : base;
             })(),
           AccountReference: `Order-${orderId}`,
@@ -749,11 +805,14 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
   // ── Bearer-token verification ────────────────────────────────────────────
   // Safaricom does not sign callbacks with HMAC, but it echoes the exact
   // CallBackURL verbatim (query params included).  We embed a shared secret
-  // as ?token=<MPESA_WEBHOOK_SECRET> when initiating the push, then validate
-  // it here.  An Authorization: Bearer <secret> header is also accepted so
-  // the endpoint can be tested easily from curl/Postman.
+  // as ?token=<secret> when initiating the push, then validate it here.
+  // An Authorization: Bearer <secret> header is also accepted so the endpoint
+  // can be tested easily from curl/Postman.
+  //
+  // The secret is loaded at request time from the DB (admin-rotatable) with
+  // env-var fallback, so it can be rotated without a server restart.
   {
-    const webhookSecret    = process.env["MPESA_WEBHOOK_SECRET"];
+    const webhookSecret = await getMpesaWebhookSecret();
     // Fail-closed in production: if NODE_ENV=production and no secret is set,
     // treat it as MPESA_WEBHOOK_REQUIRED_SIGNATURE=true so the endpoint never
     // silently accepts unverified callbacks in a live deployment.
@@ -775,13 +834,13 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         return;
       }
     } else {
-      // MPESA_WEBHOOK_SECRET is not configured — token verification is skipped.
+      // No secret configured — token verification is skipped.
       // This is acceptable in a local dev/test environment.
       // In production this is a security risk: any caller can forge "paid" callbacks.
       console.warn(
-        "[M-Pesa callback] ⚠️  SECURITY WARNING: MPESA_WEBHOOK_SECRET is not set. " +
+        "[M-Pesa callback] ⚠️  SECURITY WARNING: M-Pesa webhook secret is not set. " +
           "Callback token verification is DISABLED. " +
-          "Set MPESA_WEBHOOK_SECRET in your environment to enable it. " +
+          "Set it in Admin → Payment Settings or via MPESA_WEBHOOK_SECRET to enable it. " +
           "If this is a production deployment, set MPESA_WEBHOOK_REQUIRED_SIGNATURE=true " +
           "to hard-reject unverified requests."
       );
@@ -789,7 +848,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         // Hard-reject: operator has explicitly opted in to strict mode.
         console.error(
           "[M-Pesa callback] MPESA_WEBHOOK_REQUIRED_SIGNATURE=true but " +
-            "MPESA_WEBHOOK_SECRET is missing — rejecting request."
+            "no webhook secret is configured — rejecting request."
         );
         res.status(403).json({
           error:
