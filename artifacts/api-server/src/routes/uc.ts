@@ -35,7 +35,7 @@ import {
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
-import { eq, desc, inArray, and, asc, ne, gt, or } from "drizzle-orm";
+import { eq, desc, inArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import {
@@ -1967,6 +1967,9 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
     return;
   }
 
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim()
@@ -1975,7 +1978,11 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
     const orders = await db
       .select()
       .from(ucOrdersTable)
-      .where(statusFilter ? eq(ucOrdersTable.status, statusFilter) : undefined)
+      .where(and(
+        statusFilter ? eq(ucOrdersTable.status, statusFilter) : undefined,
+        dateRange.from ? sql`${ucOrdersTable.dateCreated}::date >= ${dateRange.from}::date` : undefined,
+        dateRange.to   ? sql`${ucOrdersTable.dateCreated}::date <= ${dateRange.to}::date`   : undefined,
+      ))
       .orderBy(desc(ucOrdersTable.dateCreated));
 
     if (orders.length === 0) {
@@ -2059,6 +2066,9 @@ router.get("/uc/admin/tickets", async (req: Request, res: Response): Promise<voi
     return;
   }
 
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim()
@@ -2067,7 +2077,11 @@ router.get("/uc/admin/tickets", async (req: Request, res: Response): Promise<voi
     const tickets = await db
       .select()
       .from(ucTicketsTable)
-      .where(statusFilter ? eq(ucTicketsTable.status, statusFilter) : undefined)
+      .where(and(
+        statusFilter ? eq(ucTicketsTable.status, statusFilter) : undefined,
+        dateRange.from ? sql`${ucTicketsTable.createdAt}::date >= ${dateRange.from}::date` : undefined,
+        dateRange.to   ? sql`${ucTicketsTable.createdAt}::date <= ${dateRange.to}::date`   : undefined,
+      ))
       .orderBy(desc(ucTicketsTable.createdAt));
 
     res.json(tickets.map(t => ({
@@ -2151,6 +2165,9 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
     return;
   }
 
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim()
@@ -2159,7 +2176,11 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
     const waterTests = await db
       .select()
       .from(ucWaterTestsTable)
-      .where(statusFilter ? eq(ucWaterTestsTable.status, statusFilter) : undefined)
+      .where(and(
+        statusFilter ? eq(ucWaterTestsTable.status, statusFilter) : undefined,
+        dateRange.from ? sql`${ucWaterTestsTable.createdAt}::date >= ${dateRange.from}::date` : undefined,
+        dateRange.to   ? sql`${ucWaterTestsTable.createdAt}::date <= ${dateRange.to}::date`   : undefined,
+      ))
       .orderBy(desc(ucWaterTestsTable.createdAt));
 
     res.json(waterTests.map(w => ({
@@ -2181,6 +2202,29 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
   }
 });
 
+// ─── Date-range helper ────────────────────────────────────────────────────────
+// Parses optional ?from=YYYY-MM-DD and ?to=YYYY-MM-DD query params.
+// Returns { from, to } (each nullable) on success, or null after sending a 400.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function parseDateRange(
+  req: Request,
+  res: Response,
+): { from: string | null; to: string | null } | null {
+  const rawFrom = typeof req.query["from"] === "string" ? req.query["from"].trim() : "";
+  const rawTo   = typeof req.query["to"]   === "string" ? req.query["to"].trim()   : "";
+
+  if (rawFrom && (!ISO_DATE_RE.test(rawFrom) || isNaN(Date.parse(rawFrom)))) {
+    res.status(400).json({ error: "Invalid ?from= — expected YYYY-MM-DD" });
+    return null;
+  }
+  if (rawTo && (!ISO_DATE_RE.test(rawTo) || isNaN(Date.parse(rawTo)))) {
+    res.status(400).json({ error: "Invalid ?to= — expected YYYY-MM-DD" });
+    return null;
+  }
+
+  return { from: rawFrom || null, to: rawTo || null };
+}
+
 // ─── CSV export helpers ───────────────────────────────────────────────────────
 // All cell values go through sanitiseCsvCell (RFC 4180 + formula-injection
 // defence: values starting with =, +, -, @ are apostrophe-prefixed).
@@ -2197,6 +2241,9 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
 
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim() : null;
@@ -2204,7 +2251,11 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
     const orders = await db
       .select()
       .from(ucOrdersTable)
-      .where(statusFilter ? eq(ucOrdersTable.status, statusFilter) : undefined)
+      .where(and(
+        statusFilter ? eq(ucOrdersTable.status, statusFilter) : undefined,
+        dateRange.from ? sql`${ucOrdersTable.dateCreated}::date >= ${dateRange.from}::date` : undefined,
+        dateRange.to   ? sql`${ucOrdersTable.dateCreated}::date <= ${dateRange.to}::date`   : undefined,
+      ))
       .orderBy(desc(ucOrdersTable.dateCreated));
 
     let items: (typeof ucOrderItemsTable.$inferSelect)[] = [];
@@ -2273,6 +2324,9 @@ router.get("/uc/admin/tickets.csv", async (req: Request, res: Response): Promise
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
 
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim() : null;
@@ -2280,7 +2334,11 @@ router.get("/uc/admin/tickets.csv", async (req: Request, res: Response): Promise
     const tickets = await db
       .select()
       .from(ucTicketsTable)
-      .where(statusFilter ? eq(ucTicketsTable.status, statusFilter) : undefined)
+      .where(and(
+        statusFilter ? eq(ucTicketsTable.status, statusFilter) : undefined,
+        dateRange.from ? sql`${ucTicketsTable.createdAt}::date >= ${dateRange.from}::date` : undefined,
+        dateRange.to   ? sql`${ucTicketsTable.createdAt}::date <= ${dateRange.to}::date`   : undefined,
+      ))
       .orderBy(desc(ucTicketsTable.createdAt));
 
     const header = csvRow([
@@ -2310,6 +2368,9 @@ router.get("/uc/admin/water-tests.csv", async (req: Request, res: Response): Pro
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
 
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim() : null;
@@ -2317,7 +2378,11 @@ router.get("/uc/admin/water-tests.csv", async (req: Request, res: Response): Pro
     const waterTests = await db
       .select()
       .from(ucWaterTestsTable)
-      .where(statusFilter ? eq(ucWaterTestsTable.status, statusFilter) : undefined)
+      .where(and(
+        statusFilter ? eq(ucWaterTestsTable.status, statusFilter) : undefined,
+        dateRange.from ? sql`${ucWaterTestsTable.createdAt}::date >= ${dateRange.from}::date` : undefined,
+        dateRange.to   ? sql`${ucWaterTestsTable.createdAt}::date <= ${dateRange.to}::date`   : undefined,
+      ))
       .orderBy(desc(ucWaterTestsTable.createdAt));
 
     const header = csvRow([
