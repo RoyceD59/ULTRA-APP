@@ -87,17 +87,21 @@ export default function ProductsScreen() {
   // Animated transitions: 1 = basket-has-items view, 0 = empty view
   const basketAnim = useRef(new Animated.Value(hasItems ? 1 : 0)).current;
   const emptyAnim  = useRef(new Animated.Value(hasItems ? 0 : 1)).current;
+  // Separate anim for layout-affecting paddingTop (useNativeDriver must be false for layout props)
+  const paddingAnim = useRef(new Animated.Value(hasItems ? 60 : 0)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(basketAnim, { toValue: hasItems ? 1 : 0, duration: 280, useNativeDriver: true }),
-      Animated.timing(emptyAnim,  { toValue: hasItems ? 0 : 1, duration: 280, useNativeDriver: true }),
+      Animated.timing(basketAnim,  { toValue: hasItems ? 1 : 0,  duration: 280, useNativeDriver: true }),
+      Animated.timing(emptyAnim,   { toValue: hasItems ? 0 : 1,  duration: 280, useNativeDriver: true }),
+      Animated.timing(paddingAnim, { toValue: hasItems ? 60 : 0, duration: 280, useNativeDriver: false }),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasItems]);
 
   // ScrollView ref + catalog layout position for scroll-to-products
-  const scrollRef      = useRef<ScrollView>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scrollRef      = useRef<any>(null);
   const catalogOffsetY = useRef(0);
   const scrollToProducts = useCallback(() => {
     scrollRef.current?.scrollTo({ y: catalogOffsetY.current, animated: true });
@@ -290,18 +294,16 @@ export default function ProductsScreen() {
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
-  const scrollTopPad = hasItems ? 60 : 0;
-
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* Sticky Mini Basket Bar — always rendered, animated in/out */}
       {miniBasketBar}
 
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: scrollTopPad, paddingBottom: Platform.OS === 'web' ? 34 : 80 }}
+        contentContainerStyle={{ paddingTop: paddingAnim, paddingBottom: Platform.OS === 'web' ? 34 : 80 }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}>
 
         {/* Search */}
@@ -368,7 +370,7 @@ export default function ProductsScreen() {
             />
           )}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Floating chatbot bubble (basket non-empty) */}
       {chatBubble}
