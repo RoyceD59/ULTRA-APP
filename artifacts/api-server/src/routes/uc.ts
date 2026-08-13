@@ -1601,6 +1601,61 @@ router.get("/uc/admin/tickets", async (req: Request, res: Response): Promise<voi
   }
 });
 
+// PATCH /api/uc/admin/tickets/:id — update ticket status. Protected by admin auth.
+const TICKET_STATUSES = ["submitted", "in_progress", "resolved"] as const;
+
+router.patch("/uc/admin/tickets/:id", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const id = String(req.params["id"]);
+  const { status } = req.body as Record<string, unknown>;
+
+  if (!status || typeof status !== "string" || !status.trim()) {
+    res.status(400).json({ error: "status is required" });
+    return;
+  }
+
+  const normalizedStatus = status.trim();
+  if (!(TICKET_STATUSES as readonly string[]).includes(normalizedStatus)) {
+    res.status(400).json({
+      error: `Invalid status. Allowed values: ${TICKET_STATUSES.join(", ")}`,
+    });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(ucTicketsTable)
+      .set({ status: normalizedStatus })
+      .where(eq(ucTicketsTable.id, id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Ticket not found" });
+      return;
+    }
+
+    res.json({
+      id:                   updated.id,
+      userId:               updated.userId,
+      productModel:         updated.productModel,
+      issueDescription:     updated.issueDescription,
+      preferredContactTime: updated.preferredContactTime,
+      photos:               updated.photos ?? [],
+      videos:               updated.videos ?? [],
+      status:               updated.status,
+      createdAt:            updated.createdAt,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to update ticket status");
+    res.status(500).json({ error: "Failed to update ticket" });
+  }
+});
+
 // GET /api/uc/admin/water-tests — all water test bookings, most-recent first.
 // Accepts optional ?status= filter. Protected by admin auth.
 router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise<void> => {
@@ -1637,6 +1692,63 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
   } catch (err) {
     logger.error({ err }, "Failed to load admin water tests");
     res.status(500).json({ error: "Failed to load water tests" });
+  }
+});
+
+// PATCH /api/uc/admin/water-tests/:id — update water test booking status. Protected by admin auth.
+const WATER_TEST_STATUSES = ["pending", "scheduled", "completed"] as const;
+
+router.patch("/uc/admin/water-tests/:id", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const id = String(req.params["id"]);
+  const { status } = req.body as Record<string, unknown>;
+
+  if (!status || typeof status !== "string" || !status.trim()) {
+    res.status(400).json({ error: "status is required" });
+    return;
+  }
+
+  const normalizedStatus = status.trim();
+  if (!(WATER_TEST_STATUSES as readonly string[]).includes(normalizedStatus)) {
+    res.status(400).json({
+      error: `Invalid status. Allowed values: ${WATER_TEST_STATUSES.join(", ")}`,
+    });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(ucWaterTestsTable)
+      .set({ status: normalizedStatus })
+      .where(eq(ucWaterTestsTable.id, id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Water test not found" });
+      return;
+    }
+
+    res.json({
+      id:          updated.id,
+      userId:      updated.userId,
+      name:        updated.name,
+      address:     updated.address,
+      phone:       updated.phone,
+      waterSource: updated.waterSource,
+      concerns:    updated.concerns,
+      photos:      updated.photos ?? [],
+      videos:      updated.videos ?? [],
+      status:      updated.status,
+      createdAt:   updated.createdAt,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to update water test status");
+    res.status(500).json({ error: "Failed to update water test" });
   }
 });
 
