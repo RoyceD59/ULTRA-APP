@@ -359,18 +359,26 @@ export default function AiChatScreen() {
           </View>
         )}
 
-        {/* ── Follow-up suggestion chips ───────────────────────────────── */}
-        {!isUser && !isRetryingThis && item.suggestions && item.suggestions.length > 0 && (
+        {/* ── Follow-up / quick-reply chips ────────────────────────────── */}
+        {/* Only shown on the MOST RECENT assistant message so old chips
+            cannot redirect an in-progress thread. */}
+        {!isUser && !isRetryingThis && !sending &&
+         item.suggestions && item.suggestions.length > 0 &&
+         messages.filter(m => m.role === 'assistant').at(-1)?.id === item.id && (
           <View style={[styles.chipRow, { marginLeft: 36 }]}>
             {item.suggestions.map(s => (
               <TouchableOpacity
                 key={s}
-                onPress={() => handleSend(s)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  handleSend(s);
+                }}
                 activeOpacity={0.75}
                 style={[styles.followChip, {
-                  borderColor:     colors.primary + '55',
-                  backgroundColor: colors.primaryLight + '55',
+                  borderColor:     colors.primary + '66',
+                  backgroundColor: colors.primaryLight,
                 }]}>
+                <Ionicons name="return-down-forward-outline" size={11} color={colors.primary} style={{ marginRight: 3 }} />
                 <Text style={[styles.followChipText, { color: colors.primary }]} numberOfLines={2}>{s}</Text>
               </TouchableOpacity>
             ))}

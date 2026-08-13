@@ -11,7 +11,7 @@ const DELIVERY_FEE = 500;
 export default function CartScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { items, removeItem, updateQty, totalPrice } = useCart();
+  const { items, removeItem, updateQty, totalPrice, clearCart } = useCart();
 
   const total = totalPrice + (items.length > 0 ? DELIVERY_FEE : 0);
 
@@ -38,6 +38,15 @@ export default function CartScreen() {
         keyExtractor={i => String(i.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <TouchableOpacity
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); clearCart(); }}
+            style={styles.clearRow}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="trash-outline" size={14} color={colors.destructive} />
+            <Text style={[styles.clearText, { color: colors.destructive }]}>Clear all</Text>
+          </TouchableOpacity>
+        }
         ListFooterComponent={
           <View style={{ gap: 16 }}>
             {/* Summary */}
@@ -115,6 +124,8 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14 },
   shopBtn: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12, marginTop: 8 },
   shopBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
+  clearRow: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end' as const, marginBottom: 4 },
+  clearText: { fontSize: 13, fontWeight: '500' as const },
   list: { padding: 16, gap: 12, paddingBottom: 120 },
   item: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
   itemImage: { width: 60, height: 60, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

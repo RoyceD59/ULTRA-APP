@@ -223,6 +223,24 @@ async function applyStartupMigrations(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS uc_notification_log_provider_idx ON uc_notification_log (provider)`
   );
   logger.info("Startup migration: uc_notification_log table ensured");
+
+  // Create uc_return_requests table for customer return/refund requests.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_return_requests (
+      id         serial       PRIMARY KEY,
+      order_id   integer      NOT NULL,
+      user_id    integer      NOT NULL,
+      reason     text         NOT NULL,
+      details    text         NOT NULL DEFAULT '',
+      status     text         NOT NULL DEFAULT 'pending',
+      created_at timestamptz  NOT NULL DEFAULT now(),
+      updated_at timestamptz  NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uc_return_requests_order_user_idx ON uc_return_requests (order_id, user_id)`
+  );
+  logger.info("Startup migration: uc_return_requests table ensured");
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────

@@ -303,6 +303,10 @@ export function useApi() {
       get<UCProduct[]>(`/api/uc/products/compatibility?skus=${encodeURIComponent(skus)}`),
     getProfile: () => get<UCCustomer>('/api/uc/customer/profile'),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getReturnRequest: (orderId: number) =>
+      get<{ request: { id: number; reason: string; details: string; status: string; createdAt: string } | null }>(`/api/uc/orders/${orderId}/return-request`),
+    requestReturn: (orderId: number, data: { reason: string; details?: string }) =>
+      post<{ ok: boolean; requestId: number; message: string }>(`/api/uc/orders/${orderId}/return-request`, data),
     createOrder: (data: {
       lineItems: { productId: number; quantity: number }[];
       paymentMethod: string;

@@ -27,6 +27,7 @@ import {
 } from "../lib/email.js";
 import { sendViaResend } from "../lib/resend.js";
 import {
+  pool,
   db,
   ucPushTokensTable, ucEnquiriesTable, ucNotifPrefsTable,
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
@@ -1497,6 +1498,105 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
     })));
   } catch {
     res.json(orderStoreFallback.filter(o => (o as Record<string,unknown>)["userId"] === userId));
+  }
+});
+
+// ─── Return Requests ──────────────────────────────────────────────────────────
+const RETURN_WINDOW_DAYS = 30;
+const RETURN_ELIGIBLE_STATUSES = ["completed", "shipped"];
+const RETURN_REASONS = [
+  "Defective or faulty product",
+  "Wrong item delivered",
+  "Product not as described",
+  "Changed my mind",
+];
+
+/** GET /uc/orders/:orderId/return-request — fetch existing return request for this order/user */
+router.get("/uc/orders/:orderId/return-request", async (req: Request, res: Response): Promise<void> => {
+  const userId = userIdFromBearer(req.headers["authorization"]);
+  const orderId = parseInt(req.params["orderId"] ?? "", 10);
+  if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID." }); return; }
+  try {
+    const result = await pool.query(
+      "SELECT id, reason, details, status, created_at FROM uc_return_requests WHERE order_id = $1 AND user_id = $2 LIMIT 1",
+      [orderId, userId]
+    );
+    if (result.rows.length === 0) { res.json({ request: null }); return; }
+    const r = result.rows[0] as { id: number; reason: string; details: string; status: string; created_at: string };
+    res.json({ request: { id: r.id, reason: r.reason, details: r.details, status: r.status, createdAt: r.created_at } });
+  } catch (err) {
+    logger.error({ err }, "Return request fetch error");
+    res.status(500).json({ error: "Failed to fetch return request." });
+  }
+});
+
+/** POST /uc/orders/:orderId/return-request — submit a return request */
+router.post("/uc/orders/:orderId/return-request", async (req: Request, res: Response): Promise<void> => {
+  const userId = userIdFromBearer(req.headers["authorization"]);
+  const orderId = parseInt(req.params["orderId"] ?? "", 10);
+  if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID." }); return; }
+
+  const { reason, details } = req.body ?? {};
+  if (!reason || typeof reason !== "string") { res.status(400).json({ error: "reason is required." }); return; }
+  if (!RETURN_REASONS.includes(reason)) { res.status(400).json({ error: "Invalid reason. Please select a valid return reason." }); return; }
+
+  try {
+    const [order] = await db.select().from(ucOrdersTable)
+      .where(and(eq(ucOrdersTable.id, orderId), eq(ucOrdersTable.userId, userId)))
+      .limit(1);
+    if (!order) { res.status(404).json({ error: "Order not found." }); return; }
+
+    if (!RETURN_ELIGIBLE_STATUSES.includes(order.status)) {
+      res.status(422).json({ error: "Returns can only be requested for delivered or shipped orders. If you have a concern about a pending order, please contact our support team." }); return;
+    }
+
+    const daysSince = (Date.now() - new Date(order.dateCreated).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince > RETURN_WINDOW_DAYS) {
+      res.status(422).json({ error: `Our return window is ${RETURN_WINDOW_DAYS} days from the order date. This order is outside that window — but please reach out to support@ucfilters.co.ke or call 0717774049. Our team reviews every case personally.` }); return;
+    }
+
+    const existing = await pool.query(
+      "SELECT id FROM uc_return_requests WHERE order_id = $1 AND user_id = $2 LIMIT 1",
+      [orderId, userId]
+    );
+    if (existing.rows.length > 0) { res.status(409).json({ error: "A return request has already been submitted for this order." }); return; }
+
+    const insert = await pool.query(
+      "INSERT INTO uc_return_requests (order_id, user_id, reason, details) VALUES ($1, $2, $3, $4) RETURNING id, status, created_at",
+      [orderId, userId, reason, (details ?? "").toString().trim()]
+    );
+    const row = insert.rows[0] as { id: number; status: string; created_at: string };
+
+    // Notify the support team by email (non-blocking)
+    const [customer] = await db.select({ email: ucUsersTable.email })
+      .from(ucUsersTable).where(eq(ucUsersTable.id, userId)).limit(1);
+    const detailsText = (details ?? "").toString().trim();
+    sendViaResend({
+      from: "Ultra-Clear Returns <noreply@contacts.ucfilters.com>",
+      to: "support@ucfilters.co.ke",
+      subject: `Return Request #${row.id} — Order #${orderId}`,
+      text: [
+        `A new return request has been submitted.`,
+        `Request ID : ${row.id}`,
+        `Order ID   : ${orderId}`,
+        `Customer   : ${customer?.email ?? "unknown"}`,
+        `Reason     : ${reason}`,
+        detailsText ? `Details    : ${detailsText}` : "",
+        ``,
+        `Please review and contact the customer within 2 business days.`,
+      ].filter(Boolean).join("\n"),
+      html: `<p><strong>New Return Request #${row.id}</strong></p><ul><li><strong>Order:</strong> #${orderId}</li><li><strong>Customer:</strong> ${customer?.email ?? "unknown"}</li><li><strong>Reason:</strong> ${reason}</li>${detailsText ? `<li><strong>Details:</strong> ${detailsText}</li>` : ""}</ul><p>Please review and contact the customer within 2 business days.</p>`,
+    }).catch(err => logger.warn({ err }, "Return request team email not sent"));
+
+    res.status(201).json({
+      ok: true,
+      requestId: row.id,
+      status: row.status,
+      message: "Your return request has been received. Our team will be in touch within 2 business days. You can also reach us at support@ucfilters.co.ke or call 0717774049.",
+    });
+  } catch (err) {
+    logger.error({ err }, "Return request submission error");
+    res.status(500).json({ error: "Failed to submit return request. Please try again or contact support@ucfilters.co.ke." });
   }
 });
 
