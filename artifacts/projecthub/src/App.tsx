@@ -29,6 +29,7 @@ import Notifications from '@/pages/notifications';
 import SystemStatus from '@/pages/system-status';
 import WebhookTester from '@/pages/webhook-tester';
 import OrdersPage from '@/pages/orders';
+import UcNotificationFailuresPage from '@/pages/uc-notification-failures';
 // Admin pages
 import AdminUsersPage from '@/pages/admin/users';
 
@@ -132,6 +133,9 @@ function Router() {
               </Route>
               <Route path="/orders">
                 <PageGuard page="orders"><OrdersPage /></PageGuard>
+              </Route>
+              <Route path="/uc-notifications">
+                <PageGuard page="uc-notifications"><UcNotificationFailuresPage /></PageGuard>
               </Route>
               {/* Admin-only */}
               <Route path="/admin/users">

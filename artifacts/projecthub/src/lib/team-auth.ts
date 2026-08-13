@@ -29,6 +29,7 @@ export const PAGES = [
   { slug: "system",           label: "System Status" },
   { slug: "webhook",          label: "Webhook Tester" },
   { slug: "orders",           label: "Orders" },
+  { slug: "uc-notifications", label: "Notification Failures" },
 ] as const;
 
 export type PageSlug = typeof PAGES[number]["slug"];
