@@ -847,3 +847,265 @@ describe("GET /api/uc/admin/orders.csv — symmetric item count (no padding need
     assert.equal(cells[i2 + 3], "1999",                    "order D item_2_total");
   });
 });
+
+// ── Asymmetric item-count edge case ───────────────────────────────────────────
+
+const ASYM_EMAIL = "orders-csv-asymmetric-test@ucfilters-test.internal";
+
+// Sentinel status isolates this suite's result set from the shared DB.
+const ASYM_STATUS = "asym-csv-test-one-big-order";
+
+// The five line items on the big order (order E), in insertion order.
+const BIG_ORDER_ITEMS = [
+  { productId: 1,  name: "Hydra Flux",               quantity: 1, total: "3499" },
+  { productId: 22, name: "Bottle Filter Cartridge",  quantity: 2, total: "2198" },
+  { productId: 11, name: "Sweet Home",               quantity: 1, total: "3699" },
+  { productId: 23, name: "Faucet Filter Cartridge",  quantity: 1, total: "1999" },
+  { productId: 24, name: "Shower Filter Cartridge",  quantity: 3, total: "4497" },
+] as const;
+
+let asymUserId: number;
+let asymOrderIds: number[] = []; // [big 5-item order, 1-item order, 1-item order]
+
+describe("GET /api/uc/admin/orders.csv — asymmetric item counts (one 5-item order, two 1-item orders)", () => {
+  before(async () => {
+    const [inserted] = await db
+      .insert(ucUsersTable)
+      .values({
+        email: ASYM_EMAIL,
+        passwordHash: "test-hash-not-real",
+        firstName: "Asymmetric",
+        lastName: "Test",
+        isAdmin: false,
+      })
+      .returning({ id: ucUsersTable.id });
+    if (!inserted) throw new Error("Failed to insert asymmetric test user");
+    asymUserId = inserted.id;
+
+    process.env["UC_ADMIN_EMAILS"] = ASYM_EMAIL;
+
+    // Order E — five line items
+    const [orderE] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(asymUserId),
+        status: ASYM_STATUS,
+        total: "15892",
+        currency: "KES",
+        paymentMethod: "mpesa",
+        paymentReference: `TEST-ASYM-${Date.now()}`,
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {
+          firstName: "Big",
+          lastName: "Order",
+          address1: "5 Bulk Blvd",
+          city: "Nairobi",
+          country: "KE",
+          phone: "+254700000005",
+        },
+        webhookRecovery: false,
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderE) throw new Error("Failed to insert order E");
+
+    // Order F — one line item
+    const [orderF] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(asymUserId),
+        status: ASYM_STATUS,
+        total: "3499",
+        currency: "KES",
+        paymentMethod: "cod",
+        paymentReference: "",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {
+          firstName: "Small",
+          lastName: "One",
+          address1: "6 Single St",
+          city: "Mombasa",
+          country: "KE",
+          phone: "+254700000006",
+        },
+        webhookRecovery: false,
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderF) throw new Error("Failed to insert order F");
+
+    // Order G — one line item
+    const [orderG] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(asymUserId),
+        status: ASYM_STATUS,
+        total: "1099",
+        currency: "KES",
+        paymentMethod: "cod",
+        paymentReference: "",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {
+          firstName: "Small",
+          lastName: "Two",
+          address1: "7 Single St",
+          city: "Kisumu",
+          country: "KE",
+          phone: "+254700000007",
+        },
+        webhookRecovery: false,
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderG) throw new Error("Failed to insert order G");
+
+    asymOrderIds = [orderE.id, orderF.id, orderG.id];
+
+    // Five line items on order E
+    await db.insert(ucOrderItemsTable).values(
+      BIG_ORDER_ITEMS.map(it => ({ orderId: orderE.id, ...it })),
+    );
+
+    // One line item each on orders F and G
+    await db.insert(ucOrderItemsTable).values([
+      {
+        orderId: orderF.id,
+        productId: 1,
+        name: "Hydra Flux",
+        quantity: 1,
+        total: "3499",
+      },
+      {
+        orderId: orderG.id,
+        productId: 22,
+        name: "Bottle Filter Cartridge",
+        quantity: 1,
+        total: "1099",
+      },
+    ]);
+  });
+
+  after(async () => {
+    if (asymOrderIds.length > 0) {
+      await db
+        .delete(ucOrderItemsTable)
+        .where(inArray(ucOrderItemsTable.orderId, asymOrderIds));
+      await db
+        .delete(ucOrdersTable)
+        .where(inArray(ucOrdersTable.id, asymOrderIds));
+    }
+    if (asymUserId) {
+      await db.delete(ucUsersTable).where(eq(ucUsersTable.id, asymUserId));
+    }
+    delete process.env["UC_ADMIN_EMAILS"];
+  });
+
+  const csvUrl = `/api/uc/admin/orders.csv?status=${ASYM_STATUS}`;
+
+  function asymAuth() {
+    return { Authorization: authHeader({ id: asymUserId, email: ASYM_EMAIL }) };
+  }
+
+  it("returns 200 with exactly 3 data rows", async () => {
+    const { status, headers, text } = await apiFetch(csvUrl, { headers: asymAuth() });
+    assert.equal(status, 200);
+    assert.ok(
+      headers.get("content-type")?.startsWith("text/csv"),
+      `Expected text/csv, got: ${headers.get("content-type")}`,
+    );
+    const dataLines = text.split("\r\n").filter(l => l.trim()).slice(1);
+    assert.equal(dataLines.length, 3, `Expected 3 data rows, got ${dataLines.length}`);
+  });
+
+  it("header has exactly 5 × COLS_PER_ITEM item columns (maxItems = 5)", async () => {
+    const { text } = await apiFetch(csvUrl, { headers: asymAuth() });
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const headerCells = parseCsvRow(lines[0]!);
+    const itemColCount = headerCells.length - STATIC_COL_COUNT;
+    assert.equal(
+      itemColCount,
+      5 * COLS_PER_ITEM,
+      `Expected ${5 * COLS_PER_ITEM} item columns in header, got ${itemColCount}`,
+    );
+  });
+
+  it("the 5-item row populates all five item slots correctly", async () => {
+    const { text } = await apiFetch(csvUrl, { headers: asymAuth() });
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length;
+
+    const bigRow = lines.slice(1).find(l => {
+      const cells = parseCsvRow(l);
+      return cells[0] !== undefined && Number(cells[0]) === asymOrderIds[0];
+    });
+    assert.ok(bigRow, "Could not find the 5-item order row in the CSV");
+
+    const cells = parseCsvRow(bigRow!);
+    assert.equal(
+      cells.length,
+      totalHeaderCols,
+      `5-item row has ${cells.length} columns, expected ${totalHeaderCols}`,
+    );
+
+    for (let n = 0; n < BIG_ORDER_ITEMS.length; n++) {
+      const item = BIG_ORDER_ITEMS[n]!;
+      const base = STATIC_COL_COUNT + n * COLS_PER_ITEM;
+      assert.equal(cells[base],     String(item.productId), `item_${n + 1}_productId`);
+      assert.equal(cells[base + 1], item.name,              `item_${n + 1}_name`);
+      assert.equal(cells[base + 2], String(item.quantity),  `item_${n + 1}_qty`);
+      assert.equal(cells[base + 3], item.total,             `item_${n + 1}_total`);
+    }
+  });
+
+  it("each 1-item row has item 1 populated and items 2–5 empty", async () => {
+    const { text } = await apiFetch(csvUrl, { headers: asymAuth() });
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length;
+
+    const expectedByOrderId: Record<number, { productId: string; name: string; qty: string; total: string }> = {
+      [asymOrderIds[1]!]: { productId: "1",  name: "Hydra Flux",              qty: "1", total: "3499" },
+      [asymOrderIds[2]!]: { productId: "22", name: "Bottle Filter Cartridge", qty: "1", total: "1099" },
+    };
+
+    for (const orderId of [asymOrderIds[1]!, asymOrderIds[2]!]) {
+      const row = lines.slice(1).find(l => {
+        const cells = parseCsvRow(l);
+        return cells[0] !== undefined && Number(cells[0]) === orderId;
+      });
+      assert.ok(row, `Could not find 1-item order ${orderId} row in the CSV`);
+
+      const cells = parseCsvRow(row!);
+      assert.equal(
+        cells.length,
+        totalHeaderCols,
+        `1-item row for order ${orderId} has ${cells.length} columns, expected ${totalHeaderCols}`,
+      );
+
+      // Item 1 populated
+      const exp = expectedByOrderId[orderId]!;
+      const i1 = STATIC_COL_COUNT;
+      assert.equal(cells[i1],     exp.productId, `order ${orderId} item_1_productId`);
+      assert.equal(cells[i1 + 1], exp.name,      `order ${orderId} item_1_name`);
+      assert.equal(cells[i1 + 2], exp.qty,       `order ${orderId} item_1_qty`);
+      assert.equal(cells[i1 + 3], exp.total,     `order ${orderId} item_1_total`);
+
+      // Items 2–5 all empty
+      const paddingCells = cells.slice(STATIC_COL_COUNT + COLS_PER_ITEM);
+      assert.equal(
+        paddingCells.length,
+        4 * COLS_PER_ITEM,
+        `order ${orderId}: expected ${4 * COLS_PER_ITEM} padding cells, got ${paddingCells.length}`,
+      );
+      for (let i = 0; i < paddingCells.length; i++) {
+        assert.equal(
+          paddingCells[i],
+          "",
+          `order ${orderId}: padding cell [${i}] must be empty, got: "${paddingCells[i]}"`,
+        );
+      }
+    }
+  });
+});
