@@ -356,6 +356,19 @@ export function useApi() {
     updateProfile: (data: { firstName?: string; lastName?: string; phone?: string }) =>
       patch<UCCustomer>('/api/uc/customer/profile', data),
 
+    /** Permanently anonymise the authenticated user's account and personal data. */
+    deleteAccount: async (): Promise<{ ok: boolean }> => {
+      const res = await fetch(`${getBase()}/api/uc/customer`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || `${res.status}`);
+      }
+      return res.json() as Promise<{ ok: boolean }>;
+    },
+
     /** Register an Expo push token for the authenticated user. */
     registerPushToken: (pushToken: string) =>
       post<{ ok: boolean }>('/api/uc/notify/register', { pushToken }),

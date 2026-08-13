@@ -249,6 +249,14 @@ async function applyStartupMigrations(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uc_return_requests_order_user_idx ON uc_return_requests (order_id, user_id)`
   );
   logger.info("Startup migration: uc_return_requests table ensured");
+
+  // Add deleted_at column to uc_users for GDPR/PDPA right-to-erasure revocation.
+  // When set, any still-valid bearer token for this userId is rejected by
+  // DB-anchored customer routes (profile, orders, tickets, water-tests, etc.).
+  await pool.query(`
+    ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+  `);
+  logger.info("Startup migration: uc_users.deleted_at column ensured");
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────

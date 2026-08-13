@@ -14,6 +14,10 @@ export const ucUsersTable = pgTable("uc_users", {
   lastName:     text("last_name").notNull().default(""),
   isAdmin:      boolean("is_admin").notNull().default(false),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Set when the customer exercises their GDPR/PDPA right to erasure.
+   *  Any still-valid bearer token for this userId is rejected by DB-anchored
+   *  customer routes once this timestamp is set. */
+  deletedAt:    timestamp("deleted_at", { withTimezone: true }),
 });
 
 export type UcUser = typeof ucUsersTable.$inferSelect;

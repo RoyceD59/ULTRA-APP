@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { createHash } from "node:crypto";
-import { appendFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,10 +32,10 @@ import {
   db,
   ucPushTokensTable, ucEnquiriesTable, ucNotifPrefsTable,
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
-  ucReviewsTable, ucProductMediaTable, ucNotificationLogTable,
+  ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
-import { eq, desc, inArray, and, asc, ne, gt } from "drizzle-orm";
+import { eq, desc, inArray, and, asc, ne, gt, or } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import {
@@ -856,6 +856,10 @@ router.post("/uc/products/:id/reviews", async (req: Request, res: Response): Pro
     media?: { url?: unknown; type?: unknown }[];
   };
 
+  // Reject deleted accounts — their JWT is still cryptographically valid.
+  const reviewNumericId = Number(claims.id);
+  if (await guardDeletedAccount(reviewNumericId, res)) return;
+
   const stars = Number(rating);
   if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
     res.status(400).json({ error: "Rating must be a whole number from 1 to 5" });
@@ -1265,6 +1269,12 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
       // Looks like a real serial DB id (not a timestamp)
       const dbUser = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.id, numericId) });
       if (dbUser) {
+        // Reject requests from deleted accounts — their JWT is still cryptographically
+        // valid but the account has exercised its right to erasure.
+        if (dbUser.deletedAt) {
+          res.status(401).json({ error: "This account has been deleted" });
+          return;
+        }
         res.json({
           id: dbUser.id,
           email: dbUser.email,
@@ -1325,6 +1335,8 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
     return;
   }
 
+  if (await guardDeletedAccount(numericId, res)) return;
+
   const updates: Record<string, string> = {};
   if (firstName !== undefined) updates["firstName"] = firstName.trim();
   if (lastName  !== undefined) updates["lastName"]  = lastName.trim();
@@ -1357,6 +1369,338 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
   } catch (err) {
     console.error("[profile patch] error:", err);
     res.status(500).json({ error: "Failed to update profile. Please try again." });
+  }
+});
+
+// ─── Delete account (GDPR / PDPA right to erasure) ───────────────────────────
+// Anonymises all PII in place rather than hard-deleting rows so that order
+// history and ticket records remain intact for the team (foreign-key integrity
+// and business audit trail). Linked personal fields are replaced with the
+// "[deleted customer]" sentinel so the team can see a record existed without
+// any personal data being visible.
+//
+// Full erasure inventory:
+//   uc_users        — email, passwordHash, firstName, lastName, phone
+//   uc_orders       — shippingAddress (customer's delivery/contact info)
+//   uc_enquiries    — name, email, phone, message
+//   uc_tickets      — issueDescription, photos[], videos[]
+//   uc_water_tests  — name, phone, address, concerns, photos[], videos[]
+//   uc_push_tokens  — hard-deleted (token itself is PII)
+//   Object storage  — all media blobs attached to tickets and water tests
+//   JSONL backups   — tickets.jsonl / water-tests.jsonl entries scrubbed by ID
+//   In-memory stores — fallback arrays cleared of this user's entries
+
+/** Check whether the uc_users row for numericId has a non-null deleted_at.
+ *  Sends an appropriate HTTP error response and returns true when the route
+ *  should abort immediately.  Fails CLOSED: when the DB is unavailable it
+ *  returns 503 rather than passing the request through, so an erased identity
+ *  can never be reactivated by a transient outage. */
+async function guardDeletedAccount(numericId: number, res: Response): Promise<boolean> {
+  // Non-DB-anchored identities (anonymous, legacy timestamp IDs) are not in
+  // the deleted-account table — skip the check entirely.
+  if (isNaN(numericId) || numericId <= 0 || numericId >= 1_000_000_000) return false;
+  try {
+    const result = await pool.query<{ deleted_at: string | null }>(
+      "SELECT deleted_at FROM uc_users WHERE id = $1 LIMIT 1",
+      [numericId]
+    );
+    if (result.rows[0]?.deleted_at) {
+      res.status(401).json({ error: "This account has been deleted" });
+      return true;
+    }
+    return false;
+  } catch {
+    // DB unavailable — fail closed to prevent erased identities from slipping through.
+    res.status(503).json({ error: "Service temporarily unavailable. Please try again." });
+    return true;
+  }
+}
+
+/** Best-effort delete a single media blob from object storage. Silently ignored if
+ *  the URL doesn't point to an internal upload or if the file no longer exists. */
+async function deleteStorageBlob(url: string): Promise<void> {
+  // Only internal uploads have the /api/storage/objects/ prefix
+  if (!url.startsWith(UPLOADED_MEDIA_PREFIX)) return;
+  const objectPath = url.slice("/api/storage".length); // "/objects/uploads/<uuid>"
+  if (!objectPath.startsWith("/objects/uploads/")) return;
+  try {
+    const file = await objectStorage.getObjectEntityFile(objectPath);
+    await file.delete();
+  } catch {
+    // ObjectNotFoundError or any other failure — already gone or inaccessible, skip
+  }
+}
+
+/** Overwrite entries matching `predicate` in a JSONL file with the result of
+ *  `scrub(line)`. Writes atomically via a temp file; silently skips on any I/O error. */
+async function scrubJsonlFile(
+  filename: string,
+  predicate: (rec: Record<string, unknown>) => boolean,
+  scrub: (rec: Record<string, unknown>) => Record<string, unknown>,
+): Promise<void> {
+  const filePath = join(UC_DATA_DIR, filename);
+  const tmpPath  = `${filePath}.tmp`;
+  try {
+    const raw    = await readFile(filePath, "utf8").catch(() => "");
+    const lines  = raw.split("\n");
+    const output = lines.map(line => {
+      if (!line.trim()) return line;
+      try {
+        const rec = JSON.parse(line) as Record<string, unknown>;
+        return predicate(rec) ? JSON.stringify(scrub(rec)) : line;
+      } catch {
+        return line; // malformed line — leave unchanged
+      }
+    });
+    await writeFile(tmpPath, output.join("\n"), "utf8");
+    await rename(tmpPath, filePath);
+  } catch (err) {
+    logger.warn({ err, filename }, "JSONL scrub failed — continuing deletion");
+  }
+}
+
+router.delete("/uc/customer", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const numericId = Number(claims.id);
+  if (isNaN(numericId) || numericId <= 0 || numericId >= 1_000_000_000) {
+    res.status(403).json({ error: "Account deletion is only available for registered accounts" });
+    return;
+  }
+
+  try {
+    // 1. Verify the user exists
+    const existing = await db.query.ucUsersTable.findFirst({
+      where: eq(ucUsersTable.id, numericId),
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+
+    // Guard: admin accounts cannot be self-deleted through the customer route.
+    // Checks both the DB flag AND the UC_ADMIN_EMAILS env list — identical to
+    // how isAdminRequest() works — so environment-designated admins are also
+    // protected regardless of whether their DB is_admin flag is set.
+    if (existing.isAdmin || adminEmailList().includes(existing.email.toLowerCase())) {
+      res.status(403).json({ error: "Admin accounts cannot be deleted through the customer deletion flow. Contact the team to remove your account." });
+      return;
+    }
+
+    const DELETED = "[deleted customer]";
+    const userId  = String(numericId);
+    // Capture pre-deletion email for enquiry-fallback scrubbing (those records
+    // have no userId, so we must match by the email they were submitted with).
+    const preDeletionEmail = existing.email;
+
+    // 2. Collect media URLs from tickets, water-tests, and reviews BEFORE
+    //    redacting, so we can delete blobs from object storage.
+    const [ticketRows, waterTestRows, reviewRows] = await Promise.all([
+      db.select({ id: ucTicketsTable.id, photos: ucTicketsTable.photos, videos: ucTicketsTable.videos })
+        .from(ucTicketsTable).where(eq(ucTicketsTable.userId, userId)),
+      db.select({ id: ucWaterTestsTable.id, photos: ucWaterTestsTable.photos, videos: ucWaterTestsTable.videos })
+        .from(ucWaterTestsTable).where(eq(ucWaterTestsTable.userId, userId)),
+      db.select({ id: ucReviewsTable.id, media: ucReviewsTable.media })
+        .from(ucReviewsTable).where(eq(ucReviewsTable.userId, userId)),
+    ]);
+
+    const ticketIds    = ticketRows.map(t => t.id);
+    const waterTestIds = waterTestRows.map(w => w.id);
+
+    // Collect linked order IDs for notification-log scrubbing
+    const orderRows = await db
+      .select({ id: ucOrdersTable.id })
+      .from(ucOrdersTable)
+      .where(eq(ucOrdersTable.userId, userId));
+    const orderIds = orderRows.map(o => o.id);
+
+    const allMediaUrls: string[] = [
+      ...ticketRows.flatMap(t => [...(t.photos ?? []), ...(t.videos ?? [])]),
+      ...waterTestRows.flatMap(w => [...(w.photos ?? []), ...(w.videos ?? [])]),
+      ...reviewRows.flatMap(r => (r.media ?? []).map((m: ReviewMediaItem) => m.url)),
+    ];
+
+    // 3. Delete object-storage blobs (best-effort, in parallel)
+    await Promise.allSettled(allMediaUrls.map(deleteStorageBlob));
+
+    // 4. Anonymise the user row — keep id, createdAt for audit trail.
+    //    isAdmin is cleared so any still-valid bearer tokens lose DB-level privilege.
+    //    deletedAt is set so all DB-anchored customer routes reject further requests
+    //    with this token (token revocation without a token blacklist).
+    await db
+      .update(ucUsersTable)
+      .set({
+        email:        `deleted-${numericId}@deleted.invalid`,
+        passwordHash: await bcryptjs.hash(Math.random().toString(36), 10),
+        firstName:    DELETED,
+        lastName:     "",
+        phone:        "",
+        isAdmin:      false,
+        deletedAt:    new Date(),
+      })
+      .where(eq(ucUsersTable.id, numericId));
+
+    // 5. Redact personal fields on linked orders (shipping address carries name/phone)
+    await db
+      .update(ucOrdersTable)
+      .set({ shippingAddress: { name: DELETED, address: "", city: "", country: "" } })
+      .where(eq(ucOrdersTable.userId, userId));
+
+    // 6. Redact ALL personal fields on enquiries (including free-text message)
+    await db
+      .update(ucEnquiriesTable)
+      .set({ name: DELETED, email: DELETED, phone: "", message: DELETED })
+      .where(eq(ucEnquiriesTable.userId, userId));
+
+    // 7. Redact ALL personal fields on maintenance tickets (free text + media refs)
+    await db
+      .update(ucTicketsTable)
+      .set({ issueDescription: DELETED, photos: [], videos: [] })
+      .where(eq(ucTicketsTable.userId, userId));
+
+    // 8. Redact ALL personal fields on water tests (free text + media refs)
+    await db
+      .update(ucWaterTestsTable)
+      .set({ name: DELETED, phone: "", address: "", concerns: "", photos: [], videos: [] })
+      .where(eq(ucWaterTestsTable.userId, userId));
+
+    // 9. Redact public review content (authorName + free text + media refs).
+    //    Reviews are publicly visible, so redaction is mandatory.
+    await db
+      .update(ucReviewsTable)
+      .set({ authorName: DELETED, title: "", body: DELETED, media: [] })
+      .where(eq(ucReviewsTable.userId, userId));
+
+    // 10. Redact notification-log rows whose recipient/body carry PII.
+    //     Redact recipient (email/phone) and messageBody for every log entry
+    //     linked to this user's orders, tickets, or water-test IDs.
+    const notifConditions = [
+      ...(orderIds.length > 0    ? [inArray(ucNotificationLogTable.orderId,  orderIds)]   : []),
+      ...(ticketIds.length > 0   ? [inArray(ucNotificationLogTable.ticketId,  ticketIds)]  : []),
+      ...(waterTestIds.length > 0 ? [inArray(ucNotificationLogTable.testId,   waterTestIds)] : []),
+    ];
+    if (notifConditions.length > 0) {
+      await db
+        .update(ucNotificationLogTable)
+        .set({ recipient: DELETED, messageBody: "" })
+        .where(or(...notifConditions));
+    }
+    // Also redact by recipient = customer email/phone (covers SMS logs and any
+    // direct sendViaResend call where the customer's contact info IS the recipient).
+    const recipientConditions = [
+      ...(preDeletionEmail ? [eq(ucNotificationLogTable.recipient, preDeletionEmail)] : []),
+      ...(existing.phone   ? [eq(ucNotificationLogTable.recipient, existing.phone)]  : []),
+    ];
+    if (recipientConditions.length > 0) {
+      await db
+        .update(ucNotificationLogTable)
+        .set({ recipient: DELETED, messageBody: "" })
+        .where(or(...recipientConditions));
+    }
+    // Enquiry/return-request emails go to the team mailbox (info@ucfilters.com /
+    // support@ucfilters.co.ke), so the recipient column is NOT the customer's
+    // address.  The customer's name, email, phone, and message appear in
+    // messageBody (both Resend and SendGrid/SMTP fallback paths log the full
+    // plain-text body).  Use a content search to find and scrub those rows.
+    if (preDeletionEmail) {
+      await pool.query(
+        "UPDATE uc_notification_log SET recipient = $1, message_body = '' WHERE message_body LIKE $2",
+        [DELETED, `%${preDeletionEmail}%`]
+      );
+    }
+    if (existing.phone) {
+      await pool.query(
+        "UPDATE uc_notification_log SET recipient = $1, message_body = '' WHERE message_body LIKE $2",
+        [DELETED, `%${existing.phone}%`]
+      );
+    }
+
+    // 11. Redact uc_return_requests (raw SQL — table predates Drizzle schema)
+    await pool.query(
+      "UPDATE uc_return_requests SET details = $1 WHERE user_id = $2",
+      [DELETED, numericId]
+    );
+
+    // 12. Redact M-Pesa STK initiations — phone is the only PII stored.
+    //     The record is retained for payment audit; only the phone is erased.
+    if (existing.phone) {
+      await db
+        .update(mpesaStkInitiationsTable)
+        .set({ phone: "" })
+        .where(eq(mpesaStkInitiationsTable.phone, existing.phone));
+    }
+
+    // 13. Hard-delete push tokens (token string is PII) and notification prefs.
+    //     uc_notif_prefs contains the stable user ID; deleting the row removes
+    //     the linkage (no personal data beyond the ID itself).
+    await db
+      .delete(ucPushTokensTable)
+      .where(eq(ucPushTokensTable.userId, userId));
+    await db
+      .delete(ucNotifPrefsTable)
+      .where(eq(ucNotifPrefsTable.userId, userId));
+
+    // 13. Scrub JSONL backups.
+    //     tickets.jsonl  — matched by userId (always written alongside userId)
+    //     water-tests.jsonl — matched by water-test ID (from DB) OR by userId
+    //       for entries written after this fix, which now include a userId field.
+    await Promise.allSettled([
+      scrubJsonlFile("tickets.jsonl",
+        rec => rec["userId"] === userId,
+        rec => ({ ...rec, userId: "", issueDescription: DELETED, photos: [], videos: [] }),
+      ),
+      scrubJsonlFile("water-tests.jsonl",
+        rec => waterTestIds.includes(String(rec["id"])) || rec["userId"] === userId,
+        rec => ({ ...rec, userId: "", name: DELETED, phone: "", email: null, address: "", concerns: "", photos: [], videos: [] }),
+      ),
+    ]);
+
+    // 14. Scrub in-memory fallback stores (best-effort mutation in place)
+    for (const o of orderStoreFallback) {
+      const r = o as Record<string, unknown>;
+      if (r["userId"] === userId) {
+        r["shippingAddress"] = { name: DELETED, address: "", city: "", country: "" };
+      }
+    }
+    for (const t of ticketStoreFallback) {
+      const r = t as Record<string, unknown>;
+      if (r["userId"] === userId) {
+        r["issueDescription"] = DELETED;
+        r["photos"] = [];
+        r["videos"] = [];
+      }
+    }
+    for (const w of waterTestStoreFallback) {
+      const r = w as Record<string, unknown>;
+      if (r["userId"] === userId || waterTestIds.includes(String(r["id"]))) {
+        r["name"]     = DELETED;
+        r["phone"]    = "";
+        r["address"]  = "";
+        r["concerns"] = "";
+        r["photos"]   = [];
+        r["videos"]   = [];
+      }
+    }
+    // Enquiry fallback: no userId stored, match by the pre-deletion email address
+    for (const e of enquiryStoreFallback) {
+      const r = e as Record<string, unknown>;
+      if (r["email"] === preDeletionEmail) {
+        r["name"]    = DELETED;
+        r["email"]   = DELETED;
+        r["phone"]   = "";
+        r["message"] = DELETED;
+      }
+    }
+
+    logger.info({ userId: numericId }, "Customer account anonymised on deletion request");
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, userId: numericId }, "Failed to delete customer account");
+    res.status(500).json({ error: "Failed to delete account. Please try again or contact support." });
   }
 });
 
@@ -1520,7 +1864,7 @@ const RETURN_REASONS = [
 /** GET /uc/orders/:orderId/return-request — fetch existing return request for this order/user */
 router.get("/uc/orders/:orderId/return-request", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
-  const orderId = parseInt(req.params["orderId"] ?? "", 10);
+  const orderId = parseInt(String(req.params["orderId"] ?? ""), 10);
   if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID." }); return; }
   try {
     const result = await pool.query(
@@ -1539,7 +1883,9 @@ router.get("/uc/orders/:orderId/return-request", async (req: Request, res: Respo
 /** POST /uc/orders/:orderId/return-request — submit a return request */
 router.post("/uc/orders/:orderId/return-request", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
-  const orderId = parseInt(req.params["orderId"] ?? "", 10);
+  const retNumericId = Number(userId);
+  if (await guardDeletedAccount(retNumericId, res)) return;
+  const orderId = parseInt(String(req.params["orderId"] ?? ""), 10);
   if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID." }); return; }
 
   const { reason, details } = req.body ?? {};
@@ -1574,8 +1920,11 @@ router.post("/uc/orders/:orderId/return-request", async (req: Request, res: Resp
     const row = insert.rows[0] as { id: number; status: string; created_at: string };
 
     // Notify the support team by email (non-blocking)
-    const [customer] = await db.select({ email: ucUsersTable.email })
-      .from(ucUsersTable).where(eq(ucUsersTable.id, userId)).limit(1);
+    const numericUserId = Number(userId);
+    const [customer] = !isNaN(numericUserId)
+      ? await db.select({ email: ucUsersTable.email })
+          .from(ucUsersTable).where(eq(ucUsersTable.id, numericUserId)).limit(1)
+      : [undefined];
     const detailsText = (details ?? "").toString().trim();
     sendViaResend({
       from: "Ultra-Clear Returns <noreply@contacts.ucfilters.com>",
@@ -2364,6 +2713,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   // Capture the caller's identity up-front so we can send a push notification
   // after the order is created without re-parsing the header each time.
   const orderUserId = userIdFromBearer(req.headers["authorization"]);
+  const orderNumericId = Number(orderUserId);
+  if (await guardDeletedAccount(orderNumericId, res)) return;
 
   const { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, userEmail } =
     req.body as {
@@ -3043,6 +3394,8 @@ router.post("/uc/notify/register", async (req: Request, res: Response): Promise<
     res.status(401).json({ error: "Authentication required" });
     return;
   }
+  const notifyNumericId = Number(userId);
+  if (await guardDeletedAccount(notifyNumericId, res)) return;
   const { pushToken } = req.body as { pushToken?: string };
   if (!pushToken) {
     res.status(400).json({ error: "pushToken required" });
@@ -3094,6 +3447,8 @@ router.post("/uc/notify/prefs", async (req: Request, res: Response): Promise<voi
     res.status(401).json({ error: "Authentication required" });
     return;
   }
+  const prefsNumericId = Number(userId);
+  if (await guardDeletedAccount(prefsNumericId, res)) return;
   const { optOutOrders } = req.body as { optOutOrders?: boolean };
   const value = optOutOrders ?? false;
   try {
@@ -3187,7 +3542,7 @@ async function appendToLocalStore(filename: string, record: Record<string, unkno
  * Send a plain-text notification to service@ucfilters.com — same delivery chain
  * as notifyOffice (Resend → SendGrid/SMTP fallback). Fire-and-forget; never throws.
  */
-async function notifyService(subject: string, lines: string[]): Promise<void> {
+async function notifyService(subject: string, lines: string[], meta?: { testId?: string; ticketId?: string; orderId?: number | string }): Promise<void> {
   const text = lines.join("\n");
   const sent = await sendViaResend({
     from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
@@ -3202,6 +3557,9 @@ async function notifyService(subject: string, lines: string[]): Promise<void> {
     to: SERVICE_EMAIL, subject, text,
     html: `<pre style="font-family:monospace">${escapeHtml(text)}</pre>`,
     template: "service_notification",
+    testId:   meta?.testId,
+    ticketId: meta?.ticketId,
+    orderId:  meta?.orderId != null ? Number(meta.orderId) : undefined,
   }).catch(err =>
     console.error(`[service-notify] email failed for "${subject}":`, err instanceof Error ? err.message : err),
   );
@@ -3224,7 +3582,7 @@ function escapeHtml(s: string): string {
  * never the form payload (it contains customer PII; the submission itself is
  * already persisted in the database).
  */
-export async function notifyOffice(subject: string, lines: string[]): Promise<void> {
+export async function notifyOffice(subject: string, lines: string[], meta?: { testId?: string; ticketId?: string; orderId?: number | string }): Promise<void> {
   const text = lines.join("\n");
   const sent = await sendViaResend({
     from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
@@ -3242,6 +3600,9 @@ export async function notifyOffice(subject: string, lines: string[]): Promise<vo
       text,
       html: `<pre style="font-family:monospace">${escapeHtml(text)}</pre>`,
       template: "office_notification",
+      testId:   meta?.testId,
+      ticketId: meta?.ticketId,
+      orderId:  meta?.orderId != null ? Number(meta.orderId) : undefined,
     });
   } catch (err) {
     console.error(`[office-notify] email failed for "${subject}":`, err instanceof Error ? err.message : err);
@@ -3315,6 +3676,10 @@ router.post("/uc/enquiries", async (req: Request, res: Response): Promise<void> 
   }
 
   const userId = userIdFromBearer(req.headers["authorization"]);
+  // Reject deleted accounts — guest enquiries (userId === "anonymous") are allowed.
+  if (userId !== "anonymous") {
+    if (await guardDeletedAccount(Number(userId), res)) return;
+  }
 
   try {
     await db.insert(ucEnquiriesTable).values({
@@ -3363,6 +3728,8 @@ router.get("/uc/tickets", async (req: Request, res: Response): Promise<void> => 
 
 router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
+  const ticketNumericId = Number(userId);
+  if (await guardDeletedAccount(ticketNumericId, res)) return;
   const { productModel, issueDescription, preferredContactTime, photos, videos } = req.body as {
     productModel?: string;
     issueDescription?: string;
@@ -3421,13 +3788,13 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
         });
         sendEmail({ to: contact.email, ...receipt, template: "ticket_confirmation", ticketId }).catch(() => {});
       }
-      notifyOffice(subject, lines).catch(() => {});
+      notifyOffice(subject, lines, { ticketId }).catch(() => {});
       notifyService(subject, [
         ...lines,
         "",
         `Service type:  Maintenance / Support Ticket`,
         `Ticket ref:    ${ticketId}`,
-      ]).catch(() => {});
+      ], { ticketId }).catch(() => {});
     }).catch(() => {});
 
     // Local JSONL backup regardless of login state
@@ -3469,6 +3836,8 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
 // ─── Water Tests ──────────────────────────────────────────────────────────────
 router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
+  const wtNumericId = Number(userId);
+  if (await guardDeletedAccount(wtNumericId, res)) return;
   const { name, address, phone, email: formEmail, waterSource, concerns, photos, videos } = req.body as {
     name?: string;
     address?: string;
@@ -3545,17 +3914,17 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
     }).catch(() => {});
 
     // Full copy to sales@ucfilters.com (office) and service@ucfilters.com
-    notifyOffice(subject, lines).catch(() => {});
+    notifyOffice(subject, lines, { testId }).catch(() => {});
     notifyService(subject, [
       ...lines,
       "",
       `Service type: Water Quality Test`,
       `Ticket:       ${testId}`,
-    ]).catch(() => {});
+    ], { testId }).catch(() => {});
 
     // Local JSONL backup for retrieval without DB access
     appendToLocalStore("water-tests.jsonl", {
-      id: testId, name, phone, email: formEmail ?? null, address,
+      id: testId, userId, name, phone, email: formEmail ?? null, address,
       waterSource: waterSource ?? "Municipal", concerns: concerns ?? "",
       photos: photoList, videos: videoList, submittedAt: new Date().toISOString(),
     });

@@ -233,6 +233,125 @@ const editStyles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' as const },
 });
 
+// ── Delete Account Confirmation Modal ─────────────────────────────────────────
+
+interface DeleteAccountModalProps {
+  visible:  boolean;
+  onClose:  () => void;
+  onDelete: () => Promise<void>;
+}
+
+function DeleteAccountModal({ visible, onClose, onDelete }: DeleteAccountModalProps) {
+  const colors   = useColors();
+  const [busy,   setBusy]   = useState(false);
+  const [error,  setError]  = useState('');
+  const [step,   setStep]   = useState<'confirm' | 'final'>('confirm');
+
+  // Reset when opened
+  useEffect(() => {
+    if (visible) { setStep('confirm'); setError(''); }
+  }, [visible]);
+
+  async function handleDelete() {
+    setBusy(true);
+    setError('');
+    try {
+      await onDelete();
+      // Parent closes the modal after logout
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete account. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <View style={delStyles.overlay}>
+        <View style={[delStyles.sheet, { backgroundColor: colors.background }]}>
+          {/* Icon */}
+          <View style={[delStyles.iconWrap, { backgroundColor: colors.destructive + '18' }]}>
+            <Ionicons name="trash-outline" size={32} color={colors.destructive} />
+          </View>
+
+          {step === 'confirm' ? (
+            <>
+              <Text style={[delStyles.title, { color: colors.text }]}>Delete your account?</Text>
+              <Text style={[delStyles.body, { color: colors.mutedForeground }]}>
+                This will permanently erase your personal information — name, email, phone,
+                and contact details attached to your orders and tickets.{'\n\n'}
+                Your order history will remain in our system as anonymised records for
+                business purposes, but no personal data will be retained.
+              </Text>
+              <View style={delStyles.btnRow}>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={[delStyles.cancelBtn, { borderColor: colors.border }]}
+                  activeOpacity={0.75}>
+                  <Text style={[delStyles.cancelText, { color: colors.text }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setStep('final')}
+                  style={[delStyles.deleteBtn, { backgroundColor: colors.destructive }]}
+                  activeOpacity={0.85}>
+                  <Text style={delStyles.deleteBtnText}>Continue</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={[delStyles.title, { color: colors.text }]}>Are you sure?</Text>
+              <Text style={[delStyles.body, { color: colors.mutedForeground }]}>
+                This cannot be undone. Your account and personal data will be permanently
+                deleted immediately.
+              </Text>
+              {!!error && (
+                <View style={[delStyles.errorBox, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '30' }]}>
+                  <Ionicons name="alert-circle-outline" size={15} color={colors.destructive} />
+                  <Text style={[delStyles.errorText, { color: colors.destructive }]}>{error}</Text>
+                </View>
+              )}
+              <View style={delStyles.btnRow}>
+                <TouchableOpacity
+                  onPress={onClose}
+                  disabled={busy}
+                  style={[delStyles.cancelBtn, { borderColor: colors.border }]}
+                  activeOpacity={0.75}>
+                  <Text style={[delStyles.cancelText, { color: colors.text }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  disabled={busy}
+                  style={[delStyles.deleteBtn, { backgroundColor: colors.destructive, opacity: busy ? 0.7 : 1 }]}
+                  activeOpacity={0.85}>
+                  {busy
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={delStyles.deleteBtnText}>Delete my account</Text>}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const delStyles = StyleSheet.create({
+  overlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  sheet:        { width: '100%', maxWidth: 380, borderRadius: 20, padding: 24, alignItems: 'center', gap: 12 },
+  iconWrap:     { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  title:        { fontSize: 18, fontWeight: '700' as const, textAlign: 'center' },
+  body:         { fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  btnRow:       { flexDirection: 'row' as const, gap: 10, width: '100%', marginTop: 4 },
+  cancelBtn:    { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 13, alignItems: 'center' as const },
+  cancelText:   { fontSize: 15, fontWeight: '600' as const },
+  deleteBtn:    { flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center' as const, justifyContent: 'center' as const, minHeight: 46 },
+  deleteBtnText:{ color: '#fff', fontSize: 15, fontWeight: '700' as const },
+  errorBox:     { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, width: '100%' },
+  errorText:    { flex: 1, fontSize: 13 },
+});
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function AccountScreen() {
@@ -245,6 +364,7 @@ export default function AccountScreen() {
   const [notifStatus,       setNotifStatus]       = useState<string>('undetermined');
   const [filterActivation,  setFilterActivation]  = useState<FilterActivation | null>(null);
   const [editModalVisible,  setEditModalVisible]   = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   const refreshNotifStatus = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -462,6 +582,16 @@ export default function AccountScreen() {
             <Ionicons name="log-out-outline" size={18} color={colors.destructive} />
             <Text style={[styles.logoutText, { color: colors.destructive }]}>Sign Out</Text>
           </TouchableOpacity>
+
+          {/* Delete account */}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setDeleteModalVisible(true);
+            }}
+            style={styles.deleteAccountBtn}>
+            <Text style={[styles.deleteAccountText, { color: colors.mutedForeground }]}>Delete my account</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -472,6 +602,18 @@ export default function AccountScreen() {
         email={user.email}
         onClose={() => setEditModalVisible(false)}
         onSaved={() => setEditModalVisible(false)}
+      />
+
+      {/* Delete Account Modal */}
+      <DeleteAccountModal
+        visible={deleteModalVisible}
+        onClose={() => setDeleteModalVisible(false)}
+        onDelete={async () => {
+          await api.deleteAccount();
+          setDeleteModalVisible(false);
+          await logout();
+          queryClient.clear();
+        }}
       />
     </>
   );
@@ -515,8 +657,10 @@ const styles = StyleSheet.create({
   menuItem:         { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   menuIcon:         { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   menuLabel:        { flex: 1, fontSize: 15, fontWeight: '500' as const },
-  logoutBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14 },
-  logoutText:       { fontSize: 15, fontWeight: '600' as const },
+  logoutBtn:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14 },
+  logoutText:          { fontSize: 15, fontWeight: '600' as const },
+  deleteAccountBtn:    { alignItems: 'center', paddingVertical: 8 },
+  deleteAccountText:   { fontSize: 13, textDecorationLine: 'underline' as const },
 
   notifCard:        { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14, marginTop: topPad + 12, marginHorizontal: 16 },
   notifIconWrap:    { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
