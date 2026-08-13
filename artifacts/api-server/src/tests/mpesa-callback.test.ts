@@ -792,6 +792,236 @@ describe("M-Pesa initiation — DB insert failure", () => {
   });
 });
 
+// ── (o) Successful callback on pending order → sends customer email ────────────
+// Key signal: when the M-Pesa callback advances an existing pending order to
+// "processing", sendViaResend must be called with the customer's email address
+// (userId on the order) so they receive a confirmation email.
+//
+// The Resend API is stubbed via globalThis.fetch.  We capture every POST to
+// api.resend.com and assert that at least one targets the customer email.
+
+describe("M-Pesa callback — customer email sent when pending order is advanced", () => {
+  it("POSTs to the Resend API with the customer email after advancing to processing", async () => {
+    const ref = nextRef();
+    await insertInitiation(ref, 5500, "254712345670");
+
+    // Insert a pending order whose userId is the customer email.
+    const [inserted] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId:           "otieno@example.com",
+        status:           "pending",
+        total:            "5500",
+        currency:         "KES",
+        paymentMethod:    "mpesa",
+        paymentReference: ref,
+        promoCode:        "",
+        discountPercent:  0,
+        discountAmount:   0,
+        shippingAddress:  { firstName: "Otieno", city: "Kisumu" },
+      })
+      .returning();
+
+    const resendCalls: { to: unknown; subject: unknown }[] = [];
+
+    // Custom fetch stub: confirms Daraja + captures Resend sends.
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("/oauth/v1/generate")) {
+        return new Response(JSON.stringify({ access_token: "stub_token" }), { status: 200 });
+      }
+      if (u.includes("/stkpushquery")) {
+        return new Response(
+          JSON.stringify({ ResultCode: "0", ResultDesc: "Processed successfully." }),
+          { status: 200 },
+        );
+      }
+      if (u.includes("resend.com")) {
+        let body: Record<string, unknown> = {};
+        try { body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>; } catch { /* skip */ }
+        resendCalls.push({ to: body["to"], subject: body["subject"] });
+        return new Response(JSON.stringify({ id: "re_stub_ok" }), { status: 200 });
+      }
+      // Fall through for anything else (DB health-checks, etc.)
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+
+    try {
+      const { status, body } = await postCallback(stkPayload(ref, 0, 5500, "254712345670", "LEMAIL01"));
+      assert.equal(status, 200, "callback must return 200");
+      assert.equal(body["ResultCode"], 0);
+      assert.equal(body["orderId"], inserted!.id, "orderId must match the existing order");
+
+      // DB: order advanced to processing
+      const rows = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.paymentReference, ref));
+      assert.equal(rows[0]!.status, "processing", "order must be advanced to processing");
+
+      // Email: at least one Resend call must target the customer
+      assert.ok(
+        resendCalls.length > 0,
+        "at least one email must be sent via Resend when a pending order is advanced",
+      );
+      const customerEmailSent = resendCalls.some((c) => String(c.to).includes("otieno@example.com"));
+      assert.ok(
+        customerEmailSent,
+        `customer email 'otieno@example.com' must appear in a Resend to field; calls: ${JSON.stringify(resendCalls)}`,
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
+
+// ── (p) Successful callback with no existing order → recovery row + team alert ─
+// When Daraja confirms a payment but no order exists in our system (app lost
+// connectivity before createOrder fired), a recovery order is created and the
+// team is alerted via email.  This test verifies both: the DB row exists AND
+// a Resend call targeted the team inbox (info@ucfilters.com).
+
+describe("M-Pesa callback — team alert sent when recovery order is created", () => {
+  it("sends a team alert email when a recovery order is created for a confirmed payment", async () => {
+    const ref = nextRef();
+    await insertInitiation(ref, 6200, "254733000099");
+    // No existing order — this is the recovery path.
+
+    const resendCalls: { to: unknown; subject: unknown }[] = [];
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("/oauth/v1/generate")) {
+        return new Response(JSON.stringify({ access_token: "stub_token" }), { status: 200 });
+      }
+      if (u.includes("/stkpushquery")) {
+        return new Response(
+          JSON.stringify({ ResultCode: "0", ResultDesc: "Processed successfully." }),
+          { status: 200 },
+        );
+      }
+      if (u.includes("resend.com")) {
+        let body: Record<string, unknown> = {};
+        try { body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>; } catch { /* skip */ }
+        resendCalls.push({ to: body["to"], subject: body["subject"] });
+        return new Response(JSON.stringify({ id: "re_stub_team" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+
+    try {
+      const { status, body } = await postCallback(stkPayload(ref, 0, 9999, "254733000099", "LRECOV01"));
+      assert.equal(status, 200);
+      assert.equal(body["ResultCode"], 0);
+      assert.equal(body["recovered"], true, "recovered flag must be set");
+      assert.ok(typeof body["orderId"] === "number", "orderId must be a number");
+
+      // DB: recovery order created in 'processing' state
+      const rows = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.paymentReference, ref));
+      assert.equal(rows.length, 1, "exactly one recovery order must be created");
+      assert.equal(rows[0]!.status, "processing");
+      assert.equal(rows[0]!.webhookRecovery, true);
+
+      // Alert: Resend must have been called targeting the team email.
+      // alertTeamRecoveryOrder fires fetch via sendViaResend (fire-and-forget), so
+      // we wait a tick to allow the microtask to settle before asserting.
+      await new Promise<void>((r) => setTimeout(r, 50));
+      assert.ok(
+        resendCalls.length > 0,
+        "at least one email must be sent via Resend for a recovery order",
+      );
+      const teamAlertSent = resendCalls.some((c) => String(c.to).includes("info@ucfilters.com"));
+      assert.ok(
+        teamAlertSent,
+        `team email 'info@ucfilters.com' must appear in a Resend to field; calls: ${JSON.stringify(resendCalls)}`,
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
+
+// ── (q) Sequential duplicate callback → absorbed without a second order ────────
+// A non-concurrent duplicate (second request completes after the first): the
+// idempotency check on paymentReference finds the order created by the first
+// call and returns 200 without inserting another row.  This complements the
+// concurrent test (i) by verifying the idempotency path also works when the
+// requests arrive sequentially (the normal Safaricom retry pattern).
+
+describe("M-Pesa callback — sequential duplicate is absorbed (no second order created)", () => {
+  it("second callback for the same CheckoutRequestID is a no-op after the first succeeds", async () => {
+    const restore = stubDaraja("0");
+    const ref = nextRef();
+    await insertInitiation(ref, 4800, "254711000077");
+    try {
+      // First call — creates the recovery order.
+      const first = await postCallback(stkPayload(ref, 0, 4800, "254711000077", "LSEQ001"));
+      assert.equal(first.status, 200, "first callback must return 200");
+      assert.equal(first.body["ResultCode"], 0);
+      assert.equal(first.body["recovered"], true, "first call must create a recovery order");
+      const firstOrderId = first.body["orderId"] as number;
+
+      // Second call — the order already exists; idempotency must absorb it.
+      const second = await postCallback(stkPayload(ref, 0, 4800, "254711000077", "LSEQ001"));
+      assert.equal(second.status, 200, "second callback must also return 200");
+      assert.equal(second.body["ResultCode"], 0);
+      // orderId must still refer to the same order (not a new one).
+      assert.equal(
+        second.body["orderId"],
+        firstOrderId,
+        "duplicate callback must reference the original order, not a new one",
+      );
+
+      // DB: exactly one order row — no duplicate.
+      const rows = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.paymentReference, ref));
+      assert.equal(
+        rows.length,
+        1,
+        "sequential duplicate callback must not create a second order row",
+      );
+      assert.equal(rows[0]!.status, "processing");
+    } finally { restore(); }
+  });
+});
+
+// ── (r) Failed payment (ResultCode !== 0) → no order touched ─────────────────
+// Safaricom sends ResultCode !== 0 when the payment fails (user cancelled, wrong
+// PIN, insufficient funds, etc.).  The handler must ack the callback (ResultCode 0
+// in the response so Safaricom stops retrying) without creating or modifying any
+// order row.
+
+describe("M-Pesa callback — failed payment leaves no DB trace", () => {
+  it("ResultCode !== 0 callback is acknowledged without creating or touching any order", async () => {
+    const restore = stubDaraja("0"); // Daraja stub present but never reached (ResultCode check is first)
+    const ref = nextRef();
+    try {
+      // ResultCode 1 = InsufficientFunds; not 0 → handler should bail immediately.
+      const { status, body } = await postCallback(stkPayload(ref, 1));
+      assert.equal(status, 200, "Safaricom must always receive HTTP 200");
+      assert.equal(body["ResultCode"], 0, "ack ResultCode must always be 0");
+      assert.ok(!("orderId"   in body), "no orderId for a failed payment");
+      assert.ok(!("recovered" in body), "no recovered flag for a failed payment");
+
+      // DB: no order must exist for this reference.
+      const rows = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.paymentReference, ref));
+      assert.equal(rows.length, 0, "a non-zero ResultCode must not create or modify any order row");
+    } finally { restore(); }
+  });
+
+  it("ResultCode 1032 (user cancelled) callback is acknowledged without any DB action", async () => {
+    const restore = stubDaraja("0");
+    const ref = nextRef();
+    try {
+      const { status, body } = await postCallback(stkPayload(ref, 1032));
+      assert.equal(status, 200);
+      assert.equal(body["ResultCode"], 0);
+      assert.ok(!("orderId" in body));
+
+      const rows = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.paymentReference, ref));
+      assert.equal(rows.length, 0, "user-cancelled callback must not create any order row");
+    } finally { restore(); }
+  });
+});
+
 // ── (n) Full round-trip: POST /payments/mpesa → initiation stored → callback ─
 // This test exercises the real POST /payments/mpesa endpoint in sandbox mode
 // (no Daraja credentials active), verifies the initiation record is persisted,
