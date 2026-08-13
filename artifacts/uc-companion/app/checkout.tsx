@@ -13,6 +13,7 @@ import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPi
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import { type CodeValidationResult } from '@/hooks/useApi';
+import { classifyMpesaStatus } from '@/hooks/mpesaStatusClassifier';
 
 const DELIVERY_FEE = 500;
 
@@ -156,7 +157,8 @@ export default function CheckoutScreen() {
         // the network request was in-flight.
         if (attemptRef.current !== thisAttempt) return;
         if (settled) return;
-        if (status.status === 'success') {
+        const action = classifyMpesaStatus(status);
+        if (action.kind === 'create_order') {
           settled = true;
           clearInterval(intervalId);
           if (pollRef.current === intervalId) pollRef.current = null;
@@ -166,7 +168,7 @@ export default function CheckoutScreen() {
           // payment and retry createOrder rather than issuing a new STK push.
           const orderCreated = await createOrder('mpesa', checkoutRequestId);
           if (orderCreated) lastCheckoutRequestIdRef.current = null;
-        } else if (status.status === 'failed') {
+        } else if (action.kind === 'hint_dialog' || action.kind === 'retry_dialog') {
           settled = true;
           clearInterval(intervalId);
           if (pollRef.current === intervalId) pollRef.current = null;
@@ -174,32 +176,24 @@ export default function CheckoutScreen() {
           lastCheckoutRequestIdRef.current = null;
           setMpesaWaiting(false);
           setProcessing(false);
-          // Distinguish transient network errors from definitive declines so the
-          // customer gets the right advice:
-          //   retriable=false → wrong PIN, user cancelled, insufficient funds
-          //   retriable=true  → network/server timeout — offer "Try again / COD"
-          if (status.retriable === false) {
-            Alert.alert(
-              'Payment Not Completed',
-              (status.resultDesc ?? 'M-Pesa payment was not completed.') +
-                '\n\nIf you entered the wrong PIN, open the Safaricom app to verify your M-Pesa PIN before trying again.',
-            );
+          if (action.kind === 'hint_dialog') {
+            // retriable=false: wrong PIN, user cancelled, insufficient funds.
+            // Show dismissal + Safaricom-app PIN hint (no retry buttons).
+            Alert.alert(action.title, action.message);
           } else {
-            Alert.alert(
-              'M-Pesa Failed',
-              status.resultDesc ?? 'M-Pesa payment was not completed. You can try again or switch to Cash on Delivery.',
-              [
-                { text: 'Try again', onPress: () => setShowMpesaModal(true) },
-                {
-                  text: 'Pay with COD instead',
-                  onPress: () => setPaymentMethod('cod'),
-                  style: 'cancel',
-                },
-              ],
-            );
+            // retriable=true: transient network/server error.
+            // Offer "Try again / Pay with COD".
+            Alert.alert(action.title, action.message, [
+              { text: 'Try again', onPress: () => setShowMpesaModal(true) },
+              {
+                text: 'Pay with COD instead',
+                onPress: () => setPaymentMethod('cod'),
+                style: 'cancel',
+              },
+            ]);
           }
         }
-        // status === 'pending' → keep polling (no action needed)
+        // action.kind === 'continue_polling' → keep the interval running
       } catch { /* transient network error — keep polling */ }
     }, 3000);
     pollRef.current = intervalId;

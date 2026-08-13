@@ -44,6 +44,14 @@ function alertTeamRecoveryOrder(params: {
   }
 }
 
+// Exported so tests can import the live set instead of duplicating it.
+// ResultCodes representing definitive user declines — showing "Try again" would
+// be confusing or pointless for these outcomes.
+//   "1"    → insufficient funds (customer must top up)
+//   "1032" → customer cancelled / dismissed the prompt
+//   "2001" → wrong PIN entered
+export const NON_RETRIABLE_CODES = new Set(["1", "1032", "2001"]);
+
 const router = Router();
 
 // ─── M-Pesa webhook secret — DB-backed with env-var fallback ──────────────────
@@ -336,9 +344,6 @@ router.get(
         res.json({ status: "success", resultDesc: qData["ResultDesc"] });
         return;
       }
-      // Definitive non-retriable failures: user cancelled, wrong PIN, or insufficient funds.
-      // These are deliberate outcomes — showing "Try again" would be confusing or pointless.
-      const NON_RETRIABLE_CODES = new Set(["1", "1032", "2001"]);
       res.json({
         status: "failed",
         resultDesc: qData["ResultDesc"],
