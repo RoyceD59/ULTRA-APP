@@ -379,6 +379,124 @@ describe("createOrder — WooCommerce COD path — sendViaResend is called", () 
   });
 });
 
+// ── Path A3 — WooCommerce path with empty line_items ─────────────────────────
+//
+// When WooCommerce returns an order whose line_items array is empty the route
+// must still create the order and send a confirmation email whose body contains
+// the "No items listed" fallback text (rendered by buildOrderReceiptEmail).
+
+describe("createOrder — WooCommerce path — empty line_items — fallback receipt sent", () => {
+  it("creates the order and emails a receipt containing 'No items listed'", async () => {
+    const { id: userId, email: userEmail, jwt } = await createTestUser("wc-empty-items");
+
+    const savedWcKey    = process.env["WC_CONSUMER_KEY"];
+    const savedWcSecret = process.env["WC_CONSUMER_SECRET"];
+    const savedWcBase   = process.env["WC_BASE_URL"];
+    const savedPsKey    = process.env["PAYSTACK_SECRET_KEY"];
+    delete process.env["PAYSTACK_SECRET_KEY"];
+
+    try {
+      process.env["WC_CONSUMER_KEY"]    = "test_wc_key_empty";
+      process.env["WC_CONSUMER_SECRET"] = "test_wc_secret_empty";
+      process.env["WC_BASE_URL"]        = "https://wc-empty.test";
+
+      const payRef    = nextRef();
+      const wcOrderId = 7700 + seq;
+
+      const resendCalls: { to: string; subject: string; html: string; text: string }[] = [];
+
+      globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+        const u = String(url);
+
+        // WC orders POST → mock WooCommerce response with NO line items.
+        if (u.includes("wc-empty.test") && u.includes("/orders") && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id:             wcOrderId,
+              status:         "processing",
+              date_created:   new Date().toISOString(),
+              total:          "0",
+              currency:       "KES",
+              payment_method: "paystack",
+              shipping:       {},
+              line_items:     [],          // ← the key fixture: empty array
+              meta_data:      [],
+            }),
+            { status: 201 },
+          );
+        }
+
+        // WC orders GET (idempotency reconciliation) → empty list.
+        if (u.includes("wc-empty.test") && u.includes("/orders")) {
+          return new Response(JSON.stringify([]), { status: 200 });
+        }
+
+        // Resend → capture payload.
+        if (u.includes("resend.com") && u.includes("/emails")) {
+          const body = JSON.parse(init?.body as string ?? "{}") as typeof resendCalls[0];
+          resendCalls.push(body);
+          return new Response(JSON.stringify({ id: "re_wc_empty_stub" }), { status: 200 });
+        }
+
+        return new Response(JSON.stringify({}), { status: 200 });
+      };
+
+      const { status, body: orderBody } = await postOrders(
+        {
+          lineItems:        [],              // client also sends no items
+          paymentMethod:    "paystack",
+          paymentReference: payRef,
+          shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "5 Empty St", city: "Nairobi" },
+        },
+        jwt,
+      );
+
+      // The route must accept and create the order (not reject it).
+      assert.equal(
+        status, 200,
+        `order route must return 200 for empty line_items; got ${status}, body: ${JSON.stringify(orderBody)}`,
+      );
+
+      // sendOrderConfirmationEmail fires fire-and-forget — wait for it.
+      const captured = await waitFor(() => resendCalls.length > 0, 4000);
+      assert.ok(captured, "sendViaResend must be called within 4 s for empty line_items WC path");
+
+      const call = resendCalls[0]!;
+
+      // "to" must be EXACTLY the test user's email address.
+      assert.equal(call.to, userEmail, `"to" must be the test user's email; got: ${call.to}`);
+
+      // Subject must contain the WC order ID.
+      assert.ok(
+        call.subject.includes(String(wcOrderId)),
+        `subject must include the WC order ID (${wcOrderId}); got: "${call.subject}"`,
+      );
+
+      // The email body must contain the "No items listed" fallback text.
+      const bodyText = (call.html ?? "") + (call.text ?? "");
+      assert.ok(
+        bodyText.toLowerCase().includes("no items listed"),
+        `email body must contain the "No items listed" fallback when line_items is empty; ` +
+        `got html snippet: ${call.html?.slice(0, 300) ?? "(empty)"}`,
+      );
+
+      // Clean up: track anchor order rows.
+      const anchors = await db
+        .select({ id: ucOrdersTable.id })
+        .from(ucOrdersTable)
+        .where(eq(ucOrdersTable.userId, String(userId)));
+      for (const r of anchors) createdOrderIds.push(r.id);
+
+    } finally {
+      globalThis.fetch = realFetch;
+      if (savedWcKey    !== undefined) process.env["WC_CONSUMER_KEY"]    = savedWcKey;    else delete process.env["WC_CONSUMER_KEY"];
+      if (savedWcSecret !== undefined) process.env["WC_CONSUMER_SECRET"] = savedWcSecret; else delete process.env["WC_CONSUMER_SECRET"];
+      if (savedWcBase   !== undefined) process.env["WC_BASE_URL"]        = savedWcBase;   else delete process.env["WC_BASE_URL"];
+      if (savedPsKey    !== undefined) process.env["PAYSTACK_SECRET_KEY"] = savedPsKey;   else delete process.env["PAYSTACK_SECRET_KEY"];
+    }
+  });
+});
+
 // ── Path B — DB path ──────────────────────────────────────────────────────────
 
 describe("createOrder — DB path — sendViaResend is called", () => {
