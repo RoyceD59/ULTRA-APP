@@ -250,24 +250,16 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     // in a different category than what was declared at request-upload time.
     const declaredCategory = ALLOWED_MIME_PREFIXES.find((p) => slot.declaredType.startsWith(p));
     const actualCategory = ALLOWED_MIME_PREFIXES.find((p) => actualContentType.startsWith(p));
-    if (!actualCategory) {
-      res.status(422).json({ error: "Uploaded file has an unrecognised or disallowed MIME type" });
-      return;
-    }
-    if (declaredCategory && actualCategory !== declaredCategory) {
-      res.status(422).json({ error: "File MIME type does not match the declared type" });
-      return;
-    }
-    // The upload must be the byte size declared when the slot was issued —
-    // the declaration binds the slot to one specific file.
-    if (actualSize !== slot.declaredSize) {
-      res.status(422).json({ error: "Uploaded file size does not match the declared size" });
-      return;
-    }
 
-    // Content-based validation: the contentType metadata is client-supplied on
-    // the presigned PUT, so read the object's leading bytes and require the
-    // real file signature to match the claimed type.
+    const claimed = await db
+      .update(teamLibraryPendingUploadsTable)
+      .set({ consumed: true })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+      .where(and(
+        eq(teamLibraryPendingUploadsTable.id as any, uploadId),
+        eq(teamLibraryPendingUploadsTable.consumed, false),
+      ))
+      .returning({ id: teamLibraryPendingUploadsTable.id });
     let head: Buffer;
     try {
       const [buf] = await pinnedFile.download({ start: 0, end: 4095 });
