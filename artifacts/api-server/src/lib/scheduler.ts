@@ -8,7 +8,7 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateReport, setLatestReport } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable } from "@workspace/db";
+import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable } from "@workspace/db";
 import { lt, lte, desc, eq, and, or } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import { sendViaResend } from "./resend.js";
@@ -92,15 +92,41 @@ export function startScheduler() {
   // Successful sends are pruned after UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS
   // (default 30).  Failed rows are kept longer — UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS
   // (default 90) — so the team has time to investigate and retry.
+  // Both values can be overridden from team_settings (admin panel) without a restart.
   cron.schedule("0 3 * * *", async () => {
-    const successDays = Math.max(
-      1,
-      parseInt(process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"] ?? "30", 10) || 30,
-    );
-    const failureDays = Math.max(
-      1,
-      parseInt(process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"] ?? "90", 10) || 90,
-    );
+    // Read retention windows from team_settings (admin panel), falling back to
+    // env vars or hard defaults only when the DB row has no override.
+    // If the DB query itself fails, abort pruning entirely — better to keep logs
+    // than to silently delete them with a potentially wrong retention window.
+    let successDays: number;
+    let failureDays: number;
+    try {
+      const [settingsRow] = await db
+        .select({
+          successDays: teamSettingsTable.notificationLogSuccessRetentionDays,
+          failureDays: teamSettingsTable.notificationLogFailureRetentionDays,
+        })
+        .from(teamSettingsTable)
+        .where(eq(teamSettingsTable.id, "singleton"))
+        .limit(1);
+
+      successDays = Math.max(
+        1,
+        settingsRow?.successDays ??
+        (parseInt(process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"] ?? "30", 10) || 30),
+      );
+      failureDays = Math.max(
+        1,
+        settingsRow?.failureDays ??
+        (parseInt(process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"] ?? "90", 10) || 90),
+      );
+    } catch (err) {
+      logger.error(
+        { err },
+        "Scheduler: failed to read notification log retention settings — aborting pruning to avoid data loss",
+      );
+      return;
+    }
 
     const successCutoff = new Date(Date.now() - successDays * 24 * 60 * 60 * 1000);
     const failureCutoff = new Date(Date.now() - failureDays * 24 * 60 * 60 * 1000);

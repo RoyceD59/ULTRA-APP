@@ -72,6 +72,13 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     res.status(400).json({ error: "title, fileName, fileSize, fileType, and objectPath are required" });
     return;
   }
+  // Enforce that the objectPath must be one issued by this server's upload endpoint.
+  // Upload URLs always resolve to /objects/uploads/<uuid>; any other path is rejected
+  // to prevent members from registering arbitrary private-bucket paths.
+  if (!objectPath.startsWith("/objects/uploads/")) {
+    res.status(400).json({ error: "Invalid objectPath — must be a path returned by the upload endpoint" });
+    return;
+  }
 
   try {
     const doc = {
@@ -117,9 +124,10 @@ router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<
     return;
   }
 
+  const docId = String(req.params["id"] ?? "");
   try {
     const [doc] = await db.select().from(teamLibraryDocsTable)
-      .where(eq(teamLibraryDocsTable.id, req.params["id"] ?? ""));
+      .where(eq(teamLibraryDocsTable.id, docId));
     if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
     // Delete from GCS (non-fatal if already gone)
@@ -131,7 +139,7 @@ router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<
     }
 
     await db.delete(teamLibraryDocsTable)
-      .where(eq(teamLibraryDocsTable.id, req.params["id"] ?? ""));
+      .where(eq(teamLibraryDocsTable.id, docId));
     res.json({ ok: true });
   } catch (err) {
     console.error("[library] delete error:", err);
@@ -144,9 +152,10 @@ router.get("/library/download/:id", async (req: Request, res: Response): Promise
   const member = requireMember(res, req.headers["authorization"]);
   if (!member) return;
 
+  const docId = String(req.params["id"] ?? "");
   try {
     const [doc] = await db.select().from(teamLibraryDocsTable)
-      .where(eq(teamLibraryDocsTable.id, req.params["id"] ?? ""));
+      .where(eq(teamLibraryDocsTable.id, docId));
     if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
     const file = await storage.getObjectEntityFile(doc.objectPath);

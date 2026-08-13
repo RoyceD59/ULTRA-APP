@@ -298,7 +298,7 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
 
 /** PATCH /auth/users/:id/role */
 router.patch("/auth/users/:id/role", requireTeamAdmin, async (req, res): Promise<void> => {
-  const { id } = req.params;
+  const id = String(req.params["id"] ?? "");
   const { role } = req.body ?? {};
   if (!["admin", "member"].includes(role)) {
     res.status(400).json({ error: "role must be 'admin' or 'member'." });
@@ -311,7 +311,7 @@ router.patch("/auth/users/:id/role", requireTeamAdmin, async (req, res): Promise
 
 /** PATCH /auth/users/:id  — update name / isActive */
 router.patch("/auth/users/:id", requireTeamAdmin, async (req, res): Promise<void> => {
-  const { id } = req.params;
+  const id = String(req.params["id"] ?? "");
   const { name, isActive, permissions } = req.body ?? {};
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates["name"] = String(name).trim();
@@ -324,7 +324,7 @@ router.patch("/auth/users/:id", requireTeamAdmin, async (req, res): Promise<void
 
 /** POST /auth/users/:id/reset-password  — admin generates reset link */
 router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res): Promise<void> => {
-  const { id } = req.params;
+  const id = String(req.params["id"] ?? "");
   const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
   const token = randomBytes(32).toString("hex");

@@ -25,6 +25,7 @@ import whatsappRouter from "./whatsapp";
 import adminPaymentSettingsRouter from "./admin-payment-settings.js";
 import libraryRouter from "./library.js";
 import { requireTeamAuth } from "./auth.js";
+import adminNotificationSettingsRouter from "./admin-notification-settings.js";
 
 const router: IRouter = Router();
 
@@ -69,6 +70,7 @@ router.use(referralsRouter);
 // Team Horizon
 router.use(libraryRouter);
 router.use(adminPaymentSettingsRouter);
+router.use(adminNotificationSettingsRouter);
 router.use(authRouter);
 router.use(contactsRouter);
 router.use(contactsSyncRouter);

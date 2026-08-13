@@ -266,6 +266,15 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
 
+  // Add notification log retention columns to team_settings so the team can
+  // configure pruning windows from the admin panel without a server restart.
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS notification_log_success_retention_days integer,
+      ADD COLUMN IF NOT EXISTS notification_log_failure_retention_days integer;
+  `);
+  logger.info("Startup migration: team_settings notification log retention columns ensured");
+
   // Team Library — stores metadata for documents uploaded to GCS via the
   // Library page in ProjectHub. Actual files live in the private object dir;
   // this table holds the normalized GCS path and display metadata.

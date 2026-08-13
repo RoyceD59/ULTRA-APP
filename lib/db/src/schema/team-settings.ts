@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer } from "drizzle-orm/pg-core";
 
 export const teamSettingsTable = pgTable("team_settings", {
   id: text("id").primaryKey().$defaultFn(() => "singleton"),
@@ -16,6 +16,17 @@ export const teamSettingsTable = pgTable("team_settings", {
    * Supersedes the TEAM_ALERT_PHONE env var when present.
    */
   teamAlertPhone: text("team_alert_phone"),
+  /**
+   * How many days to keep successful notification log entries before the nightly pruning job
+   * removes them. Falls back to UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS env var (default 30).
+   */
+  notificationLogSuccessRetentionDays: integer("notification_log_success_retention_days"),
+  /**
+   * How many days to keep failed notification log entries. Failed rows are kept longer so the
+   * team has time to investigate and retry. Falls back to
+   * UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS env var (default 90).
+   */
+  notificationLogFailureRetentionDays: integer("notification_log_failure_retention_days"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
