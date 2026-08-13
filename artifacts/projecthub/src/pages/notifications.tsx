@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   useListNotificationLogs, 
   useDispatchNotification,
@@ -121,20 +121,64 @@ export default function Notifications() {
     {
       query: {
         queryKey: getListNotificationLogsQueryKey({ limit: 50 }),
-        // Poll every 8 s while any WhatsApp log is still awaiting a "read" receipt
-        refetchInterval: (query) => {
-          const items = query.state.data;
-          if (!items) return false;
-          const hasPending = items.some(
-            (l) => l.channelType === "whatsapp" && l.status === "sent" && l.deliveryStatus !== "read"
-          );
-          return hasPending ? 8_000 : false;
-        },
+        // No refetchInterval — receipt updates arrive via SSE (see useEffect below)
       },
     }
   );
   const { data: contacts } = useListContacts();
   const queryClient = useQueryClient();
+
+  // ── SSE: subscribe to receipt updates instead of polling ──────────────────
+  const esRef = useRef<EventSource | null>(null);
+  useEffect(() => {
+    // Close any previous connection before opening a new one.
+    esRef.current?.close();
+
+    const es = new EventSource("/api/notifications/receipt-stream");
+    esRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const { whatsappMsgId, deliveryStatus } = JSON.parse(event.data) as {
+          whatsappMsgId: string;
+          deliveryStatus: "delivered" | "read";
+        };
+
+        // Patch the matching row in the React Query cache without a full refetch.
+        queryClient.setQueryData<NotificationLog[]>(
+          getListNotificationLogsQueryKey({ limit: 50 }),
+          (prev) => {
+            if (!prev) return prev;
+            return prev.map((log) =>
+              log.whatsappMsgId === whatsappMsgId
+                ? { ...log, deliveryStatus }
+                : log
+            );
+          }
+        );
+      } catch {
+        // Ignore malformed events (e.g. heartbeat comments)
+      }
+    };
+
+    es.onopen = () => {
+      // Refetch once on every (re)connect to catch any receipts that arrived
+      // before the SSE stream was established or while it was disconnected.
+      queryClient.invalidateQueries({
+        queryKey: getListNotificationLogsQueryKey({ limit: 50 }),
+      });
+    };
+
+    es.onerror = () => {
+      // Browser will automatically reconnect on transient failures.
+      // No explicit retry logic needed here.
+    };
+
+    return () => {
+      es.close();
+      esRef.current = null;
+    };
+  }, [queryClient]);
   const { toast } = useToast();
   
   const [dialogOpen, setDialogOpen] = useState(false);

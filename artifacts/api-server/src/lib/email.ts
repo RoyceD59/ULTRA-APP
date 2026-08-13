@@ -552,3 +552,73 @@ export function buildOrderReceiptEmail(params: {
     text,
   };
 }
+export function buildWhatsAppAlertEmail(params: {
+  reason: "qr" | "disconnected";
+  qrPageUrl: string;
+}): { subject: string; html: string; text: string } {
+  const { reason, qrPageUrl } = params;
+
+  const heading =
+    reason === "qr"
+      ? "WhatsApp session requires QR scan 📱"
+      : "WhatsApp session has been disconnected ⚠️";
+
+  const body =
+    reason === "qr"
+      ? "The WhatsApp session has ended and is now waiting for a QR code scan. Messages cannot be sent until the session is re-authenticated."
+      : "The WhatsApp session has been disconnected for more than 5 minutes and has not recovered automatically. Messages cannot be sent until the session is restored.";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><title>WhatsApp Alert</title></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;">
+        <tr><td style="background:#0D4FA8;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;">Ultra Clear Filters</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Internal system alert</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h2 style="margin:0 0 12px;color:#111827;font-size:18px;">${heading}</h2>
+          <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">${body}</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td>
+              <a href="${qrPageUrl}"
+                 style="display:inline-block;background:#0D4FA8;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+                Open QR Scan Page →
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0;color:#9ca3af;font-size:12px;">
+            This is an automated alert from the Ultra Clear API server.
+            The QR scan page is at: <a href="${qrPageUrl}" style="color:#0D4FA8;">${qrPageUrl}</a>
+          </p>
+        </td></tr>
+        <tr><td style="background:#f3f4f6;padding:20px 32px;text-align:center;">
+          <p style="margin:0;color:#9ca3af;font-size:12px;">© 2026 UCFilters Ltd · Nairobi, Kenya</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    heading,
+    "",
+    body,
+    "",
+    `Re-authenticate here: ${qrPageUrl}`,
+    "",
+    "This is an automated alert from the Ultra Clear API server.",
+  ].join("\n");
+
+  const subjectMap: Record<string, string> = {
+    qr: "ACTION REQUIRED: WhatsApp session needs QR scan",
+    disconnected: "ALERT: WhatsApp session disconnected for >5 minutes",
+  };
+
+  return { subject: subjectMap[reason] ?? "WhatsApp session alert", html, text };
+}
+

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { desc } from "drizzle-orm";
 import { db, notificationLogsTable } from "@workspace/db";
 import { dispatchToContact, type TemplateId } from "../lib/notifications";
+import { addReceiptClient, removeReceiptClient } from "../lib/receiptStream";
 import {
   DispatchNotificationBody,
   DispatchNotificationResponse,
@@ -10,6 +11,16 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+/**
+ * SSE endpoint — browsers subscribe here instead of polling /notifications/logs.
+ * Stays open indefinitely; the server pushes a JSON event whenever Baileys
+ * reports a delivery or read receipt.
+ */
+router.get("/notifications/receipt-stream", (req, res): void => {
+  addReceiptClient(res);
+  req.on("close", () => removeReceiptClient(res));
+});
 
 router.get("/notifications/logs", async (req, res): Promise<void> => {
   const query = ListNotificationLogsQueryParams.safeParse(req.query);

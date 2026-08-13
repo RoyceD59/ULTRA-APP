@@ -6,6 +6,13 @@
  * scans with their phone.  Credentials are stored in AUTH_DIR so the
  * session survives server restarts.
  *
+ * Object Storage sync (production):
+ *   Set WHATSAPP_SESSION_BUCKET_PATH to a GCS path such as
+ *   /<bucket-id>/whatsapp-session to enable automatic credential sync.
+ *   On startup the server downloads all files from that path into AUTH_DIR
+ *   before Baileys initialises; on every creds.update the files are pushed
+ *   back so the session survives container replacement.
+ *
  * External API:
  *   getWhatsAppStatus()               → { state, qr? }
  *   sendWhatsAppMessage(to, msg)      → Promise<string> (message key ID)
@@ -14,6 +21,7 @@
  */
 
 import { join } from "path";
+import { mkdir, readdir, readFile, writeFile } from "fs/promises";
 import { toDataURL } from "qrcode";
 import pino from "pino";
 import { eq, isNull, or, ne, and } from "drizzle-orm";
@@ -25,6 +33,10 @@ import makeWASocket, {
   type WASocket,
   WAMessageUpdate,
 } from "@whiskeysockets/baileys";
+import { objectStorageClient } from "./objectStorage";
+import { sendEmail, buildWhatsAppAlertEmail } from "./email";
+import { sendViaResend } from "./resend";
+import { pushReceiptUpdate } from "./receiptStream";
 
 // Credentials are stored in AUTH_DIR so they survive hot-reloads and process
 // restarts.  The path is controlled by the WHATSAPP_SESSION_DIR env var so it
@@ -33,6 +45,86 @@ import makeWASocket, {
 // alongside the repo (git-ignored — no secrets in VCS).
 const AUTH_DIR =
   process.env.WHATSAPP_SESSION_DIR ?? join(process.cwd(), ".whatsapp-session");
+
+// When WHATSAPP_SESSION_BUCKET_PATH is set (e.g. /<bucket-id>/whatsapp-session),
+// credentials are mirrored to/from Replit Object Storage so they survive
+// container replacement in production deployments.
+const SESSION_BUCKET_PATH = process.env.WHATSAPP_SESSION_BUCKET_PATH?.replace(
+  /\/+$/,
+  ""
+);
+
+/**
+ * Parse a bucket path like /<bucket-id>/some/prefix into { bucketName, prefix }.
+ */
+function parseBucketPath(path: string): { bucketName: string; prefix: string } {
+  const parts = path.replace(/^\//, "").split("/");
+  const bucketName = parts[0];
+  const prefix = parts.slice(1).join("/");
+  return { bucketName, prefix };
+}
+
+/**
+ * Download all credential files from Object Storage into AUTH_DIR.
+ * Called once at startup before Baileys initialises.
+ * No-op when SESSION_BUCKET_PATH is not set.
+ */
+async function syncFromObjectStorage(): Promise<void> {
+  if (!SESSION_BUCKET_PATH) return;
+  try {
+    await mkdir(AUTH_DIR, { recursive: true });
+    const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const [files] = await bucket.getFiles({ prefix });
+    if (files.length === 0) {
+      console.log("[whatsapp] No session files found in Object Storage — fresh start");
+      return;
+    }
+    await Promise.all(
+      files.map(async (file) => {
+        const relativeName = file.name.slice(prefix.length).replace(/^\//, "");
+        if (!relativeName) return; // skip the directory placeholder itself
+        const [contents] = await file.download();
+        const destPath = join(AUTH_DIR, relativeName);
+        await writeFile(destPath, contents);
+      })
+    );
+    console.log(`[whatsapp] Restored ${files.length} session file(s) from Object Storage`);
+  } catch (err) {
+    // Non-fatal: if sync fails we start fresh and show a QR code
+    console.error("[whatsapp] Failed to restore session from Object Storage:", err);
+  }
+}
+
+/**
+ * Upload all credential files from AUTH_DIR to Object Storage.
+ * Called on every creds.update event so the bucket always has the latest tokens.
+ * No-op when SESSION_BUCKET_PATH is not set.
+ */
+async function syncToObjectStorage(): Promise<void> {
+  if (!SESSION_BUCKET_PATH) return;
+  try {
+    const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
+    const bucket = objectStorageClient.bucket(bucketName);
+    let fileNames: string[];
+    try {
+      fileNames = await readdir(AUTH_DIR);
+    } catch {
+      return; // AUTH_DIR doesn't exist yet
+    }
+    await Promise.all(
+      fileNames.map(async (name) => {
+        const localPath = join(AUTH_DIR, name);
+        const contents = await readFile(localPath);
+        const objectName = prefix ? `${prefix}/${name}` : name;
+        await bucket.file(objectName).save(contents, { resumable: false });
+      })
+    );
+  } catch (err) {
+    // Non-fatal: credential sync failure should never crash the main process
+    console.error("[whatsapp] Failed to push session to Object Storage:", err);
+  }
+}
 
 // Silent pino logger for Baileys internals — we don't want its verbose output
 // flooding the server console.
@@ -47,6 +139,91 @@ let currentQrDataUri: string | null = null;
 let connectionState: WaState = "disconnected";
 let isInitializing = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Alert deduplication: track whether we have already fired an alert for the
+// current disconnect/qr event so we don't spam the admin inbox.
+let alertSentForCurrentSession = false;
+// Timer that fires a "still disconnected" alert after DISCONNECT_ALERT_DELAY_MS.
+let disconnectAlertTimer: ReturnType<typeof setTimeout> | null = null;
+// How long (ms) to wait before alerting about a persistent disconnect.
+const DISCONNECT_ALERT_DELAY_MS = 5 * 60 * 1_000; // 5 minutes
+
+// ─── Alert helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Returns the comma-separated list of admin email addresses from UC_ADMIN_EMAILS.
+ * Falls back to an empty array when the env var is not set.
+ */
+export function alertRecipients(): string[] {
+  return (process.env["UC_ADMIN_EMAILS"] ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * The URL of the ProjectHub page where admins can scan the QR code.
+ * Controlled by PROJECTHUB_URL env var; defaults to the production system-status page.
+ */
+export function qrPageUrl(): string {
+  const base = (process.env["PROJECTHUB_URL"] ?? "").replace(/\/+$/, "");
+  return base ? `${base}/system` : "https://projecthub.ucfilters.co.ke/system";
+}
+
+/**
+ * Returns true when the minimum alert configuration is present:
+ * at least one recipient in UC_ADMIN_EMAILS.
+ * Exposed so health checks and startup code can surface misconfiguration.
+ */
+export function isAlertConfigured(): boolean {
+  return alertRecipients().length > 0;
+}
+
+/** Delivery options for sendSessionAlert — injected in tests to avoid real network calls. */
+export interface AlertDeliveryOptions {
+  resendSender?: (email: { from: string; to: string; subject: string; text: string }) => Promise<boolean>;
+  emailSender?: (email: { to: string; subject: string; html: string; text: string }) => Promise<void>;
+}
+
+/**
+ * Send a WhatsApp session alert email to all configured admin recipients.
+ * Tries Resend first (Replit connector — no extra credentials needed in production),
+ * then falls back to the SendGrid/SMTP chain in lib/email.
+ * Fire-and-forget; errors are logged but never propagated.
+ *
+ * @param reason  "qr" for immediate re-auth needed; "disconnected" for a persistent drop.
+ * @param opts    Optional delivery overrides (used in tests to avoid real network calls).
+ */
+export async function sendSessionAlert(
+  reason: "qr" | "disconnected",
+  opts: AlertDeliveryOptions = {},
+): Promise<void> {
+  const recipients = alertRecipients();
+  if (recipients.length === 0) {
+    console.warn(
+      "[whatsapp] UC_ADMIN_EMAILS not configured — session alert not sent. " +
+      "Set UC_ADMIN_EMAILS to a comma-separated list of admin addresses."
+    );
+    return;
+  }
+  const { subject, html, text } = buildWhatsAppAlertEmail({ reason, qrPageUrl: qrPageUrl() });
+  const resendFn = opts.resendSender ?? sendViaResend;
+  const emailFn  = opts.emailSender  ?? sendEmail;
+  console.log(`[whatsapp] Sending session alert (${reason}) to ${recipients.join(", ")}`);
+  for (const to of recipients) {
+    // Try Resend first (pre-configured Replit connector, works without extra env vars).
+    const sent = await resendFn({
+      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to,
+      subject,
+      text,
+    }).catch(() => false);
+    if (sent) continue;
+    // Fall back to SendGrid/SMTP if Resend is unavailable.
+    console.warn(`[whatsapp] Resend unavailable for alert to ${to} — falling back to SendGrid/SMTP`);
+    void emailFn({ to, subject, html, text });
+  }
+}
 
 // ─── Public accessors ─────────────────────────────────────────────────────────
 
@@ -114,10 +291,17 @@ async function handleMessageUpdates(updates: WAMessageUpdate[]): Promise<void> {
               isNull(notificationLogsTable.deliveryStatus)
             );
 
-      await db
+      const updated = await db
         .update(notificationLogsTable)
         .set({ deliveryStatus })
-        .where(whereClause);
+        .where(whereClause)
+        .returning({ whatsappMsgId: notificationLogsTable.whatsappMessageId });
+
+      // Push to any open SSE clients so the browser updates instantly
+      // without needing to poll the logs endpoint.
+      if (updated.length > 0) {
+        pushReceiptUpdate({ whatsappMsgId: msgId, deliveryStatus });
+      }
     } catch {
       // Non-fatal: receipt tracking should not crash the main flow
     }
@@ -133,12 +317,34 @@ export async function initWhatsApp(): Promise<void> {
     reconnectTimer = null;
   }
 
+  // Warn once at startup so misconfiguration is visible in server logs before
+  // it silently swallows a real WhatsApp drop event.
+  if (!isAlertConfigured()) {
+    console.warn(
+      "[whatsapp] DEPLOYMENT READINESS: UC_ADMIN_EMAILS is not set. " +
+      "No one will be alerted if the WhatsApp session drops. " +
+      "Set UC_ADMIN_EMAILS to a comma-separated list of admin email addresses."
+    );
+  }
+
   isInitializing = true;
   connectionState = "connecting";
   currentQrDataUri = null;
 
   try {
+    // Restore credentials from Object Storage before Baileys reads AUTH_DIR.
+    // This is what keeps the session alive across container replacements in
+    // production.  In development (SESSION_BUCKET_PATH unset) it is a no-op.
+    await syncFromObjectStorage();
+
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+
+    // Wrap saveCreds so every credential update is mirrored to Object Storage
+    // immediately after the local files are written.
+    const saveAndSyncCreds = async () => {
+      await saveCreds();
+      void syncToObjectStorage();
+    };
 
     sock = makeWASocket({
       auth: {
@@ -160,6 +366,18 @@ export async function initWhatsApp(): Promise<void> {
           currentQrDataUri = await toDataURL(qr, { errorCorrectionLevel: "M", margin: 2 });
           connectionState = "qr";
           isInitializing = false;
+
+          // Alert admins immediately: a QR state means the session has ended
+          // and someone must physically scan the code to restore service.
+          if (!alertSentForCurrentSession) {
+            alertSentForCurrentSession = true;
+            // Cancel any pending "disconnected" timer — the qr alert supersedes it.
+            if (disconnectAlertTimer) {
+              clearTimeout(disconnectAlertTimer);
+              disconnectAlertTimer = null;
+            }
+            void sendSessionAlert("qr");
+          }
         } catch {
           // If QR generation fails just stay in connecting state
         }
@@ -179,6 +397,26 @@ export async function initWhatsApp(): Promise<void> {
         if (shouldReconnect) {
           // Back off 5 s before reconnecting so we don't hammer the WA servers
           reconnectTimer = setTimeout(() => initWhatsApp(), 5_000);
+
+          // Schedule a "still disconnected" alert if we haven't already alerted
+          // for this disconnect cycle and no reconnect succeeds within the window.
+          if (!alertSentForCurrentSession && !disconnectAlertTimer) {
+            disconnectAlertTimer = setTimeout(() => {
+              disconnectAlertTimer = null;
+              if (connectionState !== "connected" && !alertSentForCurrentSession) {
+                alertSentForCurrentSession = true;
+                void sendSessionAlert("disconnected");
+              }
+            }, DISCONNECT_ALERT_DELAY_MS);
+          }
+        } else {
+          // Logged out — alert immediately (no auto-reconnect will happen).
+          // The qr-state handler above also fires shortly after, but guard here
+          // in case Baileys doesn't emit a qr event on some logout paths.
+          if (!alertSentForCurrentSession) {
+            alertSentForCurrentSession = true;
+            void sendSessionAlert("qr");
+          }
         }
       }
 
@@ -186,10 +424,18 @@ export async function initWhatsApp(): Promise<void> {
         currentQrDataUri = null;
         connectionState = "connected";
         isInitializing = false;
+
+        // Connection restored — reset alert state so the next disconnect cycle
+        // can send a fresh alert.
+        alertSentForCurrentSession = false;
+        if (disconnectAlertTimer) {
+          clearTimeout(disconnectAlertTimer);
+          disconnectAlertTimer = null;
+        }
       }
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", saveAndSyncCreds);
 
     // ── Delivery & read receipts ─────────────────────────────────────────────
     // Baileys fires "messages.update" when the remote party receives or reads
@@ -213,6 +459,12 @@ export async function disconnectWhatsApp(): Promise<void> {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  if (disconnectAlertTimer) {
+    clearTimeout(disconnectAlertTimer);
+    disconnectAlertTimer = null;
+  }
+  // Reset alert state so the next session start gets a fresh alert if needed.
+  alertSentForCurrentSession = false;
   if (sock) {
     try {
       await sock.logout();
