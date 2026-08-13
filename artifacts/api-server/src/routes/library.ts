@@ -31,7 +31,6 @@ import { db, teamLibraryDocsTable, teamLibraryPendingUploadsTable } from "@works
 import { eq, and, gt, desc } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { verifyToken } from "../lib/jwt.js";
-
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
@@ -230,8 +229,8 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
 
     // 4. Size / type guard using GCS metadata as ground truth.
     const [gcsMeta] = await gcsFile.getMetadata();
-    const actualContentType = String((gcsMeta as Record<string, unknown>)["contentType"] ?? "");
-    const actualSize = Number((gcsMeta as Record<string, unknown>)["size"] ?? 0);
+    const actualContentType: string = String((gcsMeta as Record<string, unknown>)["contentType"] ?? "");
+    const actualSize: number = Number((gcsMeta as Record<string, unknown>)["size"] ?? 0);
     const stagingGeneration = Number((gcsMeta as Record<string, unknown>)["generation"] ?? 0);
     if (!stagingGeneration) {
       res.status(422).json({ error: "Uploaded file has no storage generation — cannot validate integrity" });
