@@ -101,6 +101,15 @@ keytool -list -v -keystore release.keystore -alias <alias>
 
 then update the restriction in Google Cloud Console before shipping the new build.
 
+## Pre-release checklist (Android — Play Store)
+
+Before submitting the **first production build** to the Play Store, confirm each item below:
+
+- [ ] **Maps key Android restriction verified** — In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), the `GOOGLE_MAPS_ANDROID_KEY` has an **Android apps** application restriction configured with package name `com.ultraclean.companion` and the SHA-1 fingerprint of the production release keystore. If the restriction is absent or uses only the debug fingerprint, rotate the key before uploading the AAB.
+- [ ] EAS project initialised and `app.json` `updates.url` set to the live EAS project URL (replace `REPLACE_AFTER_EAS_PROJECT_INIT`).
+- [ ] Release keystore backed up securely (loss means the app can never be updated on the Play Store under the same listing).
+- [ ] `GOOGLE_MAPS_ANDROID_KEY` confirmed not committed to version control (it is injected at build time via EAS secrets / environment variables).
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
