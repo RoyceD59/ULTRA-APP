@@ -28,6 +28,7 @@ import {
   BarChart2, Flag, Download, X, RotateCcw, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getTeamToken } from '@/lib/team-auth';
 
 const BASE             = import.meta.env.BASE_URL.replace(/\/$/, '');
 const TOKEN_KEY        = 'alison_admin_token';
@@ -440,7 +441,7 @@ function EntryCard({ entry, highlights }: { entry: FeedbackEntry; highlights?: s
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AlisonFeedbackPage() {
-  const [token,          setToken]          = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
+  const [token,          setToken]          = useState<string | null>(() => getTeamToken() ?? sessionStorage.getItem(TOKEN_KEY));
   const [data,           setData]           = useState<FeedbackResponse | null>(null);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState('');

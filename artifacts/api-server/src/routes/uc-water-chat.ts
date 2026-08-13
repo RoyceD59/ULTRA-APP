@@ -58,6 +58,11 @@ export async function checkAdminAuth(
 }
 
 async function isAdminRequest(authHeader: string | undefined): Promise<boolean> {
+  // Fast-path: ProjectHub team admins carry a team-session JWT with role:"admin".
+  // Accept those directly without a UC customer DB lookup.
+  const claims = verifyToken(authHeader);
+  if (claims?.type === "team-session" && claims?.role === "admin") return true;
+
   return checkAdminAuth(
     authHeader,
     verifyToken,

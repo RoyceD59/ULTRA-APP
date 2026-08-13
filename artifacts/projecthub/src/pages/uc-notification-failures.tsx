@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { useToast } from "@/hooks/use-toast";
+import { getTeamToken } from "@/lib/team-auth";
 
 const BASE      = import.meta.env.BASE_URL.replace(/\/$/, "");
 const TOKEN_KEY = "uc_notif_admin_token";
@@ -401,7 +402,7 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
 
 export default function UcNotificationFailuresPage() {
   const [token, setToken] = useState<string | null>(() =>
-    sessionStorage.getItem(TOKEN_KEY)
+    getTeamToken() ?? sessionStorage.getItem(TOKEN_KEY)
   );
 
   if (!token) {

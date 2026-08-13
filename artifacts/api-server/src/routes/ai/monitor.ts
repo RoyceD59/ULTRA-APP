@@ -122,6 +122,9 @@ router.post("/ai/push", requireTeamAuth, async (_req, res): Promise<void> => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // X-Requested-With is required by some orchestration webhooks (e.g.
+        // Team-Horizon) that use it as a lightweight CSRF guard on their end.
+        "X-Requested-With": "XMLHttpRequest",
         ...(secret ? { "Authorization": `Bearer ${secret}` } : {}),
       },
       body: JSON.stringify(payload),

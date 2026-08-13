@@ -19,6 +19,7 @@ import {
   LogOut, Copy, Check, ExternalLink,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
+import { getTeamToken } from "@/lib/team-auth";
 
 const BASE      = import.meta.env.BASE_URL.replace(/\/$/, "");
 const TOKEN_KEY = "uc_orders_admin_token";
@@ -355,7 +356,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
 export default function OrdersPage() {
   const [token, setToken] = useState<string | null>(() =>
-    sessionStorage.getItem(TOKEN_KEY)
+    getTeamToken() ?? sessionStorage.getItem(TOKEN_KEY)
   );
 
   // Keep token state in sync with sessionStorage (e.g. after forced logout)

@@ -21,6 +21,7 @@ import {
   Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
   PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut,
 } from 'lucide-react';
+import { getTeamToken } from '@/lib/team-auth';
 
 const BASE      = import.meta.env.BASE_URL.replace(/\/$/, '');
 const TOKEN_KEY = 'uc_impact_admin_token';
@@ -323,7 +324,7 @@ function FormProductRow({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ImpactPage() {
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => getTeamToken() ?? sessionStorage.getItem(TOKEN_KEY));
 
   function handleToken(t: string) { setToken(t); }
   function handleSignOut() { sessionStorage.removeItem(TOKEN_KEY); setToken(null); }

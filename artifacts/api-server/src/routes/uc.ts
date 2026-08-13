@@ -956,9 +956,14 @@ function adminEmailList(): string[] {
 async function isAdminRequest(authHeader: string | undefined): Promise<boolean> {
   const claims = verifyToken(authHeader);
   if (!claims) return false;
-  // Admin is strictly DB-anchored: the bearer token must resolve to a real
-  // registered user row. JWT claims alone are NEVER trusted for admin — the
-  // dev login fallback can mint tokens carrying an arbitrary email.
+  // ProjectHub team admins carry a team-session JWT with role:"admin".
+  // Accept those directly — they are signed with the same SESSION_SECRET
+  // and their role is set at login time by the team_users table.
+  if (claims.type === "team-session" && claims.role === "admin") return true;
+  // UC customer admin check — strictly DB-anchored: the bearer token must
+  // resolve to a real registered user row. JWT claims alone are NEVER
+  // trusted for admin — the dev login fallback can mint tokens carrying an
+  // arbitrary email.
   const numericId = Number(claims.id);
   if (isNaN(numericId) || numericId <= 0 || numericId >= 1_000_000_000) return false;
   try {
