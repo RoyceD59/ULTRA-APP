@@ -15,6 +15,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs';
 
 const _require = createRequire(import.meta.url);
 const Module   = _require('module');
@@ -22,6 +23,10 @@ const root     = path.dirname(fileURLToPath(import.meta.url));
 const mocks    = path.join(root, '__mocks__');
 
 const STUBS = {
+  'react':
+    path.join(mocks, 'react.ts'),
+  'react/jsx-runtime':
+    path.join(mocks, 'react-jsx-runtime.ts'),
   'react-native':
     path.join(mocks, 'react-native.ts'),
   'expo-notifications':
@@ -35,5 +40,19 @@ Module._resolveFilename = (request, parent, isMain, options) => {
   if (Object.prototype.hasOwnProperty.call(STUBS, request)) {
     return STUBS[request];
   }
-  return original(request, parent, isMain, options);
+  try {
+    return original(request, parent, isMain, options);
+  } catch (err) {
+    // This hook is registered before tsx, so `original` is Node's built-in
+    // resolver, which cannot resolve extensionless relative requires of .ts/
+    // .tsx files emitted by tsx-compiled CJS modules (e.g. CartContext.tsx
+    // requiring './cartStorage').  Retry with TypeScript extensions.
+    if (request.startsWith('.') && parent?.filename) {
+      const base = path.resolve(path.dirname(parent.filename), request);
+      for (const ext of ['.ts', '.tsx', '.mts']) {
+        if (fs.existsSync(base + ext)) return base + ext;
+      }
+    }
+    throw err;
+  }
 };

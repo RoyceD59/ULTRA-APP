@@ -3,6 +3,8 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./*"],
+      "react":                                     ["./__mocks__/react.ts"],
+      "react/jsx-runtime":                         ["./__mocks__/react-jsx-runtime.ts"],
       "react-native":                              ["./__mocks__/react-native.ts"],
       "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
       "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"]
@@ -14,6 +16,7 @@
     "hooks/useNotifications.ts",
     "hooks/mpesaStatusClassifier.ts",
     "hooks/mpesaRetryGuard.ts",
-    "context/cartStorage.ts"
+    "context/cartStorage.ts",
+    "context/CartContext.tsx"
   ]
 }
