@@ -338,29 +338,49 @@ export default function CheckoutScreen() {
     }
   }
 
-  async function handlePaystack() {
+  /**
+   * Verify an existing Paystack reference after the browser closes (or after a
+   * network error on a previous verify attempt).  Keeping verify separate from
+   * init is critical: if the verify call fails (e.g. a 500 mid-request), "Try
+   * again" must re-verify the SAME reference rather than opening a new Paystack
+   * checkout — re-init would create a new charge reference, losing visibility of
+   * the original one and risking a double charge if the first payment completed.
+   *
+   * Test plan (manual, on-device):
+   *
+   *   Scenario A — paystackInit 500 (network error before browser opens):
+   *     1. Force-fail /api/payments/paystack/init (e.g. kill API server).
+   *     2. Tap "Pay with Paystack".
+   *     3. Expect: "Paystack Unavailable" alert with "Try again" / "Pay with COD instead".
+   *     4. "Try again" → re-enters handlePaystack() fresh (correct, no charge issued yet).
+   *     5. "Pay with COD instead" → picker switches to COD, no spinner.
+   *
+   *   Scenario B — paystackVerify 500 (network error after browser closes):
+   *     1. Let init succeed and open the browser.
+   *     2. Complete or abandon the Paystack payment in the browser, then close it.
+   *     3. Force-fail /api/payments/paystack/verify (e.g. kill API server mid-flight).
+   *     4. Expect: "Paystack Unavailable" alert with "Try again" / "Pay with COD instead".
+   *     5. "Try again" → calls handlePaystackVerify with the ORIGINAL reference
+   *        (no new browser, no new charge reference).
+   *     6. "Pay with COD instead" → picker switches to COD, no spinner.
+   *
+   *   Scenario C — user-cancelled browser (abandoned):
+   *     1. Let init succeed, open the browser, then close it without paying.
+   *     2. Verify returns status "abandoned" or null.
+   *     3. Expect: no alert, no spinner, checkout form back to idle.
+   *
+   *   Scenario D — successful payment:
+   *     1. Let init succeed, complete payment in browser, close browser.
+   *     2. Verify returns success → order created, navigates to /order/:id.
+   */
+  async function handlePaystackVerify(reference: string) {
     setProcessing(true);
     try {
-      const r = await api.paystackInit(
-        user?.email ?? 'customer@ucfilters.com',
-        total,
-      );
-      setProcessing(false);
-
-      // Open Paystack's hosted checkout — Paystack handles all card/mobile-money data.
-      // openBrowserAsync works reliably on both Expo Go and standalone builds.
-      // After the customer pays (or cancels), they close the browser and we verify.
-      await WebBrowser.openBrowserAsync(r.authorizationUrl);
-
-      // Always verify with Paystack's API after the browser closes — regardless of
-      // whether the user paid or cancelled. The server contacts Paystack directly so
-      // the client cannot fake a successful status.
-      setProcessing(true);
-      const verified = await api.paystackVerify(r.reference);
+      const verified = await api.paystackVerify(reference);
       setProcessing(false);
 
       if (verified.success && verified.status === 'success') {
-        await createOrder('paystack', r.reference);
+        await createOrder('paystack', reference);
       } else {
         // Branch on the specific Paystack status to give the right advice:
         //   abandoned / null  → user closed the browser; silent, no error shown
@@ -368,7 +388,7 @@ export default function CheckoutScreen() {
         //   anything else     → unexpected non-success; generic "not confirmed" message
         const st = verified.status;
         if (!st || st === 'abandoned') {
-          // User cancelled — nothing to do
+          // User cancelled — nothing to do; checkout form returns to idle
         } else if (st === 'failed') {
           Alert.alert(
             'Payment Declined',
@@ -388,17 +408,17 @@ export default function CheckoutScreen() {
       if (isRetryable) {
         Alert.alert(
           'Paystack Unavailable',
-          'Paystack is temporarily unavailable. You can try again or place your order with Cash on Delivery.',
+          'Paystack could not confirm your payment. Your card has not been charged again. You can try again or place your order with Cash on Delivery.',
           [
             {
+              // Retry verification with the SAME reference — do not re-init a new
+              // Paystack session, which would lose the original charge reference.
               text: 'Try again',
-              onPress: () => handlePaystack(),
+              onPress: () => handlePaystackVerify(reference),
             },
             {
               text: 'Pay with COD instead',
-              onPress: () => {
-                setPaymentMethod('cod');
-              },
+              onPress: () => setPaymentMethod('cod'),
               style: 'cancel',
             },
           ],
@@ -411,6 +431,81 @@ export default function CheckoutScreen() {
         );
       }
     }
+  }
+
+  async function handlePaystack() {
+    setProcessing(true);
+    let r: { authorizationUrl: string; reference: string } | null = null;
+    try {
+      r = await api.paystackInit(
+        user?.email ?? 'customer@ucfilters.com',
+        total,
+      );
+      setProcessing(false);
+    } catch (e) {
+      setProcessing(false);
+      // Init failed — no payment session was created, so "Try again" safely
+      // re-enters handlePaystack() to start a completely fresh attempt.
+      const isRetryable = e instanceof ApiError ? e.retryable : true;
+      if (isRetryable) {
+        Alert.alert(
+          'Paystack Unavailable',
+          'Paystack is temporarily unavailable. You can try again or place your order with Cash on Delivery.',
+          [
+            {
+              text: 'Try again',
+              onPress: () => handlePaystack(),
+            },
+            {
+              text: 'Pay with COD instead',
+              onPress: () => setPaymentMethod('cod'),
+              style: 'cancel',
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          'Payment Declined',
+          (e instanceof Error ? e.message : null) ||
+            'Your payment could not be completed. Please check your card details and try a different payment method.',
+        );
+      }
+      return;
+    }
+
+    // Open Paystack's hosted checkout — Paystack handles all card/mobile-money data.
+    // Wrap in its own try-catch: if the OS or WebBrowser rejects the launch, a
+    // Paystack session already exists.  Recovery must verify the same reference
+    // (not re-init) because the browser may have briefly opened before throwing,
+    // meaning payment could theoretically have completed.
+    try {
+      await WebBrowser.openBrowserAsync(r.authorizationUrl);
+    } catch {
+      setProcessing(false);
+      Alert.alert(
+        'Browser Could Not Open',
+        'The Paystack checkout page could not be opened. You can try again or place your order with Cash on Delivery.',
+        [
+          {
+            // Verify the existing reference — safer than re-initing, which would
+            // create a second charge reference and lose sight of the first.
+            text: 'Try again',
+            onPress: () => handlePaystackVerify(r!.reference),
+          },
+          {
+            text: 'Pay with COD instead',
+            onPress: () => setPaymentMethod('cod'),
+            style: 'cancel',
+          },
+        ],
+      );
+      return;
+    }
+
+    // Always verify after the browser closes — regardless of how the user exited
+    // (success, cancel, or manual close).  Use a dedicated helper so that a
+    // verify-failure retry re-uses the same reference rather than re-initing.
+    await handlePaystackVerify(r.reference);
   }
 
   async function applyPromoCode() {
