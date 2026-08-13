@@ -1482,6 +1482,14 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    // Idempotency: if the account was already anonymised (deletedAt set), a
+    // duplicate deletion request (network retry / race before logout) succeeds
+    // with 200 instead of re-running the redaction pipeline or returning 404.
+    if (existing.deletedAt) {
+      res.json({ ok: true, alreadyDeleted: true, message: "Account already deleted" });
+      return;
+    }
+
     // Guard: admin accounts cannot be self-deleted through the customer route.
     // Checks both the DB flag AND the UC_ADMIN_EMAILS env list — identical to
     // how isAdminRequest() works — so environment-designated admins are also
