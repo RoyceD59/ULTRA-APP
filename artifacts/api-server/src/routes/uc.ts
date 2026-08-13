@@ -11,6 +11,7 @@ import {
   recordReferralConversion,
   registerReferralAtSignup,
 } from "./referrals";
+import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import {
   sendSms,
@@ -1692,6 +1693,166 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
   } catch (err) {
     logger.error({ err }, "Failed to load admin water tests");
     res.status(500).json({ error: "Failed to load water tests" });
+  }
+});
+
+// ─── CSV export helpers ───────────────────────────────────────────────────────
+// All cell values go through sanitiseCsvCell (RFC 4180 + formula-injection
+// defence: values starting with =, +, -, @ are apostrophe-prefixed).
+function csvRow(cells: unknown[]): string {
+  return cells.map(v => sanitiseCsvCell(v === null || v === undefined ? "" : String(v))).join(",");
+}
+function csvTimestamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+}
+
+// GET /api/uc/admin/orders.csv — CSV download of all orders with line items expanded.
+// Accepts optional ?status= filter. Protected by admin auth.
+router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  try {
+    const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
+      ? req.query["status"].trim() : null;
+
+    const orders = await db
+      .select()
+      .from(ucOrdersTable)
+      .where(statusFilter ? eq(ucOrdersTable.status, statusFilter) : undefined)
+      .orderBy(desc(ucOrdersTable.dateCreated));
+
+    let items: (typeof ucOrderItemsTable.$inferSelect)[] = [];
+    const itemsByOrder: Record<number, typeof items> = {};
+    if (orders.length > 0) {
+      const orderIds = orders.map(o => o.id);
+      items = await db.select().from(ucOrderItemsTable).where(inArray(ucOrderItemsTable.orderId, orderIds));
+      for (const item of items) {
+        (itemsByOrder[item.orderId] ??= []).push(item);
+      }
+    }
+
+    // Determine the maximum number of line items across all orders for column expansion.
+    const maxItems = Math.max(0, ...orders.map(o => (itemsByOrder[o.id] ?? []).length));
+
+    // Build header row.
+    const itemHeaders: string[] = [];
+    for (let i = 1; i <= maxItems; i++) {
+      itemHeaders.push(
+        `item_${i}_productId`, `item_${i}_name`, `item_${i}_qty`, `item_${i}_total`,
+      );
+    }
+    const header = csvRow([
+      "id", "userId", "status", "dateCreated", "total", "currency",
+      "paymentMethod", "paymentReference", "promoCode",
+      "discountPercent", "discountAmount", "webhookRecovery",
+      "shippingName", "shippingPhone", "shippingAddress", "shippingCity", "shippingCountry",
+      ...itemHeaders,
+    ]);
+
+    const dataRows = orders.map(o => {
+      const addr = (o.shippingAddress ?? {}) as Record<string, unknown>;
+      // Checkout persists firstName/lastName/address1; fall back to legacy name/address keys.
+      const shippingName = [addr["firstName"], addr["lastName"]].filter(Boolean).join(" ")
+        || String(addr["name"] ?? "");
+      const shippingAddr = String(addr["address1"] ?? addr["address"] ?? "");
+      const lineItems = itemsByOrder[o.id] ?? [];
+      const itemCells: unknown[] = [];
+      for (let i = 0; i < maxItems; i++) {
+        const li = lineItems[i];
+        itemCells.push(li?.productId ?? "", li?.name ?? "", li?.quantity ?? "", li?.total ?? "");
+      }
+      return csvRow([
+        o.id, o.userId, o.status, o.dateCreated, o.total, o.currency,
+        o.paymentMethod, o.paymentReference ?? "", o.promoCode ?? "",
+        o.discountPercent, o.discountAmount, o.webhookRecovery ?? false,
+        shippingName, addr["phone"] ?? "", shippingAddr, addr["city"] ?? "", addr["country"] ?? "",
+        ...itemCells,
+      ]);
+    });
+
+    const csv = [header, ...dataRows].join("\r\n") + "\r\n";
+    const filename = `orders_${csvTimestamp()}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    logger.error({ err }, "Failed to export orders CSV");
+    res.status(500).json({ error: "Failed to export orders" });
+  }
+});
+
+// GET /api/uc/admin/tickets.csv — CSV download of all maintenance tickets.
+// Accepts optional ?status= filter. Protected by admin auth.
+router.get("/uc/admin/tickets.csv", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  try {
+    const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
+      ? req.query["status"].trim() : null;
+
+    const tickets = await db
+      .select()
+      .from(ucTicketsTable)
+      .where(statusFilter ? eq(ucTicketsTable.status, statusFilter) : undefined)
+      .orderBy(desc(ucTicketsTable.createdAt));
+
+    const header = csvRow([
+      "id", "userId", "productModel", "issueDescription",
+      "preferredContactTime", "photoCount", "videoCount", "status", "createdAt",
+    ]);
+    const dataRows = tickets.map(t => csvRow([
+      t.id, t.userId, t.productModel, t.issueDescription,
+      t.preferredContactTime, (t.photos ?? []).length, (t.videos ?? []).length,
+      t.status, t.createdAt,
+    ]));
+
+    const csv = [header, ...dataRows].join("\r\n") + "\r\n";
+    const filename = `tickets_${csvTimestamp()}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    logger.error({ err }, "Failed to export tickets CSV");
+    res.status(500).json({ error: "Failed to export tickets" });
+  }
+});
+
+// GET /api/uc/admin/water-tests.csv — CSV download of all water test bookings.
+// Accepts optional ?status= filter. Protected by admin auth.
+router.get("/uc/admin/water-tests.csv", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  try {
+    const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
+      ? req.query["status"].trim() : null;
+
+    const waterTests = await db
+      .select()
+      .from(ucWaterTestsTable)
+      .where(statusFilter ? eq(ucWaterTestsTable.status, statusFilter) : undefined)
+      .orderBy(desc(ucWaterTestsTable.createdAt));
+
+    const header = csvRow([
+      "id", "userId", "name", "address", "phone",
+      "waterSource", "concerns", "photoCount", "videoCount", "status", "createdAt",
+    ]);
+    const dataRows = waterTests.map(w => csvRow([
+      w.id, w.userId, w.name, w.address, w.phone,
+      w.waterSource, w.concerns, (w.photos ?? []).length, (w.videos ?? []).length,
+      w.status, w.createdAt,
+    ]));
+
+    const csv = [header, ...dataRows].join("\r\n") + "\r\n";
+    const filename = `water-tests_${csvTimestamp()}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    logger.error({ err }, "Failed to export water tests CSV");
+    res.status(500).json({ error: "Failed to export water tests" });
   }
 });
 
