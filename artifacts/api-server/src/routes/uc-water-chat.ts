@@ -240,6 +240,33 @@ export function isRateLimited(userId: number): boolean {
   return false;
 }
 
+// ─── Anthropic shim (injectable for tests) ────────────────────────────────────
+// Minimal local interfaces — avoids a direct @anthropic-ai/sdk import so the
+// api-server package doesn't need @anthropic-ai/sdk as an explicit dependency.
+// Typed as the non-streaming overload so callers and test stubs know the
+// resolved value is always a message, never a Stream.
+
+export interface AiChatParams {
+  model:      string;
+  max_tokens: number;
+  system:     string;
+  messages:   Array<{ role: "user" | "assistant"; content: string }>;
+}
+export interface AiChatResponse {
+  content: Array<{ type: string; text?: string }>;
+}
+
+// Tests can replace `_aiClient.create` to simulate service failures without
+// needing module-level mocking — the same injection pattern used by checkAdminAuth.
+export const _aiClient: {
+  create: (params: AiChatParams) => Promise<AiChatResponse>;
+} = {
+  // Cast needed to bridge the local minimal interface to the SDK's full type.
+  // Safe: the SDK's non-streaming overload satisfies AiChatResponse at runtime.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  create: (params) => anthropic.messages.create(params as any) as Promise<AiChatResponse>,
+};
+
 // ─── POST /api/uc/ai/water-chat ───────────────────────────────────────────────
 router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<void> => {
   // ── Auth check ──────────────────────────────────────────────────────────────
@@ -336,7 +363,7 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
   });
 
   try {
-    const response = await anthropic.messages.create({
+    const response = await _aiClient.create({
       model:      "claude-haiku-4-5",
       max_tokens: 1024,
       system:     SYSTEM_PROMPT,
@@ -344,8 +371,8 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
     });
 
     const rawText = (() => {
-      const block = response.content.find(b => b.type === "text");
-      return block?.type === "text" ? block.text : "";
+      const block = response.content.find((b: AiChatResponse["content"][number]) => b.type === "text");
+      return block?.type === "text" ? (block.text ?? "") : "";
     })();
 
     const { reply, suggestions } = parseSuggestions(rawText);
