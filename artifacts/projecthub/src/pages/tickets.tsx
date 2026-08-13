@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Wrench, RefreshCw, Lock, AlertCircle, LogOut, Download, Image, Video,
+  Wrench, RefreshCw, Lock, AlertCircle, LogOut, Download, Image, Video, X,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
@@ -249,13 +249,22 @@ type StatusFilter = (typeof STATUSES)[number] | "all";
 function TicketsList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [exporting, setExporting] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate,   setToDate]   = useState("");
   const [localTickets, setLocalTickets] = useState<AdminTicket[] | null>(null);
 
+  function buildParams() {
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate)   params.set("to",   toDate);
+    return params;
+  }
+
   const { data: tickets, isLoading, isError, refetch, isFetching } = useQuery<AdminTicket[]>({
-    queryKey: ["admin-tickets", token, statusFilter],
+    queryKey: ["admin-tickets", token, statusFilter, fromDate, toDate],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
+      const params = buildParams();
       const url = `${BASE}/api/uc/admin/tickets${params.size ? `?${params}` : ""}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -290,8 +299,7 @@ function TicketsList({ token, onLogout }: { token: string; onLogout: () => void 
   async function downloadCsv() {
     setExporting(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
+      const params = buildParams();
       const url = `${BASE}/api/uc/admin/tickets.csv${params.size ? `?${params}` : ""}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -352,18 +360,53 @@ function TicketsList({ token, onLogout }: { token: string; onLogout: () => void 
         </div>
       </div>
 
-      {/* Status filter tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {(["all", ...STATUSES] as StatusFilter[]).map(s => (
-          <Button
-            key={s}
-            variant={statusFilter === s ? "default" : "outline"}
-            size="sm"
-            onClick={() => setStatusFilter(s)}
-          >
-            {s === "all" ? "All" : statusLabel(s)}
-          </Button>
-        ))}
+      {/* Filters row: status tabs + date range */}
+      <div className="space-y-3">
+        <div className="flex gap-2 flex-wrap">
+          {(["all", ...STATUSES] as StatusFilter[]).map(s => (
+            <Button
+              key={s}
+              variant={statusFilter === s ? "default" : "outline"}
+              size="sm"
+              onClick={() => setStatusFilter(s)}
+            >
+              {s === "all" ? "All" : statusLabel(s)}
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="tickets-from" className="text-sm text-muted-foreground whitespace-nowrap">From</Label>
+            <Input
+              id="tickets-from"
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="w-40 h-8 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="tickets-to" className="text-sm text-muted-foreground whitespace-nowrap">To</Label>
+            <Input
+              id="tickets-to"
+              type="date"
+              value={toDate}
+              onChange={e => setToDate(e.target.value)}
+              className="w-40 h-8 text-sm"
+            />
+          </div>
+          {(fromDate || toDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setFromDate(""); setToDate(""); }}
+              className="h-8 px-2 text-muted-foreground"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Clear dates
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading && (

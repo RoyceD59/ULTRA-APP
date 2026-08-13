@@ -269,11 +269,22 @@ function OrderCard({ order }: { order: AdminOrder }) {
 function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [recoveryOnly, setRecoveryOnly] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate,   setToDate]   = useState("");
+
+  function buildParams(extra?: Record<string, string>) {
+    const params = new URLSearchParams(extra);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate)   params.set("to",   toDate);
+    return params;
+  }
 
   async function downloadCsv() {
     setExporting(true);
     try {
-      const res = await fetch(`${BASE}/api/uc/admin/orders.csv`, {
+      const params = buildParams();
+      const url = `${BASE}/api/uc/admin/orders.csv${params.size ? `?${params}` : ""}`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401 || res.status === 403) {
@@ -299,9 +310,11 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
   }
 
   const { data: orders, isLoading, isError, refetch, isFetching } = useQuery<AdminOrder[]>({
-    queryKey: ["admin-orders", token],
+    queryKey: ["admin-orders", token, fromDate, toDate],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/uc/admin/orders`, {
+      const params = buildParams();
+      const url = `${BASE}/api/uc/admin/orders${params.size ? `?${params}` : ""}`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401 || res.status === 403) {
@@ -375,6 +388,41 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
             <LogOut className="w-4 h-4" />
           </Button>
         </div>
+      </div>
+
+      {/* Date range picker */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="orders-from" className="text-sm text-muted-foreground whitespace-nowrap">From</Label>
+          <Input
+            id="orders-from"
+            type="date"
+            value={fromDate}
+            onChange={e => setFromDate(e.target.value)}
+            className="w-40 h-8 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="orders-to" className="text-sm text-muted-foreground whitespace-nowrap">To</Label>
+          <Input
+            id="orders-to"
+            type="date"
+            value={toDate}
+            onChange={e => setToDate(e.target.value)}
+            className="w-40 h-8 text-sm"
+          />
+        </div>
+        {(fromDate || toDate) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setFromDate(""); setToDate(""); }}
+            className="h-8 px-2 text-muted-foreground"
+          >
+            <X className="w-3.5 h-3.5 mr-1" />
+            Clear dates
+          </Button>
+        )}
       </div>
 
       {/* Recovery alert banner */}

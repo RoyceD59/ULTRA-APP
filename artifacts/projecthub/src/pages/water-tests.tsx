@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Droplets, RefreshCw, Lock, AlertCircle, LogOut, Download, Image, Video,
-  MapPin, Phone,
+  MapPin, Phone, X,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
@@ -266,13 +266,22 @@ type StatusFilter = (typeof STATUSES)[number] | "all";
 function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [exporting, setExporting] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate,   setToDate]   = useState("");
   const [localTests, setLocalTests] = useState<AdminWaterTest[] | null>(null);
 
+  function buildParams() {
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate)   params.set("to",   toDate);
+    return params;
+  }
+
   const { data: tests, isLoading, isError, refetch, isFetching } = useQuery<AdminWaterTest[]>({
-    queryKey: ["admin-water-tests", token, statusFilter],
+    queryKey: ["admin-water-tests", token, statusFilter, fromDate, toDate],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
+      const params = buildParams();
       const url = `${BASE}/api/uc/admin/water-tests${params.size ? `?${params}` : ""}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -307,8 +316,7 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
   async function downloadCsv() {
     setExporting(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
+      const params = buildParams();
       const url = `${BASE}/api/uc/admin/water-tests.csv${params.size ? `?${params}` : ""}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -369,18 +377,53 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
         </div>
       </div>
 
-      {/* Status filter tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {(["all", ...STATUSES] as StatusFilter[]).map(s => (
-          <Button
-            key={s}
-            variant={statusFilter === s ? "default" : "outline"}
-            size="sm"
-            onClick={() => setStatusFilter(s)}
-          >
-            {s === "all" ? "All" : statusLabel(s)}
-          </Button>
-        ))}
+      {/* Filters row: status tabs + date range */}
+      <div className="space-y-3">
+        <div className="flex gap-2 flex-wrap">
+          {(["all", ...STATUSES] as StatusFilter[]).map(s => (
+            <Button
+              key={s}
+              variant={statusFilter === s ? "default" : "outline"}
+              size="sm"
+              onClick={() => setStatusFilter(s)}
+            >
+              {s === "all" ? "All" : statusLabel(s)}
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="wt-from" className="text-sm text-muted-foreground whitespace-nowrap">From</Label>
+            <Input
+              id="wt-from"
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="w-40 h-8 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="wt-to" className="text-sm text-muted-foreground whitespace-nowrap">To</Label>
+            <Input
+              id="wt-to"
+              type="date"
+              value={toDate}
+              onChange={e => setToDate(e.target.value)}
+              className="w-40 h-8 text-sm"
+            />
+          </div>
+          {(fromDate || toDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setFromDate(""); setToDate(""); }}
+              className="h-8 px-2 text-muted-foreground"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Clear dates
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading && (
