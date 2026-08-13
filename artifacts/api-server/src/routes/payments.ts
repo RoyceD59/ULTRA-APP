@@ -5,7 +5,43 @@ import { ucOrdersTable, mpesaStkInitiationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import type Stripe from "stripe";
 import { sendViaResend } from "../lib/resend.js";
+import { sendSms } from "../lib/sms.js";
 import { buildOrderReceiptEmail } from "../lib/email.js";
+
+/**
+ * Send a recovery-order alert to the team via email (primary) and SMS (fallback).
+ * The email is fire-and-forget; SMS fires unconditionally so the team is reached
+ * even when Resend is temporarily unavailable.
+ *
+ * The team phone number is read from TEAM_ALERT_PHONE (E.164 / Kenyan local format).
+ * If the env var is absent, SMS is silently skipped (Africa's Talking creds check
+ * inside sendSms handles the rest).
+ */
+function alertTeamRecoveryOrder(params: {
+  subject:  string;
+  body:     string;
+  smsText:  string;
+  template: string;
+  orderId:  number;
+}): void {
+  const { subject, body, smsText, template, orderId } = params;
+
+  // Primary: email
+  sendViaResend({
+    from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
+    to:      "info@ucfilters.com",
+    subject,
+    text:    body,
+    meta:    { template, orderId },
+  }).catch(() => { /* already logged inside sendViaResend */ });
+
+  // Fallback: SMS (fires regardless of email success so the team is reached
+  // even when Resend is down)
+  const teamPhone = process.env["TEAM_ALERT_PHONE"];
+  if (teamPhone) {
+    sendSms(teamPhone, smsText, { template, orderId }).catch(() => {});
+  }
+}
 
 const router = Router();
 
@@ -578,13 +614,11 @@ router.post(
         `[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`
       );
 
-      // ── Alert the team ────────────────────────────────────────────────────
-      // Fire-and-forget: email failure must never block the webhook 200 response.
-      sendViaResend({
-        from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
-        to: "info@ucfilters.com",
-        subject: `⚠️ Webhook recovery order #${recovered!.id} needs fulfilment`,
-        text: [
+      // ── Alert the team (email + SMS fallback) ────────────────────────────
+      // Fire-and-forget: alert failure must never block the webhook 200 response.
+      alertTeamRecoveryOrder({
+        subject:  `⚠️ Webhook recovery order #${recovered!.id} needs fulfilment`,
+        body: [
           "A Paystack webhook recovery order was created automatically.",
           "The customer paid but the app lost connectivity before the order was recorded.",
           "",
@@ -600,8 +634,10 @@ router.post(
           "",
           "This order is flagged as 'Webhook recovery' in the orders list.",
         ].join("\n"),
-        meta: { template: "payment_recovery_alert", orderId: recovered!.id },
-      }).catch(() => { /* already logged inside sendViaResend */ });
+        smsText:  `UCFilters: Paystack recovery order #${recovered!.id} needs fulfilment. Ref: ${reference}. Customer: ${customerEmail || "unknown"}. Check admin panel.`,
+        template: "payment_recovery_alert",
+        orderId:  recovered!.id,
+      });
 
       res.json({ received: true, orderId: recovered!.id, recovered: true });
     } catch (err) {
@@ -896,12 +932,10 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         `[M-Pesa callback] Unverified order ${unverified!.id} stored as pending — ref=${paymentReference} amount=KES ${verifiedAmount} phone=${verifiedPhone}`
       );
 
-      // Alert team that VERIFICATION IS REQUIRED before fulfilling.
-      sendViaResend({
-        from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
-        to:      "info@ucfilters.com",
-        subject: `🔍 Unverified M-Pesa callback #${unverified!.id} — VERIFY BEFORE FULFILLING`,
-        text: [
+      // Alert team that VERIFICATION IS REQUIRED before fulfilling (email + SMS fallback).
+      alertTeamRecoveryOrder({
+        subject:  `🔍 Unverified M-Pesa callback #${unverified!.id} — VERIFY BEFORE FULFILLING`,
+        body: [
           "An M-Pesa callback was received but Daraja verification was unavailable.",
           "This order is stored as PENDING and must NOT be fulfilled until manually verified.",
           "",
@@ -919,8 +953,10 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
           "This order is flagged as 'Webhook recovery' in the orders list.",
           "Status: PENDING (not fulfilled until verified).",
         ].join("\n"),
-        meta: { template: "mpesa_unverified_alert", orderId: unverified!.id },
-      }).catch(() => { /* already logged inside sendViaResend */ });
+        smsText:  `UCFilters: UNVERIFIED M-Pesa order #${unverified!.id} (PENDING). Daraja down — verify before fulfilling. Ref: ${paymentReference}. Phone: ${verifiedPhone}.`,
+        template: "mpesa_unverified_alert",
+        orderId:  unverified!.id,
+      });
 
       ack({ orderId: unverified!.id, recovered: true, unverified: true });
       return;
@@ -1043,12 +1079,10 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
       `[M-Pesa callback] Recovery order ${recovered!.id} created — ref=${paymentReference} receipt=${receiptNum} amount=KES ${recoveryAmount} phone=${recoveryPhone}`
     );
 
-    // Alert the team (fire-and-forget — must never block the ack response).
-    sendViaResend({
-      from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
-      to:      "info@ucfilters.com",
-      subject: `⚠️ M-Pesa webhook recovery order #${recovered!.id} needs fulfilment`,
-      text: [
+    // Alert the team (email + SMS fallback — must never block the ack response).
+    alertTeamRecoveryOrder({
+      subject:  `⚠️ M-Pesa webhook recovery order #${recovered!.id} needs fulfilment`,
+      body: [
         "An M-Pesa webhook recovery order was created automatically.",
         "Payment independently verified with Daraja and matched to our STK initiation — safe to fulfil.",
         "The customer paid but the app closed before the order was recorded.",
@@ -1066,8 +1100,10 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         "",
         "This order is flagged as 'Webhook recovery' in the orders list.",
       ].join("\n"),
-      meta: { template: "payment_recovery_alert", orderId: recovered!.id },
-    }).catch(() => { /* already logged inside sendViaResend */ });
+      smsText:  `UCFilters: M-Pesa recovery order #${recovered!.id} needs fulfilment. KES ${recoveryAmount.toLocaleString()}. Phone: ${recoveryPhone}. Receipt: ${receiptNum || "N/A"}.`,
+      template: "payment_recovery_alert",
+      orderId:  recovered!.id,
+    });
 
     ack({ orderId: recovered!.id, recovered: true });
   } catch (err) {

@@ -7,10 +7,11 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateReport, setLatestReport } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, sheetSyncsTable, membersTable } from "@workspace/db";
-import { lt, desc, eq } from "drizzle-orm";
+import { db, ucAiFeedbackTable, sheetSyncsTable, membersTable, ucOrdersTable } from "@workspace/db";
+import { lt, lte, desc, eq, and, or } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import { sendViaResend } from "./resend.js";
+import { sendSms } from "./sms.js";
 import { getValidAccessToken } from "./google-auth.js";
 
 export function startScheduler() {
@@ -159,6 +160,96 @@ export function startScheduler() {
   }, { timezone: "UTC" });
 
   logger.info("Scheduler: daily Google Sheets contacts sync registered (06:00 UTC)");
+
+  // ─── Daily 07:00 UTC: remind team of stale webhook-recovery orders ────────
+  // Finds webhook_recovery orders (M-Pesa or Paystack) whose status is still
+  // "processing" or "pending" (i.e. not shipped/completed/cancelled) and that
+  // were created more than 24 h ago.  Sends a single digest email + SMS to the
+  // team so the team is alerted even if the original creation alert was missed
+  // because Resend was temporarily down.
+  //
+  // TEAM_ALERT_PHONE — E.164 or Kenyan local format; SMS skipped when absent.
+  cron.schedule("0 7 * * *", async () => {
+    logger.info("Scheduler: checking for stale webhook-recovery orders");
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const stale = await db
+        .select()
+        .from(ucOrdersTable)
+        .where(
+          and(
+            eq(ucOrdersTable.webhookRecovery, true),
+            or(
+              eq(ucOrdersTable.status, "processing"),
+              eq(ucOrdersTable.status, "pending"),
+            ),
+            lte(ucOrdersTable.dateCreated, cutoff),
+          )
+        );
+
+      if (stale.length === 0) {
+        logger.info("Scheduler: no stale recovery orders found");
+        return;
+      }
+
+      logger.warn({ count: stale.length }, "Scheduler: stale recovery orders found — alerting team");
+
+      const lines = stale.map(
+        (o) =>
+          `  Order #${o.id} | ${o.paymentMethod.toUpperCase()} | KES ${Number(o.total).toLocaleString()} | status=${o.status} | ref=${o.paymentReference || "(none)"} | created=${o.dateCreated.toUTCString()}`
+      );
+
+      const emailBody = [
+        `${stale.length} webhook-recovery order${stale.length > 1 ? "s" : ""} have been sitting unfulfilled for more than 24 hours.`,
+        "These orders were created automatically when a payment arrived but the app had lost connectivity.",
+        "Each order needs manual review to confirm the customer's items and delivery address.",
+        "",
+        "Stale recovery orders:",
+        ...lines,
+        "",
+        "Action required for each order:",
+        "  1. Contact the customer (use the phone number stored in the order).",
+        "  2. Confirm delivery address and item selection.",
+        "  3. Dispatch and mark the order as shipped/completed.",
+        "",
+        "View all recovery orders in the admin panel — filter by 'Webhook recovery'.",
+      ].join("\n");
+
+      const smsBody =
+        `UCFilters: ${stale.length} recovery order${stale.length > 1 ? "s" : ""} unfulfilled >24h. ` +
+        stale.map((o) => `#${o.id}(${o.paymentMethod})`).join(", ") +
+        ". Check admin panel.";
+
+      // Email to team
+      const emailOk = await sendViaResend({
+        from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
+        to:      "info@ucfilters.com",
+        subject: `⏰ ${stale.length} recovery order${stale.length > 1 ? "s" : ""} still unfulfilled after 24 h`,
+        text:    emailBody,
+        meta:    { template: "recovery_order_digest" },
+      });
+
+      if (emailOk) {
+        logger.info({ count: stale.length }, "Scheduler: stale recovery order digest email sent");
+      } else {
+        logger.warn("Scheduler: digest email failed — will rely on SMS fallback");
+      }
+
+      // SMS fallback — fires unconditionally so the team is reached even when Resend is down
+      const teamPhone = process.env["TEAM_ALERT_PHONE"];
+      if (teamPhone) {
+        await sendSms(teamPhone, smsBody, { template: "recovery_order_digest" });
+        logger.info("Scheduler: stale recovery order SMS sent");
+      } else {
+        logger.info("Scheduler: TEAM_ALERT_PHONE not set — SMS reminder skipped");
+      }
+    } catch (err) {
+      logger.error({ err }, "Scheduler: stale recovery order digest job failed");
+    }
+  }, { timezone: "UTC" });
+
+  logger.info("Scheduler: stale recovery order digest job registered (07:00 UTC)");
 }
 
 // ─── Sync-failure notification ────────────────────────────────────────────────
