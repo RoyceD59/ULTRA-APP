@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform,
   ActivityIndicator, useWindowDimensions,
@@ -16,6 +16,10 @@ import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
 import * as Haptics from 'expo-haptics';
+
+const GALLERY_H = 310;
+const THUMB_SIZE = 54;
+const MAX_PHOTOS = 6;
 
 function formatKES(price: string) {
   const n = parseFloat(price);
@@ -38,6 +42,7 @@ export default function ProductDetailScreen() {
   const pid = parseInt(id ?? '');
   const [slideIndex, setSlideIndex] = useState(0);
   const [viewerItem, setViewerItem] = useState<UCReviewMedia | null>(null);
+  const galleryRef = useRef<ScrollView>(null);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -51,7 +56,7 @@ export default function ProductDetailScreen() {
     enabled: !isNaN(pid),
   });
 
-  // Admin flag (drives the "Manage media" row); only fetched when signed in.
+  // Admin flag (drives the "Manage media" row).
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.getProfile(),
@@ -59,13 +64,16 @@ export default function ProductDetailScreen() {
   });
   const isAdmin = profile?.isAdmin === true;
 
-  // Product video player — source attached once the product loads.
+  // Strike video player — muted, looping, auto-plays.
   const player = useVideoPlayer(null as unknown as string, (p) => {
     p.loop = true;
     p.muted = true;
   });
   useEffect(() => {
-    if (product?.videoUrl) player.replace({ uri: resolveMediaUrl(product.videoUrl) });
+    if (product?.videoUrl) {
+      player.replace({ uri: resolveMediaUrl(product.videoUrl) });
+      player.play();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.videoUrl]);
 
@@ -86,10 +94,20 @@ export default function ProductDetailScreen() {
   const isOnSale = !isEnquiryOnly && product.salePrice && parseFloat(product.salePrice) < parseFloat(product.regularPrice);
   const inStock = product.stockStatus === 'instock';
 
+  // Up to 6 photos, then exactly one strike-video slot.
   const slides: Slide[] = [
-    ...product.images.map((img) => ({ kind: 'photo' as const, src: resolveMediaUrl(img.src), alt: img.alt })),
+    ...product.images.slice(0, MAX_PHOTOS).map((img) => ({
+      kind: 'photo' as const,
+      src: resolveMediaUrl(img.src),
+      alt: img.alt,
+    })),
     ...(product.videoUrl ? [{ kind: 'video' as const, src: resolveMediaUrl(product.videoUrl) }] : []),
   ];
+
+  function goToSlide(i: number) {
+    galleryRef.current?.scrollTo({ x: i * width, animated: true });
+    setSlideIndex(i);
+  }
 
   const myReview = reviewData?.reviews.find((r) => r.mine);
   const reviewParams = { productId: String(product.id), productName: product.name };
@@ -97,49 +115,117 @@ export default function ProductDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        {/* Media gallery — swipe through photos, then the product video */}
-        <View style={[styles.imageContainer, { backgroundColor: colors.surface }]}>
-          {slides.length === 0 ? (
-            <Ionicons name="water-outline" size={80} color={colors.primary} />
-          ) : (
+
+        {/* ── Gallery ─────────────────────────────────────────────────── */}
+        <View style={{ backgroundColor: '#0d0d0d' }}>
+
+          {/* Main slide area */}
+          <View style={{ height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
+            {slides.length === 0 ? (
+              <Ionicons name="water-outline" size={80} color={colors.primary} />
+            ) : (
+              <ScrollView
+                ref={galleryRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) =>
+                  setSlideIndex(Math.max(0, Math.round(e.nativeEvent.contentOffset.x / width)))
+                }
+                style={{ height: GALLERY_H }}
+              >
+                {slides.map((slide, i) => (
+                  <View key={i} style={{ width, height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
+                    {slide.kind === 'photo' ? (
+                      <Image
+                        source={{ uri: slide.src }}
+                        style={{ width, height: GALLERY_H }}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={{ width, height: GALLERY_H }}>
+                        <VideoView
+                          player={player}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="contain"
+                          nativeControls={false}
+                        />
+                        {/* Strike badge */}
+                        <View style={styles.strikeBadge}>
+                          <Ionicons name="flash" size={12} color="#fff" />
+                          <Text style={styles.strikeBadgeTxt}>Quick Look</Text>
+                        </View>
+                        {/* Duration hint */}
+                        <View style={styles.durationHint}>
+                          <Text style={styles.durationHintTxt}>3 – 5 s</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Sale badge */}
+            {isOnSale && (
+              <View style={[styles.saleBadge, { backgroundColor: colors.destructive }]}>
+                <Text style={styles.saleBadgeText}>SALE</Text>
+              </View>
+            )}
+
+            {/* Slide counter */}
+            {slides.length > 1 && (
+              <View style={styles.slideCounter}>
+                <Text style={styles.slideCounterTxt}>{slideIndex + 1} / {slides.length}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Thumbnail strip */}
+          {slides.length > 1 && (
             <ScrollView
               horizontal
-              pagingEnabled
               showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) =>
-                setSlideIndex(Math.max(0, Math.round(e.nativeEvent.contentOffset.x / width)))
-              }
+              contentContainerStyle={styles.thumbStrip}
+              style={{ height: THUMB_SIZE + 20 }}
             >
-              {slides.map((slide, i) => (
-                <View key={i} style={{ width, height: 260, alignItems: 'center', justifyContent: 'center' }}>
-                  {slide.kind === 'photo' ? (
-                    <Image source={{ uri: slide.src }} style={styles.image} resizeMode="contain" />
-                  ) : (
-                    <VideoView player={player} style={styles.video} contentFit="contain" nativeControls />
-                  )}
-                </View>
-              ))}
+              {slides.map((slide, i) => {
+                const active = i === slideIndex;
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => goToSlide(i)}
+                    activeOpacity={0.75}
+                    style={[
+                      styles.thumbCell,
+                      { borderColor: active ? colors.primary : 'rgba(255,255,255,0.2)' },
+                      active && styles.thumbCellActive,
+                    ]}
+                  >
+                    {slide.kind === 'photo' ? (
+                      <Image source={{ uri: slide.src }} style={styles.thumbImg} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.thumbVideo}>
+                        <Ionicons
+                          name="flash"
+                          size={16}
+                          color={active ? '#fff' : 'rgba(255,255,255,0.55)'}
+                        />
+                        <Text style={[styles.thumbVideoTxt, { opacity: active ? 1 : 0.55 }]}>
+                          Quick{'\n'}Look
+                        </Text>
+                      </View>
+                    )}
+                    {active && (
+                      <View style={[styles.thumbActiveBar, { backgroundColor: colors.primary }]} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           )}
-          {isOnSale && (
-            <View style={[styles.saleBadge, { backgroundColor: colors.destructive }]}>
-              <Text style={styles.saleBadgeText}>SALE</Text>
-            </View>
-          )}
-          {slides.length > 1 && (
-            <View style={styles.dots}>
-              {slides.map((s, i) => (
-                s.kind === 'video' ? (
-                  <Ionicons key={i} name="play-circle" size={12}
-                    color={i === slideIndex ? colors.primary : 'rgba(120,120,120,0.5)'} />
-                ) : (
-                  <View key={i} style={[styles.dot,
-                    { backgroundColor: i === slideIndex ? colors.primary : 'rgba(120,120,120,0.35)' }]} />
-                )
-              ))}
-            </View>
-          )}
         </View>
+        {/* ── /Gallery ─────────────────────────────────────────────────── */}
 
         <View style={styles.body}>
           {/* Category */}
@@ -201,12 +287,11 @@ export default function ProductDetailScreen() {
             {product.description.replace(/<[^>]*>/g, '')}
           </Text>
 
-          {/* Short description */}
-          {product.shortDescription && (
+          {product.shortDescription ? (
             <Text style={[styles.shortDesc, { color: colors.mutedForeground }]}>
               {product.shortDescription.replace(/<[^>]*>/g, '')}
             </Text>
-          )}
+          ) : null}
 
           {/* Trust Badges */}
           <Text style={[styles.sectionLabel, { color: colors.text }]}>Certifications & Trust</Text>
@@ -276,7 +361,7 @@ export default function ProductDetailScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.adminTitle, { color: colors.text }]}>Manage product media</Text>
                 <Text style={[styles.adminSub, { color: colors.mutedForeground }]}>
-                  Team only — add photos or a product video
+                  Team only — add photos or a quick-look strike video (3–5 s)
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
@@ -312,7 +397,14 @@ export default function ProductDetailScreen() {
               onPress={() => {
                 if (!inStock) return;
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                addItem({ id: product.id, name: product.name, price: parseFloat(displayPrice), quantity: 1, image: resolveMediaUrl(product.images[0]?.src ?? ''), sku: product.sku });
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  price: parseFloat(displayPrice),
+                  quantity: 1,
+                  image: resolveMediaUrl(product.images[0]?.src ?? ''),
+                  sku: product.sku,
+                });
                 router.push('/cart');
               }}
               style={[styles.addBtn, { backgroundColor: inStock ? colors.primary : colors.muted }]}>
@@ -332,13 +424,47 @@ export default function ProductDetailScreen() {
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  imageContainer: { height: 260, alignItems: 'center', justifyContent: 'center' },
-  image: { width: '100%', height: '100%' },
-  video: { width: '92%', height: '92%' },
-  dots: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  saleBadge: { position: 'absolute', top: 16, left: 16, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+
+  // Gallery
+  strikeBadge: {
+    position: 'absolute', top: 12, right: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20,
+  },
+  strikeBadgeTxt: { color: '#fff', fontSize: 11, fontWeight: '700' as const },
+  durationHint: {
+    position: 'absolute', bottom: 12, right: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8,
+  },
+  durationHintTxt: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '600' as const },
+  slideCounter: {
+    position: 'absolute', top: 12, left: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20,
+  },
+  slideCounterTxt: { color: '#fff', fontSize: 11, fontWeight: '700' as const },
+  saleBadge: { position: 'absolute', top: 52, left: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   saleBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' as const },
+
+  // Thumbnail strip
+  thumbStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  thumbCell: {
+    width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 9,
+    overflow: 'hidden', borderWidth: 1.5,
+  },
+  thumbCellActive: { borderWidth: 2 },
+  thumbImg: { width: '100%', height: '100%' },
+  thumbVideo: {
+    width: '100%', height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center', gap: 2,
+  },
+  thumbVideoTxt: { color: '#fff', fontSize: 8, fontWeight: '700' as const, textAlign: 'center' },
+  thumbActiveBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3 },
+
+  // Body
   body: { padding: 20, gap: 14 },
   category: { fontSize: 12, fontWeight: '700' as const, textTransform: 'uppercase', letterSpacing: 1 },
   name: { fontSize: 22, fontWeight: '700' as const, lineHeight: 28 },
@@ -364,13 +490,20 @@ const styles = StyleSheet.create({
   adminRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 12, padding: 12 },
   adminTitle: { fontSize: 14, fontWeight: '600' as const },
   adminSub: { fontSize: 12, marginTop: 1 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 12, padding: 16, paddingBottom: Platform.OS === 'web' ? 34 : 16, borderTopWidth: 1 },
+  enquiryBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderRadius: 12, padding: 14 },
+  enquiryBannerTitle: { fontSize: 15, fontWeight: '700' as const },
+  enquiryBannerSub: { fontSize: 13, marginTop: 2, lineHeight: 18 },
+
+  // Footer
+  footer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', gap: 12, padding: 16,
+    paddingBottom: Platform.OS === 'web' ? 34 : 16,
+    borderTopWidth: 1,
+  },
   cartIcon: { width: 50, height: 50, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' as const },
   addBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 14 },
   addBtnText: { fontSize: 16, fontWeight: '700' as const },
-  enquiryBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderRadius: 12, padding: 14 },
-  enquiryBannerTitle: { fontSize: 15, fontWeight: '700' as const },
-  enquiryBannerSub: { fontSize: 13, marginTop: 2, lineHeight: 18 },
 });
