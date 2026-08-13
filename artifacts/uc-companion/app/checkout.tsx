@@ -519,7 +519,26 @@ export default function CheckoutScreen() {
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Method</Text>
-        <PaymentMethodPicker selected={paymentMethod} onChange={setPaymentMethod} />
+        <PaymentMethodPicker
+          selected={paymentMethod}
+          onChange={(method) => {
+            // Only reset state when the user genuinely switches to a different
+            // method.  Tapping the already-selected row must be a no-op so
+            // that an in-flight payment cannot be unlocked by tapping its own
+            // method row.
+            if (method === paymentMethod) return;
+            // Cancel any in-flight M-Pesa poll so stale callbacks don't act
+            // after the method has switched.
+            attemptRef.current++;
+            if (pollRef.current) {
+              clearInterval(pollRef.current);
+              pollRef.current = null;
+            }
+            setMpesaWaiting(false);
+            setProcessing(false);
+            setPaymentMethod(method);
+          }}
+        />
 
         {/* Promo / referral code */}
         <TouchableOpacity onPress={() => setShowPromoField(v => !v)}
