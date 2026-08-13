@@ -1109,3 +1109,202 @@ describe("GET /api/uc/admin/orders.csv — asymmetric item counts (one 5-item or
     }
   });
 });
+
+// ── Status filter alongside other active orders ───────────────────────────────
+//
+// Two orders share the same sentinel status with an equal item count (2 each),
+// while a third order with a DIFFERENT status carries MORE items (3). The
+// filtered CSV must be computed over only the filtered subset: 2 rows,
+// maxItems = 2 (not 3), and no spurious empty padding.
+
+const FILTERED_EMAIL = "orders-csv-filtered-test@ucfilters-test.internal";
+const FILTERED_STATUS_MATCH = "filt-csv-test-match";
+const FILTERED_STATUS_OTHER = "filt-csv-test-other";
+
+let filteredUserId: number;
+let filteredOrderIds: number[] = []; // [E, F, G] — E,F match; G is the outsider
+
+describe("GET /api/uc/admin/orders.csv — status filter with other active orders", () => {
+  before(async () => {
+    const [inserted] = await db
+      .insert(ucUsersTable)
+      .values({
+        email: FILTERED_EMAIL,
+        passwordHash: "test-hash-not-real",
+        firstName: "Filtered",
+        lastName: "Test",
+        isAdmin: false,
+      })
+      .returning({ id: ucUsersTable.id });
+    if (!inserted) throw new Error("Failed to insert filtered test user");
+    filteredUserId = inserted.id;
+
+    process.env["UC_ADMIN_EMAILS"] = FILTERED_EMAIL;
+
+    const baseOrder = {
+      userId: String(filteredUserId),
+      currency: "KES",
+      paymentReference: "",
+      promoCode: "",
+      discountPercent: 0,
+      discountAmount: 0,
+      webhookRecovery: false,
+    };
+
+    // Order E — matching status, 2 items
+    const [orderE] = await db
+      .insert(ucOrdersTable)
+      .values({
+        ...baseOrder,
+        status: FILTERED_STATUS_MATCH,
+        total: "4598",
+        paymentMethod: "cod",
+        shippingAddress: {
+          firstName: "Echo", lastName: "Filt", address1: "5 Echo St",
+          city: "Nairobi", country: "KE", phone: "+254700000005",
+        },
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderE) throw new Error("Failed to insert order E");
+
+    // Order F — matching status, 2 items
+    const [orderF] = await db
+      .insert(ucOrdersTable)
+      .values({
+        ...baseOrder,
+        status: FILTERED_STATUS_MATCH,
+        total: "5698",
+        paymentMethod: "mpesa",
+        shippingAddress: {
+          firstName: "Fox", lastName: "Filt", address1: "6 Fox Ave",
+          city: "Mombasa", country: "KE", phone: "+254700000006",
+        },
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderF) throw new Error("Failed to insert order F");
+
+    // Order G — DIFFERENT status, 3 items (must not affect the filtered CSV)
+    const [orderG] = await db
+      .insert(ucOrdersTable)
+      .values({
+        ...baseOrder,
+        status: FILTERED_STATUS_OTHER,
+        total: "6097",
+        paymentMethod: "cod",
+        shippingAddress: {
+          firstName: "Golf", lastName: "Filt", address1: "7 Golf Rd",
+          city: "Kisumu", country: "KE", phone: "+254700000007",
+        },
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderG) throw new Error("Failed to insert order G");
+
+    filteredOrderIds = [orderE.id, orderF.id, orderG.id];
+
+    await db.insert(ucOrderItemsTable).values([
+      // Order E — 2 items
+      { orderId: orderE.id, productId: 1,  name: "Hydra Flux",              quantity: 1, total: "3499" },
+      { orderId: orderE.id, productId: 22, name: "Bottle Filter Cartridge", quantity: 1, total: "1099" },
+      // Order F — 2 items
+      { orderId: orderF.id, productId: 11, name: "Sweet Home",              quantity: 1, total: "3699" },
+      { orderId: orderF.id, productId: 23, name: "Faucet Filter Cartridge", quantity: 1, total: "1999" },
+      // Order G — 3 items (outsider; would force 12 item columns if the
+      // maxItems calculation leaked outside the filtered subset)
+      { orderId: orderG.id, productId: 15, name: "J'adore",                  quantity: 1, total: "4399" },
+      { orderId: orderG.id, productId: 24, name: "Shower Filter Cartridge",  quantity: 1, total: "1499" },
+      { orderId: orderG.id, productId: 26, name: "Survivor Straw Cartridge", quantity: 1, total: "499"  },
+    ]);
+  });
+
+  after(async () => {
+    if (filteredOrderIds.length > 0) {
+      await db
+        .delete(ucOrderItemsTable)
+        .where(inArray(ucOrderItemsTable.orderId, filteredOrderIds));
+      await db
+        .delete(ucOrdersTable)
+        .where(inArray(ucOrdersTable.id, filteredOrderIds));
+    }
+    if (filteredUserId) {
+      await db.delete(ucUsersTable).where(eq(ucUsersTable.id, filteredUserId));
+    }
+    delete process.env["UC_ADMIN_EMAILS"];
+  });
+
+  const filteredUrl = `/api/uc/admin/orders.csv?status=${FILTERED_STATUS_MATCH}`;
+
+  function filteredAuth() {
+    return {
+      Authorization: authHeader({ id: filteredUserId, email: FILTERED_EMAIL }),
+    };
+  }
+
+  it("returns 200 with CSV content-type", async () => {
+    const { status, headers } = await apiFetch(filteredUrl, { headers: filteredAuth() });
+    assert.equal(status, 200);
+    assert.ok(
+      headers.get("content-type")?.startsWith("text/csv"),
+      `Expected text/csv, got: ${headers.get("content-type")}`,
+    );
+  });
+
+  it("filtered CSV has exactly 2 rows — the different-status order is excluded", async () => {
+    const { text } = await apiFetch(filteredUrl, { headers: filteredAuth() });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const dataLines = lines.slice(1);
+    assert.equal(dataLines.length, 2, `Expected exactly 2 data rows, got ${dataLines.length}`);
+
+    const rowIds = dataLines.map(l => Number(parseCsvRow(l)[0]));
+    assert.ok(rowIds.includes(filteredOrderIds[0]!), "Order E row missing");
+    assert.ok(rowIds.includes(filteredOrderIds[1]!), "Order F row missing");
+    assert.ok(
+      !rowIds.includes(filteredOrderIds[2]!),
+      "Order G (different status) must not appear in the filtered CSV",
+    );
+  });
+
+  it("maxItems is computed over the filtered subset only (8 item columns, not 12)", async () => {
+    const { text } = await apiFetch(filteredUrl, { headers: filteredAuth() });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const headerCells = parseCsvRow(lines[0]!);
+    const itemColCount = headerCells.length - STATIC_COL_COUNT;
+
+    assert.equal(
+      itemColCount,
+      2 * COLS_PER_ITEM,
+      `Expected ${2 * COLS_PER_ITEM} item columns (filtered maxItems = 2), got ${itemColCount} ` +
+        `— the 3-item different-status order must not widen the header`,
+    );
+  });
+
+  it("all rows match the header column count with no spurious padding", async () => {
+    const { text } = await apiFetch(filteredUrl, { headers: filteredAuth() });
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length;
+    const dataLines = lines.slice(1);
+
+    assert.equal(dataLines.length, 2, `Expected 2 data rows, got ${dataLines.length}`);
+
+    for (const row of dataLines) {
+      const cells = parseCsvRow(row);
+      assert.equal(
+        cells.length,
+        totalHeaderCols,
+        `Row for order ${cells[0]} has ${cells.length} columns, expected ${totalHeaderCols}`,
+      );
+
+      // Both item slots are fully populated — no spurious empty padding
+      const itemCells = cells.slice(STATIC_COL_COUNT);
+      for (let i = 0; i < itemCells.length; i++) {
+        assert.notEqual(
+          itemCells[i],
+          "",
+          `Order ${cells[0]}: item cell [${i}] must not be empty (no spurious padding)`,
+        );
+      }
+    }
+  });
+});

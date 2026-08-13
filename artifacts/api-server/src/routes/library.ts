@@ -173,49 +173,33 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
   }
 
   try {
-    // 1. Atomically claim the slot — prevents two concurrent requests for the
-    //    same uploadId from both passing the consumed/ownership/expiry checks.
-    //    The UPDATE only succeeds when the row exists, belongs to this member,
-    //    has not been consumed, and has not yet expired.  Only one concurrent
-    //    writer can win; the loser gets no returned row and is rejected.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
-    const [claimed] = await db
-      .update(teamLibraryPendingUploadsTable)
-      .set({ consumed: true })
-      .where(
-        and(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          eq(teamLibraryPendingUploadsTable.id as any, uploadId),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          eq(teamLibraryPendingUploadsTable.consumed as any, false),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          eq(teamLibraryPendingUploadsTable.uploadedBy as any, member.email),
-          gt(teamLibraryPendingUploadsTable.expiresAt, new Date()),
-        ),
-      )
-      .returning();
-
-    if (!claimed) {
-      // Claim failed — inspect the slot (without ownership filter) to return a
-      // specific error message rather than a generic 409.
-      const [slot] = await db
-        .select()
-        .from(teamLibraryPendingUploadsTable)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId))
-        .limit(1);
-      if (!slot) {
-        res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
-      } else if (slot.uploadedBy !== member.email) {
-        res.status(403).json({ error: "Upload slot belongs to a different user" });
-      } else if (slot.consumed) {
-        res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
-      } else {
-        res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
-      }
+    // 1. Non-consuming precheck of the slot — gives specific error messages
+    //    without irreversibly consuming the slot before validation succeeds.
+    //    The single ATOMIC claim happens in the transaction below (step 5),
+    //    after validation and promotion, so a failed validation leaves the
+    //    slot usable and concurrent finalizations still can't double-insert.
+    const [slot] = await db
+      .select()
+      .from(teamLibraryPendingUploadsTable)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+      .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId))
+      .limit(1);
+    if (!slot) {
+      res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
       return;
     }
-    const slot = claimed;
+    if (slot.uploadedBy !== member.email) {
+      res.status(403).json({ error: "Upload slot belongs to a different user" });
+      return;
+    }
+    if (slot.consumed) {
+      res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
+      return;
+    }
+    if (slot.expiresAt <= new Date()) {
+      res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
+      return;
+    }
 
     // 4. Verify the object actually landed in GCS before attempting to claim
     //    the slot, so we don't consume it for a missing file.
@@ -249,16 +233,6 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     // in a different category than what was declared at request-upload time.
     const declaredCategory = ALLOWED_MIME_PREFIXES.find((p) => slot.declaredType.startsWith(p));
     const actualCategory = ALLOWED_MIME_PREFIXES.find((p) => actualContentType.startsWith(p));
-
-    const claimed = await db
-      .update(teamLibraryPendingUploadsTable)
-      .set({ consumed: true })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
-      .where(and(
-        eq(teamLibraryPendingUploadsTable.id as any, uploadId),
-        eq(teamLibraryPendingUploadsTable.consumed, false),
-      ))
-      .returning({ id: teamLibraryPendingUploadsTable.id });
     let head: Buffer;
     try {
       const [buf] = await pinnedFile.download({ start: 0, end: 4095 });
@@ -290,7 +264,7 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     //    still unconsumed and not yet expired.  This prevents concurrent
     //    finalization calls from both observing consumed=false and each
     //    inserting a separate document row (upload-slot replay attack).
-  const docId = String(req.params["id"]);
+    const docId = randomUUID(); // server-generated — this POST route has no :id param
     const [saved] = await db.transaction(async (tx) => {
       const claimed = await tx
         .update(teamLibraryPendingUploadsTable)
@@ -359,6 +333,10 @@ router.get("/library/docs", async (req: Request, res: Response): Promise<void> =
 router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<void> => {
   const member = requireMember(res, req.headers["authorization"]);
   if (!member) return;
+  if (member.role !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
 
   const docId = String(req.params["id"]);
   try {
@@ -367,7 +345,8 @@ router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<
       .where(eq(teamLibraryDocsTable.id as any, docId));
     if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
-    const file = await storage.getObjectEntityFile(doc.objectPath);
+    try {
+      const file = await storage.getObjectEntityFile(doc.objectPath);
       await file.delete();
     } catch {
       // Object already deleted or not found — continue with metadata cleanup.
