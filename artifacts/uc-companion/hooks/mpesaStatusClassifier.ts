@@ -42,7 +42,9 @@ export type MpesaStatusAction =
  * *after* `createOrder` succeeds (see checkout.tsx).  This function covers
  * the failure paths (hint_dialog / retry_dialog) where clearing is immediate.
  */
-export function pollSettleClearsRef(action: MpesaStatusAction): boolean {
+export function pollSettleClearsRef(
+  action: MpesaStatusAction,
+): action is Extract<MpesaStatusAction, { kind: "hint_dialog" | "retry_dialog" }> {
   return action.kind === "hint_dialog" || action.kind === "retry_dialog";
 }
 

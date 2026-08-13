@@ -1372,6 +1372,200 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
   }
 });
 
+// ─── Data export (GDPR Art. 20 / PDPA right to data portability) ─────────────
+// Returns a machine-readable JSON copy of every category of personal data the
+// system holds for the authenticated customer: profile, orders (with line
+// items), maintenance tickets, water tests, and product enquiries. Served as a
+// downloadable attachment so the Companion app can save/share the file.
+router.get("/uc/customer/data-export", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const numericId = Number(claims.id);
+  if (isNaN(numericId) || numericId <= 0 || numericId >= 1_000_000_000) {
+    res.status(403).json({ error: "Data export is only available for registered accounts" });
+    return;
+  }
+  if (await guardDeletedAccount(numericId, res)) return;
+
+  try {
+    const user = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.id, numericId) });
+    if (!user) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+
+    const userId = String(numericId);
+
+    // Orders: WooCommerce is the authoritative order system when credentials
+    // are configured — the DB tables only back the dev/offline path. Fetch the
+    // customer's orders from Woo, scoped strictly to their account email.
+    let wooOrders: Record<string, unknown>[] | null = null;
+    if (hasWCCredentials()) {
+      // Paginate through ALL matching pages — a data-portability export must
+      // be complete, so we keep fetching until Woo returns a short page.
+      const emailLc = user.email.toLowerCase();
+      const PER_PAGE = 100;
+      const MAX_PAGES = 200; // hard safety cap (20k orders)
+      const collected: Record<string, unknown>[] = [];
+      let complete = false;
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const fetched = await wcFetchArray("/orders", {
+          search:    user.email,
+          per_page:  String(PER_PAGE),
+          page:      String(page),
+          orderby:   "date",
+          order:     "desc",
+        });
+        if (fetched === null) {
+          // Explicit failure: don't silently ship an export missing the
+          // customer's authoritative order history.
+          res.status(502).json({ error: "Order system temporarily unavailable — please try the export again shortly." });
+          return;
+        }
+        collected.push(...fetched.filter(o => {
+          const billing = o["billing"] as Record<string, unknown> | undefined;
+          return String(billing?.["email"] ?? "").toLowerCase() === emailLc;
+        }));
+        if (fetched.length < PER_PAGE) { complete = true; break; } // last page reached
+      }
+      if (!complete) {
+        // Never silently ship a truncated order history — a portability
+        // export must be complete or fail explicitly.
+        res.status(502).json({ error: "Order history too large to export in one pass — please contact support." });
+        return;
+      }
+      wooOrders = collected;
+    }
+
+    const [orders, tickets, waterTests, enquiries, reviews, notifPrefRows, pushTokenRows] = await Promise.all([
+      db.select().from(ucOrdersTable)
+        .where(eq(ucOrdersTable.userId, userId))
+        .orderBy(desc(ucOrdersTable.dateCreated)),
+      db.select().from(ucTicketsTable)
+        .where(eq(ucTicketsTable.userId, userId))
+        .orderBy(desc(ucTicketsTable.createdAt)),
+      db.select().from(ucWaterTestsTable)
+        .where(eq(ucWaterTestsTable.userId, userId))
+        .orderBy(desc(ucWaterTestsTable.createdAt)),
+      db.select().from(ucEnquiriesTable)
+        .where(eq(ucEnquiriesTable.userId, userId))
+        .orderBy(desc(ucEnquiriesTable.createdAt)),
+      db.select().from(ucReviewsTable)
+        .where(eq(ucReviewsTable.userId, userId))
+        .orderBy(desc(ucReviewsTable.createdAt)),
+      db.select().from(ucNotifPrefsTable)
+        .where(eq(ucNotifPrefsTable.userId, userId)),
+      db.select().from(ucPushTokensTable)
+        .where(eq(ucPushTokensTable.userId, userId)),
+    ]);
+
+    const orderIds = orders.map(o => o.id);
+    const items = orderIds.length > 0
+      ? await db.select().from(ucOrderItemsTable).where(inArray(ucOrderItemsTable.orderId, orderIds))
+      : [];
+    const itemsByOrder = items.reduce<Record<number, typeof items>>((acc, item) => {
+      (acc[item.orderId] ??= []).push(item);
+      return acc;
+    }, {});
+
+    const exportPayload = {
+      exportedAt: new Date().toISOString(),
+      format:     "Ultra Clear customer data export v1 (GDPR Art. 20 / PDPA data portability)",
+      profile: {
+        id:        user.id,
+        email:     user.email,
+        firstName: user.firstName,
+        lastName:  user.lastName,
+        phone:     user.phone,
+        createdAt: user.createdAt,
+      },
+      orders: wooOrders !== null
+        ? wooOrders.map(normalizeOrder)
+        : orders.map(o => ({
+            id:              o.id,
+            status:          o.status,
+            dateCreated:     o.dateCreated,
+            total:           o.total,
+            currency:        o.currency,
+            paymentMethod:   o.paymentMethod,
+            shippingAddress: o.shippingAddress ?? {},
+            promoCode:       o.promoCode ?? "",
+            lineItems:       (itemsByOrder[o.id] ?? []).map(i => ({
+              productId: i.productId,
+              name:      i.name,
+              quantity:  i.quantity,
+              total:     i.total,
+            })),
+          })),
+      tickets: tickets.map(t => ({
+        id:                   t.id,
+        productModel:         t.productModel,
+        issueDescription:     t.issueDescription,
+        preferredContactTime: t.preferredContactTime,
+        photos:               t.photos ?? [],
+        videos:               t.videos ?? [],
+        status:               t.status,
+        createdAt:            t.createdAt,
+      })),
+      waterTests: waterTests.map(w => ({
+        id:          w.id,
+        name:        w.name,
+        address:     w.address,
+        phone:       w.phone,
+        waterSource: w.waterSource,
+        concerns:    w.concerns,
+        photos:      w.photos ?? [],
+        videos:      w.videos ?? [],
+        status:      w.status,
+        createdAt:   w.createdAt,
+      })),
+      reviews: reviews.map(r => ({
+        id:         r.id,
+        productId:  r.productId,
+        authorName: r.authorName,
+        rating:     r.rating,
+        title:      r.title,
+        body:       r.body,
+        media:      r.media ?? [],
+        createdAt:  r.createdAt,
+      })),
+      notificationPreferences: notifPrefRows.map(p => ({
+        optOutOrderUpdates: p.optOutOrders,
+        updatedAt:          p.updatedAt,
+      })),
+      // Push registration metadata. The raw Expo push token is the user's own
+      // device credential — included since this is their personal data export.
+      pushRegistrations: pushTokenRows.map(t => ({
+        pushToken:          t.pushToken,
+        optOutOrderUpdates: t.optOutOrders,
+        updatedAt:          t.updatedAt,
+      })),
+      enquiries: enquiries.map(e => ({
+        id:          e.id,
+        productId:   e.productId,
+        productName: e.productName,
+        name:        e.name,
+        email:       e.email,
+        phone:       e.phone,
+        message:     e.message,
+        createdAt:   e.createdAt,
+      })),
+    };
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="ultra-clear-data-export-${dateStamp}.json"`);
+    res.send(JSON.stringify(exportPayload, null, 2));
+  } catch (err) {
+    logger.error({ err, userId: numericId }, "Failed to generate customer data export");
+    res.status(500).json({ error: "Failed to generate your data export. Please try again." });
+  }
+});
+
 // ─── Delete account (GDPR / PDPA right to erasure) ───────────────────────────
 // Anonymises all PII in place rather than hard-deleting rows so that order
 // history and ticket records remain intact for the team (foreign-key integrity

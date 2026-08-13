@@ -30,6 +30,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { db, ucOrdersTable, mpesaStkInitiationsTable } from "@workspace/db";
+import { invalidateMpesaSecretCache } from "../routes/payments.js";
 import { eq } from "drizzle-orm";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
@@ -163,6 +164,7 @@ before(async () => {
   // set and restore the value themselves around each test.
   savedWebhookSecret = process.env["MPESA_WEBHOOK_SECRET"];
   delete process.env["MPESA_WEBHOOK_SECRET"];
+  invalidateMpesaSecretCache();
 
   // Fake Daraja credentials activate the verification branch.
   process.env["MPESA_SHORTCODE"]       ??= "174379";
@@ -190,6 +192,7 @@ after(async () => {
   // Restore webhook secret to whatever it was before the suite ran.
   if (savedWebhookSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedWebhookSecret;
   else delete process.env["MPESA_WEBHOOK_SECRET"];
+  invalidateMpesaSecretCache();
 });
 
 // ── (a) Non-zero ResultCode → no DB action ───────────────────────────────────
@@ -558,6 +561,7 @@ describe("M-Pesa callback — bearer-token guard: correct token via query param"
     const restore = stubDaraja(null); // Daraja unavailable — we only care about the guard
     const savedSecret = process.env["MPESA_WEBHOOK_SECRET"];
     process.env["MPESA_WEBHOOK_SECRET"] = "test-webhook-secret-abc123";
+    invalidateMpesaSecretCache();
     try {
       // Send a minimal body; Daraja unavailable + no initiation → no order created.
       // The guard must not reject the request (status must not be 401/403).
@@ -573,6 +577,7 @@ describe("M-Pesa callback — bearer-token guard: correct token via query param"
     } finally {
       if (savedSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedSecret;
       else delete process.env["MPESA_WEBHOOK_SECRET"];
+      invalidateMpesaSecretCache();
       restore();
     }
   });
@@ -583,6 +588,7 @@ describe("M-Pesa callback — bearer-token guard: correct token via Authorizatio
     const restore = stubDaraja(null);
     const savedSecret = process.env["MPESA_WEBHOOK_SECRET"];
     process.env["MPESA_WEBHOOK_SECRET"] = "test-webhook-secret-abc123";
+    invalidateMpesaSecretCache();
     try {
       const { status, body } = await postCallback(
         {},
@@ -595,6 +601,7 @@ describe("M-Pesa callback — bearer-token guard: correct token via Authorizatio
     } finally {
       if (savedSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedSecret;
       else delete process.env["MPESA_WEBHOOK_SECRET"];
+      invalidateMpesaSecretCache();
       restore();
     }
   });
@@ -604,6 +611,7 @@ describe("M-Pesa callback — bearer-token guard: wrong token", () => {
   it("rejects a request whose token does not match MPESA_WEBHOOK_SECRET with 401", async () => {
     const savedSecret = process.env["MPESA_WEBHOOK_SECRET"];
     process.env["MPESA_WEBHOOK_SECRET"] = "correct-secret";
+    invalidateMpesaSecretCache();
     try {
       const { status } = await postCallback(
         {},
@@ -614,6 +622,7 @@ describe("M-Pesa callback — bearer-token guard: wrong token", () => {
     } finally {
       if (savedSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedSecret;
       else delete process.env["MPESA_WEBHOOK_SECRET"];
+      invalidateMpesaSecretCache();
     }
   });
 });
@@ -622,6 +631,7 @@ describe("M-Pesa callback — bearer-token guard: missing token when secret is c
   it("rejects a request with no token at all when MPESA_WEBHOOK_SECRET is set", async () => {
     const savedSecret = process.env["MPESA_WEBHOOK_SECRET"];
     process.env["MPESA_WEBHOOK_SECRET"] = "correct-secret";
+    invalidateMpesaSecretCache();
     try {
       // No ?token= and no Authorization header
       const { status } = await postCallback({}, server);
@@ -629,6 +639,7 @@ describe("M-Pesa callback — bearer-token guard: missing token when secret is c
     } finally {
       if (savedSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedSecret;
       else delete process.env["MPESA_WEBHOOK_SECRET"];
+      invalidateMpesaSecretCache();
     }
   });
 });
@@ -638,6 +649,7 @@ describe("M-Pesa callback — bearer-token guard: MPESA_WEBHOOK_REQUIRED_SIGNATU
     const savedSecret = process.env["MPESA_WEBHOOK_SECRET"];
     const savedRequired = process.env["MPESA_WEBHOOK_REQUIRED_SIGNATURE"];
     delete process.env["MPESA_WEBHOOK_SECRET"];
+    invalidateMpesaSecretCache();
     process.env["MPESA_WEBHOOK_REQUIRED_SIGNATURE"] = "true";
     try {
       const { status, body } = await postCallback({}, server);
@@ -646,6 +658,7 @@ describe("M-Pesa callback — bearer-token guard: MPESA_WEBHOOK_REQUIRED_SIGNATU
     } finally {
       if (savedSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedSecret;
       else delete process.env["MPESA_WEBHOOK_SECRET"];
+      invalidateMpesaSecretCache();
       if (savedRequired !== undefined) process.env["MPESA_WEBHOOK_REQUIRED_SIGNATURE"] = savedRequired;
       else delete process.env["MPESA_WEBHOOK_REQUIRED_SIGNATURE"];
     }
@@ -722,6 +735,7 @@ describe("M-Pesa initiation — CallBackURL token embedding", () => {
       globalThis.fetch = origFetch;
       if (savedSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedSecret;
       else delete process.env["MPESA_WEBHOOK_SECRET"];
+      invalidateMpesaSecretCache();
       if (savedKey  !== undefined) process.env["MPESA_CONSUMER_KEY"]    = savedKey;
       else delete process.env["MPESA_CONSUMER_KEY"];
       if (savedSec  !== undefined) process.env["MPESA_CONSUMER_SECRET"] = savedSec;

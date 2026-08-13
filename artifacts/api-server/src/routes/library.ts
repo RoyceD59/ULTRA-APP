@@ -36,6 +36,47 @@ const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
 // Allowed MIME-type prefix — reject anything that is not a document/image/PDF.
+/**
+ * Content-based file-signature (magic-byte) validation.
+ *
+ * The GCS `contentType` metadata is client-supplied on the presigned PUT, so
+ * it cannot be trusted on its own. Before promoting an upload we read the
+ * first bytes of the actual object and require them to match the signature
+ * of the claimed MIME category:
+ *   - application/pdf                       → "%PDF"
+ *   - OOXML / ODF (docx, xlsx, pptx, odt…)  → ZIP "PK\x03\x04"
+ *   - legacy Office (doc, xls, ppt)         → OLE D0 CF 11 E0
+ *   - images (png/jpeg/gif/webp)            → their well-known signatures
+ *   - text/plain, text/csv                  → no NUL bytes in the sample
+ * Exported for direct unit testing.
+ */
+export function sniffMatchesMime(head: Buffer, mime: string): boolean {
+  const startsWith = (sig: number[], offset = 0) =>
+    head.length >= offset + sig.length && sig.every((b, i) => head[offset + i] === b);
+
+  if (mime.startsWith("application/pdf")) return startsWith([0x25, 0x50, 0x44, 0x46]); // %PDF
+  if (mime.startsWith("application/vnd.openxmlformats") || mime.startsWith("application/vnd.oasis")) {
+    return startsWith([0x50, 0x4b, 0x03, 0x04]); // ZIP
+  }
+  if (mime.startsWith("application/msword") || mime.startsWith("application/vnd.ms-")) {
+    // Legacy OLE container, or OOXML saved with a legacy-family MIME.
+    return startsWith([0xd0, 0xcf, 0x11, 0xe0]) || startsWith([0x50, 0x4b, 0x03, 0x04]);
+  }
+  if (mime.startsWith("image/")) {
+    return (
+      startsWith([0x89, 0x50, 0x4e, 0x47]) ||               // PNG
+      startsWith([0xff, 0xd8, 0xff]) ||                      // JPEG
+      startsWith([0x47, 0x49, 0x46, 0x38]) ||                // GIF
+      (startsWith([0x52, 0x49, 0x46, 0x46]) && startsWith([0x57, 0x45, 0x42, 0x50], 8)) // WEBP
+    );
+  }
+  if (mime.startsWith("text/plain") || mime.startsWith("text/csv")) {
+    if (head.length === 0) return false;
+    return !head.includes(0); // binary payloads masquerading as text carry NULs
+  }
+  return false; // unknown category — reject
+}
+
 const ALLOWED_MIME_PREFIXES = [
   "application/pdf",
   "application/msword",
@@ -140,7 +181,6 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
       .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId))
       .limit(1);
-
     if (!slot) {
       res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
       return;
@@ -150,8 +190,18 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
       res.status(403).json({ error: "Upload slot belongs to a different user" });
       return;
     }
+    // 3. Consumed / expiry pre-checks for precise error codes; the atomic
+    //    conditional claim below re-enforces both under concurrency.
+    if (slot.consumed) {
+      res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
+      return;
+    }
+    if (new Date() > slot.expiresAt) {
+      res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
+      return;
+    }
 
-    // 3. Verify the object actually landed in GCS before attempting to claim
+    // 4. Verify the object actually landed in GCS before attempting to claim
     //    the slot, so we don't consume it for a missing file.
     let gcsFile;
     try {
@@ -165,6 +215,15 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     const [gcsMeta] = await gcsFile.getMetadata();
     const actualContentType = String((gcsMeta as Record<string, unknown>)["contentType"] ?? "");
     const actualSize = Number((gcsMeta as Record<string, unknown>)["size"] ?? 0);
+    const stagingGeneration = Number((gcsMeta as Record<string, unknown>)["generation"] ?? 0);
+    if (!stagingGeneration) {
+      res.status(422).json({ error: "Uploaded file has no storage generation — cannot validate integrity" });
+      return;
+    }
+    // All reads below are pinned to this exact generation so a concurrent
+    // overwrite via the still-valid presigned PUT cannot swap bytes between
+    // validation and promotion (TOCTOU).
+    const pinnedFile = gcsFile.bucket.file(gcsFile.name, { generation: stagingGeneration });
 
     if (actualSize > MAX_FILE_BYTES) {
       res.status(422).json({ error: "Uploaded file exceeds maximum allowed size" });
@@ -173,13 +232,49 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
     // Require a recognised MIME category from GCS metadata; reject if absent or
     // in a different category than what was declared at request-upload time.
     const declaredCategory = ALLOWED_MIME_PREFIXES.find((p) => slot.declaredType.startsWith(p));
-    const actualCategory   = ALLOWED_MIME_PREFIXES.find((p) => actualContentType.startsWith(p));
+    const actualCategory = ALLOWED_MIME_PREFIXES.find((p) => actualContentType.startsWith(p));
     if (!actualCategory) {
       res.status(422).json({ error: "Uploaded file has an unrecognised or disallowed MIME type" });
       return;
     }
     if (declaredCategory && actualCategory !== declaredCategory) {
       res.status(422).json({ error: "File MIME type does not match the declared type" });
+      return;
+    }
+    // The upload must be the byte size declared when the slot was issued —
+    // the declaration binds the slot to one specific file.
+    if (actualSize !== slot.declaredSize) {
+      res.status(422).json({ error: "Uploaded file size does not match the declared size" });
+      return;
+    }
+
+    // Content-based validation: the contentType metadata is client-supplied on
+    // the presigned PUT, so read the object's leading bytes and require the
+    // real file signature to match the claimed type.
+    let head: Buffer;
+    try {
+      const [buf] = await pinnedFile.download({ start: 0, end: 4095 });
+      head = buf;
+    } catch {
+      res.status(422).json({ error: "Uploaded file could not be read for validation" });
+      return;
+    }
+    if (!sniffMatchesMime(head, actualContentType)) {
+      res.status(422).json({ error: "File content does not match its declared type" });
+      return;
+    }
+
+    // Promote the validated bytes to a server-controlled final key. The
+    // presigned PUT URL for the staging object stays valid for its full TTL,
+    // so the staging object remains writable by the client after validation;
+    // copying to a fresh key (never exposed via any signed URL) makes the
+    // stored document immutable, then the staging object is deleted.
+    let finalObjectPath: string;
+    try {
+      finalObjectPath = await storage.promoteObjectEntity(gcsFile, stagingGeneration);
+    } catch (err) {
+      console.error("[library] promotion error:", err);
+      res.status(502).json({ error: "Failed to finalise uploaded file in storage" });
       return;
     }
 
@@ -213,7 +308,7 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
         fileName:   fileName.slice(0, 255),
         fileSize:   actualSize || fileSize,
         fileType:   actualContentType || fileType.slice(0, 100),
-        objectPath: slot.objectPath,   // server-issued path, never from the client
+        objectPath: finalObjectPath,   // server-controlled immutable key, never from the client
         uploadedBy: member.email,
       });
 

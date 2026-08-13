@@ -165,6 +165,39 @@ export class ObjectStorageService {
     return objectFile;
   }
 
+  /**
+   * Promote a validated staging upload to a server-controlled final key.
+   *
+   * The presigned PUT URL for the staging object stays valid for its full
+   * TTL, so the staging object is mutable by the uploader even after
+   * server-side validation. Copying the validated bytes to a fresh key the
+   * client never received a write URL for makes the stored document
+   * immutable; the staging object is then deleted (best-effort).
+   *
+   * Returns the new `/objects/...` entity path to persist.
+   */
+  async promoteObjectEntity(stagingFile: File, generation: number, prefix = 'library'): Promise<string> {
+    const finalId = `${prefix}/${randomUUID()}`;
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) {
+      entityDir = `${entityDir}/`;
+    }
+    const { bucketName, objectName } = parseObjectPath(`${entityDir}${finalId}`);
+    const destFile = objectStorageClient.bucket(bucketName).file(objectName);
+    // Pin the copy source to the exact generation that was validated. If the
+    // uploader overwrites the staging object after validation, that
+    // generation no longer exists (versioning off) or differs, and the copy
+    // fails instead of promoting unvalidated bytes (closes the TOCTOU race).
+    const pinnedSource = stagingFile.bucket.file(stagingFile.name, { generation });
+    await pinnedSource.copy(destFile, { preconditionOpts: { ifGenerationMatch: 0 } });
+    try {
+      await stagingFile.delete();
+    } catch {
+      // Best-effort cleanup; the staging object is orphaned but harmless.
+    }
+    return `/objects/${finalId}`;
+  }
+
   normalizeObjectEntityPath(rawPath: string): string {
     if (!rawPath.startsWith('https://storage.googleapis.com/')) {
       return rawPath;

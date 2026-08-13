@@ -19,6 +19,8 @@ import {
   type FilterActivation,
 } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -366,6 +368,50 @@ export default function AccountScreen() {
   const [filterActivation,  setFilterActivation]  = useState<FilterActivation | null>(null);
   const [editModalVisible,  setEditModalVisible]   = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [exporting,          setExporting]          = useState(false);
+  const [exportError,        setExportError]        = useState('');
+
+  async function handleExportData() {
+    if (exporting) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setExporting(true);
+    setExportError('');
+    try {
+      const json = await api.exportData();
+      const filename = `ultra-clear-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      if (Platform.OS === 'web') {
+        // Browser: trigger a direct file download
+        const blob = new Blob([json], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        // Native: write to cache and open the share sheet so the user can save it
+        const file = new File(Paths.cache, filename);
+        if (file.exists) file.delete();
+        file.create();
+        file.write(json);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(file.uri, {
+            mimeType: 'application/json',
+            dialogTitle: 'Save your Ultra Clear data export',
+            UTI: 'public.json',
+          });
+        } else {
+          setExportError('Sharing is not available on this device.');
+        }
+      }
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Failed to download your data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const refreshNotifStatus = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -587,6 +633,21 @@ export default function AccountScreen() {
             <Text style={[styles.logoutText, { color: colors.destructive }]}>Sign Out</Text>
           </TouchableOpacity>
 
+          {/* Download my data (GDPR / PDPA data portability) */}
+          <TouchableOpacity
+            onPress={handleExportData}
+            disabled={exporting}
+            style={[styles.downloadDataBtn, { borderColor: colors.border, opacity: exporting ? 0.7 : 1 }]}
+            activeOpacity={0.75}>
+            {exporting
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <Ionicons name="download-outline" size={18} color={colors.primary} />}
+            <Text style={[styles.downloadDataText, { color: colors.text }]}>Download my data</Text>
+          </TouchableOpacity>
+          {!!exportError && (
+            <Text style={[styles.exportError, { color: colors.destructive }]}>{exportError}</Text>
+          )}
+
           {/* Delete account */}
           <TouchableOpacity
             onPress={() => {
@@ -663,6 +724,9 @@ const styles = StyleSheet.create({
   menuLabel:        { flex: 1, fontSize: 15, fontWeight: '500' as const },
   logoutBtn:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14 },
   logoutText:          { fontSize: 15, fontWeight: '600' as const },
+  downloadDataBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14 },
+  downloadDataText:    { fontSize: 15, fontWeight: '600' as const },
+  exportError:         { fontSize: 12, textAlign: 'center' as const, marginTop: -10 },
   deleteAccountBtn:    { alignItems: 'center', paddingVertical: 8 },
   deleteAccountText:   { fontSize: 13, textDecorationLine: 'underline' as const },
 

@@ -18,6 +18,10 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 
+process.env["SESSION_SECRET"] ??= "test-secret-team-horizon-pages";
+
+import { issueToken } from "../lib/jwt.js";
+
 // ── App & DB ──────────────────────────────────────────────────────────────────
 // Dynamic imports so env vars can be set before the modules are evaluated.
 import app from "../app.js";
@@ -73,9 +77,16 @@ async function api(
   path: string,
   body?: unknown
 ): Promise<{ status: number; data: unknown }> {
+  const token = issueToken({
+    id: "team",
+    email: "team@projecthub.internal",
+    type: "team-session",
+    role: "admin",
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
+  });
   const opts: RequestInit = {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   };
   const res = await fetch(`${base}${path}`, opts);

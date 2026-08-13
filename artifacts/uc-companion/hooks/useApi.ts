@@ -356,6 +356,19 @@ export function useApi() {
     updateProfile: (data: { firstName?: string; lastName?: string; phone?: string }) =>
       patch<UCCustomer>('/api/uc/customer/profile', data),
 
+    /** Download a machine-readable JSON copy of the authenticated user's data
+     *  (GDPR Art. 20 / PDPA data portability). Returns the raw JSON text. */
+    exportData: async (): Promise<string> => {
+      const res = await fetch(`${getBase()}/api/uc/customer/data-export`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        throw new ApiError(String(body['error'] ?? res.status), res.status, body);
+      }
+      return res.text();
+    },
+
     /** Permanently anonymise the authenticated user's account and personal data. */
     deleteAccount: async (): Promise<{ ok: boolean }> => {
       const res = await fetch(`${getBase()}/api/uc/customer`, {
