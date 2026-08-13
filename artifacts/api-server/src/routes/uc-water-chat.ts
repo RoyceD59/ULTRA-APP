@@ -168,6 +168,24 @@ export function authenticatedUserId(authHeader: string | undefined): number | nu
 // ─── Per-user sliding-window rate limiter ─────────────────────────────────────
 // Keeps a list of recent request timestamps per user and prunes old ones on
 // each call — no external dependency, no timer needed.
+//
+// INTENTIONAL TRADEOFF — IN-MEMORY ONLY:
+// The rate-limit counters live in a plain JS Map and are lost on every server
+// restart (deploy, crash, scale-down). A motivated abuser who can trigger a
+// restart would get a fresh allowance immediately after the process comes back.
+//
+// We accept this tradeoff because:
+//  1. Restarts are infrequent and not user-controllable in this deployment.
+//  2. Adding a Redis or Postgres round-trip to every AI chat request would
+//     introduce meaningful latency on a path that already calls Anthropic.
+//  3. The primary threat this limiter defends against (sustained flooding by a
+//     single authenticated user) is already handled well in-process.
+//
+// If this ever needs to survive restarts, the recommended path is:
+//  a) Add a Redis instance and replace rateLimitMap with ioredis INCR+EXPIRE
+//     commands (atomic, no extra DB schema needed), OR
+//  b) Use a lightweight Postgres table (userId, windowStart, count) with an
+//     upsert — acceptable latency if the DB is co-located with the API server.
 
 const RATE_WINDOW_MS  = 60_000; // 1 minute
 const RATE_MAX_REQS   = 20;     // requests per window
