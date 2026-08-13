@@ -152,15 +152,16 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     process.env["TEAM_ALERT_PHONE"] = "+254700000001";
 
     const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
-    alertTeamRecoveryOrder({
-      subject:  "Test recovery alert",
-      body:     "Order details here",
-      smsText:  "UCFilters: recovery order #1 needs fulfilment.",
-      template: "payment_recovery_alert",
-      orderId:  1,
+    assert.doesNotThrow(() => {
+      alertTeamRecoveryOrder({
+        subject:  "Test recovery alert",
+        body:     "Order details here",
+        smsText:  "UCFilters: recovery order #1 needs fulfilment.",
+        template: "payment_recovery_alert",
+        orderId:  1,
+      });
     });
 
-    // sendSms is fire-and-forget; wait for the async fetch to complete
     await waitTick();
 
     const atRequests = capturedRequests.filter((r) =>
@@ -176,12 +177,48 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     );
   });
 
+  it("(f) uses DB-sourced phone (not env var) when teamAlertPhone is set in team_settings", async () => {
+    // Both sources are set to different numbers so we can confirm DB takes precedence.
+    const envPhone = "+254700000001";   // env-var phone — must NOT appear in AT body
+    const dbPhone  = "+254799888777";   // DB phone    — must appear in AT body
+    process.env["TEAM_ALERT_PHONE"] = envPhone;
+
+    // DB select returns a row with teamAlertPhone populated.
+    selectStub = [{ teamAlertPhone: dbPhone }];
+
+    const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
+    alertTeamRecoveryOrder({
+      subject:  "Test DB phone alert",
+      body:     "Order details here",
+      smsText:  "UCFilters: recovery order #99 needs fulfilment.",
+      template: "payment_recovery_alert",
+      orderId:  99,
+    });
+
+    await waitTick();
+
+    const atRequests = capturedRequests.filter((r) =>
+      r.url.includes("africastalking.com")
+    );
+    assert.ok(atRequests.length >= 1, "At least one Africa's Talking fetch should be made using the DB phone");
+
+    const bodyText = atRequests[0]!.bodyText;
+    // Normalised: leading + is stripped, so "254799888777" should appear.
+    assert.ok(
+      bodyText.includes("254799888777"),
+      `AT body should contain the DB-sourced phone (254799888777); got: ${bodyText}`,
+    );
+    // The env-var phone must NOT appear — DB takes precedence.
+    assert.ok(
+      !bodyText.includes("254700000001"),
+      `AT body should NOT contain the env-var phone (254700000001) when DB has a value; got: ${bodyText}`,
+    );
+  });
+
   it("(b) skips SMS (no AT fetch, no error) when TEAM_ALERT_PHONE is absent", async () => {
     delete process.env["TEAM_ALERT_PHONE"];
 
     const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
-
-    // Must not throw
     assert.doesNotThrow(() => {
       alertTeamRecoveryOrder({
         subject:  "Test recovery alert",
@@ -200,7 +237,7 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     assert.equal(atRequests.length, 0, "No Africa's Talking fetch should be made when phone is absent");
   });
 
-  it("(f) Resend outage — AT SMS is still sent with correct phone and function does not throw", async () => {
+  it("(g) Resend outage — AT SMS is still sent with correct phone and function does not throw", async () => {
     process.env["TEAM_ALERT_PHONE"] = "+254700000099";
     // Force sendViaResend onto the fetch path (not connectors.proxy) so our stub intercepts it
     process.env["RESEND_BASE_URL"] = "https://api.resend.com";
@@ -212,10 +249,10 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
       const bodyText = typeof init?.body === "string" ? init.body : String(init?.body ?? "");
       capturedRequests.push({ url, bodyText });
 
-      if (url.includes("resend.com") || url.includes("api.resend")) {
+      if (url.includes("resend")) {
         throw new Error("Simulated Resend outage");
       }
-      // Africa's Talking succeeds
+      // AT succeeds
       return new Response(
         JSON.stringify({ SMSMessageData: { Recipients: [{ status: "Success", statusCode: 101 }] } }),
         { status: 200 },
@@ -224,7 +261,6 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
 
     const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
 
-    // Must not throw even though email will fail
     assert.doesNotThrow(() => {
       alertTeamRecoveryOrder({
         subject:  "Test recovery alert — Resend down",
@@ -235,17 +271,12 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
       });
     });
 
-    // Allow both the (failing) email and the SMS fetch to settle
     await waitTick(120);
 
-    // AT must have been called with the correct phone
     const atRequests = capturedRequests.filter((r) =>
       r.url.includes("africastalking.com")
     );
-    assert.ok(
-      atRequests.length >= 1,
-      "Africa's Talking should still be called even when Resend is down",
-    );
+    assert.ok(atRequests.length >= 1, "Africa's Talking should be called even when Resend is down");
 
     const bodyText = atRequests[0]!.bodyText;
     assert.ok(
@@ -385,6 +416,8 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
     assert.ok(atRequests.length >= 1, "Africa's Talking should be called for the SMS digest");
 
     const bodyText = atRequests[0]!.bodyText;
+
+    const dbPhone = "+254799888777";
     assert.ok(
       bodyText.includes("254700000002"),
       `AT body should contain normalised phone; got: ${bodyText}`,
