@@ -151,4 +151,38 @@ describe("isRateLimited — rate limit enforcement", () => {
     assert.equal(isRateLimited(userA), true,  "userA should be blocked");
     assert.equal(isRateLimited(userB), false,  "userB must not be affected");
   });
+
+  it("allows requests again after the one-minute sliding window expires", () => {
+    const userId = BASE_ID + 7;
+    const realNow = Date.now;
+
+    // Record the base time so we can advance it deterministically
+    const baseTime = realNow();
+
+    // Stub Date.now so all 20 burst requests land at t=0
+    let stubbedNow = baseTime;
+    Date.now = () => stubbedNow;
+
+    try {
+      // Exhaust the 20-request allowance inside the window
+      for (let i = 0; i < 20; i++) {
+        assert.equal(isRateLimited(userId), false,
+          `Request ${i + 1} should be allowed inside the window`);
+      }
+
+      // 21st request must be blocked (still inside the same window)
+      assert.equal(isRateLimited(userId), true,
+        "The 21st request must be blocked while still within the window");
+
+      // Advance time by 61 seconds — all earlier timestamps are now outside the window
+      stubbedNow = baseTime + 61_000;
+
+      // The very next request after the window rolls over must be allowed
+      assert.equal(isRateLimited(userId), false,
+        "Request must be allowed again once the 60-second window has fully expired");
+    } finally {
+      // Always restore the real Date.now
+      Date.now = realNow;
+    }
+  });
 });
