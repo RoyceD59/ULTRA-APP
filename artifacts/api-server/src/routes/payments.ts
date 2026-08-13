@@ -19,7 +19,8 @@ import { paymentLimiter } from "../lib/rate-limiters.js";
  * falling back to the TEAM_ALERT_PHONE env var so existing deployments are unaffected.
  * Changes made through the admin panel take effect immediately (60-second cache TTL).
  */
-function alertTeamRecoveryOrder(params: {
+/** @internal Exported so unit tests can call it directly without an HTTP server. */
+export function alertTeamRecoveryOrder(params: {
   subject:  string;
   body:     string;
   smsText:  string;
