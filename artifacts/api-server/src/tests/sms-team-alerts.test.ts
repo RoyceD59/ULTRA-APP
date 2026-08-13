@@ -343,6 +343,100 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
     );
   });
 
+  it("(e) sends SMS even when sendViaResend returns false, and warns about the email failure", async () => {
+    process.env["TEAM_ALERT_PHONE"] = "+254700000004";
+    // Force sendViaResend to use the fetch path so our stub can control it
+    process.env["RESEND_BASE_URL"] = "https://api.resend.com";
+
+    // Two stale orders so the digest has content
+    const createdAt = new Date(Date.now() - 30 * 60 * 60 * 1000); // 30 h ago
+    selectStub = [
+      {
+        id: 201,
+        paymentMethod: "mpesa",
+        total: "3000",
+        status: "processing",
+        paymentReference: "LGR201",
+        dateCreated: createdAt,
+        webhookRecovery: true,
+        userId: "anon",
+        currency: "KES",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {},
+      },
+    ];
+
+    // Override fetch: Resend → 500 (email fails), AT → 200 (SMS succeeds)
+    const savedFetch = globalThis.fetch;
+    const localCapture: CapturedRequest[] = [];
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : (input as URL | Request).toString();
+      const bodyText = typeof init?.body === "string" ? init.body : String(init?.body ?? "");
+      localCapture.push({ url, bodyText });
+
+      if (url.includes("resend")) {
+        // Simulate Resend being down — sendViaResend will return false
+        return new Response(JSON.stringify({ name: "service_unavailable" }), { status: 503 });
+      }
+      // Africa's Talking succeeds
+      return new Response(
+        JSON.stringify({ SMSMessageData: { Recipients: [{ status: "Success", statusCode: 101 }] } }),
+        { status: 200 },
+      );
+    };
+
+    // Spy on logger.warn to confirm the email-failure warning fires
+    const { logger } = await import("../lib/logger.js");
+    const warnMessages: string[] = [];
+    const originalWarn = logger.warn.bind(logger);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (logger as any).warn = (...args: unknown[]) => {
+      const msg = args.find((a) => typeof a === "string") as string | undefined;
+      if (msg) warnMessages.push(msg);
+    };
+
+    try {
+      const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+      await runStaleRecoveryOrderDigest();
+
+      await waitTick(120);
+
+      // Email was attempted (Resend fetch fired)
+      const resendRequests = localCapture.filter((r) => r.url.includes("resend"));
+      assert.ok(resendRequests.length >= 1, "Resend should have been attempted even though it fails");
+
+      // SMS was still sent (AT fetch fired) despite email failure
+      const atRequests = localCapture.filter((r) => r.url.includes("africastalking.com"));
+      assert.ok(
+        atRequests.length >= 1,
+        "Africa's Talking SMS should still be sent when sendViaResend returns false",
+      );
+
+      // SMS body should reference the stale order
+      const decoded = decodeURIComponent(atRequests[0]!.bodyText);
+      assert.ok(
+        decoded.includes("201") || atRequests[0]!.bodyText.includes("201"),
+        `SMS body should reference order #201; got: ${atRequests[0]!.bodyText}`,
+      );
+
+      // Logger warned about the email failure before falling back to SMS
+      const emailFailureWarning = warnMessages.find((m) =>
+        m.includes("digest email failed") || m.includes("SMS fallback"),
+      );
+      assert.ok(
+        emailFailureWarning != null,
+        `logger.warn should mention email failure / SMS fallback; captured warnings: ${JSON.stringify(warnMessages)}`,
+      );
+    } finally {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (logger as any).warn = originalWarn;
+      globalThis.fetch = savedFetch;
+      delete process.env["RESEND_BASE_URL"];
+    }
+  });
+
   it("(d) skips gracefully (no SMS, no error) when no stale orders found", async () => {
     process.env["TEAM_ALERT_PHONE"] = "+254700000003";
     selectStub = []; // empty result — no stale orders
