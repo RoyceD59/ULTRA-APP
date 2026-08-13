@@ -28,7 +28,7 @@
 import { Router, type Request, type Response, type IRouter } from "express";
 import { randomUUID } from "crypto";
 import { db, teamLibraryDocsTable, teamLibraryPendingUploadsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gt } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { verifyToken } from "../lib/jwt.js";
 
@@ -133,7 +133,7 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
   }
 
   try {
-    // 1. Look up the pending slot.
+    // 1. Look up the pending slot (read-only pre-check for ownership and existence).
     const [slot] = await db
       .select()
       .from(teamLibraryPendingUploadsTable)
@@ -145,23 +145,14 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
       res.status(404).json({ error: "Upload slot not found — request a new upload URL" });
       return;
     }
-    // 2. Ownership check.
+    // 2. Ownership check (server-side; client cannot forge this).
     if (slot.uploadedBy !== member.email) {
       res.status(403).json({ error: "Upload slot belongs to a different user" });
       return;
     }
-    // 3. Consumed check.
-    if (slot.consumed) {
-      res.status(409).json({ error: "Upload slot already used — request a new upload URL" });
-      return;
-    }
-    // 4. Expiry check.
-    if (new Date() > slot.expiresAt) {
-      res.status(410).json({ error: "Upload slot expired — request a new upload URL" });
-      return;
-    }
 
-    // 5. Verify the object actually landed in GCS.
+    // 3. Verify the object actually landed in GCS before attempting to claim
+    //    the slot, so we don't consume it for a missing file.
     let gcsFile;
     try {
       gcsFile = await storage.getObjectEntityFile(slot.objectPath);
@@ -170,7 +161,7 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // 6. Size / type guard using GCS metadata as ground truth.
+    // 4. Size / type guard using GCS metadata as ground truth.
     const [gcsMeta] = await gcsFile.getMetadata();
     const actualContentType = String((gcsMeta as Record<string, unknown>)["contentType"] ?? "");
     const actualSize = Number((gcsMeta as Record<string, unknown>)["size"] ?? 0);
@@ -179,43 +170,66 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
       res.status(422).json({ error: "Uploaded file exceeds maximum allowed size" });
       return;
     }
-    const allowedType = ALLOWED_MIME_PREFIXES.some((p) => fileType.startsWith(p));
-    if (!allowedType) {
-      res.status(422).json({ error: "File type not allowed" });
-      return;
-    }
-    // Ensure the declared MIME category matches GCS's detected one (coarse check).
+    // Require a recognised MIME category from GCS metadata; reject if absent or
+    // in a different category than what was declared at request-upload time.
     const declaredCategory = ALLOWED_MIME_PREFIXES.find((p) => slot.declaredType.startsWith(p));
     const actualCategory   = ALLOWED_MIME_PREFIXES.find((p) => actualContentType.startsWith(p));
-    if (declaredCategory && actualCategory && declaredCategory !== actualCategory) {
+    if (!actualCategory) {
+      res.status(422).json({ error: "Uploaded file has an unrecognised or disallowed MIME type" });
+      return;
+    }
+    if (declaredCategory && actualCategory !== declaredCategory) {
       res.status(422).json({ error: "File MIME type does not match the declared type" });
       return;
     }
 
-    // 7. Promote to docs table and mark slot consumed.
-    const doc = {
-      id:         randomUUID(),
-      title:      title.trim().slice(0, 200),
-      fileName:   fileName.slice(0, 255),
-      fileSize:   actualSize || fileSize,
-      fileType:   actualContentType || fileType.slice(0, 100),
-      objectPath: slot.objectPath,   // server-issued path, never from the client
-      uploadedBy: member.email,
-    };
-    await db.insert(teamLibraryDocsTable).values(doc);
-    await db
-      .update(teamLibraryPendingUploadsTable)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
-      .set({ consumed: true })
-      .where(eq(teamLibraryPendingUploadsTable.id as any, uploadId));
+    // 5. Atomically claim the slot by flipping consumed=true ONLY IF it is
+    //    still unconsumed and not yet expired.  This prevents concurrent
+    //    finalization calls from both observing consumed=false and each
+    //    inserting a separate document row (upload-slot replay attack).
+    const docId = randomUUID();
+    const [saved] = await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(teamLibraryPendingUploadsTable)
+        .set({ consumed: true })
+        .where(
+          and(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+            eq(teamLibraryPendingUploadsTable.id as any, uploadId),
+            eq(teamLibraryPendingUploadsTable.consumed, false),
+            gt(teamLibraryPendingUploadsTable.expiresAt, new Date()),
+          )
+        )
+        .returning();
 
-    const [saved] = await db
-      .select()
-      .from(teamLibraryDocsTable)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
-      .where(eq(teamLibraryDocsTable.id as any, doc.id));
+      if (claimed.length === 0) {
+        // Another concurrent call already consumed this slot, or it expired.
+        throw Object.assign(new Error("slot_unavailable"), { slotUnavailable: true });
+      }
+
+      await tx.insert(teamLibraryDocsTable).values({
+        id:         docId,
+        title:      title.trim().slice(0, 200),
+        fileName:   fileName.slice(0, 255),
+        fileSize:   actualSize || fileSize,
+        fileType:   actualContentType || fileType.slice(0, 100),
+        objectPath: slot.objectPath,   // server-issued path, never from the client
+        uploadedBy: member.email,
+      });
+
+      return tx
+        .select()
+        .from(teamLibraryDocsTable)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle text-PK type narrowing quirk with project references
+        .where(eq(teamLibraryDocsTable.id as any, docId));
+    });
+
     res.status(201).json(saved);
   } catch (err) {
+    if (err instanceof Error && (err as Error & { slotUnavailable?: boolean }).slotUnavailable) {
+      res.status(409).json({ error: "Upload slot already used or expired — request a new upload URL" });
+      return;
+    }
     console.error("[library] DB insert error:", err);
     res.status(500).json({ error: "Failed to save document metadata" });
   }

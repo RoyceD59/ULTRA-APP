@@ -3141,11 +3141,11 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             return anchorId;
           });
         } catch (claimErr) {
-          if (
-            typeof claimErr === "object" && claimErr !== null &&
-            "code" in claimErr &&
-            (claimErr as { code: string }).code === "23505"
-          ) {
+          // DrizzleQueryError wraps the pg error in `.cause`; check both locations.
+          const _wcPgCode =
+            (claimErr as { code?: string }).code ??
+            (claimErr as { cause?: { code?: string } }).cause?.code;
+          if (_wcPgCode === "23505") {
             const [winner] = await db
               .select()
               .from(ucOrdersTable)
@@ -3420,11 +3420,14 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     // Two requests can race through the pre-check and both try to insert.
     // The loser hits Postgres error 23505. Re-read the winner's row and return
     // it without sending any additional notification.
-    if (
-      paymentReference &&
-      typeof dbErr === "object" && dbErr !== null &&
-      "code" in dbErr && (dbErr as { code: string }).code === "23505"
-    ) {
+    // DrizzleQueryError wraps the underlying pg error in `.cause`; the Postgres
+    // error code "23505" (unique_violation) is therefore at dbErr.cause.code,
+    // not dbErr.code.  Check both so the handler fires whether the raw pg error
+    // or a Drizzle-wrapped version reaches this catch block.
+    const _pgErrCode =
+      (dbErr as { code?: string }).code ??
+      (dbErr as { cause?: { code?: string } }).cause?.code;
+    if (paymentReference && _pgErrCode === "23505") {
       try {
         const [winner] = await db
           .select()
