@@ -12,6 +12,7 @@ import TrustBadges from '@/components/TrustBadges';
 import ImpactBubble from '@/components/ImpactBubble';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFilterActivation, effectiveLifespanDays } from '@/hooks/useNotifications';
+import { useCartBarInset } from '@/hooks/useCartBarInset';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -94,11 +95,12 @@ export default function HomeScreen() {
     });
   }, []);
 
+  const cartBarInset = useCartBarInset();
   const featured = products?.slice(0, 6) ?? [];
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 34 : 80 }}
+      contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
       showsVerticalScrollIndicator={false}>
 
       {/* Header */}

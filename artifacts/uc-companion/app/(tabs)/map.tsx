@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
+import { useCartBarInset } from '@/hooks/useCartBarInset';
 
 const FILTER_TABS = ['All', 'Centres', 'ATMs'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
@@ -42,6 +43,7 @@ export default function MapScreen() {
   const colors = useColors();
   const api = useApi();
   const [filter, setFilter] = useState('All');
+  const cartBarInset = useCartBarInset();
 
   const { data: locations = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
@@ -77,7 +79,7 @@ export default function MapScreen() {
         <FlatList
           data={visible}
           keyExtractor={l => l.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>

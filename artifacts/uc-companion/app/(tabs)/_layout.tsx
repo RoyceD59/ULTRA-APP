@@ -1,13 +1,91 @@
-import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { Platform, StyleSheet, useColorScheme, View, Text, TouchableOpacity, Animated } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useCart } from '@/context/CartContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+
+// ── Global Cart Bar ───────────────────────────────────────────────────────────
+// Floats above the tab bar from every tab when the cart is non-empty.
+
+function formatKES(price: number) {
+  return `KES ${price.toLocaleString('en-KE')}`;
+}
+
+function GlobalCartBar() {
+  const colors = useColors();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { totalItems, totalPrice } = useCart();
+
+  const hasItems = totalItems > 0;
+
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: hasItems ? 1 : 0,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
+  }, [hasItems, anim]);
+
+  // Position the bar just above the tab bar.
+  // Tab bar is ~49 pt tall on iOS (+ safe-area bottom), ~56 on Android, ~84 on web.
+  const tabBarHeight = Platform.OS === 'web' ? 84 : Platform.OS === 'ios' ? 49 : 56;
+  const bottomOffset = tabBarHeight + (Platform.OS === 'web' ? 0 : insets.bottom);
+
+  return (
+    <Animated.View
+      pointerEvents={hasItems ? 'auto' : 'none'}
+      style={[
+        styles.globalBar,
+        {
+          backgroundColor: colors.primary,
+          bottom: bottomOffset,
+          opacity: anim,
+          transform: [
+            {
+              translateY: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [56, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      {/* Left: item count + total */}
+      <View style={styles.barLeft}>
+        <View style={[styles.badgeCircle, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+          <Text style={styles.badgeText}>{totalItems}</Text>
+        </View>
+        <Text style={styles.barTotal}>{formatKES(totalPrice)}</Text>
+      </View>
+
+      {/* Right: Quick Checkout button */}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          router.push('/checkout');
+        }}
+        style={[styles.checkoutBtn, { backgroundColor: '#fff' }]}
+      >
+        <Ionicons name="bag-check-outline" size={15} color={colors.primary} />
+        <Text style={[styles.checkoutBtnText, { color: colors.primary }]}>Quick Checkout</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ── Native-tab layout (iOS Liquid Glass) ─────────────────────────────────────
 
 function NativeTabLayout() {
   return (
@@ -35,6 +113,8 @@ function NativeTabLayout() {
     </NativeTabs>
   );
 }
+
+// ── Classic tab layout (Android / web / older iOS) ───────────────────────────
 
 function ClassicTabLayout() {
   const colors = useColors();
@@ -113,9 +193,61 @@ function ClassicTabLayout() {
   );
 }
 
+// ── Root export ───────────────────────────────────────────────────────────────
+
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
+  return (
+    <View style={{ flex: 1 }}>
+      {isLiquidGlassAvailable() ? <NativeTabLayout /> : <ClassicTabLayout />}
+      {/* Persistent cart bar — visible from every tab when cart is non-empty */}
+      <GlobalCartBar />
+    </View>
+  );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  globalBar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    zIndex: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    height: 52,
+    // Shadow
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  barLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  badgeCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  barTotal: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  checkoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  checkoutBtnText: { fontSize: 13, fontWeight: '700' },
+});

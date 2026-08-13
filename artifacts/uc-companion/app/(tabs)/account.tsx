@@ -18,6 +18,7 @@ import {
   getFilterActivation,
   type FilterActivation,
 } from '@/hooks/useNotifications';
+import { useCartBarInset } from '@/hooks/useCartBarInset';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -389,6 +390,9 @@ export default function AccountScreen() {
     enabled: !!user,
   });
 
+  // Must be called unconditionally before any early return (Rules of Hooks).
+  const cartBarInset = useCartBarInset();
+
   if (!user) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -425,7 +429,7 @@ export default function AccountScreen() {
     <>
       <ScrollView
         style={[styles.screen, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 34 : 80 }}>
+        contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}>
 
         {/* Notification permission prompt */}
         {Platform.OS !== 'web' && notifStatus !== 'granted' && (

@@ -13,6 +13,7 @@ import {
   GUIDES, GUIDE_CATEGORIES, CATEGORY_ICONS,
   type Guide, type GuideCategory,
 } from '@/data/guides';
+import { useCartBarInset } from '@/hooks/useCartBarInset';
 
 const TABS = ['Guides', 'My Tickets', 'Water Test'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
@@ -103,6 +104,7 @@ export default function SupportScreen() {
   const api    = useApi();
   const [tab, setTab]       = useState(0);
   const [search, setSearch] = useState('');
+  const cartBarInset = useCartBarInset();
 
   const { data: tickets, isLoading: loadingTickets } = useQuery({
     queryKey: ['tickets'],
@@ -154,7 +156,7 @@ export default function SupportScreen() {
           sections={sections}
           keyExtractor={g => g.id}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 34 : 80 }}
+          contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
           ListHeaderComponent={
             <>
               <AiBanner colors={colors} onPress={() => router.push('/ai-chat' as never)} />
@@ -228,7 +230,7 @@ export default function SupportScreen() {
           <FlatList
             data={tickets ?? []}
             keyExtractor={t => t.id}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[styles.list, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }]}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
               <TouchableOpacity
@@ -254,7 +256,7 @@ export default function SupportScreen() {
 
       {/* ── Water Test ── */}
       {tab === 2 && (
-        <ScrollView contentContainerStyle={styles.waterTestContent}>
+        <ScrollView contentContainerStyle={[styles.waterTestContent, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }]}>
           <View style={[styles.waterTestCard, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
             <Ionicons name="flask" size={40} color={colors.primary} />
             <Text style={[styles.waterTestTitle, { color: colors.text }]}>Free Water Quality Test</Text>

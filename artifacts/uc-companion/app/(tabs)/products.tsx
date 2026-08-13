@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi, UCProduct, resolveMediaUrl } from '@/hooks/useApi';
 import { useCart } from '@/context/CartContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCartBarInset } from '@/hooks/useCartBarInset';
 import ProductCard from '@/components/ProductCard';
 import FilterChip from '@/components/FilterChip';
 import * as Haptics from 'expo-haptics';
@@ -72,6 +73,7 @@ export default function ProductsScreen() {
   const api = useApi();
   const insets = useSafeAreaInsets();
   const { items, totalItems, totalPrice, addItem, refreshCart, cartHydrated } = useCart();
+  const cartBarInset = useCartBarInset();
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
@@ -307,7 +309,7 @@ export default function ProductsScreen() {
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: paddingAnim, paddingBottom: Platform.OS === 'web' ? 34 : 80 }}
+        contentContainerStyle={{ paddingTop: paddingAnim, paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}>
 
         {/* Search */}
