@@ -35,6 +35,11 @@ const blockPatterns = [
   /_tmp_\d+[/\\]/,
   // react-native-maps android build tree
   /react-native-maps[^/\\]*[/\\]android[/\\]/,
+  // Node.js test doubles — kept in hooks/node_modules/ so the test runner and
+  // the module-under-test share the same stub instance via nearest-node_modules
+  // resolution.  Blocked here so Metro always falls through to the real
+  // packages in the project-root node_modules/ and never ships stub code.
+  /hooks[/\\]node_modules[/\\]/,
 ];
 
 const existing = config.resolver.blockList;

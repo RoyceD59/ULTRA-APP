@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  CartItem,
+  loadCartFromStorage,
+  saveCartToStorage,
+  mergeItem,
+  totalItems as calcTotalItems,
+  totalPrice as calcTotalPrice,
+} from './cartStorage';
 
-export interface CartItem {
-  id: number;
-  name: string;
-  price: number;
-  quantity: number;
-  image: string;
-  sku: string;
-}
+export type { CartItem };
 
 interface CartContextValue {
   items: CartItem[];
@@ -36,17 +37,15 @@ const CartContext = createContext<CartContextValue>({
   refreshCart: async () => {},
 });
 
-const CART_KEY = 'uc_cart_v1';
-
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
 
   const loadFromStorage = useCallback(async () => {
     try {
-      const data = await AsyncStorage.getItem(CART_KEY);
-      if (data) setItems(JSON.parse(data));
-    } catch { /* ignore */ } finally {
+      const loaded = await loadCartFromStorage(AsyncStorage);
+      setItems(loaded);
+    } finally {
       setCartHydrated(true);
     }
   }, []);
@@ -55,46 +54,48 @@ export function CartProvider({ children }: { children: ReactNode }) {
     loadFromStorage();
   }, [loadFromStorage]);
 
-  const persist = (next: CartItem[]) => {
-    setItems(next);
-    AsyncStorage.setItem(CART_KEY, JSON.stringify(next)).catch(() => {});
-  };
-
-  const addItem = (product: CartItem) => {
+  const addItem = useCallback((product: CartItem) => {
     setItems(prev => {
-      const existing = prev.find(i => i.id === product.id);
-      const next = existing
-        ? prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...prev, { ...product, quantity: 1 }];
-      AsyncStorage.setItem(CART_KEY, JSON.stringify(next)).catch(() => {});
+      const next = mergeItem(prev, product);
+      saveCartToStorage(AsyncStorage, next);
       return next;
     });
-  };
+  }, []);
 
-  const removeItem = (id: number) => {
+  const removeItem = useCallback((id: number) => {
     setItems(prev => {
       const next = prev.filter(i => i.id !== id);
-      AsyncStorage.setItem(CART_KEY, JSON.stringify(next)).catch(() => {});
+      saveCartToStorage(AsyncStorage, next);
       return next;
     });
-  };
+  }, []);
 
-  const updateQty = (id: number, qty: number) => {
+  const updateQty = useCallback((id: number, qty: number) => {
     if (qty <= 0) { removeItem(id); return; }
     setItems(prev => {
       const next = prev.map(i => i.id === id ? { ...i, quantity: qty } : i);
-      AsyncStorage.setItem(CART_KEY, JSON.stringify(next)).catch(() => {});
+      saveCartToStorage(AsyncStorage, next);
       return next;
     });
-  };
+  }, [removeItem]);
 
-  const clearCart = () => persist([]);
-
-  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const clearCart = useCallback(() => {
+    setItems([]);
+    saveCartToStorage(AsyncStorage, []);
+  }, []);
 
   return (
-    <CartContext.Provider value={{ items, totalItems, totalPrice, cartHydrated, addItem, removeItem, updateQty, clearCart, refreshCart: loadFromStorage }}>
+    <CartContext.Provider value={{
+      items,
+      totalItems: calcTotalItems(items),
+      totalPrice: calcTotalPrice(items),
+      cartHydrated,
+      addItem,
+      removeItem,
+      updateQty,
+      clearCart,
+      refreshCart: loadFromStorage,
+    }}>
       {children}
     </CartContext.Provider>
   );

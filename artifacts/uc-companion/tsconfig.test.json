@@ -3,8 +3,8 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./*"],
-      "react-native":                             ["./__mocks__/react-native.ts"],
-      "expo-notifications":                       ["./__mocks__/expo-notifications.ts"],
+      "react-native":                              ["./__mocks__/react-native.ts"],
+      "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
       "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"]
     },
     "noEmit": true
@@ -13,6 +13,7 @@
     "hooks/__tests__/**/*.mts",
     "hooks/useNotifications.ts",
     "hooks/mpesaStatusClassifier.ts",
-    "hooks/mpesaRetryGuard.ts"
+    "hooks/mpesaRetryGuard.ts",
+    "context/cartStorage.ts"
   ]
 }
