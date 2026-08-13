@@ -11,8 +11,7 @@
       "js-yaml@>=4 <5": "4.3.1",
       "fast-uri": "4.1.2",
       "postcss": "8.5.26",
-      "fast-xml-parser": "5.10.1",
-      "image-size": "2.0.2"
+      "fast-xml-parser": "5.10.1"
     }
   },
   "scripts": {
