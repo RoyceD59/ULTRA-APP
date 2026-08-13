@@ -1697,6 +1697,35 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
     }
 
     logger.info({ userId: numericId }, "Customer account anonymised on deletion request");
+
+    // 15. Notify the team — best-effort, never blocks the deletion response.
+    //     No PII is included: only the numeric user ID and the UTC timestamp.
+    const deletedAt = new Date().toUTCString();
+    sendViaResend({
+      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to:   "info@ucfilters.com",
+      subject: `Account deleted — user #${numericId}`,
+      text: [
+        "A customer has exercised their right to erasure.",
+        "",
+        `User ID   : ${numericId}`,
+        `Deleted at: ${deletedAt} (UTC)`,
+        "",
+        "All personal data has been anonymised. No action is required unless",
+        "a dispute or order investigation is in progress for this account.",
+      ].join("\n"),
+      html: [
+        "<p>A customer has exercised their right to erasure.</p>",
+        "<ul>",
+        `<li><strong>User ID:</strong> ${numericId}</li>`,
+        `<li><strong>Deleted at:</strong> ${deletedAt} (UTC)</li>`,
+        "</ul>",
+        "<p>All personal data has been anonymised. No action is required unless",
+        "a dispute or order investigation is in progress for this account.</p>",
+      ].join("\n"),
+      meta: { template: "account_deleted" },
+    }).catch(err => logger.warn({ err, userId: numericId }, "Account-deletion team notification not sent"));
+
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err, userId: numericId }, "Failed to delete customer account");
