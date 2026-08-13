@@ -198,6 +198,61 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     );
     assert.equal(atRequests.length, 0, "No Africa's Talking fetch should be made when phone is absent");
   });
+
+  it("(e) sendSms network failure does not suppress the email or throw", async () => {
+    process.env["TEAM_ALERT_PHONE"] = "+254700000099";
+    // Force sendViaResend to use the fetch path (not connectors.proxy) so our
+    // fetch stub can capture the Resend call.
+    process.env["RESEND_BASE_URL"] = "https://api.resend.com";
+
+    // Override fetch so AT calls reject but Resend calls succeed
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : (input as URL | Request).toString();
+      const bodyText = typeof init?.body === "string" ? init.body : String(init?.body ?? "");
+      capturedRequests.push({ url, bodyText });
+
+      if (url.includes("africastalking.com")) {
+        throw new Error("Simulated AT network failure");
+      }
+      // Resend succeeds
+      return new Response(JSON.stringify({ id: "resend-ok" }), { status: 200 });
+    };
+
+    const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
+
+    // Must not throw even though SMS will fail
+    assert.doesNotThrow(() => {
+      alertTeamRecoveryOrder({
+        subject:  "Test recovery alert",
+        body:     "Order details here",
+        smsText:  "UCFilters: recovery order #3 needs fulfilment.",
+        template: "payment_recovery_alert",
+        orderId:  3,
+      });
+    });
+
+    // Allow both the email and the (failing) SMS fetch to settle
+    await waitTick(120);
+
+    // Email (Resend) must still have been attempted
+    const resendRequests = capturedRequests.filter((r) =>
+      r.url.includes("resend.com") || r.url.includes("api.resend")
+    );
+    assert.ok(
+      resendRequests.length >= 1,
+      "Resend email should still be attempted even when SMS fails",
+    );
+
+    // AT was attempted (credentials + phone are both present)
+    const atRequests = capturedRequests.filter((r) =>
+      r.url.includes("africastalking.com")
+    );
+    assert.ok(atRequests.length >= 1, "AT fetch should have been attempted before failing");
+
+    globalThis.fetch = savedFetch;
+    delete process.env["RESEND_BASE_URL"];
+  });
 });
 
 // ─── runStaleRecoveryOrderDigest ───────────────────────────────────────────────
