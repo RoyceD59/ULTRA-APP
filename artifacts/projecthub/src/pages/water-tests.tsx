@@ -148,7 +148,40 @@ function statusLabel(status: string) {
 
 // ─── Water Test Card ──────────────────────────────────────────────────────────
 
-function WaterTestCard({ test }: { test: AdminWaterTest }) {
+interface WaterTestCardProps {
+  test: AdminWaterTest;
+  token: string;
+  onUpdate: (updated: AdminWaterTest) => void;
+}
+
+function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
+  const [updating, setUpdating] = useState(false);
+  const [error, setError]       = useState("");
+
+  async function changeStatus(newStatus: string) {
+    if (newStatus === test.status || updating) return;
+    setUpdating(true);
+    setError("");
+    try {
+      const res = await fetch(`${BASE}/api/uc/admin/water-tests/${test.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        setError(body.error ?? `Error ${res.status}`);
+        return;
+      }
+      const updated = await res.json() as AdminWaterTest;
+      onUpdate(updated);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -199,6 +232,27 @@ function WaterTestCard({ test }: { test: AdminWaterTest }) {
             )}
           </div>
         )}
+        {/* Status controls */}
+        <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-1">Move to:</span>
+          {STATUSES.map(s => (
+            <button
+              key={s}
+              disabled={s === test.status || updating}
+              onClick={() => changeStatus(s)}
+              className={[
+                "text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                s === test.status
+                  ? `${statusColor(s)} border-transparent cursor-default opacity-70`
+                  : "border-border hover:bg-muted disabled:opacity-40 cursor-pointer",
+              ].join(" ")}
+            >
+              {statusLabel(s)}
+            </button>
+          ))}
+          {updating && <span className="text-xs text-muted-foreground animate-pulse ml-1">Saving…</span>}
+        </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </CardContent>
     </Card>
   );
@@ -212,6 +266,7 @@ type StatusFilter = (typeof STATUSES)[number] | "all";
 function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [exporting, setExporting] = useState(false);
+  const [localTests, setLocalTests] = useState<AdminWaterTest[] | null>(null);
 
   const { data: tests, isLoading, isError, refetch, isFetching } = useQuery<AdminWaterTest[]>({
     queryKey: ["admin-water-tests", token, statusFilter],
@@ -232,6 +287,22 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
     },
     refetchOnWindowFocus: false,
   });
+
+  // Sync local copy whenever the query result changes
+  useEffect(() => { setLocalTests(tests ?? null); }, [tests]);
+
+  function handleTestUpdate(updated: AdminWaterTest) {
+    setLocalTests(prev => {
+      if (!prev) return prev;
+      // When a status filter is active, remove the test if it no longer matches
+      if (statusFilter !== "all" && updated.status !== statusFilter) {
+        return prev.filter(t => t.id !== updated.id);
+      }
+      return prev.map(t => (t.id === updated.id ? updated : t));
+    });
+  }
+
+  const displayTests = localTests ?? tests;
 
   async function downloadCsv() {
     setExporting(true);
@@ -320,14 +391,16 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
           Failed to load water tests. Please refresh or sign in again.
         </div>
       )}
-      {tests && tests.length === 0 && !isLoading && (
+      {displayTests && displayTests.length === 0 && !isLoading && (
         <div className="text-muted-foreground text-sm py-12 text-center">
           {statusFilter !== "all" ? `No ${statusLabel(statusFilter).toLowerCase()} water tests.` : "No water tests yet."}
         </div>
       )}
-      {tests && tests.length > 0 && (
+      {displayTests && displayTests.length > 0 && (
         <div className="space-y-3">
-          {tests.map(t => <WaterTestCard key={t.id} test={t} />)}
+          {displayTests.map(t => (
+            <WaterTestCard key={t.id} test={t} token={token} onUpdate={handleTestUpdate} />
+          ))}
         </div>
       )}
     </div>

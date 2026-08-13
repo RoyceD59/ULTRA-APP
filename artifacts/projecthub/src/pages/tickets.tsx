@@ -145,7 +145,40 @@ function statusLabel(status: string) {
 
 // ─── Ticket Card ──────────────────────────────────────────────────────────────
 
-function TicketCard({ ticket }: { ticket: AdminTicket }) {
+interface TicketCardProps {
+  ticket: AdminTicket;
+  token: string;
+  onUpdate: (updated: AdminTicket) => void;
+}
+
+function TicketCard({ ticket, token, onUpdate }: TicketCardProps) {
+  const [updating, setUpdating] = useState(false);
+  const [error, setError]       = useState("");
+
+  async function changeStatus(newStatus: string) {
+    if (newStatus === ticket.status || updating) return;
+    setUpdating(true);
+    setError("");
+    try {
+      const res = await fetch(`${BASE}/api/uc/admin/tickets/${ticket.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        setError(body.error ?? `Error ${res.status}`);
+        return;
+      }
+      const updated = await res.json() as AdminTicket;
+      onUpdate(updated);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -182,6 +215,27 @@ function TicketCard({ ticket }: { ticket: AdminTicket }) {
             </span>
           )}
         </div>
+        {/* Status controls */}
+        <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-1">Move to:</span>
+          {STATUSES.map(s => (
+            <button
+              key={s}
+              disabled={s === ticket.status || updating}
+              onClick={() => changeStatus(s)}
+              className={[
+                "text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                s === ticket.status
+                  ? `${statusColor(s)} border-transparent cursor-default opacity-70`
+                  : "border-border hover:bg-muted disabled:opacity-40 cursor-pointer",
+              ].join(" ")}
+            >
+              {statusLabel(s)}
+            </button>
+          ))}
+          {updating && <span className="text-xs text-muted-foreground animate-pulse ml-1">Saving…</span>}
+        </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </CardContent>
     </Card>
   );
@@ -195,6 +249,7 @@ type StatusFilter = (typeof STATUSES)[number] | "all";
 function TicketsList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [exporting, setExporting] = useState(false);
+  const [localTickets, setLocalTickets] = useState<AdminTicket[] | null>(null);
 
   const { data: tickets, isLoading, isError, refetch, isFetching } = useQuery<AdminTicket[]>({
     queryKey: ["admin-tickets", token, statusFilter],
@@ -215,6 +270,22 @@ function TicketsList({ token, onLogout }: { token: string; onLogout: () => void 
     },
     refetchOnWindowFocus: false,
   });
+
+  // Sync local copy whenever the query result changes
+  useEffect(() => { setLocalTickets(tickets ?? null); }, [tickets]);
+
+  function handleTicketUpdate(updated: AdminTicket) {
+    setLocalTickets(prev => {
+      if (!prev) return prev;
+      // When a status filter is active, remove the ticket if it no longer matches
+      if (statusFilter !== "all" && updated.status !== statusFilter) {
+        return prev.filter(t => t.id !== updated.id);
+      }
+      return prev.map(t => (t.id === updated.id ? updated : t));
+    });
+  }
+
+  const displayTickets = localTickets ?? tickets;
 
   async function downloadCsv() {
     setExporting(true);
@@ -303,14 +374,16 @@ function TicketsList({ token, onLogout }: { token: string; onLogout: () => void 
           Failed to load tickets. Please refresh or sign in again.
         </div>
       )}
-      {tickets && tickets.length === 0 && !isLoading && (
+      {displayTickets && displayTickets.length === 0 && !isLoading && (
         <div className="text-muted-foreground text-sm py-12 text-center">
           {statusFilter !== "all" ? `No ${statusLabel(statusFilter).toLowerCase()} tickets.` : "No tickets yet."}
         </div>
       )}
-      {tickets && tickets.length > 0 && (
+      {displayTickets && displayTickets.length > 0 && (
         <div className="space-y-3">
-          {tickets.map(t => <TicketCard key={t.id} ticket={t} />)}
+          {displayTickets.map(t => (
+            <TicketCard key={t.id} ticket={t} token={token} onUpdate={handleTicketUpdate} />
+          ))}
         </div>
       )}
     </div>
