@@ -189,7 +189,7 @@ export default function CheckoutScreen() {
             // retriable=false: wrong PIN, user cancelled, insufficient funds.
             // Show dismissal + Safaricom-app PIN hint (no retry buttons).
             Alert.alert(action.title, action.message);
-          } else {
+          } else if (action.kind === 'retry_dialog') {
             // retriable=true: transient network/server error.
             // Offer "Try again / Pay with COD".
             Alert.alert(action.title, action.message, [
