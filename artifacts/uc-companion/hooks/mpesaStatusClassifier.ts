@@ -30,6 +30,23 @@ export type MpesaStatusAction =
     };
 
 /**
+ * Returns `true` when a settled poll action means `lastCheckoutRequestIdRef`
+ * must be cleared immediately — i.e. the prior STK push is definitively done
+ * and re-querying it on the next "Try again" would be pointless or wrong.
+ *
+ * The condition is centralised here (rather than inlined in checkout.tsx) so
+ * both the component and its tests import the same rule.  If the clearing
+ * logic ever changes, updating this function is the single source of truth.
+ *
+ * Note: `create_order` is intentionally excluded — the ref is only cleared
+ * *after* `createOrder` succeeds (see checkout.tsx).  This function covers
+ * the failure paths (hint_dialog / retry_dialog) where clearing is immediate.
+ */
+export function pollSettleClearsRef(action: MpesaStatusAction): boolean {
+  return action.kind === "hint_dialog" || action.kind === "retry_dialog";
+}
+
+/**
  * Classify a Daraja status response into one of four actions:
  *
  *  - `create_order`      — payment confirmed; proceed to create the order

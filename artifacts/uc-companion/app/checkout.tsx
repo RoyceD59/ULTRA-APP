@@ -13,7 +13,7 @@ import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPi
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import { type CodeValidationResult } from '@/hooks/useApi';
-import { classifyMpesaStatus } from '@/hooks/mpesaStatusClassifier';
+import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusClassifier';
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 
 const DELIVERY_FEE = 500;
@@ -169,11 +169,13 @@ export default function CheckoutScreen() {
           // payment and retry createOrder rather than issuing a new STK push.
           const orderCreated = await createOrder('mpesa', checkoutRequestId);
           if (orderCreated) lastCheckoutRequestIdRef.current = null;
-        } else if (action.kind === 'hint_dialog' || action.kind === 'retry_dialog') {
+        } else if (pollSettleClearsRef(action)) {
           settled = true;
           clearInterval(intervalId);
           if (pollRef.current === intervalId) pollRef.current = null;
           // Definitive failure — no point querying this ref again on retry.
+          // pollSettleClearsRef encodes this rule (hint_dialog | retry_dialog)
+          // as the single source of truth shared with the test suite.
           lastCheckoutRequestIdRef.current = null;
           setMpesaWaiting(false);
           setProcessing(false);
