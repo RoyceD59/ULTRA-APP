@@ -27,6 +27,7 @@ channel = "stable-25_05"
 [userenv.shared]
 AI_ORCHESTRATOR_WEBHOOK_URL = "https://team-horizon--jerryaroyce.replit.app/webhook/projecthub"
 MPESA_ENV = "sandbox"
+WHATSAPP_SESSION_BUCKET_PATH = "/replit-objstore-83ddc91a-d087-49a2-9cbf-3f91d91008cd/whatsapp-session"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-83ddc91a-d087-49a2-9cbf-3f91d91008cd"
