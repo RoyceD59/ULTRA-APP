@@ -404,20 +404,24 @@ export function buildOrderReceiptEmail(params: {
     ? [addr.address1, addr.city, addr.country].filter(Boolean).join(", ")
     : "To be confirmed";
 
-  const itemsHtml = lineItems
-    .map(
-      (i) => {
-        const safeName  = i.name     != null && i.name     !== "" ? i.name               : "—";
-        const safeQty   = i.quantity != null                      ? String(i.quantity)   : "—";
-        const safeTotal = i.total    != null && i.total    !== "" ? fmt(i.total)         : "—";
-        return `<tr>
+  const itemsHtml = lineItems.length === 0
+    ? `<tr>
+          <td colspan="3" style="padding:12px;text-align:center;color:#6b7280;font-size:13px;font-style:italic;">No items listed</td>
+        </tr>`
+    : lineItems
+      .map(
+        (i) => {
+          const safeName  = i.name     != null && i.name     !== "" ? i.name               : "—";
+          const safeQty   = i.quantity != null                      ? String(i.quantity)   : "—";
+          const safeTotal = i.total    != null && i.total    !== "" ? fmt(i.total)         : "—";
+          return `<tr>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${safeName}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${safeQty}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">${safeTotal}</td>
         </tr>`;
-      }
-    )
-    .join("\n");
+        }
+      )
+      .join("\n");
 
   const discountRow =
     discountAmount && discountAmount > 0
@@ -529,12 +533,14 @@ export function buildOrderReceiptEmail(params: {
     `Delivery to: ${addrText}`,
     "",
     "Items:",
-    ...lineItems.map((i) => {
-      const safeName  = i.name     != null && i.name     !== "" ? i.name           : "—";
-      const safeQty   = i.quantity != null                      ? `x${i.quantity}` : "x—";
-      const safeTotal = i.total    != null && i.total    !== "" ? fmt(i.total)     : "—";
-      return `  ${safeName} ${safeQty} — ${safeTotal}`;
-    }),
+    ...(lineItems.length === 0
+      ? ["  No items listed"]
+      : lineItems.map((i) => {
+          const safeName  = i.name     != null && i.name     !== "" ? i.name           : "—";
+          const safeQty   = i.quantity != null                      ? `x${i.quantity}` : "x—";
+          const safeTotal = i.total    != null && i.total    !== "" ? fmt(i.total)     : "—";
+          return `  ${safeName} ${safeQty} — ${safeTotal}`;
+        })),
     ...(discountAmount && discountAmount > 0
       ? [`  Discount${promoCode ? ` (${promoCode})` : ""}: -${fmt(discountAmount)}`]
       : []),

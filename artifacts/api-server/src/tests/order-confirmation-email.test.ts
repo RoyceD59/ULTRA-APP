@@ -190,6 +190,29 @@ describe("buildOrderReceiptEmail — missing line-item fields", () => {
   });
 });
 
+// ─── (b3) HTML template — empty lineItems array ───────────────────────────────
+
+describe("buildOrderReceiptEmail — empty lineItems", () => {
+  it("shows a fallback row instead of a blank tbody", async () => {
+    const { buildOrderReceiptEmail } = await import("../lib/email.js");
+    const { html, text } = buildOrderReceiptEmail({ ...SAMPLE_ORDER, lineItems: [] });
+
+    // Must not contain an empty <tbody></tbody> — the fallback row must be present
+    assert.ok(
+      !html.includes("<tbody>\n                \n                "),
+      "HTML must not render an empty item block",
+    );
+    assert.ok(
+      html.toLowerCase().includes("no items listed"),
+      `HTML must show the fallback text "No items listed"; got: ${html.slice(html.indexOf("<tbody>"), html.indexOf("</tbody>") + 8)}`,
+    );
+    assert.ok(
+      text.toLowerCase().includes("no items listed"),
+      'plain-text must include "No items listed"',
+    );
+  });
+});
+
 // ─── (c) sendViaResend — success path ────────────────────────────────────────
 
 describe("sendViaResend — success", () => {
