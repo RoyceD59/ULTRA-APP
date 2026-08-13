@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   CartItem,
+  CART_STORAGE_KEY,
   loadCartFromStorage,
-  saveCartToStorage,
   mergeItem,
   totalItems as calcTotalItems,
   totalPrice as calcTotalPrice,
@@ -41,48 +41,94 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
 
+  // Write-versioning that guards refreshCart() against the tab-switch race:
+  // `version` increments synchronously at each mutation call (stepper tap,
+  // add, remove, clear) and that unique version is passed explicitly to the
+  // persistence layer.  Writes are SERIALIZED on a promise chain, a write is
+  // skipped when a newer mutation has superseded it (only the newest snapshot
+  // can commit, so concurrent AsyncStorage writes can never settle out of
+  // order), and `savedVersion` advances only after that exact write SUCCEEDS
+  // — a suppressed storage failure is never treated as persisted.
+  // A refresh may only overwrite in-memory state when nothing mutated since
+  // it started AND storage had caught up when the read completed — otherwise
+  // freshly tapped quantities would be clobbered by stale data.
+  // (Plain object via useState initializer: stable identity, like a ref.)
+  const [writeSync] = useState(() => ({
+    version: 0,
+    savedVersion: 0,
+    chain: Promise.resolve(),
+  }));
+
+  const persist = useCallback((next: CartItem[], v: number) => {
+    writeSync.chain = writeSync.chain.then(async () => {
+      // Superseded by a newer mutation whose write is queued behind us:
+      // skip this stale snapshot so it can never become the final value.
+      if (v < writeSync.version) return;
+      try {
+        await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
+        if (v > writeSync.savedVersion) writeSync.savedVersion = v;
+      } catch {
+        // Failed write: savedVersion stays behind so refreshCart will not
+        // trust storage that predates this mutation.
+      }
+    });
+  }, [writeSync]);
+
   const loadFromStorage = useCallback(async () => {
+    const versionAtStart = writeSync.version;
     try {
       const loaded = await loadCartFromStorage(AsyncStorage);
-      setItems(loaded);
+      // Snapshot how far storage had caught up when the read completed; if the
+      // save chain only settles later, `loaded` predates it and must not win.
+      const savedAtRead = writeSync.savedVersion;
+      setItems(prev => {
+        const isStale =
+          writeSync.version !== versionAtStart ||  // mutated since refresh began
+          savedAtRead < versionAtStart;            // read happened before the last save settled
+        return isStale ? prev : loaded;
+      });
     } finally {
       setCartHydrated(true);
     }
-  }, []);
+  }, [writeSync]);
 
   useEffect(() => {
     loadFromStorage();
   }, [loadFromStorage]);
 
   const addItem = useCallback((product: CartItem) => {
+    const v = ++writeSync.version;
     setItems(prev => {
       const next = mergeItem(prev, product);
-      saveCartToStorage(AsyncStorage, next);
+      persist(next, v);
       return next;
     });
-  }, []);
+  }, [writeSync, persist]);
 
   const removeItem = useCallback((id: number) => {
+    const v = ++writeSync.version;
     setItems(prev => {
       const next = prev.filter(i => i.id !== id);
-      saveCartToStorage(AsyncStorage, next);
+      persist(next, v);
       return next;
     });
-  }, []);
+  }, [writeSync, persist]);
 
   const updateQty = useCallback((id: number, qty: number) => {
     if (qty <= 0) { removeItem(id); return; }
+    const v = ++writeSync.version;
     setItems(prev => {
       const next = prev.map(i => i.id === id ? { ...i, quantity: qty } : i);
-      saveCartToStorage(AsyncStorage, next);
+      persist(next, v);
       return next;
     });
-  }, [removeItem]);
+  }, [removeItem, writeSync, persist]);
 
   const clearCart = useCallback(() => {
+    const v = ++writeSync.version;
     setItems([]);
-    saveCartToStorage(AsyncStorage, []);
-  }, []);
+    persist([], v);
+  }, [writeSync, persist]);
 
   return (
     <CartContext.Provider value={{
