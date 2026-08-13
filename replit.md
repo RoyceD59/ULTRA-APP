@@ -81,6 +81,26 @@ _Populate as you build — explicit user instructions worth remembering across s
 - After changing `lib/db` schema: run `pnpm --filter @workspace/db run push` **and** `pnpm exec tsc -b lib/db` (the package has no build script; project references need the manual rebuild) before typechecking/starting the API.
 - UC admin access is DB-anchored: a registered `uc_users` row with `is_admin=true`, or a registered user whose email is in the `UC_ADMIN_EMAILS` env var. The dev-only mock login (unknown email + any 6+ char password) is disabled in production.
 
+## Google Maps Android key — app restriction (IMPORTANT)
+
+The `GOOGLE_MAPS_ANDROID_KEY` is embedded in every Android build and can be extracted from the APK/AAB. To prevent unauthorised billable usage, the key **must** have an Android-app application restriction set in Google Cloud Console:
+
+1. Open [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
+2. Click the Maps key used by the UC Companion app.
+3. Under **Application restrictions**, select **Android apps**.
+4. Add a restriction entry with:
+   - **Package name**: `com.ultraclean.companion`
+   - **SHA-1 certificate fingerprint**: the debug fingerprint for development builds, **plus** the release fingerprint for production builds (generated from the release keystore).
+5. Save.
+
+**Maintenance note — keystore changes**: if the Android release keystore is ever rotated or replaced, the SHA-1 fingerprint in this restriction must be updated immediately, otherwise production Maps requests will be rejected. Obtain the new fingerprint with:
+
+```bash
+keytool -list -v -keystore release.keystore -alias <alias>
+```
+
+then update the restriction in Google Cloud Console before shipping the new build.
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
