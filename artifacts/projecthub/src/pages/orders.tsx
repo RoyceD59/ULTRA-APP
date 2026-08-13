@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   ShoppingBag, AlertTriangle, Package, RefreshCw, Lock, AlertCircle,
-  LogOut, Copy, Check, ExternalLink,
+  LogOut, Copy, Check, ExternalLink, Filter, X,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
@@ -267,6 +267,8 @@ function OrderCard({ order }: { order: AdminOrder }) {
 // ─── Orders list ──────────────────────────────────────────────────────────────
 
 function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }) {
+  const [recoveryOnly, setRecoveryOnly] = useState(false);
+
   const { data: orders, isLoading, isError, refetch, isFetching } = useQuery<AdminOrder[]>({
     queryKey: ["admin-orders", token],
     queryFn: async () => {
@@ -285,7 +287,11 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
     refetchOnWindowFocus: false,
   });
 
-  const recoveryOrders = orders?.filter(o => o.webhookRecovery) ?? [];
+  const recoveryOrders  = orders?.filter(o => o.webhookRecovery) ?? [];
+  const unresolvedCount = recoveryOrders.filter(
+    o => o.status !== "completed" && o.status !== "cancelled"
+  ).length;
+  const visibleOrders   = recoveryOnly ? recoveryOrders : (orders ?? []);
 
   return (
     <div className="space-y-6">
@@ -294,12 +300,34 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ShoppingBag className="w-6 h-6" />
             Orders
+            {unresolvedCount > 0 && (
+              <span className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold px-2 py-0.5 min-w-[1.25rem]">
+                {unresolvedCount}
+              </span>
+            )}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             All app orders — review webhook recovery orders before dispatch.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Recovery-only filter toggle */}
+          <Button
+            variant={recoveryOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setRecoveryOnly(v => !v)}
+            className={recoveryOnly ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500" : ""}
+            title={recoveryOnly ? "Showing recovery orders only — click to show all" : "Filter to recovery orders only"}
+          >
+            {recoveryOnly
+              ? <><X className="w-4 h-4 mr-1.5" />Recovery only</>
+              : <><Filter className="w-4 h-4 mr-1.5" />Recovery only</>}
+            {!recoveryOnly && recoveryOrders.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem]">
+                {recoveryOrders.length}
+              </span>
+            )}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
@@ -311,10 +339,14 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
       </div>
 
       {/* Recovery alert banner */}
-      {recoveryOrders.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+      {recoveryOrders.length > 0 && !recoveryOnly && (
+        <div
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex items-start gap-3 cursor-pointer hover:bg-amber-100 transition-colors"
+          onClick={() => setRecoveryOnly(true)}
+          title="Click to filter to recovery orders"
+        >
           <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-          <div>
+          <div className="flex-1">
             <p className="font-semibold text-amber-800">
               {recoveryOrders.length} webhook recovery order{recoveryOrders.length > 1 ? "s" : ""} need attention
             </p>
@@ -324,6 +356,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
               to confirm items and address before dispatch.
             </p>
           </div>
+          <span className="text-xs text-amber-600 font-medium whitespace-nowrap">View only →</span>
         </div>
       )}
 
@@ -337,13 +370,15 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
         </div>
       )}
 
-      {orders && orders.length === 0 && (
-        <div className="text-muted-foreground text-sm py-12 text-center">No orders yet.</div>
+      {orders && visibleOrders.length === 0 && !isLoading && (
+        <div className="text-muted-foreground text-sm py-12 text-center">
+          {recoveryOnly ? "No recovery orders." : "No orders yet."}
+        </div>
       )}
 
-      {orders && orders.length > 0 && (
+      {visibleOrders.length > 0 && (
         <div className="space-y-3">
-          {orders.map(order => (
+          {visibleOrders.map(order => (
             <OrderCard key={order.id} order={order} />
           ))}
         </div>

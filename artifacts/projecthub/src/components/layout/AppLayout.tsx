@@ -7,10 +7,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  clearTeamAuth, changePassword, isTeamAdmin, getTeamUser, canView,
+  clearTeamAuth, changePassword, isTeamAdmin, getTeamUser, canView, getTeamToken,
 } from "@/lib/team-auth";
 import type { PageSlug } from "@/lib/team-auth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,6 +107,35 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
+// ─── Recovery order count hook ────────────────────────────────────────────────
+
+/** Fetches the count of unresolved webhook recovery orders for the nav badge.
+ *  Silently returns 0 on any error (the badge is a convenience, not critical). */
+function useRecoveryOrderCount(): number {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const token = getTeamToken();
+    if (!token) return;
+
+    let cancelled = false;
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+    fetch(`${base}/api/uc/admin/orders/recovery-count`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() as Promise<{ count: number }> : Promise.resolve({ count: 0 }))
+      .then(data => { if (!cancelled) setCount(data.count ?? 0); })
+      .catch(() => { /* badge is non-critical */ });
+
+    return () => { cancelled = true; };
+  // Re-fetch whenever the route changes so the badge stays current
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return count;
+}
+
 // ─── AppLayout ─────────────────────────────────────────────────────────────────
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -115,6 +144,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [changePassOpen, setChangePassOpen] = useState(false);
   const admin = isTeamAdmin();
   const user = getTeamUser();
+  const recoveryCount = useRecoveryOrderCount();
 
   // Filter nav to pages the current user can access
   const navigation = ALL_NAVIGATION.filter((item) => canView(item.slug));
@@ -143,6 +173,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
           {navigation.map((item) => {
             const active = item.href === "/" ? location === "/" : location.startsWith(item.href);
+            const isOrders = item.slug === "orders";
+            const showRecoveryBadge = isOrders && recoveryCount > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <button className={cn(
@@ -152,7 +184,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )}>
                   <item.icon className="w-4 h-4 flex-shrink-0" />
-                  {item.name}
+                  <span className="flex-1 text-left">{item.name}</span>
+                  {showRecoveryBadge && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem] leading-none py-0.5"
+                      title={`${recoveryCount} unresolved recovery order${recoveryCount > 1 ? "s" : ""}`}
+                    >
+                      {recoveryCount}
+                    </span>
+                  )}
                 </button>
               </Link>
             );

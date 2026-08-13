@@ -2020,6 +2020,36 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
   }
 });
 
+// GET /api/uc/admin/orders/recovery-count — count of unresolved webhook recovery
+// orders (not completed and not cancelled). Used by the nav badge so the team
+// can see pending recovery orders without navigating to the orders page.
+// Requires admin auth. Intentionally lightweight — no line-item joins.
+router.get("/uc/admin/orders/recovery-count", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  try {
+    const rows = await db
+      .select({ id: ucOrdersTable.id })
+      .from(ucOrdersTable)
+      .where(
+        and(
+          eq(ucOrdersTable.webhookRecovery, true),
+          ne(ucOrdersTable.status, "completed"),
+          ne(ucOrdersTable.status, "cancelled"),
+        )
+      );
+
+    res.json({ count: rows.length });
+  } catch (err) {
+    logger.error({ err }, "Failed to count recovery orders");
+    res.status(500).json({ error: "Failed to count recovery orders" });
+  }
+});
+
 // GET /api/uc/admin/tickets — all maintenance tickets, most-recent first.
 // Accepts optional ?status= filter. Protected by admin auth.
 router.get("/uc/admin/tickets", async (req: Request, res: Response): Promise<void> => {
