@@ -1,11 +1,23 @@
 /**
- * Tests for GET /api/uc/admin/orders.csv — zero-line-item edge case.
+ * Tests for GET /api/uc/admin/orders.csv — zero-line-item and status-filter edge cases.
  *
- * Covers:
+ * Fixtures
+ * ─────────
+ *   Order A  pending     / 0 items   ← zero-item fixture
+ *   Order B  processing  / 2 items   ← multi-item fixture (excluded by pending filter)
+ *   Order C  pending     / 1 item    ← same-status fixture with items
+ *
+ * Covers (unfiltered export)
  *   1. Row count equals order count when one order has no line items.
  *   2. The zero-item row has the correct number of empty item columns
- *      (padded to the max item count found in the result set).
+ *      (padded to the max item count found in the result set, which is 2 via order B).
  *   3. The multi-item row populates all item columns correctly.
+ *
+ * Covers (?status=pending export — the core task-218 scenario)
+ *   4. maxItems is computed only from the filtered orders (1, via order C).
+ *   5. Order A's row is padded to 1 item width — all item cells empty.
+ *   6. Order C's row contains the correct item data.
+ *   7. Order B (processing) is absent from the filtered CSV.
  *
  * Uses the real DB (same pattern as feedback-export.test.ts).
  * Run with: pnpm --filter @workspace/api-server test
@@ -111,6 +123,9 @@ function parseCsvRow(row: string): string[] {
 const TEST_EMAIL = "orders-csv-test-admin@ucfilters-test.internal";
 
 let testUserId: number;
+// [0] = order A (pending, 0 items)
+// [1] = order B (processing, 2 items)
+// [2] = order C (pending, 1 item)
 let insertedOrderIds: number[] = [];
 
 // Number of static columns before the item columns in the CSV header/rows.
@@ -124,7 +139,7 @@ const COLS_PER_ITEM = 4;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
+describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter padding", () => {
   before(async () => {
     // Insert a test admin user
     const [inserted] = await db
@@ -143,7 +158,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
     // Grant admin access via env var
     process.env["UC_ADMIN_EMAILS"] = TEST_EMAIL;
 
-    // Order A — no line items
+    // Order A — pending, no line items
     const [orderA] = await db
       .insert(ucOrdersTable)
       .values({
@@ -169,7 +184,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
       .returning({ id: ucOrdersTable.id });
     if (!orderA) throw new Error("Failed to insert order A");
 
-    // Order B — two line items
+    // Order B — processing, two line items (excluded from status=pending filter)
     const [orderB] = await db
       .insert(ucOrdersTable)
       .values({
@@ -195,9 +210,36 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
       .returning({ id: ucOrdersTable.id });
     if (!orderB) throw new Error("Failed to insert order B");
 
-    insertedOrderIds = [orderA.id, orderB.id];
+    // Order C — pending, one line item (same status as order A but has items,
+    // so ?status=pending must pad order A's row to order C's item width)
+    const [orderC] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(testUserId),
+        status: "pending",
+        total: "1999",
+        currency: "KES",
+        paymentMethod: "cod",
+        paymentReference: "",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {
+          firstName: "One",
+          lastName: "Item",
+          address1: "3 Faucet Ln",
+          city: "Kisumu",
+          country: "KE",
+          phone: "+254700000003",
+        },
+        webhookRecovery: false,
+      })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderC) throw new Error("Failed to insert order C");
 
-    // Insert two line items on order B
+    insertedOrderIds = [orderA.id, orderB.id, orderC.id];
+
+    // Two line items on order B
     await db.insert(ucOrderItemsTable).values([
       {
         orderId: orderB.id,
@@ -214,10 +256,20 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
         total: "1099",
       },
     ]);
+
+    // One line item on order C
+    await db.insert(ucOrderItemsTable).values([
+      {
+        orderId: orderC.id,
+        productId: 23,
+        name: "Faucet Filter Cartridge",
+        quantity: 2,
+        total: "1999",
+      },
+    ]);
   });
 
   after(async () => {
-    // Cascade delete removes order items via FK; delete orders first
     if (insertedOrderIds.length > 0) {
       await db
         .delete(ucOrderItemsTable)
@@ -231,6 +283,8 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
     }
     delete process.env["UC_ADMIN_EMAILS"];
   });
+
+  // ── Unfiltered export ───────────────────────────────────────────────────────
 
   it("returns 200 with CSV content-type", async () => {
     const { status, headers } = await apiFetch("/api/uc/admin/orders.csv", {
@@ -263,12 +317,12 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
 
     assert.equal(
       ourRows.length,
-      2,
-      `Expected 2 data rows for our fixture orders, got ${ourRows.length}`,
+      3,
+      `Expected 3 data rows for our fixture orders, got ${ourRows.length}`,
     );
   });
 
-  it("zero-item order row has the correct number of empty item columns", async () => {
+  it("zero-item order row is padded to match the global max-item width", async () => {
     const { text } = await apiFetch("/api/uc/admin/orders.csv", {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
@@ -277,11 +331,11 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
     const headerLine = lines[0]!;
     const headerCells = parseCsvRow(headerLine);
 
-    // The header must have item column headers for each item slot
+    // The header must have item column headers for each item slot.
+    // maxItems across all fixtures = 2 (order B) → 8 item columns.
     const totalHeaderCols = headerCells.length;
     const itemColCount = totalHeaderCols - STATIC_COL_COUNT;
 
-    // With order B having 2 items, maxItems = 2 → 8 item columns
     assert.equal(
       itemColCount,
       2 * COLS_PER_ITEM,
@@ -355,6 +409,148 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case", () => {
     assert.equal(rowCells[item2Start + 1], "Bottle Filter Cartridge",  "item_2_name must be Bottle Filter Cartridge");
     assert.equal(rowCells[item2Start + 2], "1",                        "item_2_qty must be 1");
     assert.equal(rowCells[item2Start + 3], "1099",                     "item_2_total must be 1099");
+  });
+
+  // ── Status-filter export (?status=pending) ──────────────────────────────────
+  //
+  // The pending filter returns order A (0 items) and order C (1 item).
+  // maxItems is computed only from the filtered set → 1.
+  // Header must have STATIC_COL_COUNT + COLS_PER_ITEM columns.
+  // Order A's row must be padded with one set of empty item columns.
+  // Order B (processing, 2 items) must be absent — its larger item count
+  // must NOT inflate the filtered export's column width.
+
+  it("?status=pending returns 200 with CSV content-type", async () => {
+    const { status, headers } = await apiFetch(
+      "/api/uc/admin/orders.csv?status=pending",
+      { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
+    );
+    assert.equal(status, 200);
+    assert.ok(
+      headers.get("content-type")?.startsWith("text/csv"),
+      `Expected text/csv, got: ${headers.get("content-type")}`,
+    );
+  });
+
+  it("?status=pending header item-column count reflects only the filtered orders", async () => {
+    // Filtered set: order A (0 items) + order C (1 item) → maxItems = 1
+    // Header must have STATIC_COL_COUNT + 1*COLS_PER_ITEM columns, NOT the
+    // 2-item width that order B (processing) would introduce.
+    const { text } = await apiFetch(
+      "/api/uc/admin/orders.csv?status=pending",
+      { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
+    );
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    assert.ok(lines.length >= 1, "CSV must have at least a header row");
+
+    const headerCells = parseCsvRow(lines[0]!);
+    const expectedCols = STATIC_COL_COUNT + 1 * COLS_PER_ITEM;
+
+    assert.equal(
+      headerCells.length,
+      expectedCols,
+      `Header must have ${expectedCols} columns (maxItems=1 from pending orders only); ` +
+        `got ${headerCells.length}`,
+    );
+  });
+
+  it("?status=pending zero-item row (order A) is padded to match the pending-filtered header", async () => {
+    const { text } = await apiFetch(
+      "/api/uc/admin/orders.csv?status=pending",
+      { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
+    );
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length; // STATIC + 1*COLS_PER_ITEM
+
+    // Find order A in the filtered result
+    const dataLines = lines.slice(1);
+    const orderARow = dataLines.find(l => {
+      const cells = parseCsvRow(l);
+      return cells[0] !== undefined && Number(cells[0]) === insertedOrderIds[0];
+    });
+    assert.ok(
+      orderARow,
+      "Could not find order A (pending, zero items) in the filtered CSV",
+    );
+
+    const rowCells = parseCsvRow(orderARow!);
+
+    // Width must match header
+    assert.equal(
+      rowCells.length,
+      totalHeaderCols,
+      `Order A row has ${rowCells.length} columns but header has ${totalHeaderCols}`,
+    );
+
+    // Item columns (the padding) must all be empty
+    const itemCells = rowCells.slice(STATIC_COL_COUNT);
+    assert.equal(itemCells.length, COLS_PER_ITEM, "Expected exactly one item slot padded");
+    for (let i = 0; i < itemCells.length; i++) {
+      assert.equal(
+        itemCells[i],
+        "",
+        `Padded item cell [${i}] of order A must be empty, got: "${itemCells[i]}"`,
+      );
+    }
+  });
+
+  it("?status=pending item-bearing row (order C) contains correct item data", async () => {
+    const { text } = await apiFetch(
+      "/api/uc/admin/orders.csv?status=pending",
+      { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
+    );
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const totalHeaderCols = parseCsvRow(lines[0]!).length;
+
+    const dataLines = lines.slice(1);
+    const orderCRow = dataLines.find(l => {
+      const cells = parseCsvRow(l);
+      return cells[0] !== undefined && Number(cells[0]) === insertedOrderIds[2];
+    });
+    assert.ok(
+      orderCRow,
+      "Could not find order C (pending, one item) in the filtered CSV",
+    );
+
+    const rowCells = parseCsvRow(orderCRow!);
+
+    // Width must match header
+    assert.equal(
+      rowCells.length,
+      totalHeaderCols,
+      `Order C row has ${rowCells.length} columns but header has ${totalHeaderCols}`,
+    );
+
+    // Item 1: Faucet Filter Cartridge, qty 2, total 1999
+    const itemStart = STATIC_COL_COUNT;
+    assert.equal(rowCells[itemStart],     "23",                      "item_1_productId must be 23");
+    assert.equal(rowCells[itemStart + 1], "Faucet Filter Cartridge", "item_1_name must be Faucet Filter Cartridge");
+    assert.equal(rowCells[itemStart + 2], "2",                       "item_1_qty must be 2");
+    assert.equal(rowCells[itemStart + 3], "1999",                    "item_1_total must be 1999");
+  });
+
+  it("?status=pending excludes the processing order (order B) and its wider item count", async () => {
+    const { text } = await apiFetch(
+      "/api/uc/admin/orders.csv?status=pending",
+      { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
+    );
+
+    const lines = text.split("\r\n").filter(l => l.trim());
+    const dataLines = lines.slice(1);
+
+    const orderBPresent = dataLines.some(l => {
+      const cells = parseCsvRow(l);
+      return cells[0] !== undefined && Number(cells[0]) === insertedOrderIds[1];
+    });
+
+    assert.equal(
+      orderBPresent,
+      false,
+      "Order B (processing, 2 items) must not appear in a ?status=pending filtered CSV",
+    );
   });
 });
 
