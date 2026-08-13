@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, Users, Bell,
   Bot, Leaf, MessageSquareOff, Contact2, BellRing, Activity,
   Webhook, ShoppingBag, LogOut, KeyRound, Loader2, Shield,
-  UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets,
+  UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -41,6 +41,7 @@ const ALL_NAVIGATION = [
   { name: "Tickets",          href: "/tickets",         slug: "tickets"         as PageSlug, icon: Wrench },
   { name: "Water Tests",      href: "/water-tests",     slug: "water-tests"     as PageSlug, icon: Droplets },
   { name: "Notif. Failures",  href: "/uc-notifications", slug: "uc-notifications" as PageSlug, icon: BellOff },
+  { name: "Library",          href: "/library",           slug: "library"          as PageSlug, icon: BookOpen },
 ];
 
 // ─── Change Password Dialog ────────────────────────────────────────────────────

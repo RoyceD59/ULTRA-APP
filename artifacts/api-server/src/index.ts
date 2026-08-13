@@ -265,6 +265,23 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
+
+  // Team Library — stores metadata for documents uploaded to GCS via the
+  // Library page in ProjectHub. Actual files live in the private object dir;
+  // this table holds the normalized GCS path and display metadata.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS team_library_docs (
+      id          text         PRIMARY KEY,
+      title       text         NOT NULL,
+      file_name   text         NOT NULL,
+      file_size   integer      NOT NULL,
+      file_type   text         NOT NULL,
+      object_path text         NOT NULL,
+      uploaded_by text         NOT NULL,
+      created_at  timestamptz  NOT NULL DEFAULT now()
+    )
+  `);
+  logger.info("Startup migration: team_library_docs table ensured");
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────

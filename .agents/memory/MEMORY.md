@@ -7,3 +7,4 @@
 - [Resend connector email](resend-connector-email.md) — delivery via Replit Resend connector; from must be @contacts.ucfilters.com; 403s until user finishes DNS verification at resend.com/domains.
 - [UC upload/media security](uc-upload-security.md) — attach-time metadata verification is the enforcement point for presigned uploads; admin is DB-anchored; public serving limited to uploads/<uuid>.
 - [image-size Metro compat](image-size-metro-compat.md) — image-size 2.x breaks Metro PNG processing via DataView byteOffset overflow; must stay on 1.x until metro upgrades.
+- [Alison product links and library](alison-library-notes.md) — product IDs are numeric (1–30), link format is `[Name](product:ID)`; library uses team-session JWT + GCS object storage; startup migration in index.ts creates team_library_docs automatically.

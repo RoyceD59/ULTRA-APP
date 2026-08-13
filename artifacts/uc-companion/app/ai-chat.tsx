@@ -15,7 +15,7 @@ import React, {
 } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  FlatList, KeyboardAvoidingView, Platform, Animated, Easing,
+  FlatList, KeyboardAvoidingView, Platform, Animated, Easing, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,6 +70,29 @@ const AUTOCOMPLETE_POOL = [
   "How long does the bottle cartridge last?",
   "Can I filter rainwater with a bottle filter?",
 ];
+
+// ── Link parser ───────────────────────────────────────────────────────────────
+// Splits message text into plain text segments and markdown-style links
+// so product/call/WhatsApp links Alison emits can render as tappable buttons.
+
+type MsgPart =
+  | { t: 'text'; v: string }
+  | { t: 'link'; label: string; href: string };
+
+function parseMessageContent(content: string): MsgPart[] {
+  const parts: MsgPart[] = [];
+  // Match [label](href) — Alison uses product:ID, tel:, and https://wa.me/
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    if (m.index > last) parts.push({ t: 'text', v: content.slice(last, m.index) });
+    parts.push({ t: 'link', label: m[1], href: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < content.length) parts.push({ t: 'text', v: content.slice(last) });
+  return parts;
+}
 
 // ── Greeting helpers ──────────────────────────────────────────────────────────
 
@@ -154,10 +177,26 @@ function TypingDots({ color }: { color: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Link handler ──────────────────────────────────────────────────────────────
+// Called when a parsed link inside an Alison message is tapped.
+
+function useLinkHandler() {
+  const router = useRouter();
+  return (href: string) => {
+    if (href.startsWith('product:')) {
+      const id = href.slice('product:'.length);
+      router.push(`/product/${id}`);
+      return;
+    }
+    Linking.openURL(href).catch(() => {});
+  };
+}
+
 export default function AiChatScreen() {
   const colors = useColors();
   const router = useRouter();
   const api    = useApi();
+  const handleLink = useLinkHandler();
 
   const params = useLocalSearchParams<{
     productName?: string; daysRemaining?: string;
@@ -321,7 +360,21 @@ export default function AiChatScreen() {
               : [styles.bubbleAI,   { backgroundColor: colors.surface, borderColor: colors.border }],
           ]}>
             <Text style={[styles.bubbleText, { color: isUser ? '#fff' : colors.text }]}>
-              {item.content}
+              {isUser
+                ? item.content
+                : parseMessageContent(item.content).map((part, i) =>
+                    part.t === 'text'
+                      ? <Text key={i}>{part.v}</Text>
+                      : (
+                        <Text
+                          key={i}
+                          style={[styles.linkText, { color: colors.primary }]}
+                          onPress={() => handleLink(part.href)}>
+                          {part.label}
+                        </Text>
+                      )
+                  )
+              }
             </Text>
           </View>
         </View>
@@ -530,6 +583,9 @@ const styles = StyleSheet.create({
   autocompleteBar:  { borderTopWidth: 1, paddingHorizontal: 12, paddingVertical: 6, gap: 6, flexDirection: 'column' },
   autocompleteChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   autocompleteText: { fontSize: 13, flex: 1 },
+
+  // Inline links inside AI bubbles
+  linkText: { textDecorationLine: 'underline' as const, fontWeight: '600' as const },
 
   // Typing dots
   typingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 2 },

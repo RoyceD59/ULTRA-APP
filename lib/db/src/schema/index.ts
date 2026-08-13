@@ -46,3 +46,4 @@ export * from "./password-reset-tokens";
 export * from "./sheet-syncs";
 export * from "./google-oauth-credentials";
 export * from "./mpesa-stk-initiations";
+export * from "./team-library";

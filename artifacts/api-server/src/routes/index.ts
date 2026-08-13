@@ -23,6 +23,7 @@ import systemStatusRouter from "./system-status";
 import webhookRouter from "./webhook";
 import whatsappRouter from "./whatsapp";
 import adminPaymentSettingsRouter from "./admin-payment-settings.js";
+import libraryRouter from "./library.js";
 import { requireTeamAuth } from "./auth.js";
 
 const router: IRouter = Router();
@@ -35,6 +36,7 @@ const router: IRouter = Router();
 // would intercept ALL requests flowing through that router, including paths
 // it doesn't own.
 router.use("/members",      requireTeamAuth);
+router.use("/library",      requireTeamAuth);
 router.use("/projects",     requireTeamAuth);
 router.use("/tasks",        requireTeamAuth);
 router.use("/dashboard",    requireTeamAuth);
@@ -65,6 +67,7 @@ router.use(storageRouter);
 router.use(paymentsRouter);
 router.use(referralsRouter);
 // Team Horizon
+router.use(libraryRouter);
 router.use(adminPaymentSettingsRouter);
 router.use(authRouter);
 router.use(contactsRouter);

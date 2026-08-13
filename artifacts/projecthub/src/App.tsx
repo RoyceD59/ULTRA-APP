@@ -32,6 +32,7 @@ import OrdersPage from '@/pages/orders';
 import TicketsPage from '@/pages/tickets';
 import WaterTestsPage from '@/pages/water-tests';
 import UcNotificationFailuresPage from '@/pages/uc-notification-failures';
+import LibraryPage from '@/pages/library';
 // Admin pages
 import AdminUsersPage from '@/pages/admin/users';
 import AdminPaymentSettingsPage from '@/pages/admin/payment-settings';
@@ -145,6 +146,9 @@ function Router() {
               </Route>
               <Route path="/uc-notifications">
                 <PageGuard page="uc-notifications"><UcNotificationFailuresPage /></PageGuard>
+              </Route>
+              <Route path="/library">
+                <PageGuard page="library"><LibraryPage /></PageGuard>
               </Route>
               {/* Admin-only */}
               <Route path="/admin/users">
