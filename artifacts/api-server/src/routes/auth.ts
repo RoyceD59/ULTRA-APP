@@ -29,6 +29,7 @@ import { db, teamSettingsTable, teamUsersTable, teamInvitationsTable, passwordRe
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { sendViaResend } from "../lib/resend.js";
 import { logger } from "../lib/logger.js";
+import { authLimiter } from "../lib/rate-limiters.js";
 
 const router: IRouter = Router();
 
@@ -117,7 +118,7 @@ async function verifyPasscode(submitted: string): Promise<boolean> {
 // ─── Routes: public ──────────────────────────────────────────────────────────
 
 /** POST /auth/login  — email + password */
-router.post("/auth/login", async (req, res): Promise<void> => {
+router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   const { email, password } = req.body ?? {};
   if (!email || typeof email !== "string" || !password || typeof password !== "string") {
     res.status(400).json({ error: "email and password are required." });
@@ -138,7 +139,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 });
 
 /** POST /auth/register  — invite token + name + password */
-router.post("/auth/register", async (req, res): Promise<void> => {
+router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   const { token, name, password } = req.body ?? {};
   if (!token || !name?.trim() || !password) {
     res.status(400).json({ error: "token, name, and password are required." });
@@ -169,7 +170,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 });
 
 /** POST /auth/forgot-password  — always 200 to prevent enumeration */
-router.post("/auth/forgot-password", async (req, res): Promise<void> => {
+router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void> => {
   const { email } = req.body ?? {};
   if (!email || typeof email !== "string") {
     res.status(400).json({ error: "email is required." });

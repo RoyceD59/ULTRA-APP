@@ -13,6 +13,7 @@ import {
 } from "./referrals";
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
+import { authLimiter } from "../lib/rate-limiters.js";
 import {
   sendSms,
   orderConfirmationSms,
@@ -1108,7 +1109,7 @@ router.delete("/uc/admin/media/:mediaId", async (req: Request, res: Response): P
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-router.post("/uc/auth/login", async (req: Request, res: Response): Promise<void> => {
+router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body as { email?: string; password?: string };
   if (!email || !password) {
     res.status(400).json({ error: "Email and password required" });
@@ -1192,7 +1193,7 @@ router.post("/uc/auth/login", async (req: Request, res: Response): Promise<void>
   res.status(401).json({ error: "Invalid credentials" });
 });
 
-router.post("/uc/auth/register", async (req: Request, res: Response): Promise<void> => {
+router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response): Promise<void> => {
   const { email, phone, password, firstName, lastName, referralCode } = req.body as {
     email?: string;
     phone?: string;

@@ -8,6 +8,7 @@ import type Stripe from "stripe";
 import { sendViaResend } from "../lib/resend.js";
 import { sendSms } from "../lib/sms.js";
 import { buildOrderReceiptEmail } from "../lib/email.js";
+import { paymentLimiter } from "../lib/rate-limiters.js";
 
 /**
  * Send a recovery-order alert to the team via email (primary) and SMS (fallback).
@@ -138,7 +139,7 @@ async function getMpesaToken(): Promise<string | null> {
   }
 }
 
-router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void> => {
+router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Response): Promise<void> => {
   const { phone, amount, orderId } = req.body as {
     phone: string;
     amount: number;
@@ -361,6 +362,7 @@ router.get(
 // Frontend opens the sessionUrl in expo-web-browser; Stripe handles all card data.
 router.post(
   "/payments/stripe/session",
+  paymentLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const { amount, currency = "kes", orderId, returnUrl } = req.body as {
       amount: number;
@@ -430,6 +432,7 @@ router.get(
 // ─── Paystack ─────────────────────────────────────────────────────────────────
 router.post(
   "/payments/paystack/init",
+  paymentLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const { email, amount, callbackUrl } = req.body as {
       email: string;
