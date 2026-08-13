@@ -7,8 +7,7 @@
  * The team uses this to spot recurring knowledge gaps and improve her prompts.
  *
  * Features:
- *  - Login gate: email + password form calls POST /api/uc/auth/login (same
- *    credentials as the UC Companion app); JWT stored in sessionStorage
+ *  - Protected by the standard ProjectHub team JWT (same login used everywhere)
  *  - 7-day stats (server-computed from the full log, not the paged slice)
  *  - Topic breakdown: client-side keyword frequency on thumbs-down questions
  *  - Most-flagged question card (highest repeat question in thumbs-down set)
@@ -20,18 +19,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   ThumbsUp, ThumbsDown, RefreshCw, MessageSquare,
-  ChevronDown, ChevronUp, Bot, AlertCircle, Lock, LogOut,
+  ChevronDown, ChevronUp, Bot, AlertCircle, LogOut,
   BarChart2, Flag, Download, X, RotateCcw, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getTeamToken } from '@/lib/team-auth';
+import { getTeamToken, clearTeamAuth, handleUnauthorizedResponse } from '@/lib/team-auth';
 
 const BASE             = import.meta.env.BASE_URL.replace(/\/$/, '');
-const TOKEN_KEY        = 'alison_admin_token';
 const AUTO_REFRESH_MS  = 60_000;
 
 // ── TopicBreakdown component ──────────────────────────────────────────────────
@@ -237,110 +234,6 @@ function absTime(ts: string): string {
   });
 }
 
-// ── Login gate ────────────────────────────────────────────────────────────────
-// Uses the same credentials as the UC Companion mobile app (POST /api/uc/auth/login).
-// The returned JWT is stored in sessionStorage for the duration of the session.
-
-interface LoginGateProps { onToken: (t: string) => void }
-
-function LoginGate({ onToken }: LoginGateProps) {
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
-  const [busy,     setBusy]     = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !password) return;
-    setBusy(true); setError('');
-    try {
-      // Step 1: authenticate and get a JWT
-      const loginRes = await fetch(`${BASE}/api/uc/auth/login`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: email.trim(), password }),
-      });
-      if (loginRes.status === 401) { setError('Incorrect email or password.'); return; }
-      if (!loginRes.ok) { setError(`Login failed (${loginRes.status}). Try again.`); return; }
-
-      const { token } = await loginRes.json() as { token: string };
-      if (!token) { setError('No token returned. Please try again.'); return; }
-
-      // Step 2: verify the account actually has admin access to this page
-      const checkRes = await fetch(`${BASE}/api/uc/ai/chat-feedback`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (checkRes.status === 403) {
-        setError('Your account does not have admin access. Contact the UCFilters team.');
-        return;
-      }
-      if (!checkRes.ok) { setError(`Server error (${checkRes.status}). Try again.`); return; }
-
-      sessionStorage.setItem(TOKEN_KEY, token);
-      onToken(token);
-    } catch {
-      setError('Could not reach the server. Is the API running?');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center pb-4">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-            <Lock className="w-6 h-6 text-primary" />
-          </div>
-          <CardTitle className="text-xl">Sign in to Alison Feedback</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Use your UCFilters admin account (same credentials as the Companion app).
-          </p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@ucfilters.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
-            </div>
-            {error && (
-              <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 rounded-md p-3">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                {error}
-              </div>
-            )}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={!email.trim() || !password || busy}
-            >
-              {busy ? 'Signing in…' : 'Sign in'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 // ── Entry card ────────────────────────────────────────────────────────────────
 
 /**
@@ -441,7 +334,7 @@ function EntryCard({ entry, highlights }: { entry: FeedbackEntry; highlights?: s
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AlisonFeedbackPage() {
-  const [token,          setToken]          = useState<string | null>(() => getTeamToken() ?? sessionStorage.getItem(TOKEN_KEY));
+  const [token,          setToken]          = useState<string | null>(getTeamToken);
   const [data,           setData]           = useState<FeedbackResponse | null>(null);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState('');
@@ -482,8 +375,7 @@ export default function AlisonFeedbackPage() {
         headers: { Authorization: `Bearer ${tok}` },
       });
       if (res.status === 403 || res.status === 401) {
-        sessionStorage.removeItem(TOKEN_KEY);
-        setToken(null);
+        handleUnauthorizedResponse();
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -502,15 +394,9 @@ export default function AlisonFeedbackPage() {
     return () => clearInterval(id);
   }, [token, load]);
 
-  function handleToken(t: string) {
-    setToken(t);
-    load(false, t);
-  }
-
   function handleSignOut() {
-    sessionStorage.removeItem(TOKEN_KEY);
+    clearTeamAuth();
     setToken(null);
-    setData(null);
   }
 
   async function downloadCsv() {
@@ -523,8 +409,7 @@ export default function AlisonFeedbackPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401 || res.status === 403) {
-        sessionStorage.removeItem(TOKEN_KEY);
-        setToken(null);
+        handleUnauthorizedResponse();
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -545,9 +430,6 @@ export default function AlisonFeedbackPage() {
       setExporting(false);
     }
   }
-
-  // ── Login gate ─────────────────────────────────────────────────────────────
-  if (!token) return <LoginGate onToken={handleToken} />;
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const all        = data?.items ?? [];
