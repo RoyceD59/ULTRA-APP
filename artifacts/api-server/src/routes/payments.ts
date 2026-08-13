@@ -15,9 +15,9 @@ import { paymentLimiter } from "../lib/rate-limiters.js";
  * The email is fire-and-forget; SMS fires unconditionally so the team is reached
  * even when Resend is temporarily unavailable.
  *
- * The team phone number is read from TEAM_ALERT_PHONE (E.164 / Kenyan local format).
- * If the env var is absent, SMS is silently skipped (Africa's Talking creds check
- * inside sendSms handles the rest).
+ * The team phone number is read from the DB (team_settings.team_alert_phone) first,
+ * falling back to the TEAM_ALERT_PHONE env var so existing deployments are unaffected.
+ * Changes made through the admin panel take effect immediately (60-second cache TTL).
  */
 function alertTeamRecoveryOrder(params: {
   subject:  string;
@@ -38,11 +38,12 @@ function alertTeamRecoveryOrder(params: {
   }).catch(() => { /* already logged inside sendViaResend */ });
 
   // Fallback: SMS (fires regardless of email success so the team is reached
-  // even when Resend is down)
-  const teamPhone = process.env["TEAM_ALERT_PHONE"];
-  if (teamPhone) {
-    sendSms(teamPhone, smsText, { template, orderId }).catch(() => {});
-  }
+  // even when Resend is down). Phone is resolved from DB first, then env var.
+  getTeamAlertPhone().then((teamPhone) => {
+    if (teamPhone) {
+      sendSms(teamPhone, smsText, { template, orderId }).catch(() => {});
+    }
+  }).catch(() => {});
 }
 
 // Exported so tests can import the live set instead of duplicating it.
@@ -106,6 +107,48 @@ export async function getMpesaWebhookSecret(): Promise<string | null> {
 // Expose a cache-bust helper so the admin settings route can invalidate after a rotation.
 export function invalidateMpesaSecretCache(): void {
   _mpesaSecretCache = null;
+}
+
+// ─── Team alert phone — DB-backed with env-var fallback ───────────────────────
+// Read at alert time so admins can update the number from the admin panel without
+// restarting the server. A short in-process cache (60 s TTL) keeps DB cost negligible.
+
+let _teamAlertPhoneCache: SecretCache | null = null;
+
+export async function getTeamAlertPhone(): Promise<string | null> {
+  const now = Date.now();
+  if (_teamAlertPhoneCache && _teamAlertPhoneCache.expiresAt > now) {
+    return _teamAlertPhoneCache.value;
+  }
+
+  let value: string | null = null;
+
+  try {
+    const [row] = await db
+      .select({ teamAlertPhone: teamSettingsTable.teamAlertPhone })
+      .from(teamSettingsTable)
+      .where(eq(teamSettingsTable.id, "singleton"))
+      .limit(1);
+
+    if (row?.teamAlertPhone) {
+      value = row.teamAlertPhone;
+    }
+  } catch (err) {
+    console.error("[payments] DB read for team alert phone failed — falling back to env var:", err);
+  }
+
+  // Env-var fallback (backwards-compat for existing deployments)
+  if (value === null) {
+    value = process.env["TEAM_ALERT_PHONE"] ?? null;
+  }
+
+  // Cache for 60 seconds
+  _teamAlertPhoneCache = { value, expiresAt: now + 60_000 };
+  return value;
+}
+
+export function invalidateTeamAlertPhoneCache(): void {
+  _teamAlertPhoneCache = null;
 }
 
 // Lazy Stripe — only when STRIPE_SECRET_KEY is present

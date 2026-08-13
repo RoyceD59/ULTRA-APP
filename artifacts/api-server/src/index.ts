@@ -83,6 +83,14 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: team_settings.mpesa_webhook_secret_enc column ensured");
 
+  // Add team_alert_phone column (plain text phone number for SMS fallback alerts).
+  // Supersedes the TEAM_ALERT_PHONE env var; configurable from the admin panel without restart.
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS team_alert_phone text;
+  `);
+  logger.info("Startup migration: team_settings.team_alert_phone column ensured");
+
   // Partial unique index on payment_reference — prevents duplicate orders for
   // the same Paystack (or other) reference.  Excludes empty strings so COD
   // orders (no reference) are unaffected.

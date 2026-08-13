@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  KeyRound, RefreshCw, Loader2, CheckCircle2, AlertCircle, ShieldCheck,
+  KeyRound, RefreshCw, Loader2, CheckCircle2, AlertCircle, ShieldCheck, Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,12 @@ interface PaymentSettingsData {
     envHint: string | null;
     updatedAt: string | null;
   };
+  teamAlertPhone: {
+    source: "db" | "env" | "none";
+    isSet: boolean;
+    hint: string | null;
+    updatedAt: string | null;
+  };
 }
 
 async function fetchPaymentSettings(): Promise<PaymentSettingsData> {
@@ -32,7 +38,9 @@ async function fetchPaymentSettings(): Promise<PaymentSettingsData> {
   return res.json() as Promise<PaymentSettingsData>;
 }
 
-async function savePaymentSettings(payload: { mpesaWebhookSecret?: string }): Promise<void> {
+async function savePaymentSettings(
+  payload: { mpesaWebhookSecret?: string; teamAlertPhone?: string },
+): Promise<void> {
   const res = await fetch(`${API}/admin/payment-settings`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...(getAuthHeaders() ?? {}) },
@@ -65,6 +73,127 @@ function SourceBadge({ source }: { source: "db" | "env" | "none" }) {
     <Badge variant="destructive" className="gap-1 text-xs">
       <AlertCircle className="w-3 h-3" /> Not configured
     </Badge>
+  );
+}
+
+// ─── Team Alert Phone section ──────────────────────────────────────────────────
+
+function TeamAlertPhoneCard({ data }: { data: PaymentSettingsData }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [phone, setPhone] = useState("");
+  const [showInput, setShowInput] = useState(false);
+
+  const { teamAlertPhone: p } = data;
+
+  const mutation = useMutation({
+    mutationFn: () => savePaymentSettings({ teamAlertPhone: phone }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin-payment-settings"] });
+      toast({
+        title: "Phone number saved",
+        description: "The team alert phone number has been updated. The next recovery-order SMS will use this number.",
+      });
+      setPhone("");
+      setShowInput(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="rounded-lg border bg-card p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <Phone className="w-4 h-4 text-primary" />
+            Team Alert Phone Number
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            When a recovery order is detected, an SMS is sent to this number as a
+            fallback in case email is temporarily unavailable. Changes take effect
+            immediately — no server restart needed.
+          </p>
+        </div>
+        <SourceBadge source={p.source} />
+      </div>
+
+      {p.source === "env" && p.hint && (
+        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm text-muted-foreground">
+          Currently using the <code className="font-mono text-xs">TEAM_ALERT_PHONE</code> environment variable
+          (ends in <code className="font-mono text-xs">{p.hint}</code>).
+          Setting a number here will override it — no server restart required.
+        </div>
+      )}
+
+      {p.source === "none" && (
+        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm text-muted-foreground">
+          No alert phone number configured. Recovery-order alerts will be email-only.
+          Set a number below to enable SMS fallback.
+        </div>
+      )}
+
+      {p.source === "db" && p.hint && (
+        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+          Alert phone stored in database (ends in <code className="font-mono text-xs">{p.hint}</code>).
+          {p.updatedAt && (
+            <> Last updated {new Date(p.updatedAt).toLocaleString()}.</>
+          )}
+        </div>
+      )}
+
+      {showInput ? (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="alert-phone">
+              {p.isSet ? "New phone number (replaces current)" : "Alert phone number"}
+            </Label>
+            <Input
+              id="alert-phone"
+              type="tel"
+              placeholder="e.g. +254712345678 or 0712345678"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={mutation.isPending}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              International format (+254…) or Kenyan local format (07… / 01…) both work.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => { setShowInput(false); setPhone(""); }}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || phone.trim().length < 7}
+            >
+              {mutation.isPending
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Saving…</>
+                : p.isSet ? "Update number" : "Set number"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowInput(true)}
+          >
+            <RefreshCw className="w-4 h-4" />
+            {p.isSet ? "Update number" : "Set number"}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -222,7 +351,10 @@ export default function AdminPaymentSettingsPage() {
           Failed to load settings: {(error as Error).message}
         </div>
       ) : data ? (
-        <MpesaWebhookSecretCard data={data} />
+        <>
+          <TeamAlertPhoneCard data={data} />
+          <MpesaWebhookSecretCard data={data} />
+        </>
       ) : null}
     </div>
   );

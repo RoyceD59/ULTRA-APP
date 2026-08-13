@@ -12,7 +12,7 @@ import { db, teamSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { encryptSecret } from "../lib/secret-crypto.js";
 import { requireTeamAdmin } from "./auth.js";
-import { invalidateMpesaSecretCache } from "./payments.js";
+import { invalidateMpesaSecretCache, invalidateTeamAlertPhoneCache } from "./payments.js";
 
 const router = Router();
 
@@ -31,6 +31,9 @@ router.get(
     const hasDbSecret = Boolean(row?.mpesaWebhookSecretEnc);
     const hasEnvSecret = Boolean(process.env["MPESA_WEBHOOK_SECRET"]);
 
+    const dbPhone = row?.teamAlertPhone ?? null;
+    const envPhone = process.env["TEAM_ALERT_PHONE"] ?? null;
+
     res.json({
       mpesaWebhookSecret: {
         // "db" wins; "env" is the legacy fallback; "none" means unprotected
@@ -39,6 +42,18 @@ router.get(
         // Hint: last 4 chars of the env secret (never the DB one — we don't decrypt to show)
         envHint: hasEnvSecret && !hasDbSecret
           ? `…${process.env["MPESA_WEBHOOK_SECRET"]!.slice(-4)}`
+          : null,
+        updatedAt: row?.updatedAt ?? null,
+      },
+      teamAlertPhone: {
+        // "db" wins over env var; phone numbers are not secrets so we show a masked hint
+        source: dbPhone ? "db" : envPhone ? "env" : "none",
+        isSet: Boolean(dbPhone ?? envPhone),
+        // Show last 4 digits as a hint regardless of source
+        hint: dbPhone
+          ? `…${dbPhone.slice(-4)}`
+          : envPhone
+          ? `…${envPhone.slice(-4)}`
           : null,
         updatedAt: row?.updatedAt ?? null,
       },
@@ -52,8 +67,9 @@ router.patch(
   "/admin/payment-settings",
   requireTeamAdmin,
   async (req: Request, res: Response): Promise<void> => {
-    const { mpesaWebhookSecret } = req.body as {
+    const { mpesaWebhookSecret, teamAlertPhone } = req.body as {
       mpesaWebhookSecret?: string;
+      teamAlertPhone?: string;
     };
 
     if (mpesaWebhookSecret !== undefined) {
@@ -90,6 +106,30 @@ router.patch(
       invalidateMpesaSecretCache();
 
       console.info("[admin/payment-settings] M-Pesa webhook secret rotated via admin panel");
+    }
+
+    if (teamAlertPhone !== undefined) {
+      const phone = typeof teamAlertPhone === "string" ? teamAlertPhone.trim() : "";
+      if (!phone) {
+        res.status(400).json({ error: "teamAlertPhone must be a non-empty string" });
+        return;
+      }
+
+      await db
+        .insert(teamSettingsTable)
+        .values({ id: "singleton", teamAlertPhone: phone })
+        .onConflictDoUpdate({
+          target: teamSettingsTable.id,
+          set: {
+            teamAlertPhone: phone,
+            updatedAt: new Date(),
+          },
+        });
+
+      // Bust the in-process cache so alert sends pick up the new number immediately.
+      invalidateTeamAlertPhoneCache();
+
+      console.info("[admin/payment-settings] Team alert phone updated via admin panel:", phone.slice(-4).padStart(phone.length, "*"));
     }
 
     res.json({ ok: true });

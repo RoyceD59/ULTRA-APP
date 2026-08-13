@@ -10,6 +10,12 @@ export const teamSettingsTable = pgTable("team_settings", {
    * so the team can rotate it from the admin panel without a server restart.
    */
   mpesaWebhookSecretEnc: text("mpesa_webhook_secret_enc"),
+  /**
+   * Team alert phone number for SMS fallback on recovery-order alerts.
+   * Stored in plain text (E.164 / Kenyan local format accepted).
+   * Supersedes the TEAM_ALERT_PHONE env var when present.
+   */
+  teamAlertPhone: text("team_alert_phone"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
