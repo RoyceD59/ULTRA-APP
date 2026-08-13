@@ -2243,6 +2243,27 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
 // Parses optional ?from=YYYY-MM-DD and ?to=YYYY-MM-DD query params.
 // Returns { from, to } (each nullable) on success, or null after sending a 400.
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Returns true only for a string that is both syntactically YYYY-MM-DD and
+ * represents a real calendar date.  Date.parse() alone is not sufficient because
+ * V8 silently rolls over invalid days (e.g. "2024-02-30" becomes March 1) instead
+ * of returning NaN, so we do a component round-trip check via Date.UTC().
+ */
+function isValidIsoDate(s: string): boolean {
+  if (!ISO_DATE_RE.test(s)) return false;
+  const [yearStr, monthStr, dayStr] = s.split("-");
+  const year  = Number(yearStr);
+  const month = Number(monthStr);
+  const day   = Number(dayStr);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return (
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth()    === month - 1 &&
+    d.getUTCDate()     === day
+  );
+}
+
 function parseDateRange(
   req: Request,
   res: Response,
@@ -2250,11 +2271,11 @@ function parseDateRange(
   const rawFrom = typeof req.query["from"] === "string" ? req.query["from"].trim() : "";
   const rawTo   = typeof req.query["to"]   === "string" ? req.query["to"].trim()   : "";
 
-  if (rawFrom && (!ISO_DATE_RE.test(rawFrom) || isNaN(Date.parse(rawFrom)))) {
+  if (rawFrom && !isValidIsoDate(rawFrom)) {
     res.status(400).json({ error: "Invalid ?from= — expected YYYY-MM-DD" });
     return null;
   }
-  if (rawTo && (!ISO_DATE_RE.test(rawTo) || isNaN(Date.parse(rawTo)))) {
+  if (rawTo && !isValidIsoDate(rawTo)) {
     res.status(400).json({ error: "Invalid ?to= — expected YYYY-MM-DD" });
     return null;
   }
