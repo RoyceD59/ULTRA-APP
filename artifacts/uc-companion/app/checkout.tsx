@@ -223,20 +223,30 @@ export default function CheckoutScreen() {
         // Server returns 402 if Stripe session is not paid — surface that to the user
         Alert.alert('Payment not confirmed', (e as Error).message ?? 'Stripe payment was not completed. No order was created.');
       }
-    } catch {
+    } catch (e) {
       setProcessing(false);
-      Alert.alert(
-        'Stripe Unavailable',
-        'Stripe checkout could not be opened. You can try again or place your order with Cash on Delivery.',
-        [
-          { text: 'Try again', onPress: () => handleStripeCheckout() },
-          {
-            text: 'Pay with COD instead',
-            onPress: () => setPaymentMethod('cod'),
-            style: 'cancel',
-          },
-        ],
-      );
+      // Distinguish a transient server/network blip (retryable) from a permanent failure.
+      const isRetryable = e instanceof ApiError ? e.retryable : true;
+      if (isRetryable) {
+        Alert.alert(
+          'Stripe Unavailable',
+          'Stripe checkout could not be opened. You can try again or place your order with Cash on Delivery.',
+          [
+            { text: 'Try again', onPress: () => handleStripeCheckout() },
+            {
+              text: 'Pay with COD instead',
+              onPress: () => setPaymentMethod('cod'),
+              style: 'cancel',
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          'Payment Declined',
+          (e instanceof Error ? e.message : null) ||
+            'Your payment could not be completed. Please check your card details and try a different payment method.',
+        );
+      }
     }
   }
 
