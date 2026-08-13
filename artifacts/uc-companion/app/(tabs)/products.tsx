@@ -71,7 +71,7 @@ export default function ProductsScreen() {
   const router = useRouter();
   const api = useApi();
   const insets = useSafeAreaInsets();
-  const { items, totalItems, totalPrice, addItem, refreshCart } = useCart();
+  const { items, totalItems, totalPrice, addItem, refreshCart, cartHydrated } = useCart();
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
@@ -84,20 +84,24 @@ export default function ProductsScreen() {
   // the live item count/total even when items were added from another screen.
   useFocusEffect(useCallback(() => { refreshCart(); }, [refreshCart]));
 
-  // Animated transitions: 1 = basket-has-items view, 0 = empty view
-  const basketAnim = useRef(new Animated.Value(hasItems ? 1 : 0)).current;
-  const emptyAnim  = useRef(new Animated.Value(hasItems ? 0 : 1)).current;
+  // Animated transitions: 1 = basket-has-items view, 0 = empty view.
+  // Always start at 0 — we don't know the saved cart state until AsyncStorage
+  // resolves, so we suppress both states until cartHydrated is true.
+  const basketAnim = useRef(new Animated.Value(0)).current;
+  const emptyAnim  = useRef(new Animated.Value(0)).current;
   // Separate anim for layout-affecting paddingTop (useNativeDriver must be false for layout props)
-  const paddingAnim = useRef(new Animated.Value(hasItems ? 60 : 0)).current;
+  const paddingAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Don't animate until we know what the cart actually contains.
+    if (!cartHydrated) return;
     Animated.parallel([
       Animated.timing(basketAnim,  { toValue: hasItems ? 1 : 0,  duration: 280, useNativeDriver: true }),
       Animated.timing(emptyAnim,   { toValue: hasItems ? 0 : 1,  duration: 280, useNativeDriver: true }),
       Animated.timing(paddingAnim, { toValue: hasItems ? 60 : 0, duration: 280, useNativeDriver: false }),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasItems]);
+  }, [hasItems, cartHydrated]);
 
   // ScrollView ref + catalog layout position for scroll-to-products
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -334,8 +338,10 @@ export default function ProductsScreen() {
           )}
         />
 
-        {/* Empty state (basket empty) or Add-Ons section (basket has items) */}
-        {!hasItems ? emptyState : addOnsSection}
+        {/* Empty state (basket empty) or Add-Ons section (basket has items).
+            Suppressed until cartHydrated to prevent a flash of the empty card
+            on first load when AsyncStorage hasn't resolved yet. */}
+        {cartHydrated && (!hasItems ? emptyState : addOnsSection)}
 
         {/* Products catalog */}
         <View onLayout={e => { catalogOffsetY.current = e.nativeEvent.layout.y; }}>
