@@ -62,6 +62,11 @@ export default function CheckoutScreen() {
   // prior attempt (cancelled, timed-out, or already settled) are silently discarded
   // regardless of when their in-flight network requests resolve.
   const attemptRef = useRef(0);
+  // Persists the CheckoutRequestID of the most recent STK push across retries.
+  // Before issuing a new push, handleMpesa queries this ID's status — if the
+  // original push completed while the user was on the timeout screen, we create
+  // the order from it instead of charging the customer a second time.
+  const lastCheckoutRequestIdRef = useRef<string | null>(null);
 
   // Promo / referral code
   const [promoInput, setPromoInput] = useState('');
@@ -90,6 +95,116 @@ export default function CheckoutScreen() {
     if (paymentMethod === 'cod') { await createOrder('cod', 'COD'); }
   }
 
+  /**
+   * Poll Daraja for the status of an in-flight STK push identified by
+   * `checkoutRequestId`.  This is a shared helper used both for a freshly
+   * initiated push and for a resumed poll after "Try again" — keeping the
+   * polling logic in one place prevents drift between the two paths.
+   *
+   * The function shows the waiting UI, runs up to 20 ticks (≈ 60 s), and:
+   *   - success  → clears lastCheckoutRequestIdRef, creates the order
+   *   - failed   → clears ref, shows the appropriate alert
+   *   - timeout  → leaves ref intact so the next "Try again" can re-check
+   *                the same push before issuing a new one
+   *
+   * Every async step is guarded by `thisAttempt === attemptRef.current` so
+   * stale callbacks from a cancelled or superseded attempt are silently
+   * discarded.
+   */
+  function startMpesaPoll(checkoutRequestId: string, thisAttempt: number) {
+    setShowMpesaModal(false);
+    setMpesaWaiting(true);
+    let attempts = 0;
+    // `settled` prevents two near-simultaneous ticks from both reaching
+    // createOrder / clearInterval after an await.
+    let settled = false;
+
+    const intervalId = setInterval(async () => {
+      // Discard if a newer attempt has started (cancel, retry, or timeout).
+      if (attemptRef.current !== thisAttempt) { clearInterval(intervalId); return; }
+      if (settled) return;
+      attempts++;
+      if (attempts > 20) {
+        settled = true;
+        clearInterval(intervalId);
+        if (pollRef.current === intervalId) pollRef.current = null;
+        setMpesaWaiting(false);
+        setProcessing(false);
+        // lastCheckoutRequestIdRef is intentionally NOT cleared here — the
+        // push may still complete moments after the UI timeout.  Keeping the
+        // ref means the next "Try again" will query it before sending a new
+        // push, preventing a double charge.
+        Alert.alert(
+          'M-Pesa Timed Out',
+          'M-Pesa confirmation timed out. You can try again or place your order with Cash on Delivery.',
+          [
+            { text: 'Try again', onPress: () => setShowMpesaModal(true) },
+            {
+              // Customer is switching away from M-Pesa — clear the stored ref
+              // so a later return to M-Pesa doesn't query a stale push.
+              text: 'Pay with COD instead',
+              onPress: () => { lastCheckoutRequestIdRef.current = null; setPaymentMethod('cod'); },
+              style: 'cancel',
+            },
+          ],
+        );
+        return;
+      }
+      try {
+        const status = await api.mpesaStatus(checkoutRequestId);
+        // Re-check after the await — cancel / new retry may have fired while
+        // the network request was in-flight.
+        if (attemptRef.current !== thisAttempt) return;
+        if (settled) return;
+        if (status.status === 'success') {
+          settled = true;
+          clearInterval(intervalId);
+          if (pollRef.current === intervalId) pollRef.current = null;
+          // Do NOT clear the ref yet — only clear it after order creation
+          // succeeds.  If createOrder fails (network error, server blip) and
+          // the customer retries, the guard must still see this confirmed
+          // payment and retry createOrder rather than issuing a new STK push.
+          const orderCreated = await createOrder('mpesa', checkoutRequestId);
+          if (orderCreated) lastCheckoutRequestIdRef.current = null;
+        } else if (status.status === 'failed') {
+          settled = true;
+          clearInterval(intervalId);
+          if (pollRef.current === intervalId) pollRef.current = null;
+          // Definitive failure — no point querying this ref again on retry.
+          lastCheckoutRequestIdRef.current = null;
+          setMpesaWaiting(false);
+          setProcessing(false);
+          // Distinguish transient network errors from definitive declines so the
+          // customer gets the right advice:
+          //   retriable=false → wrong PIN, user cancelled, insufficient funds
+          //   retriable=true  → network/server timeout — offer "Try again / COD"
+          if (status.retriable === false) {
+            Alert.alert(
+              'Payment Not Completed',
+              (status.resultDesc ?? 'M-Pesa payment was not completed.') +
+                '\n\nIf you entered the wrong PIN, open the Safaricom app to verify your M-Pesa PIN before trying again.',
+            );
+          } else {
+            Alert.alert(
+              'M-Pesa Failed',
+              status.resultDesc ?? 'M-Pesa payment was not completed. You can try again or switch to Cash on Delivery.',
+              [
+                { text: 'Try again', onPress: () => setShowMpesaModal(true) },
+                {
+                  text: 'Pay with COD instead',
+                  onPress: () => setPaymentMethod('cod'),
+                  style: 'cancel',
+                },
+              ],
+            );
+          }
+        }
+        // status === 'pending' → keep polling (no action needed)
+      } catch { /* transient network error — keep polling */ }
+    }, 3000);
+    pollRef.current = intervalId;
+  }
+
   async function handleMpesa() {
     if (!mpesaPhone || mpesaPhone.length < 9) {
       Alert.alert('Invalid number', 'Enter a valid Safaricom number (e.g. 0712 345 678)');
@@ -101,89 +216,68 @@ export default function CheckoutScreen() {
     // network request is in-flight, the stale callback simply returns.
     const thisAttempt = ++attemptRef.current;
     setProcessing(true);
-    try {
-      const r = await api.mpesaSTKPush(mpesaPhone, total, `cart_${Date.now()}`);
-      // STK push resolved — verify this attempt is still active (not cancelled
-      // while the request was in-flight).
-      if (attemptRef.current !== thisAttempt) return;
-      setShowMpesaModal(false);
-      setMpesaWaiting(true);
-      let attempts = 0;
-      // `settled` prevents two near-simultaneous poll ticks from both reaching
-      // createOrder / clearInterval after an await.
-      let settled = false;
-      const intervalId = setInterval(async () => {
-        // Discard if a newer attempt has started (cancel, retry, or timeout).
-        if (attemptRef.current !== thisAttempt) { clearInterval(intervalId); return; }
-        if (settled) return;
-        attempts++;
-        if (attempts > 20) {
-          settled = true;
-          clearInterval(intervalId);
-          if (pollRef.current === intervalId) pollRef.current = null;
-          setMpesaWaiting(false);
-          setProcessing(false);
-          Alert.alert(
-            'M-Pesa Timed Out',
-            'M-Pesa confirmation timed out. You can try again or place your order with Cash on Delivery.',
-            [
-              { text: 'Try again', onPress: () => setShowMpesaModal(true) },
-              {
-                text: 'Pay with COD instead',
-                onPress: () => setPaymentMethod('cod'),
-                style: 'cancel',
-              },
-            ],
-          );
+
+    // ── Double-charge guard ──────────────────────────────────────────────────
+    // If a previous STK push was issued (e.g. the user hit "Try again" after
+    // a timeout), query its status BEFORE sending a new push.
+    //
+    //   success → payment completed while the UI timed out; create the order
+    //             from the original push — no new charge needed.
+    //
+    //   failed  → definitive decline; safe to clear the ref and send a fresh push.
+    //
+    //   pending → Daraja is still processing the original push; resuming the
+    //             poll is the only safe option — sending a new push now could
+    //             result in two charges if the original completes moments later.
+    //
+    //   network error → we cannot determine whether the original push is still
+    //             live; the safest response is to resume polling it rather than
+    //             risk a double charge.  If the original ultimately fails, the
+    //             poll loop will clear the ref and the next retry will send a
+    //             new push.
+    const priorRef = lastCheckoutRequestIdRef.current;
+    if (priorRef) {
+      try {
+        const priorStatus = await api.mpesaStatus(priorRef);
+        if (attemptRef.current !== thisAttempt) return; // cancelled while querying
+        if (priorStatus.status === 'success') {
+          // Original push succeeded — use it; no new charge needed.
+          // Do NOT clear the ref until createOrder succeeds: if order creation
+          // fails (network blip) the ref must survive so the next retry
+          // re-detects this confirmed payment and retries createOrder rather
+          // than sending a new STK push.
+          const orderCreated = await createOrder('mpesa', priorRef);
+          if (orderCreated) lastCheckoutRequestIdRef.current = null;
+          else setProcessing(false); // createOrder reset its own UI; ensure spinner off
           return;
         }
-        try {
-          const status = await api.mpesaStatus(r.checkoutRequestId);
-          // Re-check after the await — cancel / new retry may have fired while
-          // the network request was in-flight.
-          if (attemptRef.current !== thisAttempt) return;
-          if (settled) return;
-          if (status.status === 'success') {
-            settled = true;
-            clearInterval(intervalId);
-            if (pollRef.current === intervalId) pollRef.current = null;
-            await createOrder('mpesa', r.checkoutRequestId);
-          } else if (status.status === 'failed') {
-            settled = true;
-            clearInterval(intervalId);
-            if (pollRef.current === intervalId) pollRef.current = null;
-            setMpesaWaiting(false);
-            setProcessing(false);
-            // Distinguish transient network errors from definitive declines so the
-            // customer gets the right advice:
-            //   retriable=true  → network/server timeout — offer "Try again / COD"
-            //   retriable=false → wrong PIN, user cancelled, insufficient funds —
-            //                     show a dismissal with a hint (no point retrying the
-            //                     same push; the customer should open Safaricom first)
-            if (status.retriable === false) {
-              Alert.alert(
-                'Payment Not Completed',
-                (status.resultDesc ?? 'M-Pesa payment was not completed.') +
-                  '\n\nIf you entered the wrong PIN, open the Safaricom app to verify your M-Pesa PIN before trying again.',
-              );
-            } else {
-              Alert.alert(
-                'M-Pesa Failed',
-                status.resultDesc ?? 'M-Pesa payment was not completed. You can try again or switch to Cash on Delivery.',
-                [
-                  { text: 'Try again', onPress: () => setShowMpesaModal(true) },
-                  {
-                    text: 'Pay with COD instead',
-                    onPress: () => setPaymentMethod('cod'),
-                    style: 'cancel',
-                  },
-                ],
-              );
-            }
-          }
-        } catch { /* keep polling */ }
-      }, 3000);
-      pollRef.current = intervalId;
+        if (priorStatus.status !== 'failed') {
+          // Pending (or unexpected status) — resume polling the existing push.
+          // Do NOT issue a new STK push; the original may still succeed.
+          startMpesaPoll(priorRef, thisAttempt);
+          return;
+        }
+        // Definitive failure — safe to clear and send a new push below.
+        lastCheckoutRequestIdRef.current = null;
+      } catch {
+        // Status query failed (network error) — we cannot confirm the original
+        // push is dead, so resume polling it rather than risking a double charge.
+        if (attemptRef.current !== thisAttempt) return;
+        startMpesaPoll(priorRef, thisAttempt);
+        return;
+      }
+    }
+
+    // ── Issue a new STK push ─────────────────────────────────────────────────
+    try {
+      const r = await api.mpesaSTKPush(mpesaPhone, total, `cart_${Date.now()}`);
+      // Verify this attempt is still active (not cancelled while the request
+      // was in-flight).
+      if (attemptRef.current !== thisAttempt) return;
+      // Store so the next "Try again" press can check whether this push
+      // completed while the user was on the timeout screen.
+      lastCheckoutRequestIdRef.current = r.checkoutRequestId;
+      startMpesaPoll(r.checkoutRequestId, thisAttempt);
     } catch {
       if (attemptRef.current !== thisAttempt) return;
       setProcessing(false);
@@ -349,7 +443,22 @@ export default function CheckoutScreen() {
     setPromoInput('');
   }
 
-  async function createOrder(method: string, reference: string) {
+  /**
+   * Create an order on the server and navigate to the order-confirmation screen.
+   *
+   * Returns `true` when the order was created and the router has navigated away.
+   * Returns `false` when order creation failed for a non-retriable reason (the
+   *   function has already shown an alert to the user; callers need not show another).
+   * Throws `ApiError` for retriable server/auth errors so that callers
+   *   (handlePaystack, handleStripeCheckout) can inspect `retryable` and show the
+   *   correct advice (retry/COD vs "check your card").
+   *
+   * IMPORTANT: for M-Pesa flows, callers must only clear `lastCheckoutRequestIdRef`
+   * after this function returns `true`.  Clearing early — before the order is
+   * durably recorded — loses the guard against a double charge when the network
+   * fails mid-creation and the customer retries.
+   */
+  async function createOrder(method: string, reference: string): Promise<boolean> {
     setProcessing(true);
     try {
       const order = await api.createOrder({
@@ -364,6 +473,7 @@ export default function CheckoutScreen() {
       setMpesaWaiting(false);
       setProcessing(false);
       router.replace(`/order/${order.id}` as never);
+      return true;
     } catch (e) {
       setProcessing(false);
       setMpesaWaiting(false);
@@ -372,6 +482,7 @@ export default function CheckoutScreen() {
       // "check your card") rather than a generic "contact support" message.
       if (e instanceof ApiError) throw e;
       Alert.alert('Error', 'Order could not be created. Please contact support.');
+      return false;
     }
   }
 
