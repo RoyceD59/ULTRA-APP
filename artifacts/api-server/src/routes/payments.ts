@@ -298,7 +298,12 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
           //
           // The secret is fetched from the DB (admin-rotatable) with env-var fallback.
           CallBackURL: await (async () => {
-              const base = `${process.env["API_BASE_URL"] || "https://team-horizon--jerryaroyce.replit.app"}/api/payments/mpesa/callback`;
+              const apiBase =
+                process.env["API_BASE_URL"] ??
+                (process.env["REPLIT_DEV_DOMAIN"]
+                  ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
+                  : "https://team-horizon--jerryaroyce.replit.app");
+              const base = `${apiBase}/api/payments/mpesa/callback`;
               const secret = await getMpesaWebhookSecret();
               return secret ? `${base}?token=${encodeURIComponent(secret)}` : base;
             })(),
@@ -311,6 +316,7 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
     const checkoutRequestId = stkData["CheckoutRequestID"];
 
     if (!checkoutRequestId) {
+      console.error("[M-Pesa] STK push failed — Safaricom response:", JSON.stringify(stkData), "HTTP status:", stkRes.status);
       res.status(500).json({ error: "M-Pesa request failed — no checkout reference", retryable: true });
       return;
     }
