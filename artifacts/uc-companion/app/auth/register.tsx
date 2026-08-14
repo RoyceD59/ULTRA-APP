@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import BrandLogo from '@/components/BrandLogo';
+import SocialAuthButtons from '@/components/SocialAuthButtons';
 
 // ── Phone helpers ─────────────────────────────────────────────────────────────
 
@@ -210,6 +211,8 @@ export default function RegisterScreen() {
               : <Text style={styles.registerBtnText}>Create Account</Text>}
           </TouchableOpacity>
         </View>
+
+        <SocialAuthButtons onSuccess={() => router.replace('/(tabs)' as never)} />
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Already have an account?</Text>

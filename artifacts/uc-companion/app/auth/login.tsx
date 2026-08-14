@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import BrandLogo from '@/components/BrandLogo';
+import SocialAuthButtons from '@/components/SocialAuthButtons';
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -68,6 +69,8 @@ export default function LoginScreen() {
               <Text style={styles.loginBtnText}>Sign In</Text>}
           </TouchableOpacity>
         </View>
+
+        <SocialAuthButtons onSuccess={() => router.replace('/(tabs)' as never)} />
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Don't have an account?</Text>

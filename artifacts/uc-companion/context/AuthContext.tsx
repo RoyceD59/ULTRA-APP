@@ -17,6 +17,8 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  /** Exchange a verified Clerk session token (Google/Apple sign-in) for the app's own session. */
+  socialLogin: (clerkToken: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   /** Persist updated user fields locally so the UI reflects profile changes immediately. */
   updateUser: (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone'>>) => Promise<void>;
@@ -37,6 +39,7 @@ const AuthContext = createContext<AuthContextValue>({
   isLoading: true,
   login: async () => ({ success: false }),
   register: async () => ({ success: false }),
+  socialLogin: async () => ({ success: false }),
   logout: async () => {},
   updateUser: async () => {},
 });
@@ -131,6 +134,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const socialLogin = async (clerkToken: string) => {
+    try {
+      const res = await fetch(`${getBase()}/api/uc/auth/social`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clerkToken}` },
+      });
+      const data = await res.json() as { token?: string; user?: UCUser; error?: string };
+      if (res.status === 429) return { success: false, error: data.error || 'Too many attempts. Please wait a minute before trying again.' };
+      if (!res.ok || data.error || !data.token || !data.user) {
+        return { success: false, error: data.error || 'Sign-in failed' };
+      }
+      await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+      // Register push token after successful sign-in (fire-and-forget)
+      registerPushTokenWithServer(data.token);
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  };
+
   const logout = async () => {
     // Fire-and-forget: unregister this device's push token server-side so
     // order-update pushes stop arriving after logout (shared/handed-over device).
@@ -149,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, socialLogin, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

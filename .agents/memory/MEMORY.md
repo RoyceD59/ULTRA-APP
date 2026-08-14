@@ -13,3 +13,4 @@
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines silently drop exports; rebuild libs with typecheck:libs; merges wait on my turn lock.
 - [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).
 - [UC reminder channels](uc-reminder-channels.md) — opt-in email/SMS/WhatsApp filter reminders; claim-before-send at-most-once; Postgres µs vs JS ms timestamp equality trap.
+- [UC social sign-in](uc-social-auth.md) — Clerk is identity-layer only; exchange endpoint issues uc JWT; verified-email + never-relink rules; ClerkLoaded must not gate the whole app.

@@ -13,6 +13,12 @@ export const ucUsersTable = pgTable("uc_users", {
   firstName:    text("first_name").notNull(),
   lastName:     text("last_name").notNull().default(""),
   isAdmin:      boolean("is_admin").notNull().default(false),
+  /** Clerk user id when the account was created/linked via social sign-in
+   *  (Google / Apple). Null for password-only accounts. */
+  clerkUserId:  text("clerk_user_id").unique(),
+  /** "password" (default) or "social". Social-only accounts hold a sentinel
+   *  in passwordHash that can never match a bcrypt comparison. */
+  authProvider: text("auth_provider").notNull().default("password"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   /** Set when the customer exercises their GDPR/PDPA right to erasure.
    *  Any still-valid bearer token for this userId is rejected by DB-anchored

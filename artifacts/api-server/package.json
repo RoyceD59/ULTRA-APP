@@ -12,6 +12,8 @@
     "test": "node --import tsx/esm --test src/tests/**/*.test.ts"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.56",
+    "@clerk/shared": "^4.29.0",
     "@google-cloud/storage": "^7.21.0",
     "@replit/connectors-sdk": "^0.4.1",
     "@whiskeysockets/baileys": "7.0.0-rc14",
@@ -25,6 +27,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "google-auth-library": "^10.9.0",
+    "http-proxy-middleware": "^4.2.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^9.0.5",
     "pino": "^9.14.0",
