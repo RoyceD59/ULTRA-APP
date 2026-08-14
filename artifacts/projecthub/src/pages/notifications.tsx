@@ -150,7 +150,7 @@ export default function Notifications() {
           (prev) => {
             if (!prev) return prev;
             return prev.map((log) =>
-              log.whatsappMsgId === whatsappMsgId
+              log.whatsappMessageId === whatsappMsgId
                 ? { ...log, deliveryStatus }
                 : log
             );

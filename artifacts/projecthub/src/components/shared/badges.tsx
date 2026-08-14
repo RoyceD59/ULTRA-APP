@@ -1,10 +1,10 @@
-import { TaskStatus, TaskPriority, ProjectStatus } from '@workspace/api-client-react/api.schemas';
+import type { TaskStatus, TaskPriority, ProjectStatus } from '@workspace/api-client-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { CheckCircle2, Circle, Clock, AlertCircle, AlertTriangle, ArrowUp, ArrowRight, ArrowDown } from 'lucide-react';
 
 export function TaskStatusBadge({ status }: { status: TaskStatus }) {
-  const config = {
+  const config: Record<TaskStatus, { label: string; className: string; icon: typeof Circle }> = {
     todo: { label: 'To Do', className: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300', icon: Circle },
     in_progress: { label: 'In Progress', className: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400', icon: Clock },
     in_review: { label: 'In Review', className: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400', icon: AlertCircle },
@@ -22,7 +22,7 @@ export function TaskStatusBadge({ status }: { status: TaskStatus }) {
 }
 
 export function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
-  const config = {
+  const config: Record<TaskPriority, { label: string; className: string; icon: typeof Circle }> = {
     low: { label: 'Low', className: 'text-slate-500 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:text-slate-400', icon: ArrowDown },
     medium: { label: 'Medium', className: 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400', icon: ArrowRight },
     high: { label: 'High', className: 'text-orange-600 bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400', icon: ArrowUp },
@@ -40,7 +40,7 @@ export function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
 }
 
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
-  const config = {
+  const config: Record<ProjectStatus, { label: string; className: string }> = {
     planning: { label: 'Planning', className: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400' },
     active: { label: 'Active', className: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400' },
     on_hold: { label: 'On Hold', className: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400' },

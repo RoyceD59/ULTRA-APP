@@ -28,7 +28,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 import { TaskStatusBadge, TaskPriorityBadge, getInitials, formatDate, formatRelativeDate } from "@/components/shared/badges";
-import { Task, TaskInput, TaskUpdate } from "@workspace/api-client-react/api.schemas";
+import { Task, TaskInput, TaskUpdate } from "@workspace/api-client-react";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),

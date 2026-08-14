@@ -7,7 +7,8 @@ import {
   useUpdateProject, 
   useDeleteProject,
   getListTasksQueryKey,
-  getGetProjectQueryKey
+  getGetProjectQueryKey,
+  getGetProjectSummaryQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -44,13 +45,13 @@ export default function ProjectDetail() {
   const { toast } = useToast();
 
   const { data: project, isLoading: isProjectLoading } = useGetProject(projectId, {
-    query: { enabled: !!projectId }
+    query: { queryKey: getGetProjectQueryKey(projectId), enabled: !!projectId }
   });
   const { data: summary, isLoading: isSummaryLoading } = useGetProjectSummary(projectId, {
-    query: { enabled: !!projectId }
+    query: { queryKey: getGetProjectSummaryQueryKey(projectId), enabled: !!projectId }
   });
   const { data: tasks, isLoading: isTasksLoading } = useListTasks({ projectId }, {
-    query: { enabled: !!projectId }
+    query: { queryKey: getListTasksQueryKey({ projectId }), enabled: !!projectId }
   });
 
   const [isEditOpen, setIsEditOpen] = useState(false);

@@ -22,7 +22,7 @@ import { Users, Plus, MoreVertical, Mail, Briefcase, Trash2, Edit } from "lucide
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials, formatDate } from "@/components/shared/badges";
-import { Member } from "@workspace/api-client-react/api.schemas";
+import { Member } from "@workspace/api-client-react";
 
 const memberSchema = z.object({
   name: z.string().min(1, "Name is required"),

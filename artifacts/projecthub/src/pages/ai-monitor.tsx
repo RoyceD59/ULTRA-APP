@@ -38,11 +38,11 @@ function ReportPanel() {
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-foreground">Status Report</h2>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={pushing} onClick={() => push({})} className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" disabled={pushing} onClick={() => push()} className="gap-1.5 text-xs">
             {pushing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Radio className="w-3 h-3" />}
             Push to Orchestrator
           </Button>
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => generate({}, { onSuccess: () => refetch() })} className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => generate(undefined, { onSuccess: () => refetch() })} className="gap-1.5 text-xs">
             {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
             Refresh
           </Button>
