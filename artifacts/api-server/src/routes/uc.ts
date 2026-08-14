@@ -2937,7 +2937,7 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
         itemCells.push(li?.productId ?? "", li?.name ?? "", li?.quantity ?? "", li?.total ?? "");
       }
       return csvRow([
-        o.id, o.userId, o.status, o.dateCreated, o.total, o.currency,
+        o.id, o.userId, o.status, new Date(o.dateCreated).toISOString(), o.total, o.currency,
         o.paymentMethod, o.paymentReference ?? "", o.promoCode ?? "",
         o.discountPercent, o.discountAmount, o.webhookRecovery ?? false,
         shippingName, addr["phone"] ?? "", shippingAddr, addr["city"] ?? "", addr["country"] ?? "",
