@@ -73,6 +73,25 @@ source. The scenarios below verify the real navigation paths on a device.
 4. Screen content padding follows the bar: the bottom inset appears together
    with the bar (no content hidden behind it afterwards).
 
+## Static analysis — NativeTabLayout (iOS Liquid Glass) path
+
+`GlobalCartBar` is rendered as a sibling of both `NativeTabLayout` and `ClassicTabLayout`
+inside the root `TabLayout` view — not inside either child — so the hydration guard
+(`hasItems = cartHydrated && totalItems > 0`) and the `anim = new Animated.Value(0)` starting
+point apply identically regardless of which tab layout is active.
+
+Scenario 5 concerns (native path):
+- **Basket bar flash** — `anim` is initialised to 0 and starts its first animation only after
+  `hasItems` becomes true. Because `hasItems` requires `cartHydrated === true`, the bar cannot
+  animate out against a stale zero count and then back in; an out-animation requires the bar to
+  have been visible first, which is impossible before hydration. The `useNativeDriver: true`
+  flag changes where the animation runs (native thread), not its starting conditions.
+- **Tab badge flash** — `NativeTabLayout` does not wire a `tabBarBadge` prop at all, so no
+  badge can appear before or after hydration on the glass tab bar.
+
+The static analysis finds no code path that can produce a flash on the native iOS layout.
+On-device visual confirmation was blocked by an Expo QR launch crash (tracked as a follow-up).
+
 ## Execution record — 2026-08-14 (Scenarios 4 & 5)
 
 Executed on **Expo web** (the only device surface available in this
