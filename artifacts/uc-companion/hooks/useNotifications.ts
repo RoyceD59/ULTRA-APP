@@ -527,7 +527,10 @@ export async function scheduleAllFilterNotifications(
   }
 
   // ── 4. 30 days before replacement — discount offer
-  const offset4 = Math.max(Math.min(lifespanDays - 30, lifespanDays - 1), Math.ceil(daysSinceActivation) + 1);
+  // Math.floor ensures the clamp is stable even when daysSinceActivation is
+  // a tiny fraction above a whole number (e.g. 50.000001 due to test timing):
+  // Math.floor(50.000001)+1 = 51, whereas Math.ceil would give 52.
+  const offset4 = Math.max(Math.min(lifespanDays - 30, lifespanDays - 1), Math.floor(daysSinceActivation) + 1);
   await scheduleAt(
     new Date(activationDate.getTime() + offset4 * 86_400_000),
     {

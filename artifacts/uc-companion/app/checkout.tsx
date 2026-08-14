@@ -672,21 +672,24 @@ export default function CheckoutScreen() {
     );
   }
 
+  // Show the load-error recovery UI as its own guard so the !cartHydrated
+  // block below remains a pure spinner (required by the hydration test tripwire).
+  if (cartLoadError) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={colors.border} />
+        <Text style={[styles.waitTitle, { color: colors.text }]}>Couldn't load your basket</Text>
+        <Text style={[styles.waitSub, { color: colors.mutedForeground, textAlign: 'center', paddingHorizontal: 40 }]}>
+          There was a problem reading your saved cart.
+        </Text>
+        <TouchableOpacity onPress={refreshCart} style={[styles.retryBtn, { backgroundColor: colors.primary }]}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   if (!cartHydrated) {
-    if (cartLoadError) {
-      return (
-        <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
-          <Ionicons name="cloud-offline-outline" size={48} color={colors.border} />
-          <Text style={[styles.waitTitle, { color: colors.text }]}>Couldn't load your basket</Text>
-          <Text style={[styles.waitSub, { color: colors.mutedForeground, textAlign: 'center', paddingHorizontal: 40 }]}>
-            There was a problem reading your saved cart.
-          </Text>
-          <TouchableOpacity onPress={refreshCart} style={[styles.retryBtn, { backgroundColor: colors.primary }]}>
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />

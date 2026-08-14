@@ -61,6 +61,11 @@ function RootLayoutNav() {
         router.push('/(tabs)/products' as never);
       } else if (screen === 'orders') {
         router.push('/(tabs)/account' as never);
+      } else if (screen === 'filterTracker') {
+        // Opens the Account tab which hosts the filter tracker.
+        // syncActivationWithCatalogue() runs on mount there and reschedules
+        // any activation whose lifespanDays changed in the catalogue.
+        router.push('/(tabs)/account' as never);
       }
     });
 
