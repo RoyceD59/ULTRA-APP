@@ -320,6 +320,25 @@ export async function runLifespanAuditAlert(
         : [],
     }));
 
+    // Resolve products that previously alerted but now HAVE a lifespan: delete
+    // their dedupe rows so a later regression (meta removed again) re-alerts.
+    const missingIdSet = new Set(missing.map((p) => p.id));
+    const resolvedIds = products
+      .map((p) => Number((p as Record<string, unknown>)["id"]))
+      .filter((id) => Number.isFinite(id) && !missingIdSet.has(id));
+    if (resolvedIds.length > 0) {
+      const deleted = await db
+        .delete(ucLifespanAlertsTable)
+        .where(inArray(ucLifespanAlertsTable.productId, resolvedIds))
+        .returning({ productId: ucLifespanAlertsTable.productId });
+      if (deleted.length > 0) {
+        logger.info(
+          { resolved: deleted.map((r) => r.productId) },
+          "Scheduler: lifespan audit — previously alerted products now trackable, dedupe rows cleared",
+        );
+      }
+    }
+
     if (missing.length === 0) {
       logger.info("Scheduler: lifespan audit clean — all live products trackable");
       return { flagged: 0, newlyAlerted: 0, emailed: false };

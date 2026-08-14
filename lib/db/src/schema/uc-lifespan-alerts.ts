@@ -14,8 +14,8 @@ import { z } from "zod/v4";
  * about products with no row yet — preventing daily repeat alerts.
  *
  * Rows are keyed by the WooCommerce product ID. If the team later fixes the
- * product's meta, the row simply becomes inert (the product stops being
- * flagged by the audit).
+ * product's meta, the audit deletes the row ("resolved"), so a later
+ * regression (meta removed again) re-alerts the team once more.
  */
 export const ucLifespanAlertsTable = pgTable("uc_lifespan_alerts", {
   productId: integer("product_id").primaryKey(),

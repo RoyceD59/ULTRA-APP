@@ -148,6 +148,50 @@ describe("runLifespanAuditAlert", () => {
     assert.doesNotMatch(sentEmails[0]!, /Test Filter 9911001/);
   });
 
+  it("re-alerts when a fixed product loses its lifespan meta again", async () => {
+    await cleanup();
+    const sentEmails: string[] = [];
+    const sendEmail = async (e: { text: string }) => { sentEmails.push(e.text); return true; };
+
+    // 1. Product missing lifespan → alerted and recorded
+    const first = await runLifespanAuditAlert({
+      fetchProducts: async () => [wcProduct(IDS[0]!)],
+      sendEmail,
+    });
+    assert.equal(first.emailed, true);
+    assert.equal(sentEmails.length, 1);
+
+    // 2. Team fixes the product → audit clean, dedupe row cleared
+    const fixed = await runLifespanAuditAlert({
+      fetchProducts: async () => [wcProduct(IDS[0]!, { lifespan: 90 })],
+      sendEmail,
+    });
+    assert.deepEqual(fixed, { flagged: 0, newlyAlerted: 0, emailed: false });
+    let rows = await db
+      .select()
+      .from(ucLifespanAlertsTable)
+      .where(inArray(ucLifespanAlertsTable.productId, IDS));
+    assert.equal(rows.length, 0, "resolved product's dedupe row must be deleted");
+
+    // 3. Meta disappears again → treated as newly flagged, emailed once more
+    const regressed = await runLifespanAuditAlert({
+      fetchProducts: async () => [wcProduct(IDS[0]!)],
+      sendEmail,
+    });
+    assert.equal(regressed.newlyAlerted, 1);
+    assert.equal(regressed.emailed, true);
+    assert.equal(sentEmails.length, 2, "regression must trigger a second email");
+
+    // 4. And dedupe still works after the re-alert
+    const again = await runLifespanAuditAlert({
+      fetchProducts: async () => [wcProduct(IDS[0]!)],
+      sendEmail,
+    });
+    assert.equal(again.emailed, false);
+    assert.equal(sentEmails.length, 2, "no repeat email while still flagged");
+    await cleanup();
+  });
+
   it("does not record products when the email send fails, so it retries next run", async () => {
     await cleanup();
     const deps = {
