@@ -15,13 +15,21 @@ const METHODS: { id: PaymentMethod; label: string; sub: string; icon: keyof type
 interface Props {
   selected: PaymentMethod;
   onChange: (m: PaymentMethod) => void;
+  /**
+   * Server-driven availability map from GET /api/payments/config.
+   * Methods explicitly set to false are hidden (e.g. Stripe while the
+   * team's card processing is deactivated). Absent = shown, so the picker
+   * degrades gracefully if the config fetch fails.
+   */
+  enabled?: Partial<Record<PaymentMethod, boolean>>;
 }
 
-export default function PaymentMethodPicker({ selected, onChange }: Props) {
+export default function PaymentMethodPicker({ selected, onChange, enabled }: Props) {
   const colors = useColors();
+  const visible = METHODS.filter(m => enabled?.[m.id] !== false);
   return (
     <View style={styles.container}>
-      {METHODS.map(m => {
+      {visible.map(m => {
         const active = selected === m.id;
         const isCod = m.id === 'cod';
         return (

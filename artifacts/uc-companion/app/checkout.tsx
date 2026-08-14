@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   Modal, Platform, ActivityIndicator, Alert,
@@ -8,7 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
-import { useApi, UCAddress, ApiError } from '@/hooks/useApi';
+import { useApi, UCAddress, ApiError, type PaymentsConfig } from '@/hooks/useApi';
 import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPicker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
@@ -72,6 +72,28 @@ export default function CheckoutScreen() {
   const api = useApi();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paystack');
+  // Server-driven method availability — hides deactivated providers (e.g. card
+  // payments while Stripe is switched off). Null until fetched; on fetch failure
+  // every method stays visible so checkout is never blocked by a config blip.
+  const [paymentsConfig, setPaymentsConfig] = useState<PaymentsConfig | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.getPaymentsConfig()
+      .then(cfg => {
+        if (cancelled) return;
+        setPaymentsConfig(cfg);
+        // If the currently selected method was deactivated server-side, fall
+        // back to the first available method so Confirm never hits a dead end.
+        setPaymentMethod(prev => {
+          if (cfg.methods[prev] !== false) return prev;
+          const order: PaymentMethod[] = ['paystack', 'mpesa', 'cod', 'stripe'];
+          return order.find(m => cfg.methods[m] !== false) ?? prev;
+        });
+      })
+      .catch(() => { /* keep defaults — all methods visible */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [address, setAddress] = useState<UCAddress>({
     ...DEFAULT_ADDRESS,
     firstName: user?.firstName ?? '',
@@ -681,6 +703,7 @@ export default function CheckoutScreen() {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Method</Text>
         <PaymentMethodPicker
           selected={paymentMethod}
+          enabled={paymentsConfig?.methods}
           onChange={(method) => {
             // Only reset state when the user genuinely switches to a different
             // method.  Tapping the already-selected row must be a no-op so

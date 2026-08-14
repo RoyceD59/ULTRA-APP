@@ -112,10 +112,13 @@ before(async () => {
 
   // Fake Daraja credentials activate the real verification branch
   // (without them the status route returns a random sandbox mock).
-  process.env["MPESA_SHORTCODE"]       ??= "174379";
-  process.env["MPESA_PASSKEY"]         ??= "test_passkey_status";
-  process.env["MPESA_CONSUMER_KEY"]    ??= "test_key_status";
-  process.env["MPESA_CONSUMER_SECRET"] ??= "test_secret_status";
+  // Set unconditionally: the workspace may carry placeholder secrets (e.g.
+  // MPESA_SHORTCODE="NA") that the route now correctly rejects as invalid,
+  // which would silently drop these tests into demo mode.
+  process.env["MPESA_SHORTCODE"]       = "174379";
+  process.env["MPESA_PASSKEY"]         = "test_passkey_status";
+  process.env["MPESA_CONSUMER_KEY"]    = "test_key_status";
+  process.env["MPESA_CONSUMER_SECRET"] = "test_secret_status";
   process.env["SESSION_SECRET"]        ??= "test-secret-mpesa-status";
   process.env["RESEND_BASE_URL"]       ??= "https://api.resend.com";
   process.env["RESEND_API_KEY"]        ??= "re_test_status_key";

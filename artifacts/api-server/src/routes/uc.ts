@@ -439,13 +439,25 @@ function wcUrl(path: string, extra: Record<string, string> = {}): string {
   return url.toString();
 }
 
+/**
+ * Parse a WooCommerce REST API response that may have PHP notices prepended.
+ * WordPress sites with WP_DEBUG enabled output HTML notices before the JSON body.
+ * We scan for the first `[` or `{` and parse from there.
+ */
+function parseWcJson(text: string): unknown {
+  const start = text.search(/[{[]/);
+  if (start === -1) throw new SyntaxError("No JSON object found in WC response");
+  return JSON.parse(text.slice(start));
+}
+
 async function wcFetchArray(
   path: string,
   extra: Record<string, string> = {}
 ): Promise<Record<string, unknown>[] | null> {
   try {
     const res = await fetch(wcUrl(path, extra));
-    const data: unknown = await res.json();
+    const text = await res.text();
+    const data: unknown = parseWcJson(text);
     return Array.isArray(data) ? (data as Record<string, unknown>[]) : null;
   } catch {
     return null;
@@ -458,7 +470,8 @@ async function wcFetchOne(
 ): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(wcUrl(path, extra));
-    const data: unknown = await res.json();
+    const text = await res.text();
+    const data: unknown = parseWcJson(text);
     return data && typeof data === "object" && !Array.isArray(data)
       ? (data as Record<string, unknown>)
       : null;

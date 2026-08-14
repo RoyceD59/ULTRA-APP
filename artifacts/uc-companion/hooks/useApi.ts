@@ -187,6 +187,13 @@ export interface WaterTestRequest {
   createdAt: string;
 }
 
+export interface PaymentsConfig {
+  /** Method visibility map — false = hide from the checkout picker. */
+  methods: { paystack: boolean; mpesa: boolean; stripe: boolean; cod: boolean };
+  /** "live" when real Daraja credentials are configured; "demo" otherwise. */
+  mpesaMode: 'live' | 'demo';
+}
+
 export interface MpesaResponse {
   checkoutRequestId: string;
   merchantRequestId: string;
@@ -343,6 +350,9 @@ export function useApi() {
       photos?: string[];
       videos?: string[];
     }) => post<WaterTestRequest>('/api/uc/water-tests', data),
+    /** Server-driven payment method availability (e.g. Stripe deactivated). */
+    getPaymentsConfig: () =>
+      get<PaymentsConfig>('/api/payments/config'),
     mpesaSTKPush: (phone: string, amount: number, orderId: string) =>
       post<MpesaResponse>('/api/payments/mpesa', { phone, amount, orderId }),
     mpesaStatus: (checkoutRequestId: string) =>

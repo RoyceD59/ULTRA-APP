@@ -152,6 +152,15 @@ export function invalidateTeamAlertPhoneCache(): void {
   _teamAlertPhoneCache = null;
 }
 
+// ─── Stripe feature flag ──────────────────────────────────────────────────────
+// Card payments are switchable without deleting the secret key: set
+// STRIPE_ENABLED=false to hide the option in the app and reject session
+// creation server-side. The team asked for Stripe to stay off until their
+// Stripe account is connected to the WooCommerce store.
+export function stripeEnabled(): boolean {
+  return process.env["STRIPE_ENABLED"] !== "false";
+}
+
 // Lazy Stripe — only when STRIPE_SECRET_KEY is present
 let _stripe: Stripe | null = null;
 async function getStripe(): Promise<Stripe | null> {
@@ -163,6 +172,31 @@ async function getStripe(): Promise<Stripe | null> {
   }
   return _stripe;
 }
+
+// ─── M-Pesa credential validation ─────────────────────────────────────────────
+// Daraja shortcodes are numeric (Paybill/Till numbers, e.g. sandbox 174379).
+// Placeholder values like "NA" must route checkout to demo mode instead of
+// sending doomed STK pushes to Safaricom that fail with "Invalid BusinessShortCode".
+export function getMpesaShortcode(): string | null {
+  const sc = process.env["MPESA_SHORTCODE"]?.trim();
+  return sc && /^\d{4,10}$/.test(sc) ? sc : null;
+}
+
+// ─── Payment method availability ──────────────────────────────────────────────
+// Server-driven config so the mobile app only shows methods that can actually
+// process a payment. M-Pesa stays visible even in demo mode (mock flow works);
+// Stripe is hidden entirely when deactivated.
+router.get("/payments/config", (_req: Request, res: Response): void => {
+  res.json({
+    methods: {
+      paystack: true,
+      mpesa: true,
+      stripe: stripeEnabled() && !!process.env["STRIPE_SECRET_KEY"],
+      cod: true,
+    },
+    mpesaMode: getMpesaShortcode() && process.env["MPESA_PASSKEY"] ? "live" : "demo",
+  });
+});
 
 // ─── M-Pesa Daraja ────────────────────────────────────────────────────────────
 async function getMpesaToken(): Promise<string | null> {
@@ -194,9 +228,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
     return;
   }
 
-  const shortcode = process.env["MPESA_SHORTCODE"];
+  const shortcode = getMpesaShortcode();
   const passkey = process.env["MPESA_PASSKEY"];
-  const token = await getMpesaToken();
+  const token = shortcode && passkey ? await getMpesaToken() : null;
 
   const normalizedPhone = phone.replace(/^\+/, "").replace(/^0/, "254");
   const expectedAmount  = Math.ceil(amount);
@@ -335,9 +369,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
 router.get(
   "/payments/mpesa/status/:checkoutRequestId",
   async (req: Request, res: Response): Promise<void> => {
-    const token = await getMpesaToken();
-    const shortcode = process.env["MPESA_SHORTCODE"];
+    const shortcode = getMpesaShortcode();
     const passkey = process.env["MPESA_PASSKEY"];
+    const token = shortcode && passkey ? await getMpesaToken() : null;
 
     if (!token || !shortcode || !passkey) {
       res.json({ status: Math.random() > 0.4 ? "success" : "pending" });
@@ -416,6 +450,11 @@ router.post(
     };
     if (!amount) {
       res.status(400).json({ error: "amount required" });
+      return;
+    }
+
+    if (!stripeEnabled()) {
+      res.status(503).json({ error: "Card payments are currently unavailable. Please use Paystack, M-Pesa, or Cash on Delivery." });
       return;
     }
 
