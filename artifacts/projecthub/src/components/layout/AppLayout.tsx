@@ -169,6 +169,33 @@ function useRecoveryOrderCount(): number {
   return count;
 }
 
+/** Fetches the count of orders with reminder gaps (products missing a lifespan,
+ *  so no replacement reminder will be scheduled) for the nav badge.
+ *  Silently returns 0 on any error (the badge is a convenience, not critical). */
+function useReminderGapCount(): number {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const token = getTeamToken();
+    if (!token) return;
+
+    let cancelled = false;
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+    fetch(`${base}/api/uc/admin/orders/reminder-gaps`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() as Promise<{ orders?: unknown[] }> : Promise.resolve({ orders: [] }))
+      .then(data => { if (!cancelled) setCount(data.orders?.length ?? 0); })
+      .catch(() => { /* badge is non-critical */ });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return count;
+}
+
 // ─── AppLayout ─────────────────────────────────────────────────────────────────
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -179,6 +206,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const admin = isTeamAdmin();
   const user = getTeamUser();
   const recoveryCount = useRecoveryOrderCount();
+  const reminderGapCount = useReminderGapCount();
   const { mpesaSecretMissing } = useSecurityWarnings();
   const showSecurityBanner = admin && mpesaSecretMissing && !securityBannerDismissed;
 
@@ -211,6 +239,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             const active = item.href === "/" ? location === "/" : location.startsWith(item.href);
             const isOrders = item.slug === "orders";
             const showRecoveryBadge = isOrders && recoveryCount > 0;
+            const showReminderGapBadge = isOrders && reminderGapCount > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <button className={cn(
@@ -227,6 +256,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       title={`${recoveryCount} unresolved recovery order${recoveryCount > 1 ? "s" : ""}`}
                     >
                       {recoveryCount}
+                    </span>
+                  )}
+                  {showReminderGapBadge && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem] leading-none py-0.5"
+                      title={`${reminderGapCount} order${reminderGapCount > 1 ? "s" : ""} with reminder gaps`}
+                    >
+                      {reminderGapCount}
                     </span>
                   )}
                 </button>
