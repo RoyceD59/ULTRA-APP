@@ -50,13 +50,15 @@ export const EXPECTED_LIFESPANS = {
   // Wireless Dispenser Filter: product page spec states 300L capacity,
   // 2–3 months average use → 90 (same band as bottles/pitcher, 150–400L / 3 months)
   8574: { name: "Wireless Dispenser Filter", days: 90 },
+  // Portable Water Filter Pump: product page spec states
+  // "Filter life Span: 4-5 months" → 120 (same band as faucet filters)
+  8147: { name: "Portable Water Filter Pump", days: 120 },
 };
 
 // Products deliberately left NON-trackable (no lifespan meta on purpose):
 //   9656 "Shell"                          — housing only, no filter media
-//   8147 "Portable Water Filter Pump"     — lifespan unconfirmed by the team
 // Never guess a lifespan; these stay 0 until the team confirms a value.
-export const KNOWN_NON_TRACKABLE = [9656, 8147];
+export const KNOWN_NON_TRACKABLE = [9656];
 
 const key = process.env.WC_CONSUMER_KEY;
 const secret = process.env.WC_CONSUMER_SECRET;
