@@ -154,11 +154,20 @@ interface TicketCardProps {
 function TicketCard({ ticket, token, onUpdate }: TicketCardProps) {
   const [updating, setUpdating] = useState(false);
   const [error, setError]       = useState("");
+  const [saved, setSaved]       = useState(false);
+
+  // Auto-dismiss the "Saved ✓" confirmation after ~2 seconds
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSaved(false), 2000);
+    return () => clearTimeout(timer);
+  }, [saved]);
 
   async function changeStatus(newStatus: string) {
     if (newStatus === ticket.status || updating) return;
     setUpdating(true);
     setError("");
+    setSaved(false);
     try {
       const res = await fetch(`${BASE}/api/uc/admin/tickets/${ticket.id}`, {
         method:  "PATCH",
@@ -171,6 +180,7 @@ function TicketCard({ ticket, token, onUpdate }: TicketCardProps) {
         return;
       }
       const updated = await res.json() as AdminTicket;
+      setSaved(true);
       onUpdate(updated);
     } catch {
       setError("Could not reach the server.");
@@ -234,6 +244,9 @@ function TicketCard({ ticket, token, onUpdate }: TicketCardProps) {
             </button>
           ))}
           {updating && <span className="text-xs text-muted-foreground animate-pulse ml-1">Saving…</span>}
+          {!updating && saved && (
+            <span className="text-xs text-green-600 ml-1" role="status">Saved ✓</span>
+          )}
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
       </CardContent>
