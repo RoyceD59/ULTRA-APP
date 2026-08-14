@@ -5,14 +5,15 @@
  * inviting them to enable email / SMS / WhatsApp reminder channels.
  *
  * Behaviour:
- *   • All three toggles start OFF — opt-in only, never opt-out.
+ *   • Toggles are pre-filled from the server's current prefs; if the fetch
+ *     fails all three default to OFF so the sheet is still usable.
  *   • Tapping "Enable Reminders" POSTs only the channels the user switched on.
  *   • "Skip for now" and the × dismiss without any network call.
  *   • The sheet is never shown again for the same registration
  *     (dismissal flag stored in AsyncStorage, keyed by productId+activatedAt).
  *   • Signed-out callers must not render this component.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity,
   Switch, Platform, ActivityIndicator,
@@ -91,8 +92,36 @@ export default function ReminderOptInSheet({
     reminderSms: false,
     reminderWhatsapp: false,
   });
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-fill toggles with the customer's existing channel preferences each time
+  // the sheet becomes visible. Falls back to all-OFF if the fetch fails.
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    api.getServerNotifPrefs()
+      .then(prefs => {
+        if (cancelled) return;
+        setChannels({
+          reminderEmail:    prefs.reminderEmail,
+          reminderSms:      prefs.reminderSms,
+          reminderWhatsapp: prefs.reminderWhatsapp,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Graceful fallback — all channels OFF; user can still opt in manually.
+        setChannels({ reminderEmail: false, reminderSms: false, reminderWhatsapp: false });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const anyEnabled =
     channels.reminderEmail || channels.reminderSms || channels.reminderWhatsapp;
@@ -169,54 +198,62 @@ export default function ReminderOptInSheet({
 
             {/* Channel rows */}
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <ChannelRow
-                icon="mail-outline"
-                iconColor="#2563eb"
-                iconBg="#dbeafe"
-                label="Email reminders"
-                value={channels.reminderEmail}
-                onToggle={v => toggle('reminderEmail', v)}
-                disabled={saving}
-                colors={colors}
-              />
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <ChannelRow
-                icon="chatbubble-outline"
-                iconColor="#7c3aed"
-                iconBg="#ede9fe"
-                label="Text message (SMS)"
-                value={channels.reminderSms}
-                onToggle={v => toggle('reminderSms', v)}
-                disabled={saving}
-                colors={colors}
-              />
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <ChannelRow
-                icon="logo-whatsapp"
-                iconColor="#16a34a"
-                iconBg="#dcfce7"
-                label="WhatsApp"
-                value={channels.reminderWhatsapp}
-                onToggle={v => toggle('reminderWhatsapp', v)}
-                disabled={saving}
-                colors={colors}
-              />
+              {loading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : (
+                <>
+                  <ChannelRow
+                    icon="mail-outline"
+                    iconColor="#2563eb"
+                    iconBg="#dbeafe"
+                    label="Email reminders"
+                    value={channels.reminderEmail}
+                    onToggle={v => toggle('reminderEmail', v)}
+                    disabled={saving}
+                    colors={colors}
+                  />
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <ChannelRow
+                    icon="chatbubble-outline"
+                    iconColor="#7c3aed"
+                    iconBg="#ede9fe"
+                    label="Text message (SMS)"
+                    value={channels.reminderSms}
+                    onToggle={v => toggle('reminderSms', v)}
+                    disabled={saving}
+                    colors={colors}
+                  />
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <ChannelRow
+                    icon="logo-whatsapp"
+                    iconColor="#16a34a"
+                    iconBg="#dcfce7"
+                    label="WhatsApp"
+                    value={channels.reminderWhatsapp}
+                    onToggle={v => toggle('reminderWhatsapp', v)}
+                    disabled={saving}
+                    colors={colors}
+                  />
+                </>
+              )}
             </View>
 
             {!!error && (
               <Text style={styles.errorText}>{error}</Text>
             )}
 
-            {/* Enable button — only active when something is toggled on */}
+            {/* Enable button — only active when prefs are loaded and something is toggled on */}
             <TouchableOpacity
               onPress={handleEnable}
-              disabled={!anyEnabled || saving}
+              disabled={loading || !anyEnabled || saving}
               activeOpacity={0.85}
               style={[
                 styles.enableBtn,
                 {
                   backgroundColor: colors.primary,
-                  opacity: !anyEnabled || saving ? 0.5 : 1,
+                  opacity: loading || !anyEnabled || saving ? 0.5 : 1,
                 },
               ]}
             >
@@ -290,6 +327,7 @@ const styles = StyleSheet.create({
   channelIcon:  { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   channelLabel: { flex: 1, fontSize: 15, fontWeight: '500' as const },
   divider:      { height: 1, marginHorizontal: 14 },
+  loadingRow:   { paddingVertical: 20, alignItems: 'center' },
   errorText:    { fontSize: 13, color: '#EF4444', lineHeight: 18 },
   enableBtn:    { borderRadius: 13, paddingVertical: 15, alignItems: 'center' },
   enableBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
