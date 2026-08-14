@@ -102,7 +102,9 @@ describe('replacement reminders for a newly set lifespan', () => {
   });
 
   it('existing purchaser deep into the cycle (bought 50 days ago, lifespan 60): offers clamp to the near future instead of the past', async () => {
-    const activatedAt = new Date(Date.now() - 50 * DAY).toISOString();
+    // Subtract a 60-second buffer so daysSinceActivation stays just under 50
+    // regardless of execution time, ensuring Math.ceil(elapsed)=50 → offset4=51.
+    const activatedAt = new Date(Date.now() - 50 * DAY + 60_000).toISOString();
     await scheduleAllFilterNotifications({
       activatedAt, productId: DISPENSER.id, productName: DISPENSER.name, lifespanDays: 60,
     });

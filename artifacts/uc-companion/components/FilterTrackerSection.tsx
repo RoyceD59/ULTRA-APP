@@ -40,21 +40,8 @@ import PerformanceCheckInModal from '@/components/PerformanceCheckInModal';
 import SyncToast from '@/components/SyncToast';
 
 // ── Day-offset options ────────────────────────────────────────────────────────
-export const DAY_OFFSETS = [
-  { label: 'Today',      days: 0 },
-  { label: '1 week ago', days: 7 },
-  { label: '2 weeks ago', days: 14 },
-  { label: '1 month ago', days: 30 },
-  { label: '2 months ago', days: 60 },
-];
-
-/** Snap an arbitrary number of days to the closest selectable day-offset option. */
-export function closestDayOffset(days: number): number {
-  return DAY_OFFSETS.reduce(
-    (best, o) => (Math.abs(o.days - days) < Math.abs(best - days) ? o.days : best),
-    DAY_OFFSETS[0].days,
-  );
-}
+export { DAY_OFFSETS, closestDayOffset } from '@/hooks/filterNudge';
+import { DAY_OFFSETS, closestDayOffset } from '@/hooks/filterNudge';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {

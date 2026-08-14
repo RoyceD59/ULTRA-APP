@@ -15,19 +15,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
-import { getFilterActivation, type FilterActivation } from '@/hooks/useNotifications';
+import { type FilterActivation } from '@/hooks/useNotifications';
 import { RegisterModal } from '@/components/FilterTrackerSection';
-
-// Scoped per user so one account dismissing the prompt never suppresses it
-// for a different account signing in later on the same device.
-const dismissedKeyFor = (userId: number) => `uc_register_filter_prompt_dismissed_${userId}`;
+import { readNudgeState, markNudgeDismissed } from '@/hooks/filterNudge';
 
 interface Props {
   /** Called after the user completes registration from the prompt. */
@@ -54,13 +50,10 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
     setHasActivation(null);
     setHandled(false);
     (async () => {
-      const [flag, activation] = await Promise.all([
-        AsyncStorage.getItem(dismissedKeyFor(user.id)),
-        getFilterActivation(),
-      ]);
+      const state = await readNudgeState(user.id);
       if (cancelled) return;
-      setDismissed(flag === '1');
-      setHasActivation(activation != null);
+      setDismissed(state.dismissed);
+      setHasActivation(state.hasActivation);
     })();
     return () => { cancelled = true; };
   }, [token, user?.id]);
@@ -105,7 +98,7 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDismissed(true);
     if (!user) return;
-    try { await AsyncStorage.setItem(dismissedKeyFor(user.id), '1'); } catch { /* best-effort */ }
+    await markNudgeDismissed(user.id);
   }
 
   function handleOpen() {

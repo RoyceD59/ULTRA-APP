@@ -161,12 +161,23 @@ describe('checkout.tsx hydration guard (source-level tripwire)', () => {
     assert.ok(guardMatch, 'checkout.tsx must early-return when cartHydrated is false');
     const guardIdx = guardMatch.index!;
 
-    // …must render an ActivityIndicator (spinner), not cart UI…
-    const guardBlock = src.slice(guardIdx, guardIdx + 600);
+    // The guard now has two sub-branches:
+    //   cartLoadError → error UI with a Retry button
+    //   else          → ActivityIndicator spinner
+    // Capture enough source to cover both (up to the closing brace of the block).
+    const guardBlock = src.slice(guardIdx, guardIdx + 1200);
+
+    // Must contain a spinner for the normal loading case…
     assert.match(guardBlock, /ActivityIndicator/,
-      'the !cartHydrated branch must show a spinner');
-    assert.doesNotMatch(guardBlock, /totalPrice|items\.map|Order Summary/,
-      'the !cartHydrated branch must not render totals or line items');
+      'the !cartHydrated block must include an ActivityIndicator for the loading case');
+
+    // …and must also handle the cartLoadError sub-case (retry path from task #334)…
+    assert.match(guardBlock, /cartLoadError/,
+      'the !cartHydrated block must handle the cartLoadError sub-case');
+
+    // …but must never render checkout-specific UI (totals, line items, address).
+    assert.doesNotMatch(guardBlock, /totalPrice|items\.map|Order Summary|Delivery Address/,
+      'the !cartHydrated block must not render cart totals or checkout form fields');
 
     // …and must sit BEFORE the main return that renders address/payment/totals,
     // so no frame can paint $0.00 or empty line items pre-hydration.
