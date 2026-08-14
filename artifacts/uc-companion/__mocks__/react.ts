@@ -24,7 +24,7 @@
 export type ReactNode = unknown;
 
 interface Hook {
-  kind: 'state' | 'memo' | 'effect';
+  kind: 'state' | 'memo' | 'effect' | 'ref';
   state?: unknown;
   queue?: unknown[];
   deps?: unknown[] | undefined;
@@ -89,6 +89,12 @@ export function useMemo<T>(factory: () => T, deps: unknown[]): T {
     hook.deps = deps;
   }
   return hook.value as T;
+}
+
+export function useRef<T>(initial: T): { current: T } {
+  const { hook, first } = getHook('ref');
+  if (first) hook.value = { current: initial };
+  return hook.value as { current: T };
 }
 
 export function useEffect(effect: () => void | (() => void), deps?: unknown[]): void {
@@ -177,7 +183,7 @@ export function createElement(type: unknown, props: Record<string, unknown> | nu
 }
 
 const React = {
-  useState, useCallback, useMemo, useEffect, createContext, useContext, createElement, __testRender,
+  useState, useCallback, useMemo, useEffect, useRef, createContext, useContext, createElement, __testRender,
 };
 
 export default React;

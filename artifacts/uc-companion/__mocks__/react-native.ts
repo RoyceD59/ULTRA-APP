@@ -1,6 +1,37 @@
 /** Minimal react-native stub for the Node.js test runner. */
 export const Platform = { OS: 'ios' as const };
 export const Alert    = { alert: () => {} };
+
+// ── Controllable AppState mock ────────────────────────────────────────────────
+// Tests drive foreground/background transitions via __setAppState() and can
+// inspect how many listeners remain subscribed via __appStateListenerCount().
+
+export type AppStateStatus = 'active' | 'background' | 'inactive';
+
+type Listener = (s: AppStateStatus) => void;
+const listeners = new Set<Listener>();
+
 export const AppState = {
-  addEventListener: (_type: string, _handler: (s: string) => void) => ({ remove: () => {} }),
+  currentState: 'active' as AppStateStatus,
+  addEventListener: (_type: string, handler: Listener) => {
+    listeners.add(handler);
+    return { remove: () => { listeners.delete(handler); } };
+  },
 };
+
+/** Test helper: set the app state and notify all subscribed listeners. */
+export function __setAppState(next: AppStateStatus): void {
+  AppState.currentState = next;
+  for (const l of [...listeners]) l(next);
+}
+
+/** Test helper: number of currently subscribed AppState listeners. */
+export function __appStateListenerCount(): number {
+  return listeners.size;
+}
+
+/** Test helper: reset AppState mock between tests. */
+export function __resetAppState(): void {
+  listeners.clear();
+  AppState.currentState = 'active';
+}

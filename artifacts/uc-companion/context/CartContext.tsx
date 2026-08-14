@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   CartItem,
@@ -108,6 +109,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadFromStorage();
+  }, [loadFromStorage]);
+
+  // Low-memory resume guard: on Android the OS can purge the JS context while
+  // the app is backgrounded; on return the whole context re-initialises and
+  // cartHydrated resets to false.  Re-read storage whenever the app comes back
+  // to the foreground so the UI never briefly shows a stale empty state while
+  // waiting for a screen-level focus effect to fire.
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+      // Fire on any inactive/background → active transition ('inactive' covers
+      // iOS interruptions; Android reports 'background').
+      if (next === 'active' && prev !== 'active') {
+        loadFromStorage();
+      }
+    });
+    return () => sub.remove();
   }, [loadFromStorage]);
 
   const addItem = useCallback((product: CartItem) => {
