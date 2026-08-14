@@ -62,13 +62,13 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "expo-clipboard": "^8.0.8",
-    "expo-contacts": "^15.0.11",
+    "expo-clipboard": "~8.0.8",
+    "expo-contacts": "~15.0.11",
     "expo-file-system": "~19.0.23",
     "expo-notifications": "~0.32.17",
     "expo-sharing": "~14.0.8",
-    "expo-sms": "^14.0.8",
-    "expo-video": "^3.0.16",
+    "expo-sms": "~14.0.8",
+    "expo-video": "~3.0.16",
     "react-native-maps": "1.20.1"
   }
 }
