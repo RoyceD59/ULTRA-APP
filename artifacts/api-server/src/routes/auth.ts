@@ -28,6 +28,7 @@ import { issueToken, verifyToken } from "../lib/jwt.js";
 import { db, teamSettingsTable, teamUsersTable, teamInvitationsTable, passwordResetTokensTable } from "@workspace/db";
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { sendViaResend } from "../lib/resend.js";
+import { sendWhatsAppMessage } from "../lib/whatsapp.js";
 import { logger } from "../lib/logger.js";
 import { authLimiter } from "../lib/rate-limiters.js";
 
@@ -55,6 +56,38 @@ function projecthubBaseUrl(): string {
   if (process.env["PROJECTHUB_URL"]) return process.env["PROJECTHUB_URL"].replace(/\/$/, "");
   const domain = process.env["REPLIT_DEV_DOMAIN"];
   return domain ? `https://${domain}/projecthub` : "http://localhost:3000/projecthub";
+}
+
+// Password reset links are delivered to the team WhatsApp number only — per
+// team decision, not by email. Overridable via TEAM_RESET_WHATSAPP.
+const RESET_WHATSAPP_NUMBER =
+  process.env["TEAM_RESET_WHATSAPP"] || "+13022448888";
+
+/**
+ * Send a password-reset link to the team WhatsApp channel.
+ * Returns false (without throwing) when the WhatsApp session is not
+ * connected — the token remains valid, and an admin can still generate a
+ * link from the Team page.
+ */
+async function deliverResetLinkViaWhatsApp(
+  resetUrl: string,
+  accountEmail: string
+): Promise<boolean> {
+  try {
+    await sendWhatsAppMessage(
+      RESET_WHATSAPP_NUMBER,
+      `🔐 ProjectHub password reset requested for ${accountEmail}.\n\n` +
+        `Reset link (valid 24 hours):\n${resetUrl}\n\n` +
+        `If nobody on the team requested this, ignore this message.`
+    );
+    return true;
+  } catch (err) {
+    logger.warn(
+      { err, accountEmail },
+      "Password reset WhatsApp delivery failed — token still valid"
+    );
+    return false;
+  }
 }
 
 function issueTeamToken(user: { id: string; email: string; name: string; role: string }): string {
@@ -213,14 +246,10 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
   logger.info({ email: user.email }, "Password reset token generated");
-  const sent = await sendViaResend({
-    from: "ProjectHub <noreply@contacts.ucfilters.com>",
-    to: normalised,
-    subject: "Reset your ProjectHub password",
-    text: `You requested a password reset.\n\nReset your password here (valid 24 hours):\n${resetUrl}`,
-    html: `<p>You requested a password reset.</p><p><a href="${resetUrl}">Reset password</a> (valid 24 hours)</p><p>Or copy this link: ${resetUrl}</p>`,
-  });
-  if (!sent) logger.warn({ email: user.email }, "Password reset email not delivered — token still valid");
+  // Delivery is via the team WhatsApp channel ONLY (team decision) — the link
+  // goes to the shared team number, not the requester's inbox, so the team
+  // always sees who asked for a reset.
+  await deliverResetLinkViaWhatsApp(resetUrl, user.email);
   res.json({ ok: true });
 });
 
@@ -381,13 +410,9 @@ router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res)
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
-  await sendViaResend({
-    from: "ProjectHub <noreply@contacts.ucfilters.com>",
-    to: user.email,
-    subject: "Your ProjectHub password has been reset",
-    text: `An admin has generated a password reset link for your account.\n\nReset your password here (valid 24 hours):\n${resetUrl}`,
-    html: `<p>An admin has generated a password reset link for your account.</p><p><a href="${resetUrl}">Reset password</a> (valid 24 hours)</p>`,
-  });
+  // Deliver via the team WhatsApp channel (team decision — no email). Failure
+  // is non-fatal: the admin sees the link in the response and can share it.
+  await deliverResetLinkViaWhatsApp(resetUrl, user.email);
   res.json({ resetUrl, email: user.email, expiresAt });
 });
 

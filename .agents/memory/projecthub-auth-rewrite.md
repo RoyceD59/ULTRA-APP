@@ -47,3 +47,8 @@ All under `/api/auth/`. See `artifacts/api-server/src/routes/auth.ts` for full d
 `/login`, `/register?token=`, `/forgot-password`, `/reset-password?token=`, `/admin/users` — all in `artifacts/projecthub/src/pages/`.
 
 `/register`, `/forgot-password`, `/reset-password` are public (outside `AuthGuard`). `/admin/users` is behind both `AuthGuard` and `AdminGuard`.
+
+## Two parallel auth systems — don't mix their login endpoints
+- Team/admin accounts live in `team_users` and log in via `POST /api/auth/login` → JWT with `type:"team-session"` + `role`. Admin-gated UC routes accept team-session role:"admin" directly.
+- `POST /api/uc/auth/login` is the **customer** (companion app) login backed by `uc_users`, with a dev fallback that can mint tokens for arbitrary emails — those tokens correctly fail the DB-anchored admin check (403).
+- **How to apply:** when smoke-testing admin endpoints, always authenticate via `/api/auth/login`; a 403 after a "successful" `/api/uc/auth/login` is the fail-closed design working, not a bug.

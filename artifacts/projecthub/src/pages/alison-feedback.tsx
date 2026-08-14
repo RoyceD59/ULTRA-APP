@@ -19,11 +19,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   ThumbsUp, ThumbsDown, RefreshCw, MessageSquare,
   ChevronDown, ChevronUp, Bot, AlertCircle, LogOut,
-  BarChart2, Flag, Download, X, RotateCcw, Search,
+  BarChart2, Flag, Download, X, RotateCcw, Search, Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getTeamToken, clearTeamAuth, handleUnauthorizedResponse } from '@/lib/team-auth';
@@ -201,11 +202,15 @@ function TopicBreakdown({
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface FeedbackEntry {
-  ts:       string;
-  rating:   'up' | 'down';
-  question: string;
-  answer:   string;
+  id?:              number | null;
+  ts:               string;
+  rating:           'up' | 'down';
+  question:         string;
+  answer:           string;
+  improvementNote?: string | null;
 }
+
+const NOTE_MAX = 250;
 
 interface FeedbackResponse {
   totalInLog: number;
@@ -268,9 +273,59 @@ function HighlightedText({ text, keywords }: { text: string; keywords: string[] 
   );
 }
 
-function EntryCard({ entry, highlights }: { entry: FeedbackEntry; highlights?: string[] }) {
+function EntryCard({
+  entry, token, highlights,
+}: { entry: FeedbackEntry; token: string; highlights?: string[] }) {
   const [expanded, setExpanded] = useState(false);
   const isDown = entry.rating === 'down';
+
+  // Improvement suggestion editor — 250-char team note, saved per entry
+  const [noteOpen,  setNoteOpen]  = useState(false);
+  const [note,      setNote]      = useState(entry.improvementNote ?? '');
+  const [savedNote, setSavedNote] = useState(entry.improvementNote ?? '');
+  const [saving,    setSaving]    = useState(false);
+  const [noteError, setNoteError] = useState('');
+  const canEditNote = entry.id != null;
+
+  // Keep the editor in sync with refreshed server data (60 s auto-refresh /
+  // manual refresh) — but never clobber a draft the user is mid-editing.
+  // savedRef mirrors the last value we know the server holds.
+  const savedRef = useRef(entry.improvementNote ?? '');
+  useEffect(() => {
+    const serverNote = entry.improvementNote ?? '';
+    if (serverNote === savedRef.current) return;
+    // Only replace the draft when it is clean (equals the last-known saved value)
+    setNote(prev => (prev === savedRef.current ? serverNote : prev));
+    savedRef.current = serverNote;
+    setSavedNote(serverNote);
+  }, [entry.improvementNote]);
+
+  async function saveNote() {
+    if (entry.id == null) return;
+    setSaving(true);
+    setNoteError('');
+    try {
+      const res = await fetch(`${BASE}/api/uc/ai/chat-feedback/${entry.id}/note`, {
+        method:  'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ note: note.trim() }),
+      });
+      if (res.status === 401 || res.status === 403) {
+        handleUnauthorizedResponse();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const trimmed = note.trim();
+      savedRef.current = trimmed;
+      setSavedNote(trimmed);
+      setNote(trimmed);
+      if (!trimmed) setNoteOpen(false);
+    } catch {
+      setNoteError('Could not save — try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Card className={cn(
@@ -325,6 +380,63 @@ function EntryCard({ entry, highlights }: { entry: FeedbackEntry; highlights?: s
               : <><ChevronDown className="w-3 h-3" /> Show full answer</>
             }
           </button>
+        )}
+
+        {/* Team improvement suggestion — 250-char note saved per entry */}
+        {canEditNote && (
+          (noteOpen || savedNote) ? (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                Team improvement suggestion
+              </div>
+              <Textarea
+                value={note}
+                maxLength={NOTE_MAX}
+                onChange={e => setNote(e.target.value.slice(0, NOTE_MAX))}
+                placeholder="How should Alison answer this better?"
+                className="text-sm min-h-[60px] resize-none"
+              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={cn(
+                  'text-xs',
+                  note.length >= NOTE_MAX ? 'text-destructive font-medium' : 'text-muted-foreground',
+                )}>
+                  {note.length}/{NOTE_MAX}
+                </span>
+                {noteError && <span className="text-xs text-destructive">{noteError}</span>}
+                <div className="ml-auto flex items-center gap-2">
+                  {savedNote && (
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      disabled={saving}
+                      onClick={() => { setNote(''); }}
+                      title="Clear the text, then Save to remove the suggestion"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline" size="sm"
+                    className="h-7 text-xs"
+                    disabled={saving || note.trim() === savedNote}
+                    onClick={saveNote}
+                  >
+                    {saving ? 'Saving…' : 'Save suggestion'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setNoteOpen(true)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors pt-1"
+            >
+              <Lightbulb className="w-3.5 h-3.5" />
+              Add improvement suggestion
+            </button>
+          )
         )}
       </CardContent>
     </Card>
@@ -668,8 +780,9 @@ export default function AlisonFeedbackPage() {
         <div className="space-y-3">
           {shown.map((entry, i) => (
             <EntryCard
-              key={`${entry.ts}-${i}`}
+              key={entry.id != null ? `fb-${entry.id}` : `${entry.ts}-${i}`}
               entry={entry}
+              token={token ?? ''}
               highlights={[keywordFilter, normalizedSearch].filter(Boolean) as string[]}
             />
           ))}

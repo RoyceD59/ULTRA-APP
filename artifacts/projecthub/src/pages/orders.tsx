@@ -17,7 +17,13 @@ import { Label } from "@/components/ui/label";
 import {
   ShoppingBag, AlertTriangle, Package, RefreshCw, Lock, AlertCircle,
   LogOut, Copy, Check, ExternalLink, Filter, X, Download,
+  CheckCircle2, XCircle, Undo2, Trash2,
 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
 
@@ -132,9 +138,13 @@ function LoginGate({ onToken }: { onToken: (t: string) => void }) {
 
 function statusColor(status: string) {
   switch (status) {
+    case "pending":    return "bg-amber-100 text-amber-800";
     case "processing": return "bg-blue-100 text-blue-800";
+    case "paid":       return "bg-emerald-100 text-emerald-800";
     case "completed":  return "bg-emerald-100 text-emerald-800";
+    case "declined":   return "bg-red-100 text-red-800";
     case "cancelled":  return "bg-red-100 text-red-800";
+    case "refunded":   return "bg-violet-100 text-violet-800";
     default:           return "bg-muted text-muted-foreground";
   }
 }
@@ -179,9 +189,178 @@ function CopyButton({ value, label }: { value: string; label?: string }) {
   );
 }
 
+// ─── Order actions (admin-only mutations) ─────────────────────────────────────
+
+function OrderActions({
+  order, token, onChanged,
+}: { order: AdminOrder; token: string; onChanged: () => void }) {
+  const [busy,  setBusy]  = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const isRefunded = order.status === "refunded";
+  const isPaystack = order.paymentMethod === "paystack" && !!order.paymentReference;
+
+  async function call(method: string, path: string, body?: unknown): Promise<boolean> {
+    setError("");
+    try {
+      const res = await fetch(`${BASE}/api/uc/admin/orders/${order.id}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(body ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { error?: string } | null;
+        setError(data?.error ?? `Request failed (${res.status})`);
+        return false;
+      }
+      onChanged();
+      return true;
+    } catch {
+      setError("Could not reach the server.");
+      return false;
+    }
+  }
+
+  async function setStatus(status: string) {
+    setBusy(status);
+    await call("PATCH", "/status", { status });
+    setBusy(null);
+  }
+
+  async function refund() {
+    setBusy("refund");
+    await call("POST", "/refund");
+    setBusy(null);
+  }
+
+  async function remove() {
+    setBusy("delete");
+    await call("DELETE", "");
+    setBusy(null);
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {!isRefunded && order.status !== "paid" && (
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setStatus("paid")}
+            disabled={busy !== null}
+            className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+            {busy === "paid" ? "Saving…" : "Mark paid"}
+          </Button>
+        )}
+        {!isRefunded && order.status !== "declined" && (
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setStatus("declined")}
+            disabled={busy !== null}
+            className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
+          >
+            <XCircle className="w-3.5 h-3.5 mr-1" />
+            {busy === "declined" ? "Saving…" : "Mark declined"}
+          </Button>
+        )}
+
+        {/* Refund — real Paystack refund for card payments; confirmation required */}
+        {!isRefunded && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline" size="sm"
+                disabled={busy !== null}
+                className="h-7 text-xs text-violet-700 border-violet-300 hover:bg-violet-50"
+              >
+                <Undo2 className="w-3.5 h-3.5 mr-1" />
+                {busy === "refund" ? "Refunding…" : "Refund"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Refund order #{order.id}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {isPaystack ? (
+                    <>
+                      This sends a <strong>real refund of {order.currency} {order.total}</strong>{" "}
+                      through Paystack to the customer's card. This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This marks the order as refunded for record-keeping only.{" "}
+                      {paymentMethodLabel(order.paymentMethod)} reversals must be sent to the
+                      customer manually — this does not move any money.
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={refund}
+                  className="bg-violet-600 hover:bg-violet-700"
+                >
+                  {isPaystack ? "Send Paystack refund" : "Mark refunded"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+
+        {/* Delete — permanent, confirmation required */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost" size="sm"
+              disabled={busy !== null}
+              className="h-7 text-xs text-muted-foreground hover:text-destructive ml-auto"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              {busy === "delete" ? "Deleting…" : "Delete"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete order #{order.id}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes the order and its line items from the app database.
+                It does not touch any payment — refund first if money needs to move.
+                This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={remove}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-md p-2">
+          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Order card ───────────────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: AdminOrder }) {
+function OrderCard({
+  order, token, onChanged,
+}: { order: AdminOrder; token: string; onChanged: () => void }) {
   const isRecovery   = order.webhookRecovery;
   const hasReference = !!order.paymentReference;
   const customerIsEmail = isEmail(order.userId);
@@ -259,6 +438,7 @@ function OrderCard({ order }: { order: AdminOrder }) {
         <div className="mt-2 text-sm font-semibold text-right">
           Total: {order.currency} {order.total}
         </div>
+        <OrderActions order={order} token={token} onChanged={onChanged} />
       </CardContent>
     </Card>
   );
@@ -268,6 +448,7 @@ function OrderCard({ order }: { order: AdminOrder }) {
 
 function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [recoveryOnly, setRecoveryOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate,   setToDate]   = useState("");
@@ -333,7 +514,20 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
   const unresolvedCount = recoveryOrders.filter(
     o => o.status !== "completed" && o.status !== "cancelled"
   ).length;
-  const visibleOrders   = recoveryOnly ? recoveryOrders : (orders ?? []);
+
+  // Status chips — fixed order, only statuses present in the data are shown
+  const STATUS_ORDER = ["pending", "processing", "paid", "declined", "completed", "cancelled", "refunded"];
+  const statusCounts = new Map<string, number>();
+  for (const o of orders ?? []) {
+    statusCounts.set(o.status, (statusCounts.get(o.status) ?? 0) + 1);
+  }
+  const chipStatuses = [
+    ...STATUS_ORDER.filter(s => statusCounts.has(s)),
+    ...[...statusCounts.keys()].filter(s => !STATUS_ORDER.includes(s)).sort(),
+  ];
+
+  const baseOrders    = recoveryOnly ? recoveryOrders : (orders ?? []);
+  const visibleOrders = statusFilter ? baseOrders.filter(o => o.status === statusFilter) : baseOrders;
 
   return (
     <div className="space-y-6">
@@ -425,6 +619,33 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
         )}
       </div>
 
+      {/* Status filter chips — client-side, counts reflect loaded orders */}
+      {chipStatuses.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setStatusFilter(null)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+              statusFilter === null
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All ({orders?.length ?? 0})
+          </button>
+          {chipStatuses.map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(s => (s === status ? null : status))}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${statusColor(status)} ${
+                statusFilter === status ? "ring-2 ring-primary ring-offset-1" : "opacity-80 hover:opacity-100"
+              }`}
+            >
+              {status} ({statusCounts.get(status)})
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Recovery alert banner */}
       {recoveryOrders.length > 0 && !recoveryOnly && (
         <div
@@ -459,14 +680,16 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
       {orders && visibleOrders.length === 0 && !isLoading && (
         <div className="text-muted-foreground text-sm py-12 text-center">
-          {recoveryOnly ? "No recovery orders." : "No orders yet."}
+          {statusFilter
+            ? `No ${statusFilter} orders${recoveryOnly ? " in recovery" : ""}.`
+            : recoveryOnly ? "No recovery orders." : "No orders yet."}
         </div>
       )}
 
       {visibleOrders.length > 0 && (
         <div className="space-y-3">
           {visibleOrders.map(order => (
-            <OrderCard key={order.id} order={order} />
+            <OrderCard key={order.id} order={order} token={token} onChanged={() => refetch()} />
           ))}
         </div>
       )}

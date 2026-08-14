@@ -68,6 +68,10 @@ export interface UCProduct {
   lifespanDays?: number;
   /** Team-uploaded product video (relative API path), shown in the gallery. */
   videoUrl?: string | null;
+  /** WooCommerce lifetime sales count — used to rank recommendations. */
+  totalSales?: number;
+  /** Set by /products/compatibility: "Replacement Filter" | "Compatible Accessory". */
+  compatibilityReason?: string;
 }
 
 export interface UCReviewMedia {

@@ -641,10 +641,12 @@ router.get("/uc/ai/chat-feedback", async (req: Request, res: Response): Promise<
 
     // Normalise shape to match what the ProjectHub UI already expects
     const shaped = items.map(e => ({
-      ts:       e.createdAt.toISOString(),
-      rating:   e.rating,
-      question: e.question,
-      answer:   e.answer,
+      id:              e.id,
+      ts:              e.createdAt.toISOString(),
+      rating:          e.rating,
+      question:        e.question,
+      answer:          e.answer,
+      improvementNote: e.improvementNote ?? null,
     }));
 
     res.json({
@@ -704,6 +706,55 @@ export function sanitiseCsvCell(value: string): string {
   return safe;
 }
 
+// ─── PATCH /api/uc/ai/chat-feedback/:id/note  (admin-only) ───────────────────
+// Save a team improvement suggestion on a feedback entry. Limited to 250
+// characters (enforced here, mirrored by the UI). An empty note clears it.
+router.patch("/uc/ai/chat-feedback/:id/note", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid feedback id" });
+    return;
+  }
+
+  const noteRaw = (req.body as { note?: unknown } | undefined)?.note;
+  if (typeof noteRaw !== "string") {
+    res.status(400).json({ error: "note must be a string" });
+    return;
+  }
+  const note = noteRaw.trim();
+  if (note.length > 250) {
+    res.status(400).json({ error: "Improvement suggestion is limited to 250 characters" });
+    return;
+  }
+
+  try {
+    const [row] = await db
+      .select({ id: ucAiFeedbackTable.id })
+      .from(ucAiFeedbackTable)
+      .where(eq(ucAiFeedbackTable.id, id))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Feedback entry not found" });
+      return;
+    }
+    await db.update(ucAiFeedbackTable)
+      .set({
+        improvementNote:   note || null,
+        improvementNoteAt: note ? new Date() : null,
+      })
+      .where(eq(ucAiFeedbackTable.id, id));
+    res.json({ ok: true, id, note: note || null });
+  } catch (err) {
+    console.error("[Alison feedback] note update failed:", err);
+    res.status(500).json({ error: "Failed to save suggestion" });
+  }
+});
+
 // ─── GET /api/uc/ai/chat-feedback/export  (admin-only CSV download) ──────────
 // Streams a CSV of the uc_ai_feedback table (ts, rating, question, answer)
 // matching optional rating and date filters.
@@ -759,7 +810,7 @@ router.get("/uc/ai/chat-feedback/export", async (req: Request, res: Response): P
     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
 
     // Write header row
-    res.write("ts,rating,question,answer\r\n");
+    res.write("ts,rating,question,answer,improvement_note\r\n");
 
     // Write data rows
     for (const row of rows) {
@@ -768,6 +819,7 @@ router.get("/uc/ai/chat-feedback/export", async (req: Request, res: Response): P
         sanitiseCsvCell(row.rating),
         sanitiseCsvCell(row.question),
         sanitiseCsvCell(row.answer),
+        sanitiseCsvCell(row.improvementNote ?? ""),
       ].join(",");
       res.write(`${line}\r\n`);
     }

@@ -495,6 +495,9 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
     tags: p["tags"],
     lifespanDays,
     enquiryOnly: p["enquiryOnly"] ?? false,
+    // WooCommerce lifetime sales counter — used by the mobile app to rank
+    // recommendations. Mock products have no sales history → 0.
+    totalSales: Number(p["total_sales"] ?? p["totalSales"] ?? 0) || 0,
   };
 }
 
@@ -2255,6 +2258,113 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
   } catch (err) {
     logger.error({ err }, "Failed to load admin orders");
     res.status(500).json({ error: "Failed to load orders" });
+  }
+});
+
+// ─── Admin order actions (admin-only mutations) ──────────────────────────────
+// Statuses the team may set directly. "refunded" is deliberately excluded —
+// it is only reachable through the refund endpoint so a real Paystack refund
+// can never be skipped by a plain status change.
+const ADMIN_SETTABLE_STATUSES = new Set([
+  "pending", "processing", "paid", "declined", "completed", "cancelled",
+]);
+
+// PATCH /api/uc/admin/orders/:id/status — categorize an order (paid, declined, …)
+router.patch("/uc/admin/orders/:id/status", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  const status = typeof req.body?.status === "string" ? req.body.status.trim().toLowerCase() : "";
+  if (!ADMIN_SETTABLE_STATUSES.has(status)) {
+    res.status(400).json({ error: `Invalid status. Allowed: ${[...ADMIN_SETTABLE_STATUSES].join(", ")}` });
+    return;
+  }
+
+  try {
+    const [order] = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.id, id)).limit(1);
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (order.status === "refunded") {
+      res.status(409).json({ error: "Refunded orders cannot be re-categorized" });
+      return;
+    }
+    await db.update(ucOrdersTable).set({ status }).where(eq(ucOrdersTable.id, id));
+    logger.info({ orderId: id, from: order.status, to: status }, "Admin order status change");
+    res.json({ ok: true, id, status });
+  } catch (err) {
+    logger.error({ err, orderId: id }, "Failed to update order status");
+    res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
+// POST /api/uc/admin/orders/:id/refund — refund an order.
+// Paystack payments trigger a REAL refund through the Paystack API before the
+// order is marked refunded; if Paystack rejects the refund the order status is
+// left untouched. M-Pesa/COD orders are marked refunded for record-keeping
+// only (M-Pesa reversals are handled manually by the team).
+router.post("/uc/admin/orders/:id/refund", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  try {
+    const [order] = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.id, id)).limit(1);
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (order.status === "refunded") { res.status(409).json({ error: "Order is already refunded" }); return; }
+
+    let paystackRefunded = false;
+    if (order.paymentMethod === "paystack" && order.paymentReference) {
+      const secretKey = process.env["PAYSTACK_SECRET_KEY"];
+      if (!secretKey) {
+        res.status(500).json({ error: "PAYSTACK_SECRET_KEY is not configured — cannot send a real refund" });
+        return;
+      }
+      const psRes = await fetch("https://api.paystack.co/refund", {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({ transaction: order.paymentReference }),
+      });
+      const data = (await psRes.json().catch(() => null)) as { status?: boolean; message?: string } | null;
+      if (!psRes.ok || !data?.status) {
+        // Do NOT mark the order refunded — money did not move.
+        logger.error({ orderId: id, psStatus: psRes.status, message: data?.message }, "Paystack refund failed");
+        res.status(502).json({ error: `Paystack refund failed: ${data?.message ?? `HTTP ${psRes.status}`}` });
+        return;
+      }
+      paystackRefunded = true;
+      logger.info({ orderId: id, reference: order.paymentReference }, "Paystack refund submitted");
+    }
+
+    await db.update(ucOrdersTable).set({ status: "refunded" }).where(eq(ucOrdersTable.id, id));
+    res.json({ ok: true, id, status: "refunded", paystackRefunded, manual: !paystackRefunded });
+  } catch (err) {
+    logger.error({ err, orderId: id }, "Failed to refund order");
+    res.status(500).json({ error: "Failed to refund order" });
+  }
+});
+
+// DELETE /api/uc/admin/orders/:id — permanently remove an order + line items.
+router.delete("/uc/admin/orders/:id", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid order id" }); return; }
+
+  try {
+    const [order] = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.id, id)).limit(1);
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    await db.delete(ucOrderItemsTable).where(eq(ucOrderItemsTable.orderId, id));
+    await db.delete(ucOrdersTable).where(eq(ucOrdersTable.id, id));
+    logger.info({ orderId: id, status: order.status }, "Admin deleted order");
+    res.json({ ok: true, id });
+  } catch (err) {
+    logger.error({ err, orderId: id }, "Failed to delete order");
+    res.status(500).json({ error: "Failed to delete order" });
   }
 });
 

@@ -16,8 +16,31 @@ import { type CodeValidationResult } from '@/hooks/useApi';
 import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusClassifier';
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
+import AlisonBubble from '@/components/AlisonBubble';
 
 const DELIVERY_FEE = 500;
+
+/**
+ * Build Alison's checkout greeting. Personal when the customer is signed in,
+ * general otherwise; always mentions the cart contents and stays welcoming and
+ * customer-focused. `seed` keeps the randomly chosen variant stable across
+ * re-renders.
+ */
+function buildAlisonGreeting(
+  firstName: string | undefined,
+  cartItems: { name: string }[],
+  seed: number,
+): string {
+  const openers = firstName?.trim()
+    ? [`Hi ${firstName.trim()}!`, `Hello ${firstName.trim()}!`, `Welcome back, ${firstName.trim()}!`]
+    : ['Hello!', 'Hi there!', 'Welcome!'];
+  const opener = openers[Math.floor(seed * openers.length) % openers.length];
+  const first = cartItems[0]?.name;
+  const cartLine = first
+    ? ` I see you have ${first}${cartItems.length > 1 ? ' and more' : ''} in your cart.`
+    : '';
+  return `${opener}${cartLine} I am here to help with replacement filters, payments or other needs.`;
+}
 
 const DEFAULT_ADDRESS: UCAddress = {
   firstName: '', lastName: '', address1: '', address2: '',
@@ -76,6 +99,10 @@ export default function CheckoutScreen() {
   // original push completed while the user was on the timeout screen, we create
   // the order from it instead of charging the customer a second time.
   const lastCheckoutRequestIdRef = useRef<string | null>(null);
+
+  // Alison greeting — variant chosen once per checkout visit (stable seed)
+  const greetingSeedRef = useRef(Math.random());
+  const alisonGreeting = buildAlisonGreeting(user?.firstName, items, greetingSeedRef.current);
 
   // Promo / referral code
   const [promoInput, setPromoInput] = useState('');
@@ -613,6 +640,12 @@ export default function CheckoutScreen() {
         <TouchableOpacity onPress={() => { cancelMpesaPoll(attemptRef, pollRef); setMpesaWaiting(false); setProcessing(false); }}>
           <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
         </TouchableOpacity>
+        {/* Alison appears when the payment feels delayed (after ~10 s of waiting) */}
+        <AlisonBubble
+          message={`${user?.firstName?.trim() ? `${user.firstName.trim()}, y` : 'Y'}our M-Pesa payment is taking a moment — that's normal. I am here to help with payments, replacement filters or other needs.`}
+          appearDelayMs={10000}
+          bottomOffset={40}
+        />
       </View>
     );
   }
@@ -733,6 +766,9 @@ export default function CheckoutScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Alison chat bubble — greets on arrival, collapses after 2 s */}
+      <AlisonBubble message={alisonGreeting} bottomOffset={110} />
 
       <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border }]}>
         <TouchableOpacity onPress={handleConfirm} disabled={processing}

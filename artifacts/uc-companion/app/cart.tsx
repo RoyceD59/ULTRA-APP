@@ -1,19 +1,116 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
+import { useApi, UCProduct, resolveMediaUrl } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
 
 const DELIVERY_FEE = 500;
 
+/** Sale-aware display price for a recommendation row. */
+function recPrice(p: UCProduct): number {
+  const n = parseFloat(p.salePrice || p.price || p.regularPrice);
+  return isNaN(n) ? 0 : n;
+}
+
 export default function CartScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { items, removeItem, updateQty, totalPrice, clearCart } = useCart();
+  const api = useApi();
+  const { items, removeItem, updateQty, totalPrice, addItem } = useCart();
 
   const total = totalPrice + (items.length > 0 ? DELIVERY_FEE : 0);
+
+  // ── Recommendations (below the price-match badge) ──────────────────────────
+  // Replacement filters compatible with the cart items come first, then other
+  // recommended products ranked by lifetime sales (toggle high↔low).
+  const [recs, setRecs] = useState<UCProduct[]>([]);
+  const [salesDesc, setSalesDesc] = useState(true);
+  const skusKey = items.map(i => i.sku).filter(Boolean).join(',');
+  const idsInCart = items.map(i => i.id).join(',');
+
+  useEffect(() => {
+    if (!skusKey) { setRecs([]); return; }
+    let cancelled = false;
+    api.getCompatibilityProducts(skusKey)
+      .then(list => {
+        if (cancelled) return;
+        const cartIds = new Set(idsInCart.split(',').map(Number));
+        setRecs(list.filter(p => !cartIds.has(p.id) && p.stockStatus !== 'outofstock'));
+      })
+      .catch(() => { if (!cancelled) setRecs([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skusKey, idsInCart]);
+
+  const replacements = recs.filter(p => p.compatibilityReason === 'Replacement Filter');
+  const others = [...recs.filter(p => p.compatibilityReason !== 'Replacement Filter')]
+    .sort((a, b) => salesDesc
+      ? (b.totalSales ?? 0) - (a.totalSales ?? 0)
+      : (a.totalSales ?? 0) - (b.totalSales ?? 0));
+
+  function handleAddRec(p: UCProduct) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    addItem({
+      id: p.id,
+      name: p.name,
+      price: recPrice(p),
+      quantity: 1,
+      image: resolveMediaUrl(p.images?.[0]?.src ?? ''),
+      sku: p.sku,
+    });
+  }
+
+  // NB: the row is a plain View with two SIBLING touchables (info → product
+  // page, button → add/enquire). Nesting a TouchableOpacity inside another
+  // makes taps on the inner button also fire the outer navigation on web.
+  function RecRow({ product }: { product: UCProduct }) {
+    return (
+      <View style={[styles.recRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push(`/product/${product.id}` as never)}
+          style={styles.recInfoTap}
+        >
+          <View style={[styles.recImageWrap, { backgroundColor: colors.surface }]}>
+            {product.images?.[0] ? (
+              <Image
+                source={{ uri: resolveMediaUrl(product.images[0].src) }}
+                style={styles.recImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Ionicons name="water-outline" size={20} color={colors.primary} />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.recName, { color: colors.text }]} numberOfLines={2}>{product.name}</Text>
+            <Text style={[styles.recPrice, { color: colors.primary }]}>
+              KES {recPrice(product).toLocaleString('en-KE')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        {product.enquiryOnly ? (
+          <TouchableOpacity
+            onPress={() => router.push(`/enquiry?productId=${product.id}&productName=${encodeURIComponent(product.name)}` as never)}
+            style={[styles.recAddBtn, { backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 1 }]}
+          >
+            <Ionicons name="mail-outline" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => handleAddRec(product)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            style={[styles.recAddBtn, { backgroundColor: colors.primary }]}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -38,15 +135,6 @@ export default function CartScreen() {
         keyExtractor={i => String(i.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); clearCart(); }}
-            style={styles.clearRow}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="trash-outline" size={14} color={colors.destructive} />
-            <Text style={[styles.clearText, { color: colors.destructive }]}>Clear all</Text>
-          </TouchableOpacity>
-        }
         ListFooterComponent={
           <View style={{ gap: 16 }}>
             {/* Summary */}
@@ -71,6 +159,42 @@ export default function CartScreen() {
               <Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} />
               <Text style={[styles.matchText, { color: colors.primary }]}>Prices match our website — guaranteed</Text>
             </View>
+
+            {/* Recommended replacement filter(s) for the items in the cart */}
+            {replacements.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <View style={styles.recHeader}>
+                  <Ionicons name="sync-outline" size={16} color={colors.primary} />
+                  <Text style={[styles.recTitle, { color: colors.text }]}>Recommended replacement filter</Text>
+                </View>
+                {replacements.map(p => <RecRow key={p.id} product={p} />)}
+              </View>
+            )}
+
+            {/* Other recommended products — ranked by sales, toggleable */}
+            {others.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <View style={styles.recHeader}>
+                  <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+                  <Text style={[styles.recTitle, { color: colors.text }]}>Recommended for you</Text>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); setSalesDesc(v => !v); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={[styles.sortBtn, { borderColor: colors.border }]}
+                  >
+                    <Ionicons
+                      name={salesDesc ? 'trending-down-outline' : 'trending-up-outline'}
+                      size={14}
+                      color={colors.mutedForeground}
+                    />
+                    <Text style={[styles.sortText, { color: colors.mutedForeground }]}>
+                      Sales {salesDesc ? 'high → low' : 'low → high'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {others.map(p => <RecRow key={p.id} product={p} />)}
+              </View>
+            )}
           </View>
         }
         renderItem={({ item }) => (
@@ -124,9 +248,18 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14 },
   shopBtn: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12, marginTop: 8 },
   shopBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
-  clearRow: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end' as const, marginBottom: 4 },
-  clearText: { fontSize: 13, fontWeight: '500' as const },
   list: { padding: 16, gap: 12, paddingBottom: 120 },
+  recHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recTitle: { fontSize: 15, fontWeight: '700' as const, flex: 1 },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  sortText: { fontSize: 11, fontWeight: '500' as const },
+  recRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, padding: 10 },
+  recInfoTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  recImageWrap: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  recImage: { width: 44, height: 44 },
+  recName: { fontSize: 12.5, fontWeight: '600' as const, lineHeight: 17 },
+  recPrice: { fontSize: 13.5, fontWeight: '700' as const, marginTop: 2 },
+  recAddBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   item: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
   itemImage: { width: 60, height: 60, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   itemName: { fontSize: 13, fontWeight: '600' as const, lineHeight: 18 },

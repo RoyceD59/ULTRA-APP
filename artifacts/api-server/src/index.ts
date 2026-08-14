@@ -309,6 +309,16 @@ async function applyStartupMigrations(): Promise<void> {
     )
   `);
   logger.info("Startup migration: team_library_pending_uploads table ensured");
+
+  // Team improvement suggestions on Alison feedback entries (max 250 chars,
+  // enforced at the API layer).
+  await pool.query(`
+    ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS improvement_note text;
+  `);
+  await pool.query(`
+    ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS improvement_note_at timestamptz;
+  `);
+  logger.info("Startup migration: uc_ai_feedback improvement note columns ensured");
 }
 
 async function checkProductionSecurityConfig(): Promise<void> {
