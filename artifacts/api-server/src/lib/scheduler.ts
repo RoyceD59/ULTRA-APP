@@ -8,9 +8,15 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateReport, setLatestReport } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable } from "@workspace/db";
-import { lt, lte, desc, eq, and, or } from "drizzle-orm";
+import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable } from "@workspace/db";
+import { lt, lte, desc, eq, and, or, inArray } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
+import {
+  hasWCCredentials,
+  fetchAllPublishedProducts,
+  normalizeProduct,
+  auditProductLifespans,
+} from "../routes/uc.js";
 import { sendViaResend } from "./resend.js";
 import { sendSms } from "./sms.js";
 import { getValidAccessToken } from "./google-auth.js";
@@ -257,6 +263,138 @@ export function startScheduler() {
   }, { timezone: "UTC" });
 
   logger.info("Scheduler: stale recovery order digest job registered (07:00 UTC)");
+
+  // ─── Daily 05:00 UTC: audit live products for missing lifespan meta ───────
+  // Runs the same audit as GET /api/uc/admin/products/lifespan-audit and
+  // emails the team about newly flagged products. Each product is alerted
+  // only once (tracked in uc_lifespan_alerts) so the team is not spammed
+  // daily about the same gap. Skips silently when WooCommerce credentials
+  // are absent (nothing live to audit).
+  cron.schedule("0 5 * * *", async () => {
+    await runLifespanAuditAlert();
+  }, { timezone: "UTC" });
+
+  logger.info("Scheduler: daily product lifespan audit job registered (05:00 UTC)");
+}
+
+/**
+ * Audit live WooCommerce products for a missing `filter_lifespan_days` meta
+ * and email the team about any products not previously alerted.
+ *
+ * - Skips silently when WooCommerce credentials are absent.
+ * - Aborts loudly (log only) when the store is unreachable — a partial
+ *   catalogue must never mark products as "alerted" or send a wrong list.
+ * - Alerted product IDs are recorded in uc_lifespan_alerts ONLY after the
+ *   email is accepted by Resend, so a failed send is retried next run.
+ *
+ * @internal — exported for tests; called by the daily 05:00 UTC cron job.
+ */
+export async function runLifespanAuditAlert(
+  deps: {
+    fetchProducts?: typeof fetchAllPublishedProducts;
+    sendEmail?: typeof sendViaResend;
+  } = {},
+): Promise<{ flagged: number; newlyAlerted: number; emailed: boolean }> {
+  const fetchProducts = deps.fetchProducts ?? fetchAllPublishedProducts;
+  const sendEmail = deps.sendEmail ?? sendViaResend;
+
+  if (!hasWCCredentials()) {
+    logger.info("Scheduler: WooCommerce credentials absent — skipping lifespan audit");
+    return { flagged: 0, newlyAlerted: 0, emailed: false };
+  }
+
+  logger.info("Scheduler: running daily product lifespan audit");
+  try {
+    const products = await fetchProducts();
+    if (products === null) {
+      logger.error("Scheduler: could not reach WooCommerce store — lifespan audit aborted");
+      return { flagged: 0, newlyAlerted: 0, emailed: false };
+    }
+
+    const missing = auditProductLifespans(products.map(normalizeProduct)).map((p) => ({
+      id: Number(p["id"]),
+      name: String(p["name"] ?? ""),
+      sku: String(p["sku"] ?? ""),
+      categories: Array.isArray(p["categories"])
+        ? (p["categories"] as { name?: string }[]).map((c) => c?.name ?? "").filter(Boolean)
+        : [],
+    }));
+
+    if (missing.length === 0) {
+      logger.info("Scheduler: lifespan audit clean — all live products trackable");
+      return { flagged: 0, newlyAlerted: 0, emailed: false };
+    }
+
+    // Filter out products we have already emailed about
+    const flaggedIds = missing.map((p) => p.id);
+    const alreadyAlerted = await db
+      .select({ productId: ucLifespanAlertsTable.productId })
+      .from(ucLifespanAlertsTable)
+      .where(inArray(ucLifespanAlertsTable.productId, flaggedIds));
+    const alertedSet = new Set(alreadyAlerted.map((r) => r.productId));
+    const fresh = missing.filter((p) => !alertedSet.has(p.id));
+
+    if (fresh.length === 0) {
+      logger.info(
+        { flagged: missing.length },
+        "Scheduler: lifespan audit — all flagged products already alerted, no email",
+      );
+      return { flagged: missing.length, newlyAlerted: 0, emailed: false };
+    }
+
+    const lines = fresh.map(
+      (p) =>
+        `  • ${p.name}${p.sku ? ` (SKU ${p.sku})` : ""} — ID ${p.id}${p.categories.length ? ` | ${p.categories.join(", ")}` : ""}`,
+    );
+
+    const emailBody = [
+      `${fresh.length} new store product${fresh.length > 1 ? "s are" : " is"} missing the replacement-reminder setting (filter_lifespan_days).`,
+      "Customers who buy these products will NOT get filter replacement reminders in the app.",
+      "",
+      "Products needing attention:",
+      ...lines,
+      "",
+      "How to fix each product:",
+      "  1. Open the product in the WooCommerce admin.",
+      "  2. Add a custom field named filter_lifespan_days with the filter's lifespan in days.",
+      "  3. The product disappears from this audit automatically.",
+      "",
+      "The full audit is also visible on the ProjectHub dashboard (admin only).",
+      "You will not be emailed again about these products.",
+    ].join("\n");
+
+    const emailOk = await sendEmail({
+      from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to:      "info@ucfilters.com",
+      subject: `⚠️ ${fresh.length} store product${fresh.length > 1 ? "s" : ""} missing replacement-reminder setting`,
+      text:    emailBody,
+      meta:    { template: "lifespan_audit_alert" },
+    });
+
+    if (!emailOk) {
+      // Do NOT record the products as alerted — next run will retry the email.
+      logger.warn(
+        { count: fresh.length },
+        "Scheduler: lifespan audit email failed — will retry on next run",
+      );
+      return { flagged: missing.length, newlyAlerted: 0, emailed: false };
+    }
+
+    // Record only after a successful send so failures are retried
+    await db
+      .insert(ucLifespanAlertsTable)
+      .values(fresh.map((p) => ({ productId: p.id, name: p.name, sku: p.sku })))
+      .onConflictDoNothing();
+
+    logger.info(
+      { flagged: missing.length, newlyAlerted: fresh.length },
+      "Scheduler: lifespan audit alert email sent",
+    );
+    return { flagged: missing.length, newlyAlerted: fresh.length, emailed: true };
+  } catch (err) {
+    logger.error({ err }, "Scheduler: product lifespan audit job failed");
+    return { flagged: 0, newlyAlerted: 0, emailed: false };
+  }
 }
 
 /**

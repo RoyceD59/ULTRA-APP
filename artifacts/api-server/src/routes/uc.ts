@@ -426,7 +426,7 @@ const ticketStoreFallback: Record<string, unknown>[] = [];
 const waterTestStoreFallback: Record<string, unknown>[] = [];
 
 // ─── WooCommerce helpers ──────────────────────────────────────────────────────
-function hasWCCredentials(): boolean {
+export function hasWCCredentials(): boolean {
   return !!(process.env["WC_CONSUMER_KEY"] && process.env["WC_CONSUMER_SECRET"]);
 }
 

@@ -319,6 +319,18 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS improvement_note_at timestamptz;
   `);
   logger.info("Startup migration: uc_ai_feedback improvement note columns ensured");
+
+  // Once-per-product alert dedupe for the daily lifespan-audit scheduler job
+  // (products missing filter_lifespan_days — see lib/scheduler.ts).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_lifespan_alerts (
+      product_id integer     PRIMARY KEY,
+      name       text        NOT NULL DEFAULT '',
+      sku        text        NOT NULL DEFAULT '',
+      alerted_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  logger.info("Startup migration: uc_lifespan_alerts table ensured");
 }
 
 async function checkProductionSecurityConfig(): Promise<void> {
