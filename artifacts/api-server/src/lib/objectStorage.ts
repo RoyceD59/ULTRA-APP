@@ -139,63 +139,107 @@ export class ObjectStorageService {
     });
   }
 
+  /**
+   * Presigns a GCS PUT URL for a Team Library document.
+   * Library objects are stored under a dedicated `library/` sub-prefix so they
+   * can be distinguished from other application objects at the storage layer.
+   */
+  async getLibraryUploadURL(): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const objectId = randomUUID();
+    const fullPath = `${privateObjectDir}/library/${objectId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    return signObjectURL({ bucketName, objectName, method: 'PUT', ttlSec: 900 });
+  }
+
+  /** Returns a GCS File reference for objectPath — throws if it doesn't exist. */
   async getObjectEntityFile(objectPath: string): Promise<File> {
-    if (!objectPath.startsWith('/objects/')) {
-      throw new ObjectNotFoundError();
-    }
-
-    const parts = objectPath.slice(1).split('/');
-    if (parts.length < 2) {
-      throw new ObjectNotFoundError();
-    }
-
-    const entityId = parts.slice(1).join('/');
-    let entityDir = this.getPrivateObjectDir();
-    if (!entityDir.endsWith('/')) {
-      entityDir = `${entityDir}/`;
-    }
-    const objectEntityPath = `${entityDir}${entityId}`;
-    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const objectFile = bucket.file(objectName);
-    const [exists] = await objectFile.exists();
-    if (!exists) {
-      throw new ObjectNotFoundError();
-    }
-    return objectFile;
+    const ref = this._getObjectEntityRef(objectPath);
+    const [exists] = await ref.exists();
+    if (!exists) throw new ObjectNotFoundError();
+    return ref;
   }
 
   /**
-   * Promote a validated staging upload to a server-controlled final key.
-   *
-   * The presigned PUT URL for the staging object stays valid for its full
-   * TTL, so the staging object is mutable by the uploader even after
-   * server-side validation. Copying the validated bytes to a fresh key the
-   * client never received a write URL for makes the stored document
-   * immutable; the staging object is then deleted (best-effort).
-   *
-   * Returns the new `/objects/...` entity path to persist.
+   * Returns a GCS File reference WITHOUT checking existence.
+   * Used for copy destinations and other write operations where the object
+   * does not yet exist.
    */
-  async promoteObjectEntity(stagingFile: File, generation: number, prefix = 'library'): Promise<string> {
-    const finalId = `${prefix}/${randomUUID()}`;
+  private _getObjectEntityRef(objectPath: string): File {
+    if (!objectPath.startsWith('/objects/')) throw new ObjectNotFoundError();
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) throw new ObjectNotFoundError();
+    const entityId = parts.slice(1).join('/');
     let entityDir = this.getPrivateObjectDir();
-    if (!entityDir.endsWith('/')) {
-      entityDir = `${entityDir}/`;
-    }
-    const { bucketName, objectName } = parseObjectPath(`${entityDir}${finalId}`);
-    const destFile = objectStorageClient.bucket(bucketName).file(objectName);
-    // Pin the copy source to the exact generation that was validated. If the
-    // uploader overwrites the staging object after validation, that
-    // generation no longer exists (versioning off) or differs, and the copy
-    // fails instead of promoting unvalidated bytes (closes the TOCTOU race).
-    const pinnedSource = stagingFile.bucket.file(stagingFile.name, { generation });
-    await pinnedSource.copy(destFile, { preconditionOpts: { ifGenerationMatch: 0 } });
+    if (!entityDir.endsWith('/')) entityDir = `${entityDir}/`;
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    return objectStorageClient.bucket(bucketName).file(objectName);
+  }
+
+  /**
+   * Like _getObjectEntityRef but pins the returned File reference to a specific
+   * GCS object generation.  When this reference is used as the source of a copy,
+   * GCS encodes the generation in the copy request URL.  If the staging object
+   * has been overwritten (new generation) since we read the metadata, GCS
+   * returns 404/412 and the copy fails — which is exactly the TOCTOU guard we
+   * want.
+   *
+   * Note: this is the correct GCS SDK mechanism for source-generation
+   * enforcement during copy.  There is no `ifSourceGenerationMatch` option in
+   * CopyOptions — generation must be baked into the source File reference.
+   */
+  _getObjectEntityRefWithGeneration(objectPath: string, generation: number): File {
+    if (!objectPath.startsWith('/objects/')) throw new ObjectNotFoundError();
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) throw new ObjectNotFoundError();
+    const entityId = parts.slice(1).join('/');
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) entityDir = `${entityDir}/`;
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    // Passing { generation } to bucket.file() pins the reference to that exact
+    // GCS generation.  Any copy/read of this reference will include the
+    // generation number in the request, so a post-validation overwrite of the
+    // staging object is detected before the content reaches the library store.
+    return objectStorageClient.bucket(bucketName).file(objectName, { generation });
+  }
+
+  /**
+   * Copies a library staging object to a permanent finalised path with a
+   * source-generation precondition.
+   *
+   * HOW THE TOCTOU GUARD WORKS
+   * ──────────────────────────
+   * 1. `sourceGeneration` is the GCS generation number read from object metadata
+   *    before magic-byte and MIME validation.
+   * 2. We create the source File reference with that generation baked in via
+   *    `_getObjectEntityRefWithGeneration`.  GCS encodes the generation in the
+   *    copy request URL (`?sourceGeneration=N`).
+   * 3. If an attacker re-uploads to the staging path (via the still-valid
+   *    presigned PUT URL) between validation and this copy, the staging object
+   *    gets a new generation number.  GCS therefore returns 404 (generation not
+   *    found) and the copy fails.
+   * 4. `preconditionOpts: { ifGenerationMatch: 0 }` on the destination ensures
+   *    the finalised path does not already exist, preventing clobber.
+   * 5. Any failure returns false → the route returns 409 to the client.
+   */
+  async copyLibraryFileWithGenerationCheck(
+    sourcePath: string,
+    destPath: string,
+    sourceGeneration: number,
+  ): Promise<boolean> {
     try {
-      await stagingFile.delete();
+      // Source is pinned to the validated generation — overwrite = 404 from GCS.
+      const srcFile  = this._getObjectEntityRefWithGeneration(sourcePath, sourceGeneration);
+      // Destination must not exist yet (ifGenerationMatch: 0 = "object must have
+      // generation 0", i.e. must not exist).
+      const destFile = this._getObjectEntityRef(destPath);
+      await srcFile.copy(destFile, { preconditionOpts: { ifGenerationMatch: 0 } });
+      return true;
     } catch {
-      // Best-effort cleanup; the staging object is orphaned but harmless.
+      return false; // generation mismatch, dest already exists, or network error → caller returns 409
     }
-    return `/objects/${finalId}`;
   }
 
   normalizeObjectEntityPath(rawPath: string): string {

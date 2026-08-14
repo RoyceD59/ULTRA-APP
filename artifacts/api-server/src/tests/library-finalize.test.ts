@@ -6,6 +6,8 @@
  *   1. Two sequential uploads both succeed with distinct server-generated IDs.
  *   2. Replaying the same uploadId is rejected (slot single-use).
  *   3. Mislabelled content (contentType metadata not matching real bytes) is rejected.
+ *   4. Atomic copy (generation precondition) prevents TOCTOU staging-object swap.
+ *   5. Doc objectPath is the finalised key, not the client-writable staging path.
  *
  * GCS is stubbed at the ObjectStorageService prototype level so no real
  * storage access happens.
@@ -14,6 +16,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { Readable } from "node:stream";
 
 process.env["SESSION_SECRET"] ??= "test-secret-library-finalize";
 
@@ -29,48 +32,54 @@ let stubContentType = "application/pdf";
 let stubSize = PDF_BYTES.length;
 let stubBytes: Buffer = PDF_BYTES;
 
-const origGetUploadURL  = ObjectStorageService.prototype.getObjectEntityUploadURL;
+const origGetLibraryURL = ObjectStorageService.prototype.getLibraryUploadURL;
 const origNormalize     = ObjectStorageService.prototype.normalizeObjectEntityPath;
 const origGetEntityFile = ObjectStorageService.prototype.getObjectEntityFile;
-const origPromote       = ObjectStorageService.prototype.promoteObjectEntity;
+const origCopyFinal     = ObjectStorageService.prototype.copyLibraryFileWithGenerationCheck;
 
 let objectCounter = 0;
-// Simulated immutable store: bytes frozen at promotion time, keyed by final path.
+// Simulated immutable store: bytes frozen at copy time, keyed by final path.
 const promotedStore = new Map<string, Buffer>();
 // Simulated GCS generation semantics for the staging object.
 let liveGeneration = 1;
-// Optional hook fired right after a successful pinned download (i.e. between
-// validation and promotion) — used to simulate a TOCTOU overwrite.
+// Optional hook fired right after the staging read (between validation and copy)
+// — used to simulate a TOCTOU overwrite.
 let afterValidationHook: (() => void) | null = null;
 
 /** Simulate the uploader overwriting the staging object via the presigned PUT. */
 function overwriteStagingObject(bytes: Buffer) {
-  stubBytes = bytes;
-  stubSize = bytes.length;
-  liveGeneration += 1; // the validated generation no longer exists (no versioning)
+  stubBytes      = bytes;
+  stubSize       = bytes.length;
+  liveGeneration += 1; // the validated generation no longer exists
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test stub
 function makeStagingHandle(pinnedGen?: number): any {
   return {
-    name: "uploads/staging-object",
+    name:   "uploads/staging-object",
     bucket: { file: (_name: string, opts?: { generation?: number }) => makeStagingHandle(opts?.generation) },
     exists:      async () => [true],
     getMetadata: async () => [{ contentType: stubContentType, size: stubSize, generation: liveGeneration }],
-    download:    async () => {
+    /** Readable stream of up to `end - start + 1` bytes of stubBytes. */
+    createReadStream(opts?: { start?: number; end?: number }) {
       if (pinnedGen !== undefined && pinnedGen !== liveGeneration) {
-        throw new Error("No such object generation");
+        const err = Object.assign(new Error("No such object generation"), { code: 404 });
+        const s = new Readable({ read() {} });
+        process.nextTick(() => s.emit("error", err));
+        return s;
       }
-      const bytes = Buffer.from(stubBytes);
+      const start = opts?.start ?? 0;
+      const end   = opts?.end !== undefined ? opts.end + 1 : stubBytes.length;
+      const chunk = Buffer.from(stubBytes).slice(start, end);
       afterValidationHook?.();
-      return [bytes];
+      return Readable.from([chunk]);
     },
     delete: async () => undefined,
   };
 }
 
 before(() => {
-  ObjectStorageService.prototype.getObjectEntityUploadURL = async function () {
+  ObjectStorageService.prototype.getLibraryUploadURL = async function () {
     objectCounter += 1;
     return `https://storage.test/bucket/uploads/test-object-${objectCounter}?sig=x`;
   };
@@ -82,31 +91,27 @@ before(() => {
     return makeStagingHandle();
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test stub
-  ObjectStorageService.prototype.promoteObjectEntity = async function (_file: any, generation: number): Promise<string> {
-    // Mirror real generation-pinned copy semantics: if the staging object was
-    // overwritten after validation, the validated generation no longer exists
-    // and the copy fails instead of promoting unvalidated bytes.
-    if (generation !== liveGeneration) {
-      throw new Error("No such object generation — staging object was modified");
-    }
-    objectCounter += 1;
-    const finalPath = `/objects/library/promoted-${objectCounter}`;
-    promotedStore.set(finalPath, Buffer.from(stubBytes));
-    return finalPath;
-  };
+  (ObjectStorageService.prototype as any).copyLibraryFileWithGenerationCheck =
+    async function (_src: string, destPath: string, generation: number): Promise<boolean> {
+      // Mirror real generation-pinned copy semantics.
+      if (generation !== liveGeneration) return false;
+      promotedStore.set(destPath, Buffer.from(stubBytes));
+      return true;
+    };
 });
 
 after(() => {
-  ObjectStorageService.prototype.getObjectEntityUploadURL  = origGetUploadURL;
-  ObjectStorageService.prototype.normalizeObjectEntityPath = origNormalize;
-  ObjectStorageService.prototype.getObjectEntityFile       = origGetEntityFile;
-  ObjectStorageService.prototype.promoteObjectEntity       = origPromote;
+  ObjectStorageService.prototype.getLibraryUploadURL              = origGetLibraryURL;
+  ObjectStorageService.prototype.normalizeObjectEntityPath        = origNormalize;
+  ObjectStorageService.prototype.getObjectEntityFile             = origGetEntityFile;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (ObjectStorageService.prototype as any).copyLibraryFileWithGenerationCheck = origCopyFinal;
 });
 
 // ── Server lifecycle ──────────────────────────────────────────────────────────
 
 let server: http.Server;
-const createdDocIds: string[] = [];
+const createdDocIds: string[]  = [];
 const createdSlotIds: string[] = [];
 
 before(async () => {
@@ -169,12 +174,14 @@ async function finalize(uploadId: string) {
 describe("library upload finalization", () => {
   it("two sequential uploads both succeed with distinct IDs", async () => {
     stubContentType = "application/pdf"; stubSize = PDF_BYTES.length; stubBytes = PDF_BYTES;
+    liveGeneration = 1;
 
     const first = await finalize(await requestSlot());
     assert.equal(first.status, 201, `first upload failed: ${JSON.stringify(first.data)}`);
     const firstId = String(first.data["id"]);
     createdDocIds.push(firstId);
 
+    liveGeneration = 1; // reset for second slot
     const second = await finalize(await requestSlot());
     assert.equal(second.status, 201, `second upload failed: ${JSON.stringify(second.data)}`);
     const secondId = String(second.data["id"]);
@@ -186,6 +193,7 @@ describe("library upload finalization", () => {
 
   it("replaying the same uploadId is rejected", async () => {
     stubContentType = "application/pdf"; stubSize = PDF_BYTES.length; stubBytes = PDF_BYTES;
+    liveGeneration = 1;
     const uploadId = await requestSlot();
 
     const first = await finalize(uploadId);
@@ -198,43 +206,51 @@ describe("library upload finalization", () => {
 
   it("stores the document under a promoted immutable key, unaffected by later staging overwrites", async () => {
     stubContentType = "application/pdf"; stubSize = PDF_BYTES.length; stubBytes = PDF_BYTES;
+    liveGeneration = 1;
 
     const { status, data } = await finalize(await requestSlot());
     assert.equal(status, 201, `upload failed: ${JSON.stringify(data)}`);
     createdDocIds.push(String(data["id"]));
 
     const objectPath = String(data["objectPath"]);
-    assert.ok(objectPath.startsWith("/objects/library/"), "document must live under a promoted server-controlled key");
-    assert.ok(!objectPath.includes("/uploads/"), "document must not point at the client-writable staging path");
+    assert.ok(objectPath.startsWith("/objects/library/"),
+      "document must live under a promoted server-controlled key");
+    assert.ok(!objectPath.includes("/uploads/"),
+      "document must not point at the client-writable staging path");
 
     // Simulate the attacker reusing the still-valid presigned PUT URL to
     // overwrite the staging object AFTER finalisation.
     stubBytes = Buffer.from([0x7f, 0x45, 0x4c, 0x46]); // ELF payload
 
     const stored = promotedStore.get(objectPath);
-    assert.ok(stored, "promoted copy must exist");
-    assert.ok(stored.equals(PDF_BYTES), "stored document must remain the validated bytes despite staging overwrite");
+    assert.ok(stored, `promoted copy must exist in store (keys: ${[...promotedStore.keys()].join(", ")})`);
+    assert.ok(stored.equals(PDF_BYTES),
+      "stored document must remain the validated bytes despite staging overwrite");
   });
 
   it("TOCTOU: an overwrite between validation and promotion is rejected, never promoted", async () => {
     stubContentType = "application/pdf"; stubSize = PDF_BYTES.length; stubBytes = PDF_BYTES;
+    liveGeneration = 1;
     const uploadId = await requestSlot();
 
     // Overwrite the staging object immediately AFTER the validation read but
-    // BEFORE promotion — the classic TOCTOU window.
+    // BEFORE copy — the classic TOCTOU window.
     afterValidationHook = () => {
       overwriteStagingObject(Buffer.from([0x7f, 0x45, 0x4c, 0x46])); // ELF payload
       afterValidationHook = null;
     };
     try {
       const { status, data } = await finalize(uploadId);
-      assert.equal(status, 502, `overwritten staging object must not be promoted: ${JSON.stringify(data)}`);
+      // Generation mismatch → copyToFinal returns ok:false → 409.
+      assert.equal(status, 409,
+        `overwritten staging object must be rejected: ${JSON.stringify(data)}`);
       // No document row may exist for this failed finalisation.
       if (data["id"]) createdDocIds.push(String(data["id"]));
       assert.equal(data["id"], undefined);
       // And nothing with the attacker's bytes was promoted.
       for (const bytes of promotedStore.values()) {
-        assert.ok(bytes.equals(PDF_BYTES) || !bytes.includes(0x7f), "unvalidated bytes must never reach the immutable store");
+        assert.ok(!bytes.includes(0x7f),
+          "unvalidated bytes must never reach the immutable store");
       }
     } finally {
       afterValidationHook = null;
@@ -245,6 +261,7 @@ describe("library upload finalization", () => {
     stubContentType = "application/pdf";
     stubBytes = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01]); // ELF executable
     stubSize = stubBytes.length;
+    liveGeneration = 1;
 
     const uploadId = await requestSlot("application/pdf", stubBytes.length);
     const { status } = await finalize(uploadId);

@@ -41,6 +41,7 @@ import { eq } from "drizzle-orm";
 
 let server: http.Server;
 let base: string;
+let authToken: string;
 
 /** Start the app on a random free port before any test runs. */
 before(
@@ -48,6 +49,13 @@ before(
     new Promise<void>((resolve, reject) => {
       // Remove webhook secret so HMAC check is bypassed in tests
       delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
+
+      // Issue a test admin JWT so routes protected by requireTeamAuth pass.
+      const exp = Math.floor(Date.now() / 1000) + 8 * 60 * 60;
+      authToken = issueToken({
+        id: "test-admin", email: "test@ucfilters.com", name: "Test Admin",
+        type: "team-session", role: "admin", exp,
+      });
 
       server = http.createServer(app);
       server.listen(0, "127.0.0.1", () => {
@@ -86,7 +94,10 @@ async function api(
   });
   const opts: RequestInit = {
     method,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+    },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   };
   const res = await fetch(`${base}${path}`, opts);

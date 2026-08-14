@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { type CodeValidationResult } from '@/hooks/useApi';
 import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusClassifier';
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
+import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
 
 const DELIVERY_FEE = 500;
 
@@ -129,7 +130,7 @@ export default function CheckoutScreen() {
 
     const intervalId = setInterval(async () => {
       // Discard if a newer attempt has started (cancel, retry, or timeout).
-      if (attemptRef.current !== thisAttempt) { clearInterval(intervalId); return; }
+      if (isCancelledAttempt(thisAttempt, attemptRef)) { clearInterval(intervalId); return; }
       if (settled) return;
       attempts++;
       if (attempts > 20) {
@@ -162,7 +163,7 @@ export default function CheckoutScreen() {
         const status = await api.mpesaStatus(checkoutRequestId);
         // Re-check after the await — cancel / new retry may have fired while
         // the network request was in-flight.
-        if (attemptRef.current !== thisAttempt) return;
+        if (isCancelledAttempt(thisAttempt, attemptRef)) return;
         if (settled) return;
         const action = classifyMpesaStatus(status);
         if (action.kind === 'create_order') {
@@ -253,7 +254,7 @@ export default function CheckoutScreen() {
       } catch {
         queryFailed = true;
       }
-      if (attemptRef.current !== thisAttempt) return; // cancelled while querying
+      if (isCancelledAttempt(thisAttempt, attemptRef)) return; // cancelled while querying
 
       const guardAction = decideRetryGuard(
         priorRef,
@@ -290,22 +291,14 @@ export default function CheckoutScreen() {
       const r = await api.mpesaSTKPush(mpesaPhone, total, `cart_${Date.now()}`);
       // Verify this attempt is still active (not cancelled while the request
       // was in-flight).
-      if (attemptRef.current !== thisAttempt) return;
+      if (isCancelledAttempt(thisAttempt, attemptRef)) return;
       // Store so the next "Try again" press can check whether this push
       // completed while the user was on the timeout screen.
       lastCheckoutRequestIdRef.current = r.checkoutRequestId;
       startMpesaPoll(r.checkoutRequestId, thisAttempt);
-    } catch (e) {
-      if (attemptRef.current !== thisAttempt) return;
+    } catch {
+      if (isCancelledAttempt(thisAttempt, attemptRef)) return;
       setProcessing(false);
-      // Rate-limited: tell the user to wait rather than offering an immediate retry.
-      if (e instanceof ApiError && e.rateLimited) {
-        Alert.alert(
-          'Too Many Attempts',
-          e.message || 'Too many attempts. Please wait a minute before trying again.',
-        );
-        return;
-      }
       // The modal stays open so the phone number is preserved for a retry.
       Alert.alert(
         'M-Pesa Unavailable',
@@ -344,14 +337,6 @@ export default function CheckoutScreen() {
       }
     } catch (e) {
       setProcessing(false);
-      // Rate-limited: tell the user to wait rather than offering an immediate retry.
-      if (e instanceof ApiError && e.rateLimited) {
-        Alert.alert(
-          'Too Many Attempts',
-          e.message || 'Too many attempts. Please wait a minute before trying again.',
-        );
-        return;
-      }
       // Distinguish a transient server/network blip (retryable) from a permanent failure.
       const isRetryable = e instanceof ApiError ? e.retryable : true;
       if (isRetryable) {
@@ -442,14 +427,6 @@ export default function CheckoutScreen() {
       }
     } catch (e) {
       setProcessing(false);
-      // Rate-limited: tell the user to wait rather than offering an immediate retry.
-      if (e instanceof ApiError && e.rateLimited) {
-        Alert.alert(
-          'Too Many Attempts',
-          e.message || 'Too many attempts. Please wait a minute before trying again.',
-        );
-        return;
-      }
       // Distinguish a transient server blip (retryable) from a permanent decline.
       const isRetryable = e instanceof ApiError ? e.retryable : true;
       if (isRetryable) {
@@ -491,14 +468,6 @@ export default function CheckoutScreen() {
       setProcessing(false);
     } catch (e) {
       setProcessing(false);
-      // Rate-limited: tell the user to wait rather than offering an immediate retry.
-      if (e instanceof ApiError && e.rateLimited) {
-        Alert.alert(
-          'Too Many Attempts',
-          e.message || 'Too many attempts. Please wait a minute before trying again.',
-        );
-        return;
-      }
       // Init failed — no payment session was created, so "Try again" safely
       // re-enters handlePaystack() to start a completely fresh attempt.
       const isRetryable = e instanceof ApiError ? e.retryable : true;
@@ -641,7 +610,7 @@ export default function CheckoutScreen() {
           A prompt has been sent to {mpesaPhone}. Enter your M-Pesa PIN to complete payment.
         </Text>
         <ActivityIndicator color="#00A651" size="large" />
-        <TouchableOpacity onPress={() => { attemptRef.current++; if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setMpesaWaiting(false); setProcessing(false); }}>
+        <TouchableOpacity onPress={() => { cancelMpesaPoll(attemptRef, pollRef); setMpesaWaiting(false); setProcessing(false); }}>
           <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -687,11 +656,7 @@ export default function CheckoutScreen() {
             if (method === paymentMethod) return;
             // Cancel any in-flight M-Pesa poll so stale callbacks don't act
             // after the method has switched.
-            attemptRef.current++;
-            if (pollRef.current) {
-              clearInterval(pollRef.current);
-              pollRef.current = null;
-            }
+            cancelMpesaPoll(attemptRef, pollRef);
             setMpesaWaiting(false);
             setProcessing(false);
             setPaymentMethod(method);
@@ -802,7 +767,16 @@ export default function CheckoutScreen() {
               {processing ? <ActivityIndicator color="#fff" size="small" /> :
                 <Text style={styles.modalBtnText}>Send Payment Request</Text>}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowMpesaModal(false)} style={styles.modalCancel}>
+            <TouchableOpacity
+              onPress={() => {
+                // Invalidate any in-flight STK-push request so its async
+                // callbacks are discarded when they eventually resolve.
+                cancelMpesaPoll(attemptRef, pollRef);
+                setProcessing(false);
+                setShowMpesaModal(false);
+              }}
+              style={styles.modalCancel}
+            >
               <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
             </TouchableOpacity>
           </View>

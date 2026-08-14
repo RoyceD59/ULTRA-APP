@@ -17,12 +17,12 @@
  *   GET  /auth/users              — list all team users
  *   POST /auth/invitations        — invite a user by email
  *   PATCH /auth/users/:id/role    — promote / demote
- *   PATCH /auth/users/:id         — update name / active status
- *   POST /auth/users/:id/reset-password — generate + (optionally) email reset link
+ *   PATCH /auth/users/:id         — update name / active status / permissions
+ *   POST /auth/users/:id/reset-password — generate + email reset link
  */
 
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { timingSafeEqual, randomBytes } from "crypto";
+import { timingSafeEqual, randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import { db, teamSettingsTable, teamUsersTable, teamInvitationsTable, passwordResetTokensTable } from "@workspace/db";
@@ -62,8 +62,15 @@ function issueTeamToken(user: { id: string; email: string; name: string; role: s
   return issueToken({ id: user.id, email: user.email, name: user.name, type: "team-session", role: user.role, exp });
 }
 
-function userPublic(u: { id: string; email: string; name: string; role: string; isActive: boolean; permissions?: Record<string, string> | null; createdAt: Date }): UserPublic {
-  return { id: u.id, email: u.email, name: u.name, role: u.role as "admin" | "member", isActive: u.isActive, permissions: u.permissions ?? null, createdAt: u.createdAt };
+function userPublic(u: {
+  id: string; email: string; name: string; role: string;
+  isActive: boolean; permissions?: Record<string, string> | null; createdAt: Date;
+}): UserPublic {
+  return {
+    id: u.id, email: u.email, name: u.name,
+    role: u.role as "admin" | "member", isActive: u.isActive,
+    permissions: u.permissions ?? null, createdAt: u.createdAt,
+  };
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -124,13 +131,14 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     res.status(400).json({ error: "email and password are required." });
     return;
   }
+  const normalised = email.toLowerCase().trim();
   const [user] = await db.select().from(teamUsersTable)
-    .where(eq(teamUsersTable.email, email.toLowerCase().trim())).limit(1);
+    .where(eq(teamUsersTable.email, normalised)).limit(1);
   if (!user || !user.isActive) {
     res.status(401).json({ error: "Invalid email or password." });
     return;
   }
-  const ok = await bcrypt.compare(password, user.passwordHash);
+  const ok = await bcrypt.compare(password, user.passwordHash ?? "");
   if (!ok) {
     res.status(401).json({ error: "Invalid email or password." });
     return;
@@ -150,22 +158,38 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     return;
   }
   const [invite] = await db.select().from(teamInvitationsTable)
-    .where(and(eq(teamInvitationsTable.token, token), isNull(teamInvitationsTable.acceptedAt), gt(teamInvitationsTable.expiresAt, new Date())))
+    .where(and(
+      eq(teamInvitationsTable.token, token),
+      isNull(teamInvitationsTable.acceptedAt),
+      gt(teamInvitationsTable.expiresAt, new Date()),
+    ))
     .limit(1);
   if (!invite) {
     res.status(400).json({ error: "Invalid or expired invitation link." });
     return;
   }
-  const [existing] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.email, invite.email)).limit(1);
+  const [existing] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.email, invite.email)).limit(1);
   if (existing) {
     res.status(409).json({ error: "An account with this email already exists. Sign in instead." });
     return;
   }
   const passwordHash = await bcrypt.hash(password, 12);
-  const [user] = await db.insert(teamUsersTable)
-    .values({ email: invite.email, name: name.trim(), passwordHash, role: "member", isActive: true })
-    .returning();
-  await db.update(teamInvitationsTable).set({ acceptedAt: new Date() }).where(eq(teamInvitationsTable.id, invite.id));
+  const newUserId = randomUUID();
+  await db.insert(teamUsersTable).values({
+    id: newUserId,
+    email: invite.email,  // always from the invite — never from the client
+    name: name.trim().slice(0, 100),
+    passwordHash,
+    role: "member",
+    isActive: true,
+    permissions: {},
+  });
+  await db.update(teamInvitationsTable)
+    .set({ acceptedAt: new Date() })
+    .where(eq(teamInvitationsTable.id, invite.id));
+  const [user] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, newUserId)).limit(1);
   res.status(201).json({ token: issueTeamToken(user!), user: userPublic(user!) });
 });
 
@@ -176,24 +200,27 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
     res.status(400).json({ error: "email is required." });
     return;
   }
+  const normalised = email.toLowerCase().trim();
   const [user] = await db.select().from(teamUsersTable)
-    .where(and(eq(teamUsersTable.email, email.toLowerCase().trim()), eq(teamUsersTable.isActive, true))).limit(1);
-  if (user) {
-    // Opaque random token — NOT a JWT so it cannot be used as a team session.
-    const token = randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
-    const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
-    logger.info({ resetUrl, email: user.email }, "Password reset token generated");
-    const sent = await sendViaResend({
-      from: "ProjectHub <noreply@contacts.ucfilters.com>",
-      to: user.email,
-      subject: "Reset your ProjectHub password",
-      text: `Hi ${user.name},\n\nClick the link below to reset your password (valid 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
-      html: `<p>Hi ${user.name},</p><p>Click the link below to reset your password (valid 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, ignore this email.</p>`,
-    });
-    if (!sent) logger.warn({ email: user.email }, "Password reset email not delivered — token still valid");
-  }
+    .where(eq(teamUsersTable.email, normalised)).limit(1);
+  // Always 200 — do not reveal whether the email is registered.
+  if (!user) { res.json({ ok: true }); return; }
+
+  // Opaque random token — NOT a JWT — so this reset link cannot be used as a
+  // Bearer session token before the password is actually reset.
+  const token = randomUUID();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
+  const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
+  logger.info({ email: user.email }, "Password reset token generated");
+  const sent = await sendViaResend({
+    from: "ProjectHub <noreply@contacts.ucfilters.com>",
+    to: normalised,
+    subject: "Reset your ProjectHub password",
+    text: `You requested a password reset.\n\nReset your password here (valid 24 hours):\n${resetUrl}`,
+    html: `<p>You requested a password reset.</p><p><a href="${resetUrl}">Reset password</a> (valid 24 hours)</p><p>Or copy this link: ${resetUrl}</p>`,
+  });
+  if (!sent) logger.warn({ email: user.email }, "Password reset email not delivered — token still valid");
   res.json({ ok: true });
 });
 
@@ -209,15 +236,23 @@ router.post("/auth/reset-password", async (req, res): Promise<void> => {
     return;
   }
   const [resetToken] = await db.select().from(passwordResetTokensTable)
-    .where(and(eq(passwordResetTokensTable.token, token), isNull(passwordResetTokensTable.usedAt), gt(passwordResetTokensTable.expiresAt, new Date())))
+    .where(and(
+      eq(passwordResetTokensTable.token, token),
+      isNull(passwordResetTokensTable.usedAt),
+      gt(passwordResetTokensTable.expiresAt, new Date()),
+    ))
     .limit(1);
   if (!resetToken) {
     res.status(400).json({ error: "Invalid or expired reset link." });
     return;
   }
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  await db.update(teamUsersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(teamUsersTable.id, resetToken.userId));
-  await db.update(passwordResetTokensTable).set({ usedAt: new Date() }).where(eq(passwordResetTokensTable.id, resetToken.id));
+  await db.update(teamUsersTable)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(teamUsersTable.id, resetToken.userId));
+  await db.update(passwordResetTokensTable)
+    .set({ usedAt: new Date() })
+    .where(eq(passwordResetTokensTable.id, resetToken.id));
   res.json({ ok: true });
 });
 
@@ -226,13 +261,10 @@ router.post("/auth/reset-password", async (req, res): Promise<void> => {
 /** GET /auth/me */
 router.get("/auth/me", requireTeamAuth, async (req, res): Promise<void> => {
   const { id } = (req as AuthRequest).teamUser!;
-  const [user] = await db.select({
-    id: teamUsersTable.id, email: teamUsersTable.email, name: teamUsersTable.name,
-    role: teamUsersTable.role, isActive: teamUsersTable.isActive,
-    permissions: teamUsersTable.permissions, createdAt: teamUsersTable.createdAt,
-  }).from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  const [user] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  res.json(userPublic(user));
+  res.json(userPublic(user)); // never expose passwordHash
 });
 
 /** POST /auth/change-password */
@@ -247,12 +279,15 @@ router.post("/auth/change-password", requireTeamAuth, async (req, res): Promise<
     return;
   }
   const { id } = (req as AuthRequest).teamUser!;
-  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  const [user] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash ?? "");
   if (!ok) { res.status(401).json({ error: "Current password is incorrect." }); return; }
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  await db.update(teamUsersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(teamUsersTable.id, id));
+  await db.update(teamUsersTable)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(teamUsersTable.id, id));
   res.json({ ok: true });
 });
 
@@ -276,14 +311,16 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
     return;
   }
   const normalised = email.toLowerCase().trim();
-  const [existing] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.email, normalised)).limit(1);
+  const [existing] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.email, normalised)).limit(1);
   if (existing) {
     res.status(409).json({ error: "A user with this email already exists." });
     return;
   }
-  // Opaque random token — NOT a JWT so it cannot be used as a team session.
-  const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  // Opaque random token — NOT a JWT — so the invite URL cannot double as a
+  // Bearer session token and grant admin access before the holder registers.
+  const token = randomUUID();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const invitedById = (req as AuthRequest).teamUser!.id;
   await db.insert(teamInvitationsTable).values({ email: normalised, token, invitedById, expiresAt });
   const inviteUrl = `${projecthubBaseUrl()}/register?token=${token}`;
@@ -298,40 +335,50 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
   res.status(201).json({ inviteUrl, email: normalised, expiresAt });
 });
 
-/** PATCH /auth/users/:id/role  — promote / demote */
+/** PATCH /auth/users/:id/role  — promote or demote */
 router.patch("/auth/users/:id/role", requireTeamAdmin, async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
+  const id = String(req.params["id"]);
   const { role } = req.body ?? {};
   if (!["admin", "member"].includes(role)) {
     res.status(400).json({ error: "role must be 'admin' or 'member'." });
     return;
   }
-  const [user] = await db.update(teamUsersTable).set({ role, updatedAt: new Date() }).where(eq(teamUsersTable.id, id)).returning();
+  const [user] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  res.json(userPublic(user));
+  await db.update(teamUsersTable)
+    .set({ role, updatedAt: new Date() })
+    .where(eq(teamUsersTable.id, id));
+  res.json(userPublic({ ...user, role }));
 });
 
-/** PATCH /auth/users/:id  — update name / isActive */
+/** PATCH /auth/users/:id  — update name / active status / permissions */
 router.patch("/auth/users/:id", requireTeamAdmin, async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
+  const id = String(req.params["id"]);
   const { name, isActive, permissions } = req.body ?? {};
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates["name"] = String(name).trim();
   if (isActive !== undefined) updates["isActive"] = Boolean(isActive);
   if (permissions !== undefined) updates["permissions"] = permissions as Record<string, string>;
-  const [user] = await db.update(teamUsersTable).set(updates).where(eq(teamUsersTable.id, id)).returning();
+  const [user] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  res.json(userPublic(user));
+  await db.update(teamUsersTable).set(updates).where(eq(teamUsersTable.id, id));
+  const [updated] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, id)).limit(1);
+  res.json(userPublic(updated!));
 });
 
-/** POST /auth/users/:id/reset-password  — admin generates reset link */
+/** POST /auth/users/:id/reset-password  — admin generates a reset link */
 router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res): Promise<void> => {
-  const id = String(req.params["id"] ?? "");
-  const [user] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, id)).limit(1);
+  const id = String(req.params["id"]);
+  const [user] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "User not found." }); return; }
-  // Opaque random token — NOT a JWT so it cannot be used as a team session.
-  const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  // Opaque random token — NOT a JWT — so this reset link cannot be used as a
+  // Bearer session token before the password is actually reset.
+  const token = randomUUID();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
   await sendViaResend({
