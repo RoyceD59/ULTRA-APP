@@ -11,6 +11,7 @@ import { useColors } from '@/hooks/useColors';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import * as Location from 'expo-location';
+import { useCartBarInset } from '@/hooks/useCartBarInset';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,10 @@ export default function MapScreen() {
   const mapRef   = useRef<MapView>(null);
   const [filter,   setFilter]   = useState<Filter>('All');
   const [selected, setSelected] = useState<MapLocation | null>(null);
+  // Full inset (tab bar + safe area + cart bar + gap) when the cart is
+  // non-empty, so bottom-anchored overlays clear the GlobalCartBar.
+  const cartBarInset = useCartBarInset();
+  const bottomOffset = cartBarInset || 24;
 
   const { data: locations = [], isLoading } = useQuery({
     queryKey: ['locations'],
@@ -143,7 +148,7 @@ export default function MapScreen() {
       </TouchableOpacity>
 
       {/* ── Legend ───────────────────────────────────────────────────────── */}
-      <View style={[s.legend, { backgroundColor: colors.card + 'f2', borderColor: colors.border }]}>
+      <View style={[s.legend, { backgroundColor: colors.card + 'f2', borderColor: colors.border, bottom: bottomOffset }]}>
         <View style={s.legendRow}>
           <View style={[s.legendDot, { backgroundColor: CENTRE_PIN }]} />
           <Text style={[s.legendTxt, { color: colors.mutedForeground }]}>Experience Centre</Text>
@@ -160,6 +165,7 @@ export default function MapScreen() {
           backgroundColor: colors.card,
           borderColor: colors.border,
           shadowColor: colors.text,
+          bottom: bottomOffset,
         }]}>
           {/* Header row */}
           <View style={s.sheetTop}>
