@@ -90,7 +90,9 @@ Scenario 5 concerns (native path):
   badge can appear before or after hydration on the glass tab bar.
 
 The static analysis finds no code path that can produce a flash on the native iOS layout.
-On-device visual confirmation was blocked by an Expo QR launch crash (tracked as a follow-up).
+On-device visual confirmation was previously blocked by an Expo Go launch crash caused by an
+SDK-incompatible `expo-notifications` version (fixed 2026-08-14 by pinning to the SDK 54 line);
+QR launch now works, so Scenario 5 can be run on a device where `isLiquidGlassAvailable()` is true.
 
 ## Execution record — 2026-08-14 (Scenarios 4 & 5)
 

@@ -6,6 +6,7 @@
 - [Release versioning](release-versioning.md) — Alpha/Beta/v1.0 ladder; all deferred "out of scope" items are v1.0 targets, tracked in that file.
 - [Resend connector email](resend-connector-email.md) — delivery via Replit Resend connector; from must be @contacts.ucfilters.com; 403s until user finishes DNS verification at resend.com/domains.
 - [UC upload/media security](uc-upload-security.md) — attach-time metadata verification is the enforcement point for presigned uploads; admin is DB-anchored; public serving limited to uploads/<uuid>.
+- [Expo SDK-aligned package pins](expo-sdk-version-pins.md) — expo-* versions must match the SDK line (expo-doctor gate); a mismatched one crashes Expo Go at launch while web/tests/export still pass.
 - [image-size Metro compat](image-size-metro-compat.md) — image-size 2.x breaks Metro PNG processing via DataView byteOffset overflow; must stay on 1.x until metro upgrades.
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
