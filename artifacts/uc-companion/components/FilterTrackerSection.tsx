@@ -83,7 +83,7 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 export default function FilterTrackerSection({ activation, onActivationChange }: Props) {
   const colors = useColors();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [showRegisterModal,   setShowRegisterModal]   = useState(false);
   const [showPerfModal,       setShowPerfModal]       = useState(false);
   const [toastMessage,        setToastMessage]        = useState('');
@@ -333,8 +333,8 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
           setShowRegisterModal(false);
           // Invite signed-in users to enable message reminder channels.
           // Only show the prompt once per registration (keyed by productId+activatedAt).
-          if (token) {
-            const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt);
+          if (token && user) {
+            const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt, user.id);
             if (!alreadySeen) {
               setReminderOptIn({ productId: a.productId, activatedAt: a.activatedAt });
             }
@@ -343,11 +343,12 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
       />
 
       {/* ── Reminder opt-in sheet (shown once after registration) ────────── */}
-      {reminderOptIn && (
+      {reminderOptIn && user && (
         <ReminderOptInSheet
           visible={!!reminderOptIn}
           productId={reminderOptIn.productId}
           activatedAt={reminderOptIn.activatedAt}
+          userId={user.id}
           onClose={() => setReminderOptIn(null)}
         />
       )}

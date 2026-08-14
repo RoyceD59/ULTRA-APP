@@ -25,18 +25,27 @@ import { useApi } from '@/hooks/useApi';
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
 
-/** AsyncStorage key scoped to one registration (productId + ISO activatedAt). */
-export function reminderOptInSeenKey(productId: number, activatedAt: string): string {
-  return `uc_msg_reminder_optin_seen_${productId}_${activatedAt}`;
+/**
+ * AsyncStorage key scoped to one registration AND one user account.
+ * Including userId prevents a dismissal by User A from hiding the prompt
+ * for User B when two accounts are used on the same device.
+ */
+export function reminderOptInSeenKey(
+  productId: number,
+  activatedAt: string,
+  userId: number,
+): string {
+  return `uc_msg_reminder_optin_seen_${userId}_${productId}_${activatedAt}`;
 }
 
 /** Returns true if the prompt has already been shown for this registration. */
 export async function wasReminderOptInSeen(
   productId: number,
   activatedAt: string,
+  userId: number,
 ): Promise<boolean> {
   try {
-    return (await AsyncStorage.getItem(reminderOptInSeenKey(productId, activatedAt))) === '1';
+    return (await AsyncStorage.getItem(reminderOptInSeenKey(productId, activatedAt, userId))) === '1';
   } catch {
     return false;
   }
@@ -46,9 +55,10 @@ export async function wasReminderOptInSeen(
 export async function markReminderOptInSeen(
   productId: number,
   activatedAt: string,
+  userId: number,
 ): Promise<void> {
   try {
-    await AsyncStorage.setItem(reminderOptInSeenKey(productId, activatedAt), '1');
+    await AsyncStorage.setItem(reminderOptInSeenKey(productId, activatedAt, userId), '1');
   } catch { /* non-critical */ }
 }
 
@@ -59,6 +69,8 @@ interface Props {
   /** Notification key — used to mark the prompt as seen after close. */
   productId: number;
   activatedAt: string;
+  /** User account id — scopes the seen-flag so two accounts on the same device don't share state. */
+  userId: number;
   onClose: () => void;
 }
 
@@ -69,7 +81,7 @@ interface ChannelState {
 }
 
 export default function ReminderOptInSheet({
-  visible, productId, activatedAt, onClose,
+  visible, productId, activatedAt, userId, onClose,
 }: Props) {
   const colors = useColors();
   const api = useApi();
@@ -102,7 +114,7 @@ export default function ReminderOptInSheet({
         reminderSms:       channels.reminderSms,
         reminderWhatsapp:  channels.reminderWhatsapp,
       });
-      await markReminderOptInSeen(productId, activatedAt);
+      await markReminderOptInSeen(productId, activatedAt, userId);
       onClose();
     } catch {
       setError('Could not save your preferences. Please try again.');
@@ -112,7 +124,7 @@ export default function ReminderOptInSheet({
   }
 
   async function handleSkip() {
-    await markReminderOptInSeen(productId, activatedAt);
+    await markReminderOptInSeen(productId, activatedAt, userId);
     onClose();
   }
 
