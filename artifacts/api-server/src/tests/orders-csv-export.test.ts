@@ -1,5 +1,6 @@
 /**
- * Tests for GET /api/uc/admin/orders.csv — zero-line-item and status-filter edge cases.
+ * Tests for GET /api/uc/admin/orders.csv — zero-line-item, status-filter edge cases,
+ * and CSV/list-API parity verification.
  *
  * Fixtures
  * ─────────
@@ -1306,5 +1307,248 @@ describe("GET /api/uc/admin/orders.csv — status filter with other active order
         );
       }
     }
+  });
+});
+
+// ── CSV / list-API parity verification ───────────────────────────────────────
+//
+// The critical invariant: calling GET /api/uc/admin/orders and
+// GET /api/uc/admin/orders.csv with identical query parameters must produce
+// exactly the same set of order IDs, in the same order. A mismatch would be
+// silent — the downloaded file looks plausible but contains the wrong rows.
+//
+// Fixtures
+// ─────────
+//   Order P  sentinel status  date: 2024-01-10  inside  Jan date range
+//   Order Q  sentinel status  date: 2024-01-25  inside  Jan date range
+//   Order R  sentinel status  date: 2024-03-05  outside Jan date range
+//
+// Tests
+// ─────
+//   1. status + date range → list IDs === CSV IDs (P and Q only)
+//   2. status only, no date range → list IDs === CSV IDs (P, Q, and R)
+//   3. no filters at all → list IDs === CSV IDs (fixture IDs are a subset)
+
+const PARITY_EMAIL  = "orders-csv-parity-test@ucfilters-test.internal";
+const PARITY_STATUS = `parity-csv-test-${Date.now()}`;
+
+let parityUserId: number;
+let parityOrderIds: number[] = []; // [P, Q, R]
+
+describe("GET /api/uc/admin/orders.csv — CSV rows match list API response", () => {
+  before(async () => {
+    const [inserted] = await db
+      .insert(ucUsersTable)
+      .values({
+        email: PARITY_EMAIL,
+        passwordHash: "test-hash-not-real",
+        firstName: "Parity",
+        lastName: "Test",
+        isAdmin: false,
+      })
+      .returning({ id: ucUsersTable.id });
+    if (!inserted) throw new Error("Failed to insert parity test user");
+    parityUserId = inserted.id;
+
+    process.env["UC_ADMIN_EMAILS"] = PARITY_EMAIL;
+
+    const baseOrder = {
+      userId: String(parityUserId),
+      status: PARITY_STATUS,
+      currency: "KES",
+      paymentMethod: "cod",
+      paymentReference: "",
+      promoCode: "",
+      discountPercent: 0,
+      discountAmount: 0,
+      webhookRecovery: false,
+      shippingAddress: {
+        firstName: "Parity",
+        lastName: "Test",
+        address1: "1 Test Rd",
+        city: "Nairobi",
+        country: "KE",
+        phone: "+254700000099",
+      },
+    };
+
+    // Order P — inside the January date range
+    const [orderP] = await db
+      .insert(ucOrdersTable)
+      .values({ ...baseOrder, total: "3499", dateCreated: new Date("2024-01-10T10:00:00Z") })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderP) throw new Error("Failed to insert order P");
+
+    // Order Q — also inside January
+    const [orderQ] = await db
+      .insert(ucOrdersTable)
+      .values({ ...baseOrder, total: "1099", dateCreated: new Date("2024-01-25T14:00:00Z") })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderQ) throw new Error("Failed to insert order Q");
+
+    // Order R — outside January (March), must be excluded by the date filter
+    const [orderR] = await db
+      .insert(ucOrdersTable)
+      .values({ ...baseOrder, total: "2599", dateCreated: new Date("2024-03-05T08:00:00Z") })
+      .returning({ id: ucOrdersTable.id });
+    if (!orderR) throw new Error("Failed to insert order R");
+
+    parityOrderIds = [orderP.id, orderQ.id, orderR.id];
+
+    // One line item per order (content doesn't affect the parity check)
+    await db.insert(ucOrderItemsTable).values([
+      { orderId: orderP.id, productId: 22, name: "Bottle Filter Cartridge", quantity: 1, total: "3499" },
+      { orderId: orderQ.id, productId: 22, name: "Bottle Filter Cartridge", quantity: 1, total: "1099" },
+      { orderId: orderR.id, productId: 2,  name: "Truva Go",                quantity: 1, total: "2599" },
+    ]);
+  });
+
+  after(async () => {
+    if (parityOrderIds.length > 0) {
+      await db
+        .delete(ucOrderItemsTable)
+        .where(inArray(ucOrderItemsTable.orderId, parityOrderIds));
+      await db
+        .delete(ucOrdersTable)
+        .where(inArray(ucOrdersTable.id, parityOrderIds));
+    }
+    if (parityUserId) {
+      await db.delete(ucUsersTable).where(eq(ucUsersTable.id, parityUserId));
+    }
+    delete process.env["UC_ADMIN_EMAILS"];
+  });
+
+  function parityAuth() {
+    return { Authorization: authHeader({ id: parityUserId, email: PARITY_EMAIL }) };
+  }
+
+  /** Extract ordered IDs from a JSON list API response body. */
+  function listIds(json: unknown): number[] {
+    assert.ok(Array.isArray(json), "List API must return an array");
+    return (json as { id: number }[]).map(o => o.id);
+  }
+
+  /** Extract ordered IDs from a CSV text (skips header; reads first column of each data row). */
+  function csvIds(csvText: string): number[] {
+    return csvText
+      .split("\r\n")
+      .filter(l => l.trim())
+      .slice(1) // drop header
+      .map(l => Number(parseCsvRow(l)[0]))
+      .filter(id => !isNaN(id) && id > 0);
+  }
+
+  // ── Test 1: status + date range ──────────────────────────────────────────────
+
+  it("status + date range: CSV IDs match list API IDs (both return P and Q only)", async () => {
+    const qs = `?status=${PARITY_STATUS}&from=2024-01-01&to=2024-01-31`;
+
+    const [listRes, csvRes] = await Promise.all([
+      apiFetch(`/api/uc/admin/orders${qs}`,     { headers: parityAuth() }),
+      apiFetch(`/api/uc/admin/orders.csv${qs}`, { headers: parityAuth() }),
+    ]);
+
+    assert.equal(listRes.status, 200, `List API must return 200, got ${listRes.status}`);
+    assert.equal(csvRes.status,  200, `CSV endpoint must return 200, got ${csvRes.status}`);
+
+    const fromList = listIds(JSON.parse(listRes.text));
+    const fromCsv  = csvIds(csvRes.text);
+
+    // Both must contain exactly the two in-range fixture orders
+    const inRangeIds = [parityOrderIds[0]!, parityOrderIds[1]!].sort((a, b) => b - a); // desc
+    assert.deepEqual(
+      fromList.filter(id => parityOrderIds.includes(id)).sort((a, b) => b - a),
+      inRangeIds,
+      `List API must return only in-range fixture orders (P and Q); got ${JSON.stringify(fromList)}`,
+    );
+    assert.ok(
+      !fromList.includes(parityOrderIds[2]!),
+      `List API must NOT include order R (outside date range); got ${JSON.stringify(fromList)}`,
+    );
+    assert.ok(
+      !fromCsv.includes(parityOrderIds[2]!),
+      `CSV must NOT include order R (outside date range); got ${JSON.stringify(fromCsv)}`,
+    );
+
+    // The CSV IDs (for our fixtures) must exactly match the list IDs
+    const ourListIds = fromList.filter(id => parityOrderIds.includes(id));
+    const ourCsvIds  = fromCsv.filter(id => parityOrderIds.includes(id));
+    assert.deepEqual(
+      ourCsvIds,
+      ourListIds,
+      `CSV fixture IDs ${JSON.stringify(ourCsvIds)} must match list API fixture IDs ${JSON.stringify(ourListIds)}`,
+    );
+  });
+
+  // ── Test 2: status only, no date range ──────────────────────────────────────
+
+  it("status only (no date range): CSV IDs match list API IDs (all three fixtures)", async () => {
+    const qs = `?status=${PARITY_STATUS}`;
+
+    const [listRes, csvRes] = await Promise.all([
+      apiFetch(`/api/uc/admin/orders${qs}`,     { headers: parityAuth() }),
+      apiFetch(`/api/uc/admin/orders.csv${qs}`, { headers: parityAuth() }),
+    ]);
+
+    assert.equal(listRes.status, 200, `List API must return 200, got ${listRes.status}`);
+    assert.equal(csvRes.status,  200, `CSV endpoint must return 200, got ${csvRes.status}`);
+
+    const fromList = listIds(JSON.parse(listRes.text));
+    const fromCsv  = csvIds(csvRes.text);
+
+    // With sentinel status and no date filter, all three fixtures must appear
+    assert.equal(
+      fromList.length,
+      3,
+      `List API must return exactly 3 fixture orders; got ${fromList.length}: ${JSON.stringify(fromList)}`,
+    );
+    assert.equal(
+      fromCsv.length,
+      3,
+      `CSV must contain exactly 3 fixture rows; got ${fromCsv.length}: ${JSON.stringify(fromCsv)}`,
+    );
+
+    // IDs and order must be identical between list and CSV
+    assert.deepEqual(
+      fromCsv,
+      fromList,
+      `CSV IDs ${JSON.stringify(fromCsv)} must exactly match list API IDs ${JSON.stringify(fromList)}`,
+    );
+  });
+
+  // ── Test 3: no filters — both endpoints agree ────────────────────────────────
+
+  it("no filters: all fixture order IDs present in both list API and CSV", async () => {
+    const [listRes, csvRes] = await Promise.all([
+      apiFetch("/api/uc/admin/orders",     { headers: parityAuth() }),
+      apiFetch("/api/uc/admin/orders.csv", { headers: parityAuth() }),
+    ]);
+
+    assert.equal(listRes.status, 200, `List API must return 200, got ${listRes.status}`);
+    assert.equal(csvRes.status,  200, `CSV endpoint must return 200, got ${csvRes.status}`);
+
+    const fromList = listIds(JSON.parse(listRes.text));
+    const fromCsv  = csvIds(csvRes.text);
+
+    // Every fixture order ID must appear in both responses
+    for (const id of parityOrderIds) {
+      assert.ok(
+        fromList.includes(id),
+        `List API must include fixture order ${id}; got ${JSON.stringify(fromList)}`,
+      );
+      assert.ok(
+        fromCsv.includes(id),
+        `CSV must include fixture order ${id}; got ${JSON.stringify(fromCsv)}`,
+      );
+    }
+
+    // The overall ID sets must match (same rows, same order)
+    assert.deepEqual(
+      fromCsv,
+      fromList,
+      `CSV IDs must exactly match list API IDs when no filters are applied.\n` +
+        `  List (${fromList.length}): ${JSON.stringify(fromList)}\n` +
+        `  CSV  (${fromCsv.length}): ${JSON.stringify(fromCsv)}`,
+    );
   });
 });
