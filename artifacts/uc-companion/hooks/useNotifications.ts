@@ -271,6 +271,9 @@ export async function registerCurrentPushToken(
 /**
  * Unregister the device's push token server-side (called on logout) and clear
  * the local last-registered marker so the next login re-registers cleanly.
+ * Sends this device's own token so the server deletes the registration only
+ * if it still belongs to this device — logging out on one device never stops
+ * notifications for another device the user logged into more recently.
  * Serialized with registrations so an in-flight login/foreground registration
  * can never interleave with the delete. Best-effort — never throws.
  */
@@ -278,10 +281,15 @@ export async function unregisterPushToken(authToken: string): Promise<void> {
   if (Platform.OS === 'web') return;
   await enqueuePushRegistration(async () => {
     try {
+      // Identify this device's token before clearing local state.
+      const localToken =
+        (await AsyncStorage.getItem(REGISTERED_PUSH_TOKEN_KEY)) ??
+        (await AsyncStorage.getItem(PUSH_TOKEN_KEY));
       await AsyncStorage.removeItem(REGISTERED_PUSH_TOKEN_KEY);
       await fetch(`${getApiBase()}/api/uc/notify/register`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        ...(localToken ? { body: JSON.stringify({ pushToken: localToken }) } : {}),
       });
     } catch { /* non-critical — silently ignore */ }
   });

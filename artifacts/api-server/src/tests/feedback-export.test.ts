@@ -54,6 +54,65 @@ function authHeader(claims: { id: number | string; email: string }) {
   return `Bearer ${issueToken({ ...claims, firstName: "Export", lastName: "Test" })}`;
 }
 
+const CSV_HEADER = "ts,rating,question,answer,improvement_note";
+
+/**
+ * Split CSV text into logical records, respecting quoted fields that may
+ * contain embedded CRLF newlines (real feedback answers are multi-line).
+ */
+function splitCsvRecords(text: string): string[] {
+  const records: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      current += ch;
+    } else if (!inQuotes && ch === "\r" && text[i + 1] === "\n") {
+      records.push(current);
+      current = "";
+      i++; // skip \n
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) records.push(current);
+  return records;
+}
+
+/** Parse a single CSV record into fields (handles quoted fields + "" escapes). */
+function parseCsvRecord(record: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < record.length; i++) {
+    const ch = record[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (record[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = false;
+      } else current += ch;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      fields.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current);
+  return fields;
+}
+
+/** Return parsed data rows (excluding the header record). */
+function csvDataRows(text: string): string[][] {
+  return splitCsvRecords(text)
+    .filter(r => r.trim() && r !== CSV_HEADER)
+    .map(parseCsvRecord);
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const TEST_EMAIL    = "export-test-admin@ucfilters-test.internal";
@@ -159,7 +218,7 @@ describe("GET /api/uc/ai/chat-feedback/export — authorised access", () => {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
     const lines = text.split("\r\n");
-    assert.equal(lines[0], "ts,rating,question,answer",
+    assert.equal(lines[0], CSV_HEADER,
       `First line must be header row, got: ${lines[0]}`);
   });
 
@@ -183,17 +242,17 @@ describe("GET /api/uc/ai/chat-feedback/export — authorised access", () => {
     const { text } = await apiFetch("/api/uc/ai/chat-feedback/export?rating=down", {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
-    const dataRows = text.split("\r\n").filter(l => l.trim() && l !== "ts,rating,question,answer");
-    // Only the "down" row from our fixture should be present
+    const dataRows = csvDataRows(text);
+    // Only down-rated rows should be present (rating is column index 1)
     assert.ok(
-      dataRows.every(r => r.includes(",down,")),
-      `All data rows must have rating=down, got:\n${dataRows.join("\n")}`,
+      dataRows.every(r => r[1] === "down"),
+      `All data rows must have rating=down, got:\n${dataRows.map(r => r[1]).join(",")}`,
     );
     // Exactly our one "down" fixture row should be present
-    const hasOurRow = dataRows.some(r => r.includes("could not understand"));
+    const hasOurRow = dataRows.some(r => (r[3] ?? "").includes("could not understand"));
     assert.ok(hasOurRow, "Expected to find the down-rated fixture row in the export");
     // The "up" row must be absent
-    const hasUpRow = dataRows.some(r => r.includes("Sweet Home filter"));
+    const hasUpRow = dataRows.some(r => (r[2] ?? "").includes("Sweet Home filter"));
     assert.ok(!hasUpRow, "Up-rated row must not appear in a rating=down export");
   });
 
@@ -201,12 +260,12 @@ describe("GET /api/uc/ai/chat-feedback/export — authorised access", () => {
     const { text } = await apiFetch("/api/uc/ai/chat-feedback/export?rating=up", {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
-    const dataRows = text.split("\r\n").filter(l => l.trim() && l !== "ts,rating,question,answer");
+    const dataRows = csvDataRows(text);
     assert.ok(
-      dataRows.every(r => r.includes(",up,")),
-      `All data rows must have rating=up, got:\n${dataRows.join("\n")}`,
+      dataRows.every(r => r[1] === "up"),
+      `All data rows must have rating=up, got:\n${dataRows.map(r => r[1]).join(",")}`,
     );
-    const hasOurRow = dataRows.some(r => r.includes("Sweet Home filter"));
+    const hasOurRow = dataRows.some(r => (r[2] ?? "").includes("Sweet Home filter"));
     assert.ok(hasOurRow, "Expected to find the up-rated fixture row in the export");
   });
 });

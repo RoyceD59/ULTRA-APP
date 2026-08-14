@@ -3910,6 +3910,11 @@ router.post("/uc/notify/register", async (req: Request, res: Response): Promise<
  * DELETE /api/uc/notify/register
  * Authenticated — removes the caller's registered push token so a logged-out
  * (or handed-over) device stops receiving that user's order-update pushes.
+ *
+ * Device-specific: when the body includes { pushToken }, the row is deleted
+ * only if the stored token matches — so logging out on device A never wipes
+ * a token that device B registered more recently. When no pushToken is sent
+ * (legacy clients / token unavailable), the user's row is deleted regardless.
  * Idempotent: succeeds even when no token row exists.
  */
 router.delete("/uc/notify/register", async (req: Request, res: Response): Promise<void> => {
@@ -3918,8 +3923,12 @@ router.delete("/uc/notify/register", async (req: Request, res: Response): Promis
     res.status(401).json({ error: "Authentication required" });
     return;
   }
+  const { pushToken } = (req.body ?? {}) as { pushToken?: string };
   try {
-    await db.delete(ucPushTokensTable).where(eq(ucPushTokensTable.userId, userId));
+    const where = typeof pushToken === "string" && pushToken.length > 0
+      ? and(eq(ucPushTokensTable.userId, userId), eq(ucPushTokensTable.pushToken, pushToken))
+      : eq(ucPushTokensTable.userId, userId);
+    await db.delete(ucPushTokensTable).where(where);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to unregister push token", detail: String(err) });
