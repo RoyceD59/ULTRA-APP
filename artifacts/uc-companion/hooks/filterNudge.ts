@@ -9,9 +9,9 @@
  * because both are pure and have no platform dependencies.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFilterActivation } from './useNotifications';
+import { getFilterActivation, type FilterActivation } from './useNotifications';
 
-// ── Dismissal flag ────────────────────────────────────────────────────────────
+// ── Dismissal flag (initial registration nudge) ───────────────────────────────
 
 /**
  * Per-user AsyncStorage key for the dismissal flag.
@@ -21,18 +21,50 @@ import { getFilterActivation } from './useNotifications';
 export const dismissedKeyFor = (userId: number): string =>
   `uc_register_filter_prompt_dismissed_${userId}`;
 
+// ── Dismissal flag (replacement nudge, per order) ────────────────────────────
+
+/**
+ * Per-user, per-order key so dismissing the replacement nudge for order N
+ * never suppresses it for a later, different order.
+ */
+export const replacementDismissedKeyFor = (userId: number, orderId: number): string =>
+  `uc_replace_filter_prompt_dismissed_${userId}_${orderId}`;
+
+export async function readReplacementNudgeDismissed(
+  userId: number,
+  orderId: number,
+): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(replacementDismissedKeyFor(userId, orderId))) === '1';
+  } catch { return false; }
+}
+
+export async function markReplacementNudgeDismissed(
+  userId: number,
+  orderId: number,
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(replacementDismissedKeyFor(userId, orderId), '1');
+  } catch {
+    // best-effort — UI already hides the prompt via local state
+  }
+}
+
 // ── Compound nudge state ──────────────────────────────────────────────────────
 
 export interface NudgeState {
-  /** True when the user tapped ✕ and the flag was written to storage. */
+  /** True when the user tapped ✕ and the initial-registration flag was stored. */
   dismissed: boolean;
   /** True when a FilterActivation record exists (reminders already running). */
   hasActivation: boolean;
+  /** The stored activation record, or null when none exists. */
+  activation: FilterActivation | null;
 }
 
 /**
- * Read both suppression signals in parallel.
- * The prompt must stay hidden whenever either field is true.
+ * Read all suppression signals in parallel.
+ * The initial prompt must stay hidden whenever `dismissed` or `hasActivation`
+ * is true; the replacement prompt uses `activation` to check order freshness.
  */
 export async function readNudgeState(userId: number): Promise<NudgeState> {
   const [flag, activation] = await Promise.all([
@@ -42,6 +74,7 @@ export async function readNudgeState(userId: number): Promise<NudgeState> {
   return {
     dismissed:     flag === '1',
     hasActivation: activation != null,
+    activation,
   };
 }
 
