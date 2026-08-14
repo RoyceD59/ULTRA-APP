@@ -9,7 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/db/seed.ts",
-    "test": "node --import tsx/esm --test src/tests/**/*.test.ts"
+    "test": "node --import tsx/esm src/tests/run.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.56",
