@@ -40,6 +40,14 @@ Module._resolveFilename = (request, parent, isMain, options) => {
   if (Object.prototype.hasOwnProperty.call(STUBS, request)) {
     return STUBS[request];
   }
+  // Expo "@/..." path alias (tsconfig paths) — map to the project root and
+  // retry with TypeScript extensions, mirroring Metro's resolution.
+  if (request.startsWith('@/')) {
+    const base = path.join(root, request.slice(2));
+    for (const ext of ['.ts', '.tsx', '.mts', '']) {
+      if (fs.existsSync(base + ext) && fs.statSync(base + ext).isFile()) return base + ext;
+    }
+  }
   try {
     return original(request, parent, isMain, options);
   } catch (err) {

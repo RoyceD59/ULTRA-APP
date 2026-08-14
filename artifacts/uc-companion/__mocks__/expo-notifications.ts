@@ -6,6 +6,8 @@
 
 export const _scheduled: string[] = [];
 export const _cancelled: string[] = [];
+/** Full scheduling requests ({ id, content, trigger }) for timing assertions. */
+export const _requests: Array<{ id: string; content: unknown; trigger: unknown }> = [];
 let _counter = 0;
 
 // Push-token state — tests can rotate the token and add per-call delays to
@@ -22,6 +24,7 @@ export function _getPushTokenFetchCount(): number { return _pushState.fetchCount
 export function _reset(): void {
   _scheduled.length = 0;
   _cancelled.length = 0;
+  _requests.length = 0;
   _counter = 0;
   _pushState.token = 'ExponentPushToken[test-1]';
   _pushState.delayMs = 0;
@@ -54,10 +57,12 @@ export async function setNotificationChannelAsync(
 ): Promise<void> { /* no-op */ }
 
 export async function scheduleNotificationAsync(
-  _request: unknown,
+  request: { content?: unknown; trigger?: unknown } | unknown,
 ): Promise<string> {
   const id = `notif-${++_counter}`;
   _scheduled.push(id);
+  const r = request as { content?: unknown; trigger?: unknown } | null;
+  _requests.push({ id, content: r?.content, trigger: r?.trigger });
   return id;
 }
 

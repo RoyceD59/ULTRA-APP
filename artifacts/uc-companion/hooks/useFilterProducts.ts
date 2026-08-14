@@ -35,7 +35,7 @@ function iconForProduct(p: Pick<UCProduct, 'categories' | 'name'>): string {
   return 'water-outline';
 }
 
-function toFilterProducts(products: UCProduct[]): FilterProduct[] {
+export function toFilterProducts(products: UCProduct[]): FilterProduct[] {
   return products
     .filter(p => typeof p.lifespanDays === 'number' && p.lifespanDays > 0)
     .map(p => ({
