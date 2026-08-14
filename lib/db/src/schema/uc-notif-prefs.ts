@@ -9,6 +9,12 @@ import { pgTable, text, boolean, timestamp } from "drizzle-orm/pg-core";
 export const ucNotifPrefsTable = pgTable("uc_notif_prefs", {
   userId:       text("user_id").primaryKey(),
   optOutOrders: boolean("opt_out_orders").notNull().default(false),
+  // ── Filter-reminder delivery channels (strictly opt-in — default false) ──
+  // When enabled, the daily reminder-dispatch job also sends the filter
+  // lifecycle messages through the corresponding external channel.
+  reminderEmail:    boolean("reminder_email").notNull().default(false),
+  reminderSms:      boolean("reminder_sms").notNull().default(false),
+  reminderWhatsapp: boolean("reminder_whatsapp").notNull().default(false),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

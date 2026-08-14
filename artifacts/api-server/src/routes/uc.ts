@@ -4371,7 +4371,11 @@ router.delete("/uc/notify/register", async (req: Request, res: Response): Promis
  * Works even when no push token has been registered yet: prefs are stored in
  * uc_notif_prefs and synced into uc_push_tokens the next time a token is
  * registered, so user opt-outs are never silently lost.
- * Body: { optOutOrders?: boolean }
+ * Body: { optOutOrders?: boolean, reminderEmail?: boolean,
+ *         reminderSms?: boolean, reminderWhatsapp?: boolean }
+ * The reminder* flags are the OPT-IN switches for filter-reminder delivery
+ * via external channels (email / SMS / WhatsApp) — only provided keys are
+ * updated, so toggling one channel never clobbers the others.
  */
 router.post("/uc/notify/prefs", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
@@ -4381,16 +4385,32 @@ router.post("/uc/notify/prefs", async (req: Request, res: Response): Promise<voi
   }
   const prefsNumericId = Number(userId);
   if (await guardDeletedAccount(prefsNumericId, res)) return;
-  const { optOutOrders } = req.body as { optOutOrders?: boolean };
+  const { optOutOrders, reminderEmail, reminderSms, reminderWhatsapp } = req.body as {
+    optOutOrders?: boolean;
+    reminderEmail?: boolean;
+    reminderSms?: boolean;
+    reminderWhatsapp?: boolean;
+  };
   const value = optOutOrders ?? false;
+  // Only include reminder flags that were explicitly provided (and boolean).
+  const reminderSet: Partial<{
+    reminderEmail: boolean; reminderSms: boolean; reminderWhatsapp: boolean;
+  }> = {};
+  if (typeof reminderEmail === "boolean") reminderSet.reminderEmail = reminderEmail;
+  if (typeof reminderSms === "boolean") reminderSet.reminderSms = reminderSms;
+  if (typeof reminderWhatsapp === "boolean") reminderSet.reminderWhatsapp = reminderWhatsapp;
   try {
     // Upsert into the dedicated prefs table — always works, even without a push token row.
     await db
       .insert(ucNotifPrefsTable)
-      .values({ userId, optOutOrders: value, updatedAt: new Date() })
+      .values({ userId, optOutOrders: value, ...reminderSet, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: ucNotifPrefsTable.userId,
-        set: { optOutOrders: value, updatedAt: new Date() },
+        set: {
+          ...(optOutOrders !== undefined ? { optOutOrders: value } : {}),
+          ...reminderSet,
+          updatedAt: new Date(),
+        },
       });
     // Best-effort: also sync to the push token row if one exists so sendPushToUser
     // can use a single-table lookup.
@@ -4401,6 +4421,37 @@ router.post("/uc/notify/prefs", async (req: Request, res: Response): Promise<voi
     res.json({ ok: true, created: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to update preferences", detail: String(err) });
+  }
+});
+
+/**
+ * GET /api/uc/notify/prefs
+ * Authenticated — returns the caller's server-side notification preferences,
+ * including the opt-in flags for filter-reminder delivery via external
+ * channels. Missing row = all defaults (opted out of nothing, no channels).
+ */
+router.get("/uc/notify/prefs", async (req: Request, res: Response): Promise<void> => {
+  const userId = userIdFromBearer(req.headers["authorization"]);
+  if (userId === "anonymous") {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const prefsNumericId = Number(userId);
+  if (await guardDeletedAccount(prefsNumericId, res)) return;
+  try {
+    const [row] = await db
+      .select()
+      .from(ucNotifPrefsTable)
+      .where(eq(ucNotifPrefsTable.userId, userId))
+      .limit(1);
+    res.json({
+      optOutOrders:     row?.optOutOrders     ?? false,
+      reminderEmail:    row?.reminderEmail    ?? false,
+      reminderSms:      row?.reminderSms      ?? false,
+      reminderWhatsapp: row?.reminderWhatsapp ?? false,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load preferences", detail: String(err) });
   }
 });
 

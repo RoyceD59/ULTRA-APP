@@ -6,13 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { useApi } from '@/hooks/useApi';
+import { useApi, type ServerNotifPrefs } from '@/hooks/useApi';
 import {
   getNotifPrefs,
   saveNotifPrefs,
   cancelAllFilterNotifications,
   scheduleAllFilterNotifications,
   getFilterActivation,
+  syncReminderToServer,
   type NotifPrefs,
 } from '@/hooks/useNotifications';
 import * as Haptics from 'expo-haptics';
@@ -25,10 +26,53 @@ export default function NotificationPreferencesScreen() {
 
   const [prefs, setPrefs] = useState<NotifPrefs>({ orderUpdates: true, filterReminders: true });
   const [saving, setSaving] = useState(false);
+  // Server-side channel opt-ins (email / SMS / WhatsApp filter reminders).
+  // null while loading or when signed out.
+  const [channelPrefs, setChannelPrefs] = useState<ServerNotifPrefs | null>(null);
 
   useEffect(() => {
     getNotifPrefs().then(setPrefs);
   }, []);
+
+  const [channelError, setChannelError] = useState(false);
+
+  const loadChannelPrefs = useCallback(() => {
+    setChannelError(false);
+    api.getServerNotifPrefs()
+      .then(p => setChannelPrefs(p))
+      .catch(() => setChannelError(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setChannelPrefs(null);
+      setChannelError(false);
+      return;
+    }
+    loadChannelPrefs();
+    // Backfill: make sure the server knows about the current activation so
+    // channel reminders can actually be delivered for filters registered
+    // before this feature existed.
+    getFilterActivation().then(a => { if (a) void syncReminderToServer(a); });
+  }, [token, loadChannelPrefs]);
+
+  const handleChannelToggle = useCallback(async (
+    key: 'reminderEmail' | 'reminderSms' | 'reminderWhatsapp',
+    value: boolean,
+  ) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChannelPrefs(p => (p ? { ...p, [key]: value } : p));
+    setSaving(true);
+    try {
+      await api.updatePushPrefs({ [key]: value });
+    } catch {
+      // Revert on failure so the switch reflects what the server actually has.
+      setChannelPrefs(p => (p ? { ...p, [key]: !value } : p));
+    } finally {
+      setSaving(false);
+    }
+  }, [api]);
 
   const handleToggle = useCallback(async (key: keyof NotifPrefs, value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -99,7 +143,7 @@ export default function NotificationPreferencesScreen() {
             iconColor="#00B4D8"
             iconBg="#E0F7FC"
             title="Filter replacement reminders"
-            description="Lifecycle alerts at 30 days, 60 days, and before your filter expires"
+            description="App notifications at 30 days, 60 days, and before your filter expires (email, SMS and WhatsApp are controlled below)"
             value={prefs.filterReminders}
             onToggle={v => handleToggle('filterReminders', v)}
             disabled={saving || Platform.OS === 'web'}
@@ -107,6 +151,70 @@ export default function NotificationPreferencesScreen() {
             webNote={Platform.OS === 'web' ? 'Local notifications are only available in the mobile app' : undefined}
           />
         </View>
+
+        {/* Filter reminders by message — strictly opt-in channels */}
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+          FILTER REMINDERS BY MESSAGE
+        </Text>
+        {token && channelPrefs ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <PrefRow
+              icon="mail-outline"
+              iconColor="#2563eb"
+              iconBg="#dbeafe"
+              title="Email reminders"
+              description="Filter check-ins and replacement offers to your account email"
+              value={channelPrefs.reminderEmail}
+              onToggle={v => handleChannelToggle('reminderEmail', v)}
+              disabled={saving}
+              colors={colors}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <PrefRow
+              icon="chatbubble-outline"
+              iconColor="#7c3aed"
+              iconBg="#ede9fe"
+              title="Text message (SMS) reminders"
+              description="Short reminders to your account phone number"
+              value={channelPrefs.reminderSms}
+              onToggle={v => handleChannelToggle('reminderSms', v)}
+              disabled={saving}
+              colors={colors}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <PrefRow
+              icon="logo-whatsapp"
+              iconColor="#16a34a"
+              iconBg="#dcfce7"
+              title="WhatsApp reminders"
+              description="Reminders via WhatsApp to your account phone number"
+              value={channelPrefs.reminderWhatsapp}
+              onToggle={v => handleChannelToggle('reminderWhatsapp', v)}
+              disabled={saving}
+              colors={colors}
+            />
+          </View>
+        ) : token && channelError ? (
+          <TouchableOpacity
+            style={[styles.infoBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={loadChannelPrefs}
+            accessibilityRole="button"
+          >
+            <Ionicons name="refresh-outline" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+              Couldn't load your message preferences. Tap to retry.
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.infoBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+              {token
+                ? 'Loading your message preferences…'
+                : 'Sign in to also receive filter reminders by email, text message or WhatsApp.'}
+            </Text>
+          </View>
+        )}
 
         {/* Info box */}
         <View style={[styles.infoBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -171,6 +279,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '700' as const },
   scroll: { padding: 20, gap: 16, paddingBottom: 48 },
   intro: { fontSize: 14, lineHeight: 20 },
+  sectionLabel: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.6, marginBottom: -6 },
   card: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
   prefRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
   prefIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

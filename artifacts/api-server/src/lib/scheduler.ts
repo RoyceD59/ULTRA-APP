@@ -20,8 +20,20 @@ import {
 import { sendViaResend } from "./resend.js";
 import { sendSms } from "./sms.js";
 import { getValidAccessToken } from "./google-auth.js";
+import { dispatchFilterReminders } from "./reminder-dispatch.js";
 
 export function startScheduler() {
+  // Daily at 07:30 UTC (10:30 Nairobi) — deliver filter lifecycle reminders
+  // via email / SMS / WhatsApp to customers who opted in.
+  cron.schedule("30 7 * * *", async () => {
+    logger.info("Scheduler: dispatching filter reminders (external channels)");
+    try {
+      await dispatchFilterReminders();
+    } catch (err) {
+      logger.error({ err }, "Scheduler: filter reminder dispatch failed");
+    }
+  });
+
   // Daily at 08:00 UTC — generate a fresh report and push to the orchestrator
   cron.schedule("0 8 * * *", async () => {
     logger.info("Scheduler: generating daily AI project report");

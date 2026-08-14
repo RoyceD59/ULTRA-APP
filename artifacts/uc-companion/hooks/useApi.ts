@@ -278,6 +278,15 @@ export interface CodeValidationResult {
   label: string;
 }
 
+/** Server-side notification preferences, including the opt-in flags for
+ *  filter-reminder delivery via external channels (email / SMS / WhatsApp). */
+export interface ServerNotifPrefs {
+  optOutOrders: boolean;
+  reminderEmail: boolean;
+  reminderSms: boolean;
+  reminderWhatsapp: boolean;
+}
+
 export function useApi() {
   const { token } = useAuth();
 
@@ -426,8 +435,16 @@ export function useApi() {
     registerPushToken: (pushToken: string) =>
       post<{ ok: boolean }>('/api/uc/notify/register', { pushToken }),
     /** Sync server-side push notification opt-out preferences. */
-    updatePushPrefs: (prefs: { optOutOrders: boolean }) =>
+    updatePushPrefs: (prefs: {
+      optOutOrders?: boolean;
+      reminderEmail?: boolean;
+      reminderSms?: boolean;
+      reminderWhatsapp?: boolean;
+    }) =>
       post<{ ok: boolean }>('/api/uc/notify/prefs', prefs),
+    /** Load the caller's server-side notification prefs (incl. reminder channels). */
+    getServerNotifPrefs: () =>
+      get<ServerNotifPrefs>('/api/uc/notify/prefs'),
     /** Submit a product enquiry (works for guests and logged-in users). */
     createEnquiry: (data: {
       productId: number;

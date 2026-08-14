@@ -362,6 +362,44 @@ export function usePushTokenSync(authToken: string | null): void {
   }, [authToken]);
 }
 
+// ── Server reminder sync ─────────────────────────────────────────────────────
+//
+// Mirrors the local activation to the server (uc_filter_reminders) so the
+// daily backend job can deliver the same lifecycle reminders via email / SMS /
+// WhatsApp for users who opted in. Fire-and-forget: local scheduling never
+// depends on it, guests (no auth token) are skipped silently.
+
+const AUTH_TOKEN_KEY = 'uc_auth_token';
+
+export async function syncReminderToServer(
+  activation: Pick<
+    FilterActivation,
+    'productId' | 'productName' | 'lifespanDays' | 'activatedAt' | 'sourceOrderId'
+  > | null
+): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) return;
+    await fetch(`${getApiBase()}/api/uc/reminders/sync`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        activation: activation
+          ? {
+              productId:     activation.productId,
+              productName:   activation.productName,
+              lifespanDays:  activation.lifespanDays,
+              activatedAt:   activation.activatedAt,
+              sourceOrderId: activation.sourceOrderId,
+            }
+          : null,
+      }),
+    });
+  } catch {
+    /* non-critical — the next sync (register / clear / prefs visit) retries */
+  }
+}
+
 // ── Filter activation state ───────────────────────────────────────────────────
 
 export async function getFilterActivation(): Promise<FilterActivation | null> {
@@ -394,6 +432,7 @@ export async function scheduleAllFilterNotifications(
     const activation: FilterActivation = { ...params, notifIds: [] };
     await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
     await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    void syncReminderToServer(activation);
     return activation;
   }
 
@@ -407,6 +446,7 @@ export async function scheduleAllFilterNotifications(
     const activation: FilterActivation = { ...params, notifIds: [] };
     await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
     await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    void syncReminderToServer(activation);
     return activation;
   }
   // Positive lifespan — this is a trackable registration, clear any previous notice.
@@ -421,6 +461,7 @@ export async function scheduleAllFilterNotifications(
     const activation: FilterActivation = { ...params, notifIds: [] };
     await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
     await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    void syncReminderToServer(activation);
     return activation;
   }
 
@@ -511,6 +552,7 @@ export async function scheduleAllFilterNotifications(
   await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
   // Keep the legacy key in sync so the home screen filter card still works
   await AsyncStorage.setItem('uc_filter_last_changed', activationDate.getTime().toString());
+  void syncReminderToServer(activation);
   return activation;
 }
 
@@ -592,6 +634,8 @@ export async function clearFilterActivation(): Promise<void> {
   await AsyncStorage.removeItem(FILTER_ACTIVATION_KEY);
   await AsyncStorage.removeItem('uc_filter_last_changed');
   await setZeroLifespanNotice(false);
+  // Stop server-side email/SMS/WhatsApp reminders for the cleared filter too.
+  void syncReminderToServer(null);
 }
 
 // ── Performance check-in ──────────────────────────────────────────────────────
