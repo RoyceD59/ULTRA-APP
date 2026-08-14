@@ -85,13 +85,74 @@ from the track, open the Locations map screen, and confirm tiles load. With a wr
 the map renders blank/grey and `adb logcat` shows an `Authorization failure` from the
 Google Maps SDK.
 
-## First production setup (still pending)
+## First production setup (action required — no Play build exists yet)
 
-The record currently has `sha1: null` for the two production identities because the app
-has not been uploaded to Play yet. Once the first AAB is uploaded and Play App Signing is
-enrolled: record the Play app-signing SHA-1 (`--update`), add the restriction in Google
-Cloud Console, `--confirm-restriction`, and record the upload-key SHA-1
-(`--identity upload --update`).
+> **Status:** `security/maps-key-fingerprints.json` has `sha1: null` for both
+> `playAppSigning` and `uploadKey`. The Maps restriction is NOT locked to the production
+> certificate yet. Complete every step below immediately after the first AAB is uploaded.
+
+### Step-by-step checklist
+
+**Prerequisites:** first AAB submitted to Google Play → enrolled in Play App Signing.
+
+1. **Get the Play app-signing SHA-1.**
+   Play Console → (your app) → Setup → App signing → "App signing key certificate" section
+   → copy the SHA-1 fingerprint (format: `AA:BB:CC:…:ZZ`).
+
+2. **Record the Play app-signing fingerprint** (from `artifacts/uc-companion`):
+   ```bash
+   node scripts/check-maps-key-fingerprint.mjs \
+     --identity play-signing \
+     --fingerprint "<SHA-1 from step 1>" \
+     --update
+   ```
+   The script will print `⚠️ ACTION REQUIRED` and exit 1 — that is expected until step 4.
+
+3. **Get the EAS upload-keystore SHA-1** (separate identity, drift tracking only):
+   ```bash
+   eas credentials   # Android → production → Keystore → show fingerprints
+   ```
+   Or extract from the keystore file directly:
+   ```bash
+   keytool -list -v -keystore <upload.keystore> -alias <alias> -storepass <pass>
+   ```
+
+4. **Add the Play app-signing SHA-1 to the Maps key restriction in Google Cloud Console.**
+   [Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials) →
+   open `GOOGLE_MAPS_ANDROID_KEY` → Application restrictions → Android apps →
+   entry for `com.ultraclean.companion`:
+   - **Add** the new Play app-signing SHA-1 (from step 1).
+   - The development SHA-1 (`AE:C5:96:4B:D2:7B:8D:DB:29:ED:CE:53:E9:9C:A7:13:A4:3E:FD:0D`)
+     can remain listed if dev builds still need live Maps tiles; remove it once it is no longer needed.
+
+5. **Confirm the restriction is set:**
+   ```bash
+   node scripts/check-maps-key-fingerprint.mjs --confirm-restriction
+   ```
+   This marks `gcpRestrictionConfirmed: true` in the JSON and exits 0.
+
+6. **Record the upload-keystore fingerprint:**
+   ```bash
+   node scripts/check-maps-key-fingerprint.mjs \
+     --identity upload \
+     --fingerprint "<SHA-1 from step 3>" \
+     --update
+   ```
+
+7. **Run the full check — must pass before shipping:**
+   ```bash
+   node scripts/check-maps-key-fingerprint.mjs \
+     --fingerprint "<Play app-signing SHA-1>"
+   # Expected: ✅ OK — play-signing fingerprint matches the record and the GCP Maps restriction is confirmed.
+   ```
+
+8. **Spot-check on the internal-testing-track build.**
+   Install from the internal track, open the Locations map screen, and confirm tiles load.
+   A blank/grey map with `Authorization failure` in `adb logcat` means the SHA-1 in the
+   GCP restriction does not match the Play app-signing certificate — revisit step 4.
+
+9. **Commit `security/maps-key-fingerprints.json`** (updated by the script) so the record
+   is preserved in version control.
 
 ## Interim: development credentials (recorded 2026-08-14)
 
