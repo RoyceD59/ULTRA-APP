@@ -330,6 +330,14 @@ async function applyStartupMigrations(): Promise<void> {
       alerted_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  // Repeat-offender tracking: rows are kept (marked resolved) instead of
+  // deleted when a product is fixed, so regressions can be flagged with the
+  // prior alert count in the alert email.
+  await pool.query(`
+    ALTER TABLE uc_lifespan_alerts
+      ADD COLUMN IF NOT EXISTS alert_count integer NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS resolved_at timestamptz
+  `);
   logger.info("Startup migration: uc_lifespan_alerts table ensured");
 }
 

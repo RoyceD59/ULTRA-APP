@@ -9,7 +9,7 @@ import cron from "node-cron";
 import { logger } from "./logger";
 import { generateReport, setLatestReport } from "../routes/ai/monitor";
 import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable } from "@workspace/db";
-import { lt, lte, desc, eq, and, or, inArray } from "drizzle-orm";
+import { lt, lte, desc, eq, and, or, inArray, isNull, sql } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
   hasWCCredentials,
@@ -320,21 +320,28 @@ export async function runLifespanAuditAlert(
         : [],
     }));
 
-    // Resolve products that previously alerted but now HAVE a lifespan: delete
-    // their dedupe rows so a later regression (meta removed again) re-alerts.
+    // Resolve products that previously alerted but now HAVE a lifespan: mark
+    // their dedupe rows resolved (keeping alert history) so a later regression
+    // (meta removed again) re-alerts — flagged as a repeat offender.
     const missingIdSet = new Set(missing.map((p) => p.id));
     const resolvedIds = products
       .map((p) => Number((p as Record<string, unknown>)["id"]))
       .filter((id) => Number.isFinite(id) && !missingIdSet.has(id));
     if (resolvedIds.length > 0) {
-      const deleted = await db
-        .delete(ucLifespanAlertsTable)
-        .where(inArray(ucLifespanAlertsTable.productId, resolvedIds))
+      const resolved = await db
+        .update(ucLifespanAlertsTable)
+        .set({ resolvedAt: new Date() })
+        .where(
+          and(
+            inArray(ucLifespanAlertsTable.productId, resolvedIds),
+            isNull(ucLifespanAlertsTable.resolvedAt),
+          ),
+        )
         .returning({ productId: ucLifespanAlertsTable.productId });
-      if (deleted.length > 0) {
+      if (resolved.length > 0) {
         logger.info(
-          { resolved: deleted.map((r) => r.productId) },
-          "Scheduler: lifespan audit — previously alerted products now trackable, dedupe rows cleared",
+          { resolved: resolved.map((r) => r.productId) },
+          "Scheduler: lifespan audit — previously alerted products now trackable, dedupe rows marked resolved",
         );
       }
     }
@@ -344,14 +351,25 @@ export async function runLifespanAuditAlert(
       return { flagged: 0, newlyAlerted: 0, emailed: false };
     }
 
-    // Filter out products we have already emailed about
+    // Filter out products we have already emailed about. A row with
+    // resolvedAt set means the product was fixed and has now regressed — it
+    // must be re-alerted, flagged as a repeat offender with its prior count.
     const flaggedIds = missing.map((p) => p.id);
     const alreadyAlerted = await db
-      .select({ productId: ucLifespanAlertsTable.productId })
+      .select({
+        productId:  ucLifespanAlertsTable.productId,
+        alertCount: ucLifespanAlertsTable.alertCount,
+        resolvedAt: ucLifespanAlertsTable.resolvedAt,
+      })
       .from(ucLifespanAlertsTable)
       .where(inArray(ucLifespanAlertsTable.productId, flaggedIds));
-    const alertedSet = new Set(alreadyAlerted.map((r) => r.productId));
-    const fresh = missing.filter((p) => !alertedSet.has(p.id));
+    const activeAlertSet = new Set(
+      alreadyAlerted.filter((r) => r.resolvedAt === null).map((r) => r.productId),
+    );
+    const priorCounts = new Map(
+      alreadyAlerted.filter((r) => r.resolvedAt !== null).map((r) => [r.productId, r.alertCount]),
+    );
+    const fresh = missing.filter((p) => !activeAlertSet.has(p.id));
 
     if (fresh.length === 0) {
       logger.info(
@@ -361,10 +379,14 @@ export async function runLifespanAuditAlert(
       return { flagged: missing.length, newlyAlerted: 0, emailed: false };
     }
 
-    const lines = fresh.map(
-      (p) =>
-        `  • ${p.name}${p.sku ? ` (SKU ${p.sku})` : ""} — ID ${p.id}${p.categories.length ? ` | ${p.categories.join(", ")}` : ""}`,
-    );
+    const lines = fresh.map((p) => {
+      const prior = priorCounts.get(p.id);
+      const repeatNote =
+        prior !== undefined
+          ? ` (regressed — alerted ${prior} time${prior > 1 ? "s" : ""} before)`
+          : "";
+      return `  • ${p.name}${p.sku ? ` (SKU ${p.sku})` : ""} — ID ${p.id}${p.categories.length ? ` | ${p.categories.join(", ")}` : ""}${repeatNote}`;
+    });
 
     const emailBody = [
       `${fresh.length} new store product${fresh.length > 1 ? "s are" : " is"} missing the replacement-reminder setting (filter_lifespan_days).`,
@@ -379,7 +401,7 @@ export async function runLifespanAuditAlert(
       "  3. The product disappears from this audit automatically.",
       "",
       "The full audit is also visible on the ProjectHub dashboard (admin only).",
-      "You will not be emailed again about these products.",
+      "You will not be emailed again about these products unless one is fixed and later regresses.",
     ].join("\n");
 
     const emailOk = await sendEmail({
@@ -399,11 +421,22 @@ export async function runLifespanAuditAlert(
       return { flagged: missing.length, newlyAlerted: 0, emailed: false };
     }
 
-    // Record only after a successful send so failures are retried
+    // Record only after a successful send so failures are retried. A conflict
+    // means the product had a resolved row (regression): bump its alertCount
+    // and clear resolvedAt so dedupe applies again while history is kept.
     await db
       .insert(ucLifespanAlertsTable)
       .values(fresh.map((p) => ({ productId: p.id, name: p.name, sku: p.sku })))
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: ucLifespanAlertsTable.productId,
+        set: {
+          alertCount: sql`${ucLifespanAlertsTable.alertCount} + 1`,
+          resolvedAt: null,
+          alertedAt:  new Date(),
+          name:       sql`excluded.name`,
+          sku:        sql`excluded.sku`,
+        },
+      });
 
     logger.info(
       { flagged: missing.length, newlyAlerted: fresh.length },

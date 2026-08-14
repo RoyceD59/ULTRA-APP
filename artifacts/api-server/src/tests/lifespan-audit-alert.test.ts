@@ -160,8 +160,10 @@ describe("runLifespanAuditAlert", () => {
     });
     assert.equal(first.emailed, true);
     assert.equal(sentEmails.length, 1);
+    assert.doesNotMatch(sentEmails[0]!, /regressed/, "first alert must not be marked as a repeat");
 
-    // 2. Team fixes the product → audit clean, dedupe row cleared
+    // 2. Team fixes the product → audit clean, dedupe row marked resolved
+    //    (kept for history, not deleted)
     const fixed = await runLifespanAuditAlert({
       fetchProducts: async () => [wcProduct(IDS[0]!, { lifespan: 90 })],
       sendEmail,
@@ -171,9 +173,11 @@ describe("runLifespanAuditAlert", () => {
       .select()
       .from(ucLifespanAlertsTable)
       .where(inArray(ucLifespanAlertsTable.productId, IDS));
-    assert.equal(rows.length, 0, "resolved product's dedupe row must be deleted");
+    assert.equal(rows.length, 1, "resolved product's row must be kept for history");
+    assert.notEqual(rows[0]!.resolvedAt, null, "resolved row must have resolvedAt set");
+    assert.equal(rows[0]!.alertCount, 1);
 
-    // 3. Meta disappears again → treated as newly flagged, emailed once more
+    // 3. Meta disappears again → re-alerted, flagged as a repeat offender
     const regressed = await runLifespanAuditAlert({
       fetchProducts: async () => [wcProduct(IDS[0]!)],
       sendEmail,
@@ -181,6 +185,18 @@ describe("runLifespanAuditAlert", () => {
     assert.equal(regressed.newlyAlerted, 1);
     assert.equal(regressed.emailed, true);
     assert.equal(sentEmails.length, 2, "regression must trigger a second email");
+    assert.match(
+      sentEmails[1]!,
+      /Test Filter 9911001.*\(regressed — alerted 1 time before\)/,
+      "re-alert email must flag the product as a repeat offender",
+    );
+
+    rows = await db
+      .select()
+      .from(ucLifespanAlertsTable)
+      .where(inArray(ucLifespanAlertsTable.productId, IDS));
+    assert.equal(rows[0]!.alertCount, 2, "alertCount must increment on regression");
+    assert.equal(rows[0]!.resolvedAt, null, "resolvedAt must be cleared on regression");
 
     // 4. And dedupe still works after the re-alert
     const again = await runLifespanAuditAlert({
@@ -189,6 +205,24 @@ describe("runLifespanAuditAlert", () => {
     });
     assert.equal(again.emailed, false);
     assert.equal(sentEmails.length, 2, "no repeat email while still flagged");
+
+    // 5. Second regression cycle → count keeps growing, plural wording
+    await runLifespanAuditAlert({
+      fetchProducts: async () => [wcProduct(IDS[0]!, { lifespan: 90 })],
+      sendEmail,
+    });
+    const regressedAgain = await runLifespanAuditAlert({
+      fetchProducts: async () => [wcProduct(IDS[0]!)],
+      sendEmail,
+    });
+    assert.equal(regressedAgain.emailed, true);
+    assert.equal(sentEmails.length, 3);
+    assert.match(sentEmails[2]!, /\(regressed — alerted 2 times before\)/);
+    rows = await db
+      .select()
+      .from(ucLifespanAlertsTable)
+      .where(inArray(ucLifespanAlertsTable.productId, IDS));
+    assert.equal(rows[0]!.alertCount, 3);
     await cleanup();
   });
 
