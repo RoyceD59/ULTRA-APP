@@ -29,6 +29,7 @@ import { db, teamSettingsTable, teamUsersTable, teamInvitationsTable, passwordRe
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { sendViaResend } from "../lib/resend.js";
 import { sendWhatsAppMessage } from "../lib/whatsapp.js";
+import { sendSlackTeamMessage } from "../lib/slack.js";
 import { logger } from "../lib/logger.js";
 import { authLimiter } from "../lib/rate-limiters.js";
 
@@ -246,10 +247,25 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
   logger.info({ email: user.email }, "Password reset token generated");
-  // Delivery is via the team WhatsApp channel ONLY (team decision) — the link
-  // goes to the shared team number, not the requester's inbox, so the team
-  // always sees who asked for a reset.
-  await deliverResetLinkViaWhatsApp(resetUrl, user.email);
+  // Delivery is via the team WhatsApp number AND Slack ONLY (team decision) —
+  // never by email. The link goes to team channels, not the requester's
+  // inbox, so the team always sees who asked for a reset. Each channel fails
+  // soft; the token stays valid either way and an admin can still generate a
+  // link from the Team page.
+  const resetMessage =
+    `🔐 ProjectHub password reset requested for ${user.email}.\n\n` +
+    `Reset link (valid 24 hours):\n${resetUrl}\n\n` +
+    `If nobody on the team requested this, ignore this message.`;
+  const [whatsappOk, slackOk] = await Promise.all([
+    deliverResetLinkViaWhatsApp(resetUrl, user.email),
+    sendSlackTeamMessage(resetMessage, "PASSWORD_RESET"),
+  ]);
+  if (!whatsappOk && !slackOk) {
+    logger.error(
+      { email: user.email },
+      "Password reset link could not be delivered on ANY channel (WhatsApp + Slack both failed)"
+    );
+  }
   res.json({ ok: true });
 });
 
