@@ -3907,6 +3907,26 @@ router.post("/uc/notify/register", async (req: Request, res: Response): Promise<
 });
 
 /**
+ * DELETE /api/uc/notify/register
+ * Authenticated — removes the caller's registered push token so a logged-out
+ * (or handed-over) device stops receiving that user's order-update pushes.
+ * Idempotent: succeeds even when no token row exists.
+ */
+router.delete("/uc/notify/register", async (req: Request, res: Response): Promise<void> => {
+  const userId = userIdFromBearer(req.headers["authorization"]);
+  if (userId === "anonymous") {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  try {
+    await db.delete(ucPushTokensTable).where(eq(ucPushTokensTable.userId, userId));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to unregister push token", detail: String(err) });
+  }
+});
+
+/**
  * POST /api/uc/notify/prefs
  * Authenticated — upserts the caller's server-side notification opt-out flags.
  * Works even when no push token has been registered yet: prefs are stored in

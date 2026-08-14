@@ -269,6 +269,25 @@ export async function registerCurrentPushToken(
 }
 
 /**
+ * Unregister the device's push token server-side (called on logout) and clear
+ * the local last-registered marker so the next login re-registers cleanly.
+ * Serialized with registrations so an in-flight login/foreground registration
+ * can never interleave with the delete. Best-effort — never throws.
+ */
+export async function unregisterPushToken(authToken: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await enqueuePushRegistration(async () => {
+    try {
+      await AsyncStorage.removeItem(REGISTERED_PUSH_TOKEN_KEY);
+      await fetch(`${getApiBase()}/api/uc/notify/register`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+    } catch { /* non-critical — silently ignore */ }
+  });
+}
+
+/**
  * Foreground sync: re-register only if the current Expo token differs from
  * the last value sent to the server. Never prompts, never posts redundantly.
  */

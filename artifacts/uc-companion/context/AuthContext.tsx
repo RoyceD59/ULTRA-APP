@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerCurrentPushToken } from '@/hooks/useNotifications';
+import { registerCurrentPushToken, unregisterPushToken } from '@/hooks/useNotifications';
 
 export interface UCUser {
   id: number;
@@ -132,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // Fire-and-forget: unregister this device's push token server-side so
+    // order-update pushes stop arriving after logout (shared/handed-over device).
+    if (token) unregisterPushToken(token).catch(() => {});
     await AsyncStorage.removeItem(TOKEN_KEY);
     await AsyncStorage.removeItem(USER_KEY);
     setToken(null);
