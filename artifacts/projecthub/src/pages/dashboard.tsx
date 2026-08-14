@@ -1,9 +1,70 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useGetDashboardSummary, useGetDashboardActivity } from "@workspace/api-client-react";
-import { FolderKanban, CheckSquare, Clock, AlertTriangle, Activity } from "lucide-react";
+import { FolderKanban, CheckSquare, Clock, AlertTriangle, Activity, TimerOff } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { TaskStatusBadge, formatRelativeDate } from "@/components/shared/badges";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/team-auth";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface LifespanAudit {
+  source: string;
+  checkedAt: string;
+  checkedCount: number;
+  missing: { id: number; name: string; sku: string; categories: string[] }[];
+}
+
+/**
+ * Warns the team when live store products lack the filter_lifespan_days meta —
+ * those products ship without replacement reminders. Admin-only endpoint:
+ * non-admin members get a 403 and the card simply stays hidden.
+ */
+function LifespanAuditWarning() {
+  const { data } = useQuery<LifespanAudit | null>({
+    queryKey: ["uc-lifespan-audit"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const headers = getAuthHeaders();
+      if (!headers) return null;
+      const res = await fetch(`${BASE}/api/uc/admin/products/lifespan-audit`, { headers });
+      if (!res.ok) return null; // 403 (non-admin) or store unreachable — stay quiet
+      return res.json();
+    },
+  });
+
+  if (!data || data.missing.length === 0) return null;
+
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <CardTitle className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+          <TimerOff className="w-4 h-4" />
+          {data.missing.length} store product{data.missing.length > 1 ? "s" : ""} missing a filter lifespan
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground mb-3">
+          These live products have no <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">filter_lifespan_days</code> meta
+          on ucfilters.com, so customers who buy them will never get a replacement reminder.
+          Add the meta value in WooCommerce to fix this.
+        </p>
+        <ul className="space-y-1">
+          {data.missing.map((p) => (
+            <li key={p.id} className="text-sm flex items-center gap-2">
+              <span className="font-medium text-foreground">{p.name}</span>
+              {p.sku && <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{p.sku}</span>}
+              {p.categories.length > 0 && (
+                <span className="text-xs text-muted-foreground">{p.categories.join(", ")}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Dashboard() {
   const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary();
@@ -32,6 +93,8 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Good morning, Team.</h1>
         <p className="text-muted-foreground mt-1 text-lg">Here's what's happening across your projects today.</p>
       </div>
+
+      <LifespanAuditWarning />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="stagger-1 border-primary/20 shadow-sm hover:shadow-md transition-shadow">

@@ -612,6 +612,126 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
   }
 });
 
+// ─── Lifespan audit ───────────────────────────────────────────────────────────
+// Replacement reminders depend on every live filter product carrying a
+// `filter_lifespan_days` meta value (normalizeProduct → lifespanDays > 0).
+// New products added to the store default to lifespanDays 0 (non-trackable)
+// and would silently ship without reminders. This audit flags such products
+// so the team can add the meta before customers miss reminders.
+//
+// Exempt (never flagged — these legitimately have no lifespan):
+//   • enquiry-only products (enquiryOnly flag or zero/absent price)
+//   • products whose only categories are accessory-type (no filter media)
+const LIFESPAN_EXEMPT_CATEGORY = /accessor/i;
+
+/**
+ * Classify normalized products and return the ones that need a lifespan but
+ * lack one. Exported for tests.
+ */
+export function auditProductLifespans(
+  products: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  return products.filter((p) => {
+    if (Number(p["lifespanDays"]) > 0) return false; // already trackable
+    if (p["enquiryOnly"]) return false; // enquiry-only → no reminders expected
+    if (!(Number(p["price"]) > 0)) return false; // no purchasable price → enquiry-only in practice
+    const cats = Array.isArray(p["categories"])
+      ? (p["categories"] as { name?: unknown }[])
+      : [];
+    // Exempt when every category is accessory-type (a product also listed in a
+    // filter category still gets flagged).
+    if (
+      cats.length > 0 &&
+      cats.every((c) => LIFESPAN_EXEMPT_CATEGORY.test(String(c?.name ?? "")))
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Fetch every published product across all WooCommerce pages.
+ *
+ * WooCommerce caps `per_page` at 100, so stores with more products need
+ * pagination. Returns null when ANY page fails — a partial catalogue must
+ * never produce a false all-clear audit.
+ *
+ * `fetchPage` is injectable for tests; defaults to the live wcFetchArray.
+ * Exported for tests.
+ */
+export async function fetchAllPublishedProducts(
+  fetchPage: (page: number) => Promise<Record<string, unknown>[] | null> = (page) =>
+    wcFetchArray("/products", {
+      per_page: "100",
+      status: "publish",
+      page: String(page),
+    }),
+): Promise<Record<string, unknown>[] | null> {
+  const all: Record<string, unknown>[] = [];
+  const MAX_PAGES = 50; // 5,000 products — hard safety cap
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const batch = await fetchPage(page);
+    if (batch === null) return null; // page unreachable → whole audit fails
+    all.push(...batch);
+    if (batch.length < 100) return all; // short page = last page, catalogue complete
+  }
+  // Reached the cap with every page full — the catalogue may extend beyond
+  // what we fetched. Fail loudly rather than audit a partial catalogue and
+  // report a false all-clear.
+  return null;
+}
+
+// GET /api/uc/admin/products/lifespan-audit — admin-only report of live
+// products missing the filter_lifespan_days meta. ProjectHub surfaces this
+// as a dashboard warning so new store products can't ship untracked.
+router.get(
+  "/uc/admin/products/lifespan-audit",
+  async (req: Request, res: Response): Promise<void> => {
+    const admin = await isAdminRequest(req.headers["authorization"]);
+    if (!admin) {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+    try {
+      let source = "mock";
+      let normalized: Record<string, unknown>[] | null = null;
+      if (hasWCCredentials()) {
+        const products = await fetchAllPublishedProducts();
+        if (products) {
+          normalized = products.map(normalizeProduct);
+          source = "woocommerce";
+        } else {
+          // Store unreachable — say so loudly instead of silently auditing
+          // the mock catalogue and reporting a false all-clear.
+          res.status(502).json({ error: "Could not reach the WooCommerce store to audit products" });
+          return;
+        }
+      }
+      if (!normalized) normalized = MOCK_PRODUCTS.map(normalizeProduct);
+
+      const missing = auditProductLifespans(normalized).map((p) => ({
+        id: p["id"],
+        name: p["name"],
+        sku: p["sku"] ?? "",
+        categories: Array.isArray(p["categories"])
+          ? (p["categories"] as { name?: string }[]).map((c) => c?.name ?? "")
+          : [],
+      }));
+
+      res.json({
+        source,
+        checkedAt: new Date().toISOString(),
+        checkedCount: normalized.length,
+        missing,
+      });
+    } catch (err) {
+      logger.error({ err }, "Lifespan audit failed");
+      res.status(500).json({ error: "Lifespan audit failed" });
+    }
+  },
+);
+
 // ─── Product compatibility map ────────────────────────────────────────────────
 // Keyed by full SKU or SKU prefix (ends with "-").
 // Values are { ids: product IDs from MOCK_PRODUCTS, reason: compatibilityReason }.
