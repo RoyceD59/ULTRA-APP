@@ -15,7 +15,8 @@ import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { Platform } from 'react-native';
 import { setBaseUrl } from '@workspace/api-client-react';
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { usePushTokenSync } from '@/hooks/useNotifications';
 import { CartProvider } from '@/context/CartContext';
 
 // Import the notification hook — this also runs setNotificationHandler at
@@ -34,6 +35,11 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const router = useRouter();
+  const { token } = useAuth();
+
+  // Keep the server's push token fresh: re-registers on app foreground if
+  // Expo has rotated the token since the last registration.
+  usePushTokenSync(token);
 
   // Handle notification taps: route user to the relevant screen
   useEffect(() => {

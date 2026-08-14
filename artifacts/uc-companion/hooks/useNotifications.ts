@@ -9,7 +9,8 @@
  *
  * All scheduling functions are no-ops on web.
  */
-import { Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -28,6 +29,10 @@ if (Platform.OS !== 'web') {
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 const PUSH_TOKEN_KEY        = 'uc_push_token';
+// The token value most recently registered with the server — compared against
+// the current Expo token on every app foreground so a rotated token (reinstall,
+// OS update, permission change) is re-registered without a fresh login.
+const REGISTERED_PUSH_TOKEN_KEY = 'uc_push_token_registered';
 const FILTER_ACTIVATION_KEY = 'uc_filter_activation';
 const NOTIF_PREFS_KEY       = 'uc_notif_prefs';
 
@@ -195,6 +200,107 @@ export async function getExpoPushToken(): Promise<string | null> {
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, data);
     return data;
   } catch { return null; }
+}
+
+// ── Server push-token registration & foreground sync ─────────────────────────
+
+const getApiBase = () =>
+  process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : 'http://localhost:8080';
+
+// All server registrations run through a single promise chain so a login-time
+// registration and a foreground sync can never interleave. Each queued step
+// fetches the *current* OS token at its turn, so the last server write always
+// carries the freshest token — no stale-request-finishes-last race.
+let pushRegistrationChain: Promise<unknown> = Promise.resolve();
+function enqueuePushRegistration<T>(fn: () => Promise<T>): Promise<T> {
+  const next = pushRegistrationChain.then(fn, fn);
+  pushRegistrationChain = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+export interface RegisterPushTokenOptions {
+  /** Allow the OS permission prompt (login/registration flows). Default false. */
+  allowPrompt?: boolean;
+  /** POST even if the token matches the last-registered value (e.g. a different user just logged in). Default false. */
+  force?: boolean;
+}
+
+/**
+ * Fetch the current Expo push token from the OS and register it with the
+ * server if it differs from the last-registered value (or when forced).
+ * Serialized — concurrent callers are queued, never interleaved.
+ */
+export async function registerCurrentPushToken(
+  authToken: string,
+  { allowPrompt = false, force = false }: RegisterPushTokenOptions = {},
+): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  return enqueuePushRegistration(async () => {
+    try {
+      const granted = allowPrompt
+        ? await requestNotificationPermission()
+        : (await getNotificationPermissionStatus()) === 'granted';
+      if (!granted) return false;
+
+      await ensureAndroidChannel();
+      // Always fetch fresh from the OS — never trust the AsyncStorage cache
+      // for server registration, since Expo may have rotated the token.
+      const { data: current } = await Notifications.getExpoPushTokenAsync();
+      if (!current) return false;
+      await AsyncStorage.setItem(PUSH_TOKEN_KEY, current);
+
+      if (!force) {
+        const lastRegistered = await AsyncStorage.getItem(REGISTERED_PUSH_TOKEN_KEY);
+        if (lastRegistered === current) return true; // up to date — no API call
+      }
+
+      const res = await fetch(`${getApiBase()}/api/uc/notify/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ pushToken: current }),
+      });
+      if (!res.ok) return false;
+      await AsyncStorage.setItem(REGISTERED_PUSH_TOKEN_KEY, current);
+      return true;
+    } catch { return false; }
+  });
+}
+
+/**
+ * Foreground sync: re-register only if the current Expo token differs from
+ * the last value sent to the server. Never prompts, never posts redundantly.
+ */
+export async function syncPushTokenWithServer(authToken: string): Promise<void> {
+  await registerCurrentPushToken(authToken, { allowPrompt: false, force: false });
+}
+
+/**
+ * Hook: keeps the server's push token fresh while the app is in use.
+ * Runs a sync on mount (when logged in) and on every foreground transition,
+ * so tokens rotated by Expo (reinstall, OS update, permission change) are
+ * picked up without requiring a fresh login.
+ */
+export function usePushTokenSync(authToken: string | null): void {
+  const syncing = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !authToken) return;
+
+    const sync = () => {
+      if (syncing.current) return;
+      syncing.current = true;
+      syncPushTokenWithServer(authToken).finally(() => { syncing.current = false; });
+    };
+
+    sync(); // initial sync when the hook mounts / auth token becomes available
+
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') sync();
+    });
+    return () => sub.remove();
+  }, [authToken]);
 }
 
 // ── Filter activation state ───────────────────────────────────────────────────

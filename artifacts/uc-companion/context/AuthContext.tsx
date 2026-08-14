@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getExpoPushToken } from '@/hooks/useNotifications';
+import { registerCurrentPushToken } from '@/hooks/useNotifications';
 
 export interface UCUser {
   id: number;
@@ -49,16 +49,15 @@ const getBase = () =>
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
     : 'http://localhost:8080';
 
-/** Fire-and-forget: get the Expo push token and register it server-side. */
+/**
+ * Fire-and-forget: register the *current* Expo push token server-side.
+ * Serialized with the foreground sync (usePushTokenSync), so a login-time
+ * registration can never race it and overwrite a fresher token. Forced so a
+ * different user logging in on the same device re-associates the token.
+ */
 async function registerPushTokenWithServer(authToken: string): Promise<void> {
   try {
-    const pushToken = await getExpoPushToken();
-    if (!pushToken) return;
-    await fetch(`${getBase()}/api/uc/notify/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify({ pushToken }),
-    });
+    await registerCurrentPushToken(authToken, { allowPrompt: true, force: true });
   } catch {
     // Non-critical — silently ignore failures
   }
