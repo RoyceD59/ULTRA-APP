@@ -35,7 +35,7 @@ import {
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
-import { eq, desc, inArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
+import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import {
@@ -2528,6 +2528,111 @@ router.get("/uc/admin/orders/recovery-count", async (req: Request, res: Response
   } catch (err) {
     logger.error({ err }, "Failed to count recovery orders");
     res.status(500).json({ error: "Failed to count recovery orders" });
+  }
+});
+
+// ─── Reminder gaps ────────────────────────────────────────────────────────────
+// Replacement reminders are driven by the product's lifespanDays (from the
+// `filter_lifespan_days` meta). An order whose products all lack a lifespan
+// silently produces NO replacement reminder for that customer. This report
+// gives the team visibility into those orders so gaps are caught early.
+
+/**
+ * Classify a purchased product against the catalogue:
+ *   - "missing-lifespan": product exists, needs a lifespan, but has none
+ *     (per auditProductLifespans — exemptions for enquiry/accessory apply)
+ *   - "unknown-product": product id not found in the catalogue at all, so no
+ *     lifespan can ever be resolved for it
+ *   - null: product is trackable or legitimately exempt — no gap
+ * Exported for tests.
+ */
+export function classifyReminderGap(
+  productId: number,
+  catalogueIds: Set<number>,
+  flaggedIds: Set<number>,
+): "missing-lifespan" | "unknown-product" | null {
+  if (!catalogueIds.has(productId)) return "unknown-product";
+  return flaggedIds.has(productId) ? "missing-lifespan" : null;
+}
+
+// Order statuses that no longer need a reminder — the sale never went through.
+const REMINDER_GAP_EXCLUDED_STATUSES = ["cancelled", "refunded", "declined"];
+
+// GET /api/uc/admin/orders/reminder-gaps — admin-only report of orders whose
+// line items include a product with no lifespan set (→ no replacement
+// reminder will ever be scheduled for that purchase). ProjectHub surfaces
+// this in the Orders view as a warning badge per affected order.
+router.get("/uc/admin/orders/reminder-gaps", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  try {
+    // Resolve the catalogue exactly like the lifespan audit does: live store
+    // when credentials exist, otherwise the mock catalogue. A partially
+    // unreachable store must fail loudly, never report a false all-clear.
+    let source = "mock";
+    let normalized: Record<string, unknown>[] | null = null;
+    if (hasWCCredentials()) {
+      const products = await fetchAllPublishedProducts();
+      if (products) {
+        normalized = products.map(normalizeProduct);
+        source = "woocommerce";
+      } else {
+        res.status(502).json({ error: "Could not reach the WooCommerce store to check product lifespans" });
+        return;
+      }
+    }
+    if (!normalized) normalized = MOCK_PRODUCTS.map(normalizeProduct);
+
+    const catalogueIds = new Set(normalized.map((p) => Number(p["id"])));
+    const flaggedIds = new Set(auditProductLifespans(normalized).map((p) => Number(p["id"])));
+
+    const orders = await db
+      .select()
+      .from(ucOrdersTable)
+      .where(notInArray(ucOrdersTable.status, REMINDER_GAP_EXCLUDED_STATUSES))
+      .orderBy(desc(ucOrdersTable.dateCreated));
+
+    let gapOrders: {
+      id: number;
+      userId: string;
+      status: string;
+      dateCreated: Date | string;
+      gapItems: { productId: number; name: string; quantity: number; reason: string }[];
+    }[] = [];
+
+    if (orders.length > 0) {
+      const items = await db.select().from(ucOrderItemsTable)
+        .where(inArray(ucOrderItemsTable.orderId, orders.map(o => o.id)));
+      const itemsByOrder = items.reduce<Record<number, typeof items>>((acc, item) => {
+        (acc[item.orderId] ??= []).push(item);
+        return acc;
+      }, {});
+
+      gapOrders = orders.flatMap((o) => {
+        const gapItems = (itemsByOrder[o.id] ?? []).flatMap((i) => {
+          const reason = classifyReminderGap(i.productId, catalogueIds, flaggedIds);
+          return reason
+            ? [{ productId: i.productId, name: i.name, quantity: i.quantity, reason }]
+            : [];
+        });
+        return gapItems.length > 0
+          ? [{ id: o.id, userId: o.userId, status: o.status, dateCreated: o.dateCreated, gapItems }]
+          : [];
+      });
+    }
+
+    res.json({
+      source,
+      checkedAt: new Date().toISOString(),
+      checkedOrders: orders.length,
+      orders: gapOrders,
+    });
+  } catch (err) {
+    logger.error({ err }, "Reminder-gap report failed");
+    res.status(500).json({ error: "Reminder-gap report failed" });
   }
 });
 

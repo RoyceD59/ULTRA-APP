@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import {
   ShoppingBag, AlertTriangle, Package, RefreshCw, Lock, AlertCircle,
   LogOut, Copy, Check, ExternalLink, Filter, X, Download,
-  CheckCircle2, XCircle, Undo2, Trash2,
+  CheckCircle2, XCircle, Undo2, Trash2, BellOff,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -43,6 +43,20 @@ interface AdminOrder {
   paymentReference: string;
   webhookRecovery: boolean;
   lineItems: { productId: number; name: string; quantity: number; total: string }[];
+}
+
+interface ReminderGapItem {
+  productId: number;
+  name: string;
+  quantity: number;
+  reason: "missing-lifespan" | "unknown-product";
+}
+
+interface ReminderGapReport {
+  source: string;
+  checkedAt: string;
+  checkedOrders: number;
+  orders: { id: number; userId: string; status: string; dateCreated: string; gapItems: ReminderGapItem[] }[];
 }
 
 // ─── Login Gate ───────────────────────────────────────────────────────────────
@@ -359,9 +373,11 @@ function OrderActions({
 // ─── Order card ───────────────────────────────────────────────────────────────
 
 function OrderCard({
-  order, token, onChanged,
-}: { order: AdminOrder; token: string; onChanged: () => void }) {
+  order, token, onChanged, gapItems,
+}: { order: AdminOrder; token: string; onChanged: () => void; gapItems?: ReminderGapItem[] }) {
   const isRecovery   = order.webhookRecovery;
+  const hasGap       = !!gapItems && gapItems.length > 0;
+  const gapProductIds = new Set((gapItems ?? []).map(g => g.productId));
   const hasReference = !!order.paymentReference;
   const customerIsEmail = isEmail(order.userId);
 
@@ -376,6 +392,17 @@ function OrderCard({
               <Badge className="bg-amber-500 text-white hover:bg-amber-600 gap-1 text-xs font-medium">
                 <AlertTriangle className="w-3 h-3" />
                 Webhook recovery
+              </Badge>
+            )}
+            {/* Reminder-gap badge — this customer will get NO replacement
+                reminder because a purchased product has no lifespan set */}
+            {hasGap && (
+              <Badge
+                className="bg-orange-100 text-orange-800 hover:bg-orange-200 gap-1 text-xs font-medium border border-orange-300"
+                title="No replacement reminder will be scheduled — a purchased product has no lifespan set"
+              >
+                <BellOff className="w-3 h-3" />
+                No reminder
               </Badge>
             )}
             <Badge className={`text-xs font-medium capitalize ${statusColor(order.status)}`}>
@@ -427,12 +454,30 @@ function OrderCard({
           </p>
         ) : (
           <ul className="space-y-0.5">
-            {order.lineItems.map((item, i) => (
-              <li key={i} className="text-sm flex justify-between">
-                <span>{item.name} × {item.quantity}</span>
-                <span className="text-muted-foreground">{order.currency} {item.total}</span>
-              </li>
-            ))}
+            {order.lineItems.map((item, i) => {
+              const itemGap = gapProductIds.has(item.productId)
+                ? gapItems?.find(g => g.productId === item.productId)
+                : undefined;
+              return (
+                <li key={i} className="text-sm flex justify-between gap-2">
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    {item.name} × {item.quantity}
+                    {itemGap && (
+                      <span
+                        className="inline-flex items-center gap-1 text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5"
+                        title={itemGap.reason === "unknown-product"
+                          ? "Product not found in the catalogue — lifespan can't be resolved"
+                          : "Product has no filter_lifespan_days set in the store"}
+                      >
+                        <BellOff className="w-3 h-3" />
+                        {itemGap.reason === "unknown-product" ? "not in catalogue" : "no lifespan set"}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">{order.currency} {item.total}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
         <div className="mt-2 text-sm font-semibold text-right">
@@ -448,6 +493,7 @@ function OrderCard({
 
 function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [recoveryOnly, setRecoveryOnly] = useState(false);
+  const [gapsOnly,     setGapsOnly]     = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [fromDate, setFromDate] = useState("");
@@ -510,6 +556,28 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
     refetchOnWindowFocus: false,
   });
 
+  // Reminder-gap report — orders whose products have no lifespan set and so
+  // will never produce a replacement reminder. Loaded independently of the
+  // main list; failure of this report never blocks the orders view.
+  const { data: gapReport } = useQuery<ReminderGapReport | null>({
+    queryKey: ["admin-order-reminder-gaps", token],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/orders/reminder-gaps`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null; // report unavailable — orders list still works
+      return res.json() as Promise<ReminderGapReport>;
+    },
+    refetchOnWindowFocus: false,
+  });
+
+  const gapsByOrderId = new Map<number, ReminderGapItem[]>(
+    (gapReport?.orders ?? []).map(o => [o.id, o.gapItems])
+  );
+  const gapProductNames = [...new Set(
+    (gapReport?.orders ?? []).flatMap(o => o.gapItems.map(g => g.name))
+  )];
+
   const recoveryOrders  = orders?.filter(o => o.webhookRecovery) ?? [];
   const unresolvedCount = recoveryOrders.filter(
     o => o.status !== "completed" && o.status !== "cancelled"
@@ -526,7 +594,8 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
     ...[...statusCounts.keys()].filter(s => !STATUS_ORDER.includes(s)).sort(),
   ];
 
-  const baseOrders    = recoveryOnly ? recoveryOrders : (orders ?? []);
+  let baseOrders = recoveryOnly ? recoveryOrders : (orders ?? []);
+  if (gapsOnly) baseOrders = baseOrders.filter(o => gapsByOrderId.has(o.id));
   const visibleOrders = statusFilter ? baseOrders.filter(o => o.status === statusFilter) : baseOrders;
 
   return (
@@ -646,6 +715,42 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
         </div>
       )}
 
+      {/* Reminder-gap banner — orders that will never get a replacement
+          reminder because a purchased product has no lifespan set */}
+      {gapReport && gapReport.orders.length > 0 && !gapsOnly && (
+        <div
+          className="rounded-lg border border-orange-300 bg-orange-50 p-4 flex items-start gap-3 cursor-pointer hover:bg-orange-100 transition-colors"
+          onClick={() => setGapsOnly(true)}
+          title="Click to filter to orders with no reminder scheduled"
+        >
+          <BellOff className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-orange-800">
+              {gapReport.orders.length} order{gapReport.orders.length > 1 ? "s" : ""} will get no replacement reminder
+            </p>
+            <p className="text-orange-700 text-sm mt-0.5">
+              The purchased product{gapProductNames.length > 1 ? "s have" : " has"} no lifespan set in the
+              store, so no replacement reminder will ever be scheduled for these customers.
+              Product{gapProductNames.length > 1 ? "s" : ""} causing the gap:{" "}
+              <span className="font-medium">{gapProductNames.join(", ")}</span>.
+              Add a <span className="font-mono text-xs">filter_lifespan_days</span> value in WooCommerce to fix.
+            </p>
+          </div>
+          <span className="text-xs text-orange-600 font-medium whitespace-nowrap">View only →</span>
+        </div>
+      )}
+      {gapsOnly && (
+        <div className="flex items-center gap-2">
+          <Badge className="bg-orange-100 text-orange-800 border border-orange-300 gap-1">
+            <BellOff className="w-3 h-3" />
+            Showing orders with no reminder
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={() => setGapsOnly(false)}>
+            <X className="w-4 h-4 mr-1" />Show all
+          </Button>
+        </div>
+      )}
+
       {/* Recovery alert banner */}
       {recoveryOrders.length > 0 && !recoveryOnly && (
         <div
@@ -689,7 +794,13 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
       {visibleOrders.length > 0 && (
         <div className="space-y-3">
           {visibleOrders.map(order => (
-            <OrderCard key={order.id} order={order} token={token} onChanged={() => refetch()} />
+            <OrderCard
+              key={order.id}
+              order={order}
+              token={token}
+              onChanged={() => refetch()}
+              gapItems={gapsByOrderId.get(order.id)}
+            />
           ))}
         </div>
       )}
