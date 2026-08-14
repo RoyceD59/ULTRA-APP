@@ -17,6 +17,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { createHmac } from "node:crypto";
 
 process.env["SESSION_SECRET"] ??= "test-secret-team-horizon-pages";
 
@@ -47,9 +48,6 @@ let authToken: string;
 before(
   () =>
     new Promise<void>((resolve, reject) => {
-      // Remove webhook secret so HMAC check is bypassed in tests
-      delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
-
       // Issue a test admin JWT so routes protected by requireTeamAuth pass.
       const exp = Math.floor(Date.now() / 1000) + 8 * 60 * 60;
       authToken = issueToken({
@@ -280,12 +278,41 @@ describe("System Status page flows", () => {
 // 3. Webhook Tester
 // ─────────────────────────────────────────────────────────────────────────────
 
+const INGEST_TEST_SECRET = "test-ingest-secret-e2e";
+
+/** Compute HMAC-SHA256 of a JSON body for the public /webhook/ingest endpoint. */
+function signIngest(body: unknown): string {
+  return "sha256=" + createHmac("sha256", INGEST_TEST_SECRET).update(JSON.stringify(body)).digest("hex");
+}
+
+/** POST directly to the public /webhook/ingest endpoint (bypasses the api() auth helper). */
+async function postIngest(
+  body: unknown,
+  opts: { sig?: string; omitSig?: boolean } = {},
+): Promise<{ status: number; data: unknown }> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (!opts.omitSig) {
+    headers["x-webhook-signature"] = opts.sig ?? signIngest(body);
+  }
+  const res = await fetch(`${base}/webhook/ingest`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  return { status: res.status, data };
+}
+
 describe("Webhook Tester page flows", () => {
   let projectId: number;
   let memberId: number;
   let createdTaskId: number | null = null;
 
   before(async () => {
+    // Set a deterministic test secret so both the authenticated test-dispatch
+    // and the public HMAC ingest tests can run against the same server instance.
+    process.env["PROJECTHUB_WEBHOOK_SECRET"] = INGEST_TEST_SECRET;
+
     // Seed a project so the webhook can reference it via FK
     const [project] = await db
       .insert(projectsTable)
@@ -302,6 +329,7 @@ describe("Webhook Tester page flows", () => {
   });
 
   after(async () => {
+    delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
     if (createdTaskId) {
       await db.delete(tasksTable).where(eq(tasksTable.id, createdTaskId));
     }
@@ -313,8 +341,10 @@ describe("Webhook Tester page flows", () => {
     }
   });
 
-  it("rejects a payload missing required taskData fields", async () => {
-    const { status, data } = await api("POST", "/webhook/ingest", {
+  // ── Authenticated test-dispatch (used by the Webhook Tester UI) ─────────────
+
+  it("test-dispatch: rejects a payload missing required taskData fields (400)", async () => {
+    const { status, data } = await api("POST", "/webhook/test-dispatch", {
       event: "task.created",
       sourcePlatform: "jira",
       taskData: {
@@ -329,8 +359,8 @@ describe("Webhook Tester page flows", () => {
     assert.ok(Array.isArray(errors) && errors.length > 0, "Should list validation errors");
   });
 
-  it("accepts a valid payload and creates a task in the DB", async () => {
-    const { status, data } = await api("POST", "/webhook/ingest", {
+  it("test-dispatch: accepts a valid payload and creates a task in the DB (200)", async () => {
+    const { status, data } = await api("POST", "/webhook/test-dispatch", {
       event: "task.created",
       sourcePlatform: "jira",
       taskData: {
@@ -338,7 +368,6 @@ describe("Webhook Tester page flows", () => {
         title: "E2E Webhook Task",
         description: "Created by integration test",
         priority: "high",
-        // Webhook validation requires assigneeId, resourceRequired, deliveryFormat
         assigneeId: memberId,
         resourceRequired: { type: "budget", amount: 5000 },
         deliveryFormat: "pdf",
@@ -361,6 +390,31 @@ describe("Webhook Tester page flows", () => {
     assert.ok(task, "Task should exist in the database");
     assert.equal(task!.title, "E2E Webhook Task");
     assert.equal(task!.sourcePlatform, "jira");
+  });
+
+  // ── Public /webhook/ingest HMAC guard ───────────────────────────────────────
+
+  it("public ingest: correct HMAC-SHA256 signature is accepted (400 for missing fields)", async () => {
+    const body = { event: "task.created", sourcePlatform: "test-system" };
+    const { status } = await postIngest(body);
+    // No taskData → Zod accepts the payload but validation errors fire; either way
+    // we get a non-401/503 response, proving the signature was accepted.
+    assert.ok(
+      status === 200 || status === 400,
+      `Expected 200 or 400 for correctly-signed ingest; got ${status}`,
+    );
+  });
+
+  it("public ingest: wrong HMAC-SHA256 signature is rejected (401)", async () => {
+    const body = { event: "task.created", sourcePlatform: "test-system" };
+    const { status, data } = await postIngest(body, { sig: "sha256=" + "0".repeat(64) });
+    assert.equal(status, 401, `Expected 401 for wrong signature; got ${status}: ${JSON.stringify(data)}`);
+  });
+
+  it("public ingest: missing signature header is rejected (401)", async () => {
+    const body = { event: "task.created", sourcePlatform: "test-system" };
+    const { status, data } = await postIngest(body, { omitSig: true });
+    assert.equal(status, 401, `Expected 401 when signature header is absent; got ${status}: ${JSON.stringify(data)}`);
   });
 });
 

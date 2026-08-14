@@ -5,7 +5,7 @@
  *   1. Correct HMAC-SHA512 signature → accepted (200, received: true)
  *   2. Wrong signature → rejected (401)
  *   3. Missing x-paystack-signature header → rejected (401)
- *   4. PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE=true without a key → hard-rejected (403)
+ *   4. Missing PAYSTACK_SECRET_KEY → hard-rejected (503)
  *
  * Strategy:
  *   – We use a non-"charge.success" event type in the accept test so the handler
@@ -33,7 +33,6 @@ let base: string;
 
 // Preserve env vars so each test can freely mutate and restore them.
 let savedPaystackKey: string | undefined;
-let savedRequiredSig: string | undefined;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +104,6 @@ after(async () => {
 beforeEach(() => {
   // Snapshot env state before each test.
   savedPaystackKey = process.env["PAYSTACK_SECRET_KEY"];
-  savedRequiredSig = process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"];
 });
 
 afterEach(() => {
@@ -115,11 +113,6 @@ afterEach(() => {
   } else {
     process.env["PAYSTACK_SECRET_KEY"] = savedPaystackKey;
   }
-  if (savedRequiredSig === undefined) {
-    delete process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"];
-  } else {
-    process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"] = savedRequiredSig;
-  }
 });
 
 // ── Suite ─────────────────────────────────────────────────────────────────────
@@ -128,7 +121,6 @@ describe("Paystack webhook — signature guard", () => {
   it("correct HMAC-SHA512 signature is accepted (200)", async () => {
     const secret = "ps_test_secret_correct";
     process.env["PAYSTACK_SECRET_KEY"] = secret;
-    delete process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"];
 
     const sig = sign(PING_EVENT, secret);
     const res = await postWebhook(PING_EVENT, { sig });
@@ -149,7 +141,6 @@ describe("Paystack webhook — signature guard", () => {
   it("wrong signature is rejected (401)", async () => {
     const secret = "ps_test_secret_for_wrong_sig";
     process.env["PAYSTACK_SECRET_KEY"] = secret;
-    delete process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"];
 
     const wrongSig = "0".repeat(128); // 512-bit hex string, but computed with a different secret
     const res = await postWebhook(PING_EVENT, { sig: wrongSig });
@@ -164,7 +155,6 @@ describe("Paystack webhook — signature guard", () => {
   it("missing x-paystack-signature header is rejected (401)", async () => {
     const secret = "ps_test_secret_for_missing_sig";
     process.env["PAYSTACK_SECRET_KEY"] = secret;
-    delete process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"];
 
     // Omit the header entirely — handler receives an empty string which won't match.
     const res = await postWebhook(PING_EVENT, { omitSigHeader: true });
@@ -176,17 +166,16 @@ describe("Paystack webhook — signature guard", () => {
     );
   });
 
-  it("PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE=true without a key hard-rejects (403)", async () => {
+  it("missing PAYSTACK_SECRET_KEY hard-rejects the request (503)", async () => {
     delete process.env["PAYSTACK_SECRET_KEY"];
-    process.env["PAYSTACK_WEBHOOK_REQUIRED_SIGNATURE"] = "true";
 
-    // No signature header needed — the guard fires before signature verification.
+    // Any payload — the guard fires before signature verification.
     const res = await postWebhook(PING_EVENT, { omitSigHeader: true });
 
     assert.equal(
       res.status,
-      403,
-      `expected 403 when strict mode is on but no secret is configured; got ${res.status}: ${JSON.stringify(res.body)}`,
+      503,
+      `expected 503 when PAYSTACK_SECRET_KEY is absent; got ${res.status}: ${JSON.stringify(res.body)}`,
     );
   });
 });

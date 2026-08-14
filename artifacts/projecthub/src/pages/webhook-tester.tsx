@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useIngestWebhook } from "@workspace/api-client-react";
+import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Webhook, Terminal, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getAuthHeaders } from "@/lib/team-auth";
+
+const API = "/api";
 
 const webhookSchema = z.object({
   event: z.string().min(1, "Event name is required"),
@@ -25,18 +28,47 @@ const webhookSchema = z.object({
   }, "Must be valid JSON").optional(),
 });
 
-export default function WebhookTester() {
-  const [result, setResult] = useState<any>(null);
+type DispatchResult =
+  | { success: true; data: unknown }
+  | { success: false; error: string };
 
-  const ingestMutation = useIngestWebhook({
-    mutation: {
-      onSuccess: (data) => {
-        setResult({ success: true, data });
-      },
-      onError: (error: any) => {
-        setResult({ success: false, error: error.message || "Failed to ingest webhook" });
-      }
-    }
+async function dispatchTestWebhook(payload: {
+  event: string;
+  sourcePlatform: string;
+  taskData?: unknown;
+}): Promise<unknown> {
+  const authHeaders = getAuthHeaders();
+  if (!authHeaders) throw new Error("Not authenticated");
+
+  const res = await fetch(`${API}/webhook/test-dispatch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      typeof body === "object" && body !== null && "error" in body
+        ? String((body as Record<string, unknown>)["error"])
+        : `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
+export default function WebhookTester() {
+  const [result, setResult] = useState<DispatchResult | null>(null);
+
+  const dispatchMutation = useMutation({
+    mutationFn: dispatchTestWebhook,
+    onSuccess: (data) => {
+      setResult({ success: true, data });
+    },
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : "Failed to dispatch webhook";
+      setResult({ success: false, error: msg });
+    },
   });
 
   const form = useForm<z.infer<typeof webhookSchema>>({
@@ -58,12 +90,10 @@ export default function WebhookTester() {
       // Handled by validation
     }
 
-    ingestMutation.mutate({
-      data: {
-        event: values.event,
-        sourcePlatform: values.sourcePlatform,
-        taskData: parsedData
-      }
+    dispatchMutation.mutate({
+      event: values.event,
+      sourcePlatform: values.sourcePlatform,
+      taskData: parsedData,
     });
   }
 
@@ -85,7 +115,7 @@ export default function WebhookTester() {
                 <Terminal className="w-5 h-5 text-amber-600" />
                 POST /api/webhook/ingest
               </CardTitle>
-              <CardDescription>Send a test payload to the active environment.</CardDescription>
+              <CardDescription>Send a test payload to the active environment. The server signs the request on your behalf.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
               <Form {...form}>
@@ -121,8 +151,8 @@ export default function WebhookTester() {
                     </FormItem>
                   )} />
                   
-                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold gap-2" disabled={ingestMutation.isPending}>
-                    {ingestMutation.isPending ? "Transmitting..." : "Send Payload"} <ArrowRight className="w-4 h-4" />
+                  <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold gap-2" disabled={dispatchMutation.isPending}>
+                    {dispatchMutation.isPending ? "Transmitting..." : "Send Payload"} <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
               </Form>
@@ -143,7 +173,7 @@ export default function WebhookTester() {
                   <div className="space-y-4 animate-in-up">
                     <div className={`flex items-center gap-2 ${result.success ? "text-emerald-400" : "text-destructive"}`}>
                       {result.success ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                      <span className="font-bold text-sm">HTTP {result.success ? "200 OK" : "400 Bad Request"}</span>
+                      <span className="font-bold text-sm">HTTP {result.success ? "200 OK" : "Error"}</span>
                     </div>
                     <pre className="text-slate-300 whitespace-pre-wrap break-all">
                       {JSON.stringify(result.success ? result.data : { error: result.error }, null, 2)}
