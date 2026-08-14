@@ -23,6 +23,8 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
 import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem } from '@/hooks/useApi';
+import { useAuth } from '@/context/AuthContext';
+import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
 import {
   FilterActivation,
   scheduleAllFilterNotifications,
@@ -94,11 +96,15 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 export default function FilterTrackerSection({ activation, onActivationChange }: Props) {
   const colors = useColors();
   const router = useRouter();
+  const { token } = useAuth();
   const [showRegisterModal,   setShowRegisterModal]   = useState(false);
   const [showPerfModal,       setShowPerfModal]       = useState(false);
   const [toastMessage,        setToastMessage]        = useState('');
   const [toastVisible,        setToastVisible]        = useState(false);
   const [zeroLifespanNotice,  setZeroLifespanNotice]  = useState(false);
+  // Pending reminder opt-in prompt, set after a successful registration for
+  // signed-in users who haven't been shown the prompt for this activation yet.
+  const [reminderOptIn, setReminderOptIn] = useState<{ productId: number; activatedAt: string } | null>(null);
 
   // Fetch the live catalogue here so the sync effect and the registration modal
   // share the same data without triggering two independent API calls.
@@ -335,8 +341,29 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
         filterProducts={filterProducts}
         productsLoading={productsLoading}
         onClose={() => setShowRegisterModal(false)}
-        onSave={a => { onActivationChange(a); setShowRegisterModal(false); }}
+        onSave={async a => {
+          onActivationChange(a);
+          setShowRegisterModal(false);
+          // Invite signed-in users to enable message reminder channels.
+          // Only show the prompt once per registration (keyed by productId+activatedAt).
+          if (token) {
+            const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt);
+            if (!alreadySeen) {
+              setReminderOptIn({ productId: a.productId, activatedAt: a.activatedAt });
+            }
+          }
+        }}
       />
+
+      {/* ── Reminder opt-in sheet (shown once after registration) ────────── */}
+      {reminderOptIn && (
+        <ReminderOptInSheet
+          visible={!!reminderOptIn}
+          productId={reminderOptIn.productId}
+          activatedAt={reminderOptIn.activatedAt}
+          onClose={() => setReminderOptIn(null)}
+        />
+      )}
 
       {/* ── Performance Check-In Modal ───────────────────────────────────── */}
       {activation && (
