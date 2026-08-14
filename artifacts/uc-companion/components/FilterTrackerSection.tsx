@@ -31,6 +31,7 @@ import {
   requestNotificationPermission,
   effectiveLifespanDays,
   syncActivationWithCatalogue,
+  getZeroLifespanNotice,
   type PerfRecommendation,
 } from '@/hooks/useNotifications';
 import PerformanceCheckInModal from '@/components/PerformanceCheckInModal';
@@ -93,14 +94,24 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 export default function FilterTrackerSection({ activation, onActivationChange }: Props) {
   const colors = useColors();
   const router = useRouter();
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [showPerfModal,     setShowPerfModal]     = useState(false);
-  const [toastMessage,      setToastMessage]      = useState('');
-  const [toastVisible,      setToastVisible]      = useState(false);
+  const [showRegisterModal,   setShowRegisterModal]   = useState(false);
+  const [showPerfModal,       setShowPerfModal]       = useState(false);
+  const [toastMessage,        setToastMessage]        = useState('');
+  const [toastVisible,        setToastVisible]        = useState(false);
+  const [zeroLifespanNotice,  setZeroLifespanNotice]  = useState(false);
 
   // Fetch the live catalogue here so the sync effect and the registration modal
   // share the same data without triggering two independent API calls.
   const { products: filterProducts, loading: productsLoading, source: productsSource } = useFilterProducts();
+
+  // ── Zero-lifespan notice: load on mount and whenever activation changes ────────
+  useEffect(() => {
+    if (!activation) {
+      setZeroLifespanNotice(false);
+      return;
+    }
+    getZeroLifespanNotice().then(setZeroLifespanNotice);
+  }, [activation]);
 
   // ── Catalogue lifespan sync ──────────────────────────────────────────────────
   // Runs only when the product list came directly from the live API ('live').
@@ -116,6 +127,9 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
     const oldLifespan = activation.lifespanDays;
     const oldName     = activation.productName;
     syncActivationWithCatalogue(filterProducts).then(updated => {
+      // Refresh the notice flag regardless of whether the lifespan changed —
+      // the sync may have set or cleared it based on the catalogue data.
+      getZeroLifespanNotice().then(setZeroLifespanNotice);
       if (updated) {
         onActivationChange(updated);
         // Notify the user that the schedule was silently updated.
@@ -216,6 +230,18 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
                       : activation!.lastWaterSource === 'borehole'
                       ? 'Borehole water detected — rated lifespan may be up to 30% shorter'
                       : `After ${activation!.cleanCount} clean${(activation!.cleanCount ?? 0) > 1 ? 's' : ''}, effective lifespan is reduced`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Zero-lifespan notice — shown when the catalogue no longer carries
+                  a valid lifespan for this product (meta removed / bad store data).
+                  Non-blocking: reminders are preserved from the last known lifespan. */}
+              {zeroLifespanNotice && (
+                <View style={[styles.effWarning, { backgroundColor: '#FFF1F2', borderColor: '#FECDD3' }]}>
+                  <Ionicons name="warning-outline" size={14} color="#E11D48" />
+                  <Text style={[styles.effWarningText, { color: '#9F1239' }]}>
+                    Reminder accuracy can't be confirmed — this product's lifespan data is temporarily unavailable from the catalogue. Your existing reminders are still active.
                   </Text>
                 </View>
               )}
