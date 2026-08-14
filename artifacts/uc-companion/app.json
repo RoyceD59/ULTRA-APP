@@ -95,7 +95,7 @@
           "androidCollapsedTitle": "Ultra-Clear"
         }
       ],
-
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,
