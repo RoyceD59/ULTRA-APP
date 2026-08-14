@@ -48,6 +48,31 @@ source. The scenarios below verify the real navigation paths on a device.
 2. **Expected:** the spinner clears and checkout renders (with a genuinely
    empty cart) rather than spinning forever.
 
+## Scenario 4 — cart screen never flashes "Your cart is empty"
+
+1. With items in the cart and the app killed (and the artificial 2 s delay in
+   place), launch the app and immediately open the cart screen (tap the cart
+   icon in the home header as fast as possible, or deep-link to
+   `<app-scheme>://cart`).
+2. **Expected:** a full-screen centered spinner appears first. At no point is
+   the "Your cart is empty / Browse Products" state visible before hydration.
+3. Once hydration completes, the populated cart list, summary, and checkout
+   footer appear in one paint.
+
+## Scenario 5 — basket bar and tab badge don't flash on resume
+
+1. With items in the cart, background the app and force the OS to purge the JS
+   context (Android: enable "Don't keep activities" in developer options, or
+   open several heavy apps; alternatively fully kill and relaunch).
+2. Return to the app on any tab.
+3. **Expected:** the floating basket bar and the Products tab badge are simply
+   absent until hydration completes, then appear with the correct count and
+   total. The bar must never animate out (slide down/fade) against a zero
+   count and then animate back in, and no badge/bar ever shows a 0 or empty
+   value.
+4. Screen content padding follows the bar: the bottom inset appears together
+   with the bar (no content hidden behind it afterwards).
+
 ## Pass criteria
 
 - No frame ever shows $0.00 / empty line items before hydration completes.

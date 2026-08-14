@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
@@ -19,7 +19,7 @@ export default function CartScreen() {
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
-  const { items, removeItem, updateQty, totalPrice, addItem } = useCart();
+  const { items, removeItem, updateQty, totalPrice, addItem, cartHydrated } = useCart();
 
   const total = totalPrice + (items.length > 0 ? DELIVERY_FEE : 0);
 
@@ -108,6 +108,18 @@ export default function CartScreen() {
             <Ionicons name="add" size={18} color="#fff" />
           </TouchableOpacity>
         )}
+      </View>
+    );
+  }
+
+  // Hydration guard: on a slow device the AsyncStorage read can still be in
+  // flight when this screen mounts.  Rendering against the not-yet-hydrated
+  // `items: []` default would flash "Your cart is empty" for a frame or two,
+  // so show a spinner until the cart has been read at least once.
+  if (!cartHydrated) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }

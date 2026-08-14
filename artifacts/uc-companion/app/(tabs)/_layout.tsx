@@ -22,9 +22,13 @@ function GlobalCartBar() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { totalItems, totalPrice } = useCart();
+  const { totalItems, totalPrice, cartHydrated } = useCart();
 
-  const hasItems = totalItems > 0;
+  // Hydration guard: before the AsyncStorage read completes, `totalItems` is
+  // the pre-hydration default (0).  Without the cartHydrated gate, a JS-context
+  // restart (e.g. Android low-memory purge) would animate the bar OUT against
+  // that stale 0 and then back IN once the real cart loads — a visible flash.
+  const hasItems = cartHydrated && totalItems > 0;
 
   const anim = useRef(new Animated.Value(0)).current;
 
@@ -122,7 +126,7 @@ function ClassicTabLayout() {
   const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
-  const { totalItems } = useCart();
+  const { totalItems, cartHydrated } = useCart();
 
   const tabBarStyle = {
     position: 'absolute' as const,
@@ -162,7 +166,8 @@ function ClassicTabLayout() {
           title: 'Products',
           tabBarIcon: ({ color }) =>
             isIOS ? <SymbolView name="cart" tintColor={color} size={24} /> : <Ionicons name="cart-outline" size={22} color={color} />,
-          tabBarBadge: totalItems > 0 ? totalItems : undefined,
+          // Hydration-gated: never show a (stale-zero-derived) badge state pre-hydration
+          tabBarBadge: cartHydrated && totalItems > 0 ? totalItems : undefined,
         }}
       />
       <Tabs.Screen

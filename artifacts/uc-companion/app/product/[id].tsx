@@ -35,7 +35,7 @@ export default function ProductDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
-  const { addItem, totalItems } = useCart();
+  const { addItem, totalItems, cartHydrated } = useCart();
   const { token } = useAuth();
   const { width } = useWindowDimensions();
 
@@ -388,7 +388,8 @@ export default function ProductDetailScreen() {
             <TouchableOpacity onPress={() => router.push('/cart')} activeOpacity={0.8}
               style={[styles.cartIcon, { borderColor: colors.border }]}>
               <Ionicons name="cart-outline" size={22} color={colors.primary} />
-              {totalItems > 0 && (
+              {/* Hydration-gated: never render a badge state derived from the pre-hydration default */}
+              {cartHydrated && totalItems > 0 && (
                 <View style={styles.badge}><Text style={styles.badgeText}>{totalItems}</Text></View>
               )}
             </TouchableOpacity>

@@ -118,11 +118,14 @@ describe('CartContext hydration flag (slow-device simulation)', () => {
   });
 });
 
-describe('checkout.tsx hydration guard (source-level tripwire)', () => {
-  const src = fs.readFileSync(
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../app/checkout.tsx'),
+const readAppSource = (rel: string) =>
+  fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../', rel),
     'utf8',
   );
+
+describe('checkout.tsx hydration guard (source-level tripwire)', () => {
+  const src = readAppSource('app/checkout.tsx');
 
   it('D: early-returns a spinner on !cartHydrated before any cart UI renders', () => {
     // The guard block must exist…
@@ -143,5 +146,66 @@ describe('checkout.tsx hydration guard (source-level tripwire)', () => {
     assert.ok(mainReturnIdx > -1, 'expected the main checkout JSX to exist');
     assert.ok(guardIdx < mainReturnIdx,
       'the hydration guard must come before the main checkout JSX');
+  });
+});
+
+describe('other cart surfaces respect cartHydrated (source-level tripwires)', () => {
+  it('E: cart screen early-returns a spinner on !cartHydrated before the empty state', () => {
+    const src = readAppSource('app/cart.tsx');
+    assert.match(src, /cartHydrated/, 'cart.tsx must read cartHydrated from useCart()');
+
+    const guardMatch = src.match(/if\s*\(\s*!cartHydrated\s*\)\s*\{/);
+    assert.ok(guardMatch, 'cart.tsx must early-return when cartHydrated is false');
+    const guardIdx = guardMatch.index!;
+
+    // The guard block ends where the next statement (the empty-cart check)
+    // begins — inspect only the guard's own return.
+    const nextStmtIdx = src.indexOf('if (items.length === 0)', guardIdx);
+    assert.ok(nextStmtIdx > guardIdx, 'expected the empty-cart check after the guard');
+    const guardBlock = src.slice(guardIdx, nextStmtIdx);
+    assert.match(guardBlock, /ActivityIndicator/,
+      'the !cartHydrated branch must show a spinner');
+    assert.doesNotMatch(guardBlock, /Your cart is empty|items\.map|totalPrice/,
+      'the !cartHydrated branch must not render the empty state or totals');
+
+    // Guard must sit BEFORE the empty-cart return so no frame can flash the
+    // empty state against the pre-hydration default items: [].  The empty-cart
+    // JSX (>emptyTitle text) must only exist after the guard.
+    const emptyJsxIdx = src.indexOf('styles.emptyTitle');
+    assert.ok(emptyJsxIdx > -1, 'expected the empty-cart JSX to exist');
+    assert.ok(guardIdx < emptyJsxIdx,
+      'the hydration guard must come before the empty-cart JSX');
+  });
+
+  it('F: GlobalCartBar and tab badge gate visibility on cartHydrated', () => {
+    const src = readAppSource('app/(tabs)/_layout.tsx');
+
+    // The basket bar's visibility flag must AND cartHydrated with the count so
+    // a JS-context restart cannot animate the bar out against a stale zero.
+    assert.match(src, /hasItems\s*=\s*cartHydrated\s*&&\s*totalItems\s*>\s*0/,
+      'GlobalCartBar must gate hasItems on cartHydrated');
+
+    // The Products tab badge must not derive from the pre-hydration default.
+    assert.match(src, /tabBarBadge:\s*cartHydrated\s*&&\s*totalItems\s*>\s*0/,
+      'the tab badge must be gated on cartHydrated');
+  });
+
+  it('G: header cart badges (home, product detail) gate on cartHydrated', () => {
+    for (const rel of ['app/(tabs)/index.tsx', 'app/product/[id].tsx']) {
+      const src = readAppSource(rel);
+      // Every badge conditional that reads totalItems must be hydration-gated.
+      const badgeConds = src.match(/\{[^{}]*totalItems\s*>\s*0\s*&&/g) ?? [];
+      assert.ok(badgeConds.length > 0, `${rel}: expected a cart badge conditional`);
+      for (const cond of badgeConds) {
+        assert.match(cond, /cartHydrated\s*&&\s*totalItems/,
+          `${rel}: cart badge must be gated on cartHydrated (found: ${cond.trim()})`);
+      }
+    }
+  });
+
+  it('H: useCartBarInset returns 0 until cartHydrated', () => {
+    const src = readAppSource('hooks/useCartBarInset.ts');
+    assert.match(src, /if\s*\(\s*!cartHydrated\s*\|\|\s*!totalItems\s*\)\s*return\s*0/,
+      'useCartBarInset must treat the bar as absent until cartHydrated');
   });
 });

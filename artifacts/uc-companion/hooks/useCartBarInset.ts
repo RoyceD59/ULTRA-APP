@@ -34,8 +34,11 @@ const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : Platform.OS === 'ios' ? 49 :
  */
 export function useCartBarInset(): number {
   const insets = useSafeAreaInsets();
-  const { totalItems } = useCart();
-  if (!totalItems) return 0;
+  const { totalItems, cartHydrated } = useCart();
+  // Hydration-gated: pre-hydration `totalItems` is the default 0, so treat the
+  // cart bar as absent until the storage read completes (matches GlobalCartBar,
+  // which is also hidden until cartHydrated).
+  if (!cartHydrated || !totalItems) return 0;
   const safeBottom = Platform.OS === 'web' ? 0 : insets.bottom;
   return TAB_BAR_HEIGHT + safeBottom + CART_BAR_HEIGHT + GAP;
 }

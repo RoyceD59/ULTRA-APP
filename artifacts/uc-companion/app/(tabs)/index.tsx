@@ -55,7 +55,7 @@ export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
-  const { totalItems } = useCart();
+  const { totalItems, cartHydrated } = useCart();
   const api = useApi();
   const [filterDays, setFilterDays] = useState<number | null>(null);
   const [filterAdjusted, setFilterAdjusted] = useState(false);
@@ -111,7 +111,8 @@ export default function HomeScreen() {
         </View>
         <TouchableOpacity onPress={() => router.push('/cart')} style={styles.cartBtn}>
           <Ionicons name="cart-outline" size={24} color="#fff" />
-          {totalItems > 0 && (
+          {/* Hydration-gated: never render a badge state derived from the pre-hydration default */}
+          {cartHydrated && totalItems > 0 && (
             <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{totalItems}</Text></View>
           )}
         </TouchableOpacity>
