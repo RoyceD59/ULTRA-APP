@@ -80,19 +80,47 @@ describe('CartContext hydration flag (slow-device simulation)', () => {
     assert.equal(root.value.totalPrice, 7000);
   });
 
-  it('B: a failed storage read still sets cartHydrated (spinner cannot hang forever)', async () => {
+  it('B1: a transient read failure is retried once and hydrates with the saved cart', async () => {
+    _storage.set(CART_STORAGE_KEY, JSON.stringify(STORED));
+
+    // First read throws, retry succeeds — mirrors the write path's retry.
+    let calls = 0;
+    _setGates({
+      get: () => (++calls === 1
+        ? Promise.reject(new Error('disk I/O error'))
+        : Promise.resolve()),
+    });
+
+    const root = __testRender<{ children: null }, CartValue>(CartProvider as any, { children: null });
+    await tick(); await tick(); await tick();
+    root.flush();
+
+    assert.equal(calls >= 2, true, 'the failed read must be retried once');
+    assert.equal(root.value.cartHydrated, true);
+    assert.equal(root.value.totalItems, 2, 'the saved cart must survive a transient read error');
+  });
+
+  it('B2: a read that fails twice must NOT hydrate (no confident "basket is empty" lie)', async () => {
+    _storage.set(CART_STORAGE_KEY, JSON.stringify(STORED));
     _setGates({ get: () => Promise.reject(new Error('disk I/O error')) });
 
     const root = __testRender<{ children: null }, CartValue>(CartProvider as any, { children: null });
-    await tick(); await tick();
+    await tick(); await tick(); await tick();
     root.flush();
 
-    // finally{} semantics: even when the read blows up, hydration completes so
-    // the checkout guard releases and the user sees the (genuinely) empty cart
-    // rather than an eternal spinner.
-    assert.equal(root.value.cartHydrated, true,
-      'cartHydrated must be set even when the storage read fails');
+    // We couldn't read storage, so we don't know the cart is empty — the UI
+    // must stay in its neutral loading state rather than flash "basket empty"
+    // against the pre-hydration default items: [].
+    assert.equal(root.value.cartHydrated, false,
+      'cartHydrated must stay false when the read fails twice');
     assert.deepEqual(root.value.items, []);
+
+    // Storage recovers (e.g. a foreground refresh re-reads) → hydrates normally.
+    _setGates({});
+    await root.value.refreshCart();
+    root.flush();
+    assert.equal(root.value.cartHydrated, true);
+    assert.equal(root.value.totalItems, 2);
   });
 
   it('C: refreshCart (tab-focus re-read) never flips cartHydrated back to false', async () => {

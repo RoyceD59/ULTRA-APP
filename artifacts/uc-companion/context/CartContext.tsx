@@ -92,6 +92,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const loadFromStorage = useCallback(async () => {
     const versionAtStart = writeSync.version;
     try {
+      // loadCartFromStorage retries a failed read once internally; a second
+      // failure throws and lands in the catch below.
       const loaded = await loadCartFromStorage(AsyncStorage);
       // Snapshot how far storage had caught up when the read completed; if the
       // save chain only settles later, `loaded` predates it and must not win.
@@ -102,8 +104,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
           savedAtRead < versionAtStart;            // read happened before the last save settled
         return isStale ? prev : loaded;
       });
-    } finally {
       setCartHydrated(true);
+    } catch {
+      // Read failed twice: we genuinely don't know what's in the saved cart.
+      // Do NOT mark the cart as hydrated — asserting "your basket is empty"
+      // on a transient storage error would be a lie.  On first load the UI
+      // keeps its neutral loading state; if we were already hydrated (e.g. a
+      // foreground refresh failed) the previous in-memory items stay visible.
     }
   }, [writeSync]);
 

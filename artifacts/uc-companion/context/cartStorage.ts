@@ -37,14 +37,24 @@ export const CART_STORAGE_KEY = 'uc_cart_v1';
 // ── Storage boundary ──────────────────────────────────────────────────────────
 
 /**
- * Read the cart from `storage`.  Returns [] on any parse/I/O error so the
- * caller always gets a valid (possibly empty) list.
+ * Read the cart from `storage`.
+ * - A failed read (I/O error) is retried once, mirroring the write path's
+ *   single retry.  If the retry also fails the error PROPAGATES so the caller
+ *   can avoid asserting "the cart is empty" when it simply couldn't read.
+ * - Corrupt data (parse error) returns [] — the stored value is genuinely
+ *   unusable, so an empty cart is the honest answer.
  */
 export async function loadCartFromStorage(storage: StorageBackend): Promise<CartItem[]> {
+  let data: string | null;
   try {
-    const data = await storage.getItem(CART_STORAGE_KEY);
-    if (data) return JSON.parse(data) as CartItem[];
-    return [];
+    data = await storage.getItem(CART_STORAGE_KEY);
+  } catch {
+    // Transient I/O error: retry once.  A second failure propagates.
+    data = await storage.getItem(CART_STORAGE_KEY);
+  }
+  if (!data) return [];
+  try {
+    return JSON.parse(data) as CartItem[];
   } catch {
     return [];
   }
