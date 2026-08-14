@@ -213,6 +213,55 @@ describe("buildOrderReceiptEmail — empty lineItems", () => {
   });
 });
 
+// ─── Receipt serial number & COD payment instructions ───────────────────────
+
+describe("buildOrderReceiptEmail — receipt serial number", () => {
+  it("serial is deterministic from order id + dateCreated and appears in HTML and text", async () => {
+    const { buildOrderReceiptEmail, orderReceiptSerial } = await import("../lib/email.js");
+    const dateCreated = "2026-08-14T10:00:00+03:00";
+    const expected = orderReceiptSerial(SAMPLE_ORDER.orderId, dateCreated);
+    assert.match(expected, /^UC-\d{8}-\d{6,}$/, "serial must follow UC-YYYYMMDD-NNNNNN");
+
+    const { html, text } = buildOrderReceiptEmail({ ...SAMPLE_ORDER, dateCreated });
+    assert.ok(html.includes(expected), "HTML must contain the receipt serial");
+    assert.ok(text.includes(expected), "text must contain the receipt serial");
+
+    // Deterministic: same inputs → same serial
+    assert.equal(orderReceiptSerial(SAMPLE_ORDER.orderId, dateCreated), expected);
+  });
+
+  it("serial is generated even without dateCreated", async () => {
+    const { buildOrderReceiptEmail } = await import("../lib/email.js");
+    const { html } = buildOrderReceiptEmail(SAMPLE_ORDER);
+    assert.match(html, /UC-\d{8}-\d{6,}/, "HTML must contain a generated serial");
+  });
+});
+
+describe("buildOrderReceiptEmail — cash-on-delivery payment instructions", () => {
+  it("COD receipt includes till, paybill, account, and the company phone", async () => {
+    const { buildOrderReceiptEmail } = await import("../lib/email.js");
+    const { html, text } = buildOrderReceiptEmail({ ...SAMPLE_ORDER, paymentMethod: "cod" });
+
+    for (const body of [html, text]) {
+      assert.ok(body.includes("568 0516"),  "must include the M-Pesa till number");
+      assert.ok(body.includes("542 542"),   "must include the paybill number");
+      assert.ok(body.includes("071908000"), "must include the paybill account");
+      assert.ok(body.includes("0717774049"), "must include the company phone number");
+    }
+    assert.ok(
+      html.toLowerCase().includes("cash on delivery"),
+      "HTML must label the instructions as cash on delivery",
+    );
+  });
+
+  it("non-COD receipts do not include the payment instructions", async () => {
+    const { buildOrderReceiptEmail } = await import("../lib/email.js");
+    const { html, text } = buildOrderReceiptEmail(SAMPLE_ORDER); // mpesa
+    assert.ok(!html.includes("568 0516"), "paid receipts must not show the till number");
+    assert.ok(!text.includes("568 0516"), "paid text receipts must not show the till number");
+  });
+});
+
 // ─── (c) sendViaResend — success path ────────────────────────────────────────
 
 describe("sendViaResend — success", () => {

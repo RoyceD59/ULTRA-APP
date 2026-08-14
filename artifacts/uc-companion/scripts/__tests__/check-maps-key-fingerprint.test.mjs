@@ -139,3 +139,34 @@ describe("upload identity (drift tracking only)", () => {
     assert.match(r.out, /Unknown --identity/);
   });
 });
+
+describe("development identity (interim dev-build tracking)", () => {
+  test("registers and passes without any restriction confirmation", () => {
+    const r = run(["--identity", "development", "--fingerprint", FP_A, "--update"]);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /Development keystore recorded/);
+    assert.equal(record().fingerprints.development.sha1, FP_A);
+    assert.equal(run(["--identity", "development", "--fingerprint", FP_A]).code, 0);
+  });
+
+  test("entry is auto-created on older records that predate the development identity", () => {
+    // beforeEach record has no `development` key — the script must not crash.
+    const r = run(["--identity", "development", "--fingerprint", FP_A, "--update"]);
+    assert.equal(r.code, 0);
+    assert.equal(record().fingerprints.development.sha1, FP_A);
+  });
+
+  test("recording a development fingerprint does not unblock the play-signing gate", () => {
+    run(["--identity", "development", "--fingerprint", FP_A, "--update"]);
+    const r = run(["--fingerprint", FP_A]);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /No play-signing fingerprint recorded yet/);
+  });
+
+  test("detects development keystore drift", () => {
+    run(["--identity", "development", "--fingerprint", FP_A, "--update"]);
+    const r = run(["--identity", "development", "--fingerprint", FP_B]);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /CHANGE DETECTED/);
+  });
+});

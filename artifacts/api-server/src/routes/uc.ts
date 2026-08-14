@@ -3431,6 +3431,8 @@ export function sendOrderConfirmationEmail(
     shippingAddress?: Record<string, string>;
     discountAmount?:  number;
     promoCode?:       string;
+    /** When the order was created — used for the receipt serial number. */
+    dateCreated?:     string | Date;
   },
 ): void {
   getUserContact(ownerUserId).then(contact => {
@@ -3453,6 +3455,7 @@ export function sendOrderConfirmationEmail(
         shippingAddress: order.shippingAddress,
         discountAmount:  order.discountAmount,
         promoCode:       order.promoCode,
+        dateCreated:     order.dateCreated,
       });
       sendViaResend({
         from:    "orders@contacts.ucfilters.com",
@@ -3696,6 +3699,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             currency:      existingOrder.currency,
             paymentMethod: existingOrder.paymentMethod,
             shippingAddress: existingOrder.shippingAddress as Record<string, string> | undefined,
+            dateCreated:   existingOrder.dateCreated,
           });
         }
 
@@ -3850,6 +3854,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       currency:      String(normalized["currency"] ?? "KES"),
       paymentMethod: String(normalized["paymentMethod"] ?? ""),
       shippingAddress: normalized["shippingAddress"] as Record<string, string> | undefined,
+      dateCreated:   normalized["dateCreated"] as string | undefined,
     });
   }
 
@@ -4180,6 +4185,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       shippingAddress: newOrder.shippingAddress as Record<string, string> | undefined,
       discountAmount:  newOrder.discountAmount,
       promoCode:       newOrder.promoCode,
+      dateCreated:     newOrder.dateCreated,
     });
 
     res.json(newOrder);
@@ -4278,6 +4284,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       shippingAddress: fallbackOrder.shippingAddress as Record<string, string> | undefined,
       discountAmount:  fallbackOrder.discountAmount,
       promoCode:       fallbackOrder.promoCode,
+      dateCreated:     fallbackOrder.dateCreated,
     });
     res.json(fallbackOrder);
   }

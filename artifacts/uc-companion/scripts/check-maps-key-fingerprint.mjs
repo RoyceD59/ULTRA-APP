@@ -50,6 +50,11 @@ const IDENTITIES = {
     label: "EAS upload keystore (upload identity only — NOT the Maps restriction)",
     restriction: false,
   },
+  development: {
+    key: "development",
+    label: "Development/debug keystore (dev builds only — interim identity until the first production build exists)",
+    restriction: false,
+  },
 };
 
 const args = process.argv.slice(2);
@@ -114,8 +119,8 @@ if (flag("confirm-restriction")) {
 
 const identityName = opt("identity") ?? "play-signing";
 const identity = IDENTITIES[identityName];
-if (!identity) fail(`Unknown --identity "${identityName}". Use "play-signing" or "upload".`);
-const entry = record.fingerprints[identity.key];
+if (!identity) fail(`Unknown --identity "${identityName}". Use "play-signing", "upload", or "development".`);
+const entry = record.fingerprints[identity.key] ?? (record.fingerprints[identity.key] = { sha1: null, updatedAt: null });
 
 let current;
 if (opt("keystore")) {
@@ -123,7 +128,7 @@ if (opt("keystore")) {
     fail(
       "The Play app-signing certificate has no local keystore — Google holds it. " +
         "Copy its SHA-1 from Play Console → Setup → App signing and pass it with --fingerprint. " +
-        "(--keystore is only valid with --identity upload.)"
+        "(--keystore is only valid with --identity upload or --identity development.)"
     );
   }
   current = fingerprintFromKeystore(opt("keystore"), opt("alias"), opt("storepass"));
@@ -160,11 +165,19 @@ if (flag("update")) {
     );
     process.exit(1); // fail until restriction is confirmed
   }
-  if (!identity.restriction && changed) {
+  if (identityName === "upload" && changed) {
     console.log(
       `\nℹ️  Upload keystore changed. This does NOT change the Maps restriction (Play App Signing re-signs releases),\n` +
         `   but verify the Play app-signing SHA-1 is unchanged in Play Console → Setup → App signing, and re-run the\n` +
         `   play-signing check. If Google also reset the app-signing key, follow the runbook rotation procedure.`
+    );
+  }
+  if (identityName === "development" && changed) {
+    console.log(
+      `\nℹ️  Development keystore recorded. For Maps tiles to load in dev/debug builds, add this SHA-1 as an\n` +
+        `   ADDITIONAL entry under the Android-apps restriction for ${record.package} in Google Cloud Console.\n` +
+        `   This is an interim identity — the production release remains blocked until the Play app-signing\n` +
+        `   fingerprint is recorded and confirmed (see docs/maps-key-rotation-runbook.md).`
     );
   }
   process.exit(0);
@@ -183,9 +196,14 @@ if (current !== entry.sha1) {
       ? `PLAY APP-SIGNING CERTIFICATE CHANGE DETECTED — current SHA-1 does not match the recorded one.\n` +
           `Production Maps requests WILL BE REJECTED until the Google Cloud Console restriction includes the new SHA-1.\n` +
           `Follow docs/maps-key-rotation-runbook.md, then re-run with --update and --confirm-restriction.`
-      : `UPLOAD KEYSTORE CHANGE DETECTED — current SHA-1 does not match the recorded one.\n` +
-          `Verify in Play Console that the app-signing certificate is unchanged, then re-run with --update.\n` +
-          `Runbook: docs/maps-key-rotation-runbook.md`
+      : identityName === "development"
+        ? `DEVELOPMENT KEYSTORE CHANGE DETECTED — current SHA-1 does not match the recorded one.\n` +
+            `If the debug keystore was intentionally regenerated, re-run with --update and add the new SHA-1 to the\n` +
+            `Maps key's Android-apps restriction so dev builds keep loading tiles.\n` +
+            `Runbook: docs/maps-key-rotation-runbook.md`
+        : `UPLOAD KEYSTORE CHANGE DETECTED — current SHA-1 does not match the recorded one.\n` +
+            `Verify in Play Console that the app-signing certificate is unchanged, then re-run with --update.\n` +
+            `Runbook: docs/maps-key-rotation-runbook.md`
   );
 }
 

@@ -364,6 +364,35 @@ export function buildWaterTestConfirmationEmail(params: {
 
 // ─── HTML receipt template ────────────────────────────────────────────────────
 
+/**
+ * Deterministic receipt serial number for an order — quoted by the customer to
+ * track the order. Format: UC-YYYYMMDD-NNNNNN (date the order was created +
+ * zero-padded order id). Derived, never stored, so the same order always
+ * produces the same serial and both local-DB and WooCommerce orders get one.
+ */
+export function orderReceiptSerial(
+  orderId: string | number,
+  dateCreated?: string | Date,
+): string {
+  const d = dateCreated ? new Date(dateCreated) : new Date();
+  const valid = !isNaN(d.getTime()) ? d : new Date();
+  const ymd = [
+    valid.getFullYear(),
+    String(valid.getMonth() + 1).padStart(2, "0"),
+    String(valid.getDate()).padStart(2, "0"),
+  ].join("");
+  const idPart = String(orderId).replace(/\D/g, "").padStart(6, "0");
+  return `UC-${ymd}-${idPart}`;
+}
+
+/** Payment details shown on cash-on-delivery receipts. */
+export const COD_PAYMENT_DETAILS = {
+  mpesaTill:     "568 0516",
+  paybill:       "542 542",
+  paybillAccount: "071908000",
+  phone:         "0717774049",
+} as const;
+
 export function buildOrderReceiptEmail(params: {
   orderId:   string | number;
   firstName: string;
@@ -382,11 +411,15 @@ export function buildOrderReceiptEmail(params: {
   };
   discountAmount?: number;
   promoCode?:      string;
+  /** When the order was created — used for the receipt serial. Defaults to now. */
+  dateCreated?:    string | Date;
 }): { subject: string; html: string; text: string } {
   const {
     orderId, firstName, lineItems, total, currency,
-    paymentMethod, shippingAddress, discountAmount, promoCode,
+    paymentMethod, shippingAddress, discountAmount, promoCode, dateCreated,
   } = params;
+
+  const serial = orderReceiptSerial(orderId, dateCreated);
 
   const fmt = (n: string | number) =>
     `${currency} ${Number(n).toLocaleString("en-KE")}`;
@@ -435,6 +468,34 @@ export function buildOrderReceiptEmail(params: {
         </tr>`
       : "";
 
+  // Cash-on-delivery receipts include how-to-pay instructions.
+  const isCod = paymentMethod === "cod";
+  const codHtml = isCod
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fde68a;background:#fffbeb;border-radius:8px;margin-bottom:24px;">
+              <tr><td style="padding:16px 20px;">
+                <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:700;">💵 How to pay — Cash on Delivery</p>
+                <p style="margin:0 0 12px;color:#78350f;font-size:13px;line-height:1.6;">
+                  Pay in cash when your order arrives, or pay now via M-Pesa using either option below.
+                  Please quote your receipt serial <strong>${serial}</strong> as the reference.
+                </p>
+                <table cellpadding="0" cellspacing="0" style="font-size:13px;color:#78350f;">
+                  <tr>
+                    <td style="padding:4px 16px 4px 0;white-space:nowrap;">M-Pesa Till Number</td>
+                    <td style="padding:4px 0;font-weight:700;white-space:nowrap;">${COD_PAYMENT_DETAILS.mpesaTill}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 16px 4px 0;white-space:nowrap;">Paybill</td>
+                    <td style="padding:4px 0;font-weight:700;white-space:nowrap;">${COD_PAYMENT_DETAILS.paybill} &nbsp;·&nbsp; Account: ${COD_PAYMENT_DETAILS.paybillAccount}</td>
+                  </tr>
+                </table>
+                <p style="margin:12px 0 0;color:#78350f;font-size:13px;line-height:1.6;">
+                  Or call us to arrange delivery and payment:
+                  <a href="tel:+254717774049" style="color:#92400e;font-weight:700;">${COD_PAYMENT_DETAILS.phone}</a>
+                </p>
+              </td></tr>
+            </table>`
+    : "";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -481,6 +542,10 @@ export function buildOrderReceiptEmail(params: {
                 <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">#${orderId}</td>
               </tr>
               <tr>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Receipt serial</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">${serial}</td>
+              </tr>
+              <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Payment</td>
                 <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${payLabel}</td>
               </tr>
@@ -509,8 +574,9 @@ export function buildOrderReceiptEmail(params: {
               </tbody>
             </table>
 
+            ${codHtml}
             <p style="margin:0 0 16px;color:#0D4FA8;font-size:14px;font-weight:600;background:#eff6ff;border-left:3px solid #0D4FA8;padding:12px 16px;border-radius:4px;">
-              📦 We'll notify you as soon as your order has shipped.
+              📦 We'll notify you as soon as your order has shipped. Quote your receipt serial <strong>${serial}</strong> to track this order.
             </p>
             <p style="margin:0 0 24px;color:#6b7280;font-size:13px;line-height:1.6;">
               Questions about your order? Contact us at
@@ -540,6 +606,7 @@ export function buildOrderReceiptEmail(params: {
     `Ultra Clear Order Confirmation — #${orderId}`,
     `Hi ${firstName}, thank you for your order!`,
     "",
+    `Receipt serial: ${serial}`,
     `Payment: ${payLabel}`,
     `Delivery to: ${addrText}`,
     "",
@@ -557,7 +624,18 @@ export function buildOrderReceiptEmail(params: {
       : []),
     `  Total: ${fmt(total)}`,
     "",
-    "We'll notify you as soon as your order has shipped.",
+    ...(isCod
+      ? [
+          "How to pay — Cash on Delivery:",
+          "  Pay in cash when your order arrives, or pay now via M-Pesa:",
+          `  M-Pesa Till Number: ${COD_PAYMENT_DETAILS.mpesaTill}`,
+          `  Paybill: ${COD_PAYMENT_DETAILS.paybill}  Account: ${COD_PAYMENT_DETAILS.paybillAccount}`,
+          `  Please quote your receipt serial ${serial} as the reference.`,
+          `  Or call us to arrange delivery and payment: ${COD_PAYMENT_DETAILS.phone}`,
+          "",
+        ]
+      : []),
+    `We'll notify you as soon as your order has shipped. Quote your receipt serial ${serial} to track this order.`,
     "",
     "Questions? Email support@ucfilters.co.ke or call 0717774049.",
     "ucfilters.co.ke",

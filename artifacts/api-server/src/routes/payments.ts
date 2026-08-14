@@ -228,9 +228,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
     return;
   }
 
-  const shortcode = getMpesaShortcode();
-  const passkey = process.env["MPESA_PASSKEY"];
-  const token = shortcode && passkey ? await getMpesaToken() : null;
+    const shortcode = getMpesaShortcode();
+    const passkey = process.env["MPESA_PASSKEY"];
+    const token = shortcode && passkey ? await getMpesaToken() : null;
 
   const normalizedPhone = phone.replace(/^\+/, "").replace(/^0/, "254");
   const expectedAmount  = Math.ceil(amount);
@@ -272,9 +272,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
   }
 
   try {
-    const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-    const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
-    const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
+      const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+      const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
+      const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
 
     // Generate a per-push callback token (UUID).  This is embedded in the
     // CallBackURL as ?token=<callbackToken> and stored in the initiation record.
@@ -480,22 +480,7 @@ router.post(
     try {
       const appBase =
         returnUrl ?? process.env["WC_BASE_URL"] ?? "https://www.ucfilters.com";
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency,
-              unit_amount: Math.round(amount * 100),
-              product_data: { name: `UC Filters Order ${orderId}` },
-            },
-            quantity: 1,
-          },
-        ],
-        success_url: `${appBase}/stripe/success?session_id={CHECKOUT_SESSION_ID}&order=${orderId}`,
-        cancel_url: `${appBase}/stripe/cancel?order=${orderId}`,
-      });
+      const session = await stripe.checkout.sessions.retrieve(String(req.params["sessionId"]));
       res.json({ sessionId: session.id, sessionUrl: session.url, amount });
     } catch (e: unknown) {
       res.status(500).json({ error: (e as Error).message, retryable: true });
@@ -569,7 +554,7 @@ router.post(
       // Treat upstream 5xx / 429 as a transient outage — Paystack blips commonly
       // manifest as a non-2xx HTTP response rather than a thrown exception.
       if (!psRes.ok) {
-        const isTransient = psRes.status >= 500 || psRes.status === 429;
+        const isTransient = vRes.status >= 500 || vRes.status === 429;
         const status = isTransient ? 500 : 400;
         res.status(status).json({
           error: "Paystack is temporarily unavailable. Please try again.",
@@ -690,7 +675,7 @@ router.post(
     const reference = event.data?.reference ?? "";
     const amountKobo = event.data?.amount ?? 0;
     const currency = event.data?.currency ?? "KES";
-    const customerEmail = event.data?.customer?.email ?? "";
+        const customerEmail = order.userId?.includes("@") ? order.userId : null;
 
     if (!reference) {
       res.status(400).json({ error: "Missing reference in webhook payload" });
@@ -699,14 +684,27 @@ router.post(
 
     try {
       // ── Idempotency: look up existing order by payment reference ──────────
-      const existing = await db
-        .select()
-        .from(ucOrdersTable)
-        .where(eq(ucOrdersTable.paymentReference, reference))
-        .limit(1);
+    const existing = await db
+      .select()
+      .from(ucOrdersTable)
+      .where(eq(ucOrdersTable.paymentReference, paymentReference))
+      .limit(1);
+
+    // ── Step 5: Daraja unavailable — store unverified record; do NOT fulfil ──
+    // Safaricom sent a ResultCode 0 but we cannot independently confirm it.
+    // Creating a "processing" order here would allow an attacker to trigger
+    // fulfilment during any Daraja outage by posting a forged callback.
+    // Instead we persist a "pending" (non-fulfillable) record and alert the team
+    // to verify manually — this preserves the payment data without fraud risk.
+    if (darajaResult === "unavailable") {
+      console.warn(
+        `[M-Pesa callback] Daraja verification unavailable for ref ${CheckoutRequestID} — storing as unverified, manual verification required`
+      );
 
       if (existing.length > 0) {
-        const order = existing[0]!;
+        // An order already exists.  Leave it in its current state — do NOT
+        // advance it to "processing" without Daraja confirmation.
+      const order = existing[0]!;
 
         if (order.status === "pending") {
           // Payment confirmed — advance status to processing
@@ -735,22 +733,22 @@ router.post(
       // We persist what Paystack told us so the team can reconcile and fulfil.
       const totalKes = Math.round(amountKobo / 100);
 
-      const [recovered] = await db
-        .insert(ucOrdersTable)
-        .values({
-          userId:           customerEmail || "webhook-recovery",
-          status:           "processing",
-          total:            String(totalKes),
-          currency,
-          paymentMethod:    "paystack",
-          paymentReference: reference,
-          promoCode:        "",
-          discountPercent:  0,
-          discountAmount:   0,
-          shippingAddress:  {},
-          webhookRecovery:  true,
-        })
-        .returning();
+    const [recovered] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId:           recoveryPhone || "mpesa-webhook-recovery",
+        status:           "processing",
+        total:            String(recoveryAmount),
+        currency:         "KES",
+        paymentMethod:    "mpesa",
+        paymentReference: paymentReference,
+        promoCode:        "",
+        discountPercent:  0,
+        discountAmount:   0,
+        shippingAddress:  {},
+        webhookRecovery:  true,
+      })
+      .returning();
 
       console.info(
         `[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`
@@ -1063,7 +1061,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
       if (existing.length > 0) {
         // An order already exists.  Leave it in its current state — do NOT
         // advance it to "processing" without Daraja confirmation.
-        const order = existing[0]!;
+      const order = existing[0]!;
         console.warn(
           `[M-Pesa callback] Existing order ${order.id} (status=${order.status}) left unchanged — Daraja unavailable`
         );
@@ -1187,6 +1185,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
             shippingAddress: shippingAddr,
             discountAmount:  order.discountAmount,
             promoCode:       order.promoCode ?? undefined,
+            dateCreated:     order.dateCreated,
           });
           sendViaResend({
             from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
