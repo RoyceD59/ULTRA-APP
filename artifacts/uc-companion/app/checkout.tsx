@@ -67,7 +67,7 @@ const ADDRESS_FIELDS: FieldDef[] = [
 export default function CheckoutScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { items, totalPrice, clearCart, cartHydrated } = useCart();
+  const { items, totalPrice, clearCart, cartHydrated, cartLoadError, refreshCart } = useCart();
   const { user } = useAuth();
   const api = useApi();
 
@@ -673,6 +673,20 @@ export default function CheckoutScreen() {
   }
 
   if (!cartHydrated) {
+    if (cartLoadError) {
+      return (
+        <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.border} />
+          <Text style={[styles.waitTitle, { color: colors.text }]}>Couldn't load your basket</Text>
+          <Text style={[styles.waitSub, { color: colors.mutedForeground, textAlign: 'center', paddingHorizontal: 40 }]}>
+            There was a problem reading your saved cart.
+          </Text>
+          <TouchableOpacity onPress={refreshCart} style={[styles.retryBtn, { backgroundColor: colors.primary }]}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -880,6 +894,8 @@ const styles = StyleSheet.create({
   waitTitle: { fontSize: 22, fontWeight: '700' as const },
   waitSub: { fontSize: 14, lineHeight: 22 },
   cancelText: { fontSize: 14, padding: 12 },
+  retryBtn: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 },
+  retryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
   promoToggle: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,

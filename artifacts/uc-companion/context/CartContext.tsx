@@ -12,12 +12,21 @@ import {
 
 export type { CartItem };
 
+/** How long to wait before surfacing the "Couldn't load" error UI (ms). */
+const HYDRATION_TIMEOUT_MS = 8000;
+
 interface CartContextValue {
   items: CartItem[];
   totalItems: number;
   totalPrice: number;
   /** True once the cart has been read from AsyncStorage at least once. */
   cartHydrated: boolean;
+  /**
+   * True when a storage read has failed twice AND hydration has not yet
+   * succeeded.  The cart/checkout screens show a Retry button instead of an
+   * endless spinner in this case.
+   */
+  cartLoadError: boolean;
   addItem: (product: CartItem) => void;
   removeItem: (id: number) => void;
   updateQty: (id: number, qty: number) => void;
@@ -31,6 +40,7 @@ const CartContext = createContext<CartContextValue>({
   totalItems: 0,
   totalPrice: 0,
   cartHydrated: false,
+  cartLoadError: false,
   addItem: () => {},
   removeItem: () => {},
   updateQty: () => {},
@@ -41,6 +51,7 @@ const CartContext = createContext<CartContextValue>({
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
+  const [cartLoadError, setCartLoadError] = useState(false);
 
   // Write-versioning that guards refreshCart() against the tab-switch race:
   // `version` increments synchronously at each mutation call (stepper tap,
@@ -91,10 +102,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const loadFromStorage = useCallback(async () => {
     const versionAtStart = writeSync.version;
+
+    // Each call to loadFromStorage arms its own watchdog.  `settled` is a
+    // closure-local flag that prevents the timeout from flipping the UI into
+    // the error state after the read has already completed (success OR failure).
+    // This means every attempt — including retries — gets a fresh 8-second
+    // window, so a hanging retry can never leave the shopper on an endless
+    // spinner.
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (!settled) setCartLoadError(true);
+    }, HYDRATION_TIMEOUT_MS);
+
     try {
       // loadCartFromStorage retries a failed read once internally; a second
       // failure throws and lands in the catch below.
       const loaded = await loadCartFromStorage(AsyncStorage);
+      settled = true;
+      clearTimeout(timeoutId);
       // Snapshot how far storage had caught up when the read completed; if the
       // save chain only settles later, `loaded` predates it and must not win.
       const savedAtRead = writeSync.savedVersion;
@@ -104,13 +129,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
           savedAtRead < versionAtStart;            // read happened before the last save settled
         return isStale ? prev : loaded;
       });
+      setCartLoadError(false);
       setCartHydrated(true);
     } catch {
+      settled = true;
+      clearTimeout(timeoutId);
       // Read failed twice: we genuinely don't know what's in the saved cart.
       // Do NOT mark the cart as hydrated — asserting "your basket is empty"
       // on a transient storage error would be a lie.  On first load the UI
       // keeps its neutral loading state; if we were already hydrated (e.g. a
       // foreground refresh failed) the previous in-memory items stay visible.
+      // Surface the error so cart/checkout can show a Retry button instead of
+      // an endless spinner.
+      setCartLoadError(true);
     }
   }, [writeSync]);
 
@@ -171,17 +202,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
     persist([], v);
   }, [writeSync, persist]);
 
+  // refreshCart clears any prior error flag before retrying the load so the UI
+  // reverts to a spinner (rather than staying on the error screen) during the
+  // attempt.  The flag is re-set by loadFromStorage if the retry also fails.
+  const refreshCart = useCallback(async () => {
+    setCartLoadError(false);
+    await loadFromStorage();
+  }, [loadFromStorage]);
+
   return (
     <CartContext.Provider value={{
       items,
       totalItems: calcTotalItems(items),
       totalPrice: calcTotalPrice(items),
       cartHydrated,
+      cartLoadError,
       addItem,
       removeItem,
       updateQty,
       clearCart,
-      refreshCart: loadFromStorage,
+      refreshCart,
     }}>
       {children}
     </CartContext.Provider>

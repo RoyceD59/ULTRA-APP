@@ -19,7 +19,7 @@ export default function CartScreen() {
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
-  const { items, removeItem, updateQty, totalPrice, addItem, cartHydrated } = useCart();
+  const { items, removeItem, updateQty, totalPrice, addItem, cartHydrated, cartLoadError, refreshCart } = useCart();
 
   const total = totalPrice + (items.length > 0 ? DELIVERY_FEE : 0);
 
@@ -116,7 +116,21 @@ export default function CartScreen() {
   // flight when this screen mounts.  Rendering against the not-yet-hydrated
   // `items: []` default would flash "Your cart is empty" for a frame or two,
   // so show a spinner until the cart has been read at least once.
+  // If the read has failed (or timed out), show a Retry button instead of
+  // leaving the shopper on an endless spinner.
   if (!cartHydrated) {
+    if (cartLoadError) {
+      return (
+        <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.border} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load your basket</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>There was a problem reading your saved cart.</Text>
+          <TouchableOpacity onPress={refreshCart} style={[styles.shopBtn, { backgroundColor: colors.primary }]}>
+            <Text style={styles.shopBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
