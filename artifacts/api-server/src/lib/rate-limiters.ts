@@ -36,3 +36,20 @@ export const paymentLimiter = rateLimit({
   },
   skipSuccessfulRequests: false,
 });
+
+/**
+ * lookupLimiter — 10 requests / minute per IP for record-lookup endpoints
+ * that accept guessable identifiers (e.g. registering a filter by receipt
+ * number + phone). Stops enumeration/fishing for other customers' orders.
+ */
+export const lookupLimiter = rateLimit({
+  windowMs: 60 * 1000,   // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error:
+      "Too many attempts. Please wait a minute before trying again.",
+  },
+  skipSuccessfulRequests: false,
+});

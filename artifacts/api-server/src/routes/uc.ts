@@ -13,7 +13,7 @@ import {
 } from "./referrals";
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
-import { authLimiter } from "../lib/rate-limiters.js";
+import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
 import {
   sendSms,
   orderConfirmationSms,
@@ -680,6 +680,44 @@ export async function fetchAllPublishedProducts(
   // what we fetched. Fail loudly rather than audit a partial catalogue and
   // report a false all-clear.
   return null;
+}
+
+// ─── Product lifespan map (cached) ───────────────────────────────────────────
+// Shared lookup of productId → filter_lifespan_days for the impact calculator
+// and receipt-based filter registration. Sources the same catalogue as
+// /uc/products (live WooCommerce when credentials exist, mock otherwise) so
+// lifespans are never guessed — products without the meta simply aren't in
+// the map. Cached for 10 minutes; on a live-store outage the last good map is
+// served, and `null` is returned only when no data has ever been fetched
+// (callers must fail loudly, not fabricate lifespans).
+let _lifespanCache: { at: number; map: Map<number, number> } | null = null;
+const LIFESPAN_CACHE_TTL_MS = 10 * 60 * 1000;
+
+export async function getProductLifespanMap(): Promise<Map<number, number> | null> {
+  const now = Date.now();
+  if (_lifespanCache && now - _lifespanCache.at < LIFESPAN_CACHE_TTL_MS) {
+    return _lifespanCache.map;
+  }
+  let normalized: Record<string, unknown>[] | null = null;
+  if (hasWCCredentials()) {
+    const products = await fetchAllPublishedProducts();
+    if (products) normalized = products.map(normalizeProduct);
+  } else {
+    normalized = MOCK_PRODUCTS.map(normalizeProduct);
+  }
+  if (!normalized) return _lifespanCache?.map ?? null; // stale beats nothing
+  const map = new Map<number, number>();
+  for (const p of normalized) {
+    const lifespan = Number(p["lifespanDays"]);
+    if (lifespan > 0) map.set(Number(p["id"]), lifespan);
+  }
+  _lifespanCache = { at: now, map };
+  return map;
+}
+
+/** Test hook — reset the lifespan cache between test cases. */
+export function _resetLifespanCacheForTests(): void {
+  _lifespanCache = null;
 }
 
 // GET /api/uc/admin/products/lifespan-audit — admin-only report of live
@@ -3402,6 +3440,143 @@ export function sendOrderConfirmationEmail(
     }
   }).catch(() => {});
 }
+
+// ─── Filter registration from purchase record ────────────────────────────────
+// POST /api/uc/filters/register-purchase
+//
+// A customer registers their installed filter with the receipt/order number
+// plus the phone number used at checkout. Deliberately NO new table: the
+// lookup runs against existing purchase records — app DB orders first, then
+// the live WooCommerce store — so repeat purchases and multi-filter receipts
+// reuse the same data. The response carries only what the mobile tracker
+// needs (products + purchase date), never names or addresses.
+//
+// Anti-enumeration: rate-limited per IP, and the 404 message is identical for
+// "no such order" and "phone doesn't match" so receipts can't be fished.
+
+/** Compare phone numbers by their last 9 digits (Kenyan mobile significant
+ *  digits) so 07XX…, +2547XX… and 2547XX… all match each other. */
+function phonesMatch(a: unknown, b: unknown): boolean {
+  const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-9);
+  const da = digits(a);
+  return da.length === 9 && da === digits(b);
+}
+
+// Statuses whose purchase records may be used for registration. Cancelled,
+// refunded, failed and in-flight anchor ("pending-wc") orders are excluded.
+const REGISTRABLE_STATUSES = new Set([
+  "completed", "processing", "on-hold", "shipped", "delivered",
+]);
+
+const REGISTER_NOT_FOUND_MSG =
+  "No purchase found matching that receipt number and phone number.";
+
+router.post(
+  "/uc/filters/register-purchase",
+  lookupLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const { receipt, phone } = req.body as { receipt?: unknown; phone?: unknown };
+    const receiptDigits = String(receipt ?? "").trim().replace(/^#/, "");
+    const phoneDigits = String(phone ?? "").replace(/\D/g, "");
+    if (!/^\d{1,10}$/.test(receiptDigits) || phoneDigits.length < 9) {
+      res.status(400).json({
+        error: "Enter your receipt number and the phone number used at purchase.",
+      });
+      return;
+    }
+    const orderId = Number(receiptDigits);
+
+    type RegisterItem = {
+      productId: number; name: string; quantity: number; lifespanDays: number;
+    };
+    const respond = async (
+      source: "app" | "store",
+      status: string,
+      dateCreated: unknown,
+      rawItems: { productId: number; name: string; quantity: number }[],
+    ): Promise<void> => {
+      if (!REGISTRABLE_STATUSES.has(status)) {
+        res.status(409).json({
+          error: "This purchase is not active (cancelled or refunded), so it can't be used for registration.",
+        });
+        return;
+      }
+      const lifespans = await getProductLifespanMap();
+      if (!lifespans) {
+        res.status(503).json({
+          error: "Product catalogue temporarily unreachable — please try again shortly.",
+          retryable: true,
+        });
+        return;
+      }
+      const items: RegisterItem[] = rawItems.map((i) => ({
+        ...i,
+        lifespanDays: lifespans.get(i.productId) ?? 0, // 0 = not trackable, never guessed
+      }));
+      res.json({ source, orderId, status, dateCreated, items });
+    };
+
+    // 1) App DB purchase record
+    let dbFailed = false;
+    try {
+      const [row] = await db
+        .select()
+        .from(ucOrdersTable)
+        .where(eq(ucOrdersTable.id, orderId))
+        .limit(1);
+      if (row) {
+        const addr = (row.shippingAddress ?? {}) as Record<string, string>;
+        if (phonesMatch(addr["phone"], phone)) {
+          const items = await db
+            .select()
+            .from(ucOrderItemsTable)
+            .where(eq(ucOrderItemsTable.orderId, row.id));
+          await respond(
+            "app",
+            row.status,
+            row.dateCreated,
+            items.map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity })),
+          );
+          return;
+        }
+        // Phone mismatch → fall through to the generic 404 (no enumeration).
+      }
+    } catch (err) {
+      dbFailed = true;
+      logger.error({ err }, "[register-purchase] app DB lookup failed");
+    }
+
+    // 2) Live store purchase record (store receipts / orders placed on the site)
+    if (hasWCCredentials()) {
+      const o = await wcFetchOne(`/orders/${orderId}`);
+      if (o && Number(o["id"]) === orderId) {
+        const billing = (o["billing"] ?? {}) as Record<string, unknown>;
+        const shipping = (o["shipping"] ?? {}) as Record<string, unknown>;
+        if (phonesMatch(billing["phone"], phone) || phonesMatch(shipping["phone"], phone)) {
+          const rawItems = Array.isArray(o["line_items"])
+            ? (o["line_items"] as Record<string, unknown>[]).map((i) => ({
+                productId: Number(i["product_id"]),
+                name: String(i["name"] ?? ""),
+                quantity: Number(i["quantity"]) || 1,
+              }))
+            : [];
+          await respond("store", String(o["status"] ?? ""), o["date_created"], rawItems);
+          return;
+        }
+      }
+    }
+
+    // A DB outage must not masquerade as "no such purchase".
+    if (dbFailed) {
+      res.status(503).json({
+        error: "Purchase records temporarily unreachable — please try again shortly.",
+        retryable: true,
+      });
+      return;
+    }
+    res.status(404).json({ error: REGISTER_NOT_FOUND_MSG });
+  },
+);
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
 router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => {

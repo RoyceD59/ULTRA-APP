@@ -29,6 +29,7 @@ import {
 } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { requireAdmin } from "../lib/adminAuth.js";
+import { getProductLifespanMap } from "./uc.js";
 
 const router: IRouter = Router();
 
@@ -99,13 +100,17 @@ async function writeOverride(o: ImpactOverride): Promise<void> {
 
 // ─── Auto-calculate from app DB orders ───────────────────────────────────────
 
-async function calcImpactFromDb(): Promise<{ totalUsers: number; litresFiltered: number }> {
+async function calcImpactFromDb(): Promise<{
+  totalUsers: number;
+  litresFiltered: number;
+  cleanWaterDays: number;
+}> {
   const orders = await db
     .select({ id: ucOrdersTable.id, userId: ucOrdersTable.userId })
     .from(ucOrdersTable)
     .where(inArray(ucOrdersTable.status, FULFILLED_STATUSES));
 
-  if (orders.length === 0) return { totalUsers: 0, litresFiltered: 0 };
+  if (orders.length === 0) return { totalUsers: 0, litresFiltered: 0, cleanWaterDays: 0 };
 
   const orderIds   = orders.map(o => o.id);
   const userIds    = new Set(orders.map(o => o.userId));
@@ -119,13 +124,21 @@ async function calcImpactFromDb(): Promise<{ totalUsers: number; litresFiltered:
     .from(ucOrderItemsTable)
     .where(inArray(ucOrderItemsTable.orderId, orderIds));
 
+  // Lifespan map from the live catalogue (cached, never guessed). When the
+  // store has never been reachable the map is null — count 0 rather than
+  // fabricate lifespans; litres/users are unaffected.
+  const lifespans = await getProductLifespanMap();
+
   let litresFiltered = 0;
+  let cleanWaterDays = 0;
   for (const item of items) {
     const capacity = PRODUCT_LITRES[item.productId] ?? 0;
     litresFiltered += capacity * item.quantity;
+    const lifespan = lifespans?.get(item.productId) ?? 0;
+    cleanWaterDays += lifespan * item.quantity;
   }
 
-  return { totalUsers, litresFiltered };
+  return { totalUsers, litresFiltered, cleanWaterDays };
 }
 
 // ─── Calculate from offline client entries ────────────────────────────────────
@@ -156,7 +169,7 @@ async function calcImpactFromOfflineClients(): Promise<{
 router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => {
   try {
     const [
-      { totalUsers: dbUsers, litresFiltered: dbLitres },
+      { totalUsers: dbUsers, litresFiltered: dbLitres, cleanWaterDays },
       { clientCount: offlineCount, litresFiltered: offlineLitres },
       override,
     ] = await Promise.all([
@@ -176,9 +189,13 @@ router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => 
       totalUsers:      Math.max(0, totalUsers),
       litresFiltered:  Math.max(0, litresFiltered),
       plasticsAvoided: Math.max(0, plasticsAvoided),
+      // Days of clean water delivered: Σ filter lifespan × quantity for every
+      // fulfilled replacement-filter line item (live catalogue lifespans only).
+      cleanWaterDays:  Math.max(0, cleanWaterDays),
       autoStats: {
         totalUsers:     dbUsers,
         litresFiltered: dbLitres,
+        cleanWaterDays,
       },
       offlineStats: {
         clientCount:    offlineCount,

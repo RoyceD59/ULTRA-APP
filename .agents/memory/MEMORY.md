@@ -9,3 +9,4 @@
 - [image-size Metro compat](image-size-metro-compat.md) — image-size 2.x breaks Metro PNG processing via DataView byteOffset overflow; must stay on 1.x until metro upgrades.
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
+- [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines silently drop exports; rebuild libs with typecheck:libs; merges wait on my turn lock.

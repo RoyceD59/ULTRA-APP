@@ -49,4 +49,3 @@ export * from "./google-oauth-credentials";
 export * from "./mpesa-stk-initiations";
 export * from "./team-library";
 export * from "./team-library-pending-uploads";
-export * from "./uc-lifespan-alerts";
