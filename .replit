@@ -20,6 +20,14 @@ author = "agent"
 task = "workflow.run"
 args = "typecheck-projecthub"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-uc-companion"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-api-server"
+
 [[workflows.workflow]]
 name = "typecheck-projecthub"
 author = "agent"
@@ -27,6 +35,28 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd artifacts/projecthub && pnpm exec tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck-uc-companion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/uc-companion && pnpm exec tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck-api-server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/api-server && pnpm exec tsc --noEmit"
 
 [workflows.workflow.metadata]
 isValidation = true
