@@ -47,14 +47,16 @@ export const EXPECTED_LIFESPANS = {
   8978: { name: "Ultra Pure Pro 5-Stage RO", days: 180 },
   9633: { name: "Aqua Stream 1200", days: 210 },
   9640: { name: "Aqua Stream 1200 Pro", days: 210 },
+  // Wireless Dispenser Filter: product page spec states 300L capacity,
+  // 2–3 months average use → 90 (same band as bottles/pitcher, 150–400L / 3 months)
+  8574: { name: "Wireless Dispenser Filter", days: 90 },
 };
 
 // Products deliberately left NON-trackable (no lifespan meta on purpose):
 //   9656 "Shell"                          — housing only, no filter media
-//   8574 "Wireless Dispenser Filter"      — lifespan unconfirmed by the team
 //   8147 "Portable Water Filter Pump"     — lifespan unconfirmed by the team
 // Never guess a lifespan; these stay 0 until the team confirms a value.
-export const KNOWN_NON_TRACKABLE = [9656, 8574, 8147];
+export const KNOWN_NON_TRACKABLE = [9656, 8147];
 
 const key = process.env.WC_CONSUMER_KEY;
 const secret = process.env.WC_CONSUMER_SECRET;
