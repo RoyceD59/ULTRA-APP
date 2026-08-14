@@ -385,6 +385,67 @@ describe("Date-range filter — admin endpoints", () => {
     runBoundaryTests("/api/uc/admin/orders", orderIndexByDate);
   });
 
+  // ── Half-bounded ranges ───────────────────────────────────────────────────
+  // parseDateRange is shared by all six endpoints, so covering /admin/orders
+  // is sufficient for the null-bound wiring.
+
+  describe("GET /api/uc/admin/orders — half-bounded ranges", () => {
+    const auth = () => authHeader({ id: testUserId, email: TEST_EMAIL });
+
+    async function fetchFixtureIds(qs: string): Promise<(number | string)[]> {
+      const { status, body } = await apiFetch(
+        `/api/uc/admin/orders?${qs}`,
+        { headers: { Authorization: auth() } },
+      );
+      assert.equal(
+        status,
+        200,
+        `Expected 200 from /api/uc/admin/orders?${qs}, got ${status}: ${JSON.stringify(body)}`,
+      );
+      assert.ok(Array.isArray(body), `Expected array, got: ${JSON.stringify(body)}`);
+      const allFixtureIds = new Set([...orderIndexByDate.values()]);
+      return (body as Array<Record<string, unknown>>)
+        .filter(r => allFixtureIds.has(r["id"] as number | string))
+        .map(r => r["id"] as number | string);
+    }
+
+    it("?from= only: includes rows on and after the from-date", async () => {
+      const ids = await fetchFixtureIds(`from=${DATE_FROM}`);
+      for (const date of [DATE_FROM, DATE_INSIDE, DATE_TO, DATE_AFTER]) {
+        assert.ok(
+          ids.includes(orderIndexByDate.get(date)!),
+          `Row at ${date} should be included with ?from=${DATE_FROM} only. Found IDs: ${JSON.stringify(ids)}`,
+        );
+      }
+    });
+
+    it("?from= only: excludes rows before the from-date", async () => {
+      const ids = await fetchFixtureIds(`from=${DATE_FROM}`);
+      assert.ok(
+        !ids.includes(orderIndexByDate.get(DATE_BEFORE)!),
+        `Row at ${DATE_BEFORE} must be excluded with ?from=${DATE_FROM} only. Found IDs: ${JSON.stringify(ids)}`,
+      );
+    });
+
+    it("?to= only: includes rows on and before the to-date", async () => {
+      const ids = await fetchFixtureIds(`to=${DATE_TO}`);
+      for (const date of [DATE_BEFORE, DATE_FROM, DATE_INSIDE, DATE_TO]) {
+        assert.ok(
+          ids.includes(orderIndexByDate.get(date)!),
+          `Row at ${date} should be included with ?to=${DATE_TO} only. Found IDs: ${JSON.stringify(ids)}`,
+        );
+      }
+    });
+
+    it("?to= only: excludes rows after the to-date", async () => {
+      const ids = await fetchFixtureIds(`to=${DATE_TO}`);
+      assert.ok(
+        !ids.includes(orderIndexByDate.get(DATE_AFTER)!),
+        `Row at ${DATE_AFTER} must be excluded with ?to=${DATE_TO} only. Found IDs: ${JSON.stringify(ids)}`,
+      );
+    });
+  });
+
   // ── Tickets ───────────────────────────────────────────────────────────────
 
   describe("GET /api/uc/admin/tickets — date-range filter", () => {
