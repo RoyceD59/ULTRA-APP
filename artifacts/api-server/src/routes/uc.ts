@@ -2208,12 +2208,29 @@ async function verifyPaymentOnServer(
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
   const userId = userIdFromBearer(req.headers["authorization"]);
   try {
     if (hasWCCredentials()) {
-      const orders = await wcFetchArray("/orders", { per_page: "20", orderby: "date", order: "desc" });
+      // Woo is store-wide — orders MUST be scoped to the authenticated user's
+      // email. Woo's `search` narrows the fetch; the strict billing-email
+      // filter below is the authorization boundary (search is fuzzy).
+      const emailLc = String(claims?.email ?? "").trim().toLowerCase();
+      if (!emailLc) {
+        // No verified identity — never expose store-wide orders.
+        res.json([]);
+        return;
+      }
+      const orders = await wcFetchArray("/orders", {
+        search: emailLc, per_page: "20", orderby: "date", order: "desc",
+      });
       if (orders) {
-        res.json(orders.map(normalizeOrder));
+        res.json(orders
+          .filter(o => {
+            const billing = o["billing"] as Record<string, unknown> | undefined;
+            return String(billing?.["email"] ?? "").toLowerCase() === emailLc;
+          })
+          .map(normalizeOrder));
         return;
       }
     }

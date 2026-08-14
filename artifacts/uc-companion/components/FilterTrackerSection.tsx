@@ -36,13 +36,21 @@ import PerformanceCheckInModal from '@/components/PerformanceCheckInModal';
 import SyncToast from '@/components/SyncToast';
 
 // ── Day-offset options ────────────────────────────────────────────────────────
-const DAY_OFFSETS = [
+export const DAY_OFFSETS = [
   { label: 'Today',      days: 0 },
   { label: '1 week ago', days: 7 },
   { label: '2 weeks ago', days: 14 },
   { label: '1 month ago', days: 30 },
   { label: '2 months ago', days: 60 },
 ];
+
+/** Snap an arbitrary number of days to the closest selectable day-offset option. */
+export function closestDayOffset(days: number): number {
+  return DAY_OFFSETS.reduce(
+    (best, o) => (Math.abs(o.days - days) < Math.abs(best - days) ? o.days : best),
+    DAY_OFFSETS[0].days,
+  );
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -325,9 +333,16 @@ interface ModalProps {
   productsLoading: boolean;
   onClose: () => void;
   onSave: (a: FilterActivation) => void;
+  /** Pre-select this product and jump straight to the date step (order-based nudge). */
+  initialProductId?: number | null;
+  /** Pre-select this day offset (snapped to a DAY_OFFSETS value). */
+  initialDayOffset?: number;
 }
 
-function RegisterModal({ visible, existingActivation, filterProducts, productsLoading, onClose, onSave }: ModalProps) {
+export function RegisterModal({
+  visible, existingActivation, filterProducts, productsLoading, onClose, onSave,
+  initialProductId = null, initialDayOffset = 0,
+}: ModalProps) {
   const colors = useColors();
   const [step, setStep]         = useState<1 | 2>(1);
   const [productId, setProductId]     = useState<number | null>(null);
@@ -337,6 +352,22 @@ function RegisterModal({ visible, existingActivation, filterProducts, productsLo
   const reset = useCallback(() => {
     setStep(1); setProductId(null); setDayOffset(0); setSaving(false);
   }, []);
+
+  // Apply pre-selection each time the modal opens. When a product is supplied
+  // (and exists in the catalogue) the picker step is skipped — the user lands
+  // on the date step with the purchase-date-based offset already selected.
+  const wasVisible = useRef(false);
+  useEffect(() => {
+    if (visible && !wasVisible.current) {
+      const preselected = initialProductId != null &&
+        filterProducts.some(p => p.id === initialProductId);
+      setProductId(preselected ? initialProductId : null);
+      setDayOffset(preselected ? closestDayOffset(initialDayOffset) : 0);
+      setStep(preselected ? 2 : 1);
+      setSaving(false);
+    }
+    wasVisible.current = visible;
+  }, [visible, initialProductId, initialDayOffset, filterProducts]);
 
   const selectedProduct = filterProducts.find(p => p.id === productId);
 

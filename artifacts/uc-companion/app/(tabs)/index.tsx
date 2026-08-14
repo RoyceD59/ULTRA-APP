@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -13,6 +13,7 @@ import ImpactBubble from '@/components/ImpactBubble';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFilterActivation, effectiveLifespanDays } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -73,7 +74,7 @@ export default function HomeScreen() {
     staleTime: 2 * 60 * 1000,
   });
 
-  useEffect(() => {
+  const refreshFilterStatus = useCallback(() => {
     // Primary: use the structured FilterActivation record (product-specific lifespan)
     getFilterActivation().then(activation => {
       if (activation) {
@@ -94,6 +95,8 @@ export default function HomeScreen() {
       });
     });
   }, []);
+
+  useEffect(() => { refreshFilterStatus(); }, [refreshFilterStatus]);
 
   const cartBarInset = useCartBarInset();
   const featured = products?.slice(0, 6) ?? [];
@@ -143,6 +146,9 @@ export default function HomeScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
         </View>
+
+        {/* Nudge: bought a trackable filter but never registered it */}
+        <RegisterFilterPrompt onRegistered={refreshFilterStatus} />
 
         {/* Promotions banner — scrollable horizontal strip */}
         {promotions && promotions.length > 0 && (
