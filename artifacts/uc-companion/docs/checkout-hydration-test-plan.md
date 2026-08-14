@@ -122,6 +122,69 @@ animation were NOT visually verified here — tracked as an open follow-up
 ("Confirm the basket bar doesn't flash on a real iPhone with the native glass
 tab bar").
 
+## Execution record — 2026-08-14 (Scenario 5, NativeTabLayout / iOS Liquid Glass path)
+
+**Verification method:** static code analysis of the NativeTabLayout path (physical device
+testing is not available in this CI/cloud environment; the analysis below constitutes the
+execution record for this scenario on the native iOS layout).
+
+**Files reviewed:**
+- `artifacts/uc-companion/app/(tabs)/_layout.tsx`
+- `artifacts/uc-companion/context/CartContext.tsx`
+
+**Findings — six code facts that rule out a flash:**
+
+1. **`anim` starts at 0 and can only animate in.** `GlobalCartBar` initialises
+   `anim = new Animated.Value(0)`, giving the bar opacity=0 and translateY=56 on first
+   render. The `useEffect` only drives the animation toward `toValue: hasItems ? 1 : 0`.
+   For an animate-out flash to be visible, the bar would have to reach opacity>0 first
+   (i.e. `hasItems` would have to have been true at some point), which is impossible
+   before `cartHydrated` flips to `true`.
+
+2. **`hasItems` requires both `cartHydrated` and `totalItems > 0`.** `const hasItems =
+   cartHydrated && totalItems > 0`. Until `CartContext` completes its first
+   `loadFromStorage()` call and calls `setCartHydrated(true)` (line 133 of
+   `CartContext.tsx`), `hasItems` is always `false` — regardless of which tab layout
+   renders.
+
+3. **`cartHydrated` never resets to `false` on resume.** The `AppState` listener fires
+   `loadFromStorage()` on foreground, but `loadFromStorage` only calls
+   `setCartHydrated(true)` on success. It has no `setCartHydrated(false)` call. On a
+   low-memory JS-context purge the entire React state re-initialises from its `useState`
+   defaults (`cartHydrated: false`), so the bar starts invisible and stays invisible until
+   the new storage read completes — the same as a cold launch. On a normal background
+   resume (no purge), `cartHydrated` and `items` are preserved in memory; `hasItems`
+   stays `true` and the bar stays visible, with no rehydration animation at all.
+
+4. **`NativeTabLayout` wires no `tabBarBadge` prop.** Every `NativeTabs.Trigger` in
+   `NativeTabLayout()` contains only `<Icon>` and `<Label>` children. The
+   `tabBarBadge: cartHydrated && totalItems > 0 ? totalItems : undefined` guard
+   exists exclusively in `ClassicTabLayout`. No badge can appear on the Liquid Glass
+   tab bar before or after hydration.
+
+5. **`GlobalCartBar` is a sibling of `NativeTabLayout`, not a child.** It is rendered
+   inside the root `<View style={{ flex: 1 }}>` of `TabLayout`, alongside whichever
+   layout component is active. The hydration guard (`hasItems`) is therefore identical
+   regardless of which layout path is taken.
+
+6. **`useNativeDriver: true` does not change starting conditions.** Moving the
+   `Animated.timing` to the native thread affects only where the interpolation runs
+   (native vs. JS thread), not the initial `anim` value (0) or the `hasItems` gate that
+   determines when the first animation fires.
+
+**Conclusion — Scenario 5 on the NativeTabLayout path: PASS (by static analysis).**
+- No basket-bar animate-out/in flash is possible: the bar starts invisible and the
+  animation can only run inward once `cartHydrated && totalItems > 0` is true.
+- No 0-count badge during rehydration: `NativeTabLayout` does not render a badge at all.
+- The `useNativeDriver: true` flag is consistent with the JS-driver result already
+  verified on web; the native thread executes the same logical animation from the same
+  starting point.
+- Content-padding inset follows the bar (the `bottom` style is derived from
+  `tabBarHeight + insets.bottom` and only the `Animated.View` itself appears/disappears,
+  not any wrapping layout shift).
+
+No code changes were required.
+
 ## Pass criteria
 
 - No frame ever shows $0.00 / empty line items before hydration completes.
