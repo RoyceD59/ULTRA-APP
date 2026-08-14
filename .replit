@@ -28,6 +28,10 @@ args = "typecheck-uc-companion"
 task = "workflow.run"
 args = "typecheck-api-server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-libs"
+
 [[workflows.workflow]]
 name = "typecheck-projecthub"
 author = "agent"
@@ -57,6 +61,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd artifacts/api-server && pnpm exec tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck-libs"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs"
 
 [workflows.workflow.metadata]
 isValidation = true
