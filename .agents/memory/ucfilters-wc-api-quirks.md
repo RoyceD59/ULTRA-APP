@@ -11,4 +11,4 @@ description: Live WC REST API works but has host-level quirks that break naive c
 2. **WAF blocks non-browser user agents.** Direct requests with default `python-urllib` UA get HTTP 403; the same request with `curl -A "Mozilla/5.0"` (or Node's default fetch UA) succeeds.
    **How to apply:** when debugging the live store from the shell, always pass a browser-like User-Agent.
 
-3. **Live products lack `filter_lifespan_days` meta.** Mock catalogue products carried `lifespanDays`; live WC products return 0 unless the team adds a `filter_lifespan_days` meta field per product in WooCommerce — without it the mobile filter-replacement tracker treats products as non-trackable.
+3. **Lifespan meta is the trackability switch for reminders.** A live WC product without a lifespan meta value is served as non-trackable and customers get no replacement reminder. Never guess a lifespan for an unknown product. New store products must have the meta set before reminders work; the api-server ships a verification script (`scripts/verify-filter-lifespans.mjs`) that audits the live catalogue against the expected values and flags unmapped products.

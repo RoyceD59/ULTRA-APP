@@ -7,5 +7,5 @@
 - [Resend connector email](resend-connector-email.md) — delivery via Replit Resend connector; from must be @contacts.ucfilters.com; 403s until user finishes DNS verification at resend.com/domains.
 - [UC upload/media security](uc-upload-security.md) — attach-time metadata verification is the enforcement point for presigned uploads; admin is DB-anchored; public serving limited to uploads/<uuid>.
 - [image-size Metro compat](image-size-metro-compat.md) — image-size 2.x breaks Metro PNG processing via DataView byteOffset overflow; must stay on 1.x until metro upgrades.
-- [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; live products lack filter_lifespan_days meta.
+- [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
