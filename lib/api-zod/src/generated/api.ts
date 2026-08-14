@@ -719,6 +719,44 @@ export const DeleteContactMethodResponse = zod.void()
 
 
 /**
+ * @summary Live monitoring snapshot — site checks, payment readiness, service status, problem counts
+ */
+export const GetMonitoringSnapshotResponse = zod.object({
+  "generatedAt": zod.string(),
+  "site": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "ok": zod.boolean(),
+  "httpStatus": zod.number().nullish(),
+  "responseMs": zod.number().nullish(),
+  "checkedAt": zod.string(),
+  "error": zod.string().nullish(),
+  "history": zod.array(zod.object({
+  "at": zod.string(),
+  "ok": zod.boolean(),
+  "responseMs": zod.number().nullish()
+}))
+})),
+  "payments": zod.object({
+  "paystack": zod.boolean(),
+  "mpesaMode": zod.enum(['live', 'demo']),
+  "stripe": zod.boolean(),
+  "cod": zod.boolean()
+}),
+  "services": zod.array(zod.object({
+  "name": zod.string(),
+  "status": zod.enum(['ok', 'warn', 'down']),
+  "detail": zod.string()
+})),
+  "problems": zod.object({
+  "recoveryOrders": zod.number(),
+  "notificationFailures7d": zod.number()
+})
+})
+
+
+/**
  * @summary List all platform connection statuses
  */
 export const ListSystemStatusResponseItem = zod.object({

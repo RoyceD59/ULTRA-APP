@@ -4,7 +4,7 @@ import {
   Bot, Leaf, MessageSquareOff, Contact2, BellRing, Activity,
   Webhook, ShoppingBag, LogOut, KeyRound, Loader2, Shield,
   UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets, BookOpen,
-  AlertTriangle, X,
+  AlertTriangle, X, Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +36,7 @@ const ALL_NAVIGATION = [
   { name: "Contacts",         href: "/contacts",        slug: "contacts"        as PageSlug, icon: Contact2 },
   { name: "Notifications",    href: "/notifications",   slug: "notifications"   as PageSlug, icon: BellRing },
   { name: "System Status",    href: "/system",          slug: "system"          as PageSlug, icon: Activity },
+  { name: "Monitoring",       href: "/monitoring",      slug: "monitoring"      as PageSlug, icon: Gauge },
   { name: "Webhook Tester",   href: "/webhook",         slug: "webhook"         as PageSlug, icon: Webhook },
   { name: "Orders",           href: "/orders",          slug: "orders"          as PageSlug, icon: ShoppingBag },
   { name: "Tickets",          href: "/tickets",         slug: "tickets"         as PageSlug, icon: Wrench },

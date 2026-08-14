@@ -700,6 +700,19 @@ paths:
           description: Not found
 
   # ─── System Status / Watchdog ────────────────────────────────────
+  /admin/monitoring:
+    get:
+      operationId: getMonitoringSnapshot
+      tags: [system]
+      summary: Live monitoring snapshot — site checks, payment readiness, service status, problem counts
+      responses:
+        "200":
+          description: Current monitoring snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringSnapshot"
+
   /system/status:
     get:
       operationId: listSystemStatus
@@ -1444,6 +1457,68 @@ components:
       properties:
         status: { type: string }
         notes: { type: string }
+
+    # ─── Monitoring Schemas ───────────────────────────────────────
+    MonitoringHistoryPoint:
+      type: object
+      required: [at, ok]
+      properties:
+        at: { type: string }
+        ok: { type: boolean }
+        responseMs: { type: ["integer", "null"] }
+
+    MonitoringSiteCheck:
+      type: object
+      required: [key, label, url, ok, checkedAt, history]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        url: { type: string }
+        ok: { type: boolean }
+        httpStatus: { type: ["integer", "null"] }
+        responseMs: { type: ["integer", "null"] }
+        checkedAt: { type: string }
+        error: { type: ["string", "null"] }
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringHistoryPoint"
+
+    MonitoringService:
+      type: object
+      required: [name, status, detail]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [ok, warn, down] }
+        detail: { type: string }
+
+    MonitoringSnapshot:
+      type: object
+      required: [generatedAt, site, payments, services, problems]
+      properties:
+        generatedAt: { type: string }
+        site:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringSiteCheck"
+        payments:
+          type: object
+          required: [paystack, mpesaMode, stripe, cod]
+          properties:
+            paystack: { type: boolean }
+            mpesaMode: { type: string, enum: [live, demo] }
+            stripe: { type: boolean }
+            cod: { type: boolean }
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringService"
+        problems:
+          type: object
+          required: [recoveryOrders, notificationFailures7d]
+          properties:
+            recoveryOrders: { type: integer }
+            notificationFailures7d: { type: integer }
 
     # ─── Notification Schemas ─────────────────────────────────────
     NotificationLog:

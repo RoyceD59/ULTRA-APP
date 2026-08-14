@@ -691,33 +691,46 @@ export async function fetchAllPublishedProducts(
 // served, and `null` is returned only when no data has ever been fetched
 // (callers must fail loudly, not fabricate lifespans).
 let _lifespanCache: { at: number; map: Map<number, number> } | null = null;
+let _lifespanRefresh: Promise<Map<number, number> | null> | null = null;
 const LIFESPAN_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export async function getProductLifespanMap(): Promise<Map<number, number> | null> {
-  const now = Date.now();
-  if (_lifespanCache && now - _lifespanCache.at < LIFESPAN_CACHE_TTL_MS) {
+  if (_lifespanCache && Date.now() - _lifespanCache.at < LIFESPAN_CACHE_TTL_MS) {
     return _lifespanCache.map;
   }
-  let normalized: Record<string, unknown>[] | null = null;
-  if (hasWCCredentials()) {
-    const products = await fetchAllPublishedProducts();
-    if (products) normalized = products.map(normalizeProduct);
-  } else {
-    normalized = MOCK_PRODUCTS.map(normalizeProduct);
-  }
-  if (!normalized) return _lifespanCache?.map ?? null; // stale beats nothing
-  const map = new Map<number, number>();
-  for (const p of normalized) {
-    const lifespan = Number(p["lifespanDays"]);
-    if (lifespan > 0) map.set(Number(p["id"]), lifespan);
-  }
-  _lifespanCache = { at: now, map };
-  return map;
+  // Coalesce concurrent refreshes — at TTL expiry, impact + registration
+  // requests must not each paginate the whole Woo catalogue.
+  if (_lifespanRefresh) return _lifespanRefresh;
+  _lifespanRefresh = (async () => {
+    try {
+      let normalized: Record<string, unknown>[] | null = null;
+      if (hasWCCredentials()) {
+        const products = await fetchAllPublishedProducts();
+        if (products) normalized = products.map(normalizeProduct);
+      } else {
+        normalized = MOCK_PRODUCTS.map(normalizeProduct);
+      }
+      if (!normalized) return _lifespanCache?.map ?? null; // stale beats nothing
+      const map = new Map<number, number>();
+      for (const p of normalized) {
+        const lifespan = Number(p["lifespanDays"]);
+        if (lifespan > 0) map.set(Number(p["id"]), lifespan);
+      }
+      // Timestamp on completion — never on fetch start — so a slow fetch
+      // can't shorten the effective freshness window.
+      _lifespanCache = { at: Date.now(), map };
+      return map;
+    } finally {
+      _lifespanRefresh = null;
+    }
+  })();
+  return _lifespanRefresh;
 }
 
 /** Test hook — reset the lifespan cache between test cases. */
 export function _resetLifespanCacheForTests(): void {
   _lifespanCache = null;
+  _lifespanRefresh = null;
 }
 
 // GET /api/uc/admin/products/lifespan-audit — admin-only report of live

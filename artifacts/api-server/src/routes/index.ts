@@ -20,6 +20,7 @@ import contactsRouter from "./contacts";
 import contactsSyncRouter from "./contacts-sync";
 import notificationsRouter from "./notifications";
 import systemStatusRouter from "./system-status";
+import monitoringRouter from "./monitoring";
 import webhookRouter from "./webhook";
 import whatsappRouter from "./whatsapp";
 import adminPaymentSettingsRouter from "./admin-payment-settings.js";
@@ -76,6 +77,7 @@ router.use(contactsRouter);
 router.use(contactsSyncRouter);
 router.use(notificationsRouter);
 router.use(systemStatusRouter);
+router.use(monitoringRouter);
 router.use(webhookRouter);
 router.use(whatsappRouter);
 

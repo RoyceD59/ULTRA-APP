@@ -102,7 +102,7 @@ export default function ImpactBubble() {
   const colors = useColors();
   const api    = useApi();
 
-  const [stats, setStats] = useState({ totalUsers: 0, litresFiltered: 0, plasticsAvoided: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, litresFiltered: 0, plasticsAvoided: 0, cleanWaterDays: 0 });
 
   async function load() {
     try {
@@ -111,6 +111,7 @@ export default function ImpactBubble() {
         totalUsers:      data.totalUsers,
         litresFiltered:  data.litresFiltered,
         plasticsAvoided: data.plasticsAvoided,
+        cleanWaterDays:  data.cleanWaterDays ?? 0,
       });
     } catch {
       // silent — widget stays at zeros or last values
@@ -162,6 +163,13 @@ export default function ImpactBubble() {
           color="#f97316"
           value={stats.plasticsAvoided}
           label="Bottles avoided"
+        />
+        <View style={[styles.divider, { backgroundColor: 'rgba(255,255,255,0.12)' }]} />
+        <StatBubble
+          icon="sunny-outline"
+          color="#facc15"
+          value={stats.cleanWaterDays}
+          label="Days of clean water"
         />
       </View>
 

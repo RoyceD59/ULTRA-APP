@@ -27,6 +27,7 @@ import AlisonFeedbackPage from '@/pages/alison-feedback';
 import Contacts from '@/pages/contacts';
 import Notifications from '@/pages/notifications';
 import SystemStatus from '@/pages/system-status';
+import MonitoringPage from '@/pages/monitoring';
 import WebhookTester from '@/pages/webhook-tester';
 import OrdersPage from '@/pages/orders';
 import TicketsPage from '@/pages/tickets';
@@ -132,6 +133,9 @@ function Router() {
               </Route>
               <Route path="/system">
                 <PageGuard page="system"><SystemStatus /></PageGuard>
+              </Route>
+              <Route path="/monitoring">
+                <PageGuard page="monitoring"><MonitoringPage /></PageGuard>
               </Route>
               <Route path="/webhook">
                 <PageGuard page="webhook"><WebhookTester /></PageGuard>

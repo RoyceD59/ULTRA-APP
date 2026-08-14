@@ -256,6 +256,21 @@ export interface UCPromotion {
   createdAt: string;
 }
 
+export interface RegisterPurchaseItem {
+  productId:    number;
+  name:         string;
+  quantity:     number;
+  lifespanDays: number; // 0 = not trackable (no catalogue lifespan — never guessed)
+}
+
+export interface RegisterPurchaseResult {
+  source:      'app' | 'store';
+  orderId:     number;
+  status:      string;
+  dateCreated: string;
+  items:       RegisterPurchaseItem[];
+}
+
 export interface CodeValidationResult {
   valid: boolean;
   type: 'referral' | 'promotion' | null;
@@ -331,6 +346,12 @@ export function useApi() {
       promoCode?: string;
       userEmail?: string;
     }) => post<UCOrder>('/api/uc/orders', data),
+    /**
+     * Look up a purchase by receipt/order number + the checkout phone number
+     * so the buyer can register their filter from the purchase record.
+     */
+    registerFilterPurchase: (receipt: string, phone: string) =>
+      post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone }),
     getLocations: () => get<MapLocation[]>('/api/uc/locations'),
     getTickets: () => get<MaintenanceTicket[]>('/api/uc/tickets'),
     createTicket: (data: {
@@ -470,7 +491,8 @@ export function useApi() {
         totalUsers:      number;
         litresFiltered:  number;
         plasticsAvoided: number;
-        autoStats:       { totalUsers: number; litresFiltered: number };
+        cleanWaterDays:  number;
+        autoStats:       { totalUsers: number; litresFiltered: number; cleanWaterDays: number };
         override:        { litresOffset: number; usersOffset: number; lastUpdatedBy: string; lastUpdatedAt: string };
         lastUpdated:     string;
       }>('/api/uc/impact'),

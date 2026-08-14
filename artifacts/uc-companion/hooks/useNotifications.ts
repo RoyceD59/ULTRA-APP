@@ -84,6 +84,10 @@ export interface FilterActivation {
   lastWaterSource?: WaterSource;        // water source from most recent check-in
   lastCheckIn?:   PerformanceCheckIn;   // most recent performance check-in
   checkIns?:      PerformanceCheckIn[]; // full history (newest first)
+  // Receipt registration link — the purchase record (order id) this activation
+  // came from. Used to stop the same receipt line being registered twice for
+  // the same product; a NEW purchase (different order id) restarts the cycle.
+  sourceOrderId?: number;
 }
 
 /**
@@ -534,6 +538,9 @@ export async function syncActivationWithCatalogue(
     lastWaterSource: existing.lastWaterSource,
     lastCheckIn:     existing.lastCheckIn,
     checkIns:        existing.checkIns,
+    // Preserve the receipt linkage — losing it would let the same receipt
+    // line be registered again after a catalogue lifespan correction.
+    sourceOrderId:   existing.sourceOrderId,
   });
 
   return updated;

@@ -49,6 +49,7 @@ import type {
   Member,
   MemberInput,
   MemberUpdate,
+  MonitoringSnapshot,
   NotificationDispatchInput,
   NotificationDispatchResult,
   NotificationLog,
@@ -2926,6 +2927,83 @@ export const useDeleteContactMethod = <TError = ErrorType<void>,
       > => {
       return useMutation(getDeleteContactMethodMutationOptions(options));
     }
+
+export const getGetMonitoringSnapshotUrl = () => {
+
+
+
+
+  return `/api/admin/monitoring`
+}
+
+/**
+ * @summary Live monitoring snapshot — site checks, payment readiness, service status, problem counts
+ */
+export const getMonitoringSnapshot = async ( options?: RequestInit): Promise<MonitoringSnapshot> => {
+
+  return customFetch<MonitoringSnapshot>(getGetMonitoringSnapshotUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMonitoringSnapshotQueryKey = () => {
+    return [
+    `/api/admin/monitoring`
+    ] as const;
+    }
+
+
+export const getGetMonitoringSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getMonitoringSnapshot>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonitoringSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMonitoringSnapshotQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMonitoringSnapshot>>> = ({ signal }) => getMonitoringSnapshot({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMonitoringSnapshot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMonitoringSnapshotQueryResult = NonNullable<Awaited<ReturnType<typeof getMonitoringSnapshot>>>
+export type GetMonitoringSnapshotQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Live monitoring snapshot — site checks, payment readiness, service status, problem counts
+ */
+
+export function useGetMonitoringSnapshot<TData = Awaited<ReturnType<typeof getMonitoringSnapshot>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonitoringSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMonitoringSnapshotQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListSystemStatusUrl = () => {
 

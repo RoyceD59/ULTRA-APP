@@ -333,6 +333,71 @@ export interface SystemStatusUpdate {
   notes?: string;
 }
 
+export interface MonitoringHistoryPoint {
+  at: string;
+  ok: boolean;
+  /** @nullable */
+  responseMs?: number | null;
+}
+
+export interface MonitoringSiteCheck {
+  key: string;
+  label: string;
+  url: string;
+  ok: boolean;
+  /** @nullable */
+  httpStatus?: number | null;
+  /** @nullable */
+  responseMs?: number | null;
+  checkedAt: string;
+  /** @nullable */
+  error?: string | null;
+  history: MonitoringHistoryPoint[];
+}
+
+export type MonitoringServiceStatus = typeof MonitoringServiceStatus[keyof typeof MonitoringServiceStatus];
+
+
+export const MonitoringServiceStatus = {
+  ok: 'ok',
+  warn: 'warn',
+  down: 'down',
+} as const;
+
+export interface MonitoringService {
+  name: string;
+  status: MonitoringServiceStatus;
+  detail: string;
+}
+
+export type MonitoringSnapshotPaymentsMpesaMode = typeof MonitoringSnapshotPaymentsMpesaMode[keyof typeof MonitoringSnapshotPaymentsMpesaMode];
+
+
+export const MonitoringSnapshotPaymentsMpesaMode = {
+  live: 'live',
+  demo: 'demo',
+} as const;
+
+export type MonitoringSnapshotPayments = {
+  paystack: boolean;
+  mpesaMode: MonitoringSnapshotPaymentsMpesaMode;
+  stripe: boolean;
+  cod: boolean;
+};
+
+export type MonitoringSnapshotProblems = {
+  recoveryOrders: number;
+  notificationFailures7d: number;
+};
+
+export interface MonitoringSnapshot {
+  generatedAt: string;
+  site: MonitoringSiteCheck[];
+  payments: MonitoringSnapshotPayments;
+  services: MonitoringService[];
+  problems: MonitoringSnapshotProblems;
+}
+
 export interface NotificationLog {
   id: number;
   /** @nullable */

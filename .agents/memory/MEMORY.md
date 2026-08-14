@@ -10,3 +10,4 @@
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines silently drop exports; rebuild libs with typecheck:libs; merges wait on my turn lock.
+- [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).

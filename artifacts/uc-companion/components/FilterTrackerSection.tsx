@@ -15,13 +15,14 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
-  Platform, ActivityIndicator,
+  Platform, ActivityIndicator, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
+import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem } from '@/hooks/useApi';
 import {
   FilterActivation,
   scheduleAllFilterNotifications,
@@ -344,13 +345,30 @@ export function RegisterModal({
   initialProductId = null, initialDayOffset = 0,
 }: ModalProps) {
   const colors = useColors();
+  const api = useApi();
   const [step, setStep]         = useState<1 | 2>(1);
   const [productId, setProductId]     = useState<number | null>(null);
   const [dayOffset, setDayOffset]     = useState(0);
   const [saving, setSaving]     = useState(false);
 
+  // ── Receipt-based registration state ──────────────────────────────────────
+  const [mode, setMode]                 = useState<'catalogue' | 'receipt'>('catalogue');
+  const [receipt, setReceipt]           = useState('');
+  const [phone, setPhone]               = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError]   = useState('');
+  const [purchase, setPurchase]         = useState<RegisterPurchaseResult | null>(null);
+  // Invalidation token for in-flight lookups (bumped on back/close so a late
+  // response can never surface stale purchase data) and a synchronous save
+  // lock (state alone can't stop two rapid taps scheduling twice).
+  const lookupSeq = useRef(0);
+  const savingRef = useRef(false);
+
   const reset = useCallback(() => {
+    lookupSeq.current++;
     setStep(1); setProductId(null); setDayOffset(0); setSaving(false);
+    setMode('catalogue'); setReceipt(''); setPhone('');
+    setLookupLoading(false); setLookupError(''); setPurchase(null);
   }, []);
 
   // Apply pre-selection each time the modal opens. When a product is supplied
@@ -365,6 +383,7 @@ export function RegisterModal({
       setDayOffset(preselected ? closestDayOffset(initialDayOffset) : 0);
       setStep(preselected ? 2 : 1);
       setSaving(false);
+      setMode('catalogue'); setPurchase(null); setLookupError('');
     }
     wasVisible.current = visible;
   }, [visible, initialProductId, initialDayOffset, filterProducts]);
@@ -372,7 +391,8 @@ export function RegisterModal({
   const selectedProduct = filterProducts.find(p => p.id === productId);
 
   async function handleSave() {
-    if (!selectedProduct) return;
+    if (!selectedProduct || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       // Ensure permission is granted before scheduling
@@ -391,7 +411,81 @@ export function RegisterModal({
       onSave(activation);
       reset();
     } finally {
+      savingRef.current = false;
       setSaving(false);
+    }
+  }
+
+  // ── Receipt flow handlers ──────────────────────────────────────────────────
+  async function handleLookup() {
+    const seq = ++lookupSeq.current;
+    setLookupError('');
+    setLookupLoading(true);
+    try {
+      const result = await api.registerFilterPurchase(receipt.trim(), phone.trim());
+      if (seq !== lookupSeq.current) return; // superseded (back/close) — discard
+      const trackable = result.items.filter(i => i.lifespanDays > 0);
+      if (trackable.length === 0) {
+        setLookupError(
+          'This purchase has no filters with replacement reminders. Pick your filter from the list instead.',
+        );
+        return;
+      }
+      setPurchase(result);
+    } catch (e) {
+      if (seq !== lookupSeq.current) return; // superseded — discard stale error
+      setLookupError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not reach the server. Please check your connection and try again.',
+      );
+    } finally {
+      if (seq === lookupSeq.current) setLookupLoading(false);
+    }
+  }
+
+  async function handleSaveFromPurchase(item: RegisterPurchaseItem) {
+    if (!purchase || savingRef.current) return;
+    // Same receipt line already backing the current registration → block the
+    // duplicate. A new purchase (different receipt) restarts the cycle.
+    if (
+      existingActivation?.sourceOrderId === purchase.orderId &&
+      existingActivation.productId === item.productId
+    ) {
+      setLookupError('This receipt is already registered to your current filter.');
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const status = await getNotificationPermissionStatus();
+      if (status !== 'granted') {
+        await requestNotificationPermission();
+      }
+      const activation = await scheduleAllFilterNotifications({
+        activatedAt:   purchase.dateCreated || new Date().toISOString(),
+        productId:     item.productId,
+        productName:   item.name,
+        lifespanDays:  item.lifespanDays,
+        sourceOrderId: purchase.orderId,
+      });
+      onSave(activation);
+      reset();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  function handleBack() {
+    lookupSeq.current++; // cancel any in-flight lookup
+    setLookupError('');
+    setLookupLoading(false);
+    if (mode === 'receipt') {
+      if (purchase) setPurchase(null);
+      else setMode('catalogue');
+    } else {
+      setStep(1);
     }
   }
 
@@ -406,13 +500,15 @@ export function RegisterModal({
 
           {/* Header */}
           <View style={styles.sheetHeader}>
-            {step === 2 && (
-              <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
+            {(step === 2 || mode === 'receipt') && (
+              <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
                 <Ionicons name="chevron-back" size={22} color={colors.primary} />
               </TouchableOpacity>
             )}
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              {step === 1
+              {mode === 'receipt'
+                ? purchase ? 'Select Your Filter' : 'Register with Receipt'
+                : step === 1
                 ? existingActivation ? 'New Filter Installed' : 'Register Your Filter'
                 : 'When was it installed?'}
             </Text>
@@ -421,7 +517,109 @@ export function RegisterModal({
             </TouchableOpacity>
           </View>
 
-          {step === 1 ? (
+          {mode === 'receipt' ? (
+            purchase === null ? (
+              /* Receipt step A: receipt number + phone */
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.sheetBody}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}>
+                <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
+                  Enter the receipt (order) number from your purchase and the
+                  phone number you used at checkout — we'll find your filter
+                  and start reminders from the purchase date.
+                </Text>
+                <TextInput
+                  value={receipt}
+                  onChangeText={setReceipt}
+                  placeholder="Receipt number, e.g. 1024"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                  autoCorrect={false}
+                  style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+                />
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="Phone used at purchase, e.g. 07XX XXX XXX"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="phone-pad"
+                  autoCorrect={false}
+                  style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+                />
+                {!!lookupError && (
+                  <Text style={[styles.errorText, { color: '#EF4444' }]}>{lookupError}</Text>
+                )}
+                <TouchableOpacity
+                  onPress={handleLookup}
+                  disabled={lookupLoading || !receipt.trim() || !phone.trim()}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.saveBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: lookupLoading || !receipt.trim() || !phone.trim() ? 0.6 : 1,
+                    },
+                  ]}>
+                  {lookupLoading
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.saveBtnTxt}>Find My Purchase</Text>}
+                </TouchableOpacity>
+              </ScrollView>
+            ) : (
+              /* Receipt step B: pick the filter line from the purchase */
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.sheetBody}
+                showsVerticalScrollIndicator={false}>
+                <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
+                  Receipt #{purchase.orderId}
+                  {purchase.dateCreated
+                    ? ` — purchased ${new Date(purchase.dateCreated).toLocaleDateString()}`
+                    : ''}
+                </Text>
+                <Text style={[styles.stepHint, { color: colors.mutedForeground, marginTop: 4, marginBottom: 8 }]}>
+                  Tap the filter you installed:
+                </Text>
+                <View style={{ gap: 10 }}>
+                  {purchase.items.filter(i => i.lifespanDays > 0).map((item, idx) => (
+                    <TouchableOpacity
+                      key={`${item.productId}-${idx}`}
+                      onPress={() => handleSaveFromPurchase(item)}
+                      disabled={saving}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.productRow,
+                        { backgroundColor: colors.card, borderColor: colors.border, opacity: saving ? 0.6 : 1 },
+                      ]}>
+                      <View style={[styles.productIconWrap, { backgroundColor: colors.primaryLight }]}>
+                        <Ionicons name="water" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.productRowName, { color: colors.text }]}>{item.name}</Text>
+                        <Text style={[styles.productRowLife, { color: colors.mutedForeground }]}>
+                          {item.lifespanDays}-day lifespan
+                          {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
+                        </Text>
+                      </View>
+                      {saving
+                        ? <ActivityIndicator size="small" color={colors.primary} />
+                        : <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {purchase.items.some(i => !(i.lifespanDays > 0)) && (
+                  <Text style={[styles.receiptMeta, { color: colors.mutedForeground }]}>
+                    Other items on this receipt don't have replacement reminders.
+                  </Text>
+                )}
+                {!!lookupError && (
+                  <Text style={[styles.errorText, { color: '#EF4444' }]}>{lookupError}</Text>
+                )}
+              </ScrollView>
+            )
+          ) : step === 1 ? (
             /* Step 1: Product picker */
             <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetBody} showsVerticalScrollIndicator={false}>
               <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
@@ -455,6 +653,18 @@ export function RegisterModal({
                   <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
               ))}
+
+              {/* Receipt-based entry point */}
+              <TouchableOpacity
+                onPress={() => { setLookupError(''); setMode('receipt'); }}
+                activeOpacity={0.8}
+                style={[styles.receiptLink, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Ionicons name="receipt-outline" size={16} color={colors.primary} />
+                <Text style={[styles.receiptLinkText, { color: colors.primary }]}>
+                  Bought from us? Register with your receipt number
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
             </ScrollView>
           ) : (
             /* Step 2: Date picker */
@@ -555,6 +765,11 @@ const styles = StyleSheet.create({
   productRowLife:  { fontSize: 12, marginTop: 2 },
   offsetRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13 },
   offsetLabel:     { fontSize: 15, fontWeight: '500' as const },
+  input:           { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginTop: 10 },
+  errorText:       { fontSize: 12, marginTop: 10, lineHeight: 16 },
+  receiptLink:     { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginTop: 12 },
+  receiptLinkText: { flex: 1, fontSize: 13, fontWeight: '600' as const },
+  receiptMeta:     { fontSize: 11, marginTop: 10, lineHeight: 15 },
   saveBtn:         { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 16 },
   saveBtnTxt:      { color: '#fff', fontSize: 15, fontWeight: '700' as const },
 });
