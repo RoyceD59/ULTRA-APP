@@ -46,7 +46,21 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+// The Expo web preview runs on a different origin (https://$REPLIT_EXPO_DEV_DOMAIN)
+// than the API server, so its browser fetches need CORS headers. We only allow
+// the Replit dev-domain origins, and only outside production — native builds
+// don't enforce CORS, and the production web apps are served same-origin.
+const corsAllowedOrigins: string[] = [];
+if (process.env.NODE_ENV !== "production") {
+  for (const domain of [
+    process.env.REPLIT_EXPO_DEV_DOMAIN,
+    process.env.REPLIT_DEV_DOMAIN,
+  ]) {
+    if (domain) corsAllowedOrigins.push(`https://${domain}`);
+  }
+}
+app.use(cors({ origin: corsAllowedOrigins.length > 0 ? corsAllowedOrigins : false }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
