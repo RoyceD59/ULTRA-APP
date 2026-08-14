@@ -4711,6 +4711,10 @@ router.get("/uc/tickets", async (req: Request, res: Response): Promise<void> => 
 
 router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
+  if (userId === "anonymous") {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
   const ticketNumericId = Number(userId);
   if (await guardDeletedAccount(ticketNumericId, res)) return;
   const { productModel, issueDescription, preferredContactTime, photos, videos } = req.body as {
@@ -4819,6 +4823,10 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
 // ─── Water Tests ──────────────────────────────────────────────────────────────
 router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void> => {
   const userId = userIdFromBearer(req.headers["authorization"]);
+  if (userId === "anonymous") {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
   const wtNumericId = Number(userId);
   if (await guardDeletedAccount(wtNumericId, res)) return;
   const { name, address, phone, email: formEmail, waterSource, concerns, photos, videos } = req.body as {
