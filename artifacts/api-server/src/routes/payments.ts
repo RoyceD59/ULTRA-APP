@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { ucOrdersTable, mpesaStkInitiationsTable, teamSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -239,6 +239,7 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
   if (!token || !shortcode || !passkey) {
     // Sandbox / demo mode — generate a mock CheckoutRequestID.
     const mockCheckoutRequestId = `ws_CO_${Date.now()}`;
+    const mockCallbackToken = randomUUID();
 
     // Persist the initiation record BEFORE issuing the CheckoutRequestID.
     // If this fails, we must NOT return a CheckoutRequestID — without the record
@@ -248,6 +249,7 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
         checkoutRequestId: mockCheckoutRequestId,
         expectedAmount,
         phone: normalizedPhone,
+        callbackToken: mockCallbackToken,
         expiresAt,
       }).onConflictDoNothing();
     } catch (err) {
@@ -274,6 +276,23 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
     const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
     const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
 
+    // Generate a per-push callback token (UUID).  This is embedded in the
+    // CallBackURL as ?token=<callbackToken> and stored in the initiation record.
+    // Using a per-push token instead of the long-lived shared secret limits
+    // exposure: each token is tied to exactly one STK push and expires with the
+    // initiation record, so a token captured in access logs cannot be reused
+    // across pushes or after the 15-minute window.
+    const callbackToken = randomUUID();
+
+    const apiBase =
+      process.env["API_BASE_URL"] ??
+      (process.env["REPLIT_DEV_DOMAIN"]
+        ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
+        : "https://team-horizon--jerryaroyce.replit.app");
+    // NOTE: Safaricom echoes the CallBackURL verbatim and does not support
+    // custom request headers, so the token must be a query parameter.
+    const callbackUrl = `${apiBase}/api/payments/mpesa/callback?token=${encodeURIComponent(callbackToken)}`;
+
     const stkRes = await fetch(
       `https://${env}.safaricom.co.ke/mpesa/stkpush/v1/processrequest`,
       {
@@ -288,25 +307,7 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
           PartyA: normalizedPhone,
           PartyB: shortcode,
           PhoneNumber: normalizedPhone,
-          // SECURITY NOTE: MPESA_WEBHOOK_SECRET is appended as a query parameter
-          // because Safaricom echoes the CallBackURL verbatim; it does not support
-          // custom request headers.  Query-param tokens are visible in HTTP access
-          // logs on intermediate proxies — accept this risk in exchange for the
-          // protection against arbitrary callers forging "paid" callbacks.
-          // The callback handler also accepts Authorization: Bearer <secret> for
-          // curl/Postman testing where you control the headers directly.
-          //
-          // The secret is fetched from the DB (admin-rotatable) with env-var fallback.
-          CallBackURL: await (async () => {
-              const apiBase =
-                process.env["API_BASE_URL"] ??
-                (process.env["REPLIT_DEV_DOMAIN"]
-                  ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
-                  : "https://team-horizon--jerryaroyce.replit.app");
-              const base = `${apiBase}/api/payments/mpesa/callback`;
-              const secret = await getMpesaWebhookSecret();
-              return secret ? `${base}?token=${encodeURIComponent(secret)}` : base;
-            })(),
+          CallBackURL: callbackUrl,
           AccountReference: `Order-${orderId}`,
           TransactionDesc: "UC Filter Purchase",
         }),
@@ -331,6 +332,7 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
         checkoutRequestId,
         expectedAmount,
         phone: normalizedPhone,
+        callbackToken,
         expiresAt,
       }).onConflictDoNothing();
     } catch (err) {
@@ -899,30 +901,79 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
   const ack = (extra?: Record<string, unknown>) =>
     res.json({ ResultCode: 0, ResultDesc: "Accepted", ...extra });
 
-  // ── Bearer-token verification ────────────────────────────────────────────
+  // ── Callback-token verification ─────────────────────────────────────────
   // Safaricom does not sign callbacks with HMAC, but it echoes the exact
-  // CallBackURL verbatim (query params included).  We embed a shared secret
-  // as ?token=<secret> when initiating the push, then validate it here.
-  // An Authorization: Bearer <secret> header is also accepted so the endpoint
-  // can be tested easily from curl/Postman.
-  //
-  // The secret is loaded at request time from the DB (admin-rotatable) with
-  // env-var fallback, so it can be rotated without a server restart.
+  // CallBackURL verbatim (query params included).  We embed a per-push UUID
+  // (callbackToken, stored in mpesa_stk_initiations) as ?token=<uuid> when
+  // initiating the push, then validate it here against the stored value.
+  // Using a per-push token instead of the long-lived shared secret limits
+  // exposure: each token is valid for one STK push only and expires with the
+  // initiation record.
+  // An Authorization: Bearer <token> header is also accepted for curl/Postman.
+  // Legacy rows (no callbackToken in DB) fall back to the shared secret.
   {
+    const authHeader  = String(req.headers["authorization"] ?? "");
+    const bearerToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : String(req.query["token"] ?? "");
+
+    // Peek at the body (already parsed by express.json) to get the
+    // CheckoutRequestID so we can look up the per-push token.
+    const peekId = (req.body as {
+      Body?: { stkCallback?: { CheckoutRequestID?: string } };
+    })?.Body?.stkCallback?.CheckoutRequestID;
+
+    // Fail-closed in production when no secret is configured at all.
     const webhookSecret = await getMpesaWebhookSecret();
-    // Fail-closed in production: if NODE_ENV=production and no secret is set,
-    // treat it as MPESA_WEBHOOK_REQUIRED_SIGNATURE=true so the endpoint never
-    // silently accepts unverified callbacks in a live deployment.
     const requireSignature =
       process.env["MPESA_WEBHOOK_REQUIRED_SIGNATURE"] === "true" ||
       (process.env["NODE_ENV"] === "production" && !webhookSecret);
 
-    if (webhookSecret) {
-      const authHeader  = String(req.headers["authorization"] ?? "");
-      const bearerToken = authHeader.startsWith("Bearer ")
-        ? authHeader.slice(7)
-        : String(req.query["token"] ?? "");
+    if (peekId) {
+      // We have a CheckoutRequestID — verify against the per-push token stored
+      // in the initiation record (primary path for all new-style pushes).
+      const [initRow] = await db
+        .select({ callbackToken: mpesaStkInitiationsTable.callbackToken })
+        .from(mpesaStkInitiationsTable)
+        .where(eq(mpesaStkInitiationsTable.checkoutRequestId, peekId))
+        .limit(1);
 
+      const perPushToken = initRow?.callbackToken ?? null;
+
+      if (perPushToken !== null) {
+        // Per-push token path: the token must match exactly.
+        if (bearerToken !== perPushToken) {
+          console.warn(
+            `[M-Pesa callback] ⚠️  Invalid per-push callback token for ref ${peekId} — request rejected.`
+          );
+          res.status(401).json({ error: "Invalid signature" });
+          return;
+        }
+      } else if (webhookSecret) {
+        // Legacy row (created before callbackToken column) — fall back to
+        // shared-secret comparison so existing rows still work after the upgrade.
+        if (bearerToken !== webhookSecret) {
+          console.warn(
+            "[M-Pesa callback] ⚠️  Invalid bearer token (legacy shared-secret path) — request rejected."
+          );
+          res.status(401).json({ error: "Invalid signature" });
+          return;
+        }
+      } else {
+        // No initiation record token AND no shared secret configured.
+        console.warn(
+          "[M-Pesa callback] ⚠️  SECURITY WARNING: no callback token and no shared secret — verification DISABLED."
+        );
+        if (requireSignature) {
+          res.status(403).json({
+            error: "Webhook signature verification is required but no secret key is configured.",
+          });
+          return;
+        }
+      }
+    } else if (webhookSecret) {
+      // No CheckoutRequestID in body (malformed request) — fall back to the
+      // shared secret so the handler can still reject outright bad requests.
       if (bearerToken !== webhookSecret) {
         console.warn(
           "[M-Pesa callback] ⚠️  Invalid or missing bearer token — request rejected."
@@ -931,25 +982,15 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         return;
       }
     } else {
-      // No secret configured — token verification is skipped.
-      // This is acceptable in a local dev/test environment.
-      // In production this is a security risk: any caller can forge "paid" callbacks.
+      // No CheckoutRequestID and no shared secret — open endpoint.
       console.warn(
         "[M-Pesa callback] ⚠️  SECURITY WARNING: M-Pesa webhook secret is not set. " +
           "Callback token verification is DISABLED. " +
-          "Set it in Admin → Payment Settings or via MPESA_WEBHOOK_SECRET to enable it. " +
-          "If this is a production deployment, set MPESA_WEBHOOK_REQUIRED_SIGNATURE=true " +
-          "to hard-reject unverified requests."
+          "Set it in Admin → Payment Settings or via MPESA_WEBHOOK_SECRET to enable it."
       );
       if (requireSignature) {
-        // Hard-reject: operator has explicitly opted in to strict mode.
-        console.error(
-          "[M-Pesa callback] MPESA_WEBHOOK_REQUIRED_SIGNATURE=true but " +
-            "no webhook secret is configured — rejecting request."
-        );
         res.status(403).json({
-          error:
-            "Webhook signature verification is required but no secret key is configured.",
+          error: "Webhook signature verification is required but no secret key is configured.",
         });
         return;
       }

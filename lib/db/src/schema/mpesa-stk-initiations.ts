@@ -20,6 +20,15 @@ export const mpesaStkInitiationsTable = pgTable(
     expectedAmount:    integer("expected_amount").notNull(),
     /** Normalised phone, e.g. "254712345678". */
     phone:             text("phone").notNull(),
+    /**
+     * Per-push callback token (UUID) embedded in the Safaricom CallBackURL as
+     * ?token=<callbackToken>.  Using a per-push token instead of the long-lived
+     * shared webhook secret limits the blast radius if a token leaks via access
+     * logs: each token is valid for one STK push only (tied to this row) and
+     * expires with expiresAt.  Null for legacy rows created before this column
+     * existed (verified against the shared secret as a fallback).
+     */
+    callbackToken:     text("callback_token"),
     createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Callback is not honoured after this time (replay protection). */
     expiresAt:         timestamp("expires_at", { withTimezone: true }).notNull(),

@@ -666,12 +666,13 @@ describe("M-Pesa callback — bearer-token guard: MPESA_WEBHOOK_REQUIRED_SIGNATU
 });
 
 // ── CallBackURL token embedding test ─────────────────────────────────────────
-// When MPESA_WEBHOOK_SECRET is set, the outgoing STK push must include the
-// secret as ?token= in the CallBackURL so Safaricom echoes it back and the
-// callback handler can verify it.
+// The outgoing STK push must embed a per-push UUID token as ?token= in the
+// CallBackURL (NOT the long-lived shared secret, which would expose it in logs).
+// The callback handler verifies incoming callbacks against the per-push token
+// stored in the initiation record, so the URL token must be a UUID.
 
-describe("M-Pesa initiation — CallBackURL token embedding", () => {
-  it("includes ?token=<MPESA_WEBHOOK_SECRET> in the CallBackURL sent to Daraja", async () => {
+describe("M-Pesa initiation — CallBackURL per-push token embedding", () => {
+  it("includes a UUID ?token= (not the shared secret) in the CallBackURL sent to Daraja", async () => {
     const savedSecret  = process.env["MPESA_WEBHOOK_SECRET"];
     const savedKey     = process.env["MPESA_CONSUMER_KEY"];
     const savedSec     = process.env["MPESA_CONSUMER_SECRET"];
@@ -727,9 +728,26 @@ describe("M-Pesa initiation — CallBackURL token embedding", () => {
         capturedCallbackUrl !== undefined,
         "CallBackURL must have been captured from the Daraja request",
       );
+
+      // The CallBackURL must contain a ?token= query parameter.
+      const tokenMatch = capturedCallbackUrl!.match(/[?&]token=([^&]+)/);
       assert.ok(
-        capturedCallbackUrl!.includes(`token=${encodeURIComponent(testSecret)}`),
-        `CallBackURL must include the encoded MPESA_WEBHOOK_SECRET token. Got: ${capturedCallbackUrl}`,
+        tokenMatch !== null,
+        `CallBackURL must contain a ?token= parameter. Got: ${capturedCallbackUrl}`,
+      );
+
+      const embeddedToken = decodeURIComponent(tokenMatch![1]!);
+
+      // The embedded token must be a UUID (per-push token), NOT the shared secret.
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      assert.ok(
+        uuidRe.test(embeddedToken),
+        `CallBackURL token must be a UUID (per-push token). Got: ${embeddedToken}`,
+      );
+      assert.notEqual(
+        embeddedToken,
+        testSecret,
+        "CallBackURL must NOT embed the long-lived shared secret — use per-push token only",
       );
     } finally {
       globalThis.fetch = origFetch;
@@ -1083,6 +1101,12 @@ describe("M-Pesa callback — full round-trip (sandbox)", () => {
       assert.equal(initiations[0]!.expectedAmount, 8800, "stored amount must match request");
       assert.ok(initiations[0]!.expiresAt > new Date(), "expiry must be in the future");
 
+      // The sandbox endpoint stores a per-push callbackToken alongside the
+      // initiation record.  The callback handler verifies incoming requests
+      // against this token, so we must supply it here.
+      const callbackToken = initiations[0]!.callbackToken;
+      assert.ok(callbackToken, "initiation record must include a callbackToken");
+
       // ── Step 3: fire the callback and verify a recovery order is created ─
       // Restore Daraja env so verification runs (stubs handle the actual calls).
       process.env["MPESA_CONSUMER_KEY"]    = "test_key";
@@ -1090,7 +1114,11 @@ describe("M-Pesa callback — full round-trip (sandbox)", () => {
       process.env["MPESA_SHORTCODE"]       = "174379";
       process.env["MPESA_PASSKEY"]         = "test_passkey";
 
-      const cbRes = await postCallback(stkPayload(checkoutRequestId, 0, 9999, "254712345999", "LRT001"));
+      const cbRes = await postCallback(
+        stkPayload(checkoutRequestId, 0, 9999, "254712345999", "LRT001"),
+        server,
+        { urlSuffix: `?token=${encodeURIComponent(callbackToken!)}` },
+      );
       assert.equal(cbRes.status, 200);
       assert.equal(cbRes.body["ResultCode"], 0);
       assert.ok(typeof cbRes.body["orderId"] === "number", "orderId must be returned");
