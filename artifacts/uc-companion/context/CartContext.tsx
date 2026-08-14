@@ -47,8 +47,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // persistence layer.  Writes are SERIALIZED on a promise chain, a write is
   // skipped when a newer mutation has superseded it (only the newest snapshot
   // can commit, so concurrent AsyncStorage writes can never settle out of
-  // order), and `savedVersion` advances only after that exact write SUCCEEDS
-  // — a suppressed storage failure is never treated as persisted.
+  // order), and `savedVersion` advances once that exact write SETTLES —
+  // success, or failure after one retry.  Settling on failure matters: if a
+  // failed save left savedVersion behind forever, every later refreshCart()
+  // would be silently skipped and cross-screen changes would never appear.
   // A refresh may only overwrite in-memory state when nothing mutated since
   // it started AND storage had caught up when the read completed — otherwise
   // freshly tapped quantities would be clobbered by stale data.
@@ -68,8 +70,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
         if (v > writeSync.savedVersion) writeSync.savedVersion = v;
       } catch {
-        // Failed write: savedVersion stays behind so refreshCart will not
-        // trust storage that predates this mutation.
+        // Failed write: retry once — a transient I/O error should not lose
+        // the snapshot if storage recovers immediately.
+        try {
+          await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
+          if (v > writeSync.savedVersion) writeSync.savedVersion = v;
+        } catch {
+          // Still failing: mark this version as SETTLED anyway.  If we left
+          // savedVersion behind, every future refreshCart() would be silently
+          // skipped forever (savedAtRead could never catch up), so cross-screen
+          // cart changes would stop appearing.  Accepting the (already-lost)
+          // write as settled keeps refresh alive; the in-memory state remains
+          // correct and the next successful save re-persists it.
+          if (v > writeSync.savedVersion) writeSync.savedVersion = v;
+        }
       }
     });
   }, [writeSync]);

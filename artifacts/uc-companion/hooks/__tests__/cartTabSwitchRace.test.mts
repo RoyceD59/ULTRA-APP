@@ -246,6 +246,56 @@ describe('deferred AsyncStorage writes (adversarial completion order)', () => {
     assert.equal(root.value.items[0].quantity, 3);
   });
 
+  it('a FAILED save must not permanently disable refresh: later refresh still applies newer storage', async () => {
+    _storage.set(CART_STORAGE_KEY, JSON.stringify([{ ...PRODUCT_A, quantity: 1 }]));
+    const root = await mountCart();
+    const { updateQty, refreshCart } = root.value;
+
+    // Every setItem rejects: the tap's save (and its retry) fail outright.
+    _setGates({ set: () => Promise.reject(new Error('disk full')) });
+
+    updateQty(PRODUCT_A.id, 2);
+    root.flush();
+    await tick(); await tick();      // let the failed save + retry settle
+    assert.deepEqual(JSON.parse(_storage.get(CART_STORAGE_KEY)!), [{ ...PRODUCT_A, quantity: 1 }],
+      'precondition: the save must actually have failed');
+
+    // Storage recovers, and another screen writes genuinely newer data.
+    _setGates({});
+    _storage.set(CART_STORAGE_KEY, JSON.stringify([
+      { ...PRODUCT_A, quantity: 7 },
+      { ...PRODUCT_B, quantity: 1 },
+    ]));
+
+    await refreshCart();
+    root.flush();
+
+    assert.equal(root.value.items.length, 2,
+      'refresh after a failed save must still apply newer storage');
+    const a = root.value.items.find(i => i.id === PRODUCT_A.id)!;
+    assert.equal(a.quantity, 7, 'genuinely newer storage data must win once the failed save has settled');
+  });
+
+  it('a save that fails once but succeeds on retry still persists the snapshot', async () => {
+    _storage.set(CART_STORAGE_KEY, JSON.stringify([{ ...PRODUCT_A, quantity: 1 }]));
+    const root = await mountCart();
+    const { updateQty, refreshCart } = root.value;
+
+    let call = 0;
+    _setGates({ set: () => (++call === 1 ? Promise.reject(new Error('transient')) : Promise.resolve()) });
+
+    updateQty(PRODUCT_A.id, 4);
+    root.flush();
+    await tick(); await tick();
+
+    assert.deepEqual(storedItems(), [{ ...PRODUCT_A, quantity: 4 }],
+      'retry must persist the snapshot after a transient failure');
+
+    await refreshCart();
+    root.flush();
+    assert.equal(root.value.items[0].quantity, 4);
+  });
+
   it('slow refresh read that completes after new taps must not clobber them', async () => {
     _storage.set(CART_STORAGE_KEY, JSON.stringify([{ ...PRODUCT_A, quantity: 1 }]));
     const root = await mountCart();
