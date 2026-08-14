@@ -510,6 +510,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
     setExporting(true);
     try {
       const params = buildParams();
+      if (statusFilter) params.set("status", statusFilter);
       const url = `${BASE}/api/uc/admin/orders.csv${params.size ? `?${params}` : ""}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
