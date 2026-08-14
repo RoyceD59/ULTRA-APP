@@ -34,6 +34,7 @@ export * from "./uc-product-media";
 export * from "./uc-ai-feedback";
 export * from "./uc-offline-clients";
 export * from "./uc-notification-log";
+export * from "./uc-lifespan-alerts";
 // Team Horizon schemas
 export * from "./contacts";
 export * from "./contact-methods";

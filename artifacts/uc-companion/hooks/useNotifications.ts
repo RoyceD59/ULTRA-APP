@@ -367,6 +367,15 @@ export async function scheduleAllFilterNotifications(
 
   await cancelAllFilterNotifications();
 
+  // Guard: a non-positive lifespan means the product is not trackable —
+  // persist the activation but never schedule offers at nonsensical dates.
+  if (!(params.lifespanDays > 0)) {
+    const activation: FilterActivation = { ...params, notifIds: [] };
+    await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
+    await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    return activation;
+  }
+
   const [status, prefs] = await Promise.all([
     getNotificationPermissionStatus(),
     getNotifPrefs(),
@@ -507,6 +516,11 @@ export async function syncActivationWithCatalogue(
   if (!catalogueProduct) return null;
 
   if (catalogueProduct.lifespanDays === existing.lifespanDays) return null;
+
+  // Guard: a catalogue lifespan of 0 (meta removed / bad store data) is not a
+  // real correction — refuse the sync rather than reschedule with a bogus
+  // lifespan and offers at nonsensical dates.
+  if (!(catalogueProduct.lifespanDays > 0)) return null;
 
   // Lifespan has changed in the catalogue — reschedule with the corrected value,
   // preserving the original activation date so elapsed-time calculations stay correct.
