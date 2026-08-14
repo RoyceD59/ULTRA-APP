@@ -49,10 +49,18 @@ const AUTH_DIR =
 // When WHATSAPP_SESSION_BUCKET_PATH is set (e.g. /<bucket-id>/whatsapp-session),
 // credentials are mirrored to/from Replit Object Storage so they survive
 // container replacement in production deployments.
-const SESSION_BUCKET_PATH = process.env.WHATSAPP_SESSION_BUCKET_PATH?.replace(
-  /\/+$/,
-  ""
-);
+// In production, when the env var is absent, fall back to the default object
+// storage bucket automatically so the session survives redeploys without any
+// manual configuration. Development keeps the local-folder-only behaviour so
+// a dev session can never clobber the production credentials in the bucket.
+const DEFAULT_BUCKET_ID =
+  process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID?.trim() || undefined;
+const SESSION_BUCKET_PATH = (
+  process.env.WHATSAPP_SESSION_BUCKET_PATH?.trim() ||
+  (process.env.NODE_ENV === "production" && DEFAULT_BUCKET_ID
+    ? `/${DEFAULT_BUCKET_ID}/whatsapp-session`
+    : undefined)
+)?.replace(/\/+$/, "");
 
 /**
  * Parse a bucket path like /<bucket-id>/some/prefix into { bucketName, prefix }.
@@ -74,22 +82,42 @@ async function syncFromObjectStorage(): Promise<void> {
   try {
     await mkdir(AUTH_DIR, { recursive: true });
     const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const [files] = await bucket.getFiles({ prefix });
-    if (files.length === 0) {
-      console.log("[whatsapp] No session files found in Object Storage — fresh start");
+    if (!bucketName) {
+      console.error("[whatsapp] Invalid session bucket path — sync disabled");
       return;
     }
+    const bucket = objectStorageClient.bucket(bucketName);
+    // Treat the prefix as a directory: list with a trailing "/" so a sibling
+    // object like "whatsapp-sessioncreds.json" is never matched by the raw
+    // prefix "whatsapp-session".
+    const dirPrefix = prefix ? `${prefix}/` : "";
+    const [files] = await bucket.getFiles({ prefix: dirPrefix || undefined });
+    let restored = 0;
     await Promise.all(
       files.map(async (file) => {
-        const relativeName = file.name.slice(prefix.length).replace(/^\//, "");
-        if (!relativeName) return; // skip the directory placeholder itself
+        const relativeName = file.name.slice(dirPrefix.length);
+        // Skip the directory placeholder and anything that is not a plain
+        // file name directly under the prefix (no nested paths, no traversal).
+        if (
+          !relativeName ||
+          relativeName === "." ||
+          relativeName === ".." ||
+          relativeName.includes("/") ||
+          relativeName.includes("\\")
+        ) {
+          return;
+        }
         const [contents] = await file.download();
         const destPath = join(AUTH_DIR, relativeName);
         await writeFile(destPath, contents);
+        restored++;
       })
     );
-    console.log(`[whatsapp] Restored ${files.length} session file(s) from Object Storage`);
+    if (restored === 0) {
+      console.log("[whatsapp] No session files found in Object Storage — fresh start");
+      return;
+    }
+    console.log(`[whatsapp] Restored ${restored} session file(s) from Object Storage`);
   } catch (err) {
     // Non-fatal: if sync fails we start fresh and show a QR code
     console.error("[whatsapp] Failed to restore session from Object Storage:", err);
