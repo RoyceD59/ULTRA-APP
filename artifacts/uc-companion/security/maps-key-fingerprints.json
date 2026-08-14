@@ -1,0 +1,15 @@
+{
+  "comment": "Source of truth for the Android signing identities the GOOGLE_MAPS_ANDROID_KEY restriction depends on. playAppSigning = Google Play app-signing certificate (the SHA-1 the Maps restriction must list; from Play Console → Setup → App signing). uploadKey = EAS upload keystore (upload identity only; tracked for drift). Managed by scripts/check-maps-key-fingerprint.mjs — do not edit by hand. See docs/maps-key-rotation-runbook.md.",
+  "package": "com.ultraclean.companion",
+  "fingerprints": {
+    "playAppSigning": {
+      "sha1": null,
+      "updatedAt": null,
+      "gcpRestrictionConfirmed": false
+    },
+    "uploadKey": {
+      "sha1": null,
+      "updatedAt": null
+    }
+  }
+}

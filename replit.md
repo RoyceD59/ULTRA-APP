@@ -90,22 +90,17 @@ The `GOOGLE_MAPS_ANDROID_KEY` is embedded in every Android build and can be extr
 3. Under **Application restrictions**, select **Android apps**.
 4. Add a restriction entry with:
    - **Package name**: `com.ultraclean.companion`
-   - **SHA-1 certificate fingerprint**: the debug fingerprint for development builds, **plus** the release fingerprint for production builds (generated from the release keystore).
+   - **SHA-1 certificate fingerprint**: the debug fingerprint for development builds, **plus** — for production — the **Google Play app-signing certificate** SHA-1 (Play Console → Setup → App signing). Production ships as an AAB with Play App Signing, so devices receive builds signed by Google's app-signing certificate, **not** the EAS upload keystore.
 5. Save.
 
-**Maintenance note — keystore changes**: if the Android release keystore is ever rotated or replaced, the SHA-1 fingerprint in this restriction must be updated immediately, otherwise production Maps requests will be rejected. Obtain the new fingerprint with:
-
-```bash
-keytool -list -v -keystore release.keystore -alias <alias>
-```
-
-then update the restriction in Google Cloud Console before shipping the new build.
+**Maintenance note — signing-key changes**: if the Play app-signing key is ever upgraded/reset (or, separately, the EAS upload keystore is replaced), the restriction must be re-verified immediately, otherwise production Maps requests will be rejected. Guard: `artifacts/uc-companion/scripts/check-maps-key-fingerprint.mjs` compares current SHA-1s against the record in `artifacts/uc-companion/security/maps-key-fingerprints.json` and fails until the Play app-signing fingerprint matches **and** the Google Cloud restriction is confirmed (`--confirm-restriction`). On rotation, run it with `--update` and follow the printed steps. Full procedure (incl. migration overlap and lost/compromised-key API-key rotation): `artifacts/uc-companion/docs/maps-key-rotation-runbook.md`.
 
 ## Pre-release checklist (Android — Play Store)
 
 Before submitting the **first production build** to the Play Store, confirm each item below:
 
-- [ ] **Maps key Android restriction verified** — In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), the `GOOGLE_MAPS_ANDROID_KEY` has an **Android apps** application restriction configured with package name `com.ultraclean.companion` and the SHA-1 fingerprint of the production release keystore. If the restriction is absent or uses only the debug fingerprint, rotate the key before uploading the AAB.
+- [ ] **Maps key Android restriction verified** — In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), the `GOOGLE_MAPS_ANDROID_KEY` has an **Android apps** application restriction configured with package name `com.ultraclean.companion` and the SHA-1 of the **Google Play app-signing certificate** (Play Console → Setup → App signing) — not the EAS upload keystore. If the restriction is absent or uses only the debug fingerprint, rotate the key before uploading the AAB.
+- [ ] **Signing fingerprint guard passes** — `node artifacts/uc-companion/scripts/check-maps-key-fingerprint.mjs --fingerprint <Play app-signing SHA-1>` exits 0 (fingerprint recorded and GCP restriction confirmed). Also record the upload keystore: `--identity upload --fingerprint <SHA-1 from eas credentials> --update`. See `artifacts/uc-companion/docs/maps-key-rotation-runbook.md`.
 - [ ] EAS project initialised and `app.json` `updates.url` set to the live EAS project URL (replace `REPLACE_AFTER_EAS_PROJECT_INIT`).
 - [ ] Release keystore backed up securely (loss means the app can never be updated on the Play Store under the same listing).
 - [ ] `GOOGLE_MAPS_ANDROID_KEY` confirmed not committed to version control (it is injected at build time via EAS secrets / environment variables).

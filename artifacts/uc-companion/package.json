@@ -8,7 +8,7 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "TSX_TSCONFIG_PATH=$(pwd)/tsconfig.test.json node --import ./test-setup.mjs --import tsx/esm --test hooks/__tests__/**/*.test.mts"
+    "test": "TSX_TSCONFIG_PATH=$(pwd)/tsconfig.test.json node --import ./test-setup.mjs --import tsx/esm --test hooks/__tests__/**/*.test.mts scripts/__tests__/*.test.mjs"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
