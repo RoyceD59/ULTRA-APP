@@ -33,6 +33,7 @@ import {
   ucPushTokensTable, ucEnquiriesTable, ucNotifPrefsTable,
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
+  ucLifespanAlertsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
@@ -761,14 +762,43 @@ router.get(
       }
       if (!normalized) normalized = MOCK_PRODUCTS.map(normalizeProduct);
 
-      const missing = auditProductLifespans(normalized).map((p) => ({
-        id: p["id"],
-        name: p["name"],
-        sku: p["sku"] ?? "",
-        categories: Array.isArray(p["categories"])
-          ? (p["categories"] as { name?: string }[]).map((c) => c?.name ?? "")
-          : [],
-      }));
+      const flagged = auditProductLifespans(normalized);
+      const flaggedIds = flagged.map((p) => Number(p["id"])).filter(Boolean);
+
+      // Pull alert history for each flagged product so the dashboard can show
+      // repeat offenders (alertCount > 1) and regression status (resolvedAt).
+      let alertsByProductId = new Map<number, { alertCount: number; resolvedAt: Date | null }>();
+      if (flaggedIds.length > 0) {
+        const rows = await db
+          .select({
+            productId: ucLifespanAlertsTable.productId,
+            alertCount: ucLifespanAlertsTable.alertCount,
+            resolvedAt: ucLifespanAlertsTable.resolvedAt,
+          })
+          .from(ucLifespanAlertsTable)
+          .where(inArray(ucLifespanAlertsTable.productId, flaggedIds));
+        for (const row of rows) {
+          alertsByProductId.set(row.productId, {
+            alertCount: row.alertCount,
+            resolvedAt: row.resolvedAt,
+          });
+        }
+      }
+
+      const missing = flagged.map((p) => {
+        const pid = Number(p["id"]);
+        const alert = alertsByProductId.get(pid);
+        return {
+          id: pid,
+          name: p["name"],
+          sku: p["sku"] ?? "",
+          categories: Array.isArray(p["categories"])
+            ? (p["categories"] as { name?: string }[]).map((c) => c?.name ?? "")
+            : [],
+          alertCount: alert?.alertCount ?? null,
+          resolvedAt: alert?.resolvedAt?.toISOString() ?? null,
+        };
+      });
 
       res.json({
         source,

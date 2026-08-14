@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useGetDashboardSummary, useGetDashboardActivity } from "@workspace/api-client-react";
 import { FolderKanban, CheckSquare, Clock, AlertTriangle, Activity, TimerOff } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -9,11 +10,22 @@ import { getAuthHeaders } from "@/lib/team-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+interface LifespanAuditProduct {
+  id: number;
+  name: string;
+  sku: string;
+  categories: string[];
+  /** Number of times this product has been alerted; null if never alerted yet. */
+  alertCount: number | null;
+  /** ISO timestamp when the meta was last fixed; null if still unresolved. */
+  resolvedAt: string | null;
+}
+
 interface LifespanAudit {
   source: string;
   checkedAt: string;
   checkedCount: number;
-  missing: { id: number; name: string; sku: string; categories: string[] }[];
+  missing: LifespanAuditProduct[];
 }
 
 /**
@@ -50,16 +62,26 @@ function LifespanAuditWarning() {
           on ucfilters.com, so customers who buy them will never get a replacement reminder.
           Add the meta value in WooCommerce to fix this.
         </p>
-        <ul className="space-y-1">
-          {data.missing.map((p) => (
-            <li key={p.id} className="text-sm flex items-center gap-2">
-              <span className="font-medium text-foreground">{p.name}</span>
-              {p.sku && <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{p.sku}</span>}
-              {p.categories.length > 0 && (
-                <span className="text-xs text-muted-foreground">{p.categories.join(", ")}</span>
-              )}
-            </li>
-          ))}
+        <ul className="space-y-1.5">
+          {data.missing.map((p) => {
+            const isRepeat = (p.alertCount ?? 0) > 1;
+            return (
+              <li key={p.id} className="text-sm flex flex-wrap items-center gap-2">
+                <span className="font-medium text-foreground">{p.name}</span>
+                {p.sku && (
+                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{p.sku}</span>
+                )}
+                {isRepeat && (
+                  <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">
+                    ⚠ alerted {p.alertCount}×
+                  </Badge>
+                )}
+                {p.categories.length > 0 && (
+                  <span className="text-xs text-muted-foreground">{p.categories.join(", ")}</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </CardContent>
     </Card>
