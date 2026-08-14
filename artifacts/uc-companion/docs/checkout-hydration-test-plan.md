@@ -73,6 +73,34 @@ source. The scenarios below verify the real navigation paths on a device.
 4. Screen content padding follows the bar: the bottom inset appears together
    with the bar (no content hidden behind it afterwards).
 
+## Execution record — 2026-08-14 (Scenarios 4 & 5)
+
+Executed on **Expo web** (the only device surface available in this
+environment) with the documented artificial delay temporarily added to
+`loadCartFromStorage` (15 s to capture mid-hydration frames, then 500 ms to
+capture post-hydration frames) and a temporarily seeded 2-item cart. Both
+temporary changes were removed afterwards; `git diff` on
+`context/cartStorage.ts` is empty.
+
+- **Scenario 4 — PASS.** Opening `/cart` mid-hydration showed only the
+  full-screen centered spinner; the "Your cart is empty / Browse Products"
+  state was never visible. Post-hydration, the populated item list, summary
+  (Subtotal KES 9,000, Total KES 9,500), and checkout footer rendered in one
+  paint.
+- **Scenario 5 — PASS.** On the Home tab mid-hydration, the floating basket
+  bar and Products tab badge were entirely absent — no 0-count badge, no bar,
+  no animate-out artifact (the bar starts at anim=0 and cannot animate out
+  before it ever animated in). Post-hydration the bar animated in once with
+  the correct count (2) and total (KES 9,000), the tab badge appeared with the
+  count, and content padding tracked the bar.
+- No fixes were required.
+
+**Coverage limits:** web exercises `ClassicTabLayout` and the JS Animated
+driver only. The iOS Liquid Glass `NativeTabLayout` path and native-driver
+animation were NOT visually verified here — tracked as an open follow-up
+("Confirm the basket bar doesn't flash on a real iPhone with the native glass
+tab bar").
+
 ## Pass criteria
 
 - No frame ever shows $0.00 / empty line items before hydration completes.
