@@ -11,6 +11,7 @@ import {
 } from "./middlewares/clerkProxyMiddleware";
 import { buildCorsOrigins } from "./lib/cors-origins.js";
 import router from "./routes";
+import { rejectDeletedUcAccounts } from "./lib/uc-deleted-guard.js";
 import productImagesRouter from "./routes/product-images";
 import { logger } from "./lib/logger";
 
@@ -77,6 +78,14 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ origin: buildCorsOrigins(process.env) }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── UC deleted-account guard ────────────────────────────────────────────────
+// Any /api/uc/* request carrying a valid customer JWT whose uc_users row has
+// deleted_at set is rejected with 401. Mounted BEFORE the product-images
+// mounts below so no /uc route — API or static — honours a stale
+// post-deletion token. (Mounted at "/api" so req.path inside the guard keeps
+// the /uc prefix it checks; DELETE /uc/customer stays exempt for idempotency.)
+app.use("/api", rejectDeletedUcAccounts);
 
 // Catalogue product images extracted from the official Ultra Clear catalogue.
 // Served before the API router; long cache since these change rarely.

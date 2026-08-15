@@ -54,6 +54,8 @@ router.use("/ai/agents",     requireTeamAuth);
 // Google OAuth callback at /contacts/sync/google/callback in contacts-sync.ts)
 // System status: GET /system/status and PATCH /system/status/:id are protected
 // per-route in system-status.ts; POST routes remain public for the watchdog
+// UC deleted-account guard: mounted app-level in app.ts (before the
+// /api/uc/product-images mounts) so it covers EVERY /api/uc/* request.
 
 router.use(healthRouter);
 router.use(membersRouter);
