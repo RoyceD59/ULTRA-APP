@@ -31,6 +31,7 @@ import { ObjectStorageService } from "../lib/objectStorage.js";
 import { verifyToken } from "../lib/jwt.js";
 import {
   finalizeUpload,
+  purgeAbandonedSlots,
   isLibraryPath,
   ALLOWED_MIME_TYPES,
   normalizeMime,
@@ -195,8 +196,28 @@ router.post("/library/docs", async (req: Request, res: Response): Promise<void> 
       return saved;
     },
     async purgeExpired() {
-      await db.delete(teamLibraryPendingUploadsTable)
-        .where(lt(teamLibraryPendingUploadsTable.expiresAt, new Date()));
+      await purgeAbandonedSlots({
+        async listExpiredSlots() {
+          return db
+            .select({
+              objectPath: teamLibraryPendingUploadsTable.objectPath,
+              consumed:   teamLibraryPendingUploadsTable.consumed,
+            })
+            .from(teamLibraryPendingUploadsTable)
+            .where(lt(teamLibraryPendingUploadsTable.expiresAt, new Date()));
+        },
+        async deleteObject(objectPath) {
+          try {
+            const file = await storage.getObjectEntityFile(objectPath);
+            await file.delete();
+          } catch { /* already gone — fine */ }
+        },
+        async deleteExpiredSlots() {
+          await db
+            .delete(teamLibraryPendingUploadsTable)
+            .where(lt(teamLibraryPendingUploadsTable.expiresAt, new Date()));
+        },
+      });
     },
   };
 

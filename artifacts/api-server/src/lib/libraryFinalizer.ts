@@ -176,6 +176,41 @@ export type FinalizeError = { kind: "error"; status: number; message: string };
 export type FinalizeOk   = { kind: "ok"; doc: unknown };
 export type FinalizeResult = FinalizeError | FinalizeOk;
 
+// ─── Abandoned-upload purge ────────────────────────────────────────────────────
+
+/**
+ * Deps for purgeAbandonedSlots — separated from FinalizerDeps so the purge
+ * logic can be unit-tested without wiring up a full finalization context.
+ */
+export interface PurgeDeps {
+  /** Return all slots whose expiresAt is in the past. */
+  listExpiredSlots(): Promise<Array<{ objectPath: string; consumed: boolean }>>;
+  /** Best-effort GCS delete; must not throw. */
+  deleteObject(objectPath: string): Promise<void>;
+  /** Hard-delete all expired DB rows (consumed + unconsumed). */
+  deleteExpiredSlots(): Promise<void>;
+}
+
+/**
+ * Deletes the GCS staging objects for every expired, unconsumed upload slot,
+ * then hard-deletes all expired DB rows (consumed + unconsumed).
+ *
+ * Consumed slots already had their staging objects removed during finalization
+ * (deps.deleteStagingObject in finalizeUpload), so we only clean GCS for the
+ * unconsumed (abandoned) ones.  Both categories are purged from the DB.
+ *
+ * Storage errors per object are suppressed — a transient GCS failure must not
+ * prevent the DB rows from being cleaned up on the next cycle.
+ */
+export async function purgeAbandonedSlots(deps: PurgeDeps): Promise<void> {
+  const expired = await deps.listExpiredSlots();
+  // Delete staging objects only for abandoned (unconsumed) slots.
+  const abandoned = expired.filter(s => !s.consumed);
+  await Promise.allSettled(abandoned.map(s => deps.deleteObject(s.objectPath)));
+  // Remove all expired rows regardless of consumed state.
+  await deps.deleteExpiredSlots();
+}
+
 // ─── Core logic ────────────────────────────────────────────────────────────────
 
 export async function finalizeUpload(
