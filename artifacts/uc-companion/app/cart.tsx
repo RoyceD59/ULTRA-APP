@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
-import { useApi, UCProduct, resolveMediaUrl } from '@/hooks/useApi';
+import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
 
 const DELIVERY_FEE = 500;
@@ -77,9 +78,10 @@ export default function CartScreen() {
           <View style={[styles.recImageWrap, { backgroundColor: colors.surface }]}>
             {product.images?.[0] ? (
               <Image
-                source={{ uri: resolveMediaUrl(product.images[0].src) }}
+                source={{ uri: resizedImageUrl(product.images[0].src, 48) }}
                 style={styles.recImage}
-                resizeMode="contain"
+                contentFit="contain"
+                transition={120}
               />
             ) : (
               <Ionicons name="water-outline" size={20} color={colors.primary} />

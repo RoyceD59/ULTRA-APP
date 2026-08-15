@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 
 const getBase = () =>
@@ -45,6 +46,25 @@ export const resolveMediaUrl = (src?: string | null): string => {
   if (!src) return '';
   if (/^(https?:|file:|blob:|data:|content:)/.test(src)) return src;
   return `${getBase()}${src}`;
+};
+
+/**
+ * Optimized image URL: asks the API for a right-sized WebP derivative instead
+ * of the full original (catalogue images are 533×800; review uploads can be
+ * multi-megabyte). `displayWidth` is the layout width in points; the device
+ * pixel ratio is applied here and the server snaps the result up to a fixed
+ * bucket so devices share cached derivatives. Other URLs pass through
+ * untouched, and the server falls back to the original bytes on any resize
+ * failure (e.g. videos), so this is always safe to apply.
+ */
+export const resizedImageUrl = (src: string | null | undefined, displayWidth: number): string => {
+  const url = resolveMediaUrl(src);
+  const isCatalogue = url.includes('/api/uc/product-images/');
+  const isUpload = url.includes('/api/storage/objects/uploads/');
+  if (!isCatalogue && !isUpload) return url;
+  const w = Math.min(768, Math.max(64, Math.round(PixelRatio.get() * displayWidth)));
+  // Catalogue route needs the explicit fmt flag; upload thumbnails are always WebP.
+  return `${url}?w=${w}${isCatalogue ? '&fmt=webp' : ''}`;
 };
 
 export interface UCProduct {

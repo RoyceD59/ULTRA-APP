@@ -1,5 +1,10 @@
 import { Readable } from "node:stream";
+import os from "node:os";
+import path from "node:path";
 import { Router, type IRouter, type Request, type Response } from "express";
+import sharp from "sharp";
+
+import { getOrCreateDerivative, snapWidth } from "../lib/image-derivatives";
 
 import { verifyToken } from "../lib/jwt.js";
 import {
@@ -11,6 +16,9 @@ import {
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+
+/** Disposable per-instance cache of resized upload thumbnails (see image-derivatives). */
+const STORAGE_THUMB_CACHE_DIR = path.join(os.tmpdir(), "uc-storage-thumb-cache");
 
 // ─── Upload allowlist ─────────────────────────────────────────────────────────
 // Only these MIME types may receive a presigned PUT URL. Everything else is
@@ -103,6 +111,43 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
       return;
     }
     const objectPath = `/objects/${wildcardPath}`;
+
+    // Thumbnail request (?w=<px>): serve a width-bucketed WebP derivative so
+    // review-list thumbnails don't download multi-megabyte originals over
+    // mobile data. Any failure (video, GIF, HEIC, storage hiccup) falls
+    // through to streaming the original bytes below.
+    const wRaw = parseInt(String(req.query["w"] ?? ""), 10);
+    if (!isNaN(wRaw) && wRaw > 0) {
+      const width = snapWidth(wRaw);
+      const uuid = wildcardPath.slice("uploads/".length);
+      try {
+        const cachePath = await getOrCreateDerivative(
+          STORAGE_THUMB_CACHE_DIR,
+          `${uuid}-w${width}.webp`,
+          async (tmpPath) => {
+            const file = await objectStorageService.getObjectEntityFile(objectPath);
+            const original = await objectStorageService.downloadObject(file, 3600 * 24 * 7);
+            const contentType = String(original.headers.get("content-type") ?? "");
+            if (!/^image\/(jpe?g|png|webp)$/i.test(contentType)) {
+              throw new Error(`not a resizable image: ${contentType}`);
+            }
+            const buf = Buffer.from(await original.arrayBuffer());
+            await sharp(buf)
+              .resize({ width, withoutEnlargement: true })
+              .webp({ quality: 80 })
+              .toFile(tmpPath);
+          },
+        );
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.setHeader("Content-Type", "image/webp");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.sendFile(cachePath);
+        return;
+      } catch (err) {
+        req.log?.debug({ err, objectPath }, "thumbnail unavailable — serving original");
+      }
+    }
+
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
     const response = await objectStorageService.downloadObject(objectFile, 3600 * 24 * 7);
@@ -112,6 +157,10 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     // These are user-uploaded bytes served from our origin: never let the
     // browser sniff HTML/JS out of them, and only render image/video inline.
     res.setHeader("X-Content-Type-Options", "nosniff");
+    // uploads/<uuid> content never changes once written — let devices and any
+    // intermediate cache keep it for a year instead of re-downloading review
+    // photos and product media on every visit.
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     const contentType = String(response.headers.get("content-type") ?? "");
     if (!contentType.startsWith("image/") && !contentType.startsWith("video/")) {
       res.setHeader("Content-Type", "application/octet-stream");

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { Modal, View, Image, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { Modal, View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { resolveMediaUrl } from '@/hooks/useApi';
@@ -45,7 +46,8 @@ export default function MediaViewer({ item, onClose }: Props) {
           <Image
             source={{ uri: resolveMediaUrl(item.url) }}
             style={s.photo}
-            resizeMode="contain"
+            contentFit="contain"
+            transition={150}
           />
         ) : item ? (
           <VideoView player={player} style={s.video} contentFit="contain" nativeControls />

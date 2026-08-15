@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import StarRating from '@/components/StarRating';
-import { resolveMediaUrl, type UCReview, type UCReviewMedia } from '@/hooks/useApi';
+import { resizedImageUrl, type UCReview, type UCReviewMedia } from '@/hooks/useApi';
 
 interface Props {
   review: UCReview;
@@ -61,7 +62,7 @@ export default function ReviewCard({ review, onOpenMedia }: Props) {
               style={[s.thumbWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               {m.type === 'photo' ? (
-                <Image source={{ uri: resolveMediaUrl(m.url) }} style={s.thumb} resizeMode="cover" />
+                <Image source={{ uri: resizedImageUrl(m.url, 62) }} style={s.thumb} contentFit="cover" transition={120} recyclingKey={m.url} />
               ) : (
                 <View style={[s.thumb, s.videoThumb, { backgroundColor: colors.primary + '14' }]}>
                   <Ionicons name="play-circle" size={26} color={colors.primary} />

@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
-import { UCProduct, resolveMediaUrl } from '@/hooks/useApi';
+import { UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import { useCart } from '@/context/CartContext';
 import * as Haptics from 'expo-haptics';
 
@@ -52,7 +53,7 @@ export default function ProductCard({ product, onPress, layout = 'grid' }: Props
         style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.listImageWrap, { backgroundColor: colors.surface }]}>
           {product.images[0] ? (
-            <Image source={{ uri: resolveMediaUrl(product.images[0].src) }} style={styles.listImage} resizeMode="contain" />
+            <Image source={{ uri: resizedImageUrl(product.images[0].src, 56) }} style={styles.listImage} contentFit="contain" transition={120} recyclingKey={product.images[0].src} />
           ) : (
             <Ionicons name="water-outline" size={28} color={colors.primary} />
           )}
@@ -115,7 +116,7 @@ export default function ProductCard({ product, onPress, layout = 'grid' }: Props
       )}
       <View style={[styles.imageWrap, { backgroundColor: colors.surface }]}>
         {product.images[0] ? (
-          <Image source={{ uri: resolveMediaUrl(product.images[0].src) }} style={styles.image} resizeMode="contain" />
+          <Image source={{ uri: resizedImageUrl(product.images[0].src, 200) }} style={styles.image} contentFit="contain" transition={120} recyclingKey={product.images[0].src} />
         ) : (
           <Ionicons name="water-outline" size={40} color={colors.primary} />
         )}

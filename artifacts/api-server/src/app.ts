@@ -10,6 +10,7 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import productImagesRouter from "./routes/product-images";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -85,6 +86,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // Catalogue product images extracted from the official Ultra Clear catalogue.
 // Served before the API router; long cache since these change rarely.
+// The resize router handles ?w=/&fmt= requests (small WebP derivatives for
+// the mobile app) and falls through to the static originals for everything
+// else — including on any resize error.
+app.use("/api/uc/product-images", productImagesRouter);
 app.use(
   "/api/uc/product-images",
   express.static(path.join(process.cwd(), "public", "products"), {

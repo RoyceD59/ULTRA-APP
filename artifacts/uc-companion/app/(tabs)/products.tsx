@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useApi, UCProduct, resolveMediaUrl } from '@/hooks/useApi';
+import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import { useCart } from '@/context/CartContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
@@ -15,7 +15,7 @@ import ProductCard from '@/components/ProductCard';
 import FilterChip from '@/components/FilterChip';
 import SwipeTabs from '@/components/SwipeTabs';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'react-native';
+import { Image } from 'expo-image';
 
 const CATEGORIES = ['All', 'Bottles & Portable', 'Home Filters', 'Shower & Skin', 'Accessories', 'Solutions'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
@@ -43,9 +43,11 @@ function AddonCard({ product, onAdd, onPress, colors }: AddonCardProps) {
       <View style={[styles.addonImageWrap, { backgroundColor: colors.surface }]}>
         {product.images[0] ? (
           <Image
-            source={{ uri: resolveMediaUrl(product.images[0].src) }}
+            source={{ uri: resizedImageUrl(product.images[0].src, 96) }}
             style={styles.addonImage}
-            resizeMode="contain"
+            contentFit="contain"
+            transition={120}
+            recyclingKey={product.images[0].src}
           />
         ) : (
           <Ionicons name="water-outline" size={22} color={colors.primary} />

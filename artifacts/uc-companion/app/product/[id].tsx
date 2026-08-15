@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
   ActivityIndicator, useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useColors } from '@/hooks/useColors';
-import { useApi, resolveMediaUrl, type UCReviewMedia } from '@/hooks/useApi';
+import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import TrustBadges from '@/components/TrustBadges';
@@ -138,9 +139,10 @@ export default function ProductDetailScreen() {
                   <View key={i} style={{ width, height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
                     {slide.kind === 'photo' ? (
                       <Image
-                        source={{ uri: slide.src }}
+                        source={{ uri: resizedImageUrl(slide.src, width) }}
                         style={{ width, height: GALLERY_H }}
-                        resizeMode="contain"
+                        contentFit="contain"
+                        transition={150}
                       />
                     ) : (
                       <View style={{ width, height: GALLERY_H }}>
@@ -203,7 +205,7 @@ export default function ProductDetailScreen() {
                     ]}
                   >
                     {slide.kind === 'photo' ? (
-                      <Image source={{ uri: slide.src }} style={styles.thumbImg} resizeMode="cover" />
+                      <Image source={{ uri: resizedImageUrl(slide.src, 56) }} style={styles.thumbImg} contentFit="cover" transition={100} />
                     ) : (
                       <View style={styles.thumbVideo}>
                         <Ionicons
