@@ -2131,10 +2131,13 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
 
     // 15. Notify the team — best-effort, never blocks the deletion response.
     //     No PII is included: only the numeric user ID and the UTC timestamp.
+    //     Recipient is configurable via TEAM_ALERT_EMAIL (e.g. a dedicated
+    //     privacy@ mailbox); falls back to the team inbox when unset.
     const deletedAt = new Date().toUTCString();
+    const deletionAlertTo = accountDeletionAlertRecipient();
     sendViaResend({
       from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
-      to:   "info@ucfilters.com",
+      to:   deletionAlertTo,
       subject: `Account deleted — user #${numericId}`,
       text: [
         "A customer has exercised their right to erasure.",
@@ -4684,6 +4687,17 @@ router.post("/uc/notify", async (req: Request, res: Response): Promise<void> => 
 
 /** Official office inbox for all customer form submissions. */
 const OFFICE_EMAIL  = "sales@ucfilters.com";
+
+/**
+ * Recipient for account-deletion team alerts.
+ * Configurable via the TEAM_ALERT_EMAIL env var (e.g. a dedicated privacy@
+ * mailbox); blank/whitespace values are ignored. Falls back to the team inbox.
+ * @internal Exported for unit tests.
+ */
+export function accountDeletionAlertRecipient(): string {
+  const configured = process.env["TEAM_ALERT_EMAIL"]?.trim();
+  return configured || "info@ucfilters.com";
+}
 const SERVICE_EMAIL = "service@ucfilters.com";
 
 /**
