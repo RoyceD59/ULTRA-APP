@@ -259,9 +259,23 @@ export default function NewTicketScreen() {
             </View>
             <View style={styles.accountRow}>
               <Ionicons name="call-outline" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.accountText, { color: user.phone ? colors.text : colors.mutedForeground }]}>
-                {user.phone || 'No phone number on file'}
-              </Text>
+              {user.phone ? (
+                <Text style={[styles.accountText, { color: colors.text }]}>{user.phone}</Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push('/(tabs)/account?editProfile=1' as never);
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.addPhoneLink}
+                >
+                  <Text style={[styles.addPhoneLinkText, { color: colors.primary }]}>
+                    No phone number — tap to add one
+                  </Text>
+                  <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+                </TouchableOpacity>
+              )}
             </View>
             <Text style={[styles.accountHint, { color: colors.mutedForeground }]}>
               From your account — the team will use these details to contact you.
@@ -424,4 +438,6 @@ const styles = StyleSheet.create({
   accountRow:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
   accountText:      { fontSize: 14, fontWeight: '500' as const, flex: 1 },
   accountHint:      { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  addPhoneLink:     { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
+  addPhoneLinkText: { fontSize: 13, fontWeight: '500' as const },
 });

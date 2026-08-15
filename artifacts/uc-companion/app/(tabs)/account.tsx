@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
@@ -373,12 +373,22 @@ function AccountScreenContent() {
   const api         = useApi();
   const queryClient = useQueryClient();
 
+  const { editProfile } = useLocalSearchParams<{ editProfile?: string }>();
+
   const [notifStatus,       setNotifStatus]       = useState<string>('undetermined');
   const [filterActivation,  setFilterActivation]  = useState<FilterActivation | null>(null);
   const [editModalVisible,  setEditModalVisible]   = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [exporting,          setExporting]          = useState(false);
   const [exportError,        setExportError]        = useState('');
+
+  // Auto-open the Edit Profile modal when navigated here with ?editProfile=1
+  // (e.g. from the ticket form's "add phone number" link).
+  useEffect(() => {
+    if (editProfile === '1' && user) {
+      setEditModalVisible(true);
+    }
+  }, [editProfile, user]);
 
   async function handleExportData() {
     if (exporting) return;
