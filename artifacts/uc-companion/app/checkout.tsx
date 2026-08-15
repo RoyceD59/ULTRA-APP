@@ -16,6 +16,7 @@ import { type CodeValidationResult } from '@/hooks/useApi';
 import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusClassifier';
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
+import { classifyPaymentInitError, RATE_LIMIT_TITLE, RATE_LIMIT_MESSAGE } from '@/hooks/rateLimitAlert';
 import AlisonBubble from '@/components/AlisonBubble';
 
 const DELIVERY_FEE = 500;
@@ -406,9 +407,16 @@ export default function CheckoutScreen() {
       // completed while the user was on the timeout screen.
       lastCheckoutRequestIdRef.current = r.checkoutRequestId;
       startMpesaPoll(r.checkoutRequestId, thisAttempt);
-    } catch {
+    } catch (e) {
       if (isCancelledAttempt(thisAttempt, attemptRef)) return;
       setProcessing(false);
+      // Rate limited (429) — the modal stays open so the phone number is
+      // preserved, but the alert must offer NO retry button: an immediate
+      // "Try again" would let the user bypass the rate limit by tapping.
+      if (classifyPaymentInitError(e).kind === 'rate_limited') {
+        Alert.alert(RATE_LIMIT_TITLE, RATE_LIMIT_MESSAGE);
+        return;
+      }
       // The modal stays open so the phone number is preserved for a retry.
       Alert.alert(
         'M-Pesa Unavailable',
@@ -447,9 +455,12 @@ export default function CheckoutScreen() {
       }
     } catch (e) {
       setProcessing(false);
-      // Distinguish a transient server/network blip (retryable) from a permanent failure.
-      const isRetryable = e instanceof ApiError ? e.retryable : true;
-      if (isRetryable) {
+      // Classify: 429 → wait message with only OK (no retry path that would
+      // bypass the rate limit); transient blip → retry/COD; else declined.
+      const action = classifyPaymentInitError(e);
+      if (action.kind === 'rate_limited') {
+        Alert.alert(action.title, action.message);
+      } else if (action.kind === 'retry_dialog') {
         Alert.alert(
           'Stripe Unavailable',
           'Stripe checkout could not be opened. You can try again or place your order with Cash on Delivery.',
@@ -580,8 +591,14 @@ export default function CheckoutScreen() {
       setProcessing(false);
       // Init failed — no payment session was created, so "Try again" safely
       // re-enters handlePaystack() to start a completely fresh attempt.
-      const isRetryable = e instanceof ApiError ? e.retryable : true;
-      if (isRetryable) {
+      // 429 → wait message with only OK: no "Try again" / "Pay with COD"
+      // buttons that would let the user bypass the rate limit.
+      const action = classifyPaymentInitError(e);
+      if (action.kind === 'rate_limited') {
+        Alert.alert(action.title, action.message);
+        return;
+      }
+      if (action.kind === 'retry_dialog') {
         Alert.alert(
           'Paystack Unavailable',
           'Paystack is temporarily unavailable. You can try again or place your order with Cash on Delivery.',

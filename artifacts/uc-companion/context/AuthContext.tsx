@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerCurrentPushToken, unregisterPushToken } from '@/hooks/useNotifications';
+import { authErrorMessage } from '@/hooks/rateLimitAlert';
 
 export interface UCUser {
   id: number;
@@ -97,8 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json() as { token?: string; user?: UCUser; error?: string };
-      if (res.status === 429) return { success: false, error: data.error || 'Too many attempts. Please wait a minute before trying again.' };
-      if (!res.ok || data.error) return { success: false, error: data.error || 'Login failed' };
+      const loginErr = authErrorMessage(res.status, res.ok, data.error, 'Login failed');
+      if (loginErr) return { success: false, error: loginErr };
       const u = data.user!;
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(u));
@@ -120,8 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(d),
       });
       const data = await res.json() as { token?: string; user?: UCUser; error?: string };
-      if (res.status === 429) return { success: false, error: data.error || 'Too many attempts. Please wait a minute before trying again.' };
-      if (!res.ok || data.error) return { success: false, error: data.error || 'Registration failed' };
+      const registerErr = authErrorMessage(res.status, res.ok, data.error, 'Registration failed');
+      if (registerErr) return { success: false, error: registerErr };
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user!));
       setToken(data.token!);
@@ -141,9 +142,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clerkToken}` },
       });
       const data = await res.json() as { token?: string; user?: UCUser; error?: string };
-      if (res.status === 429) return { success: false, error: data.error || 'Too many attempts. Please wait a minute before trying again.' };
-      if (!res.ok || data.error || !data.token || !data.user) {
-        return { success: false, error: data.error || 'Sign-in failed' };
+      const socialErr = authErrorMessage(res.status, res.ok, data.error, 'Sign-in failed');
+      if (socialErr || !data.token || !data.user) {
+        return { success: false, error: socialErr || 'Sign-in failed' };
       }
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
