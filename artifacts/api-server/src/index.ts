@@ -406,8 +406,29 @@ async function applyStartupMigrations(): Promise<void> {
   // which credential was used to create the account ("password" or "clerk").
   await pool.query(`
     ALTER TABLE uc_users
-      ADD COLUMN IF NOT EXISTS clerk_user_id text UNIQUE,
+      ADD COLUMN IF NOT EXISTS clerk_user_id text,
       ADD COLUMN IF NOT EXISTS auth_provider  text NOT NULL DEFAULT 'password';
+  `);
+  // The unique constraint must carry the drizzle-generated name
+  // (uc_users_clerk_user_id_unique). An inline "text UNIQUE" would create it
+  // as uc_users_clerk_user_id_key, and drizzle push would then try to add a
+  // second constraint behind an interactive prompt — breaking post-merge
+  // setup. Rename a legacy _key constraint if present, else create it.
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'uc_users'::regclass
+                   AND conname  = 'uc_users_clerk_user_id_key') THEN
+        ALTER TABLE uc_users RENAME CONSTRAINT
+          uc_users_clerk_user_id_key TO uc_users_clerk_user_id_unique;
+      ELSIF NOT EXISTS (SELECT 1 FROM pg_constraint
+                        WHERE conrelid = 'uc_users'::regclass
+                          AND conname  = 'uc_users_clerk_user_id_unique') THEN
+        ALTER TABLE uc_users
+          ADD CONSTRAINT uc_users_clerk_user_id_unique UNIQUE (clerk_user_id);
+      END IF;
+    END $$;
   `);
   logger.info("Startup migration: uc_users clerk_user_id / auth_provider columns ensured");
 }
