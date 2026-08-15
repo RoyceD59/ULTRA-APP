@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   AlertCircle, BellOff, Lock, LogOut, RefreshCw,
-  Mail, MessageSquare, RotateCcw, CheckCircle2, Filter,
+  Mail, MessageSquare, RotateCcw, CheckCircle2, Filter, Trash2,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { useToast } from "@/hooks/use-toast";
@@ -251,6 +251,7 @@ function LogRow({ log, token, onRetrySuccess }: LogRowProps) {
 
 function FailuresList({ token, onLogout }: { token: string; onLogout: () => void }) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [channelFilter, setChannelFilter] = useState<"all" | "sms" | "email">("all");
   // Track IDs that have been successfully retried so we can dim/hide them
   const [retriedIds, setRetriedIds] = useState<Set<number>>(new Set());
@@ -262,6 +263,31 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
       queryClient.invalidateQueries({ queryKey: ["uc-notification-failures", token] });
     }, 1500);
   }, [queryClient, token]);
+
+  // Manual pruning — same cleanup as the nightly 03:00 UTC job, on demand.
+  const pruneMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/notification-logs/prune`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `Prune failed (${res.status})`);
+      }
+      return res.json() as Promise<{ deletedSuccess: number; deletedFailure: number; deletedTotal: number }>;
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Pruning complete",
+        description: `${result.deletedTotal} old log entr${result.deletedTotal === 1 ? "y" : "ies"} deleted (${result.deletedSuccess} sent, ${result.deletedFailure} failed).`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["uc-notification-failures", token] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Pruning failed", description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data: logs, isLoading, isError, refetch, isFetching } = useQuery<NotificationLog[]>({
     queryKey: ["uc-notification-failures", token],
@@ -302,6 +328,16 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => pruneMutation.mutate()}
+            disabled={pruneMutation.isPending}
+            title="Delete log entries past their retention window now, without waiting for the nightly job"
+          >
+            <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
+            {pruneMutation.isPending ? "Pruning…" : "Prune now"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Refresh

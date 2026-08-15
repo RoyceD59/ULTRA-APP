@@ -3329,6 +3329,35 @@ router.get("/uc/admin/notification-logs", async (req: Request, res: Response): P
 });
 
 /**
+ * POST /api/uc/admin/notification-logs/prune
+ * Immediately runs the same pruning pass as the nightly 03:00 UTC job,
+ * deleting sent/failed rows past their retention windows.
+ * Returns the number of rows deleted. Protected by admin auth.
+ */
+router.post("/uc/admin/notification-logs/prune", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  try {
+    // Lazy import to avoid a module cycle (scheduler.ts imports from this file).
+    const { runNotificationLogPruning } = await import("../lib/scheduler.js");
+    const { deletedSuccess, deletedFailure } = await runNotificationLogPruning();
+    res.json({
+      ok: true,
+      deletedSuccess,
+      deletedFailure,
+      deletedTotal: deletedSuccess + deletedFailure,
+    });
+  } catch (err) {
+    logger.error({ err }, "Manual notification log pruning failed");
+    res.status(500).json({ error: "Failed to prune notification logs" });
+  }
+});
+
+/**
  * POST /api/uc/admin/notification-logs/:id/retry
  * Re-sends the notification described by a FAILED log row.
  * - SMS: re-sends the stored messageBody (full SMS text) to the stored recipient.

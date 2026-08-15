@@ -99,73 +99,8 @@ export function startScheduler() {
   // (default 90) — so the team has time to investigate and retry.
   // Both values can be overridden from team_settings (admin panel) without a restart.
   cron.schedule("0 3 * * *", async () => {
-    // Read retention windows from team_settings (admin panel), falling back to
-    // env vars or hard defaults only when the DB row has no override.
-    // If the DB query itself fails, abort pruning entirely — better to keep logs
-    // than to silently delete them with a potentially wrong retention window.
-    let successDays: number;
-    let failureDays: number;
     try {
-      const [settingsRow] = await db
-        .select({
-          successDays: teamSettingsTable.notificationLogSuccessRetentionDays,
-          failureDays: teamSettingsTable.notificationLogFailureRetentionDays,
-        })
-        .from(teamSettingsTable)
-        .where(eq(teamSettingsTable.id, "singleton"))
-        .limit(1);
-
-      successDays = Math.max(
-        1,
-        settingsRow?.successDays ??
-        (parseInt(process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"] ?? "30", 10) || 30),
-      );
-      failureDays = Math.max(
-        1,
-        settingsRow?.failureDays ??
-        (parseInt(process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"] ?? "90", 10) || 90),
-      );
-    } catch (err) {
-      logger.error(
-        { err },
-        "Scheduler: failed to read notification log retention settings — aborting pruning to avoid data loss",
-      );
-      return;
-    }
-
-    const successCutoff = new Date(Date.now() - successDays * 24 * 60 * 60 * 1000);
-    const failureCutoff = new Date(Date.now() - failureDays * 24 * 60 * 60 * 1000);
-
-    logger.info(
-      { successDays, failureDays, successCutoff, failureCutoff },
-      "Scheduler: pruning old notification log rows",
-    );
-
-    try {
-      // Prune successful rows beyond the shorter retention window
-      const deletedSuccess = await db
-        .delete(ucNotificationLogTable)
-        .where(
-          and(
-            eq(ucNotificationLogTable.status, "sent"),
-            lt(ucNotificationLogTable.sentAt, successCutoff),
-          ),
-        );
-
-      // Prune failed rows beyond the longer retention window
-      const deletedFailure = await db
-        .delete(ucNotificationLogTable)
-        .where(
-          and(
-            eq(ucNotificationLogTable.status, "failed"),
-            lt(ucNotificationLogTable.sentAt, failureCutoff),
-          ),
-        );
-
-      logger.info(
-        { deletedSuccess, deletedFailure },
-        "Scheduler: notification log pruning complete",
-      );
+      await runNotificationLogPruning();
     } catch (err) {
       logger.error({ err }, "Scheduler: notification log pruning failed");
     }
@@ -451,14 +386,19 @@ export async function runLifespanAuditAlert(
 /**
  * Delete notification log rows that have exceeded the configured retention window.
  *
- * Retention is controlled by two environment variables:
- *   UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS  (default 30)  — rows with status='sent'
- *   UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS  (default 90)  — rows with status='failed'
+ * Retention resolution order (per window):
+ *   1. team_settings override set from the admin panel (no restart needed)
+ *   2. environment variable —
+ *        UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS  (rows with status='sent')
+ *        UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS  (rows with status='failed')
+ *   3. hard defaults: sent=30 days, failed=90 days
  *
  * Failed rows are kept longer so the team has time to investigate and retry.
  * Existing rows are always unaffected until they age past the cutoff.
+ * If the team_settings read fails, the function throws without deleting anything.
  *
- * @internal — exported for tests; called by the daily 03:00 UTC cron job.
+ * Called by the daily 03:00 UTC cron job and by the admin
+ * POST /api/uc/admin/notification-logs/prune endpoint ("Prune now").
  */
 /**
  * Parse an env-var retention value strictly.
@@ -487,13 +427,40 @@ export async function runNotificationLogPruning(): Promise<{
   deletedSuccess: number;
   deletedFailure: number;
 }> {
-  const successDays = parseRetentionDays(
-    process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"],
-    30,
+  // Read retention windows from team_settings (admin panel), falling back to
+  // env vars or hard defaults only when the DB row has no override.
+  // If the settings read fails, abort pruning entirely — better to keep logs
+  // than to delete them with a potentially wrong retention window.
+  let settingsSuccess: number | null = null;
+  let settingsFailure: number | null = null;
+  try {
+    const [settingsRow] = await db
+      .select({
+        successDays: teamSettingsTable.notificationLogSuccessRetentionDays,
+        failureDays: teamSettingsTable.notificationLogFailureRetentionDays,
+      })
+      .from(teamSettingsTable)
+      .where(eq(teamSettingsTable.id, "singleton"))
+      .limit(1);
+    settingsSuccess = settingsRow?.successDays ?? null;
+    settingsFailure = settingsRow?.failureDays ?? null;
+  } catch (err) {
+    logger.error(
+      { err },
+      "Notification log pruning: failed to read retention settings — aborting to avoid data loss",
+    );
+    throw err;
+  }
+
+  const successDays = Math.max(
+    1,
+    settingsSuccess ??
+      parseRetentionDays(process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"], 30),
   );
-  const failureDays = parseRetentionDays(
-    process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"],
-    90,
+  const failureDays = Math.max(
+    1,
+    settingsFailure ??
+      parseRetentionDays(process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"], 90),
   );
 
   const successCutoff = new Date(Date.now() - successDays * 24 * 60 * 60 * 1000);
