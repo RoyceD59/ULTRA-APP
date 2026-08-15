@@ -335,7 +335,7 @@ describe("createOrder — WooCommerce COD path — sendViaResend is called", () 
           lineItems:     [{ productId: 2, quantity: 1 }],
           paymentMethod: "cod",
           // No paymentReference — this is the COD case with no anchor.
-          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "4 Test St", city: "Nairobi" },
+          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "4 Test St", city: "Nairobi", phone: "+254700000041" },
         },
         jwt,
       );
@@ -525,7 +525,7 @@ describe("createOrder — DB path — sendViaResend is called", () => {
         {
           lineItems:     [{ productId: 22, quantity: 2 }],  // Bottle Filter Cartridge × 2
           paymentMethod: "cod",
-          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "2 Test St", city: "Nairobi" },
+          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "2 Test St", city: "Nairobi", phone: "0712345021" },
         },
         jwt,
       );

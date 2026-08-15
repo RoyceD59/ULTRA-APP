@@ -15,6 +15,7 @@
  */
 
 import { db, ucNotificationLogTable } from "@workspace/db";
+import { storeUrlWithUtm } from "./utm.js";
 
 const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send";
 
@@ -413,13 +414,32 @@ export function buildOrderReceiptEmail(params: {
   promoCode?:      string;
   /** When the order was created — used for the receipt serial. Defaults to now. */
   dateCreated?:    string | Date;
+  /**
+   * Payment trace shown on the receipt: the M-Pesa confirmation code when
+   * known, otherwise the gateway reference. Omitted from the receipt when
+   * empty (e.g. cash on delivery).
+   */
+  paymentReference?: string;
 }): { subject: string; html: string; text: string } {
   const {
     orderId, firstName, lineItems, total, currency,
     paymentMethod, shippingAddress, discountAmount, promoCode, dateCreated,
+    paymentReference,
   } = params;
 
   const serial = orderReceiptSerial(orderId, dateCreated);
+
+  // Store links in the receipt carry the promo's UTM attribution so that a
+  // customer clicking through from a promo-code receipt is credited to the
+  // campaign in analytics. Plain store URL when there is no promo code.
+  const storeUrl = storeUrlWithUtm(promoCode);
+
+  // Human-readable order date for the receipt (serial only encodes YYYYMMDD).
+  const orderDate = (() => {
+    const d = dateCreated ? new Date(dateCreated) : new Date();
+    const valid = !isNaN(d.getTime()) ? d : new Date();
+    return valid.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  })();
 
   const fmt = (n: string | number) =>
     `${currency} ${Number(n).toLocaleString("en-KE")}`;
@@ -431,6 +451,20 @@ export function buildOrderReceiptEmail(params: {
     cod:         "Cash on Delivery",
   };
   const payLabel = payLabels[paymentMethod] ?? paymentMethod;
+
+  // Payment trace row — only when a reference exists (COD has none).
+  // The reference originates from gateway/callback payloads, so HTML-escape it
+  // before interpolation (the plain-text version keeps the raw value).
+  const payRefLabel = paymentMethod === "mpesa" ? "M-Pesa confirmation" : "Payment reference";
+  const payRefHtmlSafe = (paymentReference ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string),
+  );
+  const payRefRow = paymentReference
+    ? `<tr>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">${payRefLabel}</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;word-break:break-all;">${payRefHtmlSafe}</td>
+              </tr>`
+    : "";
 
   const addr = shippingAddress;
   const addrText = addr
@@ -546,9 +580,14 @@ export function buildOrderReceiptEmail(params: {
                 <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">${serial}</td>
               </tr>
               <tr>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Order date</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${orderDate}</td>
+              </tr>
+              <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Payment</td>
                 <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${payLabel}</td>
               </tr>
+              ${payRefRow}
               <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top;">Delivery to</td>
                 <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${addrText}</td>
@@ -591,7 +630,7 @@ export function buildOrderReceiptEmail(params: {
           <td class="uc-ft" style="background:#f3f4f6;padding:20px 32px;text-align:center;">
             <p style="margin:0;color:#9ca3af;font-size:12px;">
               © 2026 UCFilters Ltd · Nairobi, Kenya ·
-              <a href="https://ucfilters.co.ke" style="color:#6b7280;">ucfilters.co.ke</a>
+              <a href="${storeUrl}" style="color:#6b7280;">ucfilters.co.ke</a>
             </p>
           </td>
         </tr>
@@ -607,7 +646,9 @@ export function buildOrderReceiptEmail(params: {
     `Hi ${firstName}, thank you for your order!`,
     "",
     `Receipt serial: ${serial}`,
+    `Order date: ${orderDate}`,
     `Payment: ${payLabel}`,
+    ...(paymentReference ? [`${payRefLabel}: ${paymentReference}`] : []),
     `Delivery to: ${addrText}`,
     "",
     "Items:",
@@ -638,7 +679,7 @@ export function buildOrderReceiptEmail(params: {
     `We'll notify you as soon as your order has shipped. Quote your receipt serial ${serial} to track this order.`,
     "",
     "Questions? Email support@ucfilters.co.ke or call 0717774049.",
-    "ucfilters.co.ke",
+    storeUrl,
   ].join("\n");
 
   return {

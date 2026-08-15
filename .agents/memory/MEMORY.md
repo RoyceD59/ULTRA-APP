@@ -12,8 +12,10 @@
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines drop exports; spliced handler code → restore file from last good commit + re-apply legit lines.
 - [API test-DB isolation](api-test-db-isolation.md) — tests run in a per-run database; drizzle push always diffs public of the connected DB; raw-SQL-only tables (startup migrations) must be mirrored in lib/db schema.
+- [API order-flow test harness](api-order-test-harness.md) — tests hitting /uc/orders must delete MPESA_*/WC_* env vars; a stub returning {id:…} is mistaken for a real WC order.
 - [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).
 - [UC reminder channels](uc-reminder-channels.md) — opt-in email/SMS/WhatsApp filter reminders; claim-before-send at-most-once; Postgres µs vs JS ms timestamp equality trap.
 - [UC social sign-in](uc-social-auth.md) — Clerk is identity-layer only; exchange endpoint issues uc JWT; verified-email + never-relink rules; ClerkLoaded must not gate the whole app.
 - [Android signing identities](android-signing-identities.md) — dev proceeds on the debug keystore as an interim tracked identity; production Maps-key gate stays fail-closed until the Play app-signing SHA-1 exists.
 - [Image derivative pipeline](image-derivative-pipeline.md) — sharp works on pnpm despite blocked postinstall (prebuilt @img/* deps); tmpdir derivative caches are disposable and must always fall back to original bytes.
+- [Orders CSV column contract](uc-orders-csv-contract.md) — never insert a column mid-row in the admin orders CSV; append new fields after the legacy static columns, before item columns.

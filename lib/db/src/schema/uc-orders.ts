@@ -14,6 +14,12 @@ export const ucOrdersTable = pgTable("uc_orders", {
   currency:         text("currency").notNull().default("KES"),
   paymentMethod:    text("payment_method").notNull(),
   paymentReference: text("payment_reference").default(""),
+  // M-Pesa confirmation code (e.g. "SGB1KX2Q4P") extracted from the Daraja
+  // callback — the code the customer sees in their M-Pesa SMS and the one the
+  // team matches against M-Pesa statements when doing the books. Empty for
+  // non-M-Pesa orders or when no callback has arrived yet. Fill-once: never
+  // overwritten after it is set.
+  mpesaReceipt:     text("mpesa_receipt").notNull().default(""),
   promoCode:        text("promo_code").default(""),
   discountPercent:  integer("discount_percent").notNull().default(0),
   discountAmount:   integer("discount_amount").notNull().default(0),

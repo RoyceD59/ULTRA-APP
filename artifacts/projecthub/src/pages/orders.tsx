@@ -380,6 +380,36 @@ function OrderCard({
   const gapProductIds = new Set((gapItems ?? []).map(g => g.productId));
   const hasReference = !!order.paymentReference;
   const customerIsEmail = isEmail(order.userId);
+  const [receiptState, setReceiptState] = useState<"idle" | "busy" | "error">("idle");
+
+  async function downloadReceipt() {
+    setReceiptState("busy");
+    try {
+      const res = await fetch(`${BASE}/api/uc/admin/orders/${order.id}/receipt.json`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) {
+        // Token expired or revoked — same handling as the CSV export
+        sessionStorage.removeItem(TOKEN_KEY);
+        window.location.reload();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as { receipt?: { serial?: string } };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = `${data.receipt?.serial ?? `order-${order.id}`}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(anchor.href);
+      setReceiptState("idle");
+    } catch {
+      setReceiptState("error");
+      setTimeout(() => setReceiptState("idle"), 4000);
+    }
+  }
 
   return (
     <Card className={isRecovery ? "border-amber-400" : ""}>
@@ -480,8 +510,23 @@ function OrderCard({
             })}
           </ul>
         )}
-        <div className="mt-2 text-sm font-semibold text-right">
-          Total: {order.currency} {order.total}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 px-2 text-xs ${receiptState === "error" ? "text-destructive" : "text-muted-foreground"}`}
+            title="Download a structured receipt (JSON) for bookkeeping / inventory / CRM import"
+            disabled={receiptState === "busy"}
+            onClick={downloadReceipt}
+          >
+            {receiptState === "error"
+              ? <AlertCircle className="w-3 h-3 mr-1" />
+              : <Download className={`w-3 h-3 mr-1 ${receiptState === "busy" ? "animate-pulse" : ""}`} />}
+            {receiptState === "error" ? "Failed — retry" : "Receipt"}
+          </Button>
+          <div className="text-sm font-semibold text-right">
+            Total: {order.currency} {order.total}
+          </div>
         </div>
         <OrderActions order={order} token={token} onChanged={onChanged} />
       </CardContent>

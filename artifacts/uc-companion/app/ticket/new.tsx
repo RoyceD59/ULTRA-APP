@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
-import { useApi } from '@/hooks/useApi';
+import { useApi, ApiError } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import MediaPicker, { MediaItem } from '@/components/MediaPicker';
@@ -87,7 +87,7 @@ export default function NewTicketScreen() {
       return;
     }
     if (media.length > 0 && !token) {
-      setError('Sign in to attach photos or videos, or remove the attachments and continue as a guest.');
+      setError('An account is required to submit a service request. Please sign in or create an account first.');
       return;
     }
     setError('');
@@ -113,6 +113,13 @@ export default function NewTicketScreen() {
       setWhatsAppSummary(summary);
       setSubmitted(true);
     } catch (e) {
+      // Server requires an account for ticket submission — send the customer
+      // to account setup instead of leaving them stuck on an error message.
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        setError('You need an account to submit a service request. Taking you to account setup…');
+        router.push('/auth/register');
+        return;
+      }
       setError(e instanceof Error ? e.message : 'Failed to submit ticket. Please try again.');
     } finally {
       setSubmitting(false);

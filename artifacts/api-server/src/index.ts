@@ -66,6 +66,14 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_orders webhook_recovery column ensured");
 
+  // Add mpesa_receipt column (M-Pesa confirmation code from the Daraja callback,
+  // persisted for bookkeeping/statement reconciliation) on older deployments.
+  await pool.query(`
+    ALTER TABLE uc_orders
+      ADD COLUMN IF NOT EXISTS mpesa_receipt text NOT NULL DEFAULT '';
+  `);
+  logger.info("Startup migration: uc_orders mpesa_receipt column ensured");
+
   // Create team_settings table for DB-backed passcode storage.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS team_settings (

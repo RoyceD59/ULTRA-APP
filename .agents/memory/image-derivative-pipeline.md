@@ -23,3 +23,12 @@ try to persist them, and never make image serving depend on cache presence:
 every resize path must fall through to the original bytes on any failure.
 **Why:** images must never fail to load because resizing failed; tmp storage
 is per-replica and cleared on deploys.
+
+## Remote (WooCommerce/CDN) originals must be rewritten to the proxy
+WC product payloads carry raw CDN URLs to multi-megapixel originals; the
+client resize helper only recognises local `/api/uc/product-images/...`
+paths, so any unrewritten src silently downloads full-size photos again.
+**Why:** the invariant lives server-side (normalize → proxy path), and any
+server proxy fetching remote URLs here must re-validate the host allow-list
+on every redirect hop and bound bytes/concurrency/cache — `redirect:
+"follow"` plus unbounded buffering was flagged as a critical SSRF/DoS combo.

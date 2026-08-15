@@ -133,7 +133,7 @@ let insertedOrderIds: number[] = [];
 // id, userId, status, dateCreated, total, currency, paymentMethod,
 // paymentReference, promoCode, discountPercent, discountAmount, webhookRecovery,
 // shippingName, shippingPhone, shippingAddress, shippingCity, shippingCountry
-const STATIC_COL_COUNT = 17;
+const STATIC_COL_COUNT = 20; // includes mpesaReceipt, receiptSerial, and utm bookkeeping/marketing columns
 
 // Columns per line item: productId, name, qty, total
 const COLS_PER_ITEM = 4;

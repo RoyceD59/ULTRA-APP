@@ -4,10 +4,59 @@ import {
   Modal, TextInput, Alert, ActivityIndicator, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
+import { useAuth } from '@/context/AuthContext';
+
+/**
+ * Gentle nudge shown to guests after checkout: creating a free account lets
+ * us remind them when their filter's life is running out. Dismissible, never
+ * blocks the confirmation, and only renders when nobody is signed in.
+ */
+function GuestAccountNudge({ dismissed, onDismiss }: { dismissed: boolean; onDismiss: () => void }) {
+  const colors = useColors();
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+  // Wait for auth hydration so signed-in customers never see the card flash
+  // on a cold start; dismissal lives on the screen so it survives the switch
+  // from the fallback confirmation view to the loaded order view.
+  if (authLoading || user || dismissed) return null;
+  return (
+    <View style={[nudgeStyles.card, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+      <View style={nudgeStyles.headerRow}>
+        <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+        <Text style={[nudgeStyles.title, { color: colors.text }]}>Never miss a filter change</Text>
+      </View>
+      <Text style={[nudgeStyles.body, { color: colors.mutedForeground }]}>
+        Create a free account and we&apos;ll remind you when your filter is due for
+        replacement — so your water stays safe.
+      </Text>
+      <View style={nudgeStyles.btnRow}>
+        <TouchableOpacity
+          onPress={() => router.push('/auth/register' as never)}
+          style={[nudgeStyles.primaryBtn, { backgroundColor: colors.primary }]}>
+          <Text style={nudgeStyles.primaryBtnText}>Create free account</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={[nudgeStyles.laterText, { color: colors.mutedForeground }]}>Maybe later</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const nudgeStyles = StyleSheet.create({
+  card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 10 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 15, fontWeight: '700' as const },
+  body: { fontSize: 13, lineHeight: 19 },
+  btnRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 2 },
+  primaryBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10 },
+  primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' as const },
+  laterText: { fontSize: 13, fontWeight: '500' as const },
+});
 
 const RETURN_WINDOW_DAYS = 30;
 const CHANGED_MIND_WINDOW_DAYS = 7;
@@ -50,6 +99,10 @@ export default function OrderDetailScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<ReturnReason | ''>('');
   const [details, setDetails] = useState('');
+  // "Maybe later" on the account nudge — held at screen level so dismissing it
+  // in the fallback confirmation view sticks when the order query resolves and
+  // the loaded view mounts its own copy of the card.
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['orders'],
@@ -97,6 +150,9 @@ export default function OrderDetailScreen() {
         <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
           You'll receive a confirmation message shortly.
         </Text>
+        <View style={{ alignSelf: 'stretch', paddingHorizontal: 20, marginTop: 24 }}>
+          <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
+        </View>
       </View>
     );
   }
@@ -121,6 +177,9 @@ export default function OrderDetailScreen() {
           <Text style={[styles.statusDesc, { color: colors.text }]}>{statusCfg.desc}</Text>
         </View>
       </View>
+
+      {/* ── Guest account nudge (filter reminders) ──────────── */}
+      <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
 
       {/* ── Order info ──────────────────────────────────────── */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

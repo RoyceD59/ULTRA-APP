@@ -47,6 +47,61 @@ const DEFAULT_ADDRESS: UCAddress = {
   city: 'Nairobi', country: 'KE', phone: '',
 };
 
+// ── Delivery-details validation ────────────────────────────────────────────
+// Mirrors the server-side COD checks (api-server lib/order-validation.ts) so
+// customers get instant, friendly feedback instead of a server rejection.
+
+/** Keyboard-row runs that indicate mashing rather than a real name. */
+const KEYBOARD_RUNS = [
+  'qwer', 'wert', 'erty', 'rtyu', 'tyui', 'yuio', 'uiop',
+  'asdf', 'sdfg', 'dfgh', 'fghj', 'ghjk', 'hjkl',
+  'zxcv', 'xcvb', 'cvbn', 'vbnm',
+];
+
+function looksLikeRealName(raw: string): boolean {
+  const name = raw.trim();
+  if (name.length < 2 || name.length > 60) return false;
+  if (!/^[\p{L}][\p{L}\s'’.-]*$/u.test(name)) return false;
+  const plain = name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  if (!/[aeiouy]/.test(plain)) return false;          // "hjkhjk" has no vowels
+  if (/(.)\1\1/.test(plain)) return false;            // "aaaa" is mashing
+  if (KEYBOARD_RUNS.some(run => plain.includes(run))) return false;
+  return true;
+}
+
+/** Valid Kenyan (07…/01…/254…/+254…) or international (+…) phone number. */
+function isValidPhone(raw: string): boolean {
+  const cleaned = raw.replace(/[\s().-]/g, '');
+  if (/^(?:\+254|254|0)[71]\d{8}$/.test(cleaned)) return true;
+  return /^\+[1-9]\d{9,14}$/.test(cleaned);
+}
+
+type AddressErrors = Partial<Record<'firstName' | 'lastName' | 'address1' | 'city' | 'phone', string>>;
+
+/**
+ * Returns {} when the address is valid; field → message otherwise.
+ *
+ * `strict` (COD only) mirrors the server's cash-order policy: plausible
+ * names, a dialable phone, plus last name and city. Verified-payment methods
+ * (M-Pesa/Paystack/Stripe) keep the original presence-only checks — the
+ * server deliberately does not gate paid orders on these heuristics, and the
+ * client must not block a customer who is about to pay.
+ */
+function checkAddress(address: UCAddress, strict: boolean): AddressErrors {
+  const errors: AddressErrors = {};
+  if (!address.firstName.trim()) errors.firstName = 'First name is required.';
+  else if (strict && !looksLikeRealName(address.firstName)) errors.firstName = 'Please enter your real first name.';
+  if (strict) {
+    if (!address.lastName.trim()) errors.lastName = 'Last name is required.';
+    else if (!looksLikeRealName(address.lastName)) errors.lastName = 'Please enter your real last name.';
+    if (!address.city.trim()) errors.city = 'City is required.';
+  }
+  if (!address.address1.trim()) errors.address1 = 'Delivery address is required.';
+  if (!address.phone.trim()) errors.phone = 'Phone number is required.';
+  else if (strict && !isValidPhone(address.phone)) errors.phone = 'Enter a valid phone number, e.g. 0712 345 678.';
+  return errors;
+}
+
 type AddressField = 'firstName' | 'lastName' | 'address1' | 'city' | 'phone';
 
 interface FieldDef {
@@ -99,6 +154,9 @@ export default function CheckoutScreen() {
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
   });
+  // Field-level validation messages, shown under the offending input. An
+  // entry is cleared as soon as the customer edits that field again.
+  const [addressErrors, setAddressErrors] = useState<AddressErrors>({});
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [showMpesaModal, setShowMpesaModal] = useState(false);
   // `processing` is plain React state — it is NOT persisted across process
@@ -137,8 +195,11 @@ export default function CheckoutScreen() {
   const total = grossTotal - discountAmount;
 
   function validateAddress(): boolean {
-    if (!address.firstName || !address.address1 || !address.phone) {
-      Alert.alert('Missing details', 'Please fill in first name, address, and phone.');
+    const errors = checkAddress(address, paymentMethod === 'cod');
+    setAddressErrors(errors);
+    const first = Object.values(errors)[0];
+    if (first) {
+      Alert.alert('Check your delivery details', first);
       return false;
     }
     return true;
@@ -639,6 +700,16 @@ export default function CheckoutScreen() {
     } catch (e) {
       setProcessing(false);
       setMpesaWaiting(false);
+      // Server-side delivery-details rejection (COD validation) — highlight
+      // the offending fields and show the first message. This should be rare
+      // because the same checks run client-side before submitting.
+      if (e instanceof ApiError && e.status === 400 && e.body['fields']) {
+        const fields = e.body['fields'] as AddressErrors;
+        setAddressErrors(fields);
+        const first = Object.values(fields)[0];
+        Alert.alert('Check your delivery details', typeof first === 'string' ? first : 'Please review your name and phone number.');
+        return false;
+      }
       // Re-throw ApiError so callers (handlePaystack, handleStripeCheckout)
       // can inspect retryable and show the correct advice (retry/COD vs
       // "check your card") rather than a generic "contact support" message.
@@ -707,12 +778,21 @@ export default function CheckoutScreen() {
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{f.label}</Text>
               <TextInput
                 value={address[f.key]}
-                onChangeText={v => setAddress(prev => ({ ...prev, [f.key]: v }))}
+                onChangeText={v => {
+                  setAddress(prev => ({ ...prev, [f.key]: v }));
+                  setAddressErrors(prev => (prev[f.key] ? { ...prev, [f.key]: undefined } : prev));
+                }}
                 placeholder={f.placeholder}
                 placeholderTextColor={colors.border}
                 keyboardType={f.keyboard ?? 'default'}
-                style={[styles.fieldInput, { color: colors.text, borderColor: colors.border }]}
+                style={[styles.fieldInput, {
+                  color: colors.text,
+                  borderColor: addressErrors[f.key] ? '#EF4444' : colors.border,
+                }]}
               />
+              {addressErrors[f.key] ? (
+                <Text style={styles.fieldError}>{addressErrors[f.key]}</Text>
+              ) : null}
             </View>
           ))}
         </View>
@@ -870,6 +950,7 @@ const styles = StyleSheet.create({
   field: { gap: 4 },
   fieldLabel: { fontSize: 12, fontWeight: '500' as const },
   fieldInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  fieldError: { fontSize: 12, color: '#EF4444', marginTop: 2 },
   sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sumItemName: { fontSize: 13, flex: 1, marginRight: 8 },
   sumItemPrice: { fontSize: 13, fontWeight: '500' as const },

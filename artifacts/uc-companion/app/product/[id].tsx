@@ -44,6 +44,16 @@ export default function ProductDetailScreen() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [viewerItem, setViewerItem] = useState<UCReviewMedia | null>(null);
   const galleryRef = useRef<ScrollView>(null);
+  const thumbStripRef = useRef<ScrollView>(null);
+
+  // Keep the active thumbnail in view as the customer pages through slides.
+  useEffect(() => {
+    const cell = THUMB_SIZE + 8; // thumb width + strip gap
+    thumbStripRef.current?.scrollTo({
+      x: Math.max(0, slideIndex * cell - width / 2 + cell / 2),
+      animated: true,
+    });
+  }, [slideIndex, width]);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -129,10 +139,19 @@ export default function ProductDetailScreen() {
                 ref={galleryRef}
                 horizontal
                 pagingEnabled
+                nestedScrollEnabled
+                decelerationRate="fast"
+                disableIntervalMomentum
                 showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) =>
-                  setSlideIndex(Math.max(0, Math.round(e.nativeEvent.contentOffset.x / width)))
-                }
+                // Track the index continuously via onScroll (not just
+                // onMomentumScrollEnd, which never fires on web) so the
+                // counter and thumbnails always stay in sync with the swipe.
+                scrollEventThrottle={16}
+                onScroll={(e) => {
+                  const w = e.nativeEvent.layoutMeasurement.width || width;
+                  const i = Math.max(0, Math.min(slides.length - 1, Math.round(e.nativeEvent.contentOffset.x / w)));
+                  setSlideIndex(prev => (prev === i ? prev : i));
+                }}
                 style={{ height: GALLERY_H }}
               >
                 {slides.map((slide, i) => (
@@ -181,11 +200,35 @@ export default function ProductDetailScreen() {
                 <Text style={styles.slideCounterTxt}>{slideIndex + 1} / {slides.length}</Text>
               </View>
             )}
+
+            {/* Prev / next arrows — tap navigation that works everywhere,
+                including web where mouse-dragging a pager is awkward. */}
+            {slides.length > 1 && slideIndex > 0 && (
+              <TouchableOpacity
+                onPress={() => goToSlide(slideIndex - 1)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={[styles.navArrow, { left: 10 }]}
+              >
+                <Ionicons name="chevron-back" size={22} color="#fff" />
+              </TouchableOpacity>
+            )}
+            {slides.length > 1 && slideIndex < slides.length - 1 && (
+              <TouchableOpacity
+                onPress={() => goToSlide(slideIndex + 1)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={[styles.navArrow, { right: 10 }]}
+              >
+                <Ionicons name="chevron-forward" size={22} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Thumbnail strip */}
           {slides.length > 1 && (
             <ScrollView
+              ref={thumbStripRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.thumbStrip}
@@ -452,6 +495,12 @@ const styles = StyleSheet.create({
   saleBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' as const },
 
   // Thumbnail strip
+  navArrow: {
+    position: 'absolute', top: '50%', marginTop: -18,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   thumbStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
   thumbCell: {
     width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 9,

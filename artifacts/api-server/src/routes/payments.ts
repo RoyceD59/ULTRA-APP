@@ -1089,6 +1089,10 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
           currency:         "KES",
           paymentMethod:    "mpesa",
           paymentReference: paymentReference,
+          // Deliberately NOT storing the callback's claimed MpesaReceiptNumber:
+          // mpesa_receipt is the canonical, bookkeeping-grade field and this
+          // callback is unverified. The claimed code goes in the team alert
+          // below for the manual check; the field stays empty until verified.
           promoCode:        "",
           discountPercent:  0,
           discountAmount:   0,
@@ -1110,6 +1114,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
           "",
           `Order ID:       ${unverified!.id}`,
           `Checkout Ref:   ${paymentReference}`,
+          `M-Pesa Receipt: ${receiptNum || "(not provided)"} (CLAIMED — verify against M-Pesa Business)`,
           `Amount:         KES ${verifiedAmount.toLocaleString()} (from our initiation record)`,
           `Phone:          ${verifiedPhone}`,
           "",
@@ -1138,6 +1143,18 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
 
     if (existing.length > 0) {
       const order = existing[0]!;
+
+      // Persist the M-Pesa confirmation code for bookkeeping/statement
+      // reconciliation. Fill-once (only where empty) so a duplicate or forged
+      // later callback can never overwrite a stored code. Runs regardless of
+      // who advances the status — polling may already have set "processing".
+      if (receiptNum) {
+        await db
+          .update(ucOrdersTable)
+          .set({ mpesaReceipt: receiptNum })
+          .where(and(eq(ucOrdersTable.id, order.id), eq(ucOrdersTable.mpesaReceipt, "")))
+          .catch(() => { /* bookkeeping metadata must never block the ack */ });
+      }
 
       // Atomic transition: only the request that wins the WHERE status='pending'
       // guard sends the customer email.  Concurrent callbacks both read the row
@@ -1173,6 +1190,8 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
             discountAmount:  order.discountAmount,
             promoCode:       order.promoCode ?? undefined,
             dateCreated:     order.dateCreated,
+            // The customer-recognisable M-Pesa code from this very callback.
+            paymentReference: receiptNum || paymentReference,
           });
           sendViaResend({
             from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
@@ -1237,6 +1256,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         currency:         "KES",
         paymentMethod:    "mpesa",
         paymentReference: paymentReference,
+        mpesaReceipt:     receiptNum,
         promoCode:        "",
         discountPercent:  0,
         discountAmount:   0,

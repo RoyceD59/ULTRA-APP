@@ -157,7 +157,7 @@ const WATER_TARGET_STATUS = "pending";
 const WATER_OTHER_STATUS  = "scheduled";
 
 // Static column count for orders.csv (same as orders-csv-export.test.ts)
-const STATIC_COL_COUNT = 17;
+const STATIC_COL_COUNT = 20; // includes mpesaReceipt, receiptSerial, and utm bookkeeping/marketing columns
 const COLS_PER_ITEM    = 4;
 
 // ── Fixture state ─────────────────────────────────────────────────────────────

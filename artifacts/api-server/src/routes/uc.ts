@@ -13,6 +13,8 @@ import {
 } from "./referrals";
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
+import { validateCodShipping } from "../lib/order-validation.js";
+import { remoteImageProxyPath } from "./product-images.js";
 import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
 import {
   sendSms,
@@ -25,7 +27,9 @@ import {
   buildOrderReceiptEmail,
   buildTicketConfirmationEmail,
   buildWaterTestConfirmationEmail,
+  orderReceiptSerial,
 } from "../lib/email.js";
+import { promoUtmParams, promoUtmQuery } from "../lib/utm.js";
 import { sendViaResend } from "../lib/resend.js";
 import {
   pool,
@@ -502,7 +506,15 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
     shortDescription: p["short_description"] ?? p["shortDescription"],
     tagline: p["tagline"] ?? p["short_description"] ?? p["shortDescription"] ?? "",
     categories: p["categories"],
-    images: p["images"],
+    // WooCommerce image srcs point at multi-megapixel originals on the store
+    // CDN. Route eligible ones through the resize proxy so the app can load
+    // width-appropriate WebP derivatives; ineligible srcs pass through as-is.
+    images: Array.isArray(p["images"])
+      ? (p["images"] as Array<Record<string, unknown>>).map((img) => {
+          const src = typeof img?.["src"] === "string" ? (img["src"] as string) : "";
+          return { src: remoteImageProxyPath(src) ?? src, alt: img?.["alt"] ?? "" };
+        })
+      : p["images"],
     sku: p["sku"],
     stockStatus: p["stock_status"] ?? p["stockStatus"],
     stockQuantity: p["stock_quantity"] ?? p["stockQuantity"],
@@ -2976,11 +2988,16 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
         `item_${i}_productId`, `item_${i}_name`, `item_${i}_qty`, `item_${i}_total`,
       );
     }
+    // Column order note: the original static columns keep their historical
+    // positions so spreadsheet/import mappings built against older exports
+    // stay valid; newer bookkeeping/marketing columns (mpesaReceipt,
+    // receiptSerial, utm) are appended after them, before the item columns.
     const header = csvRow([
       "id", "userId", "status", "dateCreated", "total", "currency",
       "paymentMethod", "paymentReference", "promoCode",
       "discountPercent", "discountAmount", "webhookRecovery",
       "shippingName", "shippingPhone", "shippingAddress", "shippingCity", "shippingCountry",
+      "mpesaReceipt", "receiptSerial", "utm",
       ...itemHeaders,
     ]);
 
@@ -3001,6 +3018,7 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
         o.paymentMethod, o.paymentReference ?? "", o.promoCode ?? "",
         o.discountPercent, o.discountAmount, o.webhookRecovery ?? false,
         shippingName, addr["phone"] ?? "", shippingAddr, addr["city"] ?? "", addr["country"] ?? "",
+        o.mpesaReceipt ?? "", orderReceiptSerial(o.id, o.dateCreated), promoUtmQuery(o.promoCode),
         ...itemCells,
       ]);
     });
@@ -3013,6 +3031,100 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
   } catch (err) {
     logger.error({ err }, "Failed to export orders CSV");
     res.status(500).json({ error: "Failed to export orders" });
+  }
+});
+
+// GET /api/uc/admin/orders/:id/receipt.json — structured, machine-readable
+// receipt for one order, sectioned for direct import into bookkeeping,
+// inventory, and CRM systems. Protected by admin auth.
+router.get("/uc/admin/orders/:id/receipt.json", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const orderId = Number(req.params["id"]);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    res.status(400).json({ error: "Invalid order id" });
+    return;
+  }
+
+  try {
+    const [order] = await db
+      .select()
+      .from(ucOrdersTable)
+      .where(eq(ucOrdersTable.id, orderId))
+      .limit(1);
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+
+    const lineItems = await db
+      .select()
+      .from(ucOrderItemsTable)
+      .where(eq(ucOrderItemsTable.orderId, orderId));
+
+    // CRM enrichment: app accounts live in uc_users (numeric ids below the
+    // WooCommerce principal range); look up the email when available.
+    let customerEmail: string | null = null;
+    const numericUserId = Number(order.userId);
+    if (Number.isInteger(numericUserId) && numericUserId > 0 && numericUserId < 1e9) {
+      const [account] = await db
+        .select({ email: ucUsersTable.email })
+        .from(ucUsersTable)
+        .where(eq(ucUsersTable.id, numericUserId))
+        .limit(1);
+      customerEmail = account?.email ?? null;
+    }
+
+    const addr = (order.shippingAddress ?? {}) as Record<string, unknown>;
+    const customerName = [addr["firstName"], addr["lastName"]].filter(Boolean).join(" ")
+      || String(addr["name"] ?? "");
+
+    const totalNum = Number(order.total);
+    const utm = promoUtmParams(order.promoCode);
+
+    res.json({
+      format: "uc-receipt/v1",
+      receipt: {
+        serial:    orderReceiptSerial(order.id, order.dateCreated),
+        orderId:   order.id,
+        orderDate: new Date(order.dateCreated).toISOString(),
+        status:    order.status,
+      },
+      bookkeeping: {
+        currency:         order.currency,
+        // Pre-discount goods value; null when the stored total is not numeric.
+        subtotal:         Number.isFinite(totalNum) ? totalNum + order.discountAmount : null,
+        discountPercent:  order.discountPercent,
+        discountAmount:   order.discountAmount,
+        total:            order.total,
+        paymentMethod:    order.paymentMethod,
+        paymentReference: order.paymentReference ?? "",
+        mpesaReceipt:     order.mpesaReceipt ?? "",
+        webhookRecovery:  order.webhookRecovery ?? false,
+      },
+      inventory: {
+        lineItems: lineItems.map(li => ({
+          productId: li.productId,
+          name:      li.name,
+          quantity:  li.quantity,
+          lineTotal: li.total,
+        })),
+      },
+      crm: {
+        userId:       order.userId,
+        customerName,
+        email:        customerEmail,
+        phone:        String(addr["phone"] ?? ""),
+        shippingAddress: order.shippingAddress ?? null,
+        promoCode:    order.promoCode ?? "",
+      },
+      marketing: {
+        promoCode: order.promoCode ?? "",
+        utm,                                    // null when no promo code
+        utmQuery:  promoUtmQuery(order.promoCode),
+      },
+    });
+  } catch (err) {
+    logger.error({ err, orderId }, "Failed to build receipt JSON");
+    res.status(500).json({ error: "Failed to build receipt" });
   }
 });
 
@@ -3463,6 +3575,8 @@ export function sendOrderConfirmationEmail(
     promoCode?:       string;
     /** When the order was created — used for the receipt serial number. */
     dateCreated?:     string | Date;
+    /** Payment trace for the receipt (M-Pesa code or gateway reference). */
+    paymentReference?: string;
   },
 ): void {
   getUserContact(ownerUserId).then(contact => {
@@ -3486,6 +3600,7 @@ export function sendOrderConfirmationEmail(
         discountAmount:  order.discountAmount,
         promoCode:       order.promoCode,
         dateCreated:     order.dateCreated,
+        paymentReference: order.paymentReference,
       });
       sendViaResend({
         from:    "orders@contacts.ucfilters.com",
@@ -3663,6 +3778,26 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     return;
   }
 
+  // ── COD input validation ────────────────────────────────────────────────
+  // Cash orders have no payment barrier, so junk submissions (mashed names,
+  // invalid phone numbers) are rejected here. Verified-payment methods are
+  // deliberately not gated — a confirmed payment already proves intent.
+  if (paymentMethod === "cod") {
+    const codCheck = validateCodShipping(shippingAddress);
+    if (!codCheck.ok) {
+      res.status(400).json({
+        error: "Please check your delivery details",
+        fields: codCheck.fields,
+      });
+      return;
+    }
+    // Normalize the phone (07… → +254…) so SMS/WhatsApp reminders and the
+    // team's callbacks always have a dialable international number.
+    if (shippingAddress && codCheck.normalizedPhone) {
+      shippingAddress["phone"] = codCheck.normalizedPhone;
+    }
+  }
+
   // Server-side payment verification — gate order creation on confirmed payment.
   const verification = await verifyPaymentOnServer(paymentMethod, paymentReference ?? "");
   if (!verification.ok) {
@@ -3730,6 +3865,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             paymentMethod: existingOrder.paymentMethod,
             shippingAddress: existingOrder.shippingAddress as Record<string, string> | undefined,
             dateCreated:   existingOrder.dateCreated,
+            // Prefer the customer-recognisable M-Pesa code when the callback stored one.
+            paymentReference: existingOrder.mpesaReceipt || existingOrder.paymentReference || "",
           });
         }
 
@@ -3885,6 +4022,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       paymentMethod: String(normalized["paymentMethod"] ?? ""),
       shippingAddress: normalized["shippingAddress"] as Record<string, string> | undefined,
       dateCreated:   normalized["dateCreated"] as string | undefined,
+      paymentReference: paymentReference ?? "",
     });
   }
 
@@ -4216,6 +4354,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       discountAmount:  newOrder.discountAmount,
       promoCode:       newOrder.promoCode,
       dateCreated:     newOrder.dateCreated,
+      paymentReference: dbOrder!.paymentReference ?? "",
     });
 
     res.json(newOrder);
@@ -4315,6 +4454,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       discountAmount:  fallbackOrder.discountAmount,
       promoCode:       fallbackOrder.promoCode,
       dateCreated:     fallbackOrder.dateCreated,
+      paymentReference: paymentReference ?? "",
     });
     res.json(fallbackOrder);
   }
