@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bot, RefreshCw, Send, Zap, AlertTriangle, CheckCircle2, Loader2, Radio, Network } from 'lucide-react';
-import { useGetAiReport, useGenerateAiReport, usePushToOrchestrator } from '@workspace/api-client-react';
+import { Bot, RefreshCw, Send, Zap, AlertTriangle, CheckCircle2, Loader2, Radio, Network, History, Clock } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useGetAiReport, useGenerateAiReport, usePushToOrchestrator,
+  useListAiPushEvents, getListAiPushEventsQueryKey,
+} from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -28,9 +32,15 @@ function formatTs(d: Date | string) {
 
 // ─── AI Report panel ─────────────────────────────────────────────────────────
 function ReportPanel() {
+  const queryClient = useQueryClient();
   const { data: report, isLoading, refetch } = useGetAiReport();
   const { mutate: generate, isPending: generating } = useGenerateAiReport();
-  const { mutate: push, isPending: pushing, data: pushResult } = usePushToOrchestrator();
+  const { mutate: push, isPending: pushing } = usePushToOrchestrator({
+    mutation: {
+      // The push is recorded server-side — refresh the persistent board.
+      onSettled: () => queryClient.invalidateQueries({ queryKey: getListAiPushEventsQueryKey() }),
+    },
+  });
   const busy = isLoading || generating;
 
   return (
@@ -48,17 +58,6 @@ function ReportPanel() {
           </Button>
         </div>
       </div>
-
-      {pushResult && (
-        <div className={cn('rounded-lg border px-4 py-3 text-sm flex items-start gap-2',
-          pushResult.success
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
-            : 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
-        )}>
-          {pushResult.success ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-          <span>{pushResult.message}</span>
-        </div>
-      )}
 
       {busy && !report ? (
         <div className="rounded-xl border bg-muted/40 p-8 flex flex-col items-center gap-3 text-muted-foreground">
@@ -109,18 +108,147 @@ function ReportPanel() {
   );
 }
 
+// ─── Push history board ──────────────────────────────────────────────────────
+// Persistent record of every push to the orchestrator (manual + scheduled
+// daily). Polls so status echoes from the orchestrator appear automatically.
+const STATUS_STYLES: Record<string, string> = {
+  pending:        'bg-muted text-muted-foreground border-border',
+  sent:           'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800',
+  not_configured: 'bg-muted text-muted-foreground border-border',
+  received:       'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800',
+  processing:     'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800',
+  completed:      'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800',
+  failed:         'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending', sent: 'Sent', not_configured: 'Not configured',
+  received: 'Received', processing: 'Processing', completed: 'Completed', failed: 'Failed',
+};
+
+function formatDateTime(d: Date | string) {
+  return new Date(d).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function PushBoard() {
+  const { data: pushes, isLoading } = useListAiPushEvents({
+    query: {
+      queryKey: getListAiPushEventsQueryKey(),
+      refetchInterval: 10_000,
+      refetchOnWindowFocus: true,
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <History className="w-4 h-4 text-primary" />
+        <h2 className="text-base font-semibold text-foreground">Push History</h2>
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="w-3 h-3" />
+          Auto-refreshes — orchestrator echoes appear without a reload
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading push history…
+        </div>
+      ) : !pushes || pushes.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          No pushes recorded yet. Use "Push to Orchestrator" above — every manual and scheduled push is stored here permanently.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {pushes.map(p => (
+            <div key={p.id} className="rounded-lg border bg-muted/20 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <span className={cn('text-xs font-medium border rounded-full px-2.5 py-0.5', STATUS_STYLES[p.status] ?? STATUS_STYLES['pending'])}>
+                {STATUS_LABELS[p.status] ?? p.status}
+              </span>
+              <span className="text-sm font-medium text-foreground">
+                {p.payloadType === 'daily_project_status_report' ? 'Daily status report' : 'Status report'}
+              </span>
+              <span className="text-xs text-muted-foreground capitalize">{p.trigger}</span>
+              <span className="text-xs text-muted-foreground">Sent {formatDateTime(p.sentAt)}</span>
+              {p.lastEchoAt && (
+                <span className="text-xs text-muted-foreground">Echo {formatDateTime(p.lastEchoAt)}</span>
+              )}
+              <span className={cn('text-xs ml-auto', p.outboundOk ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
+                {p.outboundMessage}
+              </span>
+              {p.statusDetail && (
+                <p className="w-full text-xs text-muted-foreground mt-0.5">{p.statusDetail}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Chat panel ───────────────────────────────────────────────────────────────
-function ChatPanel() {
-  const [messages, setMessages] = useState<ChatMsg[]>([{
-    id: '0', role: 'assistant',
-    content: "Hi — I'm the ProjectHub AI monitor powered by Claude. Ask me anything about the Team-AI-Embedded project: tasks, agent progress, deadlines, or blockers.",
-  }]);
+const CONV_STORAGE_KEY = 'projecthub-ai-monitor-conversation-id';
+
+const CHAT_GREETING: ChatMsg = {
+  id: '0', role: 'assistant',
+  content: "Hi — I'm the ProjectHub AI monitor powered by Claude. Ask me anything about the Team-AI-Embedded project: tasks, agent progress, deadlines, or blockers.",
+};
+
+export function ChatPanel() {
+  const [messages, setMessages] = useState<ChatMsg[]>([CHAT_GREETING]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  // While a stored conversation is being rehydrated, sending is disabled —
+  // otherwise a message sent mid-restore would create a NEW conversation that
+  // the late restore response would then clobber (wrong convId + lost view).
+  const [restoring, setRestoring] = useState<boolean>(() => localStorage.getItem(CONV_STORAGE_KEY) !== null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const convIdRef = useRef<number | null>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // Restore the previous conversation after a reload/navigation: the id is
+  // kept in localStorage and the transcript rehydrated from the server.
+  useEffect(() => {
+    const stored = localStorage.getItem(CONV_STORAGE_KEY);
+    const convId = stored ? parseInt(stored, 10) : NaN;
+    if (!Number.isInteger(convId)) { setRestoring(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${BASE}/api/anthropic/conversations/${convId}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          // Conversation was deleted server-side — start fresh.
+          localStorage.removeItem(CONV_STORAGE_KEY);
+          return;
+        }
+        const data = await res.json() as { id: number; messages: { id: number; role: string; content: string }[] };
+        // Defence in depth: if a conversation was already created/selected in
+        // the meantime, a stale restore result must never replace it.
+        if (cancelled || convIdRef.current !== null) return;
+        convIdRef.current = data.id;
+        if (data.messages.length > 0) {
+          setMessages([
+            CHAT_GREETING,
+            ...data.messages.map(m => ({
+              id: `db-${m.id}`,
+              role: m.role === 'user' ? 'user' as const : 'assistant' as const,
+              content: m.content,
+            })),
+          ]);
+        }
+      } catch {
+        // Network hiccup — keep the fresh-chat default; next send creates/reuses.
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function ensureConversation(): Promise<number> {
     if (convIdRef.current !== null) return convIdRef.current;
@@ -130,12 +258,13 @@ function ChatPanel() {
     });
     const data = await res.json();
     convIdRef.current = data.id as number;
+    localStorage.setItem(CONV_STORAGE_KEY, String(data.id));
     return data.id as number;
   }
 
   async function send() {
     const q = input.trim();
-    if (!q || streaming) return;
+    if (!q || streaming || restoring) return;
     setInput('');
     const userMsg: ChatMsg = { id: Date.now().toString(), role: 'user', content: q };
     const assistantMsgId = (Date.now() + 1).toString();
@@ -194,11 +323,11 @@ function ChatPanel() {
       <div className="flex gap-2">
         <input type="text" value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder="Ask about tasks, agents, deadlines…"
-          disabled={streaming}
+          placeholder={restoring ? 'Restoring previous conversation…' : 'Ask about tasks, agents, deadlines…'}
+          disabled={streaming || restoring}
           className="flex-1 rounded-xl border bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50 transition"
         />
-        <Button size="sm" onClick={send} disabled={streaming || !input.trim()} className="px-3 rounded-xl">
+        <Button size="sm" onClick={send} disabled={streaming || restoring || !input.trim()} className="px-3 rounded-xl">
           {streaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
       </div>
@@ -355,6 +484,11 @@ export default function AiMonitor() {
         </div>
       </div>
 
+      {/* Push history board */}
+      <div className="rounded-2xl border bg-card p-6 shadow-sm">
+        <PushBoard />
+      </div>
+
       {/* Agent Verification */}
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
         <AgentVerificationPanel />
@@ -363,12 +497,13 @@ export default function AiMonitor() {
       {/* Integration reference */}
       <div className="rounded-xl border bg-muted/30 p-5">
         <h3 className="text-sm font-semibold text-foreground mb-3">Team-AI-Embedded Integration</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: 'Inbound from Orchestrator', value: 'POST /api/ai/query', desc: 'Orchestrator sends a question; ProjectHub answers with live task data' },
-            { label: 'Outbound report push',       value: 'POST /webhook/projecthub', desc: 'ProjectHub pushes status reports to Team-Horizon Orchestrator' },
+            { label: 'Outbound report push',       value: 'POST /webhook/projecthub', desc: 'ProjectHub pushes status reports (with a pushId) to Team-Horizon Orchestrator' },
+            { label: 'Status callback (echo)',     value: 'POST /api/ai/echo', desc: 'Orchestrator reports push status: { pushId, status: received|processing|completed|failed, message? }. HMAC-SHA256 signature over the raw body in X-Webhook-Signature (same scheme as /webhook/ingest)' },
             { label: 'Agent verification',         value: 'POST /api/external/agent-query', desc: 'Query any of the 8 agents for verification (add to Team-Horizon)' },
-            { label: 'Scheduled push',             value: 'Daily 08:00 UTC', desc: 'Automatic daily summary pushed to Team-Horizon Orchestrator' },
+            { label: 'Scheduled push',             value: 'Daily 08:00 UTC', desc: 'Automatic daily summary pushed to Team-Horizon Orchestrator — recorded in the push history like manual pushes' },
           ].map(item => (
             <div key={item.label} className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.label}</p>

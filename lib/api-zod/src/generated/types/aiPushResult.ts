@@ -11,4 +11,5 @@ export interface AiPushResult {
   message: string;
   sentAt: Date;
   webhookUrl?: string;
+  pushId?: string;
 }

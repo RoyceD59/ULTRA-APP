@@ -432,6 +432,38 @@ async function applyStartupMigrations(): Promise<void> {
     END $$;
   `);
   logger.info("Startup migration: uc_users clerk_user_id / auth_provider columns ensured");
+
+  // AI Monitor durability: persisted AI status reports + orchestrator push
+  // history. Reports survive API restarts (no silent regeneration) and every
+  // manual/scheduled push is recorded with a UUID the orchestrator references
+  // when echoing status updates back to POST /api/ai/echo.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ai_reports (
+      id           serial PRIMARY KEY,
+      summary      text NOT NULL,
+      highlights   jsonb NOT NULL DEFAULT '[]'::jsonb,
+      risks        jsonb NOT NULL DEFAULT '[]'::jsonb,
+      generated_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  logger.info("Startup migration: ai_reports table ensured");
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ai_push_events (
+      id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      payload_type      text NOT NULL,
+      trigger           text NOT NULL,
+      target            text NOT NULL DEFAULT '',
+      sent_at           timestamptz NOT NULL DEFAULT now(),
+      outbound_ok       boolean NOT NULL DEFAULT false,
+      outbound_message  text NOT NULL DEFAULT '',
+      status            text NOT NULL DEFAULT 'pending',
+      status_detail     text NOT NULL DEFAULT '',
+      status_updated_at timestamptz NOT NULL DEFAULT now(),
+      last_echo_at      timestamptz
+    );
+  `);
+  logger.info("Startup migration: ai_push_events table ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;

@@ -7,7 +7,7 @@
  */
 import cron from "node-cron";
 import { logger } from "./logger";
-import { generateReport, setLatestReport } from "../routes/ai/monitor";
+import { generateAndStoreReport, pushReportToOrchestrator } from "../routes/ai/monitor";
 import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable } from "@workspace/db";
 import { lt, lte, desc, eq, and, or, inArray, isNull, sql } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
@@ -35,45 +35,31 @@ export function startScheduler() {
     }
   });
 
-  // Daily at 08:00 UTC — generate a fresh report and push to the orchestrator
+  // Daily at 08:00 UTC — generate a fresh report and push to the orchestrator.
+  // The report is persisted (ai_reports) and the push recorded in the durable
+  // push history (ai_push_events) exactly like a manual "Push to Orchestrator",
+  // so scheduled pushes appear on the AI Monitor board too.
   cron.schedule("0 8 * * *", async () => {
     logger.info("Scheduler: generating daily AI project report");
     try {
-      const report = await generateReport();
-      setLatestReport(report);
+      const report = await generateAndStoreReport();
       logger.info("Scheduler: daily report generated successfully");
 
-      const webhookUrl = process.env.AI_ORCHESTRATOR_WEBHOOK_URL;
-      if (!webhookUrl) {
-        logger.info(
-          "Scheduler: AI_ORCHESTRATOR_WEBHOOK_URL not set, skipping push",
-        );
-        return;
-      }
-
-      const secret = process.env.PROJECTHUB_WEBHOOK_SECRET;
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(secret ? { "Authorization": `Bearer ${secret}` } : {}),
-        },
-        body: JSON.stringify({
-          source: "projecthub",
-          type: "daily_project_status_report",
-          report,
-        }),
+      const outcome = await pushReportToOrchestrator({
+        report,
+        trigger: "scheduled",
+        payloadType: "daily_project_status_report",
       });
 
-      if (res.ok) {
+      if (outcome.success) {
         logger.info(
-          { status: res.status },
-          "Scheduler: daily report pushed to Ultra Clear AI",
+          { pushId: outcome.pushId, message: outcome.message },
+          "Scheduler: daily report push recorded",
         );
       } else {
         logger.error(
-          { status: res.status, body: await res.text() },
-          "Scheduler: orchestrator webhook returned error",
+          { pushId: outcome.pushId, message: outcome.message },
+          "Scheduler: orchestrator webhook push failed",
         );
       }
     } catch (err) {

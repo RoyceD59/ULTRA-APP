@@ -21,6 +21,9 @@ import type {
 
 import type {
   ActivityItem,
+  AiPushEchoAck,
+  AiPushEchoInput,
+  AiPushEvent,
   AiPushResult,
   AiQueryAnswer,
   AiQueryInput,
@@ -2262,6 +2265,154 @@ export const usePushToOrchestrator = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getPushToOrchestratorMutationOptions(options));
+    }
+
+export const getListAiPushEventsUrl = () => {
+
+
+
+
+  return `/api/ai/pushes`
+}
+
+/**
+ * @summary List recent orchestrator push events (history board, newest first)
+ */
+export const listAiPushEvents = async ( options?: RequestInit): Promise<AiPushEvent[]> => {
+
+  return customFetch<AiPushEvent[]>(getListAiPushEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAiPushEventsQueryKey = () => {
+    return [
+    `/api/ai/pushes`
+    ] as const;
+    }
+
+
+export const getListAiPushEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAiPushEvents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiPushEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAiPushEventsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiPushEvents>>> = ({ signal }) => listAiPushEvents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAiPushEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAiPushEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAiPushEvents>>>
+export type ListAiPushEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List recent orchestrator push events (history board, newest first)
+ */
+
+export function useListAiPushEvents<TData = Awaited<ReturnType<typeof listAiPushEvents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiPushEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAiPushEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAiPushEchoUrl = () => {
+
+
+
+
+  return `/api/ai/echo`
+}
+
+/**
+ * @summary Inbound status callback (echo) from the orchestrator — HMAC-SHA256 signed via X-Webhook-Signature
+ */
+export const aiPushEcho = async (aiPushEchoInput: AiPushEchoInput, options?: RequestInit): Promise<AiPushEchoAck> => {
+
+  return customFetch<AiPushEchoAck>(getAiPushEchoUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(aiPushEchoInput)
+  }
+);}
+
+
+
+
+
+export const getAiPushEchoMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof aiPushEcho>>, TError,{data: BodyType<AiPushEchoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof aiPushEcho>>, TError,{data: BodyType<AiPushEchoInput>}, TContext> => {
+
+const mutationKey = ['aiPushEcho'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof aiPushEcho>>, {data: BodyType<AiPushEchoInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  aiPushEcho(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AiPushEchoMutationResult = NonNullable<Awaited<ReturnType<typeof aiPushEcho>>>
+    export type AiPushEchoMutationBody = BodyType<AiPushEchoInput>
+    export type AiPushEchoMutationError = ErrorType<void>
+
+    /**
+ * @summary Inbound status callback (echo) from the orchestrator — HMAC-SHA256 signed via X-Webhook-Signature
+ */
+export const useAiPushEcho = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof aiPushEcho>>, TError,{data: BodyType<AiPushEchoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof aiPushEcho>>,
+        TError,
+        {data: BodyType<AiPushEchoInput>},
+        TContext
+      > => {
+      return useMutation(getAiPushEchoMutationOptions(options));
     }
 
 export const getListContactsUrl = () => {

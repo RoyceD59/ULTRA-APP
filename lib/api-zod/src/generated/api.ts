@@ -530,7 +530,46 @@ export const PushToOrchestratorResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string(),
   "sentAt": zod.coerce.date(),
-  "webhookUrl": zod.string().optional()
+  "webhookUrl": zod.string().optional(),
+  "pushId": zod.string().optional()
+})
+
+
+/**
+ * @summary List recent orchestrator push events (history board, newest first)
+ */
+export const ListAiPushEventsResponseItem = zod.object({
+  "id": zod.string(),
+  "payloadType": zod.string(),
+  "trigger": zod.string(),
+  "target": zod.string(),
+  "sentAt": zod.coerce.date(),
+  "outboundOk": zod.boolean(),
+  "outboundMessage": zod.string(),
+  "status": zod.string(),
+  "statusDetail": zod.string(),
+  "statusUpdatedAt": zod.coerce.date(),
+  "lastEchoAt": zod.coerce.date().optional()
+})
+export const ListAiPushEventsResponse = zod.array(ListAiPushEventsResponseItem)
+
+
+/**
+ * @summary Inbound status callback (echo) from the orchestrator — HMAC-SHA256 signed via X-Webhook-Signature
+ */
+
+
+
+export const AiPushEchoBody = zod.object({
+  "pushId": zod.string().min(1),
+  "status": zod.enum(['received', 'processing', 'completed', 'failed']),
+  "message": zod.string().optional()
+})
+
+export const AiPushEchoResponse = zod.object({
+  "ok": zod.boolean(),
+  "pushId": zod.string(),
+  "status": zod.string()
 })
 
 

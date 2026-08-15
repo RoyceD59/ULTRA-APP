@@ -44,6 +44,14 @@ app.use(
   rawBodyMiddleware,
 );
 
+// Orchestrator status-callback (echo) endpoint — HMAC-verified against the
+// exact raw bytes, same scheme as /api/webhook/ingest.
+app.use(
+  "/api/ai/echo",
+  express.raw({ type: "*/*", limit: "1mb" }),
+  rawBodyMiddleware,
+);
+
 app.use(
   pinoHttp({
     logger,

@@ -254,6 +254,44 @@ export interface AiPushResult {
   message: string;
   sentAt: string;
   webhookUrl?: string;
+  pushId?: string;
+}
+
+export interface AiPushEvent {
+  id: string;
+  payloadType: string;
+  trigger: string;
+  target: string;
+  sentAt: string;
+  outboundOk: boolean;
+  outboundMessage: string;
+  status: string;
+  statusDetail: string;
+  statusUpdatedAt: string;
+  lastEchoAt?: string;
+}
+
+export type AiPushEchoInputStatus = typeof AiPushEchoInputStatus[keyof typeof AiPushEchoInputStatus];
+
+
+export const AiPushEchoInputStatus = {
+  received: 'received',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface AiPushEchoInput {
+  /** @minLength 1 */
+  pushId: string;
+  status: AiPushEchoInputStatus;
+  message?: string;
+}
+
+export interface AiPushEchoAck {
+  ok: boolean;
+  pushId: string;
+  status: string;
 }
 
 export interface Contact {

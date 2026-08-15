@@ -7,6 +7,10 @@
  */
 
 export * from './activityItem';
+export * from './aiPushEchoAck';
+export * from './aiPushEchoInput';
+export * from './aiPushEchoInputStatus';
+export * from './aiPushEvent';
 export * from './aiPushResult';
 export * from './aiQueryAnswer';
 export * from './aiQueryInput';

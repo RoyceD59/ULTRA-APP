@@ -535,6 +535,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiPushResult"
 
+  /ai/pushes:
+    get:
+      operationId: listAiPushEvents
+      tags: [ai-monitor]
+      summary: List recent orchestrator push events (history board, newest first)
+      responses:
+        "200":
+          description: Push event history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiPushEvent"
+
+  /ai/echo:
+    post:
+      operationId: aiPushEcho
+      tags: [ai-monitor]
+      summary: Inbound status callback (echo) from the orchestrator — HMAC-SHA256 signed via X-Webhook-Signature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPushEchoInput"
+      responses:
+        "200":
+          description: Echo accepted, push record updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPushEchoAck"
+        "401":
+          description: Invalid or missing webhook signature
+        "404":
+          description: Unknown push id
+
   # ─── Contacts ───────────────────────────────────────────────────
   /contacts:
     get:
@@ -1356,6 +1394,41 @@ components:
         message: { type: string }
         sentAt: { type: string, format: date-time }
         webhookUrl: { type: string }
+        pushId: { type: string }
+
+    AiPushEvent:
+      type: object
+      required: [id, payloadType, trigger, target, sentAt, outboundOk, outboundMessage, status, statusDetail, statusUpdatedAt]
+      properties:
+        id: { type: string }
+        payloadType: { type: string }
+        trigger: { type: string }
+        target: { type: string }
+        sentAt: { type: string, format: date-time }
+        outboundOk: { type: boolean }
+        outboundMessage: { type: string }
+        status: { type: string }
+        statusDetail: { type: string }
+        statusUpdatedAt: { type: string, format: date-time }
+        lastEchoAt: { type: string, format: date-time }
+
+    AiPushEchoInput:
+      type: object
+      required: [pushId, status]
+      properties:
+        pushId: { type: string, minLength: 1 }
+        status:
+          type: string
+          enum: [received, processing, completed, failed]
+        message: { type: string }
+
+    AiPushEchoAck:
+      type: object
+      required: [ok, pushId, status]
+      properties:
+        ok: { type: boolean }
+        pushId: { type: string }
+        status: { type: string }
 
     # ─── Contact Schemas ─────────────────────────────────────────
     Contact:

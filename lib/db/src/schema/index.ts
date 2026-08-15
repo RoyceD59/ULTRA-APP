@@ -22,6 +22,8 @@ export * from "./projects";
 export * from "./tasks";
 export * from "./conversations";
 export * from "./messages";
+export * from "./ai-reports";
+export * from "./ai-push-events";
 export * from "./uc-push-tokens";
 export * from "./uc-enquiries";
 export * from "./uc-notif-prefs";

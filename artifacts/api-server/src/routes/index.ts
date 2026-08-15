@@ -45,9 +45,11 @@ router.use("/projects",     requireTeamAuth);
 router.use("/tasks",        requireTeamAuth);
 router.use("/dashboard",    requireTeamAuth);
 router.use("/notifications", requireTeamAuth);
-// /ai/report and /ai/push are team-only; /ai/query is a public UC webhook
+// /ai/report, /ai/push, and /ai/pushes are team-only; /ai/query is a public
+// UC webhook and /ai/echo is the HMAC-signed orchestrator status callback.
 router.use("/ai/report",     requireTeamAuth);
 router.use("/ai/push",       requireTeamAuth);
+router.use("/ai/pushes",     requireTeamAuth);
 router.use("/ai/agent-query", requireTeamAuth);
 router.use("/ai/agents",     requireTeamAuth);
 // Contacts CRUD is protected per-route in contacts.ts (preserves the public
