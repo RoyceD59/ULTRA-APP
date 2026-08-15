@@ -72,7 +72,7 @@ export default function ProductsScreen() {
   const router = useRouter();
   const api = useApi();
   const insets = useSafeAreaInsets();
-  const { items, totalItems, totalPrice, addItem, refreshCart, cartHydrated } = useCart();
+  const { items, addItem, refreshCart, cartHydrated } = useCart();
   const cartBarInset = useCartBarInset();
 
   const [search, setSearch] = useState('');
@@ -86,22 +86,15 @@ export default function ProductsScreen() {
   // the live item count/total even when items were added from another screen.
   useFocusEffect(useCallback(() => { refreshCart(); }, [refreshCart]));
 
-  // Animated transitions: 1 = basket-has-items view, 0 = empty view.
+  // Animated transition for the empty-basket view: 1 = visible, 0 = hidden.
   // Always start at 0 — we don't know the saved cart state until AsyncStorage
-  // resolves, so we suppress both states until cartHydrated is true.
-  const basketAnim = useRef(new Animated.Value(0)).current;
-  const emptyAnim  = useRef(new Animated.Value(0)).current;
-  // Separate anim for layout-affecting paddingTop (useNativeDriver must be false for layout props)
-  const paddingAnim = useRef(new Animated.Value(0)).current;
+  // resolves, so we suppress it until cartHydrated is true.
+  const emptyAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Don't animate until we know what the cart actually contains.
     if (!cartHydrated) return;
-    Animated.parallel([
-      Animated.timing(basketAnim,  { toValue: hasItems ? 1 : 0,  duration: 280, useNativeDriver: true }),
-      Animated.timing(emptyAnim,   { toValue: hasItems ? 0 : 1,  duration: 280, useNativeDriver: true }),
-      Animated.timing(paddingAnim, { toValue: hasItems ? 60 : 0, duration: 280, useNativeDriver: false }),
-    ]).start();
+    Animated.timing(emptyAnim, { toValue: hasItems ? 0 : 1, duration: 280, useNativeDriver: true }).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasItems, cartHydrated]);
 
@@ -132,50 +125,6 @@ export default function ProductsScreen() {
   });
 
   const numColumns = 2;
-
-  // ── Mini Basket Bar ──────────────────────────────────────────────────────────
-
-  const miniBarTop = topPad + (Platform.OS !== 'web' ? insets.top : 0);
-
-  const miniBasketBar = (
-    <Animated.View
-      pointerEvents={hasItems ? 'auto' : 'none'}
-      style={[
-        styles.miniBar,
-        {
-          backgroundColor: colors.primary,
-          top: miniBarTop,
-          opacity: basketAnim,
-          transform: [{
-            translateY: basketAnim.interpolate({ inputRange: [0, 1], outputRange: [-64, 0] }),
-          }],
-        },
-      ]}>
-      <View style={styles.miniBarLeft}>
-        <View style={[styles.badgeCircle, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
-          <Text style={styles.badgeText}>{totalItems}</Text>
-        </View>
-        <Text style={styles.miniBarTotal}>{formatKES(totalPrice)}</Text>
-      </View>
-      <View style={styles.miniBarActions}>
-        <TouchableOpacity
-          onPress={scrollToProducts}
-          activeOpacity={0.8}
-          style={[styles.miniBarBtn, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-          <Text style={styles.miniBarBtnText}>Add More</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            router.push('/checkout');
-          }}
-          activeOpacity={0.8}
-          style={[styles.miniBarBtn, { backgroundColor: '#fff' }]}>
-          <Text style={[styles.miniBarBtnText, { color: colors.primary }]}>Quick Checkout</Text>
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
-  );
 
   // ── Add-Ons section ──────────────────────────────────────────────────────────
 
@@ -302,14 +251,11 @@ export default function ProductsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      {/* Sticky Mini Basket Bar — always rendered, animated in/out */}
-      {miniBasketBar}
-
       <Animated.ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: paddingAnim, paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
+        contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}>
 
         {/* Search */}
@@ -400,24 +346,6 @@ const styles = StyleSheet.create({
 
   // Category chips
   chips: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
-
-  // Mini Basket Bar
-  miniBar: {
-    position: 'absolute', left: 0, right: 0, zIndex: 20,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    height: 56,
-  },
-  miniBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  badgeCircle: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { color: '#fff', fontSize: 13, fontWeight: '700' as const },
-  miniBarTotal: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
-  miniBarActions: { flexDirection: 'row', gap: 8 },
-  miniBarBtn: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 8,
-  },
-  miniBarBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' as const },
 
   // Add-Ons
   addonsSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
