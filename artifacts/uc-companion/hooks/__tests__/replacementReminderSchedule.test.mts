@@ -103,14 +103,15 @@ describe('replacement reminders for a newly set lifespan', () => {
 
   it('existing purchaser deep into the cycle (bought 50 days ago, lifespan 60): offers clamp to the near future instead of the past', async () => {
     // Subtract a 60-second buffer so daysSinceActivation stays just under 50
-    // regardless of execution time, ensuring Math.ceil(elapsed)=50 → offset4=51.
+    // regardless of execution time: Math.floor(49.999)+1 = 50 → offset4=50.
     const activatedAt = new Date(Date.now() - 50 * DAY + 60_000).toISOString();
     await scheduleAllFilterNotifications({
       activatedAt, productId: DISPENSER.id, productName: DISPENSER.name, lifespanDays: 60,
     });
-    // day-30 stages are in the past → skipped; offer clamps to ceil(50)+1 = 51,
-    // urgent to 52 — both before the day-60 replacement point.
-    assertOffsets(scheduledOffsetsDays(activatedAt), [51, 52]);
+    // day-30 stages are in the past → skipped; offer clamps to floor(49.999)+1
+    // = 50 (still in the future relative to now), urgent to offset4+1 = 51 —
+    // both before the day-60 replacement point.
+    assertOffsets(scheduledOffsetsDays(activatedAt), [50, 51]);
   });
 
   it('current live lifespan (90 days): new purchaser gets offers at day 60 and 75', async () => {

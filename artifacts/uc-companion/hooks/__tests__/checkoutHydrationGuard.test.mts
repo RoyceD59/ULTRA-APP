@@ -161,19 +161,23 @@ describe('checkout.tsx hydration guard (source-level tripwire)', () => {
     assert.ok(guardMatch, 'checkout.tsx must early-return when cartHydrated is false');
     const guardIdx = guardMatch.index!;
 
-    // The guard now has two sub-branches:
-    //   cartLoadError → error UI with a Retry button
-    //   else          → ActivityIndicator spinner
-    // Capture enough source to cover both (up to the closing brace of the block).
-    const guardBlock = src.slice(guardIdx, guardIdx + 1200);
+    // The load-error recovery UI lives in its own `if (cartLoadError)` guard
+    // ABOVE this block, so the !cartHydrated block stays a pure spinner.
+    const guardEnd = src.indexOf('\n  }', guardIdx);
+    assert.ok(guardEnd > guardIdx, 'the !cartHydrated guard must be a closed block');
+    const guardBlock = src.slice(guardIdx, guardEnd + 4);
 
     // Must contain a spinner for the normal loading case…
     assert.match(guardBlock, /ActivityIndicator/,
       'the !cartHydrated block must include an ActivityIndicator for the loading case');
 
-    // …and must also handle the cartLoadError sub-case (retry path from task #334)…
-    assert.match(guardBlock, /cartLoadError/,
-      'the !cartHydrated block must handle the cartLoadError sub-case');
+    // …and the cartLoadError retry path must exist as its own guard before it…
+    const errGuard = src.match(/if\s*\(\s*cartLoadError\s*\)\s*\{/);
+    assert.ok(errGuard, 'checkout.tsx must render a recovery UI when cartLoadError is set');
+    assert.ok(errGuard!.index! < guardIdx,
+      'the cartLoadError guard must come before the !cartHydrated spinner guard');
+    assert.match(src.slice(errGuard!.index!, errGuard!.index! + 1200), /refreshCart|Retry/,
+      'the cartLoadError guard must offer a retry path');
 
     // …but must never render checkout-specific UI (totals, line items, address).
     assert.doesNotMatch(guardBlock, /totalPrice|items\.map|Order Summary|Delivery Address/,
