@@ -25,6 +25,28 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+
+/** sessionStorage key for the M-Pesa security banner dismissal.
+ *  Survives navigation within the session; cleared on sign-out (and naturally
+ *  absent in a fresh browser session), so the banner re-appears on next login. */
+const SEC_BANNER_DISMISS_KEY = "ph_sec_mpesa_dismissed";
+
+function readBannerDismissed(): boolean {
+  try {
+    return sessionStorage.getItem(SEC_BANNER_DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeBannerDismissed(dismissed: boolean) {
+  try {
+    if (dismissed) sessionStorage.setItem(SEC_BANNER_DISMISS_KEY, "1");
+    else sessionStorage.removeItem(SEC_BANNER_DISMISS_KEY);
+  } catch {
+    /* sessionStorage unavailable — fall back to in-memory state only */
+  }
+}
 const ALL_NAVIGATION = [
   { name: "Dashboard",        href: "/",                slug: "dashboard"       as PageSlug, icon: LayoutDashboard },
   { name: "Projects",         href: "/projects",        slug: "projects"        as PageSlug, icon: FolderKanban },
@@ -116,8 +138,11 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
  * Only runs for admin users; silently returns false for non-admins.
  * Re-fetches every 60 s so the banner disappears as soon as the admin fixes the issue.
  */
-function useSecurityWarnings(): { mpesaSecretMissing: boolean } {
+function useSecurityWarnings(): { mpesaSecretMissing: boolean; securityStatusKnown: boolean } {
   const [mpesaSecretMissing, setMpesaSecretMissing] = useState(false);
+  // True only after at least one successful status response; consumers must not
+  // treat the initial `mpesaSecretMissing === false` as "secret configured".
+  const [securityStatusKnown, setSecurityStatusKnown] = useState(false);
 
   useEffect(() => {
     if (!isTeamAdmin()) return;
@@ -130,7 +155,10 @@ function useSecurityWarnings(): { mpesaSecretMissing: boolean } {
       })
         .then(r => r.ok ? r.json() as Promise<{ mpesaWebhookSecret: { source: string } }> : Promise.resolve(null))
         .then(data => {
-          if (data) setMpesaSecretMissing(data.mpesaWebhookSecret?.source === "none");
+          if (data) {
+            setMpesaSecretMissing(data.mpesaWebhookSecret?.source === "none");
+            setSecurityStatusKnown(true);
+          }
         })
         .catch(() => { /* non-critical */ });
     }
@@ -141,7 +169,7 @@ function useSecurityWarnings(): { mpesaSecretMissing: boolean } {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { mpesaSecretMissing };
+  return { mpesaSecretMissing, securityStatusKnown };
 }
 /** Fetches the count of unresolved webhook recovery orders for the nav badge.
  *  Silently returns 0 on any error (the badge is a convenience, not critical). */
@@ -203,18 +231,37 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const [changePassOpen, setChangePassOpen] = useState(false);
-  const [securityBannerDismissed, setSecurityBannerDismissed] = useState(false);
+  const [securityBannerDismissed, setSecurityBannerDismissed] = useState(readBannerDismissed);
   const admin = isTeamAdmin();
   const user = getTeamUser();
   const recoveryCount = useRecoveryOrderCount();
   const reminderGapCount = useReminderGapCount();
-  const { mpesaSecretMissing } = useSecurityWarnings();
+  const { mpesaSecretMissing, securityStatusKnown } = useSecurityWarnings();
+
+  // Once polling positively confirms the secret has been set, clear the
+  // dismissal so the banner automatically re-appears if the secret ever goes
+  // missing again. Gated on securityStatusKnown so the initial (pre-fetch)
+  // `mpesaSecretMissing === false` doesn't wipe a stored dismissal on remount.
+  useEffect(() => {
+    if (securityStatusKnown && !mpesaSecretMissing && securityBannerDismissed) {
+      writeBannerDismissed(false);
+      setSecurityBannerDismissed(false);
+    }
+  }, [securityStatusKnown, mpesaSecretMissing, securityBannerDismissed]);
+
+  function dismissSecurityBanner() {
+    writeBannerDismissed(true);
+    setSecurityBannerDismissed(true);
+  }
+
   const showSecurityBanner = admin && mpesaSecretMissing && !securityBannerDismissed;
 
   // Filter nav to pages the current user can access
   const navigation = ALL_NAVIGATION.filter((item) => canView(item.slug));
 
   function handleSignOut() {
+    // Reset the banner dismissal so it re-appears on the next login session
+    writeBannerDismissed(false);
     clearTeamAuth();
     toast({ title: "Signed out", description: "See you next time." });
     navigate("/login", { replace: true });
@@ -361,7 +408,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {showSecurityBanner && (
-          <SecurityMisconfigBanner onDismiss={() => setSecurityBannerDismissed(true)} />
+          <SecurityMisconfigBanner onDismiss={dismissSecurityBanner} />
         )}
         <header className="h-16 border-b bg-background/80 backdrop-blur-md flex items-center justify-between px-8 flex-shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-4" />
