@@ -35,6 +35,115 @@ tags:
   - name: whatsapp
     description: WhatsApp session management and messaging
 paths:
+  /uc/admin/inventory:
+    get:
+      operationId: listUcInventory
+      tags: [uc-admin]
+      summary: List all UC products with live stock from WooCommerce
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryList"
+        "401":
+          description: Unauthorized
+
+  /uc/admin/inventory/{productId}:
+    patch:
+      operationId: updateUcInventoryItem
+      tags: [uc-admin]
+      summary: Update a product's stock quantity in WooCommerce
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryStockUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryUpdateResult"
+        "400":
+          description: Invalid input
+        "401":
+          description: Unauthorized
+        "502":
+          description: WooCommerce unreachable
+
+  /uc/admin/inventory/sync:
+    post:
+      operationId: triggerUcInventorySync
+      tags: [uc-admin]
+      summary: Trigger the configured n8n inventory-sync webhook
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sync triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncTriggered"
+        "401":
+          description: Unauthorized
+        "422":
+          description: n8n webhook URL not configured
+
+  /admin/integrations:
+    get:
+      operationId: getAdminIntegrations
+      tags: [uc-admin]
+      summary: Get integration settings metadata (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationsSettings"
+        "401":
+          description: Unauthorized
+    patch:
+      operationId: updateAdminIntegrations
+      tags: [uc-admin]
+      summary: Update integration settings (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntegrationsSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
   /uc/admin/customers/count:
     get:
       operationId: getUcCustomersCount
@@ -1765,6 +1874,77 @@ components:
         to: { type: string }
 
     # ─── UC Admin Schemas ─────────────────────────────────────────
+    InventoryProduct:
+      type: object
+      required: [id, name, sku, stockQuantity, stockStatus, syncedAt]
+      properties:
+        id:            { type: integer }
+        name:          { type: string }
+        sku:           { type: string }
+        stockQuantity: { type: integer }
+        stockStatus:   { type: string }
+        permalink:     { type: ["string", "null"] }
+        syncedAt:      { type: string, format: date-time }
+
+    InventoryList:
+      type: object
+      required: [products, source]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryProduct"
+        source:
+          type: string
+          enum: [woocommerce, mock]
+
+    InventoryStockUpdate:
+      type: object
+      required: [stockQuantity]
+      properties:
+        stockQuantity:
+          type: integer
+          minimum: 0
+
+    InventoryUpdateResult:
+      type: object
+      required: [ok, productId, stockQuantity, source]
+      properties:
+        ok:            { type: boolean }
+        productId:     { type: integer }
+        stockQuantity: { type: integer }
+        source:        { type: string }
+
+    SyncTriggered:
+      type: object
+      required: [ok, triggeredAt]
+      properties:
+        ok:          { type: boolean }
+        triggeredAt: { type: string, format: date-time }
+
+    IntegrationsSettings:
+      type: object
+      required: [n8nInventoryWebhook]
+      properties:
+        n8nInventoryWebhook:
+          type: object
+          required: [isSet]
+          properties:
+            isSet:     { type: boolean }
+            hostname:  { type: ["string", "null"] }
+            updatedAt: { type: ["string", "null"] }
+
+    IntegrationsSettingsInput:
+      type: object
+      properties:
+        n8nInventoryWebhookUrl: { type: string }
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
     UcCustomersCount:
       type: object
       required: [count]

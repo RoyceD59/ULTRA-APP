@@ -60,6 +60,10 @@ await pool.query(`
     ADD COLUMN IF NOT EXISTS notification_log_success_retention_days integer,
     ADD COLUMN IF NOT EXISTS notification_log_failure_retention_days integer;
 `);
+await pool.query(`
+  ALTER TABLE team_settings
+    ADD COLUMN IF NOT EXISTS n8n_inventory_webhook_url_enc text;
+`);
 
 // uc_orders payment_reference unique index (dedup guard)
 await pool.query(`

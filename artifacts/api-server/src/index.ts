@@ -327,6 +327,15 @@ async function applyStartupMigrations(): Promise<void> {
 
   // Team improvement suggestions on Alison feedback entries (max 250 chars,
   // enforced at the API layer).
+  // n8n inventory-sync webhook URL — stored AES-256-GCM encrypted (same format
+  // as mpesa_webhook_secret_enc) because webhook URLs often embed bearer tokens.
+  // Admins paste the URL via Admin → Integrations; it is encrypted before storage.
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS n8n_inventory_webhook_url_enc text;
+  `);
+  logger.info("Startup migration: team_settings.n8n_inventory_webhook_url_enc column ensured");
+
   await pool.query(`
     ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS improvement_note text;
   `);

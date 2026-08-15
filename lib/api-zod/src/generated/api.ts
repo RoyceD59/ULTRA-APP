@@ -9,6 +9,79 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary List all UC products with live stock from WooCommerce
+ */
+export const ListUcInventoryResponse = zod.object({
+  "products": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string(),
+  "stockQuantity": zod.number(),
+  "stockStatus": zod.string(),
+  "permalink": zod.string().nullish(),
+  "syncedAt": zod.coerce.date()
+})),
+  "source": zod.enum(['woocommerce', 'mock'])
+})
+
+
+/**
+ * @summary Update a product's stock quantity in WooCommerce
+ */
+export const UpdateUcInventoryItemParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const updateUcInventoryItemBodyStockQuantityMin = 0;
+
+
+
+export const UpdateUcInventoryItemBody = zod.object({
+  "stockQuantity": zod.number().min(updateUcInventoryItemBodyStockQuantityMin)
+})
+
+export const UpdateUcInventoryItemResponse = zod.object({
+  "ok": zod.boolean(),
+  "productId": zod.number(),
+  "stockQuantity": zod.number(),
+  "source": zod.string()
+})
+
+
+/**
+ * @summary Trigger the configured n8n inventory-sync webhook
+ */
+export const TriggerUcInventorySyncResponse = zod.object({
+  "ok": zod.boolean(),
+  "triggeredAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get integration settings metadata (admin only)
+ */
+export const GetAdminIntegrationsResponse = zod.object({
+  "n8nInventoryWebhook": zod.object({
+  "isSet": zod.boolean(),
+  "hostname": zod.string().nullish(),
+  "updatedAt": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Update integration settings (admin only)
+ */
+export const UpdateAdminIntegrationsBody = zod.object({
+  "n8nInventoryWebhookUrl": zod.string().optional()
+})
+
+export const UpdateAdminIntegrationsResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Total registered UC Companion customers (non-deleted)
  */
 export const GetUcCustomersCountResponse = zod.object({

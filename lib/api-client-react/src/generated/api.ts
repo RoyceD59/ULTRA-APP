@@ -47,6 +47,11 @@ import type {
   DisconnectWhatsApp200,
   GetDashboardActivityParams,
   HealthStatus,
+  IntegrationsSettings,
+  IntegrationsSettingsInput,
+  InventoryList,
+  InventoryStockUpdate,
+  InventoryUpdateResult,
   ListNotificationLogsParams,
   ListTasksParams,
   Member,
@@ -56,6 +61,7 @@ import type {
   NotificationDispatchInput,
   NotificationDispatchResult,
   NotificationLog,
+  OkResponse,
   Project,
   ProjectInput,
   ProjectSummary,
@@ -63,6 +69,7 @@ import type {
   ProjectWithProgress,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
+  SyncTriggered,
   SystemStatusInput,
   SystemStatusRecord,
   SystemStatusUpdate,
@@ -105,6 +112,374 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListUcInventoryUrl = () => {
+
+
+
+
+  return `/api/uc/admin/inventory`
+}
+
+/**
+ * @summary List all UC products with live stock from WooCommerce
+ */
+export const listUcInventory = async ( options?: RequestInit): Promise<InventoryList> => {
+
+  return customFetch<InventoryList>(getListUcInventoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcInventoryQueryKey = () => {
+    return [
+    `/api/uc/admin/inventory`
+    ] as const;
+    }
+
+
+export const getListUcInventoryQueryOptions = <TData = Awaited<ReturnType<typeof listUcInventory>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcInventoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcInventory>>> = ({ signal }) => listUcInventory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcInventory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcInventoryQueryResult = NonNullable<Awaited<ReturnType<typeof listUcInventory>>>
+export type ListUcInventoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary List all UC products with live stock from WooCommerce
+ */
+
+export function useListUcInventory<TData = Awaited<ReturnType<typeof listUcInventory>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcInventoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateUcInventoryItemUrl = (productId: number,) => {
+
+
+
+
+  return `/api/uc/admin/inventory/${productId}`
+}
+
+/**
+ * @summary Update a product's stock quantity in WooCommerce
+ */
+export const updateUcInventoryItem = async (productId: number,
+    inventoryStockUpdate: InventoryStockUpdate, options?: RequestInit): Promise<InventoryUpdateResult> => {
+
+  return customFetch<InventoryUpdateResult>(getUpdateUcInventoryItemUrl(productId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryStockUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcInventoryItemMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcInventoryItem>>, TError,{productId: number;data: BodyType<InventoryStockUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcInventoryItem>>, TError,{productId: number;data: BodyType<InventoryStockUpdate>}, TContext> => {
+
+const mutationKey = ['updateUcInventoryItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcInventoryItem>>, {productId: number;data: BodyType<InventoryStockUpdate>}> = (props) => {
+          const {productId,data} = props ?? {};
+
+          return  updateUcInventoryItem(productId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcInventoryItemMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcInventoryItem>>>
+    export type UpdateUcInventoryItemMutationBody = BodyType<InventoryStockUpdate>
+    export type UpdateUcInventoryItemMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a product's stock quantity in WooCommerce
+ */
+export const useUpdateUcInventoryItem = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcInventoryItem>>, TError,{productId: number;data: BodyType<InventoryStockUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcInventoryItem>>,
+        TError,
+        {productId: number;data: BodyType<InventoryStockUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcInventoryItemMutationOptions(options));
+    }
+
+export const getTriggerUcInventorySyncUrl = () => {
+
+
+
+
+  return `/api/uc/admin/inventory/sync`
+}
+
+/**
+ * @summary Trigger the configured n8n inventory-sync webhook
+ */
+export const triggerUcInventorySync = async ( options?: RequestInit): Promise<SyncTriggered> => {
+
+  return customFetch<SyncTriggered>(getTriggerUcInventorySyncUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTriggerUcInventorySyncMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof triggerUcInventorySync>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof triggerUcInventorySync>>, TError,void, TContext> => {
+
+const mutationKey = ['triggerUcInventorySync'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof triggerUcInventorySync>>, void> = () => {
+
+
+          return  triggerUcInventorySync(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TriggerUcInventorySyncMutationResult = NonNullable<Awaited<ReturnType<typeof triggerUcInventorySync>>>
+
+    export type TriggerUcInventorySyncMutationError = ErrorType<void>
+
+    /**
+ * @summary Trigger the configured n8n inventory-sync webhook
+ */
+export const useTriggerUcInventorySync = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof triggerUcInventorySync>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof triggerUcInventorySync>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTriggerUcInventorySyncMutationOptions(options));
+    }
+
+export const getGetAdminIntegrationsUrl = () => {
+
+
+
+
+  return `/api/admin/integrations`
+}
+
+/**
+ * @summary Get integration settings metadata (admin only)
+ */
+export const getAdminIntegrations = async ( options?: RequestInit): Promise<IntegrationsSettings> => {
+
+  return customFetch<IntegrationsSettings>(getGetAdminIntegrationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminIntegrationsQueryKey = () => {
+    return [
+    `/api/admin/integrations`
+    ] as const;
+    }
+
+
+export const getGetAdminIntegrationsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminIntegrations>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminIntegrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminIntegrationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminIntegrations>>> = ({ signal }) => getAdminIntegrations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminIntegrations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminIntegrationsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminIntegrations>>>
+export type GetAdminIntegrationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get integration settings metadata (admin only)
+ */
+
+export function useGetAdminIntegrations<TData = Awaited<ReturnType<typeof getAdminIntegrations>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminIntegrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminIntegrationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminIntegrationsUrl = () => {
+
+
+
+
+  return `/api/admin/integrations`
+}
+
+/**
+ * @summary Update integration settings (admin only)
+ */
+export const updateAdminIntegrations = async (integrationsSettingsInput: IntegrationsSettingsInput, options?: RequestInit): Promise<OkResponse> => {
+
+  return customFetch<OkResponse>(getUpdateAdminIntegrationsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(integrationsSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminIntegrationsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminIntegrations>>, TError,{data: BodyType<IntegrationsSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminIntegrations>>, TError,{data: BodyType<IntegrationsSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateAdminIntegrations'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminIntegrations>>, {data: BodyType<IntegrationsSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminIntegrations(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminIntegrationsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminIntegrations>>>
+    export type UpdateAdminIntegrationsMutationBody = BodyType<IntegrationsSettingsInput>
+    export type UpdateAdminIntegrationsMutationError = ErrorType<void>
+
+    /**
+ * @summary Update integration settings (admin only)
+ */
+export const useUpdateAdminIntegrations = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminIntegrations>>, TError,{data: BodyType<IntegrationsSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminIntegrations>>,
+        TError,
+        {data: BodyType<IntegrationsSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminIntegrationsMutationOptions(options));
+    }
 
 export const getGetUcCustomersCountUrl = () => {
 

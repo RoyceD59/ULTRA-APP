@@ -4,7 +4,7 @@ import {
   Bot, Leaf, MessageSquareOff, Contact2, BellRing, Activity,
   Webhook, ShoppingBag, LogOut, KeyRound, Loader2, Shield,
   UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets, BookOpen,
-  AlertTriangle, X, Gauge,
+  AlertTriangle, X, Gauge, Package, Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -356,6 +356,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}>
                   <Bell className="w-4 h-4 flex-shrink-0" />
                   Notification Settings
+                </button>
+              </Link>
+              <Link href="/admin/inventory">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/inventory")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <Package className="w-4 h-4 flex-shrink-0" />
+                  Inventory
+                </button>
+              </Link>
+              <Link href="/admin/integrations">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/integrations")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <Link2 className="w-4 h-4 flex-shrink-0" />
+                  Integrations
                 </button>
               </Link>
             </>

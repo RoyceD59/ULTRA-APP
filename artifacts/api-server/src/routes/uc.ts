@@ -32,6 +32,8 @@ import {
   orderReceiptSerial,
 } from "../lib/email.js";
 import { promoUtmParams, promoUtmQuery } from "../lib/utm.js";
+import { decryptSecret } from "../lib/secret-crypto.js";
+import { ssrfSafePost, SsrfBlockedError } from "../lib/ssrf-safe-fetch.js";
 import { sendViaResend } from "../lib/resend.js";
 import { sendSlackTeamMessage } from "../lib/slack.js";
 import {
@@ -5224,6 +5226,186 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
     waterTestStoreFallback.push(fallback);
     dispatchWtNotifications(id);
     res.status(201).json(fallback);
+  }
+});
+
+// ─── Inventory: list products with live WooCommerce stock ─────────────────────
+// Admin-only. Falls back to the mock product catalogue when WC credentials
+// are absent so the page always loads something meaningful in development.
+router.get("/uc/admin/inventory", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const syncedAt = new Date().toISOString();
+
+  if (!hasWCCredentials()) {
+    const items = MOCK_PRODUCTS.map((p) => ({
+      id:            p["id"],
+      name:          p["name"],
+      sku:           p["sku"] ?? "",
+      stockQuantity: typeof p["stockQuantity"] === "number" ? p["stockQuantity"] : 0,
+      stockStatus:   p["stockStatus"] ?? "instock",
+      permalink:     null,
+      syncedAt,
+    }));
+    res.json({ products: items, source: "mock" });
+    return;
+  }
+
+  // Fetch all published products from WooCommerce (up to 3 pages × 100)
+  const all: Record<string, unknown>[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const batch = await wcFetchArray("/products", {
+      per_page: "100", page: String(page), status: "publish",
+    });
+    if (!batch || batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < 100) break;
+  }
+
+  const items = all.map((p) => ({
+    id:            p["id"],
+    name:          String(p["name"] ?? ""),
+    sku:           String(p["sku"] ?? ""),
+    stockQuantity: typeof p["stock_quantity"] === "number"
+      ? p["stock_quantity"]
+      : p["stock_quantity"] != null ? Number(p["stock_quantity"]) : 0,
+    stockStatus:   String(p["stock_status"] ?? "instock"),
+    permalink:     typeof p["permalink"] === "string" ? p["permalink"] : null,
+    syncedAt,
+  }));
+
+  res.json({ products: items, source: "woocommerce" });
+});
+
+// ─── Inventory: update a product's stock quantity in WooCommerce ──────────────
+router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const productId = Number(req.params["productId"]);
+  if (!Number.isInteger(productId) || productId <= 0) {
+    res.status(400).json({ error: "Invalid productId" });
+    return;
+  }
+
+  const { stockQuantity } = req.body as { stockQuantity?: unknown };
+  if (typeof stockQuantity !== "number" || !Number.isInteger(stockQuantity) || stockQuantity < 0) {
+    res.status(400).json({ error: "stockQuantity must be a non-negative integer" });
+    return;
+  }
+
+  if (!hasWCCredentials()) {
+    // Mock mode: acknowledge without actually persisting
+    res.json({ ok: true, productId, stockQuantity, source: "mock" });
+    return;
+  }
+
+  try {
+    const url = wcUrl(`/products/${productId}`);
+    const wcRes = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stock_quantity: stockQuantity, manage_stock: true }),
+    });
+    const text = await wcRes.text();
+    const data = parseWcJson(text) as Record<string, unknown>;
+
+    if (!wcRes.ok) {
+      logger.warn({ productId, status: wcRes.status }, "[inventory] WooCommerce stock update failed");
+      res.status(502).json({ error: "WooCommerce update failed", detail: String(data?.["message"] ?? wcRes.statusText) });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      productId,
+      stockQuantity: typeof data["stock_quantity"] === "number" ? data["stock_quantity"] : stockQuantity,
+      source: "woocommerce",
+    });
+  } catch (err) {
+    logger.error({ err, productId }, "[inventory] WooCommerce PATCH error");
+    res.status(502).json({ error: "Failed to reach WooCommerce" });
+  }
+});
+
+// ─── Inventory: trigger the n8n inventory-sync webhook ───────────────────────
+router.post("/uc/admin/inventory/sync", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  // Read and decrypt the configured n8n webhook URL
+  let webhookUrl: string | null = null;
+  try {
+    const { rows } = await pool.query<{ n8n_inventory_webhook_url_enc: string | null }>(
+      "SELECT n8n_inventory_webhook_url_enc FROM team_settings WHERE id = 'singleton' LIMIT 1",
+    );
+    const enc = rows[0]?.n8n_inventory_webhook_url_enc ?? null;
+    webhookUrl = enc ? decryptSecret(enc) : null;
+  } catch (err) {
+    logger.error({ err }, "[inventory/sync] Failed to read n8n webhook URL from DB");
+    res.status(500).json({ error: "Internal server error" });
+    return;
+  }
+
+  if (!webhookUrl) {
+    res.status(422).json({
+      error: "n8n webhook URL is not configured. Go to Admin → Integrations to set it.",
+    });
+    return;
+  }
+
+  // ssrfSafePost enforces SSRF policy at every request:
+  //  • Re-resolves ALL A/AAAA records at request time (defeats DNS rebinding)
+  //  • Rejects ANY private/loopback/link-local answer (defeats split-brain DNS)
+  //  • Pins the TCP connection to the validated IP via https.request's lookup
+  //    callback so the OS cannot re-resolve after our check
+  //  • Preserves TLS SNI so the cert is validated against the original hostname
+  //  • Does not follow redirects (https.request never auto-follows 3xx)
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const statusCode = await ssrfSafePost(
+      webhookUrl,
+      JSON.stringify({
+        trigger:   "manual",
+        source:    "projecthub",
+        timestamp: new Date().toISOString(),
+      }),
+      controller.signal,
+    );
+    clearTimeout(timeoutHandle);
+
+    if (statusCode < 200 || statusCode >= 300) {
+      logger.warn({ status: statusCode }, "[inventory/sync] n8n returned non-2xx");
+      res.status(502).json({ error: `n8n responded with ${statusCode}` });
+      return;
+    }
+
+    res.json({ ok: true, triggeredAt: new Date().toISOString() });
+  } catch (err) {
+    clearTimeout(timeoutHandle);
+    if (err instanceof SsrfBlockedError) {
+      // DNS rebinding attempt detected at request time — URL passed save-time
+      // validation but now resolves to a private address.
+      logger.warn({ address: err.address }, "[inventory/sync] SSRF blocked at request time (DNS rebind?)");
+      res.status(422).json({
+        error: "Webhook URL is no longer valid — it now resolves to a private address. Update it in Admin → Integrations.",
+      });
+    } else if (err instanceof Error && err.name === "AbortError") {
+      logger.warn("[inventory/sync] n8n webhook timed out after 10s");
+      res.status(504).json({ error: "n8n webhook timed out (10s) — check that n8n is reachable" });
+    } else {
+      logger.error({ err }, "[inventory/sync] n8n webhook request failed");
+      res.status(502).json({ error: "Failed to reach n8n webhook" });
+    }
   }
 });
 

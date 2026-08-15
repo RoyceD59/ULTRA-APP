@@ -27,6 +27,13 @@ export const teamSettingsTable = pgTable("team_settings", {
    * UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS env var (default 90).
    */
   notificationLogFailureRetentionDays: integer("notification_log_failure_retention_days"),
+  /**
+   * AES-256-GCM encrypted n8n webhook URL for inventory-sync automation.
+   * Format: "<iv_hex>:<authTag_hex>:<ciphertext_hex>" (same as mpesaWebhookSecretEnc).
+   * Encrypted because webhook URLs often embed bearer-style path tokens.
+   * Admins paste the URL via Admin → Integrations; it is encrypted before storage.
+   */
+  n8nInventoryWebhookUrlEnc: text("n8n_inventory_webhook_url_enc"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

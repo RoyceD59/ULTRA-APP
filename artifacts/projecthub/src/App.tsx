@@ -38,6 +38,8 @@ import LibraryPage from '@/pages/library';
 import AdminUsersPage from '@/pages/admin/users';
 import AdminPaymentSettingsPage from '@/pages/admin/payment-settings';
 import AdminNotificationSettingsPage from '@/pages/admin/notification-settings';
+import AdminInventoryPage from '@/pages/admin/inventory';
+import AdminIntegrationsPage from '@/pages/admin/integrations';
 
 const queryClient = new QueryClient();
 
@@ -164,6 +166,12 @@ function Router() {
               </Route>
               <Route path="/admin/notification-settings">
                 <AdminGuard><AdminNotificationSettingsPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/inventory">
+                <AdminGuard><AdminInventoryPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/integrations">
+                <AdminGuard><AdminIntegrationsPage /></AdminGuard>
               </Route>
               <Route component={NotFound} />
             </Switch>

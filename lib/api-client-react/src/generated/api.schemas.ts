@@ -574,6 +574,67 @@ export interface WhatsAppSendResult {
   to?: string;
 }
 
+export interface InventoryProduct {
+  id: number;
+  name: string;
+  sku: string;
+  stockQuantity: number;
+  stockStatus: string;
+  /** @nullable */
+  permalink?: string | null;
+  syncedAt: string;
+}
+
+export type InventoryListSource = typeof InventoryListSource[keyof typeof InventoryListSource];
+
+
+export const InventoryListSource = {
+  woocommerce: 'woocommerce',
+  mock: 'mock',
+} as const;
+
+export interface InventoryList {
+  products: InventoryProduct[];
+  source: InventoryListSource;
+}
+
+export interface InventoryStockUpdate {
+  /** @minimum 0 */
+  stockQuantity: number;
+}
+
+export interface InventoryUpdateResult {
+  ok: boolean;
+  productId: number;
+  stockQuantity: number;
+  source: string;
+}
+
+export interface SyncTriggered {
+  ok: boolean;
+  triggeredAt: string;
+}
+
+export type IntegrationsSettingsN8nInventoryWebhook = {
+  isSet: boolean;
+  /** @nullable */
+  hostname?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+};
+
+export interface IntegrationsSettings {
+  n8nInventoryWebhook: IntegrationsSettingsN8nInventoryWebhook;
+}
+
+export interface IntegrationsSettingsInput {
+  n8nInventoryWebhookUrl?: string;
+}
+
+export interface OkResponse {
+  ok: boolean;
+}
+
 export interface UcCustomersCount {
   /** Total registered (non-deleted) UC Companion customers */
   count: number;
