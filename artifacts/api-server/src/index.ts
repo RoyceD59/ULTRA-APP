@@ -347,6 +347,57 @@ async function applyStartupMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS resolved_at timestamptz
   `);
   logger.info("Startup migration: uc_lifespan_alerts table ensured");
+
+  // Per-push callback token for M-Pesa STK initiations.  Embeds a UUID in the
+  // CallBackURL as ?token=<callbackToken> to limit blast radius if a token is
+  // captured in logs.  Null on existing rows — falls back to shared-secret
+  // verification (backward compatible).
+  await pool.query(`
+    ALTER TABLE mpesa_stk_initiations
+      ADD COLUMN IF NOT EXISTS callback_token text;
+  `);
+  logger.info("Startup migration: mpesa_stk_initiations.callback_token column ensured");
+
+  // Server-side mirror of each customer's registered filter activation.
+  // The daily reminder-dispatch job reads this table to deliver 5-stage
+  // filter lifecycle messages via email/SMS/WhatsApp for opted-in users.
+  // sentStages (jsonb array) enables atomic at-most-once claiming so
+  // concurrent dispatch runs can never double-send.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_filter_reminders (
+      user_id         text        PRIMARY KEY,
+      product_id      integer     NOT NULL,
+      product_name    text        NOT NULL,
+      lifespan_days   integer     NOT NULL DEFAULT 0,
+      activated_at    timestamptz NOT NULL,
+      source_order_id integer,
+      sent_stages     jsonb       NOT NULL DEFAULT '[]'::jsonb,
+      active          boolean     NOT NULL DEFAULT true,
+      created_at      timestamptz NOT NULL DEFAULT now(),
+      updated_at      timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  logger.info("Startup migration: uc_filter_reminders table ensured");
+
+  // Opt-in channel flags for filter replacement reminders (email / SMS / WhatsApp).
+  // All default false — customers explicitly enable each channel.
+  await pool.query(`
+    ALTER TABLE uc_notif_prefs
+      ADD COLUMN IF NOT EXISTS reminder_email    boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS reminder_sms      boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS reminder_whatsapp boolean NOT NULL DEFAULT false;
+  `);
+  logger.info("Startup migration: uc_notif_prefs reminder channel columns ensured");
+
+  // Clerk social sign-in columns on uc_users (added by Clerk integration).
+  // clerk_user_id links the row to a Clerk identity; auth_provider records
+  // which credential was used to create the account ("password" or "clerk").
+  await pool.query(`
+    ALTER TABLE uc_users
+      ADD COLUMN IF NOT EXISTS clerk_user_id text UNIQUE,
+      ADD COLUMN IF NOT EXISTS auth_provider  text NOT NULL DEFAULT 'password';
+  `);
+  logger.info("Startup migration: uc_users clerk_user_id / auth_provider columns ensured");
 }
 
 async function checkProductionSecurityConfig(): Promise<void> {

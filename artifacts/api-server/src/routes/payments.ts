@@ -480,7 +480,20 @@ router.post(
     try {
       const appBase =
         returnUrl ?? process.env["WC_BASE_URL"] ?? "https://www.ucfilters.com";
-      const session = await stripe.checkout.sessions.retrieve(String(req.params["sessionId"]));
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [{
+          price_data: {
+            currency: currency.toLowerCase(),
+            product_data: { name: `Ultra Clear Order #${orderId}` },
+            unit_amount: Math.round(amount * 100), // Stripe expects smallest unit (KES × 100)
+          },
+          quantity: 1,
+        }],
+        success_url: `${appBase}/order-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:  `${appBase}/order-cancelled`,
+      });
       res.json({ sessionId: session.id, sessionUrl: session.url, amount });
     } catch (e: unknown) {
       res.status(500).json({ error: (e as Error).message, retryable: true });
@@ -683,7 +696,7 @@ router.post(
     }
 
     try {
-      // ── Idempotency: look up existing order by payment reference ──────────────────────
+      // ── Idempotency: look up existing order by payment reference ──────────
       const existing = await db
         .select()
         .from(ucOrdersTable)
@@ -692,41 +705,29 @@ router.post(
 
       if (existing.length > 0) {
         const order = existing[0]!;
-
         if (order.status === "pending") {
-          // Payment confirmed — advance status to processing
           await db
             .update(ucOrdersTable)
             .set({ status: "processing" })
             .where(eq(ucOrdersTable.id, order.id));
-          console.info(
-            `[Paystack webhook] Order ${order.id} (ref ${reference}) advanced to processing`
-          );
+          console.info(`[Paystack webhook] Order ${order.id} (ref ${reference}) advanced to processing`);
         } else {
-          // Already processed — safe no-op (duplicate event)
-          console.info(
-            `[Paystack webhook] Duplicate event for ref ${reference} — order ${order.id} already ${order.status}`
-          );
+          console.info(`[Paystack webhook] Duplicate event for ref ${reference} — order ${order.id} already ${order.status}`);
         }
-
-        // Always return 200 once we've verified and dispatched the event so
-        // Paystack does not retry unnecessarily.
         res.json({ received: true, orderId: order.id });
         return;
       }
 
-      // ── No order found — create a recovery record ─────────────────────────────────────
+      // ── No order found — create a recovery record ─────────────────────────
       // The app lost connectivity after payment but before createOrder fired.
-      // We persist what Paystack told us so the team can reconcile and fulfil.
       const totalKes = Math.round(amountKobo / 100);
-
       const [recovered] = await db
         .insert(ucOrdersTable)
         .values({
           userId:           customerEmail || "paystack-webhook-recovery",
           status:           "processing",
           total:            String(totalKes),
-          currency:         currency,
+          currency:         "KES",
           paymentMethod:    "paystack",
           paymentReference: reference,
           promoCode:        "",
@@ -737,14 +738,10 @@ router.post(
         })
         .returning();
 
-      console.info(
-        `[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`
-      );
+      console.info(`[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`);
 
-      // ── Alert the team (email + SMS fallback) ────────────────────────────────────
-      // Fire-and-forget: alert failure must never block the webhook 200 response.
       alertTeamRecoveryOrder({
-        subject:  `⚠️ Webhook recovery order #${recovered!.id} needs fulfilment`,
+        subject: `⚠️ Webhook recovery order #${recovered!.id} needs fulfilment`,
         body: [
           "A Paystack webhook recovery order was created automatically.",
           "The customer paid but the app lost connectivity before the order was recorded.",

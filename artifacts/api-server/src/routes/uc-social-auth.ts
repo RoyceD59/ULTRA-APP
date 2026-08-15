@@ -47,11 +47,12 @@ router.post(
       // claim someone else's app account by adding their email to a Clerk
       // profile without proving ownership.
       const cu = await clerkClient.users.getUser(clerkUserId);
+      type EmailAddr = (typeof cu.emailAddresses)[number];
       const verified = cu.emailAddresses.filter(
-        (e) => e.verification?.status === "verified",
+        (e: EmailAddr) => e.verification?.status === "verified",
       );
       const primaryEmail =
-        verified.find((e) => e.id === cu.primaryEmailAddressId) ?? verified[0];
+        verified.find((e: EmailAddr) => e.id === cu.primaryEmailAddressId) ?? verified[0];
       const email = primaryEmail?.emailAddress?.toLowerCase().trim();
       if (!email) {
         res.status(403).json({ error: "Your sign-in account has no verified email address" });
