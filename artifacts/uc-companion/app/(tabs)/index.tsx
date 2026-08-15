@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFilterActivation, effectiveLifespanDays } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
+import SwipeTabs from '@/components/SwipeTabs';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -53,6 +54,14 @@ function greeting() {
 }
 
 export default function HomeScreen() {
+  return (
+    <SwipeTabs tab="index">
+      <HomeScreenContent />
+    </SwipeTabs>
+  );
+}
+
+function HomeScreenContent() {
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();

@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# WhatsApp session state — live credentials written at runtime; never commit
+artifacts/api-server/.whatsapp-session/

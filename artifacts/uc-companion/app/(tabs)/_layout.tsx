@@ -143,6 +143,9 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
+        // Slide/shift transition between tabs — pairs with the swipe-to-switch
+        // gesture (SwipeTabs) so page selection feels like sliding.
+        animation: 'shift',
         tabBarStyle,
         tabBarBackground: () =>
           isIOS ? (

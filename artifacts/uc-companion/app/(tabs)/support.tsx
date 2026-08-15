@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
 import TicketCard from '@/components/TicketCard';
+import SwipeTabs from '@/components/SwipeTabs';
 import {
   GUIDES, GUIDE_CATEGORIES, CATEGORY_ICONS,
   type Guide, type GuideCategory,
@@ -99,6 +100,14 @@ const guideCardStyles = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function SupportScreen() {
+  return (
+    <SwipeTabs tab="support">
+      <SupportScreenContent />
+    </SwipeTabs>
+  );
+}
+
+function SupportScreenContent() {
   const colors = useColors();
   const router = useRouter();
   const api    = useApi();

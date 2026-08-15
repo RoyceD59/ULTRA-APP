@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import ProductCard from '@/components/ProductCard';
 import FilterChip from '@/components/FilterChip';
+import SwipeTabs from '@/components/SwipeTabs';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'react-native';
 
@@ -68,6 +69,14 @@ function AddonCard({ product, onAdd, onPress, colors }: AddonCardProps) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ProductsScreen() {
+  return (
+    <SwipeTabs tab="products">
+      <ProductsScreenContent />
+    </SwipeTabs>
+  );
+}
+
+function ProductsScreenContent() {
   const colors = useColors();
   const router = useRouter();
   const api = useApi();

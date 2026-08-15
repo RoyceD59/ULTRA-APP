@@ -19,6 +19,7 @@ import {
   type FilterActivation,
 } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import SwipeTabs from '@/components/SwipeTabs';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 
@@ -358,6 +359,14 @@ const delStyles = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function AccountScreen() {
+  return (
+    <SwipeTabs tab="account">
+      <AccountScreenContent />
+    </SwipeTabs>
+  );
+}
+
+function AccountScreenContent() {
   const colors      = useColors();
   const router      = useRouter();
   const { user, logout } = useAuth();
