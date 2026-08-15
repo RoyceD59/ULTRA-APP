@@ -1,11 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import { createHash } from "node:crypto";
 import { appendFile, readFile, writeFile, rename } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const __ucRouteDirname = dirname(fileURLToPath(import.meta.url));
-const UC_DATA_DIR = join(__ucRouteDirname, "../../../data");
+// Durable data folder — shared with the account-records module, which
+// resolves it correctly for both the bundled runtime and tsx-run tests.
+const UC_DATA_DIR = ACCOUNT_DATA_DIR;
 import {
   validateCodeForDiscount,
   recordReferralConversion,
@@ -45,6 +45,7 @@ import {
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
+import { ACCOUNT_DATA_DIR, recordAccountRegistration } from "../lib/account-records";
 import {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -1458,17 +1459,38 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       lastName: lastName ?? "",
     }).returning();
     const user = { id: dbUser!.id, email: dbUser!.email, phone: dbUser!.phone, firstName: dbUser!.firstName, lastName: dbUser!.lastName };
+    // Durable folder record of the new account (sanitized — never password material).
+    recordAccountRegistration({
+      id: dbUser!.id, firstName: dbUser!.firstName, lastName: dbUser!.lastName,
+      email: dbUser!.email, phone: dbUser!.phone,
+      authProvider: "password", createdAt: dbUser!.createdAt,
+      source: "registration", dbPersisted: true,
+    }).catch(() => {});
     // Store referral association so first-order discount can be applied later
     if (referralCode?.trim()) {
       registerReferralAtSignup(email, referralCode.trim());
     }
     res.json({ token: issueToken(user), user });
   } catch (err) {
-    // Fallback: if DB is unavailable, issue a session-only token (not persisted)
-    console.error("[register] DB error, issuing ephemeral token:", err);
-    const user = { id: Date.now(), email, phone: cleanPhone, firstName, lastName: lastName ?? "" };
-    if (referralCode?.trim()) registerReferralAtSignup(email, referralCode.trim());
-    res.json({ token: issueToken(user), user });
+    // DB insert failed. Never silently issue a session with no saved account —
+    // write the registration to the durable folder record and tell the caller
+    // what happened so they can retry once the database is back.
+    console.error("[register] DB error — writing folder record instead of ephemeral session:", err);
+    try {
+      await recordAccountRegistration({
+        id: null, firstName, lastName: lastName ?? "",
+        email: email.toLowerCase().trim(), phone: cleanPhone,
+        authProvider: "password", createdAt: new Date(),
+        source: "registration", dbPersisted: false,
+      }, { critical: true });
+      res.status(503).json({
+        error: "We couldn't finish creating your account right now. Your details have been safely recorded — please try registering again in a few minutes.",
+      });
+    } catch {
+      res.status(503).json({
+        error: "We couldn't create your account right now. Please try again in a few minutes.",
+      });
+    }
   }
 });
 

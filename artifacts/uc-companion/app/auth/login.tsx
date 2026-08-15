@@ -2,20 +2,29 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, Alert, ActivityIndicator, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import BrandLogo from '@/components/BrandLogo';
 import SocialAuthButtons from '@/components/SocialAuthButtons';
+import { resolveReturnTo } from '@/lib/authReturn';
 
 export default function LoginScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { returnTo: returnToParam } = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = resolveReturnTo(returnToParam);
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  /** After auth, land back on the form that sent us here (draft restores there). */
+  function navigateAfterAuth() {
+    if (returnTo) router.replace(returnTo as never);
+    else router.replace('/(tabs)' as never);
+  }
 
   async function handleLogin() {
     if (!email || !password) { Alert.alert('Required', 'Enter your email and password.'); return; }
@@ -23,7 +32,7 @@ export default function LoginScreen() {
     setLoading(true);
     const result = await login(email.trim(), password);
     setLoading(false);
-    if (result.success) { router.replace('/(tabs)' as never); }
+    if (result.success) { navigateAfterAuth(); }
     else { Alert.alert('Login failed', result.error ?? 'Please check your credentials.'); }
   }
 
@@ -70,11 +79,15 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <SocialAuthButtons onSuccess={() => router.replace('/(tabs)' as never)} />
+        <SocialAuthButtons onSuccess={navigateAfterAuth} />
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Don't have an account?</Text>
-          <TouchableOpacity onPress={() => router.push('/auth/register')}>
+          <TouchableOpacity onPress={() => router.push(
+            returnTo
+              ? ({ pathname: '/auth/register', params: { returnTo } } as never)
+              : ('/auth/register' as never),
+          )}>
             <Text style={[styles.footerLink, { color: colors.primary }]}>Create account</Text>
           </TouchableOpacity>
         </View>

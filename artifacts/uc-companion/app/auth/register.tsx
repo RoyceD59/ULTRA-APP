@@ -5,11 +5,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import BrandLogo from '@/components/BrandLogo';
 import SocialAuthButtons from '@/components/SocialAuthButtons';
+import { resolveReturnTo } from '@/lib/authReturn';
 
 // ── Phone helpers ─────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ function liveFormatPhone(raw: string): string {
 export default function RegisterScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { returnTo: returnToParam } = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = resolveReturnTo(returnToParam);
   const { register } = useAuth();
   const [firstName,    setFirstName]    = useState('');
   const [lastName,     setLastName]     = useState('');
@@ -90,10 +93,16 @@ export default function RegisterScreen() {
     });
     setLoading(false);
     if (result.success) {
-      router.replace('/(tabs)' as never);
+      navigateAfterAuth();
     } else {
       Alert.alert('Registration failed', result.error ?? 'Please try again.');
     }
+  }
+
+  /** After auth, land back on the form that sent us here (draft restores there). */
+  function navigateAfterAuth() {
+    if (returnTo) router.replace(returnTo as never);
+    else router.replace('/(tabs)' as never);
   }
 
   return (
@@ -212,11 +221,15 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
 
-        <SocialAuthButtons onSuccess={() => router.replace('/(tabs)' as never)} />
+        <SocialAuthButtons onSuccess={navigateAfterAuth} />
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => router.push('/auth/login')}>
+          <TouchableOpacity onPress={() => router.push(
+            returnTo
+              ? ({ pathname: '/auth/login', params: { returnTo } } as never)
+              : ('/auth/login' as never),
+          )}>
             <Text style={[styles.footerLink, { color: colors.primary }]}>Sign in</Text>
           </TouchableOpacity>
         </View>

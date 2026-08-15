@@ -5,8 +5,11 @@
  *  - Email field added — receipt sent directly to submitted address even for guests
  *  - Receipt reference displayed prominently on success screen
  *  - WhatsApp copy button retained on success
+ *  - Account-gated: guests see a sign-in/register prompt; their in-progress
+ *    form is saved as a device-local draft and restored after authentication
+ *  - Name, email AND phone pre-fill from the signed-in account
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Platform, ActivityIndicator,
@@ -14,12 +17,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
-import { useApi } from '@/hooks/useApi';
+import { useApi, ApiError } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { openWhatsApp } from '@/lib/whatsapp';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDrafts';
 
 const WATER_SOURCES = [
   'Municipal/Tap', 'Borehole', 'Well', 'Rainwater', 'River/Lake', 'Tanker delivery',
@@ -29,15 +33,28 @@ const CONCERNS = [
   'Skin irritation', 'Gastrointestinal issues', 'General safety check',
 ];
 
+/** Everything the customer can type/pick on this form — persisted as a draft. */
+interface WaterTestDraft {
+  name: string;
+  address: string;
+  phone: string;
+  email: string;
+  waterSource: string;
+  selectedConcerns: string[];
+  extraConcerns: string;
+  media: MediaItem[];
+}
+
 export default function WaterTestScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const api     = useApi();
   const { user, token } = useAuth();
 
-  const [name,             setName]             = useState(user ? `${user.firstName} ${user.lastName}` : '');
+  // Name, email AND phone pre-fill from the signed-in account (all editable).
+  const [name,             setName]             = useState(user ? `${user.firstName} ${user.lastName}`.trim() : '');
   const [address,          setAddress]          = useState('');
-  const [phone,            setPhone]            = useState('');
+  const [phone,            setPhone]            = useState(user?.phone ?? '');
   const [email,            setEmail]            = useState(user?.email ?? '');
   const [waterSource,      setWaterSource]      = useState('');
   const [selectedConcerns, setSelectedConcerns] = useState<string[]>([]);
@@ -48,6 +65,58 @@ export default function WaterTestScreen() {
   const [receiptRef,       setReceiptRef]       = useState('');
   const [whatsAppSummary,  setWhatsAppSummary]  = useState('');
   const [error,            setError]            = useState('');
+
+  // ── Draft persistence ──────────────────────────────────────────────────────
+  // Restore any in-progress draft on mount (e.g. after a mid-flow sign-in),
+  // then keep it saved as the user types so nothing is ever lost. Draft values
+  // only overwrite a field when the draft actually holds something, so account
+  // pre-fill survives for fields the guest never touched.
+  const draftReady = useRef(false);
+  useEffect(() => {
+    (async () => {
+      const d = await loadDraft<WaterTestDraft>('water-test');
+      if (d) {
+        if (typeof d.name === 'string' && d.name.trim()) setName(d.name);
+        if (typeof d.address === 'string' && d.address.trim()) setAddress(d.address);
+        if (typeof d.phone === 'string' && d.phone.trim()) setPhone(d.phone);
+        if (typeof d.email === 'string' && d.email.trim()) setEmail(d.email);
+        if (typeof d.waterSource === 'string' && d.waterSource) setWaterSource(d.waterSource);
+        if (Array.isArray(d.selectedConcerns)) setSelectedConcerns(d.selectedConcerns);
+        if (typeof d.extraConcerns === 'string' && d.extraConcerns) setExtraConcerns(d.extraConcerns);
+        if (Array.isArray(d.media)) setMedia(d.media);
+      }
+      draftReady.current = true;
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady.current || submitted) return;
+    saveDraft<WaterTestDraft>('water-test', {
+      name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media,
+    });
+  }, [name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media, submitted]);
+
+  // Refresh the account pre-fill after a mid-flow sign-in: fill only the
+  // fields the user left blank — never overwrite what they typed.
+  useEffect(() => {
+    if (!user) return;
+    setName(prev => prev.trim() ? prev : `${user.firstName} ${user.lastName}`.trim());
+    setEmail(prev => prev.trim() ? prev : (user.email ?? ''));
+    setPhone(prev => prev.trim() ? prev : (user.phone ?? ''));
+  }, [user]);
+
+  /** Save the draft, then take the guest to sign-in / registration.
+   *  `returnTo` brings them straight back here with the draft restored. */
+  async function goToAuth(mode: 'login' | 'register') {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await saveDraft<WaterTestDraft>('water-test', {
+      name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media,
+    });
+    router.push({
+      pathname: mode === 'login' ? '/auth/login' : '/auth/register',
+      params: { returnTo: '/water-test' },
+    } as never);
+  }
 
   const toggleConcern = (c: string) => {
     setSelectedConcerns(prev =>
@@ -60,8 +129,11 @@ export default function WaterTestScreen() {
       setError('Please fill in your name, address, phone number, and select a water source.');
       return;
     }
-    if (media.length > 0 && !token) {
-      setError('Sign in to attach photos or videos, or remove the attachments and continue as a guest.');
+    if (!token) {
+      // Account-gated: never let a guest hit the server's 401 — save their
+      // work and route them into sign-in, which returns them to this form.
+      setError('');
+      await goToAuth('login');
       return;
     }
     setError('');
@@ -88,7 +160,15 @@ export default function WaterTestScreen() {
       setReceiptRef(wt.id);
       setWhatsAppSummary(summary);
       setSubmitted(true);
+      clearDraft('water-test');
     } catch (e) {
+      // Session expired / invalid — send the customer to sign-in with their
+      // draft saved instead of leaving them stuck on a raw error message.
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        setError('Your session has expired. Please sign in again — your form is saved.');
+        await goToAuth('login');
+        return;
+      }
       setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);
@@ -145,6 +225,30 @@ export default function WaterTestScreen() {
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Certified technician visits you at no charge</Text>
         </View>
       </View>
+
+      {/* Guest gate — water test appointments require an account */}
+      {!token && (
+        <View style={[styles.gateBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+          <View style={styles.gateHeader}>
+            <Ionicons name="lock-closed" size={18} color={colors.primary} />
+            <Text style={[styles.gateTitle, { color: colors.text }]}>Account required</Text>
+          </View>
+          <Text style={[styles.gateText, { color: colors.mutedForeground }]}>
+            Water test appointments are linked to your Ultra-Clear account so our technician can follow up with your results.
+            You can fill in the form now — everything you enter is saved and will be right here after you sign in.
+          </Text>
+          <View style={styles.gateBtnRow}>
+            <TouchableOpacity onPress={() => goToAuth('login')}
+              style={[styles.gateBtn, { backgroundColor: colors.primary }]}>
+              <Text style={styles.gateBtnText}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => goToAuth('register')}
+              style={[styles.gateBtn, styles.gateBtnAlt, { borderColor: colors.primary }]}>
+              <Text style={[styles.gateBtnText, { color: colors.primary }]}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Contact details */}
       <View style={styles.section}>
@@ -231,12 +335,13 @@ export default function WaterTestScreen() {
         </View>
       )}
 
+      {/* Submit — guests are routed to sign-in (with the draft saved) instead */}
       <TouchableOpacity onPress={submit} disabled={submitting}
         style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}>
         {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
           <>
-            <Ionicons name="calendar-outline" size={18} color="#fff" />
-            <Text style={styles.submitBtnText}>Book Water Test</Text>
+            <Ionicons name={token ? 'calendar-outline' : 'lock-closed-outline'} size={18} color="#fff" />
+            <Text style={styles.submitBtnText}>{token ? 'Book Water Test' : 'Sign In to Book'}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -271,4 +376,12 @@ const styles = StyleSheet.create({
   refHint:      { fontSize: 11, textAlign: 'center', marginTop: 2 },
   doneBtn:      { width: '100%', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 48, justifyContent: 'center', alignItems: 'center', marginTop: 4 },
   doneBtnText:  { color: '#fff', fontSize: 16, fontWeight: '700' as const },
+  gateBox:      { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 },
+  gateHeader:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gateTitle:    { fontSize: 15, fontWeight: '700' as const },
+  gateText:     { fontSize: 13, lineHeight: 19 },
+  gateBtnRow:   { flexDirection: 'row', gap: 10 },
+  gateBtn:      { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  gateBtnAlt:   { backgroundColor: 'transparent', borderWidth: 1.5 },
+  gateBtnText:  { color: '#fff', fontSize: 14, fontWeight: '700' as const },
 });

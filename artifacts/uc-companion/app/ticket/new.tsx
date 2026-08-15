@@ -6,8 +6,11 @@
  *  - Multi-select: the customer can flag multiple products per ticket;
  *    all are captured in productModel joined with " / " for the API.
  *  - Success screen shows the ticket reference prominently.
+ *  - Account-gated: guests see a sign-in/register prompt; their in-progress
+ *    form is saved as a device-local draft and restored after authentication.
+ *  - Signed-in users see their account contact details (name/email/phone).
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Platform, ActivityIndicator,
@@ -21,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { openWhatsApp } from '@/lib/whatsapp';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDrafts';
 
 const CONTACT_TIMES = ['Morning (8am–12pm)', 'Afternoon (12pm–5pm)', 'Evening (5pm–8pm)', 'Any time'];
 
@@ -50,11 +54,19 @@ const PRODUCT_SEGMENTS: { segment: string; models: string[] }[] = [
   },
 ];
 
+/** Everything the customer can type/pick on this form — persisted as a draft. */
+interface TicketDraft {
+  selectedProducts: string[];
+  issue: string;
+  contactTime: string;
+  media: MediaItem[];
+}
+
 export default function NewTicketScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const api     = useApi();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   // Multi-select product models
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -66,6 +78,39 @@ export default function NewTicketScreen() {
   const [ticketRef,    setTicketRef]    = useState('');
   const [whatsAppSummary, setWhatsAppSummary] = useState('');
   const [error,        setError]        = useState('');
+
+  // ── Draft persistence ──────────────────────────────────────────────────────
+  // Restore any in-progress draft on mount (e.g. after a mid-flow sign-in),
+  // then keep it saved as the user types so nothing is ever lost.
+  const draftReady = useRef(false);
+  useEffect(() => {
+    (async () => {
+      const d = await loadDraft<TicketDraft>('ticket');
+      if (d) {
+        if (Array.isArray(d.selectedProducts)) setSelectedProducts(d.selectedProducts);
+        if (typeof d.issue === 'string') setIssue(d.issue);
+        if (typeof d.contactTime === 'string' && CONTACT_TIMES.includes(d.contactTime)) setContactTime(d.contactTime);
+        if (Array.isArray(d.media)) setMedia(d.media);
+      }
+      draftReady.current = true;
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady.current || submitted) return;
+    saveDraft<TicketDraft>('ticket', { selectedProducts, issue, contactTime, media });
+  }, [selectedProducts, issue, contactTime, media, submitted]);
+
+  /** Save the draft, then take the guest to sign-in / registration.
+   *  `returnTo` brings them straight back here with the draft restored. */
+  async function goToAuth(mode: 'login' | 'register') {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await saveDraft<TicketDraft>('ticket', { selectedProducts, issue, contactTime, media });
+    router.push({
+      pathname: mode === 'login' ? '/auth/login' : '/auth/register',
+      params: { returnTo: '/ticket/new' },
+    } as never);
+  }
 
   function toggleProduct(model: string) {
     setSelectedProducts(prev =>
@@ -86,8 +131,11 @@ export default function NewTicketScreen() {
       setError('Please describe the issue so our team can help you.');
       return;
     }
-    if (media.length > 0 && !token) {
-      setError('An account is required to submit a service request. Please sign in or create an account first.');
+    if (!token) {
+      // Account-gated: never let a guest hit the server's 401 — save their
+      // work and route them into sign-in, which returns them to this form.
+      setError('');
+      await goToAuth('login');
       return;
     }
     setError('');
@@ -112,12 +160,13 @@ export default function NewTicketScreen() {
       setTicketRef(ticket.id);
       setWhatsAppSummary(summary);
       setSubmitted(true);
+      clearDraft('ticket');
     } catch (e) {
-      // Server requires an account for ticket submission — send the customer
-      // to account setup instead of leaving them stuck on an error message.
+      // Session expired / invalid — send the customer to sign-in with their
+      // draft saved instead of leaving them stuck on a raw error message.
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-        setError('You need an account to submit a service request. Taking you to account setup…');
-        router.push('/auth/register');
+        setError('Your session has expired. Please sign in again — your form is saved.');
+        await goToAuth('login');
         return;
       }
       setError(e instanceof Error ? e.message : 'Failed to submit ticket. Please try again.');
@@ -169,6 +218,58 @@ export default function NewTicketScreen() {
       contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 34 : 40 }}
       keyboardShouldPersistTaps="handled"
     >
+      {/* Guest gate — service requests require an account */}
+      {!token && (
+        <View style={[styles.gateBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+          <View style={styles.gateHeader}>
+            <Ionicons name="lock-closed" size={18} color={colors.primary} />
+            <Text style={[styles.gateTitle, { color: colors.text }]}>Account required</Text>
+          </View>
+          <Text style={[styles.gateText, { color: colors.mutedForeground }]}>
+            Service requests are linked to your Ultra-Clear account so our team can track and follow up on your ticket.
+            You can fill in the form now — everything you enter is saved and will be right here after you sign in.
+          </Text>
+          <View style={styles.gateBtnRow}>
+            <TouchableOpacity onPress={() => goToAuth('login')}
+              style={[styles.gateBtn, { backgroundColor: colors.primary }]}>
+              <Text style={styles.gateBtnText}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => goToAuth('register')}
+              style={[styles.gateBtn, styles.gateBtnAlt, { borderColor: colors.primary }]}>
+              <Text style={[styles.gateBtnText, { color: colors.primary }]}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Signed-in contact details — sourced from the account (server uses these too) */}
+      {user && (
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.text }]}>Your Contact Details</Text>
+          <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.accountRow}>
+              <Ionicons name="person-outline" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.accountText, { color: colors.text }]}>
+                {`${user.firstName} ${user.lastName}`.trim()}
+              </Text>
+            </View>
+            <View style={styles.accountRow}>
+              <Ionicons name="mail-outline" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.accountText, { color: colors.text }]}>{user.email}</Text>
+            </View>
+            <View style={styles.accountRow}>
+              <Ionicons name="call-outline" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.accountText, { color: user.phone ? colors.text : colors.mutedForeground }]}>
+                {user.phone || 'No phone number on file'}
+              </Text>
+            </View>
+            <Text style={[styles.accountHint, { color: colors.mutedForeground }]}>
+              From your account — the team will use these details to contact you.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Product model — multi-select, grouped by segment */}
       <View style={styles.section}>
         <Text style={[styles.label, { color: colors.text }]}>
@@ -272,13 +373,13 @@ export default function NewTicketScreen() {
         </View>
       )}
 
-      {/* Submit */}
+      {/* Submit — guests are routed to sign-in (with the draft saved) instead */}
       <TouchableOpacity onPress={submit} disabled={submitting}
         style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}>
         {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
           <>
-            <Ionicons name="send-outline" size={18} color="#fff" />
-            <Text style={styles.submitBtnText}>Submit Ticket</Text>
+            <Ionicons name={token ? 'send-outline' : 'lock-closed-outline'} size={18} color="#fff" />
+            <Text style={styles.submitBtnText}>{token ? 'Submit Ticket' : 'Sign In to Submit'}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -311,4 +412,16 @@ const styles = StyleSheet.create({
   refHint:          { fontSize: 11, textAlign: 'center', marginTop: 2 },
   doneBtn:          { width: '100%', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, justifyContent: 'center', alignItems: 'center' },
   doneBtnText:      { color: '#fff', fontSize: 15, fontWeight: '700' as const },
+  gateBox:          { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 },
+  gateHeader:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gateTitle:        { fontSize: 15, fontWeight: '700' as const },
+  gateText:         { fontSize: 13, lineHeight: 19 },
+  gateBtnRow:       { flexDirection: 'row', gap: 10 },
+  gateBtn:          { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  gateBtnAlt:       { backgroundColor: 'transparent', borderWidth: 1.5 },
+  gateBtnText:      { color: '#fff', fontSize: 14, fontWeight: '700' as const },
+  accountCard:      { borderWidth: 1, borderRadius: 12, padding: 14, gap: 8 },
+  accountRow:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  accountText:      { fontSize: 14, fontWeight: '500' as const, flex: 1 },
+  accountHint:      { fontSize: 11, lineHeight: 16, marginTop: 2 },
 });

@@ -20,6 +20,7 @@ import { db, ucUsersTable } from "@workspace/db";
 import { issueToken } from "../lib/jwt";
 import { authLimiter } from "../lib/rate-limiters";
 import { logger } from "../lib/logger";
+import { recordAccountRegistration } from "../lib/account-records";
 
 const router: IRouter = Router();
 
@@ -120,6 +121,16 @@ router.post(
         };
         try {
           [dbUser] = await db.insert(ucUsersTable).values(values).returning();
+          if (dbUser) {
+            // Durable folder record of the new social account (sanitized —
+            // never password material; the sentinel hash is NOT written).
+            recordAccountRegistration({
+              id: dbUser.id, firstName: dbUser.firstName, lastName: dbUser.lastName,
+              email: dbUser.email, phone: dbUser.phone,
+              authProvider: "social", createdAt: dbUser.createdAt,
+              source: "social-registration", dbPersisted: true,
+            }).catch(() => {});
+          }
         } catch {
           // Unique-constraint race (two concurrent first sign-ins): the other
           // request won — reuse its row, but only if it belongs to this same

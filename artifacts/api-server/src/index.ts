@@ -4,6 +4,7 @@ import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
 import { sendViaResend } from "./lib/resend.js";
 import { migrateAndGuardSessionDir } from "./lib/whatsapp";
+import { backfillAccountRecords } from "./lib/account-records.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -545,6 +546,12 @@ applyStartupMigrations()
     // loudly if credentials are ever detected inside the working tree.
     migrateAndGuardSessionDir().catch((err) => {
       logger.error({ err }, "WhatsApp session dir check failed");
+    });
+
+    // One-time backfill of existing accounts into the durable data folder
+    // (marker-guarded; retries on next boot if the DB is unavailable).
+    backfillAccountRecords().catch((err) => {
+      logger.error({ err }, "Account records backfill failed — will retry on next start");
     });
 
     const server = app.listen(port, (err?: Error) => {
