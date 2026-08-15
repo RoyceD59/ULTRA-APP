@@ -18,4 +18,5 @@
 - [UC social sign-in](uc-social-auth.md) — Clerk is identity-layer only; exchange endpoint issues uc JWT; verified-email + never-relink rules; ClerkLoaded must not gate the whole app.
 - [Android signing identities](android-signing-identities.md) — dev proceeds on the debug keystore as an interim tracked identity; production Maps-key gate stays fail-closed until the Play app-signing SHA-1 exists.
 - [Image derivative pipeline](image-derivative-pipeline.md) — sharp works on pnpm despite blocked postinstall (prebuilt @img/* deps); tmpdir derivative caches are disposable and must always fall back to original bytes.
+- [WhatsApp session storage](whatsapp-session-storage.md) — Baileys creds live outside the repo (~/.uc-whatsapp-session); git history still holds old creds, re-link if repo goes public.
 - [Orders CSV column contract](uc-orders-csv-contract.md) — never insert a column mid-row in the admin orders CSV; append new fields after the legacy static columns, before item columns.

@@ -20,8 +20,10 @@
  *   disconnectWhatsApp()              → logout + wipe session
  */
 
-import { join } from "path";
-import { mkdir, readdir, readFile, writeFile } from "fs/promises";
+import { join, resolve, sep } from "path";
+import { homedir } from "os";
+import { existsSync } from "fs";
+import { mkdir, readdir, readFile, writeFile, rename, copyFile, rm } from "fs/promises";
 import { toDataURL } from "qrcode";
 import pino from "pino";
 import { eq, isNull, or, ne, and } from "drizzle-orm";
@@ -39,12 +41,117 @@ import { sendViaResend } from "./resend";
 import { pushReceiptUpdate } from "./receiptStream";
 
 // Credentials are stored in AUTH_DIR so they survive hot-reloads and process
-// restarts.  The path is controlled by the WHATSAPP_SESSION_DIR env var so it
-// can point to a persistent volume in production (e.g. a mounted directory or
-// a symlink to object storage).  In development it defaults to a local folder
-// alongside the repo (git-ignored — no secrets in VCS).
+// restarts.  The path is controlled by the WHATSAPP_SESSION_DIR env var; the
+// default lives OUTSIDE the repo working tree (~/.uc-whatsapp-session) so live
+// WhatsApp credentials can never be committed to git by accident.  In
+// production the files are additionally mirrored to Object Storage (below).
+const LEGACY_AUTH_DIR = join(process.cwd(), ".whatsapp-session");
 const AUTH_DIR =
-  process.env.WHATSAPP_SESSION_DIR ?? join(process.cwd(), ".whatsapp-session");
+  process.env.WHATSAPP_SESSION_DIR ?? join(homedir(), ".uc-whatsapp-session");
+
+/**
+ * Returns true when `child` is located inside `parent` (after path resolution).
+ */
+function isInsideDir(child: string, parent: string): boolean {
+  const rel = resolve(child);
+  const base = resolve(parent);
+  return rel === base || rel.startsWith(base + sep);
+}
+
+/**
+ * Walk upward from `start` looking for a `.git` directory — i.e. the repo root.
+ * Returns null when not inside a git working tree.
+ */
+function findRepoRoot(start: string): string | null {
+  let dir = resolve(start);
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    const parent = resolve(dir, "..");
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * One-time migration + safety check, run before Baileys reads AUTH_DIR.
+ *
+ * 1. If the legacy in-repo session directory still holds credential files and
+ *    the new AUTH_DIR is empty, move the files across so the live WhatsApp
+ *    session is preserved (no re-scan needed), then remove the legacy dir.
+ * 2. Warn LOUDLY if session files are ever detected inside the repo working
+ *    tree — that means credentials are one `git add` away from leaking.
+ */
+export async function migrateAndGuardSessionDir(): Promise<void> {
+  const repoRoot = findRepoRoot(process.cwd());
+
+  // 1. Migrate legacy in-repo session files → AUTH_DIR (only when AUTH_DIR
+  //    itself is a different location and has no credentials yet).
+  try {
+    if (
+      resolve(LEGACY_AUTH_DIR) !== resolve(AUTH_DIR) &&
+      existsSync(LEGACY_AUTH_DIR)
+    ) {
+      const legacyFiles = (await readdir(LEGACY_AUTH_DIR)).filter(
+        (f) => !f.startsWith(".")
+      );
+      const destHasCreds = existsSync(join(AUTH_DIR, "creds.json"));
+      if (legacyFiles.length > 0 && !destHasCreds) {
+        await mkdir(AUTH_DIR, { recursive: true });
+        for (const name of legacyFiles) {
+          const src = join(LEGACY_AUTH_DIR, name);
+          const dest = join(AUTH_DIR, name);
+          try {
+            await rename(src, dest);
+          } catch {
+            // Cross-device fallback
+            await copyFile(src, dest);
+            await rm(src, { force: true });
+          }
+        }
+        console.log(
+          `[whatsapp] Migrated ${legacyFiles.length} session file(s) from ` +
+          `the legacy in-repo directory to ${AUTH_DIR}`
+        );
+      }
+      // Remove the legacy directory if it is now empty.
+      try {
+        const remaining = await readdir(LEGACY_AUTH_DIR);
+        if (remaining.length === 0) {
+          await rm(LEGACY_AUTH_DIR, { recursive: true, force: true });
+        }
+      } catch {
+        // ignore
+      }
+    }
+  } catch (err) {
+    console.error("[whatsapp] Legacy session migration failed:", err);
+  }
+
+  // 2. Loud warning if session files live inside the repo working tree.
+  if (repoRoot) {
+    const inRepoDirs = [
+      existsSync(LEGACY_AUTH_DIR) ? LEGACY_AUTH_DIR : null,
+      isInsideDir(AUTH_DIR, repoRoot) && existsSync(AUTH_DIR) ? AUTH_DIR : null,
+    ].filter((d): d is string => d !== null);
+    for (const dir of inRepoDirs) {
+      try {
+        const files = await readdir(dir);
+        if (files.length === 0) continue;
+      } catch {
+        continue;
+      }
+      console.error(
+        "════════════════════════════════════════════════════════════════\n" +
+        "[whatsapp] SECURITY WARNING: WhatsApp session credential files were\n" +
+        `detected INSIDE the repo working tree at:\n  ${dir}\n` +
+        "These are live login credentials and must never be committed.\n" +
+        "Move them outside the repo (default: ~/.uc-whatsapp-session) or set\n" +
+        "WHATSAPP_SESSION_DIR to a path outside the project.\n" +
+        "════════════════════════════════════════════════════════════════"
+      );
+    }
+  }
+}
 
 // When WHATSAPP_SESSION_BUCKET_PATH is set (e.g. /<bucket-id>/whatsapp-session),
 // credentials are mirrored to/from Replit Object Storage so they survive
@@ -360,6 +467,10 @@ export async function initWhatsApp(): Promise<void> {
   currentQrDataUri = null;
 
   try {
+    // Migrate any legacy in-repo session files to AUTH_DIR and warn loudly if
+    // credentials are ever detected inside the repo working tree.
+    await migrateAndGuardSessionDir();
+
     // Restore credentials from Object Storage before Baileys reads AUTH_DIR.
     // This is what keeps the session alive across container replacements in
     // production.  In development (SESSION_BUCKET_PATH unset) it is a no-op.

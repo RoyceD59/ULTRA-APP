@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
 import { sendViaResend } from "./lib/resend.js";
+import { migrateAndGuardSessionDir } from "./lib/whatsapp";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -506,6 +507,12 @@ applyStartupMigrations()
     // Fire-and-forget — a failure here must not prevent the server from starting.
     checkProductionSecurityConfig().catch((err) => {
       logger.error({ err }, "Security config check failed");
+    });
+
+    // Move any legacy in-repo WhatsApp session files outside the repo and warn
+    // loudly if credentials are ever detected inside the working tree.
+    migrateAndGuardSessionDir().catch((err) => {
+      logger.error({ err }, "WhatsApp session dir check failed");
     });
 
     const server = app.listen(port, (err?: Error) => {

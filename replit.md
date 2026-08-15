@@ -36,7 +36,7 @@ A project management app for a small B2B SaaS team: track tasks, assign owners, 
 - **Notifications** (`/notifications`): dispatch templated notifications (STAKEHOLDER_UPDATE / OWNER_ALERT / RESOURCE_REQ) to contacts via email or WhatsApp; delivery-receipt ticks for WhatsApp.
 - **System Status** (`/system`): watchdog dashboard for connected platforms (Team AI Embedded, etc.); manual heartbeat pings.
 - **Webhook Tester** (`/webhook`): send test payloads to `POST /api/webhook/ingest` to simulate external orchestration events.
-- **WhatsApp session**: Baileys-based persistent session with QR pairing; managed via `GET/POST /api/whatsapp/status|connect|disconnect|send` (team-auth required).
+- **WhatsApp session**: Baileys-based persistent session with QR pairing; managed via `GET/POST /api/whatsapp/status|connect|disconnect|send` (team-auth required). Session credentials are stored OUTSIDE the repo (default `~/.uc-whatsapp-session`, override with `WHATSAPP_SESSION_DIR`); production mirrors them to Object Storage. **Security note:** old session files were once committed and still exist in git history — if this repo is ever pushed or shared publicly, the WhatsApp session MUST be re-linked (disconnect/logout, then re-scan the QR) so the leaked credentials become useless.
 - **Team auth**: `POST /api/auth/token` — exchange `SESSION_SECRET` for an 8-hour JWT used by WhatsApp routes.
 
 ## Stack
