@@ -50,3 +50,6 @@ Thumbs.db
 
 # WhatsApp session state — live credentials written at runtime; never commit
 artifacts/api-server/.whatsapp-session/
+
+# Runtime JSONL data records (contain customer PII) — never commit
+artifacts/api-server/data/
