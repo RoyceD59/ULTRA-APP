@@ -33,6 +33,7 @@ import {
 } from "../lib/email.js";
 import { promoUtmParams, promoUtmQuery } from "../lib/utm.js";
 import { sendViaResend } from "../lib/resend.js";
+import { sendSlackTeamMessage } from "../lib/slack.js";
 import {
   pool,
   db,
@@ -1494,6 +1495,26 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
         { err: innerErr },
         "[register] dual failure — DB insert failed AND folder write failed; registration details not recorded",
       );
+      // Alert the team — the customer's details were NOT saved anywhere.
+      // Both calls are fire-and-forget; they must never block or throw here.
+      const dualFailEmail = String(email ?? "").toLowerCase().trim();
+      const dualFailPhone = String(cleanPhone ?? "");
+      sendSlackTeamMessage(
+        `⚠️ *Registration lost — dual failure*\nA customer registration could not be saved to the database OR the backup folder.\n*Email:* ${dualFailEmail}\n*Phone:* ${dualFailPhone}\nContact the customer directly to complete their registration.`,
+        "DUAL_FAILURE_REGISTRATION",
+      ).catch(() => {});
+      notifyOffice(
+        "⚠️ Registration lost — dual failure (DB + folder both failed)",
+        [
+          "A customer registration was lost. Both the database insert and the backup folder write failed.",
+          "The customer's details were NOT recorded anywhere.",
+          "",
+          `Email: ${dualFailEmail}`,
+          `Phone: ${dualFailPhone}`,
+          "",
+          "Please contact the customer directly to complete their registration.",
+        ],
+      ).catch(() => {});
       res.status(503).json({
         error: "We couldn't save your details right now. Please contact us directly to complete your registration — your information was not recorded.",
       });
