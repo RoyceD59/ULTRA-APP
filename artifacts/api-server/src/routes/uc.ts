@@ -1486,9 +1486,13 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       res.status(503).json({
         error: "We couldn't finish creating your account right now. Your details have been safely recorded — please try registering again in a few minutes.",
       });
-    } catch {
+    } catch (innerErr) {
+      logger.error(
+        { err: innerErr },
+        "[register] dual failure — DB insert failed AND folder write failed; registration details not recorded",
+      );
       res.status(503).json({
-        error: "We couldn't create your account right now. Please try again in a few minutes.",
+        error: "We couldn't save your details right now. Please contact us directly to complete your registration — your information was not recorded.",
       });
     }
   }

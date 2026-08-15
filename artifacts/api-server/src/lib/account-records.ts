@@ -10,7 +10,7 @@
  * explicitly (allow-list) — request bodies or DB rows are never spread into
  * a record, so `password` / `passwordHash` can never leak into the folder.
  */
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile as _appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +37,18 @@ function resolveDataDir(): string {
 
 /** Absolute path of the durable data folder (shared with tickets/water-tests JSONL backups). */
 export const ACCOUNT_DATA_DIR = resolveDataDir();
+
+/**
+ * IO seams object — wraps the fs/promises functions used in the hot path.
+ * Tests may replace individual properties (e.g. `_ioSeams.appendFile`) to
+ * simulate disk-full or permission-denied failures without mocking ES module
+ * namespace bindings, which are non-configurable and cannot be patched.
+ *
+ * @internal — only intended for use by the test suite.
+ */
+export const _ioSeams = {
+  appendFile: _appendFile,
+};
 
 const ACCOUNTS_FILE = "accounts.jsonl";
 const BACKFILL_MARKER = "accounts-backfill.done";
@@ -83,7 +95,7 @@ function toIso(v: Date | string | null | undefined): string {
 
 async function appendRecord(record: AccountRecord): Promise<void> {
   await mkdir(ACCOUNT_DATA_DIR, { recursive: true });
-  await appendFile(join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE), JSON.stringify(record) + "\n", "utf8");
+  await _ioSeams.appendFile(join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE), JSON.stringify(record) + "\n", "utf8");
 }
 
 /**

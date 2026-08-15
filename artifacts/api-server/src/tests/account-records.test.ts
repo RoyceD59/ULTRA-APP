@@ -27,7 +27,7 @@ process.env["UC_ACCOUNTS_DATA_DIR"] = dataDir;
 process.env["SESSION_SECRET"] ??= "test-secret-for-account-records-tests";
 
 const { default: app } = await import("../app.js");
-const { backfillAccountRecords } = await import("../lib/account-records.js");
+const { backfillAccountRecords, _ioSeams } = await import("../lib/account-records.js");
 const { db, ucUsersTable } = await import("@workspace/db");
 
 let server: http.Server;
@@ -170,6 +170,51 @@ describe("Durable account records", () => {
       assertNoPasswordMaterial(rec!, "safe-pass-123");
     } finally {
       insertMock.mock.restore();
+    }
+  });
+
+  it("returns 503 with a 'contact us' message and emits an error log when both DB insert and folder write fail", async () => {
+    // Simulate disk full / permission denied by replacing _ioSeams.appendFile.
+    // _ioSeams is a plain mutable object exported from account-records.ts — the
+    // only reliable way to inject failures without patching ES module namespace
+    // bindings, which are non-configurable and cannot be overwritten at runtime.
+    const realAppendFile = _ioSeams.appendFile;
+    _ioSeams.appendFile = async () => {
+      throw Object.assign(new Error("ENOSPC: no space left on device"), { code: "ENOSPC" });
+    };
+
+    const insertMock = mock.method(db, "insert", () => {
+      throw new Error("DB_DOWN_SIMULATION");
+    });
+
+    try {
+      const { status, body } = await post("/api/uc/auth/register", {
+        email: "dual-fail@test.com",
+        phone: "+254712345097",
+        password: "pass-dual-fail",
+        firstName: "Dual",
+        lastName: "Fail",
+      });
+
+      // Must still be a 503, not a 500 or an unhandled rejection.
+      assert.equal(status, 503, `expected 503 but got ${status}`);
+      assert.ok(!body["token"], "503 response must NOT contain a session token");
+
+      // Error message must NOT claim the details were safely recorded (they weren't).
+      const errorMsg = String(body["error"] ?? "");
+      assert.ok(errorMsg.length > 0, "response must include an error message");
+      assert.ok(
+        !errorMsg.includes("safely recorded"),
+        `error must NOT claim details were safely recorded; got: ${errorMsg}`,
+      );
+      // Must tell the customer to contact support / us directly.
+      assert.ok(
+        errorMsg.includes("contact") || errorMsg.includes("not recorded"),
+        `error should indicate the customer needs to contact support; got: ${errorMsg}`,
+      );
+    } finally {
+      insertMock.mock.restore();
+      _ioSeams.appendFile = realAppendFile;
     }
   });
 });
