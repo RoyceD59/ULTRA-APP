@@ -25,11 +25,9 @@
  * 6. Exits with the child's exit code so CI sees the correct result.
  */
 
-import pg from "pg";
+import { Pool } from "pg";
 import { execFileSync, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-
-const { Pool } = pg;
 
 // ── 0. Require DATABASE_URL ───────────────────────────────────────────────────
 

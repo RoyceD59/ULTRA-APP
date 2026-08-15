@@ -15,8 +15,11 @@
  * In both modes the RegisterModal handles the actual activation flow;
  * for Replace mode it receives `existingActivation` so it can warn the user
  * that the old cycle will be overwritten.
+ *
+ * After a successful registration in Register mode, ReminderOptInSheet is
+ * shown once to invite the user to enable message reminder channels.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -33,6 +36,7 @@ import {
   readReplacementNudgeDismissed,
   markReplacementNudgeDismissed,
 } from '@/hooks/filterNudge';
+import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
 
 interface Props {
   /** Called after the user completes registration from the prompt. */
@@ -67,9 +71,26 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
 
   const [showModal, setShowModal] = useState(false);
 
+  // ReminderOptInSheet: shown once after a register-mode activation.
+  // Must be tracked independently of candidateResult so the sheet stays mounted
+  // even after registration sets handled=true and nulls out the candidate.
+  const [pendingOptIn, setPendingOptIn] = useState<FilterActivation | null>(null);
+
+  // A ref that always reflects the *current* user ID synchronously. Unlike the
+  // closure-captured `user`, this ref is updated on every render, so async
+  // callbacks that await before reading it see the post-switch value, not a
+  // stale snapshot from when the callback was created.
+  const currentUserIdRef = useRef<number | null>(user?.id ?? null);
+  currentUserIdRef.current = user?.id ?? null;
+
   // Re-read local state on sign-in / account switch.
+  // Also clears any pending opt-in sheet so Account A's sheet can never
+  // appear for Account B when two accounts share the same device.
   useEffect(() => {
-    if (!token || !user) return;
+    if (!token || !user) {
+      setPendingOptIn(null);
+      return;
+    }
     let cancelled = false;
     setDismissed(null);
     setHasActivation(null);
@@ -77,6 +98,7 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
     setHandled(false);
     setReplacementDismissed(null);
     setReplacementDismissedOrderId(null);
+    setPendingOptIn(null);
     (async () => {
       const state = await readNudgeState(user.id);
       if (cancelled) return;
@@ -169,13 +191,6 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
     return () => { cancelled = true; };
   }, [candidateResult?.mode, candidateResult?.orderId, user?.id]);
 
-  // ── Visibility guard ──────────────────────────────────────────────────────
-  if (!candidateResult) return null;
-  if (candidateResult.mode === 'replace' && replacementDismissed !== false) {
-    // Hide while loading (null) and when dismissed (true).
-    return null;
-  }
-
   // ── Handlers ──────────────────────────────────────────────────────────────
   async function handleDismiss() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -194,13 +209,23 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
     setShowModal(true);
   }
 
+  // ── Visibility guard ──────────────────────────────────────────────────────
+  // The nudge card is hidden when there is no candidate or the replace nudge
+  // is dismissed/loading. The ReminderOptInSheet is rendered independently
+  // so it survives the post-registration state change that nulls candidateResult.
+  const showNudge =
+    !!candidateResult &&
+    !(candidateResult.mode === 'replace' && replacementDismissed !== false);
+
+  if (!showNudge && !pendingOptIn) return null;
+
   // ── Content copy ──────────────────────────────────────────────────────────
-  const isReplace = candidateResult.mode === 'replace';
+  const isReplace = candidateResult?.mode === 'replace';
   const title = isReplace
-    ? `Restart reminders for your new ${candidateResult.product.name}`
-    : `Start reminders for your ${candidateResult.product.name}`;
+    ? `Restart reminders for your new ${candidateResult!.product.name}`
+    : `Start reminders for your ${candidateResult?.product.name}`;
   const subtitle = isReplace
-    ? `You've bought a new ${candidateResult.product.name} — restart your replacement reminders to track this filter.`
+    ? `You've bought a new ${candidateResult!.product.name} — restart your replacement reminders to track this filter.`
     : `You bought this filter but haven't registered it — register now so replacement reminders can start.`;
   const ctaLabel = isReplace ? 'Restart reminders →' : 'Register filter →';
   const accessLabel = isReplace ? 'Dismiss restart reminders prompt' : 'Dismiss filter registration prompt';
@@ -208,47 +233,79 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
-          <Ionicons
-            name={isReplace ? 'refresh-outline' : 'notifications-outline'}
-            size={20}
-            color={colors.primary}
-          />
-        </View>
-        <TouchableOpacity style={{ flex: 1 }} onPress={handleOpen} activeOpacity={0.8}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-            {title}
-          </Text>
-          <Text style={[styles.sub, { color: colors.mutedForeground }]} numberOfLines={3}>
-            {subtitle}
-          </Text>
-          <Text style={[styles.cta, { color: colors.primary }]}>{ctaLabel}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleDismiss}
-          style={styles.closeBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel={accessLabel}>
-          <Ionicons name="close" size={18} color={colors.mutedForeground} />
-        </TouchableOpacity>
-      </View>
+      {showNudge && candidateResult && (
+        <>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+              <Ionicons
+                name={isReplace ? 'refresh-outline' : 'notifications-outline'}
+                size={20}
+                color={colors.primary}
+              />
+            </View>
+            <TouchableOpacity style={{ flex: 1 }} onPress={handleOpen} activeOpacity={0.8}>
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+                {title}
+              </Text>
+              <Text style={[styles.sub, { color: colors.mutedForeground }]} numberOfLines={3}>
+                {subtitle}
+              </Text>
+              <Text style={[styles.cta, { color: colors.primary }]}>{ctaLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDismiss}
+              style={styles.closeBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel={accessLabel}>
+              <Ionicons name="close" size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
 
-      <RegisterModal
-        visible={showModal}
-        existingActivation={isReplace ? activation : null}
-        filterProducts={filterProducts}
-        productsLoading={productsLoading}
-        initialProductId={candidateResult.product.id}
-        initialDayOffset={candidateResult.daysSincePurchase}
-        onClose={() => setShowModal(false)}
-        onSave={a => {
-          setShowModal(false);
-          setHandled(true);
-          setHasActivation(true);
-          onRegistered?.(a);
-        }}
-      />
+          <RegisterModal
+            visible={showModal}
+            existingActivation={isReplace ? activation : null}
+            filterProducts={filterProducts}
+            productsLoading={productsLoading}
+            initialProductId={candidateResult.product.id}
+            initialDayOffset={candidateResult.daysSincePurchase}
+            onClose={() => setShowModal(false)}
+            onSave={async a => {
+              setShowModal(false);
+              setHandled(true);
+              setHasActivation(true);
+              onRegistered?.(a);
+              // After register-mode activation, offer message reminder channels
+              // once (keyed by productId+activatedAt+userId so it never repeats
+              // and two accounts on the same device don't share state).
+              // Capture userId before the await; after it resolves compare against
+              // currentUserIdRef.current (updated synchronously on every render)
+              // to detect a mid-flight account switch. This is effective because
+              // unlike the closure-captured `user`, the ref always reflects the
+              // currently rendered user — an account switch will have updated it
+              // before the setState call runs.
+              if (!isReplace && token && user) {
+                const initiatingUserId = user.id;
+                const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt, initiatingUserId);
+                if (!alreadySeen && currentUserIdRef.current === initiatingUserId) {
+                  setPendingOptIn(a);
+                }
+              }
+            }}
+          />
+        </>
+      )}
+
+      {/* Rendered independently of the nudge card so it stays mounted after
+          registration sets handled=true and candidateResult becomes null. */}
+      {pendingOptIn && user && (
+        <ReminderOptInSheet
+          visible
+          productId={pendingOptIn.productId}
+          activatedAt={pendingOptIn.activatedAt}
+          userId={user.id}
+          onClose={() => setPendingOptIn(null)}
+        />
+      )}
     </>
   );
 }
