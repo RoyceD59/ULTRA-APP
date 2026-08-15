@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { openWhatsApp } from '@/lib/whatsapp';
-import { saveDraft, loadDraft, clearDraft } from '@/lib/formDrafts';
+import { saveDraft, loadDraft, clearDraft, persistMediaForDraft, validateMediaItems, enqueueDraftSave, drainDraftSaveQueue } from '@/lib/formDrafts';
 
 const CONTACT_TIMES = ['Morning (8am–12pm)', 'Afternoon (12pm–5pm)', 'Evening (5pm–8pm)', 'Any time'];
 
@@ -73,16 +73,20 @@ export default function NewTicketScreen() {
   const [issue,        setIssue]        = useState('');
   const [contactTime,  setContactTime]  = useState(CONTACT_TIMES[3]!);
   const [media,        setMedia]        = useState<MediaItem[]>([]);
-  const [submitting,   setSubmitting]   = useState(false);
-  const [submitted,    setSubmitted]    = useState(false);
-  const [ticketRef,    setTicketRef]    = useState('');
-  const [whatsAppSummary, setWhatsAppSummary] = useState('');
-  const [error,        setError]        = useState('');
+  const [submitting,         setSubmitting]         = useState(false);
+  const [submitted,          setSubmitted]          = useState(false);
+  const [ticketRef,          setTicketRef]          = useState('');
+  const [whatsAppSummary,    setWhatsAppSummary]    = useState('');
+  const [error,              setError]              = useState('');
+  const [droppedAttachments, setDroppedAttachments] = useState(0);
 
   // ── Draft persistence ──────────────────────────────────────────────────────
   // Restore any in-progress draft on mount (e.g. after a mid-flow sign-in),
   // then keep it saved as the user types so nothing is ever lost.
   const draftReady = useRef(false);
+  // Set to true before clearDraft so any in-flight auto-save IIFE that
+  // completes after submission cannot write the draft back.
+  const draftSaveCancelled = useRef(false);
   useEffect(() => {
     (async () => {
       const d = await loadDraft<TicketDraft>('ticket');
@@ -90,22 +94,38 @@ export default function NewTicketScreen() {
         if (Array.isArray(d.selectedProducts)) setSelectedProducts(d.selectedProducts);
         if (typeof d.issue === 'string') setIssue(d.issue);
         if (typeof d.contactTime === 'string' && CONTACT_TIMES.includes(d.contactTime)) setContactTime(d.contactTime);
-        if (Array.isArray(d.media)) setMedia(d.media);
+        if (Array.isArray(d.media)) {
+          const { valid, dropped } = await validateMediaItems(d.media);
+          setMedia(valid);
+          if (dropped > 0) setDroppedAttachments(dropped);
+        }
       }
       draftReady.current = true;
     })();
   }, []);
 
   useEffect(() => {
-    if (!draftReady.current || submitted) return;
-    saveDraft<TicketDraft>('ticket', { selectedProducts, issue, contactTime, media });
+    if (!draftReady.current || submitted || draftSaveCancelled.current) return;
+    // Serialised through the per-key queue so a fast second edit never
+    // lets an earlier stalled save overwrite the newer state.
+    enqueueDraftSave('ticket', async () => {
+      if (draftSaveCancelled.current) return;
+      const persistedMedia = await persistMediaForDraft(media, 'ticket');
+      if (draftSaveCancelled.current) return;
+      await saveDraft<TicketDraft>('ticket', { selectedProducts, issue, contactTime, media: persistedMedia });
+    });
   }, [selectedProducts, issue, contactTime, media, submitted]);
 
   /** Save the draft, then take the guest to sign-in / registration.
    *  `returnTo` brings them straight back here with the draft restored. */
   async function goToAuth(mode: 'login' | 'register') {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await saveDraft<TicketDraft>('ticket', { selectedProducts, issue, contactTime, media });
+    // Enqueue the save so it is ordered relative to any in-flight auto-save,
+    // then await completion before navigating away.
+    await enqueueDraftSave('ticket', async () => {
+      const persistedMedia = await persistMediaForDraft(media, 'ticket');
+      await saveDraft<TicketDraft>('ticket', { selectedProducts, issue, contactTime, media: persistedMedia });
+    });
     router.push({
       pathname: mode === 'login' ? '/auth/login' : '/auth/register',
       params: { returnTo: '/ticket/new' },
@@ -157,10 +177,14 @@ export default function NewTicketScreen() {
         `Issue: ${issue}`,
         `Preferred contact time: ${contactTime}`,
       ].join('\n');
+      // Signal cancellation, drain any queued save that started before the
+      // signal, then clean up the draft (including durable media copies).
+      draftSaveCancelled.current = true;
+      await drainDraftSaveQueue('ticket');
+      await clearDraft('ticket');
       setTicketRef(ticket.id);
       setWhatsAppSummary(summary);
       setSubmitted(true);
-      clearDraft('ticket');
     } catch (e) {
       // Session expired / invalid — send the customer to sign-in with their
       // draft saved instead of leaving them stuck on a raw error message.
@@ -377,6 +401,16 @@ export default function NewTicketScreen() {
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
           Up to 6 items · Videos capped at 15 seconds · Tap a video thumbnail to preview
         </Text>
+        {droppedAttachments > 0 && (
+          <View style={[styles.errorBox, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
+            <Ionicons name="warning-outline" size={16} color="#D97706" />
+            <Text style={[styles.errorText, { color: '#92400E' }]}>
+              {droppedAttachments === 1
+                ? '1 attachment from your saved draft could not be found — please re-add it.'
+                : `${droppedAttachments} attachments from your saved draft could not be found — please re-add them.`}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Inline error */}

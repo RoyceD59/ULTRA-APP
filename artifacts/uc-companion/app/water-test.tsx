@@ -23,7 +23,7 @@ import * as Haptics from 'expo-haptics';
 import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { openWhatsApp } from '@/lib/whatsapp';
-import { saveDraft, loadDraft, clearDraft } from '@/lib/formDrafts';
+import { saveDraft, loadDraft, clearDraft, persistMediaForDraft, validateMediaItems, enqueueDraftSave, drainDraftSaveQueue } from '@/lib/formDrafts';
 
 const WATER_SOURCES = [
   'Municipal/Tap', 'Borehole', 'Well', 'Rainwater', 'River/Lake', 'Tanker delivery',
@@ -60,11 +60,12 @@ export default function WaterTestScreen() {
   const [selectedConcerns, setSelectedConcerns] = useState<string[]>([]);
   const [extraConcerns,    setExtraConcerns]    = useState('');
   const [media,            setMedia]            = useState<MediaItem[]>([]);
-  const [submitting,       setSubmitting]       = useState(false);
-  const [submitted,        setSubmitted]        = useState(false);
-  const [receiptRef,       setReceiptRef]       = useState('');
-  const [whatsAppSummary,  setWhatsAppSummary]  = useState('');
-  const [error,            setError]            = useState('');
+  const [submitting,         setSubmitting]         = useState(false);
+  const [submitted,          setSubmitted]          = useState(false);
+  const [receiptRef,         setReceiptRef]         = useState('');
+  const [whatsAppSummary,    setWhatsAppSummary]    = useState('');
+  const [error,              setError]              = useState('');
+  const [droppedAttachments, setDroppedAttachments] = useState(0);
 
   // ── Draft persistence ──────────────────────────────────────────────────────
   // Restore any in-progress draft on mount (e.g. after a mid-flow sign-in),
@@ -72,6 +73,9 @@ export default function WaterTestScreen() {
   // only overwrite a field when the draft actually holds something, so account
   // pre-fill survives for fields the guest never touched.
   const draftReady = useRef(false);
+  // Set to true before clearDraft so any in-flight auto-save IIFE that
+  // completes after submission cannot write the draft back.
+  const draftSaveCancelled = useRef(false);
   useEffect(() => {
     (async () => {
       const d = await loadDraft<WaterTestDraft>('water-test');
@@ -83,16 +87,27 @@ export default function WaterTestScreen() {
         if (typeof d.waterSource === 'string' && d.waterSource) setWaterSource(d.waterSource);
         if (Array.isArray(d.selectedConcerns)) setSelectedConcerns(d.selectedConcerns);
         if (typeof d.extraConcerns === 'string' && d.extraConcerns) setExtraConcerns(d.extraConcerns);
-        if (Array.isArray(d.media)) setMedia(d.media);
+        if (Array.isArray(d.media)) {
+          const { valid, dropped } = await validateMediaItems(d.media);
+          setMedia(valid);
+          if (dropped > 0) setDroppedAttachments(dropped);
+        }
       }
       draftReady.current = true;
     })();
   }, []);
 
   useEffect(() => {
-    if (!draftReady.current || submitted) return;
-    saveDraft<WaterTestDraft>('water-test', {
-      name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media,
+    if (!draftReady.current || submitted || draftSaveCancelled.current) return;
+    // Serialised through the per-key queue so a fast second edit never
+    // lets an earlier stalled save overwrite the newer state.
+    enqueueDraftSave('water-test', async () => {
+      if (draftSaveCancelled.current) return;
+      const persistedMedia = await persistMediaForDraft(media, 'water-test');
+      if (draftSaveCancelled.current) return;
+      await saveDraft<WaterTestDraft>('water-test', {
+        name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media: persistedMedia,
+      });
     });
   }, [name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media, submitted]);
 
@@ -109,8 +124,13 @@ export default function WaterTestScreen() {
    *  `returnTo` brings them straight back here with the draft restored. */
   async function goToAuth(mode: 'login' | 'register') {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await saveDraft<WaterTestDraft>('water-test', {
-      name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media,
+    // Enqueue the save so it is ordered relative to any in-flight auto-save,
+    // then await completion before navigating away.
+    await enqueueDraftSave('water-test', async () => {
+      const persistedMedia = await persistMediaForDraft(media, 'water-test');
+      await saveDraft<WaterTestDraft>('water-test', {
+        name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media: persistedMedia,
+      });
     });
     router.push({
       pathname: mode === 'login' ? '/auth/login' : '/auth/register',
@@ -157,10 +177,14 @@ export default function WaterTestScreen() {
         `Water source: ${waterSource}`,
         ...(concernsText ? [`Concerns: ${concernsText}`] : []),
       ].join('\n');
+      // Signal cancellation, drain any queued save that started before the
+      // signal, then clean up the draft (including durable media copies).
+      draftSaveCancelled.current = true;
+      await drainDraftSaveQueue('water-test');
+      await clearDraft('water-test');
       setReceiptRef(wt.id);
       setWhatsAppSummary(summary);
       setSubmitted(true);
-      clearDraft('water-test');
     } catch (e) {
       // Session expired / invalid — send the customer to sign-in with their
       // draft saved instead of leaving them stuck on a raw error message.
@@ -325,6 +349,16 @@ export default function WaterTestScreen() {
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
           Photos or short videos of your water sample or source help our technician prepare.
         </Text>
+        {droppedAttachments > 0 && (
+          <View style={[styles.errorBox, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
+            <Ionicons name="warning-outline" size={16} color="#D97706" />
+            <Text style={[styles.errorText, { color: '#92400E' }]}>
+              {droppedAttachments === 1
+                ? '1 attachment from your saved draft could not be found — please re-add it.'
+                : `${droppedAttachments} attachments from your saved draft could not be found — please re-add them.`}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Inline error */}
