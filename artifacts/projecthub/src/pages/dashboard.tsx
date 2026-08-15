@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useGetDashboardSummary, useGetDashboardActivity } from "@workspace/api-client-react";
-import { FolderKanban, CheckSquare, Clock, AlertTriangle, Activity, TimerOff } from "lucide-react";
+import { FolderKanban, CheckSquare, Clock, AlertTriangle, Activity, TimerOff, Users } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { TaskStatusBadge, formatRelativeDate } from "@/components/shared/badges";
 import { Link } from "wouter";
@@ -26,6 +26,45 @@ interface LifespanAudit {
   checkedAt: string;
   checkedCount: number;
   missing: LifespanAuditProduct[];
+}
+
+/**
+ * Small stat card showing total registered UC Companion app customers.
+ * Visible to all logged-in team members; silently hidden on auth error.
+ */
+function UcCustomerCountCard() {
+  const { data, isLoading } = useQuery<{ count: number } | null>({
+    queryKey: ["uc-customers-count"],
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const headers = getAuthHeaders();
+      if (!headers) return null;
+      const res = await fetch(`${BASE}/api/uc/admin/customers/count`, { headers });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  return (
+    <Card className="shadow-sm hover:shadow-md transition-shadow border-blue-500/20">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <CardTitle className="text-sm font-medium text-muted-foreground">Registered Customers</CardTitle>
+        <Users className="w-4 h-4 text-blue-500" />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="h-9 w-16 bg-muted rounded animate-pulse" />
+        ) : (
+          <>
+            <div className="text-3xl font-bold text-foreground">
+              {data?.count ?? "—"}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">UC Companion app sign-ups</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 /**
@@ -117,6 +156,11 @@ export default function Dashboard() {
       </div>
 
       <LifespanAuditWarning />
+
+      {/* UC Companion snapshot */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <UcCustomerCountCard />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="stagger-1 border-primary/20 shadow-sm hover:shadow-md transition-shadow">

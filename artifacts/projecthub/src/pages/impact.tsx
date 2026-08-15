@@ -11,7 +11,7 @@
  * purchases that count toward Litres Filtered, Customers Served, and
  * Plastics Avoided automatically.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -367,6 +367,21 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
+  // Registered app-user count — fetched with the team session token (if present).
+  // Silently skipped when only a UC-credentials token is in use.
+  const [registeredCount, setRegisteredCount] = useState<number | null>(null);
+  const teamToken = useMemo(() => getTeamToken(), []);
+  useEffect(() => {
+    if (!teamToken) return;
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, '') ?? '';
+    fetch(`${base}/api/uc/admin/customers/count`, {
+      headers: { Authorization: `Bearer ${teamToken}` },
+    })
+      .then(r => r.ok ? r.json() as Promise<{ count: number }> : Promise.resolve(null))
+      .then(d => { if (d) setRegisteredCount(d.count); })
+      .catch(() => { /* non-critical */ });
+  }, [teamToken]);
+
   // Legacy offset form
   const [litresOffset, setLitresOffset] = useState('');
   const [usersOffset,  setUsersOffset]  = useState('');
@@ -568,8 +583,14 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
               legacy={data.override.litresOffset * 2}  total={data.plasticsAvoided}
             />
           </div>
-          <p className="text-xs text-muted-foreground -mt-4">
-            Last calculated: {new Date(data.lastUpdated).toLocaleString()}
+          <p className="text-xs text-muted-foreground -mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>Last calculated: {new Date(data.lastUpdated).toLocaleString()}</span>
+            {registeredCount !== null && (
+              <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                <Users className="w-3 h-3" />
+                {registeredCount.toLocaleString()} registered in app
+              </span>
+            )}
           </p>
         </>
       ) : null}

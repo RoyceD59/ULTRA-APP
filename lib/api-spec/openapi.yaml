@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: uc-admin
+    description: UC companion admin operations
   - name: members
     description: Team member operations
   - name: projects
@@ -33,6 +35,23 @@ tags:
   - name: whatsapp
     description: WhatsApp session management and messaging
 paths:
+  /uc/admin/customers/count:
+    get:
+      operationId: getUcCustomersCount
+      tags: [uc-admin]
+      summary: Total registered UC Companion customers (non-deleted)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcCustomersCount"
+        "401":
+          description: Unauthorized
+
   /healthz:
     get:
       operationId: healthCheck
@@ -1744,3 +1763,12 @@ components:
       properties:
         ok: { type: boolean }
         to: { type: string }
+
+    # ─── UC Admin Schemas ─────────────────────────────────────────
+    UcCustomersCount:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+          description: Total registered (non-deleted) UC Companion customers

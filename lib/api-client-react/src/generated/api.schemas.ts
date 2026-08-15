@@ -574,6 +574,11 @@ export interface WhatsAppSendResult {
   to?: string;
 }
 
+export interface UcCustomersCount {
+  /** Total registered (non-deleted) UC Companion customers */
+  count: number;
+}
+
 export type ListTasksParams = {
 projectId?: number;
 assigneeId?: number;

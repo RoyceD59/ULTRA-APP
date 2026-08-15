@@ -71,6 +71,7 @@ import type {
   TaskUpdate,
   TeamTokenRequest,
   TeamTokenResponse,
+  UcCustomersCount,
   WebhookIngestResult,
   WebhookPayload,
   WhatsAppSendInput,
@@ -104,6 +105,83 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetUcCustomersCountUrl = () => {
+
+
+
+
+  return `/api/uc/admin/customers/count`
+}
+
+/**
+ * @summary Total registered UC Companion customers (non-deleted)
+ */
+export const getUcCustomersCount = async ( options?: RequestInit): Promise<UcCustomersCount> => {
+
+  return customFetch<UcCustomersCount>(getGetUcCustomersCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcCustomersCountQueryKey = () => {
+    return [
+    `/api/uc/admin/customers/count`
+    ] as const;
+    }
+
+
+export const getGetUcCustomersCountQueryOptions = <TData = Awaited<ReturnType<typeof getUcCustomersCount>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcCustomersCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcCustomersCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcCustomersCount>>> = ({ signal }) => getUcCustomersCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcCustomersCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcCustomersCountQueryResult = NonNullable<Awaited<ReturnType<typeof getUcCustomersCount>>>
+export type GetUcCustomersCountQueryError = ErrorType<void>
+
+
+/**
+ * @summary Total registered UC Companion customers (non-deleted)
+ */
+
+export function useGetUcCustomersCount<TData = Awaited<ReturnType<typeof getUcCustomersCount>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcCustomersCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcCustomersCountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getHealthCheckUrl = () => {
 

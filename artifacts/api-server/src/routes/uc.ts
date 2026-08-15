@@ -5227,4 +5227,25 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
   }
 });
 
+// ─── UC Companion: registered customer count ──────────────────────────────────
+// Any logged-in team member (admin or regular) can read this count.
+// UC-only credentials are not accepted; the endpoint uses the ProjectHub
+// team-session JWT issued by POST /api/auth/login.
+router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims || claims.type !== "team-session") {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const { rows } = await pool.query<{ count: number }>(
+      "SELECT COUNT(*)::int AS count FROM uc_users WHERE deleted_at IS NULL"
+    );
+    res.json({ count: rows[0]?.count ?? 0 });
+  } catch (err) {
+    logger.error({ err }, "[customers/count] query failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

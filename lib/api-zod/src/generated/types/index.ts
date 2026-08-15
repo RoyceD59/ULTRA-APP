@@ -71,6 +71,7 @@ export * from './taskStatus';
 export * from './taskUpdate';
 export * from './teamTokenRequest';
 export * from './teamTokenResponse';
+export * from './ucCustomersCount';
 export * from './webhookIngestResult';
 export * from './webhookPayload';
 export * from './webhookPayloadTaskData';

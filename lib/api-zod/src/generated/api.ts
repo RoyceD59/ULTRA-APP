@@ -9,6 +9,14 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Total registered UC Companion customers (non-deleted)
+ */
+export const GetUcCustomersCountResponse = zod.object({
+  "count": zod.number().describe('Total registered (non-deleted) UC Companion customers')
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
