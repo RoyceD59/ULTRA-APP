@@ -19,6 +19,7 @@ import {
 } from "../routes/uc.js";
 import { sendViaResend } from "./resend.js";
 import { sendSms } from "./sms.js";
+import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
 import { dispatchFilterReminders } from "./reminder-dispatch.js";
 
@@ -620,13 +621,15 @@ export async function runStaleRecoveryOrderDigest(): Promise<void> {
       logger.warn("Scheduler: digest email failed — will rely on SMS fallback");
     }
 
-    // SMS fallback — fires unconditionally so the team is reached even when Resend is down
-    const teamPhone = process.env["TEAM_ALERT_PHONE"];
+    // SMS fallback — fires unconditionally so the team is reached even when Resend is down.
+    // Phone is resolved via getTeamAlertPhone (admin-panel DB value first, env var fallback)
+    // so the digest honours the same configuration as single recovery alerts.
+    const teamPhone = await getTeamAlertPhone();
     if (teamPhone) {
       await sendSms(teamPhone, smsBody, { template: "recovery_order_digest" });
       logger.info("Scheduler: stale recovery order SMS sent");
     } else {
-      logger.info("Scheduler: TEAM_ALERT_PHONE not set — SMS reminder skipped");
+      logger.info("Scheduler: team alert phone not configured — SMS reminder skipped");
     }
   } catch (err) {
     logger.error({ err }, "Scheduler: stale recovery order digest job failed");

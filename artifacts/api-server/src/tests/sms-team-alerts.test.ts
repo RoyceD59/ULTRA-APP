@@ -517,9 +517,13 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
     restoreFetch();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     capturedRequests = [];
     capturedInserts  = [];
+    // The digest resolves the phone via getTeamAlertPhone (60 s cache) — bust it
+    // so each scenario exercises its own DB/env configuration.
+    const { invalidateTeamAlertPhoneCache } = await import("../routes/payments.js");
+    invalidateTeamAlertPhoneCache();
   });
 
   it("(c) sends SMS digest when stale orders exist and TEAM_ALERT_PHONE is set", async () => {
@@ -584,6 +588,59 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
       decoded.includes("102") || bodyText.includes("102"),
       `SMS body should reference order #102; got: ${bodyText}`,
     );
+  });
+
+  it("(c2) digest SMS uses the DB (admin-panel) phone when TEAM_ALERT_PHONE is absent", async () => {
+    delete process.env["TEAM_ALERT_PHONE"];
+
+    const dbPhone = "+254733555444";
+    const createdAt = new Date(Date.now() - 30 * 60 * 60 * 1000); // 30 h ago
+
+    // The shared select stub serves BOTH the stale-orders query and the
+    // team_settings lookup inside getTeamAlertPhone, so the row carries the
+    // order fields AND teamAlertPhone.
+    selectStub = [
+      {
+        id: 201,
+        paymentMethod: "mpesa",
+        total: "3000",
+        status: "processing",
+        paymentReference: "LGR201",
+        dateCreated: createdAt,
+        webhookRecovery: true,
+        userId: "anon",
+        currency: "KES",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {},
+        teamAlertPhone: dbPhone,
+      },
+    ];
+
+    // Bust the 60 s phone cache so the DB path is exercised, not a stale env value
+    const { invalidateTeamAlertPhoneCache } = await import("../routes/payments.js");
+    invalidateTeamAlertPhoneCache();
+
+    const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+    await runStaleRecoveryOrderDigest();
+
+    const atRequests = capturedRequests.filter((r) =>
+      r.url.includes("africastalking.com")
+    );
+    assert.ok(
+      atRequests.length >= 1,
+      "Africa's Talking should be called for the digest SMS using the DB phone",
+    );
+
+    const bodyText = atRequests[0]!.bodyText;
+    assert.ok(
+      bodyText.includes("254733555444"),
+      `AT body should contain the DB-sourced phone; got: ${bodyText}`,
+    );
+
+    // Invalidate again so the cached DB phone doesn't leak into later tests
+    invalidateTeamAlertPhoneCache();
   });
 
   it("(d) skips gracefully (no SMS, no error) when no stale orders found", async () => {

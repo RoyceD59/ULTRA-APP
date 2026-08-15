@@ -228,9 +228,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
     return;
   }
 
-  const shortcode = getMpesaShortcode();
-  const passkey = process.env["MPESA_PASSKEY"];
-  const token = shortcode && passkey ? await getMpesaToken() : null;
+    const shortcode = getMpesaShortcode();
+    const passkey = process.env["MPESA_PASSKEY"];
+    const token = shortcode && passkey ? await getMpesaToken() : null;
 
   const normalizedPhone = phone.replace(/^\+/, "").replace(/^0/, "254");
   const expectedAmount  = Math.ceil(amount);
@@ -272,9 +272,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
   }
 
   try {
-    const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-    const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
-    const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
+      const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+      const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
+      const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
 
     // Generate a per-push callback token (UUID).  This is embedded in the
     // CallBackURL as ?token=<callbackToken> and stored in the initiation record.
@@ -480,22 +480,7 @@ router.post(
     try {
       const appBase =
         returnUrl ?? process.env["WC_BASE_URL"] ?? "https://www.ucfilters.com";
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency,
-              unit_amount: Math.round(amount * 100),
-              product_data: { name: `UC Filters Order ${orderId}` },
-            },
-            quantity: 1,
-          },
-        ],
-        success_url: `${appBase}/stripe/success?session_id={CHECKOUT_SESSION_ID}&order=${orderId}`,
-        cancel_url: `${appBase}/stripe/cancel?order=${orderId}`,
-      });
+      const session = await stripe.checkout.sessions.retrieve(String(req.params["sessionId"]));
       res.json({ sessionId: session.id, sessionUrl: session.url, amount });
     } catch (e: unknown) {
       res.status(500).json({ error: (e as Error).message, retryable: true });
@@ -738,10 +723,10 @@ router.post(
       const [recovered] = await db
         .insert(ucOrdersTable)
         .values({
-          userId:           customerEmail || "webhook-recovery",
+          userId:           customerEmail || "paystack-webhook-recovery",
           status:           "processing",
           total:            String(totalKes),
-          currency,
+          currency:         currency,
           paymentMethod:    "paystack",
           paymentReference: reference,
           promoCode:        "",
@@ -1063,7 +1048,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
       if (existing.length > 0) {
         // An order already exists.  Leave it in its current state — do NOT
         // advance it to "processing" without Daraja confirmation.
-        const order = existing[0]!;
+      const order = existing[0]!;
         console.warn(
           `[M-Pesa callback] Existing order ${order.id} (status=${order.status}) left unchanged — Daraja unavailable`
         );
