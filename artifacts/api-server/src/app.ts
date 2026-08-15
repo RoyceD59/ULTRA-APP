@@ -9,6 +9,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { buildCorsOrigins } from "./lib/cors-origins.js";
 import router from "./routes";
 import productImagesRouter from "./routes/product-images";
 import { logger } from "./lib/logger";
@@ -71,16 +72,9 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 // than the API server, so its browser fetches need CORS headers. We only allow
 // the Replit dev-domain origins, and only outside production — native builds
 // don't enforce CORS, and the production web apps are served same-origin.
-const corsAllowedOrigins: string[] = [];
-if (process.env.NODE_ENV !== "production") {
-  for (const domain of [
-    process.env.REPLIT_EXPO_DEV_DOMAIN,
-    process.env.REPLIT_DEV_DOMAIN,
-  ]) {
-    if (domain) corsAllowedOrigins.push(`https://${domain}`);
-  }
-}
-app.use(cors({ origin: corsAllowedOrigins.length > 0 ? corsAllowedOrigins : false }));
+// Origin list is built by buildCorsOrigins() so the same logic can be tested
+// without duplicating it.
+app.use(cors({ origin: buildCorsOrigins(process.env) }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
