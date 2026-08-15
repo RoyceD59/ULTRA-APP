@@ -10,6 +10,7 @@ import {
   validateCodeForDiscount,
   recordReferralConversion,
   registerReferralAtSignup,
+  getReferralExportData,
 } from "./referrals";
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
@@ -1703,7 +1704,7 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
 
     const exportPayload = {
       exportedAt: new Date().toISOString(),
-      format:     "Ultra Clear customer data export v1 (GDPR Art. 20 / PDPA data portability)",
+      format:     "Ultra Clear customer data export v2 (GDPR Art. 20 / PDPA data portability)",
       profile: {
         id:        user.id,
         email:     user.email,
@@ -1773,6 +1774,10 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
         optOutOrderUpdates: t.optOutOrders,
         updatedAt:          t.updatedAt,
       })),
+      // Referral programme data: the customer's own code and aggregate stats.
+      // Referred users are reported as a count only — their emails are other
+      // people's personal data and must not appear in this export.
+      referrals: getReferralExportData(user.email),
       enquiries: enquiries.map(e => ({
         id:          e.id,
         productId:   e.productId,

@@ -207,6 +207,30 @@ export function registerReferralAtSignup(userEmail: string, referralCode: string
   }
 }
 
+/**
+ * Read-only referral snapshot for the GDPR/PDPA data export (consumed by uc.ts).
+ * Does NOT create a referral record if the user has none. Referred users'
+ * emails are reported only as a count — they are other people's personal data.
+ */
+export function getReferralExportData(userEmail: string): {
+  code: string | null;
+  referredCount: number;
+  conversions: number;
+  creditsEarnedKes: number;
+  usedReferralCode: string | null;
+} {
+  const email = userEmail.toLowerCase();
+  const code = referralByEmail.get(email);
+  const rec = code ? referralByCode.get(code) : undefined;
+  return {
+    code: rec?.code ?? null,
+    referredCount: rec?.referredEmails.length ?? 0,
+    conversions: rec?.conversions ?? 0,
+    creditsEarnedKes: rec?.creditsEarnedKes ?? 0,
+    usedReferralCode: userReferredBy.get(email) ?? null,
+  };
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 /** GET /api/uc/referrals/my-code — authenticated user's code + stats */

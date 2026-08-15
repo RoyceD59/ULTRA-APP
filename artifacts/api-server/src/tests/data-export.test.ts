@@ -123,9 +123,16 @@ describe("GET /api/uc/customer/data-export", () => {
     const payload = JSON.parse(text) as Record<string, unknown>;
     for (const key of [
       "profile", "orders", "tickets", "waterTests", "enquiries",
-      "reviews", "notificationPreferences", "pushRegistrations",
+      "reviews", "notificationPreferences", "pushRegistrations", "referrals",
     ]) {
       assert.ok(key in payload, `export must include the "${key}" category`);
+    }
+
+    assert.match(String(payload["format"]), /v2/, "export format version must be v2");
+
+    const referrals = payload["referrals"] as Record<string, unknown>;
+    for (const key of ["code", "referredCount", "conversions", "creditsEarnedKes", "usedReferralCode"]) {
+      assert.ok(key in referrals, `referrals section must include "${key}"`);
     }
 
     const profile = payload["profile"] as { id: number; email: string };
