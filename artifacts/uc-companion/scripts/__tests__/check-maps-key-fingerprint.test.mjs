@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "check-maps-key-fingerprint.mjs");
 const FP_A = "0B:F7:73:4C:C4:9F:C4:B2:FC:AE:CC:5E:C5:DF:F6:E2:2C:36:C6:A0";
 const FP_B = "7A:B7:C2:F0:B4:01:95:34:2A:07:23:1A:2D:74:93:DD:54:58:90:92";
+const FP_DEV = "AE:C5:96:4B:D2:7B:8D:DB:29:ED:CE:53:E9:9C:A7:13:A4:3E:FD:0D";
 
 let recordPath;
 
@@ -113,6 +114,75 @@ describe("play-signing identity (Maps restriction)", () => {
     assert.equal(r.code, 1);
     assert.match(r.out, /Not a valid SHA-1/);
   });
+
+  test("clean check warns when dev fingerprint is still active in GCP", () => {
+    // Set up: production confirmed, dev entry present and not removed.
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: true },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: { sha1: FP_DEV, updatedAt: new Date().toISOString(), gcpEntryRemoved: false },
+        },
+      })
+    );
+    const r = run(["--fingerprint", FP_A]);
+    assert.equal(r.code, 0); // must still pass
+    assert.match(r.out, /✅ OK/);
+    assert.match(r.out, /ACTION RECOMMENDED/);
+    assert.match(r.out, /remove-dev-restriction/);
+  });
+
+  test("clean check does NOT warn when dev fingerprint is already removed from GCP", () => {
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: true },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: {
+            sha1: FP_DEV,
+            updatedAt: new Date().toISOString(),
+            gcpEntryRemoved: true,
+            gcpEntryRemovedAt: new Date().toISOString(),
+          },
+        },
+      })
+    );
+    const r = run(["--fingerprint", FP_A]);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /✅ OK/);
+    assert.doesNotMatch(r.out, /ACTION RECOMMENDED/);
+  });
+
+  test("clean check does NOT warn when no development fingerprint exists", () => {
+    run(["--fingerprint", FP_A, "--update"]);
+    run(["--confirm-restriction"]);
+    const r = run(["--fingerprint", FP_A]);
+    assert.equal(r.code, 0);
+    assert.doesNotMatch(r.out, /ACTION RECOMMENDED/);
+  });
+
+  test("--confirm-restriction also warns when dev entry is still active", () => {
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: false },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: { sha1: FP_DEV, updatedAt: new Date().toISOString(), gcpEntryRemoved: false },
+        },
+      })
+    );
+    const r = run(["--confirm-restriction"]);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /NEXT STEP/);
+    assert.match(r.out, /remove-dev-restriction/);
+  });
 });
 
 describe("upload identity (drift tracking only)", () => {
@@ -168,5 +238,110 @@ describe("development identity (interim dev-build tracking)", () => {
     const r = run(["--identity", "development", "--fingerprint", FP_B]);
     assert.equal(r.code, 1);
     assert.match(r.out, /CHANGE DETECTED/);
+  });
+});
+
+describe("--remove-dev-restriction", () => {
+  test("fails when no development fingerprint is recorded", () => {
+    const r = run(["--remove-dev-restriction"]);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /No development fingerprint recorded/);
+  });
+
+  test("marks gcpEntryRemoved=true and records timestamp", () => {
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: true },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: { sha1: FP_DEV, updatedAt: new Date().toISOString(), gcpEntryRemoved: false },
+        },
+      })
+    );
+    const r = run(["--remove-dev-restriction"]);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /✅ Recorded/);
+    const rec = record();
+    assert.equal(rec.fingerprints.development.gcpEntryRemoved, true);
+    assert.ok(rec.fingerprints.development.gcpEntryRemovedAt);
+  });
+
+  test("rotating the development fingerprint resets gcpEntryRemoved so the warning fires again", () => {
+    // Sequence: register dev FP_A → remove from GCP → rotate dev to FP_B → gcpEntryRemoved must reset.
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: true },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: {
+            sha1: FP_DEV,
+            updatedAt: new Date().toISOString(),
+            gcpEntryRemoved: true,
+            gcpEntryRemovedAt: "2026-08-15T00:00:00.000Z",
+          },
+        },
+      })
+    );
+
+    // Rotate dev fingerprint to FP_B via --update.
+    const r = run(["--identity", "development", "--fingerprint", FP_B, "--update"]);
+    assert.equal(r.code, 0);
+
+    const rec = record();
+    // gcpEntryRemoved must be cleared — the new SHA-1 is not yet removed from GCP.
+    assert.ok(!rec.fingerprints.development.gcpEntryRemoved, "gcpEntryRemoved should be falsy after rotation");
+    assert.ok(!rec.fingerprints.development.gcpEntryRemovedAt, "gcpEntryRemovedAt should be absent after rotation");
+    assert.equal(rec.fingerprints.development.sha1, FP_B);
+
+    // And the play-signing check should now warn again because the new dev SHA-1 is active.
+    const r2 = run(["--fingerprint", FP_A]);
+    assert.equal(r2.code, 0);
+    assert.match(r2.out, /ACTION RECOMMENDED/);
+  });
+
+  test("is idempotent — succeeds silently if already removed", () => {
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: true },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: {
+            sha1: FP_DEV,
+            updatedAt: new Date().toISOString(),
+            gcpEntryRemoved: true,
+            gcpEntryRemovedAt: "2026-08-15T00:00:00.000Z",
+          },
+        },
+      })
+    );
+    const r = run(["--remove-dev-restriction"]);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /already marked as removed/);
+    // Should not overwrite the original removal timestamp.
+    assert.equal(record().fingerprints.development.gcpEntryRemovedAt, "2026-08-15T00:00:00.000Z");
+  });
+
+  test("prints GCP console instructions before confirming", () => {
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        package: "com.ultraclean.companion",
+        fingerprints: {
+          playAppSigning: { sha1: FP_A, updatedAt: new Date().toISOString(), gcpRestrictionConfirmed: true },
+          uploadKey: { sha1: null, updatedAt: null },
+          development: { sha1: FP_DEV, updatedAt: new Date().toISOString(), gcpEntryRemoved: false },
+        },
+      })
+    );
+    const r = run(["--remove-dev-restriction"]);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /Google Cloud Console/);
+    assert.match(r.out, new RegExp(FP_DEV));
   });
 });

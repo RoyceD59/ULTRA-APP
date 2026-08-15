@@ -480,7 +480,22 @@ router.post(
     try {
       const appBase =
         returnUrl ?? process.env["WC_BASE_URL"] ?? "https://www.ucfilters.com";
-      const session = await stripe.checkout.sessions.retrieve(String(req.params["sessionId"]));
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency,
+              unit_amount: Math.round(amount * 100),
+              product_data: { name: `UC Filters Order ${orderId}` },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${appBase}/stripe/success?session_id={CHECKOUT_SESSION_ID}&order=${orderId}`,
+        cancel_url: `${appBase}/stripe/cancel?order=${orderId}`,
+      });
       res.json({ sessionId: session.id, sessionUrl: session.url, amount });
     } catch (e: unknown) {
       res.status(500).json({ error: (e as Error).message, retryable: true });

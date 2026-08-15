@@ -13,7 +13,8 @@
     },
     "development": {
       "sha1": "AE:C5:96:4B:D2:7B:8D:DB:29:ED:CE:53:E9:9C:A7:13:A4:3E:FD:0D",
-      "updatedAt": "2026-08-14T21:59:26.052Z"
+      "updatedAt": "2026-08-14T21:59:26.052Z",
+      "gcpEntryRemoved": false
     }
   }
 }

@@ -122,14 +122,15 @@ Google Maps SDK.
    open `GOOGLE_MAPS_ANDROID_KEY` → Application restrictions → Android apps →
    entry for `com.ultraclean.companion`:
    - **Add** the new Play app-signing SHA-1 (from step 1).
-   - The development SHA-1 (`AE:C5:96:4B:D2:7B:8D:DB:29:ED:CE:53:E9:9C:A7:13:A4:3E:FD:0D`)
-     can remain listed if dev builds still need live Maps tiles; remove it once it is no longer needed.
+   - Keep the development SHA-1 (`AE:C5:96:4B:D2:7B:8D:DB:29:ED:CE:53:E9:9C:A7:13:A4:3E:FD:0D`)
+     listed for now — you will remove it explicitly in step 7 once production is confirmed working.
 
 5. **Confirm the restriction is set:**
    ```bash
    node scripts/check-maps-key-fingerprint.mjs --confirm-restriction
    ```
-   This marks `gcpRestrictionConfirmed: true` in the JSON and exits 0.
+   This marks `gcpRestrictionConfirmed: true` in the JSON and exits 0. The script will
+   also remind you to remove the development entry (step 7).
 
 6. **Record the upload-keystore fingerprint:**
    ```bash
@@ -139,20 +140,45 @@ Google Maps SDK.
      --update
    ```
 
-7. **Run the full check — must pass before shipping:**
+7. **Remove the development SHA-1 from the Maps key restriction** (security hardening).
+
+   The debug keystore SHA-1 was added as an interim entry so Maps tiles load in local
+   dev builds. Now that production is confirmed, it must be removed — any device that
+   has the standard Android debug keystore (auto-generated with the well-known password
+   `android`) can otherwise bill against this Maps key.
+
+   a. In [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials),
+      open `GOOGLE_MAPS_ANDROID_KEY` → Application restrictions → Android apps →
+      entry for `com.ultraclean.companion`. **Delete** the development SHA-1:
+      `AE:C5:96:4B:D2:7B:8D:DB:29:ED:CE:53:E9:9C:A7:13:A4:3E:FD:0D`
+
+   b. Mark it as removed in the record:
+      ```bash
+      node scripts/check-maps-key-fingerprint.mjs --remove-dev-restriction
+      ```
+      This sets `development.gcpEntryRemoved = true` in `security/maps-key-fingerprints.json`
+      and exits 0. Future `--fingerprint` checks will no longer warn about the dev entry.
+
+   c. **If dev builds still need Maps tiles**, provision a separate Maps API key in
+      Google Cloud Console restricted only to the debug SHA-1 and set it as an EAS
+      dev-build secret (e.g. `GOOGLE_MAPS_ANDROID_KEY_DEV`). Do not re-add the debug
+      SHA-1 to the production key.
+
+8. **Run the full check — must pass before shipping:**
    ```bash
    node scripts/check-maps-key-fingerprint.mjs \
      --fingerprint "<Play app-signing SHA-1>"
    # Expected: ✅ OK — play-signing fingerprint matches the record and the GCP Maps restriction is confirmed.
+   # (No ⚠️ ACTION RECOMMENDED warning after step 7b is done.)
    ```
 
-8. **Spot-check on the internal-testing-track build.**
+9. **Spot-check on the internal-testing-track build.**
    Install from the internal track, open the Locations map screen, and confirm tiles load.
    A blank/grey map with `Authorization failure` in `adb logcat` means the SHA-1 in the
    GCP restriction does not match the Play app-signing certificate — revisit step 4.
 
-9. **Commit `security/maps-key-fingerprints.json`** (updated by the script) so the record
-   is preserved in version control.
+10. **Commit `security/maps-key-fingerprints.json`** (updated by the script) so the record
+    is preserved in version control.
 
 ## Interim: development credentials (recorded 2026-08-14)
 

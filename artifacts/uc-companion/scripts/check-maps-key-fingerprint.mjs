@@ -26,6 +26,8 @@
  *     ... --update       (for play-signing, marks gcpRestrictionConfirmed=false until confirmed)
  *   Confirm the Google Cloud Console restriction matches the recorded play-signing SHA-1:
  *     node scripts/check-maps-key-fingerprint.mjs --confirm-restriction
+ *   Mark the development SHA-1 as removed from the GCP Maps key restriction:
+ *     node scripts/check-maps-key-fingerprint.mjs --remove-dev-restriction
  *
  * Env: MAPS_FP_RECORD overrides the record file path (used by tests).
  * Exit codes: 0 = OK, 1 = mismatch / restriction unconfirmed / error.
@@ -114,6 +116,53 @@ if (flag("confirm-restriction")) {
   entry.restrictionConfirmedAt = new Date().toISOString();
   saveRecord(record);
   console.log(`✅ Recorded: Google Cloud Console Maps restriction confirmed for Play app-signing SHA-1 ${entry.sha1}`);
+
+  // Remind operator to remove the dev entry if it is still active.
+  const dev = record.fingerprints.development;
+  if (dev?.sha1 && !dev.gcpEntryRemoved) {
+    console.log(
+      `\n⚠️  NEXT STEP — remove the development fingerprint from the Maps key restriction:\n` +
+        `   The debug SHA-1 (${dev.sha1}) is still listed as an active GCP restriction entry.\n` +
+        `   Now that production is confirmed, remove it to shrink the attack surface:\n` +
+        `   1. Google Cloud Console → APIs & Services → Credentials → GOOGLE_MAPS_ANDROID_KEY\n` +
+        `   2. Application restrictions → Android apps → entry for ${record.package}\n` +
+        `   3. Delete the development SHA-1: ${dev.sha1}\n` +
+        `   4. Run: node scripts/check-maps-key-fingerprint.mjs --remove-dev-restriction\n` +
+        `   See docs/maps-key-rotation-runbook.md for details.`
+    );
+  }
+
+  process.exit(0);
+}
+
+if (flag("remove-dev-restriction")) {
+  const dev = record.fingerprints.development;
+  if (!dev?.sha1) {
+    fail("No development fingerprint recorded — nothing to remove.");
+  }
+  if (dev.gcpEntryRemoved) {
+    console.log(
+      `ℹ️  Development fingerprint (${dev.sha1}) was already marked as removed from the GCP restriction` +
+        (dev.gcpEntryRemovedAt ? ` on ${dev.gcpEntryRemovedAt}` : "") +
+        `.`
+    );
+    process.exit(0);
+  }
+  console.log(
+    `\nBefore running this command, verify that you have already removed the development SHA-1 from the GCP Maps key:\n` +
+      `  SHA-1 to remove: ${dev.sha1}\n` +
+      `  Google Cloud Console → APIs & Services → Credentials → GOOGLE_MAPS_ANDROID_KEY\n` +
+      `  → Application restrictions → Android apps → entry for ${record.package}\n` +
+      `  → Delete the development SHA-1 entry, then save.\n`
+  );
+  dev.gcpEntryRemoved = true;
+  dev.gcpEntryRemovedAt = new Date().toISOString();
+  saveRecord(record);
+  console.log(
+    `✅ Recorded: development fingerprint (${dev.sha1}) marked as removed from the GCP Maps key restriction.\n` +
+      `   Dev builds that still need Maps tiles should use a separate Maps API key restricted to the debug SHA-1.\n` +
+      `   See docs/maps-key-rotation-runbook.md for the separate-dev-key setup.`
+  );
   process.exit(0);
 }
 
@@ -173,11 +222,16 @@ if (flag("update")) {
     );
   }
   if (identityName === "development" && changed) {
+    // Reset removal tracking — the new SHA-1 is not yet removed from GCP.
+    delete entry.gcpEntryRemoved;
+    delete entry.gcpEntryRemovedAt;
+    saveRecord(record);
     console.log(
       `\nℹ️  Development keystore recorded. For Maps tiles to load in dev/debug builds, add this SHA-1 as an\n` +
         `   ADDITIONAL entry under the Android-apps restriction for ${record.package} in Google Cloud Console.\n` +
         `   This is an interim identity — the production release remains blocked until the Play app-signing\n` +
-        `   fingerprint is recorded and confirmed (see docs/maps-key-rotation-runbook.md).`
+        `   fingerprint is recorded and confirmed (see docs/maps-key-rotation-runbook.md).\n` +
+        `   (gcpEntryRemoved has been reset — run --remove-dev-restriction again once the new SHA-1 is removed from GCP.)`
     );
   }
   process.exit(0);
@@ -216,3 +270,22 @@ if (identity.restriction && !entry.gcpRestrictionConfirmed) {
 }
 
 console.log(`\n✅ OK — ${identityName} fingerprint matches the record${identity.restriction ? " and the GCP Maps restriction is confirmed" : ""}.`);
+
+// After a clean play-signing check, warn if the dev entry is still active in GCP.
+if (identity.restriction) {
+  const dev = record.fingerprints.development;
+  if (dev?.sha1 && !dev.gcpEntryRemoved) {
+    console.log(
+      `\n⚠️  ACTION RECOMMENDED — development fingerprint still active in GCP restriction:\n` +
+        `   The debug SHA-1 (${dev.sha1}) is still listed on the Maps key restriction.\n` +
+        `   Now that production is confirmed, remove it to prevent any device with the\n` +
+        `   standard Android debug keystore from billing against this Maps key:\n` +
+        `   1. Google Cloud Console → APIs & Services → Credentials → GOOGLE_MAPS_ANDROID_KEY\n` +
+        `   2. Application restrictions → Android apps → entry for ${record.package}\n` +
+        `   3. Delete the development SHA-1: ${dev.sha1}\n` +
+        `   4. Run: node scripts/check-maps-key-fingerprint.mjs --remove-dev-restriction\n` +
+        `   If dev builds still need Maps tiles, provision a separate Maps API key restricted\n` +
+        `   to the debug SHA-1 and set it in EAS dev-build secrets. See docs/maps-key-rotation-runbook.md.`
+    );
+  }
+}
