@@ -3865,6 +3865,23 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           });
         }
 
+        // When WooCommerce is the system of record, the original call returned
+        // the WC order ID — return the same WC order on the retry so duplicate
+        // Paystack deliveries observe a consistent order ID. If the lookup
+        // cannot confirm, fall through to the DB anchor row below (the
+        // duplicate is still absorbed, just with the anchor's ID).
+        if (hasWCCredentials()) {
+          try {
+            const wcDup = await findWcOrderByRef(paymentReference);
+            if (wcDup.status === "found") {
+              res.json(normalizeOrder(wcDup.order));
+              return;
+            }
+          } catch {
+            /* fall through to the DB record below */
+          }
+        }
+
         res.json({
           id:              existingOrder.id,
           status:          existingOrder.status,
