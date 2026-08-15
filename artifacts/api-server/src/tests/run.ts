@@ -4,16 +4,24 @@
  * Usage (via package.json "test" script):
  *   node --import tsx/esm src/tests/run.ts
  *
+ * Optional: TEST_GLOB limits the run to a subset of test files, e.g.
+ *   TEST_GLOB='src/tests/orders-*.test.ts' pnpm test
+ *
  * What it does
  * ────────────
- * 1. Creates one isolated PostgreSQL schema for this entire test run
+ * 1. Creates one isolated PostgreSQL DATABASE for this entire test run
  *    (named  test_api_<timestamp>_<pid>  so concurrent runs don't clash).
- * 2. Drops leftover schemas from earlier crashed runs (>1 h old).
+ *    A separate database (rather than a schema inside the live database) is
+ *    required because drizzle-kit push always introspects/diffs the "public"
+ *    schema of whatever database it connects to — pointing it at a fresh
+ *    database makes it simply create every table, with no diff against the
+ *    live dev tables.
+ * 2. Drops leftover test databases from earlier crashed runs (>30 min old).
  * 3. Runs `drizzle-kit push --force` once to create all tables there.
  * 4. Spawns the real test command as a child process with DATABASE_URL
- *    pointed at the isolated schema — the child and its worker threads
+ *    pointed at the isolated database — the child and its worker threads
  *    inherit the variable and never touch the live database.
- * 5. Drops the schema unconditionally after the child exits.
+ * 5. Drops the database unconditionally after the child exits.
  * 6. Exits with the child's exit code so CI sees the correct result.
  */
 
@@ -30,58 +38,57 @@ if (!BASE_URL) {
   throw new Error("[test-setup] DATABASE_URL must be set before running tests.");
 }
 
-// ── 1. Admin pool (connects to live DB, only for schema management) ───────────
+// ── 1. Admin pool (connects to live DB, only for database management) ─────────
 
 const adminPool = new Pool({ connectionString: BASE_URL });
 
-// ── 2. Drop stale schemas from earlier crashed runs ───────────────────────────
+// ── 2. Drop stale test databases from earlier crashed runs ────────────────────
 
 try {
-  const { rows } = await adminPool.query<{ schema_name: string }>(
-    `SELECT schema_name
-       FROM information_schema.schemata
-      WHERE schema_name LIKE 'test_api_%'`,
+  const { rows } = await adminPool.query<{ datname: string }>(
+    // ~ is a regex match: anchored, digits only — unlike LIKE, where "_" is a
+    // single-character wildcard that could match unrelated database names.
+    String.raw`SELECT datname FROM pg_database WHERE datname ~ '^test_api_\d+_\d+$'`,
   );
 
-  for (const { schema_name } of rows) {
-    // Name format: test_api_<timestamp>_<pid>
-    const parts = schema_name.split("_");
-    const ts = parseInt(parts[2] ?? "0", 10);
+  for (const { datname } of rows) {
+    // Name format: test_api_<timestamp>_<pid>.  Re-validate in JS before
+    // interpolating into DROP DATABASE — never drop a name we didn't generate.
+    const match = /^test_api_(\d+)_\d+$/.exec(datname);
+    if (!match) continue;
+    const ts = parseInt(match[1]!, 10);
     const THIRTY_MINUTES = 30 * 60 * 1_000;
     if (!isNaN(ts) && Date.now() - ts > THIRTY_MINUTES) {
-      await adminPool.query(`DROP SCHEMA IF EXISTS "${schema_name}" CASCADE`);
-      console.log(`[test-setup] Dropped stale schema: ${schema_name}`);
+      await adminPool.query(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE)`);
+      console.log(`[test-setup] Dropped stale test database: ${datname}`);
     }
   }
 } catch (err) {
-  console.warn("[test-setup] Could not clean stale test schemas:", err);
+  console.warn("[test-setup] Could not clean stale test databases:", err);
 }
 
-// ── 3. Create the isolated schema for this run ────────────────────────────────
+// ── 3. Create the isolated database for this run ──────────────────────────────
 
-const SCHEMA = `test_api_${Date.now()}_${process.pid}`;
-await adminPool.query(`CREATE SCHEMA "${SCHEMA}"`);
+const TEST_DB = `test_api_${Date.now()}_${process.pid}`;
+await adminPool.query(`CREATE DATABASE "${TEST_DB}"`);
 await adminPool.end();
 
-// ── 4. Build the test DATABASE_URL with search_path → isolated schema ─────────
-//
-// The libpq `options` URI parameter sets runtime parameters per connection.
-// Every pg.Pool opened from this URL operates in SCHEMA, so all Drizzle
-// table references resolve there instead of the live "public" schema.
+// ── 4. Build the test DATABASE_URL pointing at the isolated database ──────────
 
-const TEST_URL =
-  BASE_URL + (BASE_URL.includes("?") ? "&" : "?") +
-  `options=-c%20search_path%3D${SCHEMA}`;
+const testUrl = new URL(BASE_URL);
+testUrl.pathname = `/${TEST_DB}`;
+const TEST_URL = testUrl.toString();
 
-// ── 5. Populate the schema with all tables via drizzle-kit push ───────────────
+// ── 5. Populate the database with all tables via drizzle-kit push ─────────────
 //
-// push-force runs drizzle-kit push --force against TEST_URL, creating every
-// table defined in lib/db/src/schema/ inside SCHEMA.  We only do this once
-// for the whole suite (not per-worker), so it's fast.
+// push-force runs drizzle-kit push --force against TEST_URL. The new database
+// is empty, so drizzle-kit generates plain CREATE TABLE statements for every
+// table defined in lib/db/src/schema/.  We only do this once for the whole
+// suite (not per-worker), so it's fast.
 
 const dbPkgDir = fileURLToPath(new URL("../../../../lib/db", import.meta.url));
 
-console.log(`[test-setup] Pushing schema to "${SCHEMA}"…`);
+console.log(`[test-setup] Pushing schema to database "${TEST_DB}"…`);
 try {
   execFileSync("pnpm", ["run", "push-force"], {
     cwd: dbPkgDir,
@@ -96,24 +103,24 @@ try {
     "stdout:", e.stdout?.toString() ?? "",
     "\nstderr:", e.stderr?.toString() ?? "",
   );
-  await dropSchema();
+  await dropTestDatabase();
   process.exit(1);
 }
 
-console.log(`[test-setup] Schema "${SCHEMA}" ready — running tests…\n`);
+console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 
 // ── 6. Run the test suite as a child process ──────────────────────────────────
 //
 // We pass DATABASE_URL=TEST_URL in the child's environment.  Every worker
 // the node:test runner spawns inherits this variable, so @workspace/db always
-// connects to the isolated schema.
+// connects to the isolated database.
 //
 // execSync with a shell so the glob in the test pattern is expanded by sh.
 
 let childExitCode = 0;
 try {
   execSync(
-    "node --import tsx/esm --test 'src/tests/**/*.test.ts'",
+    `node --import tsx/esm --test '${process.env["TEST_GLOB"] ?? "src/tests/**/*.test.ts"}'`,
     {
       cwd: fileURLToPath(new URL("../..", import.meta.url)), // artifacts/api-server
       env: { ...process.env, DATABASE_URL: TEST_URL },
@@ -125,21 +132,22 @@ try {
   childExitCode = (err as { status?: number }).status ?? 1;
 }
 
-// ── 7. Drop the schema unconditionally ───────────────────────────────────────
+// ── 7. Drop the database unconditionally ─────────────────────────────────────
 
-await dropSchema();
+await dropTestDatabase();
 
 process.exit(childExitCode);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function dropSchema(): Promise<void> {
+async function dropTestDatabase(): Promise<void> {
   const pool = new Pool({ connectionString: BASE_URL });
   try {
-    await pool.query(`DROP SCHEMA IF EXISTS "${SCHEMA}" CASCADE`);
-    console.log(`\n[test-setup] Test schema "${SCHEMA}" dropped.`);
+    // FORCE terminates any connection a crashed worker may have left open.
+    await pool.query(`DROP DATABASE IF EXISTS "${TEST_DB}" WITH (FORCE)`);
+    console.log(`\n[test-setup] Test database "${TEST_DB}" dropped.`);
   } catch (err) {
-    console.error("[test-setup] Failed to drop test schema:", err);
+    console.error("[test-setup] Failed to drop test database:", err);
   } finally {
     await pool.end();
   }
