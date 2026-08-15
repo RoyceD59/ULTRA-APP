@@ -29,6 +29,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
 import { type FilterActivation } from '@/hooks/useNotifications';
+import {
+  type CandidateResult,
+  computeRegisterCandidate,
+} from '@/hooks/filterCandidateUtils';
 import { RegisterModal } from '@/components/FilterTrackerSection';
 import {
   readNudgeState,
@@ -41,15 +45,6 @@ import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderO
 interface Props {
   /** Called after the user completes registration from the prompt. */
   onRegistered?: (a: FilterActivation) => void;
-}
-
-type NudgeMode = 'register' | 'replace';
-
-interface CandidateResult {
-  mode:              NudgeMode;
-  product:           { id: number; name: string; lifespanDays: number };
-  daysSincePurchase: number;
-  orderId:           number;
 }
 
 export default function RegisterFilterPrompt({ onRegistered }: Props) {
@@ -126,54 +121,14 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
 
   // ── Candidate computation ─────────────────────────────────────────────────
   const candidateResult = useMemo<CandidateResult | null>(() => {
-    if (!orders || productsLoading || filterProducts.length === 0) return null;
-    const byId = new Map(filterProducts.map(p => [p.id, p]));
-    const sorted = [...orders].sort(
-      (a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime(),
-    );
-
-    // ① Register mode: no activation — find any trackable order.
-    if (eligibleForRegister) {
-      for (const order of sorted) {
-        for (const item of order.lineItems ?? []) {
-          const product = byId.get(item.productId);
-          if (product) {
-            const daysSincePurchase = Math.max(
-              0,
-              Math.floor((Date.now() - new Date(order.dateCreated).getTime()) / 86_400_000),
-            );
-            return { mode: 'register', product, daysSincePurchase, orderId: order.id };
-          }
-        }
-      }
-    }
-
-    // ② Replace mode: activation stored — find a trackable order that is
-    //   newer than the activation date AND from a different order than the
-    //   one that started the current cycle.
-    if (eligibleForReplace && activation) {
-      const activationTime = new Date(activation.activatedAt).getTime();
-      for (const order of sorted) {
-        const orderTime = new Date(order.dateCreated).getTime();
-        // Orders are newest-first; once we're at or before the activation we
-        // can stop — there's nothing newer to find.
-        if (orderTime <= activationTime) break;
-        // Skip the same purchase that registered the current cycle.
-        if (order.id === activation.sourceOrderId) continue;
-        for (const item of order.lineItems ?? []) {
-          const product = byId.get(item.productId);
-          if (product) {
-            const daysSincePurchase = Math.max(
-              0,
-              Math.floor((Date.now() - orderTime) / 86_400_000),
-            );
-            return { mode: 'replace', product, daysSincePurchase, orderId: order.id };
-          }
-        }
-      }
-    }
-
-    return null;
+    if (!orders || productsLoading) return null;
+    return computeRegisterCandidate({
+      eligibleForRegister,
+      eligibleForReplace,
+      activation,
+      orders,
+      filterProducts,
+    });
   }, [eligibleForRegister, eligibleForReplace, activation, orders, filterProducts, productsLoading]);
 
   // ── Replacement-nudge dismissal (lazy, per order) ─────────────────────────
