@@ -70,7 +70,7 @@ export const FALLBACK_FILTER_PRODUCTS: FilterProduct[] = [
   { id: 19, name: 'Derma Flux',              lifespanDays: 135, icon: 'sparkles-outline' },
 ];
 
-async function readCache(): Promise<FilterProduct[] | null> {
+export async function readCache(): Promise<FilterProduct[] | null> {
   try {
     const s = await AsyncStorage.getItem(CACHE_KEY);
     if (!s) return null;
@@ -81,6 +81,46 @@ async function readCache(): Promise<FilterProduct[] | null> {
 
 /** Where the currently returned product list originated. */
 export type FilterProductSource = 'live' | 'cache' | 'fallback';
+
+/** An incremental state update emitted by resolveFilterProducts. */
+export interface FilterProductsUpdate {
+  products?: FilterProduct[];
+  source?: FilterProductSource;
+  done?: boolean;
+}
+
+/**
+ * Core resolution logic — exported for testing.
+ *
+ * Calls `onUpdate` for each state transition:
+ *   1. Cache hit  → `{ products: cached, source: 'cache' }`
+ *   2. Live fetch → `{ products: fresh,  source: 'live' }` + writes cache
+ *   3. Settled   → `{ done: true }`
+ *
+ * If the live fetch throws (offline), the cache/fallback state is left as-is
+ * and only `{ done: true }` is emitted.
+ */
+export async function resolveFilterProducts(
+  fetchProducts: () => Promise<UCProduct[]>,
+  onUpdate: (u: FilterProductsUpdate) => void,
+): Promise<void> {
+  // 1. Cached copy first — picker is instantly usable offline
+  const cached = await readCache();
+  if (cached) {
+    onUpdate({ products: cached, source: 'cache' });
+  }
+
+  // 2. Refresh from the live catalogue
+  try {
+    const fresh = toFilterProducts(await fetchProducts());
+    if (fresh.length > 0) {
+      onUpdate({ products: fresh, source: 'live' });
+      try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(fresh)); } catch { /* best-effort */ }
+    }
+  } catch { /* offline — cached / fallback list stays; source unchanged */ }
+
+  onUpdate({ done: true });
+}
 
 /**
  * Hook returning the trackable filter products.
@@ -110,27 +150,17 @@ export function useFilterProducts(): {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      // 1. Cached copy first, so the picker is instantly usable offline
-      const cached = await readCache();
-      if (cached && !cancelled) {
-        setProducts(cached);
-        setSource('cache');
-      }
-
-      // 2. Refresh from the live catalogue
-      try {
-        const fresh = toFilterProducts(await getProductsRef.current());
-        if (fresh.length > 0) {
-          if (!cancelled) {
-            setProducts(fresh);
-            setSource('live');
-          }
-          try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(fresh)); } catch { /* cache write is best-effort */ }
-        }
-      } catch { /* offline — cached / fallback list stays; source unchanged */ }
+    resolveFilterProducts(
+      () => getProductsRef.current(),
+      ({ products: p, source: s, done }) => {
+        if (cancelled) return;
+        if (p !== undefined) setProducts(p);
+        if (s !== undefined) setSource(s);
+        if (done) setLoading(false);
+      },
+    ).catch(() => {
       if (!cancelled) setLoading(false);
-    })();
+    });
 
     return () => { cancelled = true; };
   }, []);
