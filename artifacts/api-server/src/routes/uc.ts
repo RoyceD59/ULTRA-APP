@@ -1447,7 +1447,10 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     // Check for duplicate email
     const existing = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.email, email.toLowerCase().trim()) }).catch(() => null);
     if (existing) {
-      res.status(409).json({ error: "An account with this email already exists" });
+      res.status(409).json({
+        error: "An account with this email already exists. If you recently tried to register and hit an error, your account was created — please use 'Forgot password' to set a new password and log in.",
+        hint: "forgot_password",
+      });
       return;
     }
     const passwordHash = await bcryptjs.hash(password, 10);

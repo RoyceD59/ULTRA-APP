@@ -133,6 +133,40 @@ describe("Durable account records", () => {
     assert.equal(afterSecond.length, afterFirst.length, "second backfill run must be a no-op (marker)");
   });
 
+  it("returns 409 with a 'forgot password' hint when the email already exists on retry", async () => {
+    // First registration — must succeed.
+    const { status: firstStatus } = await post("/api/uc/auth/register", {
+      email: "conflict-retry@test.com",
+      phone: "+254712345088",
+      password: "initial-pass-1",
+      firstName: "Con",
+      lastName: "Flict",
+    });
+    assert.equal(firstStatus, 200, "initial registration must succeed");
+
+    // Retry with the same email (simulating a customer whose 503 was followed by a DB recovery).
+    const { status, body } = await post("/api/uc/auth/register", {
+      email: "conflict-retry@test.com",
+      phone: "+254712345088",
+      password: "retry-pass-2",
+      firstName: "Con",
+      lastName: "Flict",
+    });
+
+    assert.equal(status, 409, `expected 409 conflict but got ${status}`);
+    assert.ok(!body["token"], "409 response must not issue a session token");
+
+    // The error message must guide the customer toward password reset.
+    const errorMsg = String(body["error"] ?? "");
+    assert.ok(
+      errorMsg.toLowerCase().includes("forgot password") || errorMsg.toLowerCase().includes("forgot_password"),
+      `409 error must mention 'Forgot password'; got: ${errorMsg}`,
+    );
+
+    // The hint field must be present so clients can show the correct CTA.
+    assert.equal(body["hint"], "forgot_password", "409 response must include hint: 'forgot_password'");
+  });
+
   it("returns 503 with no token and writes a dbPersisted:false folder record when the DB insert fails", async () => {
     // Simulate a DB outage by making db.insert throw for the duration of this test.
     // ES module singletons mean the route handler sees the same db object we imported.
