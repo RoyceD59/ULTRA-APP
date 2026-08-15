@@ -40,6 +40,13 @@ export interface JwtClaims {
   name?:      string; // ProjectHub display name
   type?:      string; // e.g. "team-session" for ProjectHub team auth
   role?:      string; // "admin" | "member" for ProjectHub users
+  /**
+   * Token provenance, set at issue time and never client-controlled.
+   * "woo" = the email was verified by WooCommerce at login. Absent on
+   * DB-backed logins and on the dev ephemeral-login fallback, so admin
+   * gates can trust `email` against UC_ADMIN_EMAILS ONLY when src === "woo".
+   */
+  src?:       string;
   exp?:       number;
 }
 

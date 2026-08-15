@@ -1,20 +1,34 @@
 /**
  * Shared admin-auth helper for UC routes.
  *
- * isAdminRequest   — returns true only when the bearer token resolves to a DB-
- *                    anchored admin user. Fails closed on any error.
+ * isAdminRequest   — returns true only for three, explicitly distinguished
+ *                    principal kinds. Fails closed on any error.
  * requireAdmin     — convenience wrapper: sends 401 and returns false when the
  *                    caller is not an admin, so route handlers can early-return.
  *
- * Admin is NEVER derived from JWT claims alone — the dev-login fallback can
- * mint tokens with arbitrary emails.  The DB row is always consulted.
+ * Accepted principals:
+ *   1. ProjectHub team sessions (`type: "team-session"`) — the admin role is
+ *      RE-VERIFIED against the live team_users row on every request, never
+ *      trusted from JWT claims, so demotions/deactivations take effect
+ *      immediately instead of at token expiry.
+ *   2. WooCommerce-issued tokens (`src: "woo"`) — the email was verified by
+ *      WooCommerce at issue time (provenance claim set only by the Woo login
+ *      path), so it may be checked against the UC_ADMIN_EMAILS allowlist.
+ *      Dev ephemeral-login fallback tokens mint arbitrary emails with
+ *      Date.now() ids in the same >= 1e9 range but never carry `src: "woo"`,
+ *      so they remain rejected.
+ *   3. DB-anchored uc_users accounts — the bearer token must resolve to a real
+ *      registered user row (id < 1e9); admin comes from the row's isAdmin flag
+ *      or its (DB-stored) email being on the allowlist.
+ *
+ * Admin is NEVER derived from JWT claims alone.
  */
 import { type Request, type Response } from "express";
-import { db, ucUsersTable } from "@workspace/db";
+import { db, ucUsersTable, teamUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { verifyToken } from "./jwt.js";
 
-function adminEmailList(): string[] {
+export function adminEmailList(): string[] {
   return (process.env["UC_ADMIN_EMAILS"] ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
@@ -25,6 +39,33 @@ export async function isAdminRequest(authHeader: string | undefined): Promise<bo
   const claims = verifyToken(authHeader);
   if (!claims) return false;
 
+  // ── 1. ProjectHub team session — role re-verified against team_users ──────
+  // (The legacy passcode token has id "team" with no DB row, so it is
+  // rejected here by design — only individual team-admin accounts pass.)
+  if (claims.type === "team-session") {
+    const teamId = typeof claims.id === "string" ? claims.id : "";
+    if (!teamId) return false;
+    try {
+      const [row] = await db
+        .select({ role: teamUsersTable.role, isActive: teamUsersTable.isActive })
+        .from(teamUsersTable)
+        .where(eq(teamUsersTable.id, teamId))
+        .limit(1);
+      return !!row && row.isActive && row.role === "admin";
+    } catch {
+      return false; // DB unavailable → fail closed
+    }
+  }
+
+  // ── 2. WooCommerce-issued token — email verified by Woo at issue time ─────
+  if (claims.src === "woo") {
+    const email = typeof claims.email === "string" ? claims.email.toLowerCase().trim() : "";
+    return email.length > 0 && adminEmailList().includes(email);
+  }
+
+  // ── 3. DB-anchored uc_users account ───────────────────────────────────────
+  // Synthetic principals (Woo without provenance, dev fallback) land >= 1e9
+  // and are rejected before any DB lookup.
   const numericId = Number(claims.id);
   if (isNaN(numericId) || numericId <= 0 || numericId >= 1_000_000_000) return false;
 

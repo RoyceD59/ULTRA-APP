@@ -14,6 +14,7 @@ import {
 } from "./referrals";
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
+import { isAdminRequest } from "../lib/adminAuth.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { remoteImageProxyPath } from "./product-images.js";
 import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
@@ -1187,27 +1188,9 @@ function adminEmailList(): string[] {
     .filter(Boolean);
 }
 
-async function isAdminRequest(authHeader: string | undefined): Promise<boolean> {
-  const claims = verifyToken(authHeader);
-  if (!claims) return false;
-  // ProjectHub team admins carry a team-session JWT with role:"admin".
-  // Accept those directly — they are signed with the same SESSION_SECRET
-  // and their role is set at login time by the team_users table.
-  if (claims.type === "team-session" && claims.role === "admin") return true;
-  // UC customer admin check — strictly DB-anchored: the bearer token must
-  // resolve to a real registered user row. JWT claims alone are NEVER
-  // trusted for admin — the dev login fallback can mint tokens carrying an
-  // arbitrary email.
-  const numericId = Number(claims.id);
-  if (isNaN(numericId) || numericId <= 0 || numericId >= 1_000_000_000) return false;
-  try {
-    const dbUser = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.id, numericId) });
-    if (!dbUser) return false;
-    return dbUser.isAdmin || adminEmailList().includes(dbUser.email.toLowerCase());
-  } catch {
-    return false; // DB unavailable → fail closed
-  }
-}
+// Admin gate: shared helper in ../lib/adminAuth.js — accepts DB-anchored
+// uc_users admins, Woo-verified (src:"woo") emails on UC_ADMIN_EMAILS, and
+// ProjectHub team-session admins re-verified against the team_users row.
 
 // Attach-time verification of uploaded media ---------------------------------
 const objectStorage = new ObjectStorageService();
@@ -1390,7 +1373,11 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
         firstName: displayName.split(" ")[0] ?? "Customer",
         lastName:  displayName.split(" ").slice(1).join(" "),
       };
-      res.json({ token: issueToken(wcUser), user: wcUser });
+      // src: "woo" marks provenance — this email was verified by WooCommerce.
+      // The admin gate may check it against UC_ADMIN_EMAILS. Dev-fallback
+      // tokens (also >= 1e9 ids) never carry this claim, so they can never
+      // reach admin via a forged email.
+      res.json({ token: issueToken({ ...wcUser, src: "woo" }), user: wcUser });
       return;
     }
   } catch { /* fall through to mock */ }

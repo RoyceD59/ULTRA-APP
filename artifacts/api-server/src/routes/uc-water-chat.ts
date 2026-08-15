@@ -13,6 +13,7 @@
 import { Router, type Request, type Response, type IRouter } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { verifyToken } from "../lib/jwt.js";
+import { isAdminRequest as sharedIsAdminRequest } from "../lib/adminAuth.js";
 import { db, ucUsersTable, ucAiFeedbackTable } from "@workspace/db";
 import { eq, desc, gte, lte, and, ilike } from "drizzle-orm";
 
@@ -57,19 +58,12 @@ export async function checkAdminAuth(
   }
 }
 
-async function isAdminRequest(authHeader: string | undefined): Promise<boolean> {
-  // Fast-path: ProjectHub team admins carry a team-session JWT with role:"admin".
-  // Accept those directly without a UC customer DB lookup.
-  const claims = verifyToken(authHeader);
-  if (claims?.type === "team-session" && claims?.role === "admin") return true;
-
-  return checkAdminAuth(
-    authHeader,
-    verifyToken,
-    id => db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.id, id) })
-         .then(u => u ? { isAdmin: u.isAdmin, email: u.email } : undefined),
-  );
-}
+// Route-level admin gate: delegates to the shared helper in ../lib/adminAuth.js
+// (DB-anchored uc_users admins, Woo-verified src:"woo" emails on
+// UC_ADMIN_EMAILS, and ProjectHub team-session admins re-verified against the
+// live team_users row — never trusted from JWT claims alone).
+// checkAdminAuth above is kept exported for the uc_users unit tests.
+const isAdminRequest = sharedIsAdminRequest;
 
 
 // ─── System prompt ────────────────────────────────────────────────────────────

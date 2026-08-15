@@ -13,8 +13,8 @@
  * Strategy: point WC_BASE_URL at a local stub that fails every request, set
  * dummy WC credentials so hasWCCredentials() is true, and hit the real
  * Express app on an ephemeral port. Admin auth uses a ProjectHub
- * team-session JWT with role "admin" (accepted directly by isAdminRequest,
- * no DB row needed).
+ * team-session JWT whose admin role is re-verified against a seeded
+ * team_users row (isAdminRequest never trusts the JWT role claim alone).
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
@@ -22,9 +22,13 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { issueToken } from "../lib/jwt.js";
+import { db, teamUsersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 let wcStub: http.Server;
 let server: http.Server;
+
+const TEAM_ADMIN_ID = "test-reminder-gaps-team-admin";
 
 const savedEnv: Record<string, string | undefined> = {};
 function setEnv(key: string, value: string) {
@@ -51,6 +55,13 @@ before(async () => {
   const { port } = wcStub.address() as { port: number };
   setEnv("WC_BASE_URL", `http://127.0.0.1:${port}`);
 
+  // The admin gate re-verifies team-session roles against team_users —
+  // seed a live admin row for the token to resolve to.
+  await db.insert(teamUsersTable).values({
+    id: TEAM_ADMIN_ID, email: "reminder-gaps-admin@test.internal",
+    name: "Test Admin", passwordHash: "x", role: "admin", isActive: true,
+  });
+
   const { default: app } = await import("../app.js");
   await new Promise<void>((resolve, reject) => {
     server = app.listen(0, "127.0.0.1", (err?: Error) => (err ? reject(err) : resolve()));
@@ -58,6 +69,7 @@ before(async () => {
 });
 
 after(async () => {
+  try { await db.delete(teamUsersTable).where(eq(teamUsersTable.id, TEAM_ADMIN_ID)); } catch { /* per-run DB */ }
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -79,7 +91,7 @@ async function getReminderGaps(authHeader?: string): Promise<{ status: number; b
 function adminHeader(): string {
   const exp = Math.floor(Date.now() / 1000) + 3600;
   return `Bearer ${issueToken({
-    id: "team-1", email: "admin@test.internal", name: "Test Admin",
+    id: TEAM_ADMIN_ID, email: "reminder-gaps-admin@test.internal", name: "Test Admin",
     type: "team-session", role: "admin", exp,
   })}`;
 }

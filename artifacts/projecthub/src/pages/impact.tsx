@@ -1,8 +1,11 @@
 /**
  * UC Impact Admin — ProjectHub page
  *
- * Admin-gated page. Uses the same UC Companion credentials + JWT as the
- * Alison Feedback page. Token is stored in sessionStorage.
+ * Admin-gated page. A ProjectHub team admin who is already signed in goes
+ * straight to the dashboard using their team session token (the API
+ * re-verifies the admin role against the team_users row). The UC Companion
+ * credentials form remains as a fallback for UCFilters admins whose email is
+ * on the UC admin allowlist; that token is stored in sessionStorage.
  *
  * Shows live impact stats and lets the team log individual offline client
  * purchases that count toward Litres Filtered, Customers Served, and
@@ -21,7 +24,7 @@ import {
   Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
   PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut,
 } from 'lucide-react';
-import { getTeamToken } from '@/lib/team-auth';
+import { getTeamToken, isTeamAdmin, isTeamAuthenticated } from '@/lib/team-auth';
 
 const BASE      = import.meta.env.BASE_URL.replace(/\/$/, '');
 const TOKEN_KEY = 'uc_impact_admin_token';
@@ -116,7 +119,7 @@ function authHeaders(token: string): Record<string, string> {
 
 // ─── Login Gate ───────────────────────────────────────────────────────────────
 
-function LoginGate({ onToken }: { onToken: (t: string) => void }) {
+function LoginGate({ onToken, teamDenied }: { onToken: (t: string) => void; teamDenied?: boolean }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
@@ -143,7 +146,7 @@ function LoginGate({ onToken }: { onToken: (t: string) => void }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (checkRes.status === 401 || checkRes.status === 403) {
-        setError('Your account does not have admin access. Contact the UCFilters team.');
+        setError('This account is not on the UC Impact admin list. Ask the team to add your email to UC_ADMIN_EMAILS, or sign in to ProjectHub as a team admin.');
         return;
       }
       if (!checkRes.ok) { setError(`Server error (${checkRes.status}). Try again.`); return; }
@@ -167,9 +170,18 @@ function LoginGate({ onToken }: { onToken: (t: string) => void }) {
           <CardTitle className="text-xl">Sign in to UC Impact</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Use your UCFilters admin account (same credentials as the Companion app).
+            ProjectHub team admins are signed in automatically.
           </p>
         </CardHeader>
         <CardContent>
+          {teamDenied && (
+            <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-md p-3 mb-4">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              Your ProjectHub session was not accepted for UC Impact admin (it may have expired
+              or your admin role may have changed). Sign in below with UCFilters admin
+              credentials, or sign back into ProjectHub as a team admin.
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
@@ -324,12 +336,26 @@ function FormProductRow({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ImpactPage() {
-  const [token, setToken] = useState<string | null>(() => getTeamToken() ?? sessionStorage.getItem(TOKEN_KEY));
+  const [ucToken, setUcToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
+  // Set once the ProjectHub session has been tried and rejected by the API
+  // (or explicitly signed out of this page) — fall back to the UC-credentials
+  // form instead of retrying the same token in a loop.
+  const [teamDenied, setTeamDenied] = useState(false);
 
-  function handleToken(t: string) { setToken(t); }
-  function handleSignOut() { sessionStorage.removeItem(TOKEN_KEY); setToken(null); }
+  // A logged-in ProjectHub admin gets straight in with their team session.
+  const teamToken = !teamDenied && isTeamAdmin() && isTeamAuthenticated() ? getTeamToken() : null;
+  const token = ucToken ?? teamToken;
+  const usingTeamSession = !ucToken && !!teamToken;
 
-  if (!token) return <LoginGate onToken={handleToken} />;
+  function handleToken(t: string) { setUcToken(t); }
+  function handleSignOut() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    setUcToken(null);
+    // Never clear the ProjectHub session itself — just stop using it here.
+    if (usingTeamSession) setTeamDenied(true);
+  }
+
+  if (!token) return <LoginGate onToken={handleToken} teamDenied={teamDenied} />;
   return <ImpactDashboard token={token} onSignOut={handleSignOut} />;
 }
 
