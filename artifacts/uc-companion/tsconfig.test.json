@@ -16,6 +16,7 @@
     "hooks/useNotifications.ts",
     "hooks/mpesaStatusClassifier.ts",
     "hooks/mpesaRetryGuard.ts",
+    "hooks/reminderOptInStorage.ts",
     "context/cartStorage.ts",
     "context/CartContext.tsx"
   ]

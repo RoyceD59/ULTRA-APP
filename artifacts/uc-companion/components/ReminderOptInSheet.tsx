@@ -20,48 +20,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { useApi } from '@/hooks/useApi';
+import {
+  reminderOptInSeenKey,
+  wasReminderOptInSeen,
+  markReminderOptInSeen,
+} from '@/hooks/reminderOptInStorage';
 
-// ── Storage helpers ───────────────────────────────────────────────────────────
-
-/**
- * AsyncStorage key scoped to one registration AND one user account.
- * Including userId prevents a dismissal by User A from hiding the prompt
- * for User B when two accounts are used on the same device.
- */
-export function reminderOptInSeenKey(
-  productId: number,
-  activatedAt: string,
-  userId: number,
-): string {
-  return `uc_msg_reminder_optin_seen_${userId}_${productId}_${activatedAt}`;
-}
-
-/** Returns true if the prompt has already been shown for this registration. */
-export async function wasReminderOptInSeen(
-  productId: number,
-  activatedAt: string,
-  userId: number,
-): Promise<boolean> {
-  try {
-    return (await AsyncStorage.getItem(reminderOptInSeenKey(productId, activatedAt, userId))) === '1';
-  } catch {
-    return false;
-  }
-}
-
-/** Mark the prompt as shown so it is never re-displayed for this registration. */
-export async function markReminderOptInSeen(
-  productId: number,
-  activatedAt: string,
-  userId: number,
-): Promise<void> {
-  try {
-    await AsyncStorage.setItem(reminderOptInSeenKey(productId, activatedAt, userId), '1');
-  } catch { /* non-critical */ }
-}
+// Re-export so callers that imported these from this module continue to work.
+export { reminderOptInSeenKey, wasReminderOptInSeen, markReminderOptInSeen };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
