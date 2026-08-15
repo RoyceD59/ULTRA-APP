@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { CarouselRegisterContext, type CarouselRef } from './SwipeTabsContext';
 
 /**
  * SwipeTabs — horizontal swipe navigation between the bottom tabs.
@@ -21,11 +22,31 @@ import * as Haptics from 'expo-haptics';
  * so a swipe there must never switch tabs. You can still swipe *to* the map
  * from its neighbours and leave it via the tab bar.
  *
- * Gesture tuning:
- * - activeOffsetX ±45: horizontal carousels (products strip, promo banners)
- *   win the gesture for small horizontal movements; the tab swipe only
- *   activates on a decisive horizontal drag.
- * - failOffsetY ±18: vertical scrolling always wins.
+ * Gesture arbitration:
+ * Each horizontal FlatList in this screen must be wrapped in HorizontalCarousel,
+ * which registers its NativeViewGestureHandler ref with this component via
+ * CarouselRegisterContext. Those refs are passed to
+ * `pan.requireExternalGestureToFail(...)`, which means:
+ *
+ *   - If any carousel's native scroll handler activates (the user is scrolling
+ *     a carousel), the pan blocks until that handler fails. Since a committed
+ *     scroll stays active until the finger lifts, the pan never fires →
+ *     no accidental tab switch.
+ *   - If no carousel scroll activates within ACTIVATE_X (45 px), those
+ *     handlers have all failed (or were never relevant) → the pan can activate
+ *     normally for a tab switch.
+ *   - Any vertical movement ≥ FAIL_Y (18 px) fails the pan immediately,
+ *     handing the touch to the nearest vertical ScrollView.
+ *
+ * Physical-device checklist (simulators don't reproduce gesture racing
+ * reliably; each item must be verified on a real iOS and Android device):
+ * [ ] Swipe on plain screen content → switches tab
+ * [ ] Swipe on promo banner strip → scrolls strip, no tab switch
+ * [ ] Swipe on featured products strip → scrolls strip, no tab switch
+ * [ ] Swipe on category chips → scrolls chips, no tab switch
+ * [ ] Vertical scroll anywhere → unaffected by SwipeTabs
+ * [ ] Map tab: swiping the map does NOT switch tabs (not wrapped in SwipeTabs)
+ * If a carousel loses the race: raise ACTIVATE_X or lower TRIGGER_DIST.
  */
 
 const TAB_ORDER = ['index', 'products', 'support', 'map', 'account'] as const;
@@ -48,6 +69,16 @@ export default function SwipeTabs({ tab, children }: { tab: SwipeTab; children: 
   const router = useRouter();
   const drag = useSharedValue(0);
 
+  // Collect NativeViewGestureHandler refs from HorizontalCarousel children.
+  // Stored in state so that adding/removing a carousel triggers a re-render
+  // and the pan gesture is rebuilt with the updated requireExternalGestureToFail list.
+  const [carouselRefs, setCarouselRefs] = useState<CarouselRef[]>([]);
+
+  const register = useCallback((ref: CarouselRef) => {
+    setCarouselRefs(prev => [...prev, ref]);
+    return () => setCarouselRefs(prev => prev.filter(r => r !== ref));
+  }, []);
+
   const idx = TAB_ORDER.indexOf(tab);
   const prevTab = idx > 0 ? TAB_ORDER[idx - 1] : null;
   const nextTab = idx < TAB_ORDER.length - 1 ? TAB_ORDER[idx + 1] : null;
@@ -59,39 +90,54 @@ export default function SwipeTabs({ tab, children }: { tab: SwipeTab; children: 
     router.navigate(TAB_HREF[target]);
   };
 
-  const pan = Gesture.Pan()
-    .activeOffsetX([-ACTIVATE_X, ACTIVATE_X])
-    .failOffsetY([-FAIL_Y, FAIL_Y])
-    .onUpdate((e) => {
-      // Follow the finger, damped; extra resistance when there is no
-      // neighbour in that direction (rubber-band at the first/last tab).
-      const hasNeighbour = e.translationX < 0 ? nextTab !== null : prevTab !== null;
-      const damping = hasNeighbour ? 3 : 8;
-      const capped = Math.max(-90, Math.min(90, e.translationX / damping));
-      drag.value = capped;
-    })
-    .onEnd((e) => {
-      const goingNext =
-        (e.translationX < -TRIGGER_DIST || e.velocityX < -TRIGGER_VELOCITY) && nextTab !== null;
-      const goingPrev =
-        (e.translationX > TRIGGER_DIST || e.velocityX > TRIGGER_VELOCITY) && prevTab !== null;
+  // Rebuild the gesture whenever the carousel ref list, or the available
+  // neighbours, changes so that requireExternalGestureToFail stays current.
+  const pan = useMemo(() => {
+    const gesture = Gesture.Pan()
+      .activeOffsetX([-ACTIVATE_X, ACTIVATE_X])
+      .failOffsetY([-FAIL_Y, FAIL_Y])
+      .onUpdate((e) => {
+        // Follow the finger, damped; extra resistance when there is no
+        // neighbour in that direction (rubber-band at the first/last tab).
+        const hasNeighbour = e.translationX < 0 ? nextTab !== null : prevTab !== null;
+        const damping = hasNeighbour ? 3 : 8;
+        const capped = Math.max(-90, Math.min(90, e.translationX / damping));
+        drag.value = capped;
+      })
+      .onEnd((e) => {
+        const goingNext =
+          (e.translationX < -TRIGGER_DIST || e.velocityX < -TRIGGER_VELOCITY) && nextTab !== null;
+        const goingPrev =
+          (e.translationX > TRIGGER_DIST || e.velocityX > TRIGGER_VELOCITY) && prevTab !== null;
 
-      drag.value = withTiming(0, { duration: 180 });
-      if (goingNext) {
-        runOnJS(goTo)(nextTab!);
-      } else if (goingPrev) {
-        runOnJS(goTo)(prevTab!);
-      }
-    });
+        drag.value = withTiming(0, { duration: 180 });
+        if (goingNext) {
+          runOnJS(goTo)(nextTab!);
+        } else if (goingPrev) {
+          runOnJS(goTo)(prevTab!);
+        }
+      });
+
+    // If any HorizontalCarousel has registered, require all of them to fail
+    // (i.e. not scroll) before the pan is allowed to activate.
+    if (carouselRefs.length > 0) {
+      gesture.requireExternalGestureToFail(...carouselRefs);
+    }
+
+    return gesture;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carouselRefs, prevTab, nextTab]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: drag.value }],
   }));
 
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.fill, animatedStyle]}>{children}</Animated.View>
-    </GestureDetector>
+    <CarouselRegisterContext.Provider value={register}>
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.fill, animatedStyle]}>{children}</Animated.View>
+      </GestureDetector>
+    </CarouselRegisterContext.Provider>
   );
 }
 

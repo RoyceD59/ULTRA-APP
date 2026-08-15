@@ -14,6 +14,7 @@ import { useCartBarInset } from '@/hooks/useCartBarInset';
 import ProductCard from '@/components/ProductCard';
 import FilterChip from '@/components/FilterChip';
 import SwipeTabs from '@/components/SwipeTabs';
+import HorizontalCarousel from '@/components/HorizontalCarousel';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 
@@ -150,8 +151,7 @@ function ProductsScreenContent() {
           ))}
         </View>
       ) : (addons ?? []).length > 0 ? (
-        <FlatList
-          horizontal
+        <HorizontalCarousel
           data={addons}
           keyExtractor={i => String(i.id)}
           showsHorizontalScrollIndicator={false}
@@ -285,13 +285,11 @@ function ProductsScreenContent() {
         </View>
 
         {/* Category chips */}
-        <FlatList
-          horizontal
+        <HorizontalCarousel
           data={CATEGORIES}
           keyExtractor={i => i}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chips}
-          scrollEnabled
           renderItem={({ item }) => (
             <FilterChip label={item} active={category === item} onPress={() => setCategory(item)} />
           )}

@@ -15,6 +15,7 @@ import { getFilterActivation, effectiveLifespanDays } from '@/hooks/useNotificat
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 import SwipeTabs from '@/components/SwipeTabs';
+import HorizontalCarousel from '@/components/HorizontalCarousel';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -168,8 +169,8 @@ function HomeScreenContent() {
                 <Text style={[styles.seeAll, { color: colors.primary }]}>Refer & Earn</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              horizontal data={promotions}
+            <HorizontalCarousel
+              data={promotions}
               keyExtractor={p => p.id}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
@@ -207,8 +208,8 @@ function HomeScreenContent() {
         {isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
         ) : (
-          <FlatList
-            horizontal data={featured}
+          <HorizontalCarousel
+            data={featured}
             keyExtractor={i => String(i.id)}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 12, paddingHorizontal: 2, paddingVertical: 4 }}
