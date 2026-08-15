@@ -249,6 +249,11 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS uc_notification_log_provider_idx ON uc_notification_log (provider)`
   );
+  // Composite index so the nightly pruning DELETEs (status + sent_at cutoff)
+  // and status-filtered, sent_at-ordered admin listings stay O(log n).
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS uc_notification_log_status_sent_at_idx ON uc_notification_log (status, sent_at)`
+  );
   logger.info("Startup migration: uc_notification_log table ensured");
 
   // Create uc_return_requests table for customer return/refund requests.

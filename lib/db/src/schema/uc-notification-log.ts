@@ -33,6 +33,9 @@ export const ucNotificationLogTable = pgTable(
   (t) => [
     index("uc_notification_log_status_idx").on(t.status),
     index("uc_notification_log_sent_at_idx").on(t.sentAt),
+    // Composite index for the nightly pruning job and any status-filtered,
+    // time-ordered listing: WHERE status = ? AND sent_at < ?
+    index("uc_notification_log_status_sent_at_idx").on(t.status, t.sentAt),
   ]
 );
 
