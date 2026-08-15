@@ -36,7 +36,7 @@ import { sendSms } from "./sms.js";
 import { sendWhatsAppMessage, getWhatsAppStatus } from "./whatsapp.js";
 
 /** Days past a stage's target date during which we still send it. */
-const GRACE_DAYS = 3;
+export const GRACE_DAYS = 3;
 /** Safety cap on messages per run (per channel-send counts once). */
 const MAX_SENDS_PER_RUN = 300;
 
@@ -146,12 +146,19 @@ export interface StageDecision {
  * Returns the stages that require action today: stages whose target day has
  * arrived and which aren't in sentStages. Stages within the grace window are
  * "send"; older ones are "skip_stale" (mark handled, never send).
+ *
+ * @param adjustedOffsets  When set, replace30 and replace15 use the stored
+ *   day-offsets (computed by the app at check-in time) instead of the formula.
+ *   This guarantees parity with the rescheduled phone notifications, including
+ *   for late check-ins where the app's "tomorrow" guard moved the offset past
+ *   what the lifespan formula alone would produce.
  */
 export function dueStages(
   lifespanDays: number,
   activatedAt: Date,
   sentStages: string[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  adjustedOffsets?: { replace30?: number | null; replace15?: number | null } | null
 ): StageDecision[] {
   if (!(lifespanDays > 0)) return [];
   const daysSince = Math.floor((now.getTime() - activatedAt.getTime()) / 86_400_000);
@@ -159,7 +166,14 @@ export function dueStages(
   const out: StageDecision[] = [];
   for (const stage of STAGES) {
     if (sentStages.includes(stage.key)) continue;
-    const offset = stage.offset(lifespanDays);
+    // For replace30/replace15 use the app-computed offset when available;
+    // fall back to the formula for all other stages and when no adjustment
+    // was stored.
+    const storedOffset =
+      (stage.key === "replace30" || stage.key === "replace15")
+        ? (adjustedOffsets?.[stage.key] ?? null)
+        : null;
+    const offset = storedOffset != null ? storedOffset : stage.offset(lifespanDays);
     if (offset == null) continue;
     if (daysSince < offset) continue;
     out.push({
@@ -217,6 +231,8 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
       productId: ucFilterRemindersTable.productId,
       productName: ucFilterRemindersTable.productName,
       lifespanDays: ucFilterRemindersTable.lifespanDays,
+      effectiveLifespanDays: ucFilterRemindersTable.effectiveLifespanDays,
+      adjustedReplaceOffsets: ucFilterRemindersTable.adjustedReplaceOffsets,
       activatedAt: ucFilterRemindersTable.activatedAt,
       sourceOrderId: ucFilterRemindersTable.sourceOrderId,
       sentStages: ucFilterRemindersTable.sentStages,
@@ -256,7 +272,12 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
     }
 
     const sent = Array.isArray(row.sentStages) ? row.sentStages : [];
-    const decisions = dueStages(row.lifespanDays, row.activatedAt, sent);
+    // day30/day60 use rated lifespanDays — they are informational performance
+    // prompts tied to calendar milestones, matching the local scheduler which
+    // also uses rated lifespanDays for those guards (lifespanDays > 45 / > 75).
+    // replace30/replace15 use adjustedReplaceOffsets when available so they
+    // fire on the exact dates the app computed at check-in time.
+    const decisions = dueStages(row.lifespanDays, row.activatedAt, sent, new Date(), row.adjustedReplaceOffsets);
     if (decisions.length === 0) continue;
 
     for (const decision of decisions) {
@@ -271,6 +292,8 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
         continue;
       }
 
+      // day30/day60 message bodies quote remaining-life figures; use rated
+      // lifespanDays so they match the local notification content.
       const msg = buildStageMessage(
         decision.key,
         row.productName,

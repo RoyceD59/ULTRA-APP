@@ -21,6 +21,13 @@ export function _setPushToken(t: string): void { _pushState.token = t; }
 export function _setPushTokenDelay(ms: number): void { _pushState.delayMs = ms; }
 export function _getPushTokenFetchCount(): number { return _pushState.fetchCount; }
 
+// Permission state — tests can override to simulate denied/undetermined.
+let _permStatus: 'granted' | 'denied' | 'undetermined' = 'granted';
+/** Override the permission status returned by getPermissionsAsync/requestPermissionsAsync. */
+export function _setPermissionStatus(s: 'granted' | 'denied' | 'undetermined'): void {
+  _permStatus = s;
+}
+
 export function _reset(): void {
   _scheduled.length = 0;
   _cancelled.length = 0;
@@ -29,6 +36,7 @@ export function _reset(): void {
   _pushState.token = 'ExponentPushToken[test-1]';
   _pushState.delayMs = 0;
   _pushState.fetchCount = 0;
+  _permStatus = 'granted';
 }
 
 export async function getExpoPushTokenAsync(): Promise<{ data: string }> {
@@ -44,11 +52,19 @@ export async function getExpoPushTokenAsync(): Promise<{ data: string }> {
 export function setNotificationHandler(_handler: unknown): void { /* no-op */ }
 
 export async function getPermissionsAsync() {
-  return { granted: true, canAskAgain: true };
+  return {
+    status: _permStatus,
+    granted: _permStatus === 'granted',
+    canAskAgain: _permStatus !== 'denied',
+  };
 }
 
 export async function requestPermissionsAsync() {
-  return { granted: true, canAskAgain: true };
+  return {
+    status: _permStatus,
+    granted: _permStatus === 'granted',
+    canAskAgain: false,
+  };
 }
 
 export async function setNotificationChannelAsync(

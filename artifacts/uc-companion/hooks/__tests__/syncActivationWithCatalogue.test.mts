@@ -154,6 +154,26 @@ describe('syncActivationWithCatalogue', () => {
     }
   });
 
+  it('preserves adjustedOffsets from a check-in when the catalogue lifespan changes', async () => {
+    // After a performance check-in shortens the effective schedule, a catalogue
+    // lifespan correction must not silently erase the check-in-derived offsets.
+    // Both handset (scheduleAllFilterNotifications) and server must keep using the
+    // same replace30/replace15 dates — otherwise they drift apart.
+    const offsets = { replace30: 50, replace15: 60 };
+    seedActivation({ lifespanDays: 90, adjustedOffsets: offsets });
+
+    const result = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 120, name: 'Hydra Flux Pro' },
+    ]);
+
+    assert.ok(result !== null, 'expected a non-null result for a lifespan change');
+    assert.deepEqual(
+      result.adjustedOffsets,
+      offsets,
+      'adjustedOffsets must survive a catalogue lifespan correction so server and handset fire on the same dates',
+    );
+  });
+
   it('preserves all non-lifespan fields across a sync update', async () => {
     const originalActivatedAt = daysAgo(2);
     seedActivation({

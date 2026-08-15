@@ -116,6 +116,17 @@ export interface FilterActivation {
   // came from. Used to stop the same receipt line being registered twice for
   // the same product; a NEW purchase (different order id) restarts the cycle.
   sourceOrderId?: number;
+  /**
+   * Day-offsets (from activatedAt) for the two replacement-reminder stages,
+   * computed at check-in time when a performance check-in shortens the filter's
+   * effective life. Null / absent = no adjustment; use the rated schedule.
+   *
+   * Persisting the offsets (rather than the effective lifespan alone) ensures
+   * the server dispatches on the exact same dates as the rescheduled phone
+   * notifications, even when the check-in happened after the originally
+   * scheduled offset would have already passed.
+   */
+  adjustedOffsets?: { replace30: number; replace15: number };
 }
 
 /**
@@ -374,12 +385,32 @@ const AUTH_TOKEN_KEY = 'uc_auth_token';
 export async function syncReminderToServer(
   activation: Pick<
     FilterActivation,
-    'productId' | 'productName' | 'lifespanDays' | 'activatedAt' | 'sourceOrderId'
+    | 'productId' | 'productName' | 'lifespanDays' | 'activatedAt' | 'sourceOrderId'
+    // Performance-check fields — needed to derive the effective lifespan so
+    // every sync path (register, prefs, catalogue correction, check-in)
+    // consistently carries the adjusted schedule to the server.
+    | 'cleanCount' | 'lastWaterSource'
+    // Persisted adjusted day-offsets from the most recent rescheduling event.
+    // Carrying these lets the server dispatch on exactly the same dates as the
+    // rescheduled phone notifications, even for late check-ins where the
+    // "tomorrow" guard pushed offset30 past the formula-derived date.
+    | 'adjustedOffsets'
   > | null
 ): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
     if (!token) return;
+
+    // Derive the performance-adjusted lifespan only when adjustedOffsets are also set.
+    // When a good check-in clears adjustedOffsets, omitting effectiveLifespanDays
+    // causes the server to store null and revert ALL stages to rated-lifespan
+    // dispatch — matching the handset schedule that also reverts to rated dates.
+    let effDaysPayload: number | undefined;
+    if (activation && activation.adjustedOffsets != null) {
+      const eff = effectiveLifespanDays(activation as FilterActivation);
+      if (eff < activation.lifespanDays) effDaysPayload = eff;
+    }
+
     await fetch(`${getApiBase()}/api/uc/reminders/sync`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -391,6 +422,16 @@ export async function syncReminderToServer(
               lifespanDays:  activation.lifespanDays,
               activatedAt:   activation.activatedAt,
               sourceOrderId: activation.sourceOrderId,
+              // Monotonic version: generated at call-time so the server can
+              // detect and reject out-of-order completions (a slow earlier
+              // request arriving after a faster later one).
+              syncedAt:      new Date().toISOString(),
+              ...(effDaysPayload !== undefined
+                ? { effectiveLifespanDays: effDaysPayload }
+                : {}),
+              ...(activation.adjustedOffsets != null
+                ? { adjustedReplaceOffsets: activation.adjustedOffsets }
+                : {}),
             }
           : null,
       }),
@@ -527,10 +568,13 @@ export async function scheduleAllFilterNotifications(
   }
 
   // ── 4. 30 days before replacement — discount offer
-  // Math.floor ensures the clamp is stable even when daysSinceActivation is
-  // a tiny fraction above a whole number (e.g. 50.000001 due to test timing):
-  // Math.floor(50.000001)+1 = 51, whereas Math.ceil would give 52.
-  const offset4 = Math.max(Math.min(lifespanDays - 30, lifespanDays - 1), Math.floor(daysSinceActivation) + 1);
+  // Math.floor ensures the clamp is stable when daysSinceActivation is a tiny
+  // fraction above a whole number (e.g. 49.999 → floor=49 → offset4=50, today).
+  // When stored adjusted offsets exist (from a check-in rescheduling), honour
+  // them so a re-enabled local schedule fires on the same dates as the server
+  // dispatch — avoids handset/server drift on disable→re-enable or catalogue correction.
+  const offset4 = params.adjustedOffsets?.replace30
+    ?? Math.max(Math.min(lifespanDays - 30, lifespanDays - 1), Math.floor(daysSinceActivation) + 1);
   await scheduleAt(
     new Date(activationDate.getTime() + offset4 * 86_400_000),
     {
@@ -541,7 +585,8 @@ export async function scheduleAllFilterNotifications(
   );
 
   // ── 5. 15 days before replacement — urgent 48-hour offer
-  const offset5 = Math.max(offset4 + 1, lifespanDays - 15);
+  const offset5 = params.adjustedOffsets?.replace15
+    ?? Math.max(offset4 + 1, lifespanDays - 15);
   await scheduleAt(
     new Date(activationDate.getTime() + offset5 * 86_400_000),
     {
@@ -626,6 +671,10 @@ export async function syncActivationWithCatalogue(
     // Preserve the receipt linkage — losing it would let the same receipt
     // line be registered again after a catalogue lifespan correction.
     sourceOrderId:   existing.sourceOrderId,
+    // Preserve check-in-derived offsets so the rescheduled local notifications
+    // fire on the same dates as the server dispatch.  A degradation result
+    // takes precedence over a catalogue correction for replace30/replace15.
+    adjustedOffsets: existing.adjustedOffsets,
   });
 
   return updated;
@@ -664,73 +713,41 @@ export async function recordPerformanceCheckIn(
       checkIns:        history,
     };
 
-    // If we need to replace sooner, cancel old notifs and reschedule with adjusted lifespan
-    if (checkIn.recommendation === 'replace' || checkIn.recommendation === 'clean') {
-      const effDays    = effectiveLifespanDays(updated);
-      const activation = updated.activatedAt;
-      const activationDate = new Date(activation);
-      const now        = Date.now();
-      const elapsed    = Math.floor((now - activationDate.getTime()) / 86_400_000);
+    // Compute the adjusted effective lifespan — used both to gate rescheduling
+    // and to sync the updated schedule to the server so email/SMS/WhatsApp
+    // reminders fire on the same dates as the rescheduled phone notifications.
+    const effDays = effectiveLifespanDays(updated);
 
-      const filterPrefsOk = (await getNotifPrefs()).filterReminders;
-      if (Platform.OS !== 'web' && effDays < existing.lifespanDays && filterPrefsOk) {
-        // Cancel old scheduled notifications
-        await Promise.all((existing.notifIds ?? []).map(id =>
-          Notifications.cancelScheduledNotificationAsync(id).catch(() => {})
-        ));
-
-        const status = await getNotificationPermissionStatus();
-        const newIds: string[] = [];
-
-        if (status === 'granted') {
-          await ensureAndroidChannel();
-
-          async function scheduleAdjusted(
-            targetDate: Date,
-            content: { title: string; body: string; data?: Record<string, unknown> }
-          ): Promise<void> {
-            const secondsFromNow = Math.floor((targetDate.getTime() - now) / 1000);
-            if (secondsFromNow < 30) return;
-            try {
-              const id = await Notifications.scheduleNotificationAsync({
-                content: { ...content, sound: false },
-                trigger: { seconds: secondsFromNow } as unknown as null,
-              });
-              newIds.push(id);
-            } catch { /* non-critical */ }
-          }
-
-          const offset30 = Math.max(elapsed + 1, effDays - 30);
-          if (offset30 > elapsed) {
-            await scheduleAdjusted(
-              new Date(activationDate.getTime() + offset30 * 86_400_000),
-              {
-                title: `📅 Time to order your replacement — water quality alert`,
-                body:  `Your ${existing.productName} is working harder than usual due to your water source. Order a replacement now.`,
-                data:  { screen: 'products', type: 'discount_30_adjusted' },
-              }
-            );
-          }
-
-          const offset15 = Math.max(offset30 + 1, effDays - 10);
-          if (offset15 > elapsed) {
-            await scheduleAdjusted(
-              new Date(activationDate.getTime() + offset15 * 86_400_000),
-              {
-                title: `🚨 Replace your filter soon — performance alert`,
-                body:  `Based on your water source and check-in, your ${existing.productName} needs replacing. Don't risk unfiltered water.`,
-                data:  { screen: 'products', type: 'replace_urgent_adjusted' },
-              }
-            );
-          }
-        }
-
-        updated.notifIds = newIds;
-      }
+    if (
+      (checkIn.recommendation === 'replace' || checkIn.recommendation === 'clean') &&
+      effDays < existing.lifespanDays
+    ) {
+      // ── Adjustment needed — compute and store offsets ───────────────────
+      // Persisted regardless of push-notification permission or local prefs so
+      // email/SMS/WhatsApp reminders (independent opt-in) fire on adjusted dates.
+      const activationDate = new Date(updated.activatedAt);
+      const elapsed = Math.floor((Date.now() - activationDate.getTime()) / 86_400_000);
+      const offset30 = Math.max(elapsed + 1, effDays - 30);
+      const offset15 = Math.max(offset30 + 1, effDays - 10);
+      updated.adjustedOffsets = { replace30: offset30, replace15: offset15 };
+    } else {
+      // ── Good check-in / no adjustment ──────────────────────────────────
+      // Clear any previous adjustment so the server reverts to rated-lifespan
+      // dispatch for all stages (replace30/replace15).
+      updated.adjustedOffsets = undefined;
     }
 
-    await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(updated));
-    return updated;
+    // Reschedule local notifications, persist, and sync to server in one step.
+    // scheduleAllFilterNotifications:
+    //   1. Calls cancelAllFilterNotifications() to cancel any previously
+    //      adjusted alerts (reads the OLD AsyncStorage state before this write).
+    //   2. Schedules replacement alerts at adjusted offsets (if adjustedOffsets
+    //      is set) or at rated-lifecycle formula dates (if cleared), skipping any
+    //      dates already in the past.  Respects push permission and local prefs.
+    //   3. Writes the final activation (with new notifIds) to AsyncStorage.
+    //   4. Syncs adjustedOffsets + effectiveLifespanDays (or null) to the server
+    //      so email/SMS/WhatsApp fire on the same dates as phone notifications.
+    return await scheduleAllFilterNotifications(updated);
   } catch {
     return null;
   }

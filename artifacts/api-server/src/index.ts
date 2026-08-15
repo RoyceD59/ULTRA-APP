@@ -379,6 +379,18 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_filter_reminders table ensured");
 
+  // Effective lifespan and adjusted replacement offsets — added by the check-in
+  // sync feature so the server-side dispatcher fires on the same dates as the
+  // rescheduled phone notifications.  synced_at is the monotonic version token
+  // used for atomic stale-write rejection in the upsert WHERE clause.
+  await pool.query(`
+    ALTER TABLE uc_filter_reminders
+      ADD COLUMN IF NOT EXISTS effective_lifespan_days  integer,
+      ADD COLUMN IF NOT EXISTS adjusted_replace_offsets jsonb,
+      ADD COLUMN IF NOT EXISTS synced_at                timestamptz;
+  `);
+  logger.info("Startup migration: uc_filter_reminders effective_lifespan / adjusted_replace_offsets / synced_at columns ensured");
+
   // Opt-in channel flags for filter replacement reminders (email / SMS / WhatsApp).
   // All default false — customers explicitly enable each channel.
   await pool.query(`
@@ -399,7 +411,6 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_users clerk_user_id / auth_provider columns ensured");
 }
-
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;
 
