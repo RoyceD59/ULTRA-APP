@@ -33,7 +33,7 @@ interface LifespanAudit {
  * those products ship without replacement reminders. Admin-only endpoint:
  * non-admin members get a 403 and the card simply stays hidden.
  */
-function LifespanAuditWarning() {
+export function LifespanAuditWarning() {
   const { data } = useQuery<LifespanAudit | null>({
     queryKey: ["uc-lifespan-audit"],
     staleTime: 5 * 60 * 1000,
