@@ -13,7 +13,7 @@
  * pointed at a throwaway temp dir via UC_ACCOUNTS_DATA_DIR, which must be
  * set BEFORE the account-records module is imported.
  */
-import { describe, it, before, after } from "node:test";
+import { describe, it, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -131,5 +131,45 @@ describe("Durable account records", () => {
     await backfillAccountRecords();
     const afterSecond = await readRecords();
     assert.equal(afterSecond.length, afterFirst.length, "second backfill run must be a no-op (marker)");
+  });
+
+  it("returns 503 with no token and writes a dbPersisted:false folder record when the DB insert fails", async () => {
+    // Simulate a DB outage by making db.insert throw for the duration of this test.
+    // ES module singletons mean the route handler sees the same db object we imported.
+    const insertMock = mock.method(db, "insert", () => {
+      throw new Error("DB_DOWN_SIMULATION");
+    });
+
+    try {
+      const { status, body } = await post("/api/uc/auth/register", {
+        email: "db-fail-reg@test.com",
+        phone: "+254712345099",
+        password: "safe-pass-123",
+        firstName: "Db",
+        lastName: "Fail",
+      });
+
+      // Must be 503 with the "safely recorded" message and absolutely no session token.
+      assert.equal(status, 503, `expected 503 but got ${status}`);
+      assert.ok(!body["token"], "503 response must NOT contain a session token");
+      assert.ok(
+        typeof body["error"] === "string" && body["error"].includes("safely recorded"),
+        `error must mention 'safely recorded'; got: ${String(body["error"])}`,
+      );
+
+      // The critical recordAccountRegistration call is awaited by the route before
+      // responding, so the file is already written by the time we read it here.
+      const records = await readRecords();
+      const rec = records.find(r => r["email"] === "db-fail-reg@test.com");
+      assert.ok(rec, "a folder record must be written even when the DB insert fails");
+      assert.equal(rec!["dbPersisted"], false, "dbPersisted must be false when DB insert failed");
+      assert.equal(rec!["source"], "registration", "source must be 'registration'");
+      assert.equal(rec!["id"], null, "id must be null when the DB insert never completed");
+
+      // No password material — neither the key names nor the raw secret.
+      assertNoPasswordMaterial(rec!, "safe-pass-123");
+    } finally {
+      insertMock.mock.restore();
+    }
   });
 });
