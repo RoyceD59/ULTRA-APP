@@ -11,6 +11,8 @@
  *   (g) AT returning 500 still sends the email and logs status=failed in uc_notification_log
  *   (h) alertTeamRecoveryOrder() still calls AT SMS when Resend is down
  *   (i) alertTeamRecoveryOrder() uses the DB phone number when set in team_settings
+ *   (e2)/(e3) runStaleRecoveryOrderDigest() still attempts the email and logs
+ *             status=failed when AT returns 401 / 500
  *
  * Strategy:
  *   - alertTeamRecoveryOrder is tested by intercepting globalThis.fetch for both
@@ -641,6 +643,109 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
 
     // Invalidate again so the cached DB phone doesn't leak into later tests
     invalidateTeamAlertPhoneCache();
+  });
+
+  /**
+   * Shared runner for the AT-rejection digest scenarios: stubs one stale order,
+   * makes the AT fetch return `atStatus`, runs the digest, and asserts that the
+   * Resend email is still attempted and a status=failed SMS row is logged.
+   */
+  async function runDigestWithAtRejection(atStatus: number, orderId: number): Promise<void> {
+    process.env["TEAM_ALERT_PHONE"] = "+254700000020";
+    // Force sendViaResend onto the fetch path so the stub captures the email call
+    process.env["RESEND_BASE_URL"] = "https://api.resend.com";
+
+    const createdAt = new Date(Date.now() - 30 * 60 * 60 * 1000); // 30 h ago
+    selectStub = [
+      {
+        id: orderId,
+        paymentMethod: "mpesa",
+        total: "5000",
+        status: "processing",
+        paymentReference: `LGR${orderId}`,
+        dateCreated: createdAt,
+        webhookRecovery: true,
+        userId: "anon",
+        currency: "KES",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {},
+      },
+    ];
+
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : (input as URL | Request).toString();
+      const bodyText = typeof init?.body === "string" ? init.body : String(init?.body ?? "");
+      capturedRequests.push({ url, bodyText });
+
+      if (url.includes("africastalking.com")) {
+        // Simulate AT rejecting the SMS
+        return new Response(atStatus === 401 ? "Unauthorized" : "Internal Server Error", {
+          status: atStatus,
+        });
+      }
+      // Resend succeeds
+      return new Response(JSON.stringify({ id: "resend-ok" }), { status: 200 });
+    };
+
+    try {
+      const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+
+      // Must not throw even though AT rejects the SMS
+      let threw = false;
+      try {
+        await runStaleRecoveryOrderDigest();
+      } catch {
+        threw = true;
+      }
+      assert.ok(!threw, `digest must not throw when AT returns ${atStatus}`);
+
+      // Allow any fire-and-forget log writes to settle
+      await waitTick(120);
+
+      // Email (Resend) must still have been attempted
+      const resendRequests = capturedRequests.filter((r) =>
+        r.url.includes("resend.com") || r.url.includes("api.resend")
+      );
+      assert.ok(
+        resendRequests.length >= 1,
+        `Resend email should still be attempted when AT returns ${atStatus}`,
+      );
+
+      // AT was attempted
+      const atRequests = capturedRequests.filter((r) =>
+        r.url.includes("africastalking.com")
+      );
+      assert.ok(atRequests.length >= 1, "AT fetch should have been attempted");
+
+      // uc_notification_log should have a failed row for the SMS attempt
+      const failedLogRows = capturedInserts.filter((row) => {
+        const r = row as Record<string, unknown>;
+        return r["channel"] === "sms" && r["status"] === "failed";
+      });
+      assert.ok(
+        failedLogRows.length >= 1,
+        `uc_notification_log should contain a status=failed SMS row; captured inserts: ${JSON.stringify(capturedInserts)}`,
+      );
+      const logRow = failedLogRows[0] as Record<string, unknown>;
+      assert.ok(
+        String(logRow["errorMessage"] ?? "").includes(String(atStatus)),
+        `errorMessage should reference the ${atStatus} status; got: ${logRow["errorMessage"]}`,
+      );
+    } finally {
+      globalThis.fetch = savedFetch;
+      delete process.env["RESEND_BASE_URL"];
+    }
+  }
+
+  it("(e2) AT returning 401 — digest email still attempted and status=failed logged", async () => {
+    await runDigestWithAtRejection(401, 301);
+  });
+
+  it("(e3) AT returning 500 — digest email still attempted and status=failed logged", async () => {
+    await runDigestWithAtRejection(500, 302);
   });
 
   it("(d) skips gracefully (no SMS, no error) when no stale orders found", async () => {
