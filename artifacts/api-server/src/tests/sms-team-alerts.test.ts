@@ -425,6 +425,22 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
       String(logRow["errorMessage"] ?? "").includes("401"),
       `errorMessage should reference the 401 status; got: ${logRow["errorMessage"]}`,
     );
+    assert.equal(
+      logRow["recipient"],
+      "+254700000010",
+      `log row recipient should be the normalised E.164 phone; got: ${logRow["recipient"]}`,
+    );
+    assert.equal(
+      logRow["template"],
+      "payment_recovery_alert",
+      `log row template should match the meta template; got: ${logRow["template"]}`,
+    );
+    assert.equal(logRow["channel"], "sms", "log row channel should be 'sms'");
+    assert.equal(
+      logRow["provider"],
+      "africas_talking",
+      "log row provider should be 'africas_talking'",
+    );
 
     globalThis.fetch = savedFetch;
     delete process.env["RESEND_BASE_URL"];
@@ -492,6 +508,22 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     assert.ok(
       String(logRow["errorMessage"] ?? "").includes("500"),
       `errorMessage should reference the 500 status; got: ${logRow["errorMessage"]}`,
+    );
+    assert.equal(
+      logRow["recipient"],
+      "+254700000011",
+      `log row recipient should be the normalised E.164 phone; got: ${logRow["recipient"]}`,
+    );
+    assert.equal(
+      logRow["template"],
+      "payment_recovery_alert",
+      `log row template should match the meta template; got: ${logRow["template"]}`,
+    );
+    assert.equal(logRow["channel"], "sms", "log row channel should be 'sms'");
+    assert.equal(
+      logRow["provider"],
+      "africas_talking",
+      "log row provider should be 'africas_talking'",
     );
 
     globalThis.fetch = savedFetch;
