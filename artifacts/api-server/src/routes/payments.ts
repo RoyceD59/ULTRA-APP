@@ -675,7 +675,7 @@ router.post(
     const reference = event.data?.reference ?? "";
     const amountKobo = event.data?.amount ?? 0;
     const currency = event.data?.currency ?? "KES";
-    const customerEmail = event.data?.customer?.email ?? "";
+    const customerEmail = event.data?.customer?.email ?? null;
 
     if (!reference) {
       res.status(400).json({ error: "Missing reference in webhook payload" });
@@ -683,7 +683,7 @@ router.post(
     }
 
     try {
-      // ── Idempotency: look up existing order by payment reference ──────────
+      // ── Idempotency: look up existing order by payment reference ──────────────────────
       const existing = await db
         .select()
         .from(ucOrdersTable)
@@ -715,7 +715,7 @@ router.post(
         return;
       }
 
-      // ── No order found — create a recovery record ─────────────────────────
+      // ── No order found — create a recovery record ─────────────────────────────────────
       // The app lost connectivity after payment but before createOrder fired.
       // We persist what Paystack told us so the team can reconcile and fulfil.
       const totalKes = Math.round(amountKobo / 100);
@@ -741,7 +741,7 @@ router.post(
         `[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`
       );
 
-      // ── Alert the team (email + SMS fallback) ────────────────────────────
+      // ── Alert the team (email + SMS fallback) ────────────────────────────────────
       // Fire-and-forget: alert failure must never block the webhook 200 response.
       alertTeamRecoveryOrder({
         subject:  `⚠️ Webhook recovery order #${recovered!.id} needs fulfilment`,
