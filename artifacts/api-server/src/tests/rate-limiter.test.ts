@@ -219,6 +219,88 @@ describe("Rate limiter — POST /auth/login (max 10 per minute)", () => {
   });
 });
 
+// ── Suite: auth/register rate limit ──────────────────────────────────────────
+
+// Register requests use an empty body `{}` so the handler's own
+// `!token || !name || !password` guard rejects them with HTTP 400 before any
+// DB read/write occurs. The limiter fires before the body is inspected.
+
+describe("Rate limiter — POST /auth/register (max 10 per minute)", () => {
+  it("first 10 requests are not rate-limited (400 from validator, not 429)", async () => {
+    const ip = uniqueIp();
+    const results = await fireRequests("/auth/register", {}, ip, 10);
+
+    for (let i = 0; i < results.length; i++) {
+      assert.equal(
+        results[i]!.status,
+        400,
+        `request ${i + 1} of 10 must be rejected by the validator (400), not the limiter; got ${results[i]!.status}`,
+      );
+    }
+  });
+
+  it("11th request within the window returns HTTP 429 with a user-facing error", async () => {
+    const ip = uniqueIp();
+    await fireRequests("/auth/register", {}, ip, 10);
+
+    const eleventh = await post("/auth/register", {}, ip);
+    assert.equal(
+      eleventh.status,
+      429,
+      `11th request must return 429; got ${eleventh.status}`,
+    );
+    assert.ok(
+      typeof eleventh.body["error"] === "string" && eleventh.body["error"].length > 0,
+      `429 body must have a non-empty 'error' string; got: ${JSON.stringify(eleventh.body)}`,
+    );
+    assert.ok(
+      (eleventh.body["error"] as string).toLowerCase().includes("wait"),
+      `error message should mention 'wait'; got: "${eleventh.body["error"]}"`,
+    );
+  });
+});
+
+// ── Suite: auth/forgot-password rate limit ───────────────────────────────────
+
+// Forgot-password requests use an empty body `{}` so the handler's own
+// `!email` guard rejects them with HTTP 400 before any DB lookup, token
+// creation, or notification delivery occurs.
+
+describe("Rate limiter — POST /auth/forgot-password (max 10 per minute)", () => {
+  it("first 10 requests are not rate-limited (400 from validator, not 429)", async () => {
+    const ip = uniqueIp();
+    const results = await fireRequests("/auth/forgot-password", {}, ip, 10);
+
+    for (let i = 0; i < results.length; i++) {
+      assert.equal(
+        results[i]!.status,
+        400,
+        `request ${i + 1} of 10 must be rejected by the validator (400), not the limiter; got ${results[i]!.status}`,
+      );
+    }
+  });
+
+  it("11th request within the window returns HTTP 429 with a user-facing error", async () => {
+    const ip = uniqueIp();
+    await fireRequests("/auth/forgot-password", {}, ip, 10);
+
+    const eleventh = await post("/auth/forgot-password", {}, ip);
+    assert.equal(
+      eleventh.status,
+      429,
+      `11th request must return 429; got ${eleventh.status}`,
+    );
+    assert.ok(
+      typeof eleventh.body["error"] === "string" && eleventh.body["error"].length > 0,
+      `429 body must have a non-empty 'error' string; got: ${JSON.stringify(eleventh.body)}`,
+    );
+    assert.ok(
+      (eleventh.body["error"] as string).toLowerCase().includes("wait"),
+      `error message should mention 'wait'; got: "${eleventh.body["error"]}"`,
+    );
+  });
+});
+
 // ── Suite: payments/mpesa rate limit ─────────────────────────────────────────
 
 // ── M-Pesa safety note ────────────────────────────────────────────────────────
