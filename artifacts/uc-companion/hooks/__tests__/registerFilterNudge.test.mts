@@ -53,6 +53,9 @@ import {
   readNudgeState,
   markNudgeDismissed,
   closestDayOffset,
+  replacementDismissedKeyFor,
+  readReplacementNudgeDismissed,
+  markReplacementNudgeDismissed,
 } from '../filterNudge.js';
 
 import {
@@ -192,6 +195,133 @@ describe('register-filter nudge — registration writes all required fields', ()
     const state = await readNudgeState(1);
     assert.equal(state.hasActivation, true,
       'readNudgeState must see the new activation after registration');
+  });
+});
+
+describe('register-filter nudge — replacement-nudge dismissal per order', () => {
+  beforeEach(() => { _resetStorage(); _resetNotifs(); });
+
+  // J. replacementDismissedKeyFor produces unique, order-scoped keys
+  it('J: replacementDismissedKeyFor generates different keys for different orders', () => {
+    const userId = 10;
+    const k2 = replacementDismissedKeyFor(userId, 200);
+    const k3 = replacementDismissedKeyFor(userId, 300);
+    assert.notEqual(k2, k3, 'keys must differ for different order ids');
+    assert.ok(k2.includes('200'), 'key for order 200 must embed the order id');
+    assert.ok(k3.includes('300'), 'key for order 300 must embed the order id');
+    assert.ok(
+      k2.startsWith('uc_replace_filter_prompt_dismissed_'),
+      'key must use the expected prefix',
+    );
+  });
+
+  // K. Dismissal for order #2 must not suppress the nudge for order #3
+  it('K: dismissing for order #2 does not suppress the nudge for order #3', async () => {
+    const userId  = 10;
+    const order2  = 200;
+    const order3  = 300;
+
+    // Before any dismissal: both orders show dismissed=false
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order2),
+      false,
+      'order 2 must not be dismissed before any action',
+    );
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order3),
+      false,
+      'order 3 must not be dismissed before any action',
+    );
+
+    // User dismisses the nudge for order #2
+    await markReplacementNudgeDismissed(userId, order2);
+
+    // Order #2 dismissal is stored
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order2),
+      true,
+      'order 2 must show dismissed=true after markReplacementNudgeDismissed',
+    );
+
+    // Order #3 nudge must still be visible — dismissal key is different
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order3),
+      false,
+      'order 3 must not be suppressed by the order 2 dismissal',
+    );
+  });
+
+  // L. Full three-order scenario: order #1 activates; order #2 dismissed; order #3 shows
+  it('L: nudge shows for order #3 after being dismissed for order #2 (three-order scenario)', async () => {
+    const userId  = 20;
+    const order1  = 100; // registered the current cycle — activation.sourceOrderId
+    const order2  = 200; // user dismissed the nudge
+    const order3  = 300; // new purchase — nudge must reappear
+
+    // Simulate: order #1 registered the cycle (stored via scheduleAllFilterNotifications).
+    // The nudge is then in "replace" mode for order #2.
+    // Step 1 — nudge for order #2 is not yet dismissed.
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order2),
+      false,
+      'order 2 nudge must be visible before dismissal',
+    );
+
+    // Step 2 — user taps ✕ on the order #2 nudge.
+    await markReplacementNudgeDismissed(userId, order2);
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order2),
+      true,
+      'order 2 nudge must be hidden after dismissal',
+    );
+
+    // Step 3 — order #3 arrives (a later purchase). The dismissal key for
+    // order #2 must not suppress the nudge for order #3.
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, order3),
+      false,
+      'order 3 nudge must show even though order 2 was dismissed',
+    );
+
+    // Verify the two keys are distinct (belt-and-braces)
+    assert.notEqual(
+      replacementDismissedKeyFor(userId, order2),
+      replacementDismissedKeyFor(userId, order3),
+      'dismissal keys for order 2 and order 3 must be different',
+    );
+  });
+
+  // M. markReplacementNudgeDismissed is idempotent
+  it('M: markReplacementNudgeDismissed is idempotent — repeated calls keep dismissed=true', async () => {
+    const userId = 30;
+    const orderId = 400;
+    await markReplacementNudgeDismissed(userId, orderId);
+    await markReplacementNudgeDismissed(userId, orderId); // second call must be safe
+    assert.equal(
+      await readReplacementNudgeDismissed(userId, orderId),
+      true,
+      'dismissed must still be true after a second call',
+    );
+  });
+
+  // N. Dismissal is isolated between users on the same device
+  it('N: dismissing for user A does not suppress the nudge for user B on the same device', async () => {
+    const userA = 1;
+    const userB = 2;
+    const orderId = 500;
+
+    await markReplacementNudgeDismissed(userA, orderId);
+
+    assert.equal(
+      await readReplacementNudgeDismissed(userA, orderId),
+      true,
+      'user A must see dismissed=true',
+    );
+    assert.equal(
+      await readReplacementNudgeDismissed(userB, orderId),
+      false,
+      'user B must not be affected by user A dismissal',
+    );
   });
 });
 
