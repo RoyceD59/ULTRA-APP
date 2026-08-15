@@ -6,7 +6,7 @@
  * active status filter.
  */
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -282,6 +282,7 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
   const [fromDate, setFromDate] = useState("");
   const [toDate,   setToDate]   = useState("");
   const [localTests, setLocalTests] = useState<AdminWaterTest[] | null>(null);
+  const queryClient = useQueryClient();
 
   function buildParams() {
     const params = new URLSearchParams();
@@ -291,8 +292,10 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
     return params;
   }
 
+  const queryKey = ["admin-water-tests", token, statusFilter, fromDate, toDate];
+
   const { data: tests, isLoading, isError, refetch, isFetching } = useQuery<AdminWaterTest[]>({
-    queryKey: ["admin-water-tests", token, statusFilter, fromDate, toDate],
+    queryKey,
     queryFn: async () => {
       const params = buildParams();
       const url = `${BASE}/api/uc/admin/water-tests${params.size ? `?${params}` : ""}`;
@@ -313,15 +316,23 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
   // Sync local copy whenever the query result changes
   useEffect(() => { setLocalTests(tests ?? null); }, [tests]);
 
-  function handleTestUpdate(updated: AdminWaterTest) {
-    setLocalTests(prev => {
-      if (!prev) return prev;
-      // When a status filter is active, remove the test if it no longer matches
+  async function handleTestUpdate(updated: AdminWaterTest) {
+    // Cancel any in-flight background refetch BEFORE writing to the cache.
+    // Without this, a refetch that started before the PATCH committed can
+    // resolve after setQueryData and overwrite the just-saved status.
+    await queryClient.cancelQueries({ queryKey });
+
+    function patch(list: AdminWaterTest[]): AdminWaterTest[] {
       if (statusFilter !== "all" && updated.status !== statusFilter) {
-        return prev.filter(t => t.id !== updated.id);
+        return list.filter(t => t.id !== updated.id);
       }
-      return prev.map(t => (t.id === updated.id ? updated : t));
-    });
+      return list.map(t => (t.id === updated.id ? updated : t));
+    }
+
+    // Write the PATCH result into the React Query cache (single source of truth).
+    queryClient.setQueryData<AdminWaterTest[]>(queryKey, prev => prev ? patch(prev) : prev);
+    // Also update local state immediately so the UI doesn't wait for a render cycle.
+    setLocalTests(prev => prev ? patch(prev) : prev);
   }
 
   const displayTests = localTests ?? tests;
