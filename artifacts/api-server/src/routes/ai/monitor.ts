@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { desc, eq, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { db, aiReportsTable, aiPushEventsTable } from "@workspace/db";
+import { db, aiReportsTable, aiPushEventsTable, tasksTable } from "@workspace/db";
 import { requireTeamAuth } from "../auth.js";
 import {
   AiQueryBody,
@@ -216,6 +216,161 @@ export async function pushReportToOrchestrator(opts: {
     return { success: false, message: `Push failed: ${message}`, sentAt, webhookUrl, pushId };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/ai/push-task — dispatch a single task to an agent via orchestrator
+// (team-auth applied in index.ts)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/ai/push-task", requireTeamAuth, async (req, res): Promise<void> => {
+  const { taskId, agentId, agentName } = req.body as {
+    taskId?: number;
+    agentId?: number;
+    agentName?: string;
+  };
+
+  // Validate required fields
+  if (!taskId || typeof taskId !== "number") {
+    res.status(400).json({ error: "taskId (number) is required" });
+    return;
+  }
+  if (!agentId && !agentName?.trim()) {
+    res.status(400).json({ error: "agentId or agentName is required" });
+    return;
+  }
+
+  // Fetch the task row
+  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+
+  const webhookUrl = process.env.AI_ORCHESTRATOR_WEBHOOK_URL;
+  const secret = process.env.PROJECTHUB_WEBHOOK_SECRET;
+
+  // Fail closed: both the webhook URL and the shared secret must be configured.
+  // Without the secret there is no authenticated delivery path — the request
+  // would go unsigned, which contradicts the HMAC signing contract and mirrors
+  // how the inbound /api/ai/echo endpoint fails when the secret is absent.
+  if (!webhookUrl) {
+    res.status(503).json({
+      error:
+        "AI_ORCHESTRATOR_WEBHOOK_URL is not configured — task cannot be dispatched. Set this env var to enable agent dispatch.",
+    });
+    return;
+  }
+  if (!secret) {
+    res.status(503).json({
+      error:
+        "PROJECTHUB_WEBHOOK_SECRET is not configured — task dispatch requires a shared secret for HMAC signing. Configure this env var to enable agent dispatch.",
+    });
+    return;
+  }
+
+  const sentAt = new Date();
+  const payloadType = "task_dispatch";
+  const trigger = "manual";
+
+  // Record the push event first so the payload can carry its durable id
+  const [event] = await db
+    .insert(aiPushEventsTable)
+    .values({
+      payloadType,
+      trigger,
+      target: webhookUrl,
+      sentAt,
+      status: "pending",
+    })
+    .returning({ id: aiPushEventsTable.id });
+  const pushId = event.id;
+
+  const finalize = async (fields: {
+    outboundOk: boolean;
+    outboundMessage: string;
+    status: string;
+    statusDetail: string;
+  }) => {
+    await db
+      .update(aiPushEventsTable)
+      .set({
+        outboundOk: fields.outboundOk,
+        outboundMessage: fields.outboundMessage,
+        status: sql`CASE WHEN ${aiPushEventsTable.status} = 'pending' THEN ${fields.status} ELSE ${aiPushEventsTable.status} END`,
+        statusDetail: sql`CASE WHEN ${aiPushEventsTable.status} = 'pending' THEN ${fields.statusDetail} ELSE ${aiPushEventsTable.statusDetail} END`,
+        statusUpdatedAt: sql`CASE WHEN ${aiPushEventsTable.status} = 'pending' THEN now() ELSE ${aiPushEventsTable.statusUpdatedAt} END`,
+      })
+      .where(eq(aiPushEventsTable.id, pushId));
+  };
+
+  const payload = {
+    source: "projecthub",
+    type: payloadType,
+    pushId,
+    task: {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      assigneeId: task.assigneeId,
+      dueDate: task.dueDate,
+      sourcePlatform: task.sourcePlatform,
+      resourceRequired: task.resourceRequired,
+      deliveryFormat: task.deliveryFormat,
+      notifyVia: task.notifyVia,
+      targetAgent: agentName ?? null,
+      targetAgentId: agentId ?? null,
+    },
+  };
+
+  try {
+    const body = JSON.stringify(payload);
+
+    // Compute outbound HMAC-SHA256 signature over the request body so the
+    // receiving orchestrator can verify authenticity using the same shared
+    // secret that secures the inbound /api/ai/echo callback.
+    // `secret` is guaranteed non-null here (checked above).
+    const hmacSig = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        Authorization: `Bearer ${secret}`,
+        "X-Webhook-Signature": hmacSig,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
+    }
+
+    await finalize({
+      outboundOk: true,
+      outboundMessage: `HTTP ${response.status}`,
+      status: "sent",
+      statusDetail: "Delivered — awaiting orchestrator acknowledgment",
+    });
+    res.json({
+      success: true,
+      message: `Task dispatched to orchestrator (${response.status})`,
+      sentAt,
+      webhookUrl,
+      pushId,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await finalize({
+      outboundOk: false,
+      outboundMessage: message,
+      status: "failed",
+      statusDetail: `Outbound delivery failed: ${message}`,
+    });
+    res.status(502).json({ error: `Dispatch failed: ${message}`, pushId });
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inbound webhook: Ultra Clear AI Orchestrator asks a question

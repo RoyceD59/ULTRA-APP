@@ -53,6 +53,7 @@ router.use("/ai/push",       requireTeamAuth);
 router.use("/ai/pushes",     requireTeamAuth);
 router.use("/ai/agent-query", requireTeamAuth);
 router.use("/ai/agents",     requireTeamAuth);
+router.use("/ai/push-task",  requireTeamAuth);
 // Contacts CRUD is protected per-route in contacts.ts (preserves the public
 // Google OAuth callback at /contacts/sync/google/callback in contacts-sync.ts)
 // System status: GET /system/status and PATCH /system/status/:id are protected

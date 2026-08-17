@@ -167,8 +167,12 @@ function PushBoard() {
               <span className={cn('text-xs font-medium border rounded-full px-2.5 py-0.5', STATUS_STYLES[p.status] ?? STATUS_STYLES['pending'])}>
                 {STATUS_LABELS[p.status] ?? p.status}
               </span>
-              <span className="text-sm font-medium text-foreground">
-                {p.payloadType === 'daily_project_status_report' ? 'Daily status report' : 'Status report'}
+                      <span className="text-sm font-medium text-foreground">
+                {p.payloadType === 'daily_project_status_report'
+                  ? 'Daily status report'
+                  : p.payloadType === 'task_dispatch'
+                  ? 'Task Dispatch'
+                  : 'Status report'}
               </span>
               <span className="text-xs text-muted-foreground capitalize">{p.trigger}</span>
               <span className="text-xs text-muted-foreground">Sent {formatDateTime(p.sentAt)}</span>

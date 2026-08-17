@@ -22,13 +22,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CheckSquare, Plus, Filter, Calendar, Clock, AlertTriangle, User, MoreHorizontal, Trash2 } from "lucide-react";
+import { CheckSquare, Plus, Filter, Calendar, Radio, MoreHorizontal, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 import { TaskStatusBadge, TaskPriorityBadge, getInitials, formatDate, formatRelativeDate } from "@/components/shared/badges";
 import { Task, TaskInput, TaskUpdate } from "@workspace/api-client-react";
+import { PushTaskDialog } from "@/components/tasks/PushTaskDialog";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -291,6 +292,10 @@ export default function Tasks() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  // Push-to-agent state
+  const [pushDialogTask, setPushDialogTask] = useState<Task | null>(null);
+  const [recentlyPushed, setRecentlyPushed] = useState<Set<number>>(new Set());
+
   const deleteTask = useDeleteTask({
     mutation: {
       onSuccess: () => {
@@ -382,6 +387,19 @@ export default function Tasks() {
         task={editingTask} 
       />
 
+      {pushDialogTask && (
+        <PushTaskDialog
+          task={pushDialogTask}
+          open={!!pushDialogTask}
+          onOpenChange={(open) => { if (!open) setPushDialogTask(null); }}
+          onSuccess={() => {
+            if (pushDialogTask) {
+              setRecentlyPushed(prev => new Set(prev).add(pushDialogTask.id));
+            }
+          }}
+        />
+      )}
+
       <Card className="shadow-sm border-border/50">
         <div className="divide-y">
           {!tasks?.length ? (
@@ -443,6 +461,22 @@ export default function Tasks() {
                       </DropdownMenuContent>
                     </DropdownMenu>
 
+                    {recentlyPushed.has(task.id) ? (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium px-2">
+                        <Radio className="w-3 h-3" /> Sent ✓
+                      </span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        title="Push to Agent"
+                        onClick={() => setPushDialogTask(task)}
+                      >
+                        <Radio className="h-4 w-4" />
+                      </Button>
+                    )}
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -451,6 +485,9 @@ export default function Tasks() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => handleEdit(task)}>Edit Task</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setPushDialogTask(task)}>
+                          <Radio className="w-4 h-4 mr-2" /> Push to Agent
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleDelete(task.id)} className="text-destructive">
                           <Trash2 className="w-4 h-4 mr-2" /> Delete
