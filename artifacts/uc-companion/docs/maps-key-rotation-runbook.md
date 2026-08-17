@@ -147,6 +147,34 @@ from the track, open the Locations map screen, and confirm tiles load. With a wr
 the map renders blank/grey and `adb logcat` shows an `Authorization failure` from the
 Google Maps SDK.
 
+### Internal-testing-track spot-check — **PENDING** (no production build yet)
+
+As of 2026-08-17, `security/maps-key-fingerprints.json` still shows
+`playAppSigning.sha1: null` and `gcpRestrictionConfirmed: false`. No AAB has been
+submitted to Google Play yet, so the Play app-signing certificate does not exist and
+the internal-testing-track spot-check (step 9 of the first-production-setup checklist
+below) **cannot be performed yet**.
+
+**Pre-conditions that must all be met before the spot-check:**
+
+1. First AAB uploaded to Google Play and enrolled in Play App Signing.
+2. Play app-signing SHA-1 retrieved from Play Console → Setup → App signing and recorded
+   via `node scripts/check-maps-key-fingerprint.mjs --fingerprint "<SHA-1>" --update`.
+3. That SHA-1 added to the Maps key restriction in Google Cloud Console.
+4. Restriction confirmed via `node scripts/check-maps-key-fingerprint.mjs --confirm-restriction`
+   (sets `gcpRestrictionConfirmed: true`).
+5. Internal-testing-track build promoted / re-built so that the Play-signed APK is
+   available for install from the Play Store.
+
+**How to complete the spot-check when those conditions are met:**
+
+1. Install the internal-testing-track build on a physical Android device via the Play Store.
+2. Open the Locations map screen.
+3. Confirm map tiles load visibly (not blank or grey).
+4. Run `adb logcat | grep -i "authorization"` — no `Authorization failure` should appear
+   from the Google Maps SDK.
+5. Update this section with the result and the date, replacing the PENDING notice above.
+
 ## First production setup (action required — no Play build exists yet)
 
 > **Status:** `security/maps-key-fingerprints.json` has `sha1: null` for both
