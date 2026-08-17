@@ -288,6 +288,71 @@ describe("Paystack webhook — recovery order correctness", () => {
   );
 });
 
+describe("Paystack webhook — concurrent duplicate charge.success", () => {
+  it(
+    "two simultaneous charge.success webhooks for the same reference create exactly one recovery order",
+    async () => {
+      const reference = nextRef();
+      const amountKobo = 500_000; // KES 5,000
+      const currency = "KES";
+      const customerEmail = `concurrent-${Date.now()}@example.com`;
+
+      const event = chargeSuccessEvent({ reference, amountKobo, currency, customerEmail });
+
+      // Silence all outbound HTTP (Resend, SMS, etc.) for both concurrent calls.
+      const savedFetch = globalThis.fetch;
+      globalThis.fetch = silentFetch();
+
+      try {
+        // Fire two concurrent webhook deliveries for the same reference.
+        const [first, second] = await Promise.all([
+          postWebhook(event),
+          postWebhook(event),
+        ]);
+
+        assert.equal(first.status,  200, `first webhook must return 200; got ${first.status}: ${JSON.stringify(first.body)}`);
+        assert.equal(second.status, 200, `second webhook must return 200; got ${second.status}: ${JSON.stringify(second.body)}`);
+
+        assert.equal(first.body["received"],  true, "first response must include received:true");
+        assert.equal(second.body["received"], true, "second response must include received:true");
+
+        const firstOrderId  = first.body["orderId"];
+        const secondOrderId = second.body["orderId"];
+
+        assert.ok(
+          typeof firstOrderId === "number" && firstOrderId > 0,
+          `first orderId must be a positive number; got ${firstOrderId}`,
+        );
+        assert.ok(
+          typeof secondOrderId === "number" && secondOrderId > 0,
+          `second orderId must be a positive number; got ${secondOrderId}`,
+        );
+        assert.equal(
+          firstOrderId,
+          secondOrderId,
+          `both responses must return the same orderId; got ${firstOrderId} vs ${secondOrderId}`,
+        );
+
+        // Verify exactly one DB row for this reference.
+        const rows = await db
+          .select()
+          .from(ucOrdersTable)
+          .where(eq(ucOrdersTable.paymentReference, reference));
+
+        assert.equal(
+          rows.length,
+          1,
+          `concurrent webhooks must not create duplicate recovery orders; found ${rows.length} rows`,
+        );
+        assert.equal(rows[0]!.webhookRecovery, true, "the single row must be flagged as a webhook recovery");
+        assert.equal(rows[0]!.paymentMethod,   "paystack", "paymentMethod must be 'paystack'");
+      } finally {
+        globalThis.fetch = savedFetch;
+      }
+    },
+  );
+});
+
 describe("Paystack initialize — transient outage signalling", () => {
   it(
     "Paystack returns 429 (Too Many Requests) → server responds 500 with retryable:true",

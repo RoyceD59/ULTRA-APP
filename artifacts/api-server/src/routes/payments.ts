@@ -784,10 +784,11 @@ router.post(
       // Two retries can both miss the existing-order lookup and race to insert.
       // The loser gets Postgres error 23505.  Re-read the winner's row and
       // return 200 so Paystack stops retrying rather than getting a 500.
-      if (
-        typeof err === "object" && err !== null &&
-        "code" in err && (err as { code: string }).code === "23505"
-      ) {
+      // DrizzleQueryError wraps the pg error in `.cause`; check both locations.
+      const _pgCode =
+        (err as { code?: string }).code ??
+        (err as { cause?: { code?: string } }).cause?.code;
+      if (_pgCode === "23505") {
         try {
           const [winner] = await db
             .select()
