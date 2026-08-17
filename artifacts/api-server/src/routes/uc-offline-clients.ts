@@ -20,6 +20,30 @@ const router: IRouter = Router();
 
 // ─── Validation helpers ───────────────────────────────────────────────────────
 
+/** E.164-ish phone: optional leading +, then digits/spaces/hyphens, 7–20 chars total */
+function validatePhone(v: unknown): string | null | undefined {
+  if (v === undefined || v === null || v === "") return undefined; // absent → keep null in DB
+  if (typeof v !== "string") return null; // invalid type → reject
+  const cleaned = v.trim();
+  if (cleaned === "") return undefined;
+  // Allow +, digits, spaces, hyphens, parentheses — at least 7 digits present
+  if (!/^\+?[\d\s\-().]{7,32}$/.test(cleaned)) return null;
+  const digits = cleaned.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 20) return null;
+  return cleaned;
+}
+
+/** Permissive RFC 5322 surface check — rejects obvious non-emails */
+function validateEmail(v: unknown): string | null | undefined {
+  if (v === undefined || v === null || v === "") return undefined;
+  if (typeof v !== "string") return null;
+  const cleaned = v.trim().toLowerCase();
+  if (cleaned === "") return undefined;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) return null;
+  if (cleaned.length > 255) return null;
+  return cleaned;
+}
+
 function parseProducts(raw: unknown): OfflineProduct[] | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
 
@@ -90,10 +114,12 @@ router.get("/uc/offline-clients", async (req: Request, res: Response): Promise<v
 router.post("/uc/offline-clients", async (req: Request, res: Response): Promise<void> => {
   if (!(await requireAdmin(req, res))) return;
 
-  const { clientRef, products, saleDate, notes } = req.body as Record<string, unknown>;
+  const { clientRef, products, saleDate, notes, phone, email } = req.body as Record<string, unknown>;
 
   const parsedProducts = parseProducts(products);
   const parsedDate     = validateDate(saleDate);
+  const parsedPhone    = validatePhone(phone);
+  const parsedEmail    = validateEmail(email);
 
   if (!parsedProducts) {
     res.status(400).json({ error: "products must be a non-empty array; each entry needs a non-empty productName, a positive integer quantity, and optional finite non-negative productId / litresPerUnit" });
@@ -103,12 +129,22 @@ router.post("/uc/offline-clients", async (req: Request, res: Response): Promise<
     res.status(400).json({ error: "saleDate must be a valid YYYY-MM-DD string" });
     return;
   }
+  if (parsedPhone === null) {
+    res.status(400).json({ error: "phone must be a valid phone number (7–20 digits, optional leading +)" });
+    return;
+  }
+  if (parsedEmail === null) {
+    res.status(400).json({ error: "email must be a valid email address" });
+    return;
+  }
 
   try {
     const [row] = await db
       .insert(ucOfflineClientsTable)
       .values({
         clientRef: typeof clientRef === "string" ? clientRef.trim() : "",
+        phone:     parsedPhone ?? null,
+        email:     parsedEmail ?? null,
         products:  parsedProducts,
         saleDate:  parsedDate,
         notes:     typeof notes === "string" ? notes.trim() : "",
@@ -129,10 +165,12 @@ router.put("/uc/offline-clients/:id", async (req: Request, res: Response): Promi
   const id = parseId(req.params["id"]);
   if (id === null) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { clientRef, products, saleDate, notes } = req.body as Record<string, unknown>;
+  const { clientRef, products, saleDate, notes, phone, email } = req.body as Record<string, unknown>;
 
   const parsedProducts = parseProducts(products);
   const parsedDate     = validateDate(saleDate);
+  const parsedPhone    = validatePhone(phone);
+  const parsedEmail    = validateEmail(email);
 
   if (!parsedProducts) {
     res.status(400).json({ error: "products must be a non-empty array; each entry needs a non-empty productName, a positive integer quantity, and optional finite non-negative productId / litresPerUnit" });
@@ -142,12 +180,22 @@ router.put("/uc/offline-clients/:id", async (req: Request, res: Response): Promi
     res.status(400).json({ error: "saleDate must be a valid YYYY-MM-DD string" });
     return;
   }
+  if (parsedPhone === null) {
+    res.status(400).json({ error: "phone must be a valid phone number (7–20 digits, optional leading +)" });
+    return;
+  }
+  if (parsedEmail === null) {
+    res.status(400).json({ error: "email must be a valid email address" });
+    return;
+  }
 
   try {
     const [row] = await db
       .update(ucOfflineClientsTable)
       .set({
         clientRef: typeof clientRef === "string" ? clientRef.trim() : "",
+        phone:     parsedPhone ?? null,
+        email:     parsedEmail ?? null,
         products:  parsedProducts,
         saleDate:  parsedDate,
         notes:     typeof notes === "string" ? notes.trim() : "",

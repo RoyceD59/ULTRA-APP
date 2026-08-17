@@ -479,6 +479,16 @@ async function applyStartupMigrations(): Promise<void> {
     );
   `);
   logger.info("Startup migration: ai_push_events table ensured");
+
+  // Phone and email fields on offline client entries for future customer
+  // linkage and follow-up communications.  Both are nullable — adding either
+  // field to an existing record is optional.
+  await pool.query(`
+    ALTER TABLE uc_offline_clients
+      ADD COLUMN IF NOT EXISTS phone text,
+      ADD COLUMN IF NOT EXISTS email text;
+  `);
+  logger.info("Startup migration: uc_offline_clients phone/email columns ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;

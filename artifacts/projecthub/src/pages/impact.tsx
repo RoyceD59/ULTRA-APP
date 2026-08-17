@@ -41,6 +41,8 @@ interface OfflineProduct {
 interface OfflineClient {
   id:        number;
   clientRef: string;
+  phone:     string | null;
+  email:     string | null;
   products:  OfflineProduct[];
   saleDate:  string;
   notes:     string;
@@ -394,6 +396,8 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
   const [dialogOpen,    setDialogOpen]    = useState(false);
   const [editingClient, setEditingClient] = useState<OfflineClient | null>(null);
   const [formRef,       setFormRef]       = useState('');
+  const [formPhone,     setFormPhone]     = useState('');
+  const [formEmail,     setFormEmail]     = useState('');
   const [formDate,      setFormDate]      = useState('');
   const [formNotes,     setFormNotes]     = useState('');
   const [formProducts,  setFormProducts]  = useState<OfflineProduct[]>([]);
@@ -466,13 +470,16 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
 
   function openAdd() {
     setEditingClient(null);
-    setFormRef(''); setFormDate(new Date().toISOString().slice(0, 10));
+    setFormRef(''); setFormPhone(''); setFormEmail('');
+    setFormDate(new Date().toISOString().slice(0, 10));
     setFormNotes(''); setFormProducts([{ productName: '', quantity: 1 }]);
     setFormError(''); setDialogOpen(true);
   }
 
   function openEdit(c: OfflineClient) {
-    setEditingClient(c); setFormRef(c.clientRef); setFormDate(c.saleDate);
+    setEditingClient(c); setFormRef(c.clientRef);
+    setFormPhone(c.phone ?? ''); setFormEmail(c.email ?? '');
+    setFormDate(c.saleDate);
     setFormNotes(c.notes);
     setFormProducts(c.products.length > 0 ? [...c.products] : [{ productName: '', quantity: 1 }]);
     setFormError(''); setDialogOpen(true);
@@ -492,7 +499,7 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
       const res  = await fetch(url, {
         method:  editingClient ? 'PUT' : 'POST',
         headers: authHeaders(token),
-        body:    JSON.stringify({ clientRef: formRef.trim(), products: validProducts, saleDate: formDate, notes: formNotes.trim() }),
+        body:    JSON.stringify({ clientRef: formRef.trim(), phone: formPhone.trim() || null, email: formEmail.trim() || null, products: validProducts, saleDate: formDate, notes: formNotes.trim() }),
       });
       if (res.status === 401) { onSignOut(); return; }
       if (!res.ok) {
@@ -629,6 +636,8 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
                   <tr className="border-b bg-muted/50">
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Client / Ref</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phone</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Products</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Litres</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Notes</th>
@@ -645,6 +654,16 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
                           {c.clientRef
                             ? <span className="font-medium text-foreground">{c.clientRef}</span>
                             : <span className="text-muted-foreground italic">—</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {c.phone
+                            ? <span className="text-foreground text-xs font-mono">{c.phone}</span>
+                            : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="px-4 py-3 max-w-[180px]">
+                          {c.email
+                            ? <span className="text-foreground text-xs truncate block">{c.email}</span>
+                            : <span className="text-muted-foreground/40">—</span>}
                         </td>
                         <td className="px-4 py-3 max-w-xs">
                           <span className="text-foreground">{productSummary(c.products)}</span>
@@ -772,8 +791,21 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label htmlFor="clientRef">Client name / reference <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <Input id="clientRef" placeholder="e.g. Jane Kamau, WS-001, +254…"
+              <Input id="clientRef" placeholder="e.g. Jane Kamau, WS-001"
                 value={formRef} onChange={e => setFormRef(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="formPhone">Phone number <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input id="formPhone" type="tel" placeholder="e.g. +254 712 345 678"
+                  value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="formEmail">Email address <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input id="formEmail" type="email" placeholder="e.g. jane@example.com"
+                  value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+              </div>
             </div>
 
             <div className="space-y-1.5">

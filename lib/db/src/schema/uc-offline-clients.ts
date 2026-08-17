@@ -16,6 +16,8 @@ export interface OfflineProduct {
 export const ucOfflineClientsTable = pgTable("uc_offline_clients", {
   id:        serial("id").primaryKey(),
   clientRef: text("client_ref").notNull().default(""),   // optional name / phone / ref
+  phone:     text("phone"),                              // optional E.164-style phone number
+  email:     text("email"),                              // optional RFC-valid email address
   products:  json("products").$type<OfflineProduct[]>().notNull().default([]),
   saleDate:  text("sale_date").notNull(),                // YYYY-MM-DD
   notes:     text("notes").notNull().default(""),
