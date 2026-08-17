@@ -270,7 +270,7 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
 });
 
 /** POST /auth/reset-password */
-router.post("/auth/reset-password", async (req, res): Promise<void> => {
+router.post("/auth/reset-password", authLimiter, async (req, res): Promise<void> => {
   const { token, newPassword } = req.body ?? {};
   if (!token || !newPassword) {
     res.status(400).json({ error: "token and newPassword are required." });
