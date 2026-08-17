@@ -1,17 +1,19 @@
 /**
- * Integration tests for POST /api/uc/admin/notification-logs/prune ("Prune now")
+ * Integration tests for POST /api/uc/admin/notification-logs/prune
  *
  * Covers:
- *   (a) 403 when no admin auth token provided
- *   (b) 200 happy path: rows past retention are deleted, recent rows are kept,
- *       and the response reports deletedSuccess / deletedFailure / deletedTotal
- *   (c) team_settings retention overrides are honoured: with a longer success
- *       retention configured in the admin panel, a sent row that would be
- *       deleted under the 30-day default is preserved.
+ *   (a) 403 when a non-admin token is provided
+ *   (b) 403 when no Authorization header is provided
+ *   (c) Old sent rows (past success window) are deleted; recent sent rows survive
+ *   (d) Old failed rows (past failure window) are deleted; recent failed rows survive
+ *   (e) Response shape has deletedSuccess, deletedFailure, and deletedTotal = sum
  *
- * The app is started on an ephemeral port (listen(0)). All DB rows and users
- * created during tests are deleted in the after() hook, and any pre-existing
- * team_settings retention overrides are restored.
+ * Strategy:
+ *   - App started on an ephemeral port (listen(0)) — never clashes with dev server.
+ *   - A test admin and a test regular user are seeded in the DB, cleaned up in after().
+ *   - team_settings retention windows are set to 5 d (success) / 10 d (failure) for
+ *     determinism, then restored in after().
+ *   - MPESA_* and WC_* env vars are deleted before the suite, per harness conventions.
  */
 
 import { describe, it, before, after } from "node:test";
@@ -23,82 +25,48 @@ import app from "../app.js";
 import { db, ucUsersTable, ucNotificationLogTable, teamSettingsTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 
+// ── Harness: clear env vars that confuse the order-flow helpers ───────────────
+const MPESA_WC_KEYS = [
+  "MPESA_CONSUMER_KEY", "MPESA_CONSUMER_SECRET", "MPESA_PASSKEY",
+  "MPESA_SHORTCODE", "WC_CONSUMER_KEY", "WC_CONSUMER_SECRET",
+];
+const savedEnv: Record<string, string | undefined> = {};
+for (const k of MPESA_WC_KEYS) {
+  savedEnv[k] = process.env[k];
+  delete process.env[k];
+}
+
 // ── Server setup ──────────────────────────────────────────────────────────────
 
 let server: http.Server;
 let base: string;
 let adminJwt: string;
+let regularJwt: string;
 
-const TEST_ADMIN_EMAIL    = `notif-prune-test-${Date.now()}@uctest.internal`;
-const TEST_ADMIN_PASSWORD = "test-secret-pw-12345";
+const ADMIN_EMAIL   = `prune-ep-admin-${Date.now()}@uctest.internal`;
+const REGULAR_EMAIL = `prune-ep-user-${Date.now()}@uctest.internal`;
+const TEST_PASSWORD = "test-secret-pw-12345";
+
 const createdUserIds: number[] = [];
 const createdLogIds:  number[] = [];
 
-// Snapshot of any pre-existing team_settings overrides so tests can restore them.
-let priorSuccessDays: number | null = null;
-let priorFailureDays: number | null = null;
-let hadSettingsRow = false;
+// Snapshot of the team_settings retention fields before the test mutates them.
+let prevSuccessDays: number | null = null;
+let prevFailureDays: number | null = null;
+let settingsExisted = false;
 
-function daysAgo(n: number): Date {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-}
+// Retention windows used during this suite (in days).
+const SUCCESS_DAYS = 5;
+const FAILURE_DAYS = 10;
 
-async function insertLog(status: "sent" | "failed", sentAt: Date): Promise<number> {
-  const [row] = await db
-    .insert(ucNotificationLogTable)
-    .values({
-      channel:     "sms",
-      provider:    "test",
-      recipient:   "+254700000001",
-      template:    "prune_endpoint_test",
-      messageBody: "prune endpoint test row",
-      status,
-      sentAt,
-    })
-    .returning({ id: ucNotificationLogTable.id });
-  createdLogIds.push(row!.id);
-  return row!.id;
-}
-
-async function setRetentionOverrides(successDays: number | null, failureDays: number | null): Promise<void> {
-  await db
-    .insert(teamSettingsTable)
-    .values({
-      id: "singleton",
-      notificationLogSuccessRetentionDays: successDays,
-      notificationLogFailureRetentionDays: failureDays,
-      updatedAt: new Date(),
-    } as typeof teamSettingsTable.$inferInsert)
-    .onConflictDoUpdate({
-      target: teamSettingsTable.id,
-      set: {
-        notificationLogSuccessRetentionDays: successDays,
-        notificationLogFailureRetentionDays: failureDays,
-        updatedAt: new Date(),
-      },
-    });
-}
-
-async function prune(token?: string): Promise<{ status: number; body: Record<string, unknown> }> {
-  const res = await fetch(`${base}/uc/admin/notification-logs/prune`, {
-    method:  "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-  return { status: res.status, body };
-}
-
-async function logExists(id: number): Promise<boolean> {
-  const [row] = await db
-    .select({ id: ucNotificationLogTable.id })
-    .from(ucNotificationLogTable)
-    .where(eq(ucNotificationLogTable.id, id))
-    .limit(1);
-  return !!row;
+/** Returns a Date that is `days` days in the past. */
+function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
 before(
   async () => {
+    // ── 1. Start the server ────────────────────────────────────────────────
     await new Promise<void>((resolve, reject) => {
       server = http.createServer(app);
       server.listen(0, "127.0.0.1", () => {
@@ -112,7 +80,38 @@ before(
       });
     });
 
-    // Snapshot existing team_settings overrides for restoration.
+    // ── 2. Seed users ──────────────────────────────────────────────────────
+    const hash = await bcryptjs.hash(TEST_PASSWORD, 4);
+
+    const [admin] = await db
+      .insert(ucUsersTable)
+      .values({ email: ADMIN_EMAIL, passwordHash: hash, firstName: "Prune", lastName: "Admin", phone: "+254700000010", isAdmin: true })
+      .returning({ id: ucUsersTable.id });
+    createdUserIds.push(admin!.id);
+
+    const [regular] = await db
+      .insert(ucUsersTable)
+      .values({ email: REGULAR_EMAIL, passwordHash: hash, firstName: "Prune", lastName: "User", phone: "+254700000011", isAdmin: false })
+      .returning({ id: ucUsersTable.id });
+    createdUserIds.push(regular!.id);
+
+    // ── 3. Obtain JWTs ─────────────────────────────────────────────────────
+    async function login(email: string): Promise<string> {
+      const resp = await fetch(`${base}/uc/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: TEST_PASSWORD }),
+      });
+      assert.equal(resp.status, 200, `login must succeed for ${email}`);
+      const body = await resp.json() as { token?: string };
+      assert.ok(body.token, "login response must include a JWT");
+      return body.token!;
+    }
+
+    adminJwt   = await login(ADMIN_EMAIL);
+    regularJwt = await login(REGULAR_EMAIL);
+
+    // ── 4. Configure deterministic retention windows in team_settings ──────
     const [existing] = await db
       .select({
         successDays: teamSettingsTable.notificationLogSuccessRetentionDays,
@@ -121,107 +120,210 @@ before(
       .from(teamSettingsTable)
       .where(eq(teamSettingsTable.id, "singleton"))
       .limit(1);
-    hadSettingsRow   = !!existing;
-    priorSuccessDays = existing?.successDays ?? null;
-    priorFailureDays = existing?.failureDays ?? null;
 
-    const passwordHash = await bcryptjs.hash(TEST_ADMIN_PASSWORD, 4);
-    const [user] = await db
-      .insert(ucUsersTable)
-      .values({
-        email:     TEST_ADMIN_EMAIL,
-        passwordHash,
-        firstName: "Test",
-        lastName:  "Admin",
-        phone:     "+254700000098",
-        isAdmin:   true,
-      })
-      .returning({ id: ucUsersTable.id });
-    createdUserIds.push(user!.id);
+    settingsExisted = existing !== undefined;
+    prevSuccessDays = existing?.successDays ?? null;
+    prevFailureDays = existing?.failureDays ?? null;
 
-    const resp = await fetch(`${base}/uc/auth/login`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD }),
-    });
-    assert.equal(resp.status, 200, "login must succeed for the test admin user");
-    const body = await resp.json() as { token?: string };
-    assert.ok(body.token, "login response must include a JWT token");
-    adminJwt = body.token!;
+    if (settingsExisted) {
+      await db
+        .update(teamSettingsTable)
+        .set({
+          notificationLogSuccessRetentionDays: SUCCESS_DAYS,
+          notificationLogFailureRetentionDays: FAILURE_DAYS,
+        })
+        .where(eq(teamSettingsTable.id, "singleton"));
+    } else {
+      await db
+        .insert(teamSettingsTable)
+        .values({
+          id: "singleton",
+          notificationLogSuccessRetentionDays: SUCCESS_DAYS,
+          notificationLogFailureRetentionDays: FAILURE_DAYS,
+        });
+    }
   },
   { timeout: 30_000 },
 );
 
 after(async () => {
-  // Restore team_settings overrides.
-  if (hadSettingsRow) {
-    await setRetentionOverrides(priorSuccessDays, priorFailureDays);
+  // ── Restore team_settings ──────────────────────────────────────────────────
+  if (settingsExisted) {
+    await db
+      .update(teamSettingsTable)
+      .set({
+        notificationLogSuccessRetentionDays: prevSuccessDays,
+        notificationLogFailureRetentionDays: prevFailureDays,
+      })
+      .where(eq(teamSettingsTable.id, "singleton"));
   } else {
-    await db.delete(teamSettingsTable).where(eq(teamSettingsTable.id, "singleton"));
+    // We inserted the singleton; remove the retention overrides (set back to null).
+    await db
+      .update(teamSettingsTable)
+      .set({
+        notificationLogSuccessRetentionDays: null,
+        notificationLogFailureRetentionDays: null,
+      })
+      .where(eq(teamSettingsTable.id, "singleton"));
   }
+
+  // ── Clean up log rows ──────────────────────────────────────────────────────
   if (createdLogIds.length > 0) {
     await db
       .delete(ucNotificationLogTable)
       .where(inArray(ucNotificationLogTable.id, createdLogIds));
   }
+
+  // ── Clean up users ─────────────────────────────────────────────────────────
   if (createdUserIds.length > 0) {
-    await db.delete(ucUsersTable).where(inArray(ucUsersTable.id, createdUserIds));
+    await db
+      .delete(ucUsersTable)
+      .where(inArray(ucUsersTable.id, createdUserIds));
   }
+
+  // ── Restore env vars ───────────────────────────────────────────────────────
+  for (const [k, v] of Object.entries(savedEnv)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-describe("POST /api/uc/admin/notification-logs/prune", () => {
-  it("rejects requests without admin auth (403)", async () => {
-    const { status } = await prune();
-    assert.equal(status, 403);
+/** Insert a notification log row and record its id for cleanup. */
+async function insertLog(overrides: {
+  status:  "sent" | "failed";
+  sentAt:  Date;
+  channel?: string;
+}): Promise<number> {
+  const [row] = await db
+    .insert(ucNotificationLogTable)
+    .values({
+      channel:     overrides.channel ?? "sms",
+      recipient:   "+254712000099",
+      template:    "order_confirmation",
+      messageBody: "Test prune message",
+      status:      overrides.status,
+      sentAt:      overrides.sentAt,
+    })
+    .returning({ id: ucNotificationLogTable.id });
+  const id = row!.id;
+  createdLogIds.push(id);
+  return id;
+}
+
+/** Call the prune endpoint and return the raw Response. */
+function callPrune(token?: string): Promise<Response> {
+  return fetch(`${base}/uc/admin/notification-logs/prune`, {
+    method:  "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+
+/** Return true iff the given log row still exists in the DB. */
+async function rowExists(id: number): Promise<boolean> {
+  const rows = await db
+    .select({ id: ucNotificationLogTable.id })
+    .from(ucNotificationLogTable)
+    .where(eq(ucNotificationLogTable.id, id))
+    .limit(1);
+  return rows.length > 0;
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────────────
+
+describe("POST /uc/admin/notification-logs/prune — authorization", () => {
+  it("(a) returns 403 when no Authorization header is provided", async () => {
+    const resp = await callPrune();
+    assert.equal(resp.status, 403, "missing auth must be rejected with 403");
   });
 
-  it("deletes rows past retention, keeps recent rows, and reports counts", async () => {
-    // No overrides → env/default retention (sent=30d, failed=90d in tests).
-    await setRetentionOverrides(null, null);
+  it("(b) returns 403 when a non-admin token is provided", async () => {
+    const resp = await callPrune(regularJwt);
+    assert.equal(resp.status, 403, "non-admin token must be rejected with 403");
+  });
+});
 
-    const oldSent     = await insertLog("sent",   daysAgo(45));   // past 30d  → deleted
-    const recentSent  = await insertLog("sent",   daysAgo(5));    // within 30d → kept
-    const oldFailed   = await insertLog("failed", daysAgo(120));  // past 90d  → deleted
-    const recentFailed = await insertLog("failed", daysAgo(50));  // within 90d → kept
+describe("POST /uc/admin/notification-logs/prune — row retention", () => {
+  it("(c) old sent rows are deleted; recent sent rows survive", async () => {
+    // Old: SUCCESS_DAYS + 3 days past the window → must be pruned
+    const oldSentId = await insertLog({ status: "sent", sentAt: daysAgo(SUCCESS_DAYS + 3) });
+    // Recent: 2 days ago → inside the window → must be kept
+    const recentSentId = await insertLog({ status: "sent", sentAt: daysAgo(2) });
 
-    const { status, body } = await prune(adminJwt);
-    assert.equal(status, 200);
-    assert.equal(body["ok"], true);
-    assert.equal(typeof body["deletedSuccess"], "number");
-    assert.equal(typeof body["deletedFailure"], "number");
+    const resp = await callPrune(adminJwt);
+    assert.equal(resp.status, 200, "prune must succeed with admin token");
+
     assert.equal(
-      body["deletedTotal"],
-      (body["deletedSuccess"] as number) + (body["deletedFailure"] as number),
+      await rowExists(oldSentId), false,
+      "sent row older than the success window must be deleted",
     );
-    assert.ok((body["deletedSuccess"] as number) >= 1, "at least the old sent row must be counted");
-    assert.ok((body["deletedFailure"] as number) >= 1, "at least the old failed row must be counted");
+    assert.equal(
+      await rowExists(recentSentId), true,
+      "sent row inside the success window must not be deleted",
+    );
 
-    assert.equal(await logExists(oldSent),      false, "45-day-old sent row must be pruned");
-    assert.equal(await logExists(oldFailed),    false, "120-day-old failed row must be pruned");
-    assert.equal(await logExists(recentSent),   true,  "5-day-old sent row must survive");
-    assert.equal(await logExists(recentFailed), true,  "50-day-old failed row must survive");
+    // Remove the surviving recent row from the cleanup list — it's still there.
+    // (It will be cleaned up by the after() hook via createdLogIds.)
   });
 
-  it("honours a longer team_settings retention override over the default", async () => {
-    // Admin panel configured 60-day success retention: a 45-day-old sent row
-    // would be deleted under the 30-day default but must survive here.
-    await setRetentionOverrides(60, 90);
+  it("(d) old failed rows are deleted; recent failed rows survive", async () => {
+    // Old: FAILURE_DAYS + 5 days past the window → must be pruned
+    const oldFailedId = await insertLog({ status: "failed", sentAt: daysAgo(FAILURE_DAYS + 5) });
+    // Recent: 4 days ago → inside the failure window → must be kept
+    const recentFailedId = await insertLog({ status: "failed", sentAt: daysAgo(4) });
 
-    const sent45 = await insertLog("sent", daysAgo(45)); // within 60d override → kept
-    const sent70 = await insertLog("sent", daysAgo(70)); // past 60d override   → deleted
-
-    const { status, body } = await prune(adminJwt);
-    assert.equal(status, 200);
-    assert.equal(body["ok"], true);
+    const resp = await callPrune(adminJwt);
+    assert.equal(resp.status, 200, "prune must succeed with admin token");
 
     assert.equal(
-      await logExists(sent45),
-      true,
-      "45-day-old sent row must survive when the configured retention is 60 days",
+      await rowExists(oldFailedId), false,
+      "failed row older than the failure window must be deleted",
     );
-    assert.equal(await logExists(sent70), false, "70-day-old sent row must be pruned");
+    assert.equal(
+      await rowExists(recentFailedId), true,
+      "failed row inside the failure window must not be deleted",
+    );
+  });
+});
+
+describe("POST /uc/admin/notification-logs/prune — response shape", () => {
+  it("(e) response reports deletedSuccess, deletedFailure, and deletedTotal = sum", async () => {
+    // Seed one old sent and one old failed row so the counts are non-zero.
+    await insertLog({ status: "sent",   sentAt: daysAgo(SUCCESS_DAYS + 4) });
+    await insertLog({ status: "failed", sentAt: daysAgo(FAILURE_DAYS + 6) });
+
+    const resp = await callPrune(adminJwt);
+    assert.equal(resp.status, 200);
+
+    const body = await resp.json() as {
+      ok?: boolean;
+      deletedSuccess?: number;
+      deletedFailure?: number;
+      deletedTotal?: number;
+    };
+
+    assert.equal(body.ok, true, "response must have ok=true");
+    assert.ok(typeof body.deletedSuccess === "number", "deletedSuccess must be a number");
+    assert.ok(typeof body.deletedFailure === "number", "deletedFailure must be a number");
+    assert.ok(typeof body.deletedTotal   === "number", "deletedTotal must be a number");
+
+    assert.equal(
+      body.deletedTotal,
+      (body.deletedSuccess ?? 0) + (body.deletedFailure ?? 0),
+      "deletedTotal must equal deletedSuccess + deletedFailure",
+    );
+
+    // The rows we just seeded must have been counted.
+    assert.ok(
+      (body.deletedSuccess ?? 0) >= 1,
+      `deletedSuccess should be ≥ 1 (got ${body.deletedSuccess})`,
+    );
+    assert.ok(
+      (body.deletedFailure ?? 0) >= 1,
+      `deletedFailure should be ≥ 1 (got ${body.deletedFailure})`,
+    );
   });
 });
