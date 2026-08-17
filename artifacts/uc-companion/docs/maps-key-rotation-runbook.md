@@ -45,6 +45,68 @@ Run the play-signing check as part of the pre-release checklist before every pro
 Android build. It only passes when the recorded SHA-1 matches Play Console **and** the
 restriction has been confirmed.
 
+## Automated guards (CI and EAS hook)
+
+Two gates enforce the fingerprint check before every production Android submission.
+
+### Why a persistent stored secret is not enough
+
+After Google rotates the Play app-signing certificate, the new SHA-1 appears in Play
+Console. Any secret or environment variable set before the rotation still holds the old
+value — so a check that compares a stored secret against a stored record will pass even
+though Maps is now broken for users. **The SHA-1 must be retrieved fresh from Play Console
+immediately before each submission and attested by the operator.**
+
+### 1. GitHub Actions — `maps-fingerprint-check` workflow (primary submission gate)
+
+`.github/workflows/maps-fingerprint-check.yml` has two jobs:
+
+**`record-health` (push to main)** — structural sanity check only. Verifies that
+`security/maps-key-fingerprints.json` has a recorded Play SHA-1 and that
+`gcpRestrictionConfirmed` is `true`. Catches accidental edits; cannot detect a cert
+rotation. Non-blocking early warning.
+
+**`pre-submit-gate` (workflow_dispatch)** — the actual submission gate. Before every
+production Android submission, the operator dispatches this workflow and enters the current
+Play app-signing SHA-1 in the required input field. The workflow compares that freshly-
+entered value against the committed record and fails if they differ or the restriction is
+unconfirmed.
+
+**How to run before each production submission:**
+1. Open Play Console → (your app) → Setup → App signing → copy the SHA-1 fingerprint.
+2. In GitHub → Actions → `Maps key fingerprint check` → `Run workflow`.
+3. Paste the SHA-1 into the `play_signing_sha1` input field and click **Run workflow**.
+4. Wait for the workflow to go green, then proceed with `eas submit`.
+
+### 2. EAS `eas-build-pre-install` hook (fail-closed secondary gate)
+
+`scripts/eas-build-maps-check.mjs` is registered as the `eas-build-pre-install` npm script
+in `package.json`. EAS runs it before the build starts. For production Android builds it
+is **fail-closed**: if `PLAY_APP_SIGNING_SHA1` is not set, the build exits 1 immediately.
+
+`PLAY_APP_SIGNING_SHA1` is managed transiently by the GitHub Actions pipeline:
+- **Before** `eas build`: the CI job creates the EAS secret set to the fresh operator-supplied SHA-1.
+- **After** the build (always, even on failure): the CI job deletes the EAS secret.
+
+This means the secret is absent between releases. Any developer who runs
+`eas build --platform android --profile production` directly (outside the CI pipeline)
+will hit the fail-closed hook and be blocked.
+
+**Do NOT create `PLAY_APP_SIGNING_SHA1` as a persistent EAS project secret.** The CI
+pipeline manages it transiently. A persistent value would become stale after a cert rotation
+and give the hook a false pass.
+
+### 3. Submit wrapper script (local testing only)
+
+`scripts/submit-android.mjs` / `pnpm submit:android` wraps `eas submit` with a mandatory
+pre-flight fingerprint check. For production releases **always use the GitHub Actions
+pipeline** — this wrapper is for local testing and ad-hoc scenarios only:
+
+```bash
+PLAY_APP_SIGNING_SHA1="<SHA-1 from Play Console → Setup → App signing>" \
+  pnpm submit:android [-- --id <build-id>]
+```
+
 ## Rotation procedure
 
 ### A. Play app-signing key changed (Google key upgrade/reset — the case that breaks Maps)

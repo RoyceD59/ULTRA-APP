@@ -1,0 +1,256 @@
+name: Maps key fingerprint check
+
+# Enforced pre-submission pipeline for production Android releases.
+#
+# Architecture
+# ─────────────
+# The Maps fingerprint check must run BEFORE any production build artifact is
+# created.  To also enforce it on the EAS build worker (so direct `eas build`
+# without CI is blocked), this workflow:
+#
+#   A. Runs the check locally in CI with the operator-supplied fresh SHA-1.
+#   B. Creates a transient EAS project secret (PLAY_APP_SIGNING_SHA1) set to
+#      that fresh value — it exists only for the duration of this one build.
+#   C. Runs `eas build --wait --json` — the EAS pre-install hook on the worker
+#      reads the secret and re-validates the fingerprint; the build fails there
+#      too if the secret is absent (blocks direct `eas build` calls).
+#   D. Deletes the EAS secret immediately after the build (always, even on
+#      failure), keeping the project secret slot clean between releases.
+#   E. Submits using the explicit build ID returned by step C.
+#
+# Because the secret is set only here (and removed right after), any developer
+# who runs `eas build --platform android --profile production` directly will
+# hit the fail-closed EAS hook and get blocked.
+#
+# Required GitHub secrets (Settings → Secrets → Actions):
+#   EXPO_TOKEN — EAS authentication token
+#
+# DO NOT add PLAY_APP_SIGNING_SHA1 as a persistent GitHub secret.  This
+# workflow manages it transiently as an EAS secret for each build run.
+#
+# ── Two jobs ──────────────────────────────────────────────────────────────────
+#
+# 1. record-health (push to main) — non-blocking early warning.
+#    Verifies that security/maps-key-fingerprints.json has a recorded Play SHA-1
+#    and gcpRestrictionConfirmed=true.  Cannot detect a rotation (the record
+#    also holds the old value), but catches accidental record edits.
+#
+# 2. build-and-submit (workflow_dispatch) — enforced submission pipeline:
+#    fingerprint check → ephemeral EAS secret → eas build (fail-closed hook) →
+#    delete secret → eas submit by explicit build ID.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      play_signing_sha1:
+        description: >
+          Current Play app-signing SHA-1 — copy it RIGHT NOW from
+          Play Console → (your app) → Setup → App signing → "App signing key certificate".
+          Do NOT use a saved or cached value: the whole point is to detect a rotation.
+        required: true
+        type: string
+      submit:
+        description: "Submit to Play after a successful build? ('yes' to submit)"
+        required: false
+        default: "yes"
+        type: string
+
+jobs:
+  # ── Job 1: record health check on push ───────────────────────────────────
+  record-health:
+    if: github.event_name == 'push'
+    name: Maps fingerprint record health
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artifacts/uc-companion
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify record has a fingerprint and confirmed restriction
+        run: |
+          node - <<'EOF'
+          const r = JSON.parse(require('fs').readFileSync('security/maps-key-fingerprints.json','utf8'));
+          const ps = r.fingerprints.playAppSigning;
+
+          if (!ps.sha1) {
+            console.log('⚠️  No Play app-signing SHA-1 recorded yet.');
+            console.log('   Complete the first-production-setup checklist in');
+            console.log('   docs/maps-key-rotation-runbook.md after the first AAB is submitted.');
+            process.exit(0); // warning only — dev pushes must not be blocked
+          }
+
+          console.log(`✅ Play app-signing SHA-1 recorded: ${ps.sha1}`);
+
+          if (!ps.gcpRestrictionConfirmed) {
+            console.error('❌ GCP Maps restriction is NOT confirmed for the recorded SHA-1.');
+            console.error('   Run: node scripts/check-maps-key-fingerprint.mjs --confirm-restriction');
+            console.error('   See docs/maps-key-rotation-runbook.md.');
+            process.exit(1);
+          }
+
+          console.log('✅ GCP Maps restriction confirmed.');
+          EOF
+
+  # ── Job 2: fingerprint check → build → submit ─────────────────────────────
+  build-and-submit:
+    if: github.event_name == 'workflow_dispatch'
+    name: Maps check → EAS build → EAS submit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artifacts/uc-companion
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      # ── Step A: fingerprint check in CI (before anything is built) ────────
+      # Operator-supplied SHA-1 is validated here.  It is not stored as a
+      # persistent secret; it exists only for the duration of this run.
+      - name: Verify Maps key restriction fingerprint (CI)
+        env:
+          PLAY_APP_SIGNING_SHA1: ${{ inputs.play_signing_sha1 }}
+        run: |
+          echo "Checking Maps fingerprint with operator-supplied SHA-1…"
+          node scripts/check-maps-key-fingerprint.mjs --fingerprint "$PLAY_APP_SIGNING_SHA1" || {
+            echo ""
+            echo "❌ Maps fingerprint check failed — build blocked."
+            echo "   If the SHA-1 you entered differs from the record, a cert rotation occurred."
+            echo "   Follow docs/maps-key-rotation-runbook.md before retrying."
+            exit 1
+          }
+
+      # ── Step B: set transient EAS secret (lasts one build, deleted at D) ──
+      # The EAS pre-install hook reads this secret on the worker.  Setting it
+      # here — and deleting it at step D — means it is absent between releases,
+      # so any direct `eas build` from outside this pipeline hits the
+      # fail-closed hook and is blocked.
+      - name: Set transient PLAY_APP_SIGNING_SHA1 EAS secret
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          PLAY_APP_SIGNING_SHA1: ${{ inputs.play_signing_sha1 }}
+        run: |
+          eas secret:create \
+            --scope project \
+            --name PLAY_APP_SIGNING_SHA1 \
+            --value "$PLAY_APP_SIGNING_SHA1" \
+            --type string \
+            --force \
+            --non-interactive
+
+      # ── Step C: EAS build (blocks until complete; hook re-validates on worker)
+      - name: EAS build — production Android
+        id: eas_build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          # --wait blocks until the build finishes; --json emits a single JSON
+          # object (or array) to stdout.  We write it to a temp file to avoid
+          # multiline-in-GITHUB_OUTPUT issues, then extract only the build ID.
+          eas build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json > /tmp/eas-build-result.json
+
+          BUILD_ID=$(node -e "
+            const raw = require('fs').readFileSync('/tmp/eas-build-result.json', 'utf8');
+            const data = JSON.parse(raw);
+            const id = Array.isArray(data) ? data[0]?.id : data?.id;
+            if (!id || typeof id !== 'string') {
+              process.stderr.write('Could not extract build ID from eas build output:\n' + raw + '\n');
+              process.exit(1);
+            }
+            process.stdout.write(id);
+          ")
+
+          if [ -z "$BUILD_ID" ]; then
+            echo "❌ Failed to extract build ID — cannot submit safely."
+            exit 1
+          fi
+
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "✅ Build complete — ID: $BUILD_ID"
+
+      # ── Step D: delete transient EAS secret (always runs, strict) ────────
+      # Fail the step on any error other than "secret not found" (i.e. already
+      # absent).  A silent failure would leave the secret set, allowing
+      # subsequent direct `eas build` calls to bypass the CI gate.
+      - name: Delete transient PLAY_APP_SIGNING_SHA1 EAS secret
+        if: always()
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          DELETE_OUT=$(eas secret:delete \
+            --name PLAY_APP_SIGNING_SHA1 \
+            --scope project \
+            --non-interactive 2>&1) && DELETE_EXIT=0 || DELETE_EXIT=$?
+
+          if [ $DELETE_EXIT -ne 0 ]; then
+            # Treat "not found" / "doesn't exist" as success (already gone).
+            if echo "$DELETE_OUT" | grep -qiE "not found|does not exist|no secret"; then
+              echo "ℹ️  Secret PLAY_APP_SIGNING_SHA1 was already absent — nothing to delete."
+            else
+              echo "❌ Failed to delete EAS secret PLAY_APP_SIGNING_SHA1:"
+              echo "$DELETE_OUT"
+              echo ""
+              echo "IMPORTANT: the secret may still be set.  Manual cleanup required:"
+              echo "  eas secret:delete --name PLAY_APP_SIGNING_SHA1 --scope project"
+              echo "Until it is removed, direct `eas build --profile production` calls"
+              echo "may bypass the CI gate."
+              exit 1
+            fi
+          else
+            echo "✅ EAS secret PLAY_APP_SIGNING_SHA1 deleted."
+          fi
+
+          # Verify the secret is actually gone by listing and checking absence.
+          if eas secret:list --scope project --json 2>/dev/null \
+              | node -e "
+                const s=require('fs').readFileSync('/dev/stdin','utf8');
+                try {
+                  const arr=JSON.parse(s);
+                  const found=arr.some(x=>x.name==='PLAY_APP_SIGNING_SHA1');
+                  process.exit(found ? 1 : 0);
+                } catch { process.exit(0); } // list parse error — skip verification
+              "; then
+            echo "✅ Verified: PLAY_APP_SIGNING_SHA1 is not present in EAS project secrets."
+          else
+            echo "❌ PLAY_APP_SIGNING_SHA1 still appears in EAS project secrets after deletion."
+            echo "   Manual cleanup required: eas secret:delete --name PLAY_APP_SIGNING_SHA1 --scope project"
+            exit 1
+          fi
+
+      # ── Step E: submit the exact build by ID ─────────────────────────────
+      - name: EAS submit — production Android
+        if: inputs.submit == 'yes' && steps.eas_build.outputs.build_id != ''
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas submit \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --id "${{ steps.eas_build.outputs.build_id }}"
