@@ -30,6 +30,7 @@ import libraryRouter from "./library.js";
 import { requireTeamAuth } from "./auth.js";
 import adminNotificationSettingsRouter from "./admin-notification-settings.js";
 import adminIntegrationsRouter from "./admin-integrations.js";
+import ucRewardsRouter from "./uc-rewards.js";
 
 const router: IRouter = Router();
 
@@ -75,6 +76,7 @@ router.use(ucImpactRouter);
 router.use(ucRemindersRouter);
 router.use(ucSocialAuthRouter);
 router.use(ucOfflineClientsRouter);
+router.use(ucRewardsRouter);
 router.use(storageRouter);
 router.use(paymentsRouter);
 router.use(referralsRouter);

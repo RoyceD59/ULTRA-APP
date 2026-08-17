@@ -55,6 +55,7 @@ import {
   ObjectNotFoundError,
   ObjectStorageService,
 } from "../lib/objectStorage";
+import { creditQualifyingProductPoints } from "../lib/reminder-dispatch.js";
 
 const router = Router();
 
@@ -4235,7 +4236,17 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
                 // retry caller's identity, to correctly address the customer.
                 const normalized = normalizeOrder(wcLookup.order);
                 const iConfirmed = await confirmWcAnchor(winner.id);
-                if (iConfirmed) sendWcOrderNotifications(normalized, winner.userId);
+                if (iConfirmed) {
+                  sendWcOrderNotifications(normalized, winner.userId);
+                  // Credit qualifying-product reward for this paid WC order
+                  const winnerNumericId = Number(winner.userId);
+                  if (winnerNumericId > 0 && !isNaN(winnerNumericId)) {
+                    creditQualifyingProductPoints(winnerNumericId, winner.id).catch((err) => {
+                      logger.warn({ err, userId: winnerNumericId, orderId: winner.id },
+                        "createOrder (WC reconcile anchor): qualifying-product rewards credit failed (non-fatal)");
+                    });
+                  }
+                }
                 res.json(normalized);
                 return;
               }
@@ -4280,6 +4291,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
                 recordReferralConversion(promoCode, userEmail);
               }
               sendWcOrderNotifications(normalized, orderUserId);
+              // Credit qualifying-product reward for this paid WC pre-flight order
+              if (orderNumericId > 0 && !isNaN(orderNumericId)) {
+                creditQualifyingProductPoints(orderNumericId, wcAnchorId).catch((err) => {
+                  logger.warn({ err, userId: orderNumericId, orderId: wcAnchorId },
+                    "createOrder (WC pre-flight): qualifying-product rewards credit failed (non-fatal)");
+                });
+              }
             }
           }
           res.json(normalized);
@@ -4363,11 +4381,19 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               recordReferralConversion(promoCode, userEmail);
             }
             sendWcOrderNotifications(normalized, orderUserId);
+            // Credit qualifying-product reward for this paid WC order (main path)
+            if (orderNumericId > 0 && !isNaN(orderNumericId)) {
+              creditQualifyingProductPoints(orderNumericId, wcAnchorId).catch((err) => {
+                logger.warn({ err, userId: orderNumericId, orderId: wcAnchorId },
+                  "createOrder (WC main): qualifying-product rewards credit failed (non-fatal)");
+              });
+            }
           }
         } else {
           // COD order (no payment reference → no anchor).  There is no
           // concurrent-request race for reference-less orders, so send
           // the confirmation unconditionally whenever WC accepts the order.
+          // COD orders are not paid at time of placement — no rewards credit.
           if (discountType === "referral" && promoCode && userEmail) {
             recordReferralConversion(promoCode, userEmail);
           }
@@ -4406,6 +4432,16 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           total:     String(t),
         }))
       );
+    }
+
+    // Credit qualifying-product rewards for paid (non-COD) orders.
+    // Fire-and-forget — a credit failure must never block order confirmation.
+    // The refId unique index in uc_rewards_ledger ensures idempotency.
+    if (orderNumericId > 0 && !isNaN(orderNumericId) && paymentMethod !== "cod") {
+      creditQualifyingProductPoints(orderNumericId, dbOrder!.id).catch((err) => {
+        logger.warn({ err, userId: orderNumericId, orderId: dbOrder!.id },
+          "createOrder: qualifying-product rewards credit failed (non-fatal)");
+      });
     }
 
     // Record referral conversion so the referrer earns credit

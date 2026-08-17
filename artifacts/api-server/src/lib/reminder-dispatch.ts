@@ -29,6 +29,8 @@ import {
   ucNotifPrefsTable,
   ucUsersTable,
   ucNotificationLogTable,
+  ucRewardsRulesTable,
+  ucRewardsLedgerTable,
 } from "@workspace/db";
 import { logger } from "./logger";
 import { sendViaResend } from "./resend.js";
@@ -292,6 +294,17 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
         continue;
       }
 
+      // Auto-credit rewards points for replacement stages (replace30 / replace15).
+      // refId is cycle-scoped: "<userId>:<productId>:<activatedAtMs>:<stageKey>"
+      // so each new filter lifecycle earns its own set of points.
+      // A partial unique DB index on (user_id, ref_id) ensures concurrent
+      // dispatch runs and retries cannot double-credit the same stage.
+      if (decision.key === "replace30" || decision.key === "replace15") {
+        await creditReplacementPoints(row.userId, row.productId, row.activatedAt, row.productName, decision.key).catch((err) => {
+          logger.warn({ err, userId: row.userId, stage: decision.key }, "reminder-dispatch: rewards credit failed (non-fatal)");
+        });
+      }
+
       // day30/day60 message bodies quote remaining-life figures; use rated
       // lifespanDays so they match the local notification content.
       const msg = buildStageMessage(
@@ -359,6 +372,193 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
 
   logger.info(summary, "reminder-dispatch: run complete");
   return summary;
+}
+
+// ─── Auto-credit rewards points on replacement stages ─────────────────────────
+
+/**
+ * Credits points for a filter-replacement lifecycle stage.
+ * Idempotent: skips silently if a ledger row already exists with the same
+ * refId ("<userId>:<stageKey>"), which can happen if a previous run crashed
+ * between claiming the stage and completing the credit.
+ */
+async function creditReplacementPoints(
+  userId: string,
+  productId: number,
+  activatedAt: Date,
+  productName: string,
+  stageKey: "replace30" | "replace15"
+): Promise<void> {
+  // Cycle-scoped idempotency key: each filter lifecycle cycle (product + activation date)
+  // earns its own set of points. Encoding the activation timestamp in milliseconds means
+  // starting a new cycle with the same product also earns points correctly.
+  const refId = `${userId}:${productId}:${activatedAt.getTime()}:${stageKey}`;
+
+  // The unique index on (user_id, ref_id) handles concurrent inserts at DB level,
+  // but a pre-check avoids a needless error/retry on every already-credited stage.
+  const existing = await db
+    .select({ id: ucRewardsLedgerTable.id })
+    .from(ucRewardsLedgerTable)
+    .where(
+      and(
+        eq(ucRewardsLedgerTable.userId, parseInt(userId, 10)),
+        eq(ucRewardsLedgerTable.refId, refId)
+      )
+    )
+    .limit(1);
+  if (existing.length > 0) return;
+
+  // Look up the active filter-replacement rule
+  const [rule] = await db
+    .select({ pointsValue: ucRewardsRulesTable.pointsValue })
+    .from(ucRewardsRulesTable)
+    .where(
+      and(
+        eq(ucRewardsRulesTable.eventType, "filter-replacement"),
+        eq(ucRewardsRulesTable.active, true)
+      )
+    )
+    .limit(1);
+
+  if (!rule || rule.pointsValue <= 0) return;
+
+  const numericUserId = parseInt(userId, 10);
+  if (isNaN(numericUserId) || numericUserId <= 0) return;
+
+  await db.insert(ucRewardsLedgerTable).values({
+    userId:    numericUserId,
+    points:    rule.pointsValue,
+    reason:    `Filter replacement reward — ${productName} (${stageKey === "replace30" ? "30-day" : "15-day"} reminder)`,
+    eventType: "filter-replacement",
+    refId,
+  });
+
+  logger.info({ userId, stageKey, points: rule.pointsValue }, "reminder-dispatch: rewards points credited");
+}
+
+// ─── Qualifying-product rewards on paid orders ────────────────────────────────
+
+/**
+ * Credits qualifying-product points when a paid order is created.
+ * Called from the createOrder endpoint (non-COD orders only).
+ * Idempotent: the partial unique DB index on (user_id, ref_id) absorbs any
+ * duplicate call for the same order id.
+ */
+export async function creditQualifyingProductPoints(
+  userId: number,
+  orderId: number,
+): Promise<void> {
+  if (!userId || userId <= 0) return;
+
+  const refId = `qualifying-product:order:${orderId}`;
+
+  // Pre-check idempotency (avoids a write attempt on re-runs)
+  const existing = await db
+    .select({ id: ucRewardsLedgerTable.id })
+    .from(ucRewardsLedgerTable)
+    .where(
+      and(
+        eq(ucRewardsLedgerTable.userId, userId),
+        eq(ucRewardsLedgerTable.refId, refId)
+      )
+    )
+    .limit(1);
+  if (existing.length > 0) return;
+
+  const [rule] = await db
+    .select({ pointsValue: ucRewardsRulesTable.pointsValue })
+    .from(ucRewardsRulesTable)
+    .where(
+      and(
+        eq(ucRewardsRulesTable.eventType, "qualifying-product"),
+        eq(ucRewardsRulesTable.active, true)
+      )
+    )
+    .limit(1);
+
+  if (!rule || rule.pointsValue <= 0) return;
+
+  await db.insert(ucRewardsLedgerTable).values({
+    userId,
+    points:    rule.pointsValue,
+    reason:    `Qualifying product purchase — order #${orderId}`,
+    eventType: "qualifying-product",
+    refId,
+  });
+
+  logger.info({ userId, orderId, points: rule.pointsValue }, "rewards: qualifying-product points credited");
+}
+
+// ─── Replacement rewards pass — decoupled from notification opt-in ─────────────
+
+/**
+ * Credits filter-replacement rewards for ALL customers with active filter
+ * reminders, independent of their notification channel preferences.
+ *
+ * This runs alongside dispatchFilterReminders in the scheduler to ensure
+ * customers who have opted out of notifications still earn earned points for
+ * filter lifecycle events.
+ *
+ * Idempotency: the partial unique DB index on (user_id, ref_id) prevents
+ * double-credits. This function is safe to run multiple times.
+ */
+export async function creditReplacementRewardsAll(): Promise<{ considered: number; credited: number }> {
+  // Query ALL active filter reminders without notification opt-in filter.
+  // sentStages is intentionally NOT passed to dueStages() — we pass [] instead,
+  // so the recovery pass re-evaluates each replacement stage purely by elapsed
+  // days and the grace window, regardless of whether the dispatch already marked
+  // it as sent. This makes a failed dispatch credit retryable:
+  //   - dispatch claims the stage → credit fails (transient error)
+  //   - recovery pass re-evaluates → stage is within grace window → retries INSERT
+  //   - DB unique index on (user_id, ref_id) absorbs any concurrent duplicate
+  //     from a successful dispatch credit → no double-credit possible.
+  const rows = await db
+    .select({
+      userId:                 ucFilterRemindersTable.userId,
+      productId:              ucFilterRemindersTable.productId,
+      productName:            ucFilterRemindersTable.productName,
+      lifespanDays:           ucFilterRemindersTable.lifespanDays,
+      adjustedReplaceOffsets: ucFilterRemindersTable.adjustedReplaceOffsets,
+      activatedAt:            ucFilterRemindersTable.activatedAt,
+    })
+    .from(ucFilterRemindersTable)
+    .innerJoin(ucUsersTable, eq(ucUsersTable.id, sqlToInt(ucFilterRemindersTable.userId)))
+    .where(
+      and(
+        eq(ucFilterRemindersTable.active, true),
+        gt(ucFilterRemindersTable.lifespanDays, 0),
+        isNull(ucUsersTable.deletedAt),
+      )
+    );
+
+  let credited = 0;
+
+  for (const row of rows) {
+    // Pass empty sentStages: the recovery pass must not exclude stages that were
+    // claimed by dispatch but whose credit INSERT failed. Grace/skip_stale
+    // semantics are still applied — the DB ledger unique key handles idempotency.
+    const decisions = dueStages(
+      row.lifespanDays, row.activatedAt, [], new Date(), row.adjustedReplaceOffsets
+    );
+
+    for (const decision of decisions) {
+      if (decision.key !== "replace30" && decision.key !== "replace15") continue;
+      // Respect the skip_stale gate: stages past the grace window are too old
+      // for this lifecycle cycle and should not earn retroactive points.
+      if (decision.action === "skip_stale") continue;
+
+      await creditReplacementPoints(
+        row.userId, row.productId, row.activatedAt, row.productName, decision.key
+      ).catch((err) => {
+        logger.warn({ err, userId: row.userId, stage: decision.key },
+          "creditReplacementRewardsAll: credit failed (non-fatal)");
+      });
+      credited++;
+    }
+  }
+
+  logger.info({ considered: rows.length, credited }, "creditReplacementRewardsAll: run complete");
+  return { considered: rows.length, credited };
 }
 
 // ─── Helper: join text userId to integer uc_users.id ──────────────────────────

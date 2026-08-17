@@ -21,7 +21,7 @@ import { sendViaResend } from "./resend.js";
 import { sendSms } from "./sms.js";
 import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
-import { dispatchFilterReminders } from "./reminder-dispatch.js";
+import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
 
 export function startScheduler() {
   // Daily at 07:30 UTC (10:30 Nairobi) — deliver filter lifecycle reminders
@@ -32,6 +32,20 @@ export function startScheduler() {
       await dispatchFilterReminders();
     } catch (err) {
       logger.error({ err }, "Scheduler: filter reminder dispatch failed");
+    }
+  });
+
+  // Daily at 07:35 UTC — credit filter-replacement rewards for ALL customers
+  // with active tracked filters, independent of notification channel preferences.
+  // Runs 5 minutes after the notification dispatch so the stage claim has
+  // settled, but uses the refId unique index for its own idempotency guarantee.
+  cron.schedule("35 7 * * *", async () => {
+    logger.info("Scheduler: crediting filter-replacement rewards (all customers)");
+    try {
+      const result = await creditReplacementRewardsAll();
+      logger.info(result, "Scheduler: filter-replacement rewards run complete");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: filter-replacement rewards run failed");
     }
   });
 

@@ -12,6 +12,7 @@ import { useApi } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
 import * as Haptics from 'expo-haptics';
+import QRCode from 'react-native-qrcode-svg';
 import {
   getNotificationPermissionStatus,
   requestNotificationPermission,
@@ -455,6 +456,12 @@ function AccountScreenContent() {
     enabled: !!user,
   });
 
+  const { data: rewards } = useQuery({
+    queryKey: ['customer-rewards'],
+    queryFn: () => api.getRewards(),
+    enabled: !!user,
+  });
+
   // Must be called unconditionally before any early return (Rules of Hooks).
   const cartBarInset = useCartBarInset();
 
@@ -600,6 +607,65 @@ function AccountScreenContent() {
               </View>
             </View>
           </View>
+
+          {/* ── Rewards card ─────────────────────────────────────────── */}
+          {user && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>My Rewards</Text>
+              <View style={[rewardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {/* Balance */}
+                <View style={[rewardStyles.balanceRow, { borderBottomColor: colors.border }]}>
+                  <View style={[rewardStyles.balanceIcon, { backgroundColor: colors.primaryLight }]}>
+                    <Ionicons name="star" size={22} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[rewardStyles.balanceLabel, { color: colors.mutedForeground }]}>Points Balance</Text>
+                    <Text style={[rewardStyles.balanceValue, { color: colors.text }]}>
+                      {rewards?.balance ?? 0} <Text style={[rewardStyles.balancePts, { color: colors.mutedForeground }]}>pts</Text>
+                    </Text>
+                  </View>
+                </View>
+
+                {/* QR code */}
+                <View style={[rewardStyles.qrSection, { borderBottomColor: colors.border }]}>
+                  <Text style={[rewardStyles.qrLabel, { color: colors.mutedForeground }]}>Your Rewards QR Code</Text>
+                  <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
+                    <QRCode
+                      value={`uc-rewards:${user.id}:${user.phone ?? ''}`}
+                      size={120}
+                      color="#1a1a1a"
+                      backgroundColor="#ffffff"
+                    />
+                  </View>
+                  <Text style={[rewardStyles.qrHint, { color: colors.mutedForeground }]}>
+                    Show this to field staff or scan in the admin panel to earn points
+                  </Text>
+                </View>
+
+                {/* Recent history */}
+                {rewards && rewards.ledger.length > 0 && (
+                  <View style={rewardStyles.historySection}>
+                    <Text style={[rewardStyles.historyTitle, { color: colors.text }]}>Recent Points</Text>
+                    {rewards.ledger.slice(0, 10).map(entry => (
+                      <View key={entry.id} style={[rewardStyles.historyRow, { borderBottomColor: colors.border }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[rewardStyles.historyReason, { color: colors.text }]} numberOfLines={1}>
+                            {entry.reason}
+                          </Text>
+                          <Text style={[rewardStyles.historyDate, { color: colors.mutedForeground }]}>
+                            {new Date(entry.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                        <Text style={[rewardStyles.historyPoints, { color: entry.points > 0 ? colors.primary : colors.destructive }]}>
+                          {entry.points > 0 ? '+' : ''}{entry.points} pts
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Filter tracker */}
           <FilterTrackerSection
@@ -756,4 +822,23 @@ const styles = StyleSheet.create({
   notifBtn:         { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
   notifBtnTxt:      { color: '#fff', fontSize: 13, fontWeight: '600' as const },
   notifDenied:      { fontSize: 11, maxWidth: 72, textAlign: 'center' },
+});
+
+const rewardStyles = StyleSheet.create({
+  card:           { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+  balanceRow:     { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderBottomWidth: 1 },
+  balanceIcon:    { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  balanceLabel:   { fontSize: 12, fontWeight: '500' as const, marginBottom: 2 },
+  balanceValue:   { fontSize: 26, fontWeight: '800' as const },
+  balancePts:     { fontSize: 14, fontWeight: '500' as const },
+  qrSection:      { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 16, gap: 12, borderBottomWidth: 1 },
+  qrLabel:        { fontSize: 12, fontWeight: '600' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  qrWrap:         { padding: 12, borderRadius: 12, borderWidth: 1 },
+  qrHint:         { fontSize: 11, textAlign: 'center' as const, maxWidth: 240 },
+  historySection: { padding: 14, gap: 0 },
+  historyTitle:   { fontSize: 13, fontWeight: '700' as const, marginBottom: 8 },
+  historyRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, gap: 8 },
+  historyReason:  { fontSize: 13, fontWeight: '500' as const },
+  historyDate:    { fontSize: 11, marginTop: 1 },
+  historyPoints:  { fontSize: 14, fontWeight: '700' as const, minWidth: 60, textAlign: 'right' as const },
 });

@@ -489,6 +489,56 @@ async function applyStartupMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS email text;
   `);
   logger.info("Startup migration: uc_offline_clients phone/email columns ensured");
+
+  // UC Rewards — rules table (admin-configurable event → points mapping).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_rewards_rules (
+      id           serial       PRIMARY KEY,
+      event_type   varchar(100) NOT NULL UNIQUE,
+      label        varchar(255) NOT NULL,
+      points_value integer      NOT NULL DEFAULT 0,
+      active       boolean      NOT NULL DEFAULT true,
+      updated_by   varchar(255),
+      updated_at   timestamptz  NOT NULL DEFAULT now()
+    );
+  `);
+  // Seed default reward rules (idempotent — ON CONFLICT DO NOTHING).
+  await pool.query(`
+    INSERT INTO uc_rewards_rules (event_type, label, points_value, active)
+    VALUES
+      ('filter-replacement', 'Filter Replacement', 50, true),
+      ('qualifying-product', 'Qualifying Product Purchase', 100, true)
+    ON CONFLICT (event_type) DO NOTHING;
+  `);
+  logger.info("Startup migration: uc_rewards_rules table and default rules ensured");
+
+  // UC Rewards — ledger table (auditable points credit/debit history).
+  // ref_id encodes a cycle-scoped idempotency key: "<userId>:<productId>:<activatedAtMs>:<stageKey>"
+  // so each filter lifecycle cycle can earn its own set of points.
+  // The unique index on (user_id, ref_id) prevents duplicate credits from
+  // concurrent dispatch runs or retries.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_rewards_ledger (
+      id          serial       PRIMARY KEY,
+      user_id     integer      NOT NULL REFERENCES uc_users(id),
+      points      integer      NOT NULL,
+      reason      varchar(500) NOT NULL,
+      event_type  varchar(100) NOT NULL,
+      ref_id      text,
+      granted_by  varchar(255),
+      created_at  timestamptz  NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_rewards_ledger_user_ref_idx
+      ON uc_rewards_ledger (user_id, ref_id)
+      WHERE ref_id IS NOT NULL;
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS uc_rewards_ledger_user_created_idx
+      ON uc_rewards_ledger (user_id, created_at DESC);
+  `);
+  logger.info("Startup migration: uc_rewards_ledger table ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;

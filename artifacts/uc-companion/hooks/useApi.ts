@@ -516,6 +516,13 @@ export function useApi() {
       updatedBy?:   string,
     ) => post<{ ok: boolean }>('/api/uc/impact/override', { litresOffset, usersOffset, updatedBy }),
 
+    /** Fetch the current user's loyalty-points balance and recent ledger. */
+    getRewards: () =>
+      get<{
+        balance: number;
+        ledger: Array<{ id: number; points: number; reason: string; eventType: string; createdAt: string }>;
+      }>('/api/uc/customer/rewards'),
+
     /** Submit a thumbs-up or thumbs-down rating for an Alison response. */
     chatFeedback: (
       rating:   'up' | 'down',
