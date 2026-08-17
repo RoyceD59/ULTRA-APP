@@ -780,6 +780,81 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
     await runDigestWithAtRejection(500, 302);
   });
 
+  it("(j) both channels down — durable status=failed digest row written to uc_notification_log", async () => {
+    process.env["TEAM_ALERT_PHONE"] = "+254700000030";
+    process.env["RESEND_BASE_URL"]  = "https://api.resend.com";
+
+    const createdAt = new Date(Date.now() - 30 * 60 * 60 * 1000); // 30 h ago
+    selectStub = [
+      {
+        id: 401,
+        paymentMethod: "mpesa",
+        total: "6000",
+        status: "processing",
+        paymentReference: "LGR401",
+        dateCreated: createdAt,
+        webhookRecovery: true,
+        userId: "anon",
+        currency: "KES",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {},
+      },
+    ];
+
+    // Both Resend and AT fail
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = async (input, _init) => {
+      const url = typeof input === "string" ? input : (input as URL | Request).toString();
+      if (url.includes("resend.com") || url.includes("api.resend")) {
+        throw new Error("Simulated Resend outage");
+      }
+      if (url.includes("africastalking.com")) {
+        return new Response("Service Unavailable", { status: 503 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+
+    // Bust phone cache so the test's env phone is resolved fresh
+    const { invalidateTeamAlertPhoneCache } = await import("../routes/payments.js");
+    invalidateTeamAlertPhoneCache();
+
+    try {
+      const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+
+      let threw = false;
+      try {
+        await runStaleRecoveryOrderDigest();
+      } catch {
+        threw = true;
+      }
+      assert.ok(!threw, "digest must not throw when both channels fail");
+
+      // Allow fire-and-forget log writes to settle
+      await waitTick(120);
+
+      // A durable failure row must be written with channel='digest' and status='failed'
+      const digestFailRows = capturedInserts.filter((row) => {
+        const r = row as Record<string, unknown>;
+        return r["channel"] === "digest" && r["status"] === "failed";
+      });
+      assert.ok(
+        digestFailRows.length >= 1,
+        `uc_notification_log should contain a status=failed digest row when both channels fail; captured inserts: ${JSON.stringify(capturedInserts)}`,
+      );
+      const logRow = digestFailRows[0] as Record<string, unknown>;
+      assert.equal(logRow["template"], "recovery_order_digest", "log row template should be recovery_order_digest");
+      assert.ok(
+        String(logRow["errorMessage"] ?? "").toLowerCase().includes("both"),
+        `errorMessage should mention both channels failing; got: ${logRow["errorMessage"]}`,
+      );
+    } finally {
+      globalThis.fetch = savedFetch;
+      delete process.env["RESEND_BASE_URL"];
+    }
+  });
+
   it("(d) skips gracefully (no SMS, no error) when no stale orders found", async () => {
     process.env["TEAM_ALERT_PHONE"] = "+254700000003";
     selectStub = []; // empty result — no stale orders

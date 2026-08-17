@@ -18,7 +18,7 @@ import {
   auditProductLifespans,
 } from "../routes/uc.js";
 import { sendViaResend } from "./resend.js";
-import { sendSms } from "./sms.js";
+import { sendSms, sendSmsAwaitable } from "./sms.js";
 import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
 import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
@@ -682,7 +682,15 @@ export async function runNotificationLogPruning(): Promise<{
   }
 }
 /** @internal */
-export async function runStaleRecoveryOrderDigest(): Promise<void> {
+export async function runStaleRecoveryOrderDigest(
+  deps: {
+    sendEmail?: typeof sendViaResend;
+    sendSmsAwaitable?: typeof sendSmsAwaitable;
+  } = {},
+): Promise<void> {
+  const sendEmail       = deps.sendEmail       ?? sendViaResend;
+  const _sendSmsAwaitable = deps.sendSmsAwaitable ?? sendSmsAwaitable;
+
   logger.info("Scheduler: checking for stale webhook-recovery orders");
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -735,7 +743,7 @@ export async function runStaleRecoveryOrderDigest(): Promise<void> {
       ". Check admin panel.";
 
     // Email to team
-    const emailOk = await sendViaResend({
+    const emailOk = await sendEmail({
       from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
       to:      "info@ucfilters.com",
       subject: `⏰ ${stale.length} recovery order${stale.length > 1 ? "s" : ""} still unfulfilled after 24 h`,
@@ -749,15 +757,44 @@ export async function runStaleRecoveryOrderDigest(): Promise<void> {
       logger.warn("Scheduler: digest email failed — will rely on SMS fallback");
     }
 
-    // SMS fallback — fires unconditionally so the team is reached even when Resend is down.
+    // SMS fallback — awaited so we can detect a both-channels-down scenario.
     // Phone is resolved via getTeamAlertPhone (admin-panel DB value first, env var fallback)
     // so the digest honours the same configuration as single recovery alerts.
+    let smsOk = false;
     const teamPhone = await getTeamAlertPhone();
     if (teamPhone) {
-      await sendSms(teamPhone, smsBody, { template: "recovery_order_digest" });
-      logger.info("Scheduler: stale recovery order SMS sent");
+      smsOk = await _sendSmsAwaitable(teamPhone, smsBody, { template: "recovery_order_digest" });
+      if (smsOk) {
+        logger.info("Scheduler: stale recovery order SMS sent");
+      } else {
+        logger.warn("Scheduler: stale recovery order SMS failed");
+      }
     } else {
       logger.info("Scheduler: team alert phone not configured — SMS reminder skipped");
+    }
+
+    // ── Both-channels-down guard ──────────────────────────────────────────────
+    // When neither email nor SMS reached the team, write a durable failure row
+    // to uc_notification_log so the failure is visible in the ProjectHub admin
+    // Notification Log page and can be investigated / retried.
+    if (!emailOk && !smsOk) {
+      logger.error(
+        { count: stale.length },
+        "Scheduler: stale recovery order digest — BOTH email and SMS channels failed; recording durable failure",
+      );
+      db.insert(ucNotificationLogTable)
+        .values({
+          channel:      "digest",
+          provider:     "none",
+          recipient:    "info@ucfilters.com",
+          template:     "recovery_order_digest",
+          messageBody:  emailBody,
+          status:       "failed",
+          errorMessage: "Both email (Resend) and SMS (Africa's Talking) channels failed for the stale recovery-order digest. Manual follow-up required.",
+        })
+        .catch((err: unknown) => {
+          logger.error({ err }, "Scheduler: failed to write both-channels-down log row");
+        });
     }
   } catch (err) {
     logger.error({ err }, "Scheduler: stale recovery order digest job failed");

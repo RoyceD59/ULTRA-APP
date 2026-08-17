@@ -147,6 +147,92 @@ export async function sendSms(
     });
 }
 
+/**
+ * Awaitable variant of sendSms — resolves to `true` when AT accepts the
+ * message (HTTP 2xx) and `false` otherwise (non-2xx, network error, or
+ * missing credentials / phone).
+ *
+ * Unlike `sendSms` this awaits the AT fetch so callers that need to know
+ * whether the channel succeeded can react accordingly.  The same
+ * uc_notification_log row is written regardless.
+ */
+export async function sendSmsAwaitable(
+  to: string,
+  message: string,
+  meta?: {
+    template?: string;
+    orderId?:  number | string;
+    ticketId?: string;
+    testId?:   string;
+  },
+): Promise<boolean> {
+  if (!hasATCredentials()) {
+    console.log("[sms] AT credentials absent — skipping SMS to", to);
+    logSmsAttempt({
+      recipient:    normalisePhone(to) || to,
+      template:     meta?.template ?? "",
+      messageBody:  message,
+      orderId:      meta?.orderId,
+      ticketId:     meta?.ticketId,
+      testId:       meta?.testId,
+      status:       "failed",
+      errorMessage: "Africa's Talking credentials not configured (AT_API_KEY / AT_USERNAME)",
+    });
+    return false;
+  }
+
+  const phone = normalisePhone(to);
+  if (!phone) {
+    console.warn("[sms] Cannot normalise phone number:", to);
+    return false;
+  }
+
+  const apiKey   = process.env["AT_API_KEY"]!;
+  const username = process.env["AT_USERNAME"]!;
+
+  const logMeta = {
+    recipient:   phone,
+    template:    meta?.template ?? "",
+    messageBody: message,
+    orderId:     meta?.orderId,
+    ticketId:    meta?.ticketId,
+    testId:      meta?.testId,
+  };
+
+  try {
+    const res = await fetch(AT_BASE, {
+      method: "POST",
+      headers: {
+        "Accept":       "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apiKey":       apiKey,
+      },
+      body: new URLSearchParams({
+        username,
+        to: phone,
+        message,
+      }).toString(),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "(unreadable)");
+      console.error(`[sms] AT returned ${res.status}:`, body);
+      logSmsAttempt({ ...logMeta, status: "failed", errorMessage: `AT ${res.status}: ${body}` });
+      return false;
+    }
+
+    const data = await res.json().catch(() => null);
+    console.log("[sms] sent to", phone, "—", JSON.stringify(data));
+    logSmsAttempt({ ...logMeta, status: "sent" });
+    return true;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[sms] network error:", err);
+    logSmsAttempt({ ...logMeta, status: "failed", errorMessage: `Network error: ${msg}` });
+    return false;
+  }
+}
+
 // ─── Message templates ─────────────────────────────────────────────────────────
 
 export function orderConfirmationSms(params: {
