@@ -45,6 +45,8 @@ import { CarouselRegisterContext, type CarouselRef } from './SwipeTabsContext';
  * [ ] Swipe on featured products strip → scrolls strip, no tab switch
  * [ ] Swipe on category chips → scrolls chips, no tab switch
  * [ ] Vertical scroll anywhere → unaffected by SwipeTabs
+ * [ ] Vertical scroll on Support screen (SectionList / FlatList / ScrollView tabs)
+ *     → unaffected; a slow diagonal drag never triggers a tab switch
  * [ ] Map tab: swiping the map does NOT switch tabs (not wrapped in SwipeTabs)
  * If a carousel loses the race: raise ACTIVATE_X or lower TRIGGER_DIST.
  */
@@ -61,7 +63,10 @@ const TAB_HREF: Record<SwipeTab, Href> = {
 };
 
 const ACTIVATE_X = 45;   // px of horizontal drag before the gesture claims the touch
-const FAIL_Y = 18;       // px of vertical drag that hands the touch to scrolling
+const FAIL_Y = 20;       // px of vertical drag that hands the touch to scrolling
+                         // (20 px gives a comfortable margin for content-heavy screens like
+                         // Support — a user scrolling vertically reaches 20 px long before the
+                         // 45 px horizontal gate fires, so the pan never activates)
 const TRIGGER_DIST = 70; // drag distance that commits a tab change
 const TRIGGER_VELOCITY = 800; // or a quick flick
 
