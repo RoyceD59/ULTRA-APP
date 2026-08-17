@@ -9,4 +9,8 @@
 export interface UcCustomersCount {
   /** Total registered (non-deleted) UC Companion customers */
   count: number;
+  /** Customers who registered since the start of the current calendar week */
+  newThisWeek: number;
+  /** Customers who registered since the start of the current calendar month */
+  newThisMonth: number;
 }

@@ -33,7 +33,7 @@ interface LifespanAudit {
  * Visible to all logged-in team members; silently hidden on auth error.
  */
 function UcCustomerCountCard() {
-  const { data, isLoading } = useQuery<{ count: number } | null>({
+  const { data, isLoading } = useQuery<{ count: number; newThisWeek: number; newThisMonth: number } | null>({
     queryKey: ["uc-customers-count"],
     staleTime: 60 * 1000,
     queryFn: async () => {
@@ -53,13 +53,32 @@ function UcCustomerCountCard() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="h-9 w-16 bg-muted rounded animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-9 w-16 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+          </div>
         ) : (
           <>
             <div className="text-3xl font-bold text-foreground">
               {data?.count ?? "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">UC Companion app sign-ups</p>
+            {data != null && (
+              <div className="flex gap-4 mt-2 pt-2 border-t border-border/50">
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground leading-tight">
+                    {data.newThisWeek}
+                  </p>
+                  <p className="text-xs text-muted-foreground">this week</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground leading-tight">
+                    {data.newThisMonth}
+                  </p>
+                  <p className="text-xs text-muted-foreground">this month</p>
+                </div>
+              </div>
+            )}
           </>
         )}
       </CardContent>

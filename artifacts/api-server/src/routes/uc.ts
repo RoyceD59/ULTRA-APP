@@ -5456,10 +5456,20 @@ router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { rows } = await pool.query<{ count: number }>(
-      "SELECT COUNT(*)::int AS count FROM uc_users WHERE deleted_at IS NULL"
+    const { rows } = await pool.query<{ count: number; new_this_week: number; new_this_month: number }>(
+      `SELECT
+         COUNT(*)::int                                                        AS count,
+         COUNT(*) FILTER (WHERE created_at >= date_trunc('week',  now()))::int AS new_this_week,
+         COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int AS new_this_month
+       FROM uc_users
+       WHERE deleted_at IS NULL`
     );
-    res.json({ count: rows[0]?.count ?? 0 });
+    const row = rows[0];
+    res.json({
+      count:        row?.count         ?? 0,
+      newThisWeek:  row?.new_this_week  ?? 0,
+      newThisMonth: row?.new_this_month ?? 0,
+    });
   } catch (err) {
     logger.error({ err }, "[customers/count] query failed");
     res.status(500).json({ error: "Internal server error" });

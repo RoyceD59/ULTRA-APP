@@ -1947,8 +1947,14 @@ components:
 
     UcCustomersCount:
       type: object
-      required: [count]
+      required: [count, newThisWeek, newThisMonth]
       properties:
         count:
           type: integer
           description: Total registered (non-deleted) UC Companion customers
+        newThisWeek:
+          type: integer
+          description: Customers who registered since the start of the current calendar week
+        newThisMonth:
+          type: integer
+          description: Customers who registered since the start of the current calendar month

@@ -85,7 +85,9 @@ export const UpdateAdminIntegrationsResponse = zod.object({
  * @summary Total registered UC Companion customers (non-deleted)
  */
 export const GetUcCustomersCountResponse = zod.object({
-  "count": zod.number().describe('Total registered (non-deleted) UC Companion customers')
+  "count": zod.number().describe('Total registered (non-deleted) UC Companion customers'),
+  "newThisWeek": zod.number().describe('Customers who registered since the start of the current calendar week'),
+  "newThisMonth": zod.number().describe('Customers who registered since the start of the current calendar month')
 })
 
 
