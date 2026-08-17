@@ -139,6 +139,13 @@ describe("account-deletion team notification (DELETE /api/uc/customer, step 15)"
     const user  = await seedUser(`${Date.now()}-a`);
     const token = issueToken({ id: user.id, email: user.email });
     try {
+      // Re-clear the DB value right before the request to minimise the window
+      // in which a concurrently-running suite can set team_alert_email in the DB
+      // after our beforeEach reset.
+      await pool.query(
+        "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
+      );
+      invalidateTeamAlertEmailCache();
       const { status, body } = await doDelete(token);
       assert.equal(status, 200, `DELETE returned ${status}: ${JSON.stringify(body)}`);
 

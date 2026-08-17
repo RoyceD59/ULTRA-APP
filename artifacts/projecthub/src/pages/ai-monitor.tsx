@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bot, RefreshCw, Send, Zap, AlertTriangle, CheckCircle2, Loader2, Radio, Network, History, Clock } from 'lucide-react';
+import { Bot, RefreshCw, Send, Zap, AlertTriangle, CheckCircle2, Loader2, Radio, Network, History, Clock, Plus, ChevronDown } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useGetAiReport, useGenerateAiReport, usePushToOrchestrator,
   useListAiPushEvents, getListAiPushEventsQueryKey,
+  useListAnthropicConversations, getListAnthropicConversationsQueryKey,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -201,39 +202,65 @@ const CHAT_GREETING: ChatMsg = {
   content: "Hi — I'm the ProjectHub AI monitor powered by Claude. Ask me anything about the Team-AI-Embedded project: tasks, agent progress, deadlines, or blockers.",
 };
 
+async function fetchConversationTranscript(convId: number, base: string) {
+  const res = await fetch(`${base}/api/anthropic/conversations/${convId}`);
+  if (!res.ok) return null;
+  return await res.json() as { id: number; messages: { id: number; role: string; content: string }[] };
+}
+
 export function ChatPanel() {
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMsg[]>([CHAT_GREETING]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  // While a stored conversation is being rehydrated, sending is disabled —
-  // otherwise a message sent mid-restore would create a NEW conversation that
-  // the late restore response would then clobber (wrong convId + lost view).
+  // While a stored conversation is being rehydrated, sending is disabled.
   const [restoring, setRestoring] = useState<boolean>(() => localStorage.getItem(CONV_STORAGE_KEY) !== null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const convIdRef = useRef<number | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  // Monotonic generation counter: incremented before every async load
+  // (initial restore, switchToConversation, startNewChat). Each async block
+  // captures the generation at its start and bails if it no longer matches
+  // when it resolves, preventing stale/out-of-order results from landing.
+  const genRef = useRef(0);
+
+  const { data: convList, isLoading: convListLoading } = useListAnthropicConversations({
+    query: {
+      queryKey: getListAnthropicConversationsQueryKey(),
+      refetchOnWindowFocus: true,
+      staleTime: 10_000,
+    },
+  });
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Restore the previous conversation after a reload/navigation: the id is
-  // kept in localStorage and the transcript rehydrated from the server.
+  // Close picker on outside click
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [pickerOpen]);
+
+  // Restore the previous conversation after a reload/navigation.
   useEffect(() => {
     const stored = localStorage.getItem(CONV_STORAGE_KEY);
     const convId = stored ? parseInt(stored, 10) : NaN;
     if (!Number.isInteger(convId)) { setRestoring(false); return; }
-    let cancelled = false;
+    const myGen = ++genRef.current;
     (async () => {
       try {
-        const res = await fetch(`${BASE}/api/anthropic/conversations/${convId}`);
-        if (cancelled) return;
-        if (!res.ok) {
-          // Conversation was deleted server-side — start fresh.
+        const data = await fetchConversationTranscript(convId, BASE);
+        if (genRef.current !== myGen) return; // cancelled by New chat or a switch
+        if (!data) {
           localStorage.removeItem(CONV_STORAGE_KEY);
           return;
         }
-        const data = await res.json() as { id: number; messages: { id: number; role: string; content: string }[] };
-        // Defence in depth: if a conversation was already created/selected in
-        // the meantime, a stale restore result must never replace it.
-        if (cancelled || convIdRef.current !== null) return;
         convIdRef.current = data.id;
         if (data.messages.length > 0) {
           setMessages([
@@ -246,12 +273,11 @@ export function ChatPanel() {
           ]);
         }
       } catch {
-        // Network hiccup — keep the fresh-chat default; next send creates/reuses.
+        // Network hiccup — keep fresh-chat default.
       } finally {
-        if (!cancelled) setRestoring(false);
+        if (genRef.current === myGen) setRestoring(false);
       }
     })();
-    return () => { cancelled = true; };
   }, []);
 
   async function ensureConversation(): Promise<number> {
@@ -263,7 +289,46 @@ export function ChatPanel() {
     const data = await res.json();
     convIdRef.current = data.id as number;
     localStorage.setItem(CONV_STORAGE_KEY, String(data.id));
+    // Refresh picker list so the new conversation appears immediately.
+    queryClient.invalidateQueries({ queryKey: getListAnthropicConversationsQueryKey() });
     return data.id as number;
+  }
+
+  function startNewChat() {
+    // Advance the generation so any in-flight restore/switch is ignored.
+    genRef.current++;
+    localStorage.removeItem(CONV_STORAGE_KEY);
+    convIdRef.current = null;
+    setMessages([CHAT_GREETING]);
+    setInput('');
+    setRestoring(false); // immediately unblock sending
+    setPickerOpen(false);
+  }
+
+  async function switchToConversation(convId: number) {
+    setPickerOpen(false);
+    // Advance the generation — cancels any prior in-flight restore or switch.
+    const myGen = ++genRef.current;
+    setRestoring(true);
+    try {
+      const data = await fetchConversationTranscript(convId, BASE);
+      if (genRef.current !== myGen) return; // a newer selection already won
+      if (!data) return;
+      convIdRef.current = data.id;
+      localStorage.setItem(CONV_STORAGE_KEY, String(data.id));
+      setMessages([
+        CHAT_GREETING,
+        ...data.messages.map(m => ({
+          id: `db-${m.id}`,
+          role: m.role === 'user' ? 'user' as const : 'assistant' as const,
+          content: m.content,
+        })),
+      ]);
+    } catch {
+      // Network hiccup — stay on current conversation.
+    } finally {
+      if (genRef.current === myGen) setRestoring(false);
+    }
   }
 
   async function send() {
@@ -303,9 +368,86 @@ export function ChatPanel() {
     } finally { setStreaming(false); }
   }
 
+  const activeConvId = convIdRef.current;
+  // Sort conversations newest-first for the picker
+  const sortedConvs = convList
+    ? [...convList].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    : [];
+
   return (
     <div className="flex flex-col h-[480px]">
-      <h2 className="text-base font-semibold text-foreground mb-4">Ask the AI Monitor</h2>
+      {/* Header row */}
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-base font-semibold text-foreground flex-1">Ask the AI Monitor</h2>
+
+        {/* Conversation picker */}
+        <div className="relative" ref={pickerRef}>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setPickerOpen(v => !v)}
+            disabled={streaming}
+            className="gap-1.5 text-xs"
+            title="Browse past conversations"
+          >
+            <History className="w-3 h-3" />
+            History
+            <ChevronDown className={cn('w-3 h-3 transition-transform', pickerOpen && 'rotate-180')} />
+          </Button>
+
+          {pickerOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl border bg-popover shadow-lg overflow-hidden">
+              <div className="px-3 py-2 border-b">
+                <p className="text-xs font-medium text-muted-foreground">Past conversations</p>
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                {convListLoading ? (
+                  <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Loading…
+                  </div>
+                ) : sortedConvs.length === 0 ? (
+                  <p className="px-3 py-4 text-xs text-muted-foreground">No past conversations yet.</p>
+                ) : (
+                  sortedConvs.map(conv => (
+                    <button
+                      key={conv.id}
+                      onClick={() => switchToConversation(conv.id)}
+                      className={cn(
+                        'w-full text-left px-3 py-2.5 flex items-start gap-2 hover:bg-muted/60 transition-colors',
+                        activeConvId === conv.id && 'bg-primary/5'
+                      )}
+                    >
+                      <Bot className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{conv.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(conv.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {activeConvId === conv.id && (
+                        <span className="text-xs text-primary font-medium flex-shrink-0">Active</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* New chat */}
+        <Button
+          variant="outline" size="sm"
+          onClick={startNewChat}
+          disabled={streaming}
+          className="gap-1.5 text-xs"
+          title="Start a new conversation"
+        >
+          <Plus className="w-3 h-3" />
+          New chat
+        </Button>
+      </div>
+
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 mb-4">
         {messages.map(msg => (
           <div key={msg.id} className={cn('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
@@ -324,6 +466,8 @@ export function ChatPanel() {
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {/* Input */}
       <div className="flex gap-2">
         <input type="text" value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
