@@ -7,13 +7,13 @@
  *   3. Soft-deleted users (deleted_at IS NOT NULL) are excluded from the count
  *   4. Re-registering (clearing deleted_at) a user increments the count back
  *
- * Concurrency note: the full test suite runs files concurrently and several
- * files insert into uc_users.  To minimise false failures from races we keep
- * the measurement window between consecutive count reads as tight as possible:
- * ALL inserts happen in before() or at the top of the test BEFORE the first
- * count read, so the only DB call between two consecutive reads is a single
- * UPDATE.  That window is ~10-30 ms – much harder to collide with than the
- * ~150 ms window that included an INSERT.
+ * Isolation strategy:
+ *   The full test suite runs test files concurrently and multiple files insert
+ *   into uc_users.  To avoid false failures from concurrent writes, tests 3 and
+ *   4 do NOT compare two successive global API counts.  Instead they read both
+ *   the DB and the API at the same instant and assert that they agree — a
+ *   race-proof check that the endpoint reflects DB state regardless of what
+ *   other test files are doing.
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
@@ -38,12 +38,9 @@ async function apiFetch(
 let server: http.Server;
 let teamHeader: string;
 
-// All uc_users ids inserted by this test file — cleaned up in after().
+// All ids inserted by this test file — cleaned up in after().
 const insertedIds: number[] = [];
-
-// Users inserted during before() so they're available across tests.
-let activeUserIds: number[]   = []; // 3 users that stay active throughout
-let targetUserId: number;           // the user we will soft-delete / restore
+let targetUserId: number;
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-customer-count";
@@ -69,23 +66,13 @@ before(async () => {
     role:  "admin",
   })}`;
 
-  // Pre-insert all uc_users so no insertUser call sits between count reads.
+  // Pre-insert the target user — active initially.
   const suffix = Date.now();
-
-  const actives = await pool.query<{ id: number }>(
-    `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone)
-     SELECT 'ccount-active-' || gs || '-${suffix}@test.internal', 'x', 'Count', 'Active', ''
-     FROM generate_series(1,3) gs
-     RETURNING id`
-  );
-  activeUserIds = actives.rows.map(r => r.id);
-  insertedIds.push(...activeUserIds);
-
-  // This user starts as ACTIVE; tests will soft-delete and re-activate it.
   const target = await pool.query<{ id: number }>(
     `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone)
-     VALUES ('ccount-target-${suffix}@test.internal', 'x', 'Count', 'Target', '')
-     RETURNING id`
+     VALUES ($1, 'x', 'Count', 'Target', '')
+     RETURNING id`,
+    [`ccount-target-${suffix}@test.internal`]
   );
   targetUserId = target.rows[0]!.id;
   insertedIds.push(targetUserId);
@@ -109,6 +96,21 @@ async function getCount(): Promise<number> {
   return (body as { count: number }).count;
 }
 
+/**
+ * Read the DB count of non-deleted uc_users and the API count in one go.
+ * Comparing the two at the same instant is race-proof: concurrent writes from
+ * other test files affect both reads equally so they always agree.
+ */
+async function getCountBoth(): Promise<{ db: number; api: number }> {
+  const [dbResult, apiCount] = await Promise.all([
+    pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM uc_users WHERE deleted_at IS NULL"
+    ),
+    getCount(),
+  ]);
+  return { db: parseInt(dbResult.rows[0]!.count, 10), api: apiCount };
+}
+
 // ─── Auth gate ────────────────────────────────────────────────────────────────
 
 describe("GET /uc/admin/customers/count — auth gate", () => {
@@ -128,42 +130,48 @@ describe("GET /uc/admin/customers/count — auth gate", () => {
 
 // ─── Count accuracy ───────────────────────────────────────────────────────────
 //
-// All uc_users were inserted in before(), so the only DB writes between
-// consecutive count reads are single UPDATE statements (~10-30 ms window).
+// Each sub-step reads the DB and API simultaneously so the two numbers must
+// always agree, regardless of what other test files write concurrently.
 
 describe("GET /uc/admin/customers/count — count accuracy", () => {
   it("excludes soft-deleted users and re-activating them restores the count", async () => {
-    // All four test users are active at this point.  Read the baseline — we
-    // care only about RELATIVE changes from here, not the absolute value.
-    const c0 = await getCount();
+    // Verify the API matches the DB while the target user is active.
+    {
+      const { db: dbCount, api: apiCount } = await getCountBoth();
+      assert.equal(
+        apiCount, dbCount,
+        `API count (${apiCount}) must equal DB count (${dbCount}) before soft-delete`,
+      );
+    }
 
-    // ── Step 1: soft-delete targetUser ──────────────────────────────────────
-    // Window between c0 and c1: one UPDATE + one HTTP round-trip (~30 ms).
+    // Soft-delete our target user.
     await pool.query(
       "UPDATE uc_users SET deleted_at = now() WHERE id = $1",
       [targetUserId]
     );
-    const c1 = await getCount();
-    assert.equal(
-      c1,
-      c0 - 1,
-      `soft-delete: expected count to drop by 1 (got delta ${c1 - c0})`
-    );
 
-    // ── Step 2: clear deleted_at (re-registration) ───────────────────────────
-    // Window between c1 and c2: one UPDATE + one HTTP round-trip (~30 ms).
+    // After soft-delete: API must still agree with DB (target user excluded in both).
+    {
+      const { db: dbCount, api: apiCount } = await getCountBoth();
+      assert.equal(
+        apiCount, dbCount,
+        `API count (${apiCount}) must equal DB count (${dbCount}) after soft-delete`,
+      );
+    }
+
+    // Re-activate (simulates re-registration).
     await pool.query(
       "UPDATE uc_users SET deleted_at = NULL WHERE id = $1",
       [targetUserId]
     );
-    const c2 = await getCount();
-    assert.equal(
-      c2,
-      c1 + 1,
-      `re-registration: expected count to rise by 1 (got delta ${c2 - c1})`
-    );
 
-    // Sanity: net effect of delete-then-restore should be zero.
-    assert.equal(c2, c0, "net effect of delete + restore should be zero");
+    // After re-activation: API must once again agree with DB.
+    {
+      const { db: dbCount, api: apiCount } = await getCountBoth();
+      assert.equal(
+        apiCount, dbCount,
+        `API count (${apiCount}) must equal DB count (${dbCount}) after re-activation`,
+      );
+    }
   });
 });

@@ -238,7 +238,9 @@ router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Respons
 
   if (!token || !shortcode || !passkey) {
     // Sandbox / demo mode — generate a mock CheckoutRequestID.
-    const mockCheckoutRequestId = `ws_CO_${Date.now()}`;
+    // Use randomUUID so two concurrent demo-mode initiations in the same
+    // millisecond never collide on the checkoutRequestId unique index.
+    const mockCheckoutRequestId = `ws_CO_${randomUUID()}`;
     const mockCallbackToken = randomUUID();
 
     // Persist the initiation record BEFORE issuing the CheckoutRequestID.
