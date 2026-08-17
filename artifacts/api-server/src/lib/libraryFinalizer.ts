@@ -276,6 +276,8 @@ export async function finalizeUpload(
     uploadedBy: memberEmail,
   };
   const saved = await deps.insertDoc(doc);
-  deps.purgeExpired().catch(() => {});
+  deps.purgeExpired().catch((err: unknown) => {
+    console.error("[library] purgeAbandonedSlots failed — orphaned staging objects may accumulate:", err);
+  });
   return { kind: "ok", doc: saved };
 }
