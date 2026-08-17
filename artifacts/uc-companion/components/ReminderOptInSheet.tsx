@@ -27,6 +27,7 @@ import {
   wasReminderOptInSeen,
   markReminderOptInSeen,
 } from '@/hooks/reminderOptInStorage';
+import { applyReminderPreFill, type ChannelState } from '@/hooks/reminderPreFill';
 
 // Re-export so callers that imported these from this module continue to work.
 export { reminderOptInSeenKey, wasReminderOptInSeen, markReminderOptInSeen };
@@ -41,12 +42,6 @@ interface Props {
   /** User account id — scopes the seen-flag so two accounts on the same device don't share state. */
   userId: number;
   onClose: () => void;
-}
-
-interface ChannelState {
-  reminderEmail: boolean;
-  reminderSms: boolean;
-  reminderWhatsapp: boolean;
 }
 
 export default function ReminderOptInSheet({
@@ -66,28 +61,18 @@ export default function ReminderOptInSheet({
 
   // Pre-fill toggles with the customer's existing channel preferences each time
   // the sheet becomes visible. Falls back to all-OFF if the fetch fails.
+  // The async logic lives in applyReminderPreFill (hooks/reminderPreFill.ts)
+  // so it can be unit-tested without a React rendering harness.
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    setLoading(true);
     setError('');
-    api.getServerNotifPrefs()
-      .then(prefs => {
-        if (cancelled) return;
-        setChannels({
-          reminderEmail:    prefs.reminderEmail,
-          reminderSms:      prefs.reminderSms,
-          reminderWhatsapp: prefs.reminderWhatsapp,
-        });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Graceful fallback — all channels OFF; user can still opt in manually.
-        setChannels({ reminderEmail: false, reminderSms: false, reminderWhatsapp: false });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void applyReminderPreFill(
+      () => api.getServerNotifPrefs(),
+      setLoading,
+      setChannels,
+      () => cancelled,
+    );
     return () => { cancelled = true; };
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
