@@ -15,6 +15,7 @@ import {
   AiPushEchoResponse,
 } from "@workspace/api-zod";
 import { buildProjectContext } from "./context";
+import { sendViaResend } from "../../lib/resend.js";
 
 const router: IRouter = Router();
 
@@ -89,6 +90,53 @@ export async function generateAndStoreReport(): Promise<AiReport> {
   await persistReport(report);
   latestReport = report;
   return report;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Push failure alerting
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Send a one-shot failure alert email when an orchestrator push fails.
+ * Called from outbound-failure paths and from the echo handler on a
+ * "failed" status echo. Never throws — a notification failure must not
+ * affect the calling operation.
+ */
+async function alertPushFailure(params: {
+  pushId: string;
+  /** "outbound" = delivery to orchestrator failed; "echo" = orchestrator reported failure. */
+  trigger: "outbound" | "echo";
+  payloadType?: string;
+  message: string;
+}): Promise<void> {
+  const { pushId, trigger, payloadType, message } = params;
+  const subject =
+    trigger === "outbound"
+      ? `⚠️ AI orchestrator push failed — outbound delivery error`
+      : `⚠️ AI orchestrator reported a failure for push ${pushId}`;
+  const text = [
+    trigger === "outbound"
+      ? "A push to the AI orchestrator failed to deliver."
+      : "The AI orchestrator reported a failure for a previously delivered push.",
+    "",
+    `Push ID:  ${pushId}`,
+    ...(payloadType ? [`Payload:  ${payloadType}`] : []),
+    `Error:    ${message}`,
+    "",
+    "View the full push history on the AI Monitor page in ProjectHub.",
+  ].join("\n");
+
+  try {
+    await sendViaResend({
+      from: "ProjectHub <notifications@contacts.ucfilters.com>",
+      to: "info@ucfilters.com",
+      subject,
+      text,
+      meta: { template: "push_failure_alert" },
+    });
+  } catch (err) {
+    console.error("[ai/push] push-failure alert email threw:", err);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,6 +260,13 @@ export async function pushReportToOrchestrator(opts: {
       outboundMessage: message,
       status: "failed",
       statusDetail: `Outbound delivery failed: ${message}`,
+    });
+    // Alert the team once — outbound delivery failed for this push id.
+    await alertPushFailure({
+      pushId,
+      trigger: "outbound",
+      payloadType: opts.payloadType,
+      message,
     });
     return { success: false, message: `Push failed: ${message}`, sentAt, webhookUrl, pushId };
   }
@@ -367,6 +422,13 @@ router.post("/ai/push-task", requireTeamAuth, async (req, res): Promise<void> =>
       outboundMessage: message,
       status: "failed",
       statusDetail: `Outbound delivery failed: ${message}`,
+    });
+    // Alert the team once — outbound task-dispatch delivery failed.
+    await alertPushFailure({
+      pushId,
+      trigger: "outbound",
+      payloadType,
+      message,
     });
     res.status(502).json({ error: `Dispatch failed: ${message}`, pushId });
   }
@@ -530,6 +592,14 @@ router.post("/ai/echo", async (req, res): Promise<void> => {
 
   const { pushId, status, message } = parsed.data;
   const now = new Date();
+
+  // Fetch current status before updating so we can detect a transition to
+  // "failed" and alert the team exactly once per push (not on every echo).
+  const [existing] = await db
+    .select({ status: aiPushEventsTable.status, payloadType: aiPushEventsTable.payloadType })
+    .from(aiPushEventsTable)
+    .where(eq(aiPushEventsTable.id, pushId));
+
   const [updated] = await db
     .update(aiPushEventsTable)
     .set({
@@ -547,6 +617,19 @@ router.post("/ai/echo", async (req, res): Promise<void> => {
   }
 
   req.log?.info({ pushId, status }, "Orchestrator echo applied to push event");
+
+  // Alert the team when the orchestrator reports a failure — but only when
+  // this is a new failure (previous status was not already "failed") so
+  // repeated "failed" echoes for the same push don't spam the inbox.
+  if (status === "failed" && existing?.status !== "failed") {
+    await alertPushFailure({
+      pushId,
+      trigger: "echo",
+      payloadType: existing?.payloadType ?? undefined,
+      message: message ?? "The orchestrator reported a failure for this push.",
+    });
+  }
+
   res.json(AiPushEchoResponse.parse({ ok: true, pushId, status }));
 });
 
