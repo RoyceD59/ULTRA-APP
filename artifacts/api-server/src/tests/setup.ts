@@ -141,9 +141,11 @@ await pool.query(`
   );
 `);
 await pool.query(`ALTER TABLE uc_notification_log ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT ''`);
-await pool.query(`CREATE INDEX IF NOT EXISTS uc_notification_log_status_idx  ON uc_notification_log (status)`);
+// The single-column status index was dropped (composite covers status-only queries via leading column).
+await pool.query(`DROP INDEX IF EXISTS uc_notification_log_status_idx`);
 await pool.query(`CREATE INDEX IF NOT EXISTS uc_notification_log_sent_at_idx ON uc_notification_log (sent_at)`);
 await pool.query(`CREATE INDEX IF NOT EXISTS uc_notification_log_provider_idx ON uc_notification_log (provider)`);
+await pool.query(`CREATE INDEX IF NOT EXISTS uc_notification_log_status_sent_at_idx ON uc_notification_log (status, sent_at)`);
 
 // uc_return_requests
 await pool.query(`

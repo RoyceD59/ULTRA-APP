@@ -31,10 +31,11 @@ export const ucNotificationLogTable = pgTable(
     sentAt:       timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("uc_notification_log_status_idx").on(t.status),
     index("uc_notification_log_sent_at_idx").on(t.sentAt),
     // Composite index for the nightly pruning job and any status-filtered,
     // time-ordered listing: WHERE status = ? AND sent_at < ?
+    // Also covers status-only filters via its leading column, so the old
+    // single-column uc_notification_log_status_idx is not needed.
     index("uc_notification_log_status_sent_at_idx").on(t.status, t.sentAt),
   ]
 );

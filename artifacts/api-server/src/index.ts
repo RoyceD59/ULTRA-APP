@@ -247,8 +247,11 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(
     `ALTER TABLE uc_notification_log ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT ''`
   );
+  // Drop the old single-column status index — the composite
+  // uc_notification_log_status_sent_at_idx covers status-only queries via its
+  // leading column, so this index is redundant and just costs write overhead.
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS uc_notification_log_status_idx ON uc_notification_log (status)`
+    `DROP INDEX IF EXISTS uc_notification_log_status_idx`
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS uc_notification_log_sent_at_idx ON uc_notification_log (sent_at)`
