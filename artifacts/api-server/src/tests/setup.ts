@@ -39,6 +39,13 @@ await pool.query(`
     ADD COLUMN IF NOT EXISTS webhook_recovery boolean NOT NULL DEFAULT false;
 `);
 
+// uc_orders.wc_order_id — WooCommerce order ID persisted at confirmation time
+// so retries return a consistent external ID even when WC is temporarily down.
+await pool.query(`
+  ALTER TABLE uc_orders
+    ADD COLUMN IF NOT EXISTS wc_order_id integer;
+`);
+
 // team_settings
 await pool.query(`
   CREATE TABLE IF NOT EXISTS team_settings (

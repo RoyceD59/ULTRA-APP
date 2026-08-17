@@ -3949,9 +3949,14 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
         // When WooCommerce is the system of record, the original call returned
         // the WC order ID — return the same WC order on the retry so duplicate
-        // Paystack deliveries observe a consistent order ID. If the lookup
-        // cannot confirm, fall through to the DB anchor row below (the
-        // duplicate is still absorbed, just with the anchor's ID).
+        // Paystack deliveries observe a consistent order ID.
+        //
+        // Priority order:
+        //   1. Live WC lookup succeeds → return normalised WC order.
+        //   2. WC unreachable but wcOrderId was persisted at confirmation time
+        //      → return the anchor row using the stored WC ID so the customer
+        //      always sees the same order number regardless of WC availability.
+        //   3. Nothing available → fall through to the DB anchor row.
         if (hasWCCredentials()) {
           try {
             const wcDup = await findWcOrderByRef(paymentReference);
@@ -3960,7 +3965,30 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               return;
             }
           } catch {
-            /* fall through to the DB record below */
+            /* WC unreachable — fall through to persisted wcOrderId below */
+          }
+          // Use the WC order ID persisted at confirmation time if available,
+          // so retries return a consistent ID even when WC is temporarily down.
+          if (existingOrder.wcOrderId != null) {
+            res.json({
+              id:              existingOrder.wcOrderId,
+              status:          existingOrder.status,
+              dateCreated:     existingOrder.dateCreated,
+              total:           existingOrder.total,
+              currency:        existingOrder.currency,
+              paymentMethod:   existingOrder.paymentMethod,
+              shippingAddress: existingOrder.shippingAddress ?? {},
+              discountPercent: existingOrder.discountPercent,
+              discountAmount:  existingOrder.discountAmount,
+              promoCode:       existingOrder.promoCode ?? "",
+              lineItems:       existingItems.map(i => ({
+                productId: i.productId,
+                name:      i.name,
+                quantity:  i.quantity,
+                total:     i.total,
+              })),
+            });
+            return;
           }
         }
 
@@ -4080,11 +4108,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
   // ── WC confirmation helper ──────────────────────────────────────────────────
   // Atomically transitions the anchor from "pending-wc" to "processing" and
-  // returns true only when THIS call won the state transition.  Callers must
+  // persists the WooCommerce order ID so that future retries can return a
+  // consistent external ID even when WC is briefly unreachable.
+  // Returns true only when THIS call won the state transition.  Callers must
   // send notifications ONLY when this returns true.
-  async function confirmWcAnchor(anchorId: number): Promise<boolean> {
+  async function confirmWcAnchor(anchorId: number, wcOrderId: number): Promise<boolean> {
     const updated = await db.update(ucOrdersTable)
-      .set({ status: "processing" })
+      .set({ status: "processing", wcOrderId })
       .where(and(eq(ucOrdersTable.id, anchorId), eq(ucOrdersTable.status, "pending-wc")))
       .returning()
       .catch((e: unknown) => {
@@ -4235,7 +4265,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
                 // Use the anchor's persisted userId (winner.userId), NOT the
                 // retry caller's identity, to correctly address the customer.
                 const normalized = normalizeOrder(wcLookup.order);
-                const iConfirmed = await confirmWcAnchor(winner.id);
+                const iConfirmed = await confirmWcAnchor(winner.id, Number(wcLookup.order["id"]));
                 if (iConfirmed) {
                   sendWcOrderNotifications(normalized, winner.userId);
                   // Credit qualifying-product reward for this paid WC order
@@ -4285,7 +4315,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           );
           const normalized = normalizeOrder(wcPreFlight.order);
           if (wcAnchorId !== null) {
-            const iConfirmed = await confirmWcAnchor(wcAnchorId);
+            const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcPreFlight.order["id"]));
             if (iConfirmed) {
               if (discountType === "referral" && promoCode && userEmail) {
                 recordReferralConversion(promoCode, userEmail);
@@ -4375,7 +4405,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         // Concurrent requests that lose skip notifications and return normally.
         const normalized = normalizeOrder(wcOrder);
         if (wcAnchorId !== null) {
-          const iConfirmed = await confirmWcAnchor(wcAnchorId);
+          const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcOrder["id"]));
           if (iConfirmed) {
             if (discountType === "referral" && promoCode && userEmail) {
               recordReferralConversion(promoCode, userEmail);

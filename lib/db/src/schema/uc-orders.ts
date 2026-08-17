@@ -25,6 +25,11 @@ export const ucOrdersTable = pgTable("uc_orders", {
   discountAmount:   integer("discount_amount").notNull().default(0),
   shippingAddress:  json("shipping_address").$type<Record<string, string>>(),
   dateCreated:      timestamp("date_created", { withTimezone: true }).notNull().defaultNow(),
+  // WooCommerce order ID persisted at confirmation time so that a retry can
+  // return a consistent external ID even when the WC store is briefly
+  // unreachable.  NULL for orders that never touched WooCommerce (DB-only,
+  // mock, or COD without an anchor).  Fill-once: never overwritten after set.
+  wcOrderId:        integer("wc_order_id"),
   // True only for orders inserted automatically by the Paystack webhook recovery
   // path (customer paid but the app lost connectivity before createOrder fired).
   // Set at insert time — never derived from userId heuristics.

@@ -76,6 +76,15 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_orders mpesa_receipt column ensured");
 
+  // Add wc_order_id column — persists the WooCommerce order ID at confirmation
+  // time so that a duplicate Paystack delivery can return the same external ID
+  // even when the WC store is temporarily unreachable.
+  await pool.query(`
+    ALTER TABLE uc_orders
+      ADD COLUMN IF NOT EXISTS wc_order_id integer;
+  `);
+  logger.info("Startup migration: uc_orders wc_order_id column ensured");
+
   // Create team_settings table for DB-backed passcode storage.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS team_settings (
