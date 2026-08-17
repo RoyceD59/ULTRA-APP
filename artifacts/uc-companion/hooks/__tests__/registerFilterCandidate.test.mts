@@ -205,6 +205,93 @@ describe('computeRegisterCandidate — replace-mode sourceOrderId guard', () => 
   });
 });
 
+describe('computeRegisterCandidate — empty / missing lineItems', () => {
+
+  // Register mode — lineItems: []
+  it('register mode: lineItems: [] → null (no candidate)', () => {
+    const result = computeRegisterCandidate({
+      eligibleForRegister: true,
+      eligibleForReplace:  false,
+      activation:          null,
+      orders: [
+        {
+          id:          101,
+          dateCreated: NEWER_DATE,
+          lineItems:   [],             // ← empty array
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.equal(result, null,
+      'an order with an empty lineItems array must never produce a candidate');
+  });
+
+  // Register mode — lineItems: undefined
+  it('register mode: lineItems: undefined → null (no candidate)', () => {
+    const result = computeRegisterCandidate({
+      eligibleForRegister: true,
+      eligibleForReplace:  false,
+      activation:          null,
+      orders: [
+        {
+          id:          102,
+          dateCreated: NEWER_DATE,
+          lineItems:   undefined,      // ← missing field
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.equal(result, null,
+      'an order with lineItems: undefined must never produce a candidate');
+  });
+
+  // Replace mode — lineItems: []
+  it('replace mode: lineItems: [] → null (no candidate)', () => {
+    const result = computeRegisterCandidate({
+      eligibleForRegister: false,
+      eligibleForReplace:  true,
+      activation: makeActivation({ sourceOrderId: 100 }),
+      orders: [
+        {
+          id:          201,
+          dateCreated: NEWER_DATE,
+          lineItems:   [],             // ← empty array, newer than activation
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.equal(result, null,
+      'replace mode: an order with an empty lineItems array must never produce a candidate');
+  });
+
+  // Replace mode — lineItems: undefined
+  it('replace mode: lineItems: undefined → null (no candidate)', () => {
+    const result = computeRegisterCandidate({
+      eligibleForRegister: false,
+      eligibleForReplace:  true,
+      activation: makeActivation({ sourceOrderId: 100 }),
+      orders: [
+        {
+          id:          202,
+          dateCreated: NEWER_DATE,
+          lineItems:   undefined,      // ← missing field, newer than activation
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.equal(result, null,
+      'replace mode: an order with lineItems: undefined must never produce a candidate');
+  });
+});
+
 describe('computeRegisterCandidate — replace mode, multiple orders', () => {
 
   // When the list contains both the triggering order and a new order, the new
