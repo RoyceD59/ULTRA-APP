@@ -146,6 +146,22 @@ describe('toFilterProducts', () => {
     assert.equal(fp.icon, 'home-outline');
   });
 
+  it('assigns construct-outline for accessor/accessory category products', () => {
+    const [fp] = toFilterProducts([makeProduct({
+      id: 20, name: 'Filter Wrench', lifespanDays: 365,
+      categories: [{ id: 9, name: 'Accessories' }],
+    })]);
+    assert.equal(fp.icon, 'construct-outline');
+  });
+
+  it('assigns business-outline for solution category products', () => {
+    const [fp] = toFilterProducts([makeProduct({
+      id: 21, name: 'Office Pack', lifespanDays: 180,
+      categories: [{ id: 10, name: 'Solutions' }],
+    })]);
+    assert.equal(fp.icon, 'business-outline');
+  });
+
   it('defaults to water-outline when no category pattern matches', () => {
     const [fp] = toFilterProducts([makeProduct({ id: 4, name: 'Flex', lifespanDays: 90 })]);
     assert.equal(fp.icon, 'water-outline');
