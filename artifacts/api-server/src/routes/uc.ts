@@ -1475,7 +1475,9 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     }).catch(() => {});
     // Store referral association so first-order discount can be applied later
     if (referralCode?.trim()) {
-      registerReferralAtSignup(email, referralCode.trim());
+      await registerReferralAtSignup(email, referralCode.trim()).catch((err) => {
+        logger.warn({ err, email }, "[register] referral signup association failed (non-fatal)");
+      });
     }
     res.json({ token: issueToken(user), user });
   } catch (err) {
@@ -1817,7 +1819,7 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
       // Referral programme data: the customer's own code and aggregate stats.
       // Referred users are reported as a count only — their emails are other
       // people's personal data and must not appear in this export.
-      referrals: getReferralExportData(user.email),
+      referrals: await getReferralExportData(user.email),
       enquiries: enquiries.map(e => ({
         id:          e.id,
         productId:   e.productId,
@@ -4023,7 +4025,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   let discountPercent = 0;
   let discountType: "referral" | "promotion" | null = null;
   if (promoCode?.trim()) {
-    const validation = validateCodeForDiscount(promoCode.trim(), userEmail ?? "");
+    const validation = await validateCodeForDiscount(promoCode.trim(), userEmail ?? "");
     if (validation.valid) {
       discountPercent = validation.discountPercent;
       discountType = validation.type;
@@ -4318,7 +4320,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcPreFlight.order["id"]));
             if (iConfirmed) {
               if (discountType === "referral" && promoCode && userEmail) {
-                recordReferralConversion(promoCode, userEmail);
+                await recordReferralConversion(promoCode, userEmail).catch((err) => {
+                  logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
+                });
               }
               sendWcOrderNotifications(normalized, orderUserId);
               // Credit qualifying-product reward for this paid WC pre-flight order
@@ -4408,7 +4412,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcOrder["id"]));
           if (iConfirmed) {
             if (discountType === "referral" && promoCode && userEmail) {
-              recordReferralConversion(promoCode, userEmail);
+              await recordReferralConversion(promoCode, userEmail).catch((err) => {
+                logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
+              });
             }
             sendWcOrderNotifications(normalized, orderUserId);
             // Credit qualifying-product reward for this paid WC order (main path)
@@ -4425,7 +4431,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           // the confirmation unconditionally whenever WC accepts the order.
           // COD orders are not paid at time of placement — no rewards credit.
           if (discountType === "referral" && promoCode && userEmail) {
-            recordReferralConversion(promoCode, userEmail);
+            await recordReferralConversion(promoCode, userEmail).catch((err) => {
+              logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
+            });
           }
           sendWcOrderNotifications(normalized, orderUserId);
         }
@@ -4476,7 +4484,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
     // Record referral conversion so the referrer earns credit
     if (discountType === "referral" && promoCode && userEmail) {
-      recordReferralConversion(promoCode, userEmail);
+      await recordReferralConversion(promoCode, userEmail).catch((err) => {
+        logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
+      });
     }
 
     const newOrder = {
@@ -4593,7 +4603,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     };
     orderStoreFallback.push(fallbackOrder);
     if (discountType === "referral" && promoCode && userEmail) {
-      recordReferralConversion(promoCode, userEmail);
+      await recordReferralConversion(promoCode, userEmail).catch((err) => {
+        logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
+      });
     }
     sendPushToUser(
       orderUserId,

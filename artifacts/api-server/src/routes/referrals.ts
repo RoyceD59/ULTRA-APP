@@ -1,17 +1,14 @@
 import { Router, type Request, type Response } from "express";
+import {
+  db,
+  ucReferralCodesTable,
+  ucReferralUsersTable,
+} from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 
 const router = Router();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface ReferralRecord {
-  code: string;
-  ownerEmail: string;
-  ownerName: string;
-  referredEmails: string[];
-  conversions: number;
-  creditsEarnedKes: number;
-}
-
 export interface UCPromotion {
   id: string;
   title: string;
@@ -23,12 +20,7 @@ export interface UCPromotion {
   createdAt: string;
 }
 
-// ─── In-memory stores ─────────────────────────────────────────────────────────
-const referralByCode = new Map<string, ReferralRecord>();
-const referralByEmail = new Map<string, string>(); // email → code
-const userReferredBy = new Map<string, string>(); // email → referralCode used at signup
-const userFirstOrderDone = new Map<string, boolean>(); // email → hasCompletedFirstOrder
-
+// ─── In-memory promotions (not user data — no durability required) ────────────
 // Seed a welcome promotion so the app shows something on first load
 export const promotions: UCPromotion[] = [
   {
@@ -74,31 +66,46 @@ function generateReferralCode(firstName: string, email: string): string {
   return `${name}-${suffix}`;
 }
 
-function getOrCreateReferral(
+/**
+ * Upsert a referral code record for the given owner.
+ * Returns the existing record if one already exists for this email,
+ * or creates a new one using the generated code.
+ */
+async function getOrCreateReferralCode(
   email: string,
   firstName: string,
   lastName: string
-): ReferralRecord {
+): Promise<typeof ucReferralCodesTable.$inferSelect> {
   const key = email.toLowerCase();
-  const existingCode = referralByEmail.get(key);
-  if (existingCode) {
-    const rec = referralByCode.get(existingCode);
-    if (rec) return rec;
-  }
+  // Fast path: existing record
+  const [existing] = await db
+    .select()
+    .from(ucReferralCodesTable)
+    .where(eq(ucReferralCodesTable.ownerEmail, key))
+    .limit(1);
+  if (existing) return existing;
+
   let code = generateReferralCode(firstName, email);
-  // Collision guard
-  if (referralByCode.has(code)) code = `${code}${Math.abs(email.length % 9) + 1}`;
-  const rec: ReferralRecord = {
-    code,
-    ownerEmail: key,
-    ownerName: `${firstName} ${lastName}`.trim(),
-    referredEmails: [],
-    conversions: 0,
-    creditsEarnedKes: 0,
-  };
-  referralByCode.set(code, rec);
-  referralByEmail.set(key, code);
-  return rec;
+  // Collision guard: append a suffix derived from email length
+  const [codeConflict] = await db
+    .select({ id: ucReferralCodesTable.id })
+    .from(ucReferralCodesTable)
+    .where(eq(ucReferralCodesTable.code, code))
+    .limit(1);
+  if (codeConflict) {
+    code = `${code}${Math.abs(email.length % 9) + 1}`;
+  }
+
+  const ownerName = `${firstName} ${lastName}`.trim();
+  const [created] = await db
+    .insert(ucReferralCodesTable)
+    .values({ code, ownerEmail: key, ownerName })
+    .onConflictDoUpdate({
+      target: ucReferralCodesTable.ownerEmail,
+      set: { ownerName },
+    })
+    .returning();
+  return created!;
 }
 
 function decodeUserFromAuth(
@@ -128,15 +135,15 @@ function decodeUserFromAuth(
  * Validate a promo or referral code for a given user.
  * Returns discount info; does NOT record the conversion yet.
  */
-export function validateCodeForDiscount(
+export async function validateCodeForDiscount(
   code: string,
   userEmail: string
-): {
+): Promise<{
   valid: boolean;
   type: "referral" | "promotion" | null;
   discountPercent: number;
   label: string;
-} {
+}> {
   const upper = code.trim().toUpperCase();
   const email = userEmail.toLowerCase();
 
@@ -157,17 +164,31 @@ export function validateCodeForDiscount(
     };
   }
 
-  // Referral code
-  const ref = referralByCode.get(upper);
+  // Referral code — look up in DB
+  const [ref] = await db
+    .select()
+    .from(ucReferralCodesTable)
+    .where(eq(ucReferralCodesTable.code, upper))
+    .limit(1);
+
   if (!ref) {
     return { valid: false, type: null, discountPercent: 0, label: "Invalid or expired code." };
   }
   if (ref.ownerEmail === email) {
     return { valid: false, type: null, discountPercent: 0, label: "You can't use your own referral code." };
   }
-  if (userFirstOrderDone.get(email)) {
+
+  // Check if this user has already done their first order
+  const [userRow] = await db
+    .select({ firstOrderDone: ucReferralUsersTable.firstOrderDone })
+    .from(ucReferralUsersTable)
+    .where(eq(ucReferralUsersTable.email, email))
+    .limit(1);
+
+  if (userRow?.firstOrderDone) {
     return { valid: false, type: null, discountPercent: 0, label: "Referral discount applies to first order only." };
   }
+
   return { valid: true, type: "referral", discountPercent: 10, label: `10% off – referred by ${ref.ownerName}` };
 }
 
@@ -175,35 +196,91 @@ export function validateCodeForDiscount(
  * Call after a successful order when a referral code was applied.
  * Marks the referred user's first order as done and credits the referrer.
  */
-export function recordReferralConversion(
+export async function recordReferralConversion(
   code: string,
   userEmail: string,
   referrerCreditKes = 200
-): void {
+): Promise<void> {
   const upper = code.trim().toUpperCase();
   const email = userEmail.toLowerCase();
-  const ref = referralByCode.get(upper);
+
+  // Upsert user row — mark first order as done
+  await db
+    .insert(ucReferralUsersTable)
+    .values({ email, firstOrderDone: true, referredByCode: upper })
+    .onConflictDoUpdate({
+      target: ucReferralUsersTable.email,
+      set: {
+        firstOrderDone: true,
+        updatedAt: new Date(),
+      },
+    });
+
+  // Credit the referrer and add the user to referred_emails if not already there
+  const [ref] = await db
+    .select()
+    .from(ucReferralCodesTable)
+    .where(eq(ucReferralCodesTable.code, upper))
+    .limit(1);
+
   if (ref) {
-    if (!ref.referredEmails.includes(email)) ref.referredEmails.push(email);
-    ref.conversions += 1;
-    ref.creditsEarnedKes += referrerCreditKes;
+    const emails: string[] = Array.isArray(ref.referredEmails) ? ref.referredEmails : [];
+    const alreadyRecorded = emails.includes(email);
+    const newEmails = alreadyRecorded ? emails : [...emails, email];
+    await db
+      .update(ucReferralCodesTable)
+      .set({
+        referredEmails:   newEmails,
+        conversions:      sql`${ucReferralCodesTable.conversions} + 1`,
+        creditsEarnedKes: sql`${ucReferralCodesTable.creditsEarnedKes} + ${referrerCreditKes}`,
+        updatedAt:        new Date(),
+      })
+      .where(eq(ucReferralCodesTable.code, upper));
   }
-  userFirstOrderDone.set(email, true);
-  if (!userReferredBy.has(email)) userReferredBy.set(email, upper);
 }
 
 /**
  * Associate a new user with a referral code at registration time.
  */
-export function registerReferralAtSignup(userEmail: string, referralCode: string): void {
+export async function registerReferralAtSignup(
+  userEmail: string,
+  referralCode: string
+): Promise<void> {
   const upper = referralCode.trim().toUpperCase();
-  const ref = referralByCode.get(upper);
   const email = userEmail.toLowerCase();
-  if (ref && !userReferredBy.has(email)) {
-    userReferredBy.set(email, upper);
-    if (!ref.referredEmails.includes(email)) {
-      ref.referredEmails.push(email);
-    }
+
+  // Validate the code exists before touching anything
+  const [ref] = await db
+    .select({ code: ucReferralCodesTable.code, referredEmails: ucReferralCodesTable.referredEmails })
+    .from(ucReferralCodesTable)
+    .where(eq(ucReferralCodesTable.code, upper))
+    .limit(1);
+
+  if (!ref) return;
+
+  // Upsert user row with the referral code (do not overwrite an existing referredByCode)
+  await db
+    .insert(ucReferralUsersTable)
+    .values({ email, referredByCode: upper })
+    .onConflictDoUpdate({
+      target: ucReferralUsersTable.email,
+      set: {
+        // Only set referredByCode if it was previously null
+        referredByCode: sql`COALESCE(${ucReferralUsersTable.referredByCode}, EXCLUDED.referred_by_code)`,
+        updatedAt: new Date(),
+      },
+    });
+
+  // Add user to the owner's referred_emails if not already listed
+  const emails: string[] = Array.isArray(ref.referredEmails) ? ref.referredEmails : [];
+  if (!emails.includes(email)) {
+    await db
+      .update(ucReferralCodesTable)
+      .set({
+        referredEmails: [...emails, email],
+        updatedAt:      new Date(),
+      })
+      .where(eq(ucReferralCodesTable.code, upper));
   }
 }
 
@@ -212,54 +289,85 @@ export function registerReferralAtSignup(userEmail: string, referralCode: string
  * Does NOT create a referral record if the user has none. Referred users'
  * emails are reported only as a count — they are other people's personal data.
  */
-export function getReferralExportData(userEmail: string): {
+export async function getReferralExportData(userEmail: string): Promise<{
   code: string | null;
   referredCount: number;
   conversions: number;
   creditsEarnedKes: number;
   usedReferralCode: string | null;
-} {
+}> {
   const email = userEmail.toLowerCase();
-  const code = referralByEmail.get(email);
-  const rec = code ? referralByCode.get(code) : undefined;
+
+  const [codeRow, userRow] = await Promise.all([
+    db
+      .select()
+      .from(ucReferralCodesTable)
+      .where(eq(ucReferralCodesTable.ownerEmail, email))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select({ referredByCode: ucReferralUsersTable.referredByCode })
+      .from(ucReferralUsersTable)
+      .where(eq(ucReferralUsersTable.email, email))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+  ]);
+
   return {
-    code: rec?.code ?? null,
-    referredCount: rec?.referredEmails.length ?? 0,
-    conversions: rec?.conversions ?? 0,
-    creditsEarnedKes: rec?.creditsEarnedKes ?? 0,
-    usedReferralCode: userReferredBy.get(email) ?? null,
+    code:             codeRow?.code ?? null,
+    referredCount:    Array.isArray(codeRow?.referredEmails) ? codeRow.referredEmails.length : 0,
+    conversions:      codeRow?.conversions ?? 0,
+    creditsEarnedKes: codeRow?.creditsEarnedKes ?? 0,
+    usedReferralCode: userRow?.referredByCode ?? null,
   };
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 /** GET /api/uc/referrals/my-code — authenticated user's code + stats */
-router.get("/uc/referrals/my-code", (req: Request, res: Response): void => {
+router.get("/uc/referrals/my-code", async (req: Request, res: Response): Promise<void> => {
   const u = decodeUserFromAuth(req);
   if (!u || !u.email) {
     res.status(401).json({ error: "Authenticated required" });
     return;
   }
-  const rec = getOrCreateReferral(u.email, u.firstName, u.lastName);
-  const usedCode = userReferredBy.get(u.email.toLowerCase());
-  res.json({
-    code: rec.code,
-    referredCount: rec.referredEmails.length,
-    conversions: rec.conversions,
-    creditsEarnedKes: rec.creditsEarnedKes,
-    usedReferralCode: usedCode ?? null,
-    shareMessage: `Join me on Ultra Clear! Use my code ${rec.code} for 10% off your first water filter order. Download at ucfilters.com/app`,
-  });
+  try {
+    const [rec, userRow] = await Promise.all([
+      getOrCreateReferralCode(u.email, u.firstName, u.lastName),
+      db
+        .select({ referredByCode: ucReferralUsersTable.referredByCode })
+        .from(ucReferralUsersTable)
+        .where(eq(ucReferralUsersTable.email, u.email.toLowerCase()))
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+    ]);
+    res.json({
+      code:            rec.code,
+      referredCount:   Array.isArray(rec.referredEmails) ? rec.referredEmails.length : 0,
+      conversions:     rec.conversions,
+      creditsEarnedKes: rec.creditsEarnedKes,
+      usedReferralCode: userRow?.referredByCode ?? null,
+      shareMessage: `Join me on Ultra Clear! Use my code ${rec.code} for 10% off your first water filter order. Download at ucfilters.com/app`,
+    });
+  } catch (err) {
+    console.error("[referrals] my-code error:", err);
+    res.status(500).json({ error: "Failed to load referral data" });
+  }
 });
 
 /** POST /api/uc/referrals/validate — validate promo or referral code */
-router.post("/uc/referrals/validate", (req: Request, res: Response): void => {
+router.post("/uc/referrals/validate", async (req: Request, res: Response): Promise<void> => {
   const { code, userEmail } = req.body as { code?: string; userEmail?: string };
   if (!code) {
     res.status(400).json({ valid: false, label: "No code provided", discountPercent: 0, type: null });
     return;
   }
-  res.json(validateCodeForDiscount(code, userEmail ?? ""));
+  try {
+    res.json(await validateCodeForDiscount(code, userEmail ?? ""));
+  } catch (err) {
+    console.error("[referrals] validate error:", err);
+    res.status(500).json({ valid: false, label: "Validation failed", discountPercent: 0, type: null });
+  }
 });
 
 /** GET /api/uc/promotions — active promotions (public) */
