@@ -13,8 +13,16 @@ import { eq } from "drizzle-orm";
 import { encryptSecret } from "../lib/secret-crypto.js";
 import { requireTeamAdmin } from "./auth.js";
 import { invalidateMpesaSecretCache, invalidateTeamAlertPhoneCache } from "./payments.js";
+import { invalidateTeamAlertEmailCache } from "./uc.js";
 
 const router = Router();
+
+/** Mask an email address for display: keep first char + domain. e.g. "t…@ucfilters.com" */
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return email;
+  return `${email[0]}…${email.slice(at)}`;
+}
 
 // ─── GET /admin/payment-settings ──────────────────────────────────────────────
 // Returns non-sensitive metadata: whether each secret is configured and its source.
@@ -33,6 +41,9 @@ router.get(
 
     const dbPhone = row?.teamAlertPhone ?? null;
     const envPhone = process.env["TEAM_ALERT_PHONE"] ?? null;
+
+    const dbEmail = row?.teamAlertEmail ?? null;
+    const envEmail = process.env["TEAM_ALERT_EMAIL"]?.trim() || null;
 
     res.json({
       mpesaWebhookSecret: {
@@ -57,6 +68,18 @@ router.get(
           : null,
         updatedAt: row?.updatedAt ?? null,
       },
+      teamAlertEmail: {
+        // "db" wins over env var; falls back to hardcoded info@ucfilters.com
+        source: dbEmail ? "db" : envEmail ? "env" : "default",
+        isSet: true, // always has at least the fallback
+        // Show partial address as a hint (domain kept, local-part masked beyond first char)
+        hint: dbEmail
+          ? maskEmail(dbEmail)
+          : envEmail
+          ? maskEmail(envEmail)
+          : "info@ucfilters.com",
+        updatedAt: row?.updatedAt ?? null,
+      },
     });
   }
 );
@@ -67,9 +90,10 @@ router.patch(
   "/admin/payment-settings",
   requireTeamAdmin,
   async (req: Request, res: Response): Promise<void> => {
-    const { mpesaWebhookSecret, teamAlertPhone } = req.body as {
+    const { mpesaWebhookSecret, teamAlertPhone, teamAlertEmail } = req.body as {
       mpesaWebhookSecret?: string;
       teamAlertPhone?: string;
+      teamAlertEmail?: string;
     };
 
     if (mpesaWebhookSecret !== undefined) {
@@ -130,6 +154,30 @@ router.patch(
       invalidateTeamAlertPhoneCache();
 
       console.info("[admin/payment-settings] Team alert phone updated via admin panel:", phone.slice(-4).padStart(phone.length, "*"));
+    }
+
+    if (teamAlertEmail !== undefined) {
+      const email = typeof teamAlertEmail === "string" ? teamAlertEmail.trim() : "";
+      if (!email || !email.includes("@")) {
+        res.status(400).json({ error: "teamAlertEmail must be a valid email address" });
+        return;
+      }
+
+      await db
+        .insert(teamSettingsTable)
+        .values({ id: "singleton", teamAlertEmail: email })
+        .onConflictDoUpdate({
+          target: teamSettingsTable.id,
+          set: {
+            teamAlertEmail: email,
+            updatedAt: new Date(),
+          },
+        });
+
+      // Bust the in-process cache so the next deletion alert uses the new address.
+      invalidateTeamAlertEmailCache();
+
+      console.info("[admin/payment-settings] Team alert email updated via admin panel:", maskEmail(email));
     }
 
     res.json({ ok: true });

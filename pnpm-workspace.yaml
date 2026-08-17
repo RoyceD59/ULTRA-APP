@@ -35,6 +35,11 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@replit/*'
   - stripe-replit-sync
+  - expo
+  - expo-constants
+  - expo-file-system
+  - expo-modules-autolinking
+  - '@expo/cli'
 
 onlyBuiltDependencies:
   - '@swc/core'

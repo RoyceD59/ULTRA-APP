@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  KeyRound, RefreshCw, Loader2, CheckCircle2, AlertCircle, ShieldCheck, Phone,
+  KeyRound, RefreshCw, Loader2, CheckCircle2, AlertCircle, ShieldCheck, Phone, Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,12 @@ interface PaymentSettingsData {
     hint: string | null;
     updatedAt: string | null;
   };
+  teamAlertEmail: {
+    source: "db" | "env" | "default";
+    isSet: boolean;
+    hint: string | null;
+    updatedAt: string | null;
+  };
 }
 
 async function fetchPaymentSettings(): Promise<PaymentSettingsData> {
@@ -39,7 +45,7 @@ async function fetchPaymentSettings(): Promise<PaymentSettingsData> {
 }
 
 async function savePaymentSettings(
-  payload: { mpesaWebhookSecret?: string; teamAlertPhone?: string },
+  payload: { mpesaWebhookSecret?: string; teamAlertPhone?: string; teamAlertEmail?: string },
 ): Promise<void> {
   const res = await fetch(`${API}/admin/payment-settings`, {
     method: "PATCH",
@@ -54,7 +60,7 @@ async function savePaymentSettings(
 
 // ─── Source badge ──────────────────────────────────────────────────────────────
 
-function SourceBadge({ source }: { source: "db" | "env" | "none" }) {
+function PhoneSourceBadge({ source }: { source: "db" | "env" | "none" }) {
   if (source === "db") {
     return (
       <Badge variant="default" className="gap-1 text-xs">
@@ -73,6 +79,149 @@ function SourceBadge({ source }: { source: "db" | "env" | "none" }) {
     <Badge variant="destructive" className="gap-1 text-xs">
       <AlertCircle className="w-3 h-3" /> Not configured
     </Badge>
+  );
+}
+
+function EmailSourceBadge({ source }: { source: "db" | "env" | "default" }) {
+  if (source === "db") {
+    return (
+      <Badge variant="default" className="gap-1 text-xs">
+        <ShieldCheck className="w-3 h-3" /> Stored in database
+      </Badge>
+    );
+  }
+  if (source === "env") {
+    return (
+      <Badge variant="secondary" className="gap-1 text-xs">
+        <AlertCircle className="w-3 h-3" /> Using environment variable
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="gap-1 text-xs">
+      <AlertCircle className="w-3 h-3" /> Using built-in default
+    </Badge>
+  );
+}
+
+// ─── Team Alert Email section ──────────────────────────────────────────────────
+
+function TeamAlertEmailCard({ data }: { data: PaymentSettingsData }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [showInput, setShowInput] = useState(false);
+
+  const { teamAlertEmail: e } = data;
+
+  const mutation = useMutation({
+    mutationFn: () => savePaymentSettings({ teamAlertEmail: email }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin-payment-settings"] });
+      toast({
+        title: "Alert email saved",
+        description: "Account-deletion alerts will be sent to the new address immediately.",
+      });
+      setEmail("");
+      setShowInput(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const isValidEmail = email.trim().includes("@") && email.trim().length > 3;
+
+  return (
+    <div className="rounded-lg border bg-card p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <Mail className="w-4 h-4 text-primary" />
+            Team Alert Email Address
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Account-deletion alerts are sent to this address. Changes take effect immediately —
+            no server restart needed.
+          </p>
+        </div>
+        <EmailSourceBadge source={e.source} />
+      </div>
+
+      {e.source === "default" && (
+        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm text-muted-foreground">
+          Using the built-in default address (<code className="font-mono text-xs">info@ucfilters.com</code>).
+          Set an address below to override it — no server restart required.
+        </div>
+      )}
+
+      {e.source === "env" && e.hint && (
+        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm text-muted-foreground">
+          Currently using the <code className="font-mono text-xs">TEAM_ALERT_EMAIL</code> environment
+          variable ({e.hint}). Setting an address here will override it — no server restart required.
+        </div>
+      )}
+
+      {e.source === "db" && e.hint && (
+        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+          Alert address stored in database ({e.hint}).
+          {e.updatedAt && (
+            <> Last updated {new Date(e.updatedAt).toLocaleString()}.</>
+          )}
+        </div>
+      )}
+
+      {showInput ? (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="alert-email">
+              {e.source === "db" ? "New address (replaces current)" : "Alert email address"}
+            </Label>
+            <Input
+              id="alert-email"
+              type="email"
+              placeholder="e.g. privacy@yourcompany.com"
+              value={email}
+              onChange={(ev) => setEmail(ev.target.value)}
+              disabled={mutation.isPending}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Account-deletion notifications will be delivered here. Use a mailbox the team monitors regularly.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => { setShowInput(false); setEmail(""); }}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || !isValidEmail}
+            >
+              {mutation.isPending
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Saving…</>
+                : e.source === "db" ? "Update address" : "Set address"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowInput(true)}
+          >
+            <RefreshCw className="w-4 h-4" />
+            {e.source === "db" ? "Update address" : "Set address"}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -116,7 +265,7 @@ function TeamAlertPhoneCard({ data }: { data: PaymentSettingsData }) {
             immediately — no server restart needed.
           </p>
         </div>
-        <SourceBadge source={p.source} />
+        <PhoneSourceBadge source={p.source} />
       </div>
 
       {p.source === "env" && p.hint && (
@@ -234,7 +383,7 @@ function MpesaWebhookSecretCard({ data }: { data: PaymentSettingsData }) {
             forged "paid" callbacks from arbitrary internet clients.
           </p>
         </div>
-        <SourceBadge source={s.source} />
+        <PhoneSourceBadge source={s.source} />
       </div>
 
       {s.source === "env" && s.envHint && (
@@ -338,7 +487,7 @@ export default function AdminPaymentSettingsPage() {
           <KeyRound className="w-6 h-6" /> Payment Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Manage payment integration secrets. Changes take effect immediately — no server restart needed.
+          Manage payment integration secrets and alert contacts. Changes take effect immediately — no server restart needed.
         </p>
       </div>
 
@@ -352,6 +501,7 @@ export default function AdminPaymentSettingsPage() {
         </div>
       ) : data ? (
         <>
+          <TeamAlertEmailCard data={data} />
           <TeamAlertPhoneCard data={data} />
           <MpesaWebhookSecretCard data={data} />
         </>

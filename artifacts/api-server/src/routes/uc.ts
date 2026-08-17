@@ -42,7 +42,7 @@ import {
   ucPushTokensTable, ucEnquiriesTable, ucNotifPrefsTable,
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
-  ucLifespanAlertsTable,
+  ucLifespanAlertsTable, teamSettingsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
@@ -2179,7 +2179,7 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
     //     Recipient is configurable via TEAM_ALERT_EMAIL (e.g. a dedicated
     //     privacy@ mailbox); falls back to the team inbox when unset.
     const deletedAt = new Date().toUTCString();
-    const deletionAlertTo = accountDeletionAlertRecipient();
+    const deletionAlertTo = await accountDeletionAlertRecipient();
     sendViaResend({
       from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
       to:   deletionAlertTo,
@@ -4844,15 +4844,59 @@ router.post("/uc/notify", async (req: Request, res: Response): Promise<void> => 
 /** Official office inbox for all customer form submissions. */
 const OFFICE_EMAIL  = "sales@ucfilters.com";
 
+// ─── Team alert email (DB-backed, 60 s cache) ─────────────────────────────────
+// The DB value supersedes the TEAM_ALERT_EMAIL env var, which in turn supersedes
+// the hardcoded fallback.  Same pattern as getTeamAlertPhone in payments.ts.
+
+interface _EmailSecretCache { value: string; expiresAt: number }
+let _teamAlertEmailCache: _EmailSecretCache | null = null;
+
+/**
+ * Resolve the team alert email address.
+ * Priority: DB (team_settings.team_alert_email) → TEAM_ALERT_EMAIL env var → info@ucfilters.com
+ * Result is cached for 60 seconds to keep DB cost negligible.
+ */
+export async function getTeamAlertEmail(): Promise<string> {
+  const now = Date.now();
+  if (_teamAlertEmailCache && _teamAlertEmailCache.expiresAt > now) {
+    return _teamAlertEmailCache.value;
+  }
+
+  let value: string | null = null;
+
+  try {
+    const [row] = await db
+      .select({ teamAlertEmail: teamSettingsTable.teamAlertEmail })
+      .from(teamSettingsTable)
+      .where(eq(teamSettingsTable.id, "singleton"))
+      .limit(1);
+
+    if (row?.teamAlertEmail) {
+      value = row.teamAlertEmail;
+    }
+  } catch (err) {
+    console.error("[uc] DB read for team alert email failed — falling back to env var:", err);
+  }
+
+  if (value === null) {
+    value = process.env["TEAM_ALERT_EMAIL"]?.trim() || "info@ucfilters.com";
+  }
+
+  _teamAlertEmailCache = { value, expiresAt: now + 60_000 };
+  return value;
+}
+
+export function invalidateTeamAlertEmailCache(): void {
+  _teamAlertEmailCache = null;
+}
+
 /**
  * Recipient for account-deletion team alerts.
- * Configurable via the TEAM_ALERT_EMAIL env var (e.g. a dedicated privacy@
- * mailbox); blank/whitespace values are ignored. Falls back to the team inbox.
+ * Delegates to getTeamAlertEmail() — DB setting → TEAM_ALERT_EMAIL env var → info@ucfilters.com.
  * @internal Exported for unit tests.
  */
-export function accountDeletionAlertRecipient(): string {
-  const configured = process.env["TEAM_ALERT_EMAIL"]?.trim();
-  return configured || "info@ucfilters.com";
+export async function accountDeletionAlertRecipient(): Promise<string> {
+  return getTeamAlertEmail();
 }
 const SERVICE_EMAIL = "service@ucfilters.com";
 

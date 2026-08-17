@@ -71,6 +71,10 @@ await pool.query(`
   ALTER TABLE team_settings
     ADD COLUMN IF NOT EXISTS n8n_inventory_webhook_url_enc text;
 `);
+await pool.query(`
+  ALTER TABLE team_settings
+    ADD COLUMN IF NOT EXISTS team_alert_email text;
+`);
 
 // uc_orders payment_reference unique index (dedup guard)
 await pool.query(`

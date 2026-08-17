@@ -17,6 +17,12 @@ export const teamSettingsTable = pgTable("team_settings", {
    */
   teamAlertPhone: text("team_alert_phone"),
   /**
+   * Team alert email address for account-deletion and recovery-order alerts.
+   * Supersedes the TEAM_ALERT_EMAIL env var when present.
+   * Falls back to info@ucfilters.com when neither is set.
+   */
+  teamAlertEmail: text("team_alert_email"),
+  /**
    * How many days to keep successful notification log entries before the nightly pruning job
    * removes them. Falls back to UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS env var (default 30).
    */

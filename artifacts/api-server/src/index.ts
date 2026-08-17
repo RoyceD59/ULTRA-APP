@@ -111,6 +111,14 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: team_settings.team_alert_phone column ensured");
 
+  // Add team_alert_email column — account-deletion (and future recovery-order) email alerts.
+  // Supersedes the TEAM_ALERT_EMAIL env var; configurable from the admin panel without restart.
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS team_alert_email text;
+  `);
+  logger.info("Startup migration: team_settings.team_alert_email column ensured");
+
   // Partial unique index on payment_reference — prevents duplicate orders for
   // the same Paystack (or other) reference.  Excludes empty strings so COD
   // orders (no reference) are unaffected.

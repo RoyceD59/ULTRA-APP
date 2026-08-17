@@ -15,6 +15,11 @@
  *   (j) PATCH — 200 and phone persisted on valid teamAlertPhone update.
  *   (k) PATCH — cache is busted so getMpesaWebhookSecret returns the new secret
  *       immediately without waiting for the 60-second TTL.
+ *   (l) PATCH — 400 when teamAlertEmail is an empty string.
+ *   (m) PATCH — 400 when teamAlertEmail has no "@" character.
+ *   (n) PATCH — 200 and email persisted; GET reflects "db" source with masked hint.
+ *   (o) PATCH — cache is busted so getTeamAlertEmail returns the new address immediately.
+ *   (p) getTeamAlertEmail — DB value overrides TEAM_ALERT_EMAIL env var.
  *
  * Strategy:
  *   – Admin and member team users are created in `team_users` via direct DB insert.
@@ -35,6 +40,7 @@ import app from "../app.js";
 import { db, teamUsersTable, teamSettingsTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { getMpesaWebhookSecret, invalidateMpesaSecretCache } from "../routes/payments.js";
+import { getTeamAlertEmail, invalidateTeamAlertEmailCache } from "../routes/uc.js";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -55,6 +61,7 @@ const createdTeamUserIds: string[] = [];
 // Env vars we may mutate per-test.
 let savedMpesaSecret:  string | undefined;
 let savedTeamPhone:    string | undefined;
+let savedTeamEmail:    string | undefined;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -163,11 +170,13 @@ after(async () => {
 beforeEach(() => {
   savedMpesaSecret = process.env["MPESA_WEBHOOK_SECRET"];
   savedTeamPhone   = process.env["TEAM_ALERT_PHONE"];
-  // Clear the in-process cache so each test gets a fresh DB read.
+  savedTeamEmail   = process.env["TEAM_ALERT_EMAIL"];
+  // Clear the in-process caches so each test gets a fresh DB read.
   invalidateMpesaSecretCache();
+  invalidateTeamAlertEmailCache();
 });
 
-afterEach(() => {
+afterEach(async () => {
   if (savedMpesaSecret === undefined) {
     delete process.env["MPESA_WEBHOOK_SECRET"];
   } else {
@@ -178,7 +187,20 @@ afterEach(() => {
   } else {
     process.env["TEAM_ALERT_PHONE"] = savedTeamPhone;
   }
+  if (savedTeamEmail === undefined) {
+    delete process.env["TEAM_ALERT_EMAIL"];
+  } else {
+    process.env["TEAM_ALERT_EMAIL"] = savedTeamEmail;
+  }
   invalidateMpesaSecretCache();
+  invalidateTeamAlertEmailCache();
+  // Remove any team_alert_email written to the DB so concurrent test files
+  // (which share the same PostgreSQL test database) are not polluted.
+  await db
+    .update(teamSettingsTable)
+    .set({ teamAlertEmail: null })
+    .where(eq(teamSettingsTable.id, "singleton"))
+    .catch(() => {});
 });
 
 // ── GET suite ─────────────────────────────────────────────────────────────────
@@ -330,6 +352,92 @@ describe("PATCH /admin/payment-settings — team alert phone", () => {
       row?.teamAlertPhone,
       phone,
       `DB must store the exact phone number; got ${row?.teamAlertPhone}`,
+    );
+  });
+});
+
+// ── Team alert email suites ───────────────────────────────────────────────────
+
+describe("PATCH /admin/payment-settings — team alert email validation", () => {
+  it("(l) returns 400 when teamAlertEmail is an empty string", async () => {
+    const { status, body } = await patchSettings({ teamAlertEmail: "" }, adminJwt);
+    assert.equal(status, 400, `expected 400; got ${status}: ${JSON.stringify(body)}`);
+  });
+
+  it("(m) returns 400 when teamAlertEmail has no @ character", async () => {
+    const { status, body } = await patchSettings({ teamAlertEmail: "notanemail" }, adminJwt);
+    assert.equal(status, 400, `expected 400; got ${status}: ${JSON.stringify(body)}`);
+  });
+});
+
+describe("PATCH /admin/payment-settings — team alert email persistence", () => {
+  it("(n) persists the email, returns ok:true, and GET reflects source=db with masked hint", async () => {
+    const email = `alerts-${Date.now()}@ucfilters.com`;
+
+    const { status, body } = await patchSettings({ teamAlertEmail: email }, adminJwt);
+    assert.equal(status, 200, `expected 200; got ${status}: ${JSON.stringify(body)}`);
+    assert.equal(body["ok"], true);
+
+    // Verify the DB row was actually written.
+    const [row] = await db
+      .select({ teamAlertEmail: teamSettingsTable.teamAlertEmail })
+      .from(teamSettingsTable)
+      .where(eq(teamSettingsTable.id, "singleton"))
+      .limit(1);
+    assert.equal(
+      row?.teamAlertEmail,
+      email,
+      `DB must store the exact email; got ${row?.teamAlertEmail}`,
+    );
+
+    // Verify GET reflects the new state correctly.
+    const { status: getStatus, body: getBody } = await getSettings(adminJwt);
+    assert.equal(getStatus, 200);
+    const e = getBody["teamAlertEmail"] as Record<string, unknown>;
+    assert.equal(e["source"], "db", `source must be "db" after PATCH; got ${e["source"]}`);
+    assert.equal(e["isSet"], true);
+    // hint must be a masked partial — starts with first char of local-part + "…@"
+    const hint = e["hint"] as string;
+    assert.ok(
+      hint && hint.includes("@"),
+      `hint must include "@"; got "${hint}"`,
+    );
+  });
+
+  it("(o) cache is busted: getTeamAlertEmail returns the new address immediately after PATCH", async () => {
+    const email = `cache-test-${Date.now()}@ucfilters.com`;
+
+    const { status } = await patchSettings({ teamAlertEmail: email }, adminJwt);
+    assert.equal(status, 200);
+
+    // The PATCH must have busted the in-process cache — no 60-second wait needed.
+    const live = await getTeamAlertEmail();
+    assert.equal(
+      live,
+      email,
+      `getTeamAlertEmail must return the newly saved email immediately; got "${live}"`,
+    );
+  });
+});
+
+describe("getTeamAlertEmail — DB value overrides env var", () => {
+  it("(p) DB row wins over TEAM_ALERT_EMAIL env var", async () => {
+    const dbEmail  = `db-wins-${Date.now()}@ucfilters.com`;
+    const envEmail = `env-fallback-${Date.now()}@ucfilters.com`;
+
+    // Persist the DB value via the PATCH endpoint.
+    const { status } = await patchSettings({ teamAlertEmail: dbEmail }, adminJwt);
+    assert.equal(status, 200);
+
+    // Set the env var to a different address.
+    process.env["TEAM_ALERT_EMAIL"] = envEmail;
+
+    // Cache was busted by PATCH — next call should read from DB.
+    const live = await getTeamAlertEmail();
+    assert.equal(
+      live,
+      dbEmail,
+      `DB value must take priority over env var; got "${live}" (env was "${envEmail}")`,
     );
   });
 });

@@ -119,8 +119,18 @@ after(() => {
   else process.env["TEAM_ALERT_EMAIL"] = ORIGINAL_TEAM_ALERT_EMAIL;
 });
 
+const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
+
 describe("account-deletion team notification (DELETE /api/uc/customer, step 15)", () => {
-  beforeEach(() => { resendHits = []; });
+  beforeEach(async () => {
+    resendHits = [];
+    // Clear any team_alert_email persisted by other test suites so the
+    // env-var and default-fallback cases are not overridden by a DB value.
+    await pool.query(
+      "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
+    );
+    invalidateTeamAlertEmailCache();
+  });
 
   // ── Recipient routing ────────────────────────────────────────────────────────
 
@@ -152,6 +162,12 @@ describe("account-deletion team notification (DELETE /api/uc/customer, step 15)"
     const user  = await seedUser(`${Date.now()}-b`);
     const token = issueToken({ id: user.id, email: user.email });
     try {
+      // Clear the DB value right before the request to minimise the race window
+      // with concurrently-running test files that may write to team_settings.
+      await pool.query(
+        "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
+      );
+      invalidateTeamAlertEmailCache();
       const { status, body } = await doDelete(token);
       assert.equal(status, 200, `DELETE returned ${status}: ${JSON.stringify(body)}`);
 
@@ -174,6 +190,10 @@ describe("account-deletion team notification (DELETE /api/uc/customer, step 15)"
     const user  = await seedUser(`${Date.now()}-c`);
     const token = issueToken({ id: user.id, email: user.email });
     try {
+      await pool.query(
+        "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
+      );
+      invalidateTeamAlertEmailCache();
       const { status } = await doDelete(token);
       assert.equal(status, 200);
 
