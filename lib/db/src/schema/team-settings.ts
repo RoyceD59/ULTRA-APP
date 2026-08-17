@@ -34,6 +34,12 @@ export const teamSettingsTable = pgTable("team_settings", {
    * Admins paste the URL via Admin → Integrations; it is encrypted before storage.
    */
   n8nInventoryWebhookUrlEnc: text("n8n_inventory_webhook_url_enc"),
+  /**
+   * Low-stock alert threshold (units). When a product's WooCommerce stock_quantity
+   * falls to this value or below (including 0 = out of stock), the system sends an
+   * email alert to the team. Defaults to 5 when null.
+   */
+  lowStockThreshold: integer("low_stock_threshold"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

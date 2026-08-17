@@ -194,6 +194,13 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: password_reset_tokens table ensured");
 
+  // Low-stock alert threshold column — admin-configurable from Inventory settings.
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS low_stock_threshold integer;
+  `);
+  logger.info("Startup migration: team_settings.low_stock_threshold column ensured");
+
   // Seed first admin from environment variables (runs once; idempotent).
   const adminEmail = process.env["PROJECTHUB_ADMIN_EMAIL"]?.toLowerCase().trim();
   const adminPassword = process.env["PROJECTHUB_ADMIN_PASSWORD"];

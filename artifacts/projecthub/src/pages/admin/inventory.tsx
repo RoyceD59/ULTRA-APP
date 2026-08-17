@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X,
+  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,10 @@ interface InventoryProduct {
 interface InventoryResponse {
   products: InventoryProduct[];
   source: "woocommerce" | "mock";
+}
+
+interface InventorySettings {
+  lowStockThreshold: { value: number; source: "db" | "default" };
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -65,14 +69,38 @@ async function triggerSync(): Promise<void> {
   }
 }
 
+async function fetchInventorySettings(): Promise<InventorySettings> {
+  const res = await fetch(`${BASE}/api/admin/inventory-settings`, { headers: getAuthHeaders() ?? {} });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(d.error ?? `Request failed (${res.status})`);
+  }
+  return res.json() as Promise<InventorySettings>;
+}
+
+async function saveInventorySettings(lowStockThreshold: number): Promise<void> {
+  const res = await fetch(`${BASE}/api/admin/inventory-settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(getAuthHeaders() ?? {}) },
+    body: JSON.stringify({ lowStockThreshold }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(d.error ?? `Request failed (${res.status})`);
+  }
+}
+
 // ─── Stock status badge ───────────────────────────────────────────────────────
 
-function StockStatusBadge({ status }: { status: string }) {
+function StockStatusBadge({ status, qty, threshold }: { status: string; qty: number; threshold: number }) {
+  if (status === "outofstock" || qty === 0) {
+    return <Badge variant="destructive">Out of stock</Badge>;
+  }
+  if (qty <= threshold) {
+    return <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 dark:bg-amber-950/30">Low stock</Badge>;
+  }
   if (status === "instock") {
     return <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 dark:bg-green-950/30">In stock</Badge>;
-  }
-  if (status === "outofstock") {
-    return <Badge variant="destructive">Out of stock</Badge>;
   }
   return <Badge variant="secondary">{status}</Badge>;
 }
@@ -169,6 +197,96 @@ function wcAdminUrl(productId: number, permalink: string | null): string {
   return `https://www.ucfilters.com/wp-admin/post.php?post=${productId}&action=edit`;
 }
 
+// ─── Alert Settings panel ─────────────────────────────────────────────────────
+
+function AlertSettingsPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["inventory-settings"],
+    queryFn: fetchInventorySettings,
+    staleTime: 60_000,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: () => saveInventorySettings(Number(draft)),
+    onSuccess: () => {
+      toast({ title: "Settings saved", description: `Low-stock alert threshold set to ${draft} units.` });
+      setEditing(false);
+      void qc.invalidateQueries({ queryKey: ["inventory-settings"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const currentThreshold = data?.lowStockThreshold.value ?? 5;
+
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Settings2 className="w-4 h-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Alert Settings</h2>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-muted-foreground">
+            Send a stock alert email when a product's quantity reaches this level or below (0 = out-of-stock only).
+            Alerts fire daily at 04:30 UTC and immediately after a manual stock edit.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm text-muted-foreground">Threshold:</span>
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          ) : editing ? (
+            <>
+              <Input
+                type="number"
+                min={0}
+                max={10000}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="h-7 w-20 font-mono text-sm"
+                disabled={saveMutation.isPending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !saveMutation.isPending) saveMutation.mutate();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                autoFocus
+              />
+              <span className="text-sm text-muted-foreground">units</span>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || draft === ""}>
+                {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)} disabled={saveMutation.isPending}>
+                <X className="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-sm font-medium">{currentThreshold}</span>
+              <span className="text-sm text-muted-foreground">units</span>
+              <button
+                onClick={() => { setDraft(String(currentThreshold)); setEditing(true); }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Edit threshold"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminInventoryPage() {
@@ -178,6 +296,12 @@ export default function AdminInventoryPage() {
   const { data, isLoading, error, dataUpdatedAt } = useQuery({
     queryKey: ["uc-inventory"],
     queryFn: fetchInventory,
+    staleTime: 60_000,
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: ["inventory-settings"],
+    queryFn: fetchInventorySettings,
     staleTime: 60_000,
   });
 
@@ -200,7 +324,11 @@ export default function AdminInventoryPage() {
   }
 
   const products = data?.products ?? [];
+  const threshold = settings?.lowStockThreshold.value ?? 5;
   const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : null;
+
+  const outOfStockCount = products.filter((p) => p.stockQuantity === 0).length;
+  const lowStockCount   = products.filter((p) => p.stockQuantity > 0 && p.stockQuantity <= threshold).length;
 
   return (
     <div className="space-y-6">
@@ -252,6 +380,27 @@ export default function AdminInventoryPage() {
         </div>
       </div>
 
+      {/* Stock summary banners */}
+      {!isLoading && !error && (outOfStockCount > 0 || lowStockCount > 0) && (
+        <div className="flex gap-3 flex-wrap">
+          {outOfStockCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span><strong>{outOfStockCount}</strong> product{outOfStockCount !== 1 ? "s" : ""} out of stock</span>
+            </div>
+          )}
+          {lowStockCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-2 text-sm text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span><strong>{lowStockCount}</strong> product{lowStockCount !== 1 ? "s" : ""} low on stock (≤ {threshold} units)</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Alert Settings */}
+      <AlertSettingsPanel />
+
       {/* Table */}
       {isLoading ? (
         <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
@@ -275,7 +424,16 @@ export default function AdminInventoryPage() {
             </TableHeader>
             <TableBody>
               {products.map((product) => (
-                <TableRow key={product.id}>
+                <TableRow
+                  key={product.id}
+                  className={
+                    product.stockQuantity === 0
+                      ? "bg-destructive/5"
+                      : product.stockQuantity <= threshold
+                      ? "bg-amber-50/50 dark:bg-amber-950/10"
+                      : ""
+                  }
+                >
                   <TableCell className="font-medium max-w-[240px]">
                     <span className="truncate block">{product.name}</span>
                     <span className="text-xs text-muted-foreground">ID: {product.id}</span>
@@ -290,7 +448,7 @@ export default function AdminInventoryPage() {
                     />
                   </TableCell>
                   <TableCell>
-                    <StockStatusBadge status={product.stockStatus} />
+                    <StockStatusBadge status={product.stockStatus} qty={product.stockQuantity} threshold={threshold} />
                   </TableCell>
                   <TableCell className="text-right">
                     <a

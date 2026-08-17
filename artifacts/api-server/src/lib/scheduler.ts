@@ -212,6 +212,17 @@ export function startScheduler() {
 
   logger.info("Scheduler: stale recovery order digest job registered (07:00 UTC)");
 
+  // ─── Daily 04:30 UTC: low-stock and out-of-stock email alerts ────────────
+  // Checks every published WooCommerce product against the configured
+  // low_stock_threshold (default 5 units). Sends one email listing all
+  // products at or below the threshold, split into out-of-stock vs low-stock.
+  // Skips silently when WooCommerce credentials are absent.
+  cron.schedule("30 4 * * *", async () => {
+    await runLowStockAlert();
+  }, { timezone: "UTC" });
+
+  logger.info("Scheduler: daily low-stock alert job registered (04:30 UTC)");
+
   // ─── Daily 05:00 UTC: audit live products for missing lifespan meta ───────
   // Runs the same audit as GET /api/uc/admin/products/lifespan-audit and
   // emails the team about newly flagged products. Each product is alerted
@@ -223,6 +234,156 @@ export function startScheduler() {
   }, { timezone: "UTC" });
 
   logger.info("Scheduler: daily product lifespan audit job registered (05:00 UTC)");
+}
+
+/**
+ * Check all published WooCommerce products for low / zero stock and email
+ * the team when any product is at or below the configured threshold.
+ *
+ * - Reads `low_stock_threshold` from team_settings (default 5).
+ * - Skips silently when WooCommerce credentials are absent.
+ * - Aborts when the store is unreachable (partial catalogue must never send
+ *   a misleadingly short list).
+ * - No deduplication: the daily digest always fires so the team can track
+ *   whether stock is being replenished. Immediate post-edit alerts (PATCH
+ *   /uc/admin/inventory/:id) use the same function with `skipIfEmpty=true`.
+ *
+ * @internal — exported for the scheduler cron job and inventory PATCH handler.
+ */
+export async function runLowStockAlert(
+  deps: {
+    fetchProducts?: typeof fetchAllPublishedProducts;
+    sendEmail?: typeof sendViaResend;
+    /** When true, returns immediately without sending if nothing is flagged. */
+    skipIfEmpty?: boolean;
+  } = {},
+): Promise<{ outOfStock: number; lowStock: number; emailed: boolean }> {
+  const fetchProducts = deps.fetchProducts ?? fetchAllPublishedProducts;
+  const sendEmail     = deps.sendEmail     ?? sendViaResend;
+  const skipIfEmpty   = deps.skipIfEmpty   ?? true;
+
+  if (!hasWCCredentials()) {
+    logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
+    return { outOfStock: 0, lowStock: 0, emailed: false };
+  }
+
+  // Read threshold from DB (admin-configurable), fall back to default of 5.
+  let threshold = 5;
+  try {
+    const [row] = await db
+      .select({ lowStockThreshold: teamSettingsTable.lowStockThreshold })
+      .from(teamSettingsTable)
+      .where(eq(teamSettingsTable.id, "singleton"))
+      .limit(1);
+    if (row?.lowStockThreshold != null) threshold = row.lowStockThreshold;
+  } catch (err) {
+    logger.warn({ err }, "Low-stock alert: could not read threshold from DB — using default (5)");
+  }
+
+  logger.info({ threshold }, "Scheduler: running low-stock / out-of-stock alert check");
+
+  let products: Awaited<ReturnType<typeof fetchAllPublishedProducts>>;
+  try {
+    products = await fetchProducts();
+  } catch (err) {
+    logger.error({ err }, "Low-stock alert: fetchProducts threw — aborting");
+    return { outOfStock: 0, lowStock: 0, emailed: false };
+  }
+
+  if (products === null) {
+    logger.error("Low-stock alert: could not reach WooCommerce store — aborting");
+    return { outOfStock: 0, lowStock: 0, emailed: false };
+  }
+
+  type StockItem = { id: number; name: string; sku: string; qty: number; permalink: string | null };
+  const outOfStockItems: StockItem[] = [];
+  const lowStockItems:   StockItem[] = [];
+
+  for (const raw of products) {
+    const p = normalizeProduct(raw);
+    const qty = typeof p["stockQuantity"] === "number" ? p["stockQuantity"] : 0;
+    if (qty > threshold) continue; // above threshold — skip
+    const item: StockItem = {
+      id:        Number(p["id"]),
+      name:      String(p["name"] ?? ""),
+      sku:       String(p["sku"]  ?? ""),
+      qty,
+      permalink: typeof p["permalink"] === "string" ? p["permalink"] : null,
+    };
+    if (qty === 0) outOfStockItems.push(item);
+    else           lowStockItems.push(item);
+  }
+
+  if (outOfStockItems.length === 0 && lowStockItems.length === 0) {
+    if (skipIfEmpty) {
+      logger.info("Low-stock alert: all products above threshold — no email");
+      return { outOfStock: 0, lowStock: 0, emailed: false };
+    }
+  }
+
+  // Build WooCommerce admin edit URL for each product
+  function wcEditUrl(item: StockItem): string {
+    if (item.permalink) {
+      try {
+        return `${new URL(item.permalink).origin}/wp-admin/post.php?post=${item.id}&action=edit`;
+      } catch { /* fall through */ }
+    }
+    return `https://www.ucfilters.com/wp-admin/post.php?post=${item.id}&action=edit`;
+  }
+
+  const formatItem = (item: StockItem) =>
+    `  • ${item.name}${item.sku ? ` (SKU ${item.sku})` : ""} — qty: ${item.qty} | ${wcEditUrl(item)}`;
+
+  const sections: string[] = [];
+
+  if (outOfStockItems.length > 0) {
+    sections.push(
+      `OUT OF STOCK (${outOfStockItems.length} product${outOfStockItems.length !== 1 ? "s" : ""}):`,
+      ...outOfStockItems.map(formatItem),
+    );
+  }
+
+  if (lowStockItems.length > 0) {
+    if (sections.length > 0) sections.push("");
+    sections.push(
+      `LOW STOCK — ${threshold} units or fewer (${lowStockItems.length} product${lowStockItems.length !== 1 ? "s" : ""}):`,
+      ...lowStockItems.map(formatItem),
+    );
+  }
+
+  const totalFlagged = outOfStockItems.length + lowStockItems.length;
+  const emailBody = [
+    `${totalFlagged} product${totalFlagged !== 1 ? "s" : ""} need${totalFlagged === 1 ? "s" : ""} restocking (threshold: ≤ ${threshold} units).`,
+    "",
+    ...sections,
+    "",
+    "Restock each product in WooCommerce using the links above.",
+    "You can adjust the alert threshold from ProjectHub → Admin → Inventory → Settings.",
+  ].join("\n");
+
+  const subjectParts: string[] = [];
+  if (outOfStockItems.length > 0) subjectParts.push(`${outOfStockItems.length} out of stock`);
+  if (lowStockItems.length   > 0) subjectParts.push(`${lowStockItems.length} low stock`);
+  const subject = `📦 Stock alert: ${subjectParts.join(", ")}`;
+
+  const emailOk = await sendEmail({
+    from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
+    to:      "info@ucfilters.com",
+    subject,
+    text:    emailBody,
+    meta:    { template: "low_stock_alert" },
+  });
+
+  if (emailOk) {
+    logger.info(
+      { outOfStock: outOfStockItems.length, lowStock: lowStockItems.length, threshold },
+      "Scheduler: low-stock alert email sent",
+    );
+  } else {
+    logger.warn("Scheduler: low-stock alert email failed — will retry on next scheduled run");
+  }
+
+  return { outOfStock: outOfStockItems.length, lowStock: lowStockItems.length, emailed: emailOk };
 }
 
 /**

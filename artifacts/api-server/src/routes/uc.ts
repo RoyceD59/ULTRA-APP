@@ -5357,12 +5357,73 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
       return;
     }
 
+    const confirmedQty: number =
+      typeof data["stock_quantity"] === "number" ? data["stock_quantity"] : stockQuantity;
+
     res.json({
       ok: true,
       productId,
-      stockQuantity: typeof data["stock_quantity"] === "number" ? data["stock_quantity"] : stockQuantity,
+      stockQuantity: confirmedQty,
       source: "woocommerce",
     });
+
+    // ── Immediate low-stock alert ─────────────────────────────────────────
+    // Fire an email when the newly confirmed quantity is at or below the
+    // configured threshold so the team is notified without waiting for the
+    // nightly scheduled check. Runs async — never blocks the response.
+    (async () => {
+      try {
+        let threshold = 5;
+        try {
+          const { rows } = await pool.query<{ low_stock_threshold: number | null }>(
+            "SELECT low_stock_threshold FROM team_settings WHERE id = 'singleton' LIMIT 1",
+          );
+          if (rows[0]?.low_stock_threshold != null) threshold = rows[0].low_stock_threshold;
+        } catch { /* use default */ }
+
+        if (confirmedQty > threshold) return; // still healthy — no alert needed
+
+        const productName = String(data["name"] ?? `Product #${productId}`);
+        const productSku  = String(data["sku"]  ?? "");
+        const permalink   = typeof data["permalink"] === "string" ? data["permalink"] : null;
+
+        let wcEditUrl = `https://www.ucfilters.com/wp-admin/post.php?post=${productId}&action=edit`;
+        if (permalink) {
+          try { wcEditUrl = `${new URL(permalink).origin}/wp-admin/post.php?post=${productId}&action=edit`; } catch { /* use default */ }
+        }
+
+        const level = confirmedQty === 0 ? "OUT OF STOCK" : "LOW STOCK";
+        const subject = confirmedQty === 0
+          ? `📦 ${productName} is now out of stock`
+          : `📦 Low stock: ${productName} — ${confirmedQty} unit${confirmedQty !== 1 ? "s" : ""} remaining`;
+
+        const body = [
+          `${level}: ${productName}${productSku ? ` (SKU ${productSku})` : ""}`,
+          ``,
+          `Current stock:  ${confirmedQty} unit${confirmedQty !== 1 ? "s" : ""}`,
+          `Alert threshold: ≤ ${threshold} units`,
+          ``,
+          `Edit in WooCommerce: ${wcEditUrl}`,
+          ``,
+          "You can adjust the alert threshold from ProjectHub → Admin → Inventory → Settings.",
+        ].join("\n");
+
+        await sendViaResend({
+          from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
+          to:      "info@ucfilters.com",
+          subject,
+          text:    body,
+          meta:    { template: "low_stock_alert" },
+        });
+
+        logger.info(
+          { productId, productName, confirmedQty, threshold },
+          "[inventory] Immediate low-stock alert sent",
+        );
+      } catch (alertErr) {
+        logger.error({ alertErr, productId }, "[inventory] Failed to send immediate low-stock alert");
+      }
+    })();
   } catch (err) {
     logger.error({ err, productId }, "[inventory] WooCommerce PATCH error");
     res.status(502).json({ error: "Failed to reach WooCommerce" });
