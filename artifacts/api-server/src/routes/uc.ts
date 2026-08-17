@@ -5506,7 +5506,123 @@ router.post("/uc/admin/inventory/sync", async (req, res): Promise<void> => {
   }
 });
 
+// ─── UC Companion: customer list & detail (admin only) ────────────────────────
+
+router.get("/uc/admin/customers", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  try {
+    const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
+    const from = typeof req.query["from"] === "string" ? req.query["from"].trim() : "";
+    const to = typeof req.query["to"] === "string" ? req.query["to"].trim() : "";
+    const page = Math.max(1, parseInt(String(req.query["page"] ?? "1"), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query["limit"] ?? "50"), 10) || 50));
+    const offset = (page - 1) * limit;
+
+    // Build WHERE clauses
+    const conditions: string[] = ["u.deleted_at IS NULL"];
+    const params: unknown[] = [];
+    let pi = 1;
+
+    if (q) {
+      conditions.push(
+        `(u.email ILIKE $${pi} OR u.first_name ILIKE $${pi} OR u.last_name ILIKE $${pi} OR CONCAT(u.first_name,' ',u.last_name) ILIKE $${pi})`
+      );
+      params.push(`%${q}%`);
+      pi++;
+    }
+    if (from) {
+      conditions.push(`u.created_at >= $${pi}::timestamptz`);
+      params.push(from);
+      pi++;
+    }
+    if (to) {
+      conditions.push(`u.created_at < ($${pi}::date + interval '1 day')::timestamptz`);
+      params.push(to);
+      pi++;
+    }
+
+    const where = conditions.join(" AND ");
+
+    // Count total matching rows
+    const countRes = await pool.query<{ total: number }>(
+      `SELECT COUNT(*)::int AS total FROM uc_users u WHERE ${where}`,
+      params
+    );
+    const total = countRes.rows[0]?.total ?? 0;
+
+    // Fetch paginated customer rows
+    const custRes = await pool.query<{
+      id: number; email: string; first_name: string; last_name: string;
+      phone: string; created_at: string;
+    }>(
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at
+       FROM uc_users u
+       WHERE ${where}
+       ORDER BY u.created_at DESC
+       LIMIT $${pi} OFFSET $${pi + 1}`,
+      [...params, limit, offset]
+    );
+
+    const customerIds = custRes.rows.map((r) => r.id);
+
+    // Fetch order counts and product names for the page of customers
+    let orderCountMap: Record<number, number> = {};
+    let productNamesMap: Record<number, string[]> = {};
+
+    if (customerIds.length > 0) {
+      // We store userId as text in uc_orders; cast for the join
+      const idList = customerIds.map(String);
+      const orderRes = await pool.query<{ user_id: string; order_count: number }>(
+        `SELECT user_id, COUNT(*)::int AS order_count
+         FROM uc_orders
+         WHERE user_id = ANY($1)
+         GROUP BY user_id`,
+        [idList]
+      );
+      for (const row of orderRes.rows) {
+        orderCountMap[parseInt(row.user_id, 10)] = row.order_count;
+      }
+
+      // Get up to 3 distinct product names per customer from their orders
+      const prodRes = await pool.query<{ user_id: string; name: string }>(
+        `SELECT DISTINCT ON (o.user_id, oi.name) o.user_id, oi.name
+         FROM uc_orders o
+         JOIN uc_order_items oi ON oi.order_id = o.id
+         WHERE o.user_id = ANY($1)
+         ORDER BY o.user_id, oi.name`,
+        [idList]
+      );
+      for (const row of prodRes.rows) {
+        const uid = parseInt(row.user_id, 10);
+        if (!productNamesMap[uid]) productNamesMap[uid] = [];
+        if (productNamesMap[uid].length < 3) productNamesMap[uid].push(row.name);
+      }
+    }
+
+    const customers = custRes.rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      name: `${r.first_name} ${r.last_name}`.trim(),
+      phone: r.phone,
+      joinedAt: r.created_at,
+      orderCount: orderCountMap[r.id] ?? 0,
+      products: productNamesMap[r.id] ?? [],
+    }));
+
+    res.json({ customers, total, page, limit });
+  } catch (err) {
+    logger.error({ err }, "[customers/list] query failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ─── UC Companion: registered customer count ──────────────────────────────────
+// Must be registered before /:id so Express doesn't treat "count" as an id.
 // Any logged-in team member (admin or regular) can read this count.
 // UC-only credentials are not accepted; the endpoint uses the ProjectHub
 // team-session JWT issued by POST /api/auth/login.
@@ -5533,6 +5649,109 @@ router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
     });
   } catch (err) {
     logger.error({ err }, "[customers/count] query failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── UC Companion: customer detail (admin only) ────────────────────────────────
+// Registered after /count so the static segment takes precedence.
+router.get("/uc/admin/customers/:id", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  const customerId = parseInt(req.params["id"] ?? "", 10);
+  if (!customerId || customerId < 1) {
+    res.status(400).json({ error: "Invalid customer id" });
+    return;
+  }
+  try {
+    const custRes = await pool.query<{
+      id: number; email: string; first_name: string; last_name: string;
+      phone: string; created_at: string; auth_provider: string;
+    }>(
+      `SELECT id, email, first_name, last_name, phone, created_at, auth_provider
+       FROM uc_users WHERE id = $1 AND deleted_at IS NULL`,
+      [customerId]
+    );
+    if (!custRes.rows[0]) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    const cu = custRes.rows[0];
+
+    // Recent orders (last 10)
+    const ordersRes = await pool.query<{
+      id: number; status: string; total: string; currency: string;
+      payment_method: string; date_created: string;
+    }>(
+      `SELECT id, status, total, currency, payment_method, date_created
+       FROM uc_orders WHERE user_id = $1 ORDER BY date_created DESC LIMIT 10`,
+      [String(customerId)]
+    );
+
+    let ordersWithItems: {
+      id: number; status: string; total: string; currency: string;
+      paymentMethod: string; dateCreated: string;
+      lineItems: { name: string; quantity: number; total: string }[];
+    }[] = [];
+
+    if (ordersRes.rows.length > 0) {
+      const orderIds = ordersRes.rows.map((r) => r.id);
+      const itemsRes = await pool.query<{
+        order_id: number; name: string; quantity: number; total: string;
+      }>(
+        `SELECT order_id, name, quantity, total FROM uc_order_items WHERE order_id = ANY($1)`,
+        [orderIds]
+      );
+      const itemsByOrder: Record<number, { name: string; quantity: number; total: string }[]> = {};
+      for (const item of itemsRes.rows) {
+        if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+        itemsByOrder[item.order_id].push({ name: item.name, quantity: item.quantity, total: item.total });
+      }
+      ordersWithItems = ordersRes.rows.map((o) => ({
+        id: o.id,
+        status: o.status,
+        total: o.total,
+        currency: o.currency,
+        paymentMethod: o.payment_method,
+        dateCreated: o.date_created,
+        lineItems: itemsByOrder[o.id] ?? [],
+      }));
+    }
+
+    // Recent tickets (last 10)
+    const ticketsRes = await pool.query<{
+      id: string; product_model: string; issue_description: string;
+      status: string; created_at: string;
+    }>(
+      `SELECT id, product_model, issue_description, status, created_at
+       FROM uc_tickets WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
+      [String(customerId)]
+    );
+
+    res.json({
+      customer: {
+        id: cu.id,
+        email: cu.email,
+        firstName: cu.first_name,
+        lastName: cu.last_name,
+        name: `${cu.first_name} ${cu.last_name}`.trim(),
+        phone: cu.phone,
+        joinedAt: cu.created_at,
+        authProvider: cu.auth_provider,
+      },
+      orders: ordersWithItems,
+      tickets: ticketsRes.rows.map((t) => ({
+        id: t.id,
+        productModel: t.product_model,
+        issueDescription: t.issue_description,
+        status: t.status,
+        createdAt: t.created_at,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, "[customers/detail] query failed");
     res.status(500).json({ error: "Internal server error" });
   }
 });

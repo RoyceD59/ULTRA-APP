@@ -144,6 +144,86 @@ paths:
         "401":
           description: Unauthorized
 
+  /uc/admin/customers:
+    get:
+      operationId: listUcCustomers
+      tags: [uc-admin]
+      summary: List UC Companion customers with search and date-range filter (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by name or email (case-insensitive)
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range start (inclusive)
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range end (inclusive)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcCustomerList"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Admin access required
+
+  /uc/admin/customers/{customerId}:
+    get:
+      operationId: getUcCustomer
+      tags: [uc-admin]
+      summary: Get a single UC customer with their orders and tickets (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcCustomerDetail"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Admin access required
+        "404":
+          description: Customer not found
+
   /uc/admin/customers/count:
     get:
       operationId: getUcCustomersCount
@@ -1944,6 +2024,130 @@ components:
       required: [ok]
       properties:
         ok: { type: boolean }
+
+    UcCustomerSummary:
+      type: object
+      required: [id, email, firstName, lastName, name, phone, joinedAt, orderCount, products]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        orderCount:
+          type: integer
+        products:
+          type: array
+          items:
+            type: string
+
+    UcCustomerList:
+      type: object
+      required: [customers, total, page, limit]
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    UcCustomerOrderItem:
+      type: object
+      required: [name, quantity, total]
+      properties:
+        name:
+          type: string
+        quantity:
+          type: integer
+        total:
+          type: string
+
+    UcCustomerOrder:
+      type: object
+      required: [id, status, total, currency, paymentMethod, dateCreated, lineItems]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        total:
+          type: string
+        currency:
+          type: string
+        paymentMethod:
+          type: string
+        dateCreated:
+          type: string
+          format: date-time
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerOrderItem"
+
+    UcCustomerTicket:
+      type: object
+      required: [id, productModel, issueDescription, status, createdAt]
+      properties:
+        id:
+          type: string
+        productModel:
+          type: string
+        issueDescription:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    UcCustomerDetail:
+      type: object
+      required: [customer, orders, tickets]
+      properties:
+        customer:
+          type: object
+          required: [id, email, firstName, lastName, name, phone, joinedAt, authProvider]
+          properties:
+            id:
+              type: integer
+            email:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+            name:
+              type: string
+            phone:
+              type: string
+            joinedAt:
+              type: string
+              format: date-time
+            authProvider:
+              type: string
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerOrder"
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerTicket"
 
     UcCustomersCount:
       type: object

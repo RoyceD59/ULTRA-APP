@@ -635,6 +635,66 @@ export interface OkResponse {
   ok: boolean;
 }
 
+export interface UcCustomerSummary {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  phone: string;
+  joinedAt: string;
+  orderCount: number;
+  products: string[];
+}
+
+export interface UcCustomerList {
+  customers: UcCustomerSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface UcCustomerOrderItem {
+  name: string;
+  quantity: number;
+  total: string;
+}
+
+export interface UcCustomerOrder {
+  id: number;
+  status: string;
+  total: string;
+  currency: string;
+  paymentMethod: string;
+  dateCreated: string;
+  lineItems: UcCustomerOrderItem[];
+}
+
+export interface UcCustomerTicket {
+  id: string;
+  productModel: string;
+  issueDescription: string;
+  status: string;
+  createdAt: string;
+}
+
+export type UcCustomerDetailCustomer = {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  phone: string;
+  joinedAt: string;
+  authProvider: string;
+};
+
+export interface UcCustomerDetail {
+  customer: UcCustomerDetailCustomer;
+  orders: UcCustomerOrder[];
+  tickets: UcCustomerTicket[];
+}
+
 export interface UcCustomersCount {
   /** Total registered (non-deleted) UC Companion customers */
   count: number;
@@ -643,6 +703,26 @@ export interface UcCustomersCount {
   /** Customers who registered since the start of the current calendar month */
   newThisMonth: number;
 }
+
+export type ListUcCustomersParams = {
+/**
+ * Search by name or email (case-insensitive)
+ */
+q?: string;
+/**
+ * Registration date range start (inclusive)
+ */
+from?: string;
+/**
+ * Registration date range end (inclusive)
+ */
+to?: string;
+page?: number;
+/**
+ * @maximum 100
+ */
+limit?: number;
+};
 
 export type ListTasksParams = {
 projectId?: number;

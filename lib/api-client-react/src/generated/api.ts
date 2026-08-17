@@ -54,6 +54,7 @@ import type {
   InventoryUpdateResult,
   ListNotificationLogsParams,
   ListTasksParams,
+  ListUcCustomersParams,
   Member,
   MemberInput,
   MemberUpdate,
@@ -78,6 +79,8 @@ import type {
   TaskUpdate,
   TeamTokenRequest,
   TeamTokenResponse,
+  UcCustomerDetail,
+  UcCustomerList,
   UcCustomersCount,
   WebhookIngestResult,
   WebhookPayload,
@@ -480,6 +483,167 @@ export const useUpdateAdminIntegrations = <TError = ErrorType<void>,
       > => {
       return useMutation(getUpdateAdminIntegrationsMutationOptions(options));
     }
+
+export const getListUcCustomersUrl = (params?: ListUcCustomersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/customers?${stringifiedParams}` : `/api/uc/admin/customers`
+}
+
+/**
+ * @summary List UC Companion customers with search and date-range filter (admin only)
+ */
+export const listUcCustomers = async (params?: ListUcCustomersParams, options?: RequestInit): Promise<UcCustomerList> => {
+
+  return customFetch<UcCustomerList>(getListUcCustomersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcCustomersQueryKey = (params?: ListUcCustomersParams,) => {
+    return [
+    `/api/uc/admin/customers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListUcCustomersQueryOptions = <TData = Awaited<ReturnType<typeof listUcCustomers>>, TError = ErrorType<void>>(params?: ListUcCustomersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcCustomersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcCustomers>>> = ({ signal }) => listUcCustomers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcCustomers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcCustomersQueryResult = NonNullable<Awaited<ReturnType<typeof listUcCustomers>>>
+export type ListUcCustomersQueryError = ErrorType<void>
+
+
+/**
+ * @summary List UC Companion customers with search and date-range filter (admin only)
+ */
+
+export function useListUcCustomers<TData = Awaited<ReturnType<typeof listUcCustomers>>, TError = ErrorType<void>>(
+ params?: ListUcCustomersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcCustomersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUcCustomerUrl = (customerId: number,) => {
+
+
+
+
+  return `/api/uc/admin/customers/${customerId}`
+}
+
+/**
+ * @summary Get a single UC customer with their orders and tickets (admin only)
+ */
+export const getUcCustomer = async (customerId: number, options?: RequestInit): Promise<UcCustomerDetail> => {
+
+  return customFetch<UcCustomerDetail>(getGetUcCustomerUrl(customerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcCustomerQueryKey = (customerId: number,) => {
+    return [
+    `/api/uc/admin/customers/${customerId}`
+    ] as const;
+    }
+
+
+export const getGetUcCustomerQueryOptions = <TData = Awaited<ReturnType<typeof getUcCustomer>>, TError = ErrorType<void>>(customerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcCustomer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcCustomerQueryKey(customerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcCustomer>>> = ({ signal }) => getUcCustomer(customerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: customerId !== null && customerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcCustomer>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcCustomerQueryResult = NonNullable<Awaited<ReturnType<typeof getUcCustomer>>>
+export type GetUcCustomerQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a single UC customer with their orders and tickets (admin only)
+ */
+
+export function useGetUcCustomer<TData = Awaited<ReturnType<typeof getUcCustomer>>, TError = ErrorType<void>>(
+ customerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcCustomer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcCustomerQueryOptions(customerId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetUcCustomersCountUrl = () => {
 

@@ -82,6 +82,82 @@ export const UpdateAdminIntegrationsResponse = zod.object({
 
 
 /**
+ * @summary List UC Companion customers with search and date-range filter (admin only)
+ */
+export const listUcCustomersQueryPageDefault = 1;
+export const listUcCustomersQueryLimitDefault = 50;
+export const listUcCustomersQueryLimitMax = 100;
+
+
+
+export const ListUcCustomersQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Search by name or email (case-insensitive)'),
+  "from": zod.date().optional().describe('Registration date range start (inclusive)'),
+  "to": zod.date().optional().describe('Registration date range end (inclusive)'),
+  "page": zod.coerce.number().default(listUcCustomersQueryPageDefault),
+  "limit": zod.coerce.number().max(listUcCustomersQueryLimitMax).default(listUcCustomersQueryLimitDefault)
+})
+
+export const ListUcCustomersResponse = zod.object({
+  "customers": zod.array(zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "name": zod.string(),
+  "phone": zod.string(),
+  "joinedAt": zod.coerce.date(),
+  "orderCount": zod.number(),
+  "products": zod.array(zod.string())
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Get a single UC customer with their orders and tickets (admin only)
+ */
+export const GetUcCustomerParams = zod.object({
+  "customerId": zod.coerce.number()
+})
+
+export const GetUcCustomerResponse = zod.object({
+  "customer": zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "name": zod.string(),
+  "phone": zod.string(),
+  "joinedAt": zod.coerce.date(),
+  "authProvider": zod.string()
+}),
+  "orders": zod.array(zod.object({
+  "id": zod.number(),
+  "status": zod.string(),
+  "total": zod.string(),
+  "currency": zod.string(),
+  "paymentMethod": zod.string(),
+  "dateCreated": zod.coerce.date(),
+  "lineItems": zod.array(zod.object({
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "total": zod.string()
+}))
+})),
+  "tickets": zod.array(zod.object({
+  "id": zod.string(),
+  "productModel": zod.string(),
+  "issueDescription": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Total registered UC Companion customers (non-deleted)
  */
 export const GetUcCustomersCountResponse = zod.object({
