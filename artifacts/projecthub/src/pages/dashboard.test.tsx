@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LifespanAuditWarning } from "./dashboard";
 
@@ -100,6 +100,64 @@ describe("LifespanAuditWarning – repeat-offender badge", () => {
 
   it("renders nothing when the query returns null (non-admin / API error)", () => {
     const { container } = renderWithData(null);
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+// ── Helpers for live-fetch tests ───────────────────────────────────────────
+
+/**
+ * Renders LifespanAuditWarning with a fresh QueryClient that has NO pre-seeded
+ * cache, so the real queryFn runs against the mocked `global.fetch`.
+ * Returns both the render result and the QueryClient so tests can wait for
+ * the query to settle before asserting.
+ */
+function renderWithLiveFetch() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const result = render(
+    <QueryClientProvider client={qc}>
+      <LifespanAuditWarning />
+    </QueryClientProvider>,
+  );
+  return { ...result, qc };
+}
+
+describe("LifespanAuditWarning – hidden on auth or network failure", () => {
+  it("renders nothing when the store returns 403 (non-admin member)", async () => {
+    // Simulate an HTTP 403 response — the queryFn returns null on !res.ok,
+    // so the query settles with status "success" and data === null.
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(null, { status: 403 }),
+    );
+
+    const { container, qc } = renderWithLiveFetch();
+
+    // Wait until the query has finished (status "success" — queryFn returned null)
+    await waitFor(() => {
+      const state = qc.getQueryState(["uc-lifespan-audit"]);
+      expect(state?.status).toBe("success");
+    });
+
+    // Now that the query is settled, the card must still be absent
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("renders nothing when the fetch throws (store unreachable)", async () => {
+    // Simulate a network-level failure — the queryFn throws, so the query
+    // settles with status "error" and data === undefined.
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error("Network error"));
+
+    const { container, qc } = renderWithLiveFetch();
+
+    // Wait until the query has finished (status "error" — queryFn threw)
+    await waitFor(() => {
+      const state = qc.getQueryState(["uc-lifespan-audit"]);
+      expect(state?.status).toBe("error");
+    });
+
+    // Now that the query is settled, the card must still be absent
     expect(container.firstChild).toBeNull();
   });
 });
