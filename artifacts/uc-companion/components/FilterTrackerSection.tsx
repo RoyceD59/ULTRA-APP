@@ -119,7 +119,7 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
 
     const oldLifespan = activation.lifespanDays;
     const oldName     = activation.productName;
-    syncActivationWithCatalogue(filterProducts).then(updated => {
+    syncActivationWithCatalogue(filterProducts, user!.id).then(updated => {
       // Refresh the notice flag regardless of whether the lifespan changed —
       // the sync may have set or cleared it based on the catalogue data.
       getZeroLifespanNotice().then(setZeroLifespanNotice);
@@ -146,7 +146,7 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
 
   async function handleReset() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await clearFilterActivation();
+    if (user) await clearFilterActivation(user.id);
     onActivationChange(null);
   }
 
@@ -327,6 +327,7 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
         existingActivation={activation}
         filterProducts={filterProducts}
         productsLoading={productsLoading}
+        userId={user?.id ?? 0}
         onClose={() => setShowRegisterModal(false)}
         onSave={async a => {
           onActivationChange(a);
@@ -358,6 +359,7 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
         <PerformanceCheckInModal
           visible={showPerfModal}
           activation={activation}
+          userId={user?.id ?? 0}
           onClose={() => setShowPerfModal(false)}
           onUpdated={a => { onActivationChange(a); }}
           onOrderReplacement={() => router.push('/(tabs)/products' as never)}
@@ -373,6 +375,8 @@ interface ModalProps {
   existingActivation: FilterActivation | null;
   filterProducts: ReturnType<typeof useFilterProducts>['products'];
   productsLoading: boolean;
+  /** User id used to scope the AsyncStorage activation key. */
+  userId: number;
   onClose: () => void;
   onSave: (a: FilterActivation) => void;
   /** Pre-select this product and jump straight to the date step (order-based nudge). */
@@ -382,7 +386,7 @@ interface ModalProps {
 }
 
 export function RegisterModal({
-  visible, existingActivation, filterProducts, productsLoading, onClose, onSave,
+  visible, existingActivation, filterProducts, productsLoading, userId, onClose, onSave,
   initialProductId = null, initialDayOffset = 0,
 }: ModalProps) {
   const colors = useColors();
@@ -448,7 +452,7 @@ export function RegisterModal({
         productId:    selectedProduct.id,
         productName:  selectedProduct.name,
         lifespanDays: selectedProduct.lifespanDays,
-      });
+      }, userId);
       onSave(activation);
       reset();
     } finally {
@@ -509,7 +513,7 @@ export function RegisterModal({
         productName:   item.name,
         lifespanDays:  item.lifespanDays,
         sourceOrderId: purchase.orderId,
-      });
+      }, userId);
       onSave(activation);
       reset();
     } finally {

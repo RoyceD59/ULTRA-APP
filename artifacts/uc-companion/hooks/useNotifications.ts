@@ -33,12 +33,29 @@ const PUSH_TOKEN_KEY        = 'uc_push_token';
 // the current Expo token on every app foreground so a rotated token (reinstall,
 // OS update, permission change) is re-registered without a fresh login.
 const REGISTERED_PUSH_TOKEN_KEY  = 'uc_push_token_registered';
-const FILTER_ACTIVATION_KEY      = 'uc_filter_activation';
+// Legacy unscoped key — kept for one-time migration in getFilterActivation.
+const FILTER_ACTIVATION_KEY_LEGACY      = 'uc_filter_activation';
+const FILTER_LAST_CHANGED_KEY_LEGACY    = 'uc_filter_last_changed';
 const NOTIF_PREFS_KEY            = 'uc_notif_prefs';
 // Set to 'true' when a catalogue sync detects the registered product's
 // filter_lifespan_days meta has been removed (lifespan <= 0). Cleared when
 // the catalogue restores a valid lifespan, or when the user re-registers.
 const ZERO_LIFESPAN_KEY          = 'uc_zero_lifespan_notice';
+
+/**
+ * Per-user AsyncStorage key for the filter activation record.
+ * Scoped so two accounts on the same device never share activation state.
+ */
+export function filterActivationKey(userId: number): string {
+  return `uc_filter_activation_${userId}`;
+}
+
+/**
+ * Per-user AsyncStorage key for the "filter last changed" timestamp (ms).
+ */
+export function filterLastChangedKey(userId: number): string {
+  return `uc_filter_last_changed_${userId}`;
+}
 
 // ── Notification preferences ─────────────────────────────────────────────────
 
@@ -443,11 +460,35 @@ export async function syncReminderToServer(
 
 // ── Filter activation state ───────────────────────────────────────────────────
 
-export async function getFilterActivation(): Promise<FilterActivation | null> {
+/**
+ * Load the filter activation for a specific user account.
+ *
+ * On the very first call for a given userId the function checks the legacy
+ * unscoped key ('uc_filter_activation') and migrates any found record to the
+ * user-scoped key, so existing single-account devices are unaffected.
+ */
+export async function getFilterActivation(userId: number): Promise<FilterActivation | null> {
   try {
-    const s = await AsyncStorage.getItem(FILTER_ACTIVATION_KEY);
-    if (!s) return null;
-    return JSON.parse(s) as FilterActivation;
+    const key = filterActivationKey(userId);
+    const s = await AsyncStorage.getItem(key);
+    if (s) return JSON.parse(s) as FilterActivation;
+
+    // ── One-time migration from the legacy unscoped key ──────────────────────
+    const legacy = await AsyncStorage.getItem(FILTER_ACTIVATION_KEY_LEGACY);
+    if (!legacy) return null;
+
+    // Migrate activation record
+    await AsyncStorage.setItem(key, legacy);
+    await AsyncStorage.removeItem(FILTER_ACTIVATION_KEY_LEGACY);
+
+    // Migrate companion timestamp key if present
+    const lastChanged = await AsyncStorage.getItem(FILTER_LAST_CHANGED_KEY_LEGACY);
+    if (lastChanged) {
+      await AsyncStorage.setItem(filterLastChangedKey(userId), lastChanged);
+      await AsyncStorage.removeItem(FILTER_LAST_CHANGED_KEY_LEGACY);
+    }
+
+    return JSON.parse(legacy) as FilterActivation;
   } catch { return null; }
 }
 
@@ -463,21 +504,27 @@ export async function getFilterActivation(): Promise<FilterActivation | null> {
 // Notifications whose target date has already passed are silently skipped.
 
 /**
- * Schedules all 5 filter lifecycle notifications and persists the activation.
+ * Schedules all 5 filter lifecycle notifications and persists the activation
+ * under the user-scoped AsyncStorage key so two accounts on the same device
+ * never share filter state.
  * Cancels any previously scheduled cycle first.
  */
 export async function scheduleAllFilterNotifications(
-  params: Omit<FilterActivation, 'notifIds'>
+  params: Omit<FilterActivation, 'notifIds'>,
+  userId: number,
 ): Promise<FilterActivation> {
+  const activationKey    = filterActivationKey(userId);
+  const lastChangedKey   = filterLastChangedKey(userId);
+
   if (Platform.OS === 'web') {
     const activation: FilterActivation = { ...params, notifIds: [] };
-    await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
-    await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
+    await AsyncStorage.setItem(lastChangedKey, new Date(params.activatedAt).getTime().toString());
     void syncReminderToServer(activation);
     return activation;
   }
 
-  await cancelAllFilterNotifications();
+  await cancelAllFilterNotifications(userId);
 
   // Guard: a non-positive lifespan means the product is not trackable —
   // persist the activation but never schedule offers at nonsensical dates.
@@ -485,8 +532,8 @@ export async function scheduleAllFilterNotifications(
   if (!(params.lifespanDays > 0)) {
     await setZeroLifespanNotice(true);
     const activation: FilterActivation = { ...params, notifIds: [] };
-    await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
-    await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
+    await AsyncStorage.setItem(lastChangedKey, new Date(params.activatedAt).getTime().toString());
     void syncReminderToServer(activation);
     return activation;
   }
@@ -497,11 +544,12 @@ export async function scheduleAllFilterNotifications(
     getNotificationPermissionStatus(),
     getNotifPrefs(),
   ]);
+  // (activationKey and lastChangedKey are captured in the closure above)
 
   if (status !== 'granted' || !prefs.filterReminders) {
     const activation: FilterActivation = { ...params, notifIds: [] };
-    await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
-    await AsyncStorage.setItem('uc_filter_last_changed', new Date(params.activatedAt).getTime().toString());
+    await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
+    await AsyncStorage.setItem(lastChangedKey, new Date(params.activatedAt).getTime().toString());
     void syncReminderToServer(activation);
     return activation;
   }
@@ -597,18 +645,17 @@ export async function scheduleAllFilterNotifications(
   );
 
   const activation: FilterActivation = { ...params, notifIds: ids };
-  await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(activation));
-  // Keep the legacy key in sync so the home screen filter card still works
-  await AsyncStorage.setItem('uc_filter_last_changed', activationDate.getTime().toString());
+  await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
+  await AsyncStorage.setItem(lastChangedKey, activationDate.getTime().toString());
   void syncReminderToServer(activation);
   return activation;
 }
 
 /** Cancel all scheduled notifications for the current filter cycle. */
-export async function cancelAllFilterNotifications(): Promise<void> {
+export async function cancelAllFilterNotifications(userId: number): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
-    const s = await AsyncStorage.getItem(FILTER_ACTIVATION_KEY);
+    const s = await AsyncStorage.getItem(filterActivationKey(userId));
     if (!s) return;
     const a: FilterActivation = JSON.parse(s);
     await Promise.all((a.notifIds ?? []).map(id =>
@@ -631,11 +678,12 @@ export async function cancelAllFilterNotifications(): Promise<void> {
  *   – the lifespan matches — no update needed
  */
 export async function syncActivationWithCatalogue(
-  catalogueProducts: Array<{ id: number; lifespanDays: number; name: string }>
+  catalogueProducts: Array<{ id: number; lifespanDays: number; name: string }>,
+  userId: number,
 ): Promise<FilterActivation | null> {
   if (catalogueProducts.length === 0) return null;
 
-  const existing = await getFilterActivation();
+  const existing = await getFilterActivation(userId);
   if (!existing) return null;
 
   const catalogueProduct = catalogueProducts.find(p => p.id === existing.productId);
@@ -675,16 +723,16 @@ export async function syncActivationWithCatalogue(
     // fire on the same dates as the server dispatch.  A degradation result
     // takes precedence over a catalogue correction for replace30/replace15.
     adjustedOffsets: existing.adjustedOffsets,
-  });
+  }, userId);
 
   return updated;
 }
 
 /** Remove the filter activation record (call when user resets / unregisters filter). */
-export async function clearFilterActivation(): Promise<void> {
-  await cancelAllFilterNotifications();
-  await AsyncStorage.removeItem(FILTER_ACTIVATION_KEY);
-  await AsyncStorage.removeItem('uc_filter_last_changed');
+export async function clearFilterActivation(userId: number): Promise<void> {
+  await cancelAllFilterNotifications(userId);
+  await AsyncStorage.removeItem(filterActivationKey(userId));
+  await AsyncStorage.removeItem(filterLastChangedKey(userId));
   await setZeroLifespanNotice(false);
   // Stop server-side email/SMS/WhatsApp reminders for the cleared filter too.
   void syncReminderToServer(null);
@@ -698,10 +746,11 @@ export async function clearFilterActivation(): Promise<void> {
  * notifications to fire sooner based on the effective (adjusted) lifespan.
  */
 export async function recordPerformanceCheckIn(
-  checkIn: PerformanceCheckIn
+  checkIn: PerformanceCheckIn,
+  userId: number,
 ): Promise<FilterActivation | null> {
   try {
-    const existing = await getFilterActivation();
+    const existing = await getFilterActivation(userId);
     if (!existing) return null;
 
     const history = [checkIn, ...(existing.checkIns ?? [])].slice(0, 20); // keep last 20
@@ -747,7 +796,7 @@ export async function recordPerformanceCheckIn(
     //   3. Writes the final activation (with new notifIds) to AsyncStorage.
     //   4. Syncs adjustedOffsets + effectiveLifespanDays (or null) to the server
     //      so email/SMS/WhatsApp fire on the same dates as phone notifications.
-    return await scheduleAllFilterNotifications(updated);
+    return await scheduleAllFilterNotifications(updated, userId);
   } catch {
     return null;
   }
@@ -757,9 +806,9 @@ export async function recordPerformanceCheckIn(
  * Record that the user cleaned their filter.
  * Increments cleanCount, stamps lastCleanedAt, persists, and returns the updated record.
  */
-export async function recordFilterClean(): Promise<FilterActivation | null> {
+export async function recordFilterClean(userId: number): Promise<FilterActivation | null> {
   try {
-    const existing = await getFilterActivation();
+    const existing = await getFilterActivation(userId);
     if (!existing) return null;
 
     const updated: FilterActivation = {
@@ -768,7 +817,7 @@ export async function recordFilterClean(): Promise<FilterActivation | null> {
       lastCleanedAt: new Date().toISOString(),
     };
 
-    await AsyncStorage.setItem(FILTER_ACTIVATION_KEY, JSON.stringify(updated));
+    await AsyncStorage.setItem(filterActivationKey(userId), JSON.stringify(updated));
     return updated;
   } catch {
     return null;

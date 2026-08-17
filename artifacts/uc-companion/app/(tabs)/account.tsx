@@ -441,8 +441,8 @@ function AccountScreenContent() {
 
   useEffect(() => {
     refreshNotifStatus();
-    getFilterActivation().then(setFilterActivation);
-  }, [refreshNotifStatus]);
+    if (user) getFilterActivation(user.id).then(setFilterActivation);
+  }, [refreshNotifStatus, user]);
 
   async function enableNotifications() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

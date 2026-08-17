@@ -69,7 +69,7 @@ export interface NudgeState {
 export async function readNudgeState(userId: number): Promise<NudgeState> {
   const [flag, activation] = await Promise.all([
     AsyncStorage.getItem(dismissedKeyFor(userId)),
-    getFilterActivation(),
+    getFilterActivation(userId),
   ]);
   return {
     dismissed:     flag === '1',

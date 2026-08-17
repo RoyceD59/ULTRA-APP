@@ -221,6 +221,7 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
             existingActivation={isReplace ? activation : null}
             filterProducts={filterProducts}
             productsLoading={productsLoading}
+            userId={user?.id ?? 0}
             initialProductId={candidateResult.product.id}
             initialDayOffset={candidateResult.daysSincePurchase}
             onClose={() => setShowModal(false)}

@@ -112,6 +112,7 @@ const RESULTS: Record<PerfRecommendation, ResultConfig> = {
 interface Props {
   visible:    boolean;
   activation: FilterActivation;
+  userId:     number;
   onClose:    () => void;
   onUpdated:  (a: FilterActivation) => void;
   onOrderReplacement: () => void;
@@ -120,7 +121,7 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PerformanceCheckInModal({
-  visible, activation, onClose, onUpdated, onOrderReplacement,
+  visible, activation, userId, onClose, onUpdated, onOrderReplacement,
 }: Props) {
   const colors = useColors();
 
@@ -178,7 +179,7 @@ export default function PerformanceCheckInModal({
       recommendation: rec,
     };
 
-    const updated = await recordPerformanceCheckIn(checkIn);
+    const updated = await recordPerformanceCheckIn(checkIn, userId);
     if (updated) onUpdated(updated);
 
     setResult(rec);
@@ -189,7 +190,7 @@ export default function PerformanceCheckInModal({
   async function handleMarkCleaned() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
-    const updated = await recordFilterClean();
+    const updated = await recordFilterClean(userId);
     if (updated) onUpdated(updated);
     setSaving(false);
     setCleaned(true);

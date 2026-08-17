@@ -11,7 +11,7 @@ import ProductCard from '@/components/ProductCard';
 import TrustBadges from '@/components/TrustBadges';
 import ImpactBubble from '@/components/ImpactBubble';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFilterActivation, effectiveLifespanDays } from '@/hooks/useNotifications';
+import { getFilterActivation, filterLastChangedKey, effectiveLifespanDays } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 import SwipeTabs from '@/components/SwipeTabs';
@@ -85,8 +85,9 @@ function HomeScreenContent() {
   });
 
   const refreshFilterStatus = useCallback(() => {
+    if (!user) return;
     // Primary: use the structured FilterActivation record (product-specific lifespan)
-    getFilterActivation().then(activation => {
+    getFilterActivation(user.id).then(activation => {
       if (activation) {
         const elapsed   = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
         const effDays   = effectiveLifespanDays(activation);
@@ -96,15 +97,23 @@ function HomeScreenContent() {
         setFilterAdjusted(activation.lastCheckIn != null && effDays < ratedDays);
         return;
       }
-      // Fallback: legacy uc_filter_last_changed key (180-day assumption)
-      AsyncStorage.getItem('uc_filter_last_changed').then(v => {
+      // Fallback: user-scoped last_changed timestamp, then legacy unscoped key
+      AsyncStorage.getItem(filterLastChangedKey(user.id)).then(v => {
         if (v) {
           const elapsed = Math.floor((Date.now() - parseInt(v)) / 86_400_000);
           setFilterDays(180 - elapsed);
+          return;
         }
+        // Legacy pre-migration key — only present on devices not yet migrated
+        AsyncStorage.getItem('uc_filter_last_changed').then(lv => {
+          if (lv) {
+            const elapsed = Math.floor((Date.now() - parseInt(lv)) / 86_400_000);
+            setFilterDays(180 - elapsed);
+          }
+        });
       });
     });
-  }, []);
+  }, [user]);
 
   useEffect(() => { refreshFilterStatus(); }, [refreshFilterStatus]);
 

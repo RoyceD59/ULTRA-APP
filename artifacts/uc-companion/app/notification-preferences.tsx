@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 export default function NotificationPreferencesScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const api = useApi();
 
   const [prefs, setPrefs] = useState<NotifPrefs>({ orderUpdates: true, filterReminders: true });
@@ -54,7 +54,7 @@ export default function NotificationPreferencesScreen() {
     // Backfill: make sure the server knows about the current activation so
     // channel reminders can actually be delivered for filters registered
     // before this feature existed.
-    getFilterActivation().then(a => { if (a) void syncReminderToServer(a); });
+    if (user) getFilterActivation(user.id).then(a => { if (a) void syncReminderToServer(a); });
   }, [token, loadChannelPrefs]);
 
   const handleChannelToggle = useCallback(async (
@@ -84,15 +84,15 @@ export default function NotificationPreferencesScreen() {
       // Persist client-side preference
       await saveNotifPrefs(updated);
 
-      if (key === 'filterReminders') {
+      if (key === 'filterReminders' && user) {
         if (!value) {
           // Cancel all scheduled local filter notifications
-          await cancelAllFilterNotifications();
+          await cancelAllFilterNotifications(user.id);
         } else {
           // Reschedule if there's an active filter
-          const activation = await getFilterActivation();
+          const activation = await getFilterActivation(user.id);
           if (activation) {
-            await scheduleAllFilterNotifications(activation);
+            await scheduleAllFilterNotifications(activation, user.id);
           }
         }
       }
