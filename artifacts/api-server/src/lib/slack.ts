@@ -13,6 +13,21 @@ import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db, ucNotificationLogTable } from "@workspace/db";
 import { logger } from "./logger.js";
 
+/**
+ * Test seam — wraps sendSlackTeamMessage so tests can observe or stub calls
+ * without patching non-configurable ES module namespace bindings.
+ *
+ * When `_slackSeams.sendMessage` is non-null, sendSlackTeamMessage delegates
+ * entirely to it. Set back to null after each test to restore live behaviour.
+ *
+ * @internal — only intended for use by the test suite.
+ */
+export const _slackSeams: {
+  sendMessage: ((text: string, template: string) => Promise<boolean>) | null;
+} = {
+  sendMessage: null,
+};
+
 const connectors = new ReplitConnectors();
 
 let cachedSelfId: string | null = null;
@@ -74,6 +89,10 @@ export async function sendSlackTeamMessage(
   text: string,
   template = "TEAM_NOTIFICATION",
 ): Promise<boolean> {
+  // Test seam: allow the test suite to intercept without replacing module bindings.
+  if (_slackSeams.sendMessage !== null) {
+    return _slackSeams.sendMessage(text, template);
+  }
   let recipient = "slack-self-dm";
   try {
     const userId = await resolveSelfUserId();
