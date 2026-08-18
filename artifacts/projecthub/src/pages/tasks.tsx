@@ -55,6 +55,7 @@ function TaskDialog({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const isEditing = !!task;
+  const [pushDialogOpen, setPushDialogOpen] = useState(false);
   
   const { data: projects } = useListProjects();
   const { data: members } = useListMembers();
@@ -262,6 +263,17 @@ function TaskDialog({
             
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              {isEditing && task && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="gap-2"
+                  onClick={() => setPushDialogOpen(true)}
+                >
+                  <Radio className="w-4 h-4" />
+                  Push to Agent
+                </Button>
+              )}
               <Button type="submit" disabled={createTask.isPending || updateTask.isPending}>
                 {createTask.isPending || updateTask.isPending ? "Saving..." : "Save Task"}
               </Button>
@@ -269,6 +281,15 @@ function TaskDialog({
           </form>
         </Form>
       </DialogContent>
+
+      {isEditing && task && (
+        <PushTaskDialog
+          task={task}
+          open={pushDialogOpen}
+          onOpenChange={setPushDialogOpen}
+          onSuccess={() => {/* toast already fired inside PushTaskDialog */}}
+        />
+      )}
     </Dialog>
   );
 }
