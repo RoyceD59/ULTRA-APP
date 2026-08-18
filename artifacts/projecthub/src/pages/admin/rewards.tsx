@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Gift, Loader2, ToggleLeft, ToggleRight, Search, CheckCircle2,
+  Download, ChevronRight, Users, ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthHeaders, isTeamAdmin } from "@/lib/team-auth";
 
@@ -34,6 +38,28 @@ interface GrantResult {
   entry: { id: number; userId: number; points: number; reason: string; createdAt: string };
   customer: { id: number; email: string; firstName: string; phone: string };
   newBalance: number;
+}
+
+interface CustomerBalance {
+  userId: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  balance: number;
+}
+
+interface LedgerEntry {
+  id: number;
+  userId: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  points: number;
+  reason: string;
+  eventType: string;
+  grantedBy: string | null;
+  createdAt: string;
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -80,14 +106,31 @@ async function grantPoints(payload: {
   return res.json() as Promise<GrantResult>;
 }
 
+async function fetchBalances(search: string): Promise<CustomerBalance[]> {
+  const headers = getAuthHeaders();
+  if (!headers) throw new Error("Not authenticated");
+  const params = search ? `?search=${encodeURIComponent(search)}` : "";
+  const res = await fetch(`${base()}/api/uc/admin/rewards/balances${params}`, { headers });
+  if (!res.ok) throw new Error(`Failed to fetch balances: ${res.status}`);
+  const data = await res.json() as { customers: CustomerBalance[] };
+  return data.customers;
+}
+
+async function fetchLedger(userId: number): Promise<LedgerEntry[]> {
+  const headers = getAuthHeaders();
+  if (!headers) throw new Error("Not authenticated");
+  const res = await fetch(`${base()}/api/uc/admin/rewards/ledger?userId=${userId}`, { headers });
+  if (!res.ok) throw new Error(`Failed to fetch ledger: ${res.status}`);
+  const data = await res.json() as { ledger: LedgerEntry[] };
+  return data.ledger;
+}
+
 // ─── Rules Table Row ──────────────────────────────────────────────────────────
 
 function RuleRow({ rule, onSaved }: { rule: RewardsRule; onSaved: (r: RewardsRule) => void }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [pointsInput, setPointsInput] = useState(String(rule.pointsValue));
-
-  const { email } = { email: "" }; // grantedBy tracked at page level
 
   const mutation = useMutation({
     mutationFn: (updates: { pointsValue?: number; active?: boolean }) =>
@@ -292,6 +335,286 @@ function AwardForm() {
   );
 }
 
+// ─── Ledger Drawer ────────────────────────────────────────────────────────────
+
+function LedgerDrawer({
+  customer,
+  open,
+  onClose,
+}: {
+  customer: CustomerBalance | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+
+  const { data: ledger = [], isLoading } = useQuery({
+    queryKey: ["rewards-ledger", customer?.userId],
+    queryFn: () => fetchLedger(customer!.userId),
+    enabled: open && customer != null,
+  });
+
+  function downloadCsv(userId?: number) {
+    const headers = getAuthHeaders();
+    if (!headers) { toast({ title: "Not authenticated", variant: "destructive" }); return; }
+    const params = userId ? `userId=${userId}&export=1` : `export=1`;
+    fetch(`${base()}/api/uc/admin/rewards/ledger?${params}`, { headers })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = userId ? `rewards-ledger-user${userId}.csv` : "rewards-ledger.csv";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((err: Error) => toast({ title: "Export failed", description: err.message, variant: "destructive" }));
+  }
+
+  if (!customer) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b">
+          <SheetTitle className="text-base">
+            {customer.firstName} {customer.lastName}
+          </SheetTitle>
+          <SheetDescription className="text-xs">
+            {customer.email} · {customer.phone || "no phone"} · <strong>{customer.balance} pts</strong>
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/30">
+          <span className="text-sm text-muted-foreground">Full points history</span>
+          <Button size="sm" variant="outline" onClick={() => downloadCsv(customer.userId)}>
+            <Download className="w-3.5 h-3.5 mr-1.5" /> Export CSV
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground py-12 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading ledger…
+            </div>
+          ) : ledger.length === 0 ? (
+            <div className="text-center text-muted-foreground py-12 text-sm">No entries found.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Points</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Granted by</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ledger.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(entry.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <span className={entry.points >= 0 ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                        {entry.points >= 0 ? "+" : ""}{entry.points}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm max-w-48 truncate" title={entry.reason}>
+                      {entry.reason}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs font-mono">{entry.eventType}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {entry.grantedBy ?? "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Customer Balances Section ────────────────────────────────────────────────
+
+type SortKey = "name" | "email" | "phone" | "balance";
+type SortDir = "asc" | "desc";
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 opacity-40" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="w-3.5 h-3.5 ml-1" />
+    : <ArrowDown className="w-3.5 h-3.5 ml-1" />;
+}
+
+function CustomerBalancesSection() {
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerBalance | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("balance");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(value), 350);
+  }, []);
+
+  const { data: customers = [], isLoading } = useQuery({
+    queryKey: ["rewards-balances", debouncedSearch],
+    queryFn: () => fetchBalances(debouncedSearch),
+  });
+
+  // Client-side sort applied on top of server data
+  const sorted = [...customers].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === "name") {
+      cmp = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+    } else if (sortKey === "email") {
+      cmp = a.email.localeCompare(b.email);
+    } else if (sortKey === "phone") {
+      cmp = (a.phone || "").localeCompare(b.phone || "");
+    } else {
+      cmp = a.balance - b.balance;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function toggleSort(col: SortKey) {
+    if (sortKey === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(col);
+      setSortDir(col === "balance" ? "desc" : "asc");
+    }
+  }
+
+  function downloadFullCsv() {
+    const headers = getAuthHeaders();
+    if (!headers) { toast({ title: "Not authenticated", variant: "destructive" }); return; }
+    fetch(`${base()}/api/uc/admin/rewards/ledger?export=1`, { headers })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "rewards-ledger.csv";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((err: Error) => toast({ title: "Export failed", description: err.message, variant: "destructive" }));
+  }
+
+  const SortHead = ({ col, children, className }: { col: SortKey; children: React.ReactNode; className?: string }) => (
+    <TableHead className={className}>
+      <button
+        className="flex items-center select-none hover:text-foreground transition-colors"
+        onClick={() => toggleSort(col)}
+      >
+        {children}
+        <SortIcon col={col} sortKey={sortKey} sortDir={sortDir} />
+      </button>
+    </TableHead>
+  );
+
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Users className="w-4 h-4" /> Customer Balances
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              All customers with their reward balance. Click a column header to sort; click a row to view the full ledger.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={downloadFullCsv}>
+            <Download className="w-3.5 h-3.5 mr-1.5" /> Export Full Ledger CSV
+          </Button>
+        </div>
+
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email…"
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        {/* Table */}
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <SortHead col="name">Customer</SortHead>
+                <SortHead col="email">Email</SortHead>
+                <SortHead col="phone">Phone</SortHead>
+                <SortHead col="balance" className="text-right">Balance</SortHead>
+                <TableHead className="w-8" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-10">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : sorted.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    {debouncedSearch ? "No customers match your search." : "No customers found."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                sorted.map((c) => (
+                  <TableRow
+                    key={c.userId}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedCustomer(c)}
+                  >
+                    <TableCell className="font-medium">
+                      {c.firstName} {c.lastName}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{c.email}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{c.phone || "—"}</TableCell>
+                    <TableCell className="text-right font-semibold text-primary">
+                      {Number(c.balance).toLocaleString()} pts
+                    </TableCell>
+                    <TableCell>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <LedgerDrawer
+        customer={selectedCustomer}
+        open={selectedCustomer != null}
+        onClose={() => setSelectedCustomer(null)}
+      />
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminRewardsPage() {
@@ -330,9 +653,12 @@ export default function AdminRewardsPage() {
           <Gift className="w-6 h-6" /> UC Rewards
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure reward rules and manually award points to customers.
+          Configure reward rules, manually award points, and monitor customer balances.
         </p>
       </div>
+
+      {/* Customer Balances */}
+      <CustomerBalancesSection />
 
       {/* Rules table */}
       <div className="space-y-3">
