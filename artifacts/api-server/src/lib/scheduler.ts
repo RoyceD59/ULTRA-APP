@@ -8,7 +8,7 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateAndStoreReport, pushReportToOrchestrator } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable } from "@workspace/db";
+import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, aiPushEventsTable } from "@workspace/db";
 import { lt, lte, desc, eq, and, or, inArray, isNull, sql } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
@@ -82,6 +82,23 @@ export function startScheduler() {
   }, { timezone: "UTC" });
 
   logger.info("Scheduler: daily AI report job registered (08:00 UTC)");
+
+  // ─── Daily 01:00 UTC: prune old AI push-event rows ───────────────────────
+  // Keeps the ai_push_events table bounded.  All rows (regardless of status)
+  // older than UC_PUSH_EVENTS_RETENTION_DAYS (default 90) are deleted.
+  // Terminal-status rows (completed / failed) age out with the rest; the most
+  // recent rows always survive because they fall inside the retention window.
+  cron.schedule("0 1 * * *", async () => {
+    try {
+      await runAiPushEventsPruning();
+    } catch (err) {
+      logger.error({ err }, "Scheduler: AI push-events pruning failed");
+    }
+  }, { timezone: "UTC" });
+
+  logger.info(
+    "Scheduler: daily AI push-events pruning job registered (01:00 UTC, default 90-day retention)",
+  );
 
   // ─── Daily 02:00 UTC: prune old feedback rows ─────────────────────────────
   // Retention window is configurable via UC_FEEDBACK_RETENTION_DAYS (default 90).
@@ -681,6 +698,47 @@ export async function runNotificationLogPruning(): Promise<{
     throw err;
   }
 }
+/**
+ * Delete ai_push_events rows older than the configured retention window.
+ *
+ * Retention window resolution order:
+ *   1. UC_PUSH_EVENTS_RETENTION_DAYS env var (strict positive-integer only)
+ *   2. Hard default: 90 days
+ *
+ * All rows older than the cutoff are removed regardless of status.
+ * Terminal-status rows (completed / failed) age out with the rest; the most
+ * recent rows always survive because they fall inside the retention window.
+ *
+ * Throws on DB errors so the cron wrapper can log them.
+ *
+ * @internal — exported for tests and the scheduler cron job.
+ */
+export async function runAiPushEventsPruning(): Promise<{ deleted: number }> {
+  const retentionDays = parseRetentionDays(
+    process.env["UC_PUSH_EVENTS_RETENTION_DAYS"],
+    90,
+  );
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+  logger.info(
+    { retentionDays, cutoff },
+    "Scheduler: pruning old AI push-event rows",
+  );
+
+  try {
+    const result = await db
+      .delete(aiPushEventsTable)
+      .where(lt(aiPushEventsTable.sentAt, cutoff));
+
+    const deleted = (result as { rowCount?: number }).rowCount ?? 0;
+    logger.info({ deleted }, "Scheduler: AI push-events pruning complete");
+    return { deleted };
+  } catch (err) {
+    logger.error({ err }, "Scheduler: AI push-events pruning failed");
+    throw err;
+  }
+}
+
 /** @internal */
 export async function runStaleRecoveryOrderDigest(
   deps: {
