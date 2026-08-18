@@ -7,7 +7,8 @@
       "react/jsx-runtime":                         ["./__mocks__/react-jsx-runtime.ts"],
       "react-native":                              ["./__mocks__/react-native.ts"],
       "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
-      "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"]
+      "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"],
+      "expo-file-system":                          ["./__mocks__/expo-file-system.ts"]
     },
     "noEmit": true
   },
@@ -18,6 +19,9 @@
     "hooks/mpesaRetryGuard.ts",
     "hooks/reminderOptInStorage.ts",
     "context/cartStorage.ts",
-    "context/CartContext.tsx"
+    "context/CartContext.tsx",
+    "lib/formDrafts.ts",
+    "components/MediaPicker.tsx",
+    "__mocks__/expo-file-system.ts"
   ]
 }

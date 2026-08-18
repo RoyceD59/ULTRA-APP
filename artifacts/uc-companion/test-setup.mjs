@@ -33,6 +33,8 @@ const STUBS = {
     path.join(mocks, 'expo-notifications.ts'),
   '@react-native-async-storage/async-storage':
     path.join(mocks, '@react-native-async-storage', 'async-storage.ts'),
+  'expo-file-system':
+    path.join(mocks, 'expo-file-system.ts'),
 };
 
 const original = Module._resolveFilename.bind(Module);

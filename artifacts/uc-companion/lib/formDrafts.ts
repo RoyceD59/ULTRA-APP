@@ -35,6 +35,20 @@ import type { MediaItem } from '@/components/MediaPicker';
 
 export type DraftKey = 'ticket' | 'water-test';
 
+/**
+ * Reset all module-level tracking state.
+ * Exported for use in unit tests only — never call this in production code.
+ * Simulates a cold-restart by discarding everything accumulated in-memory
+ * during a previous session (persistedStableUris, sessionUriCache, initializedKeys).
+ */
+export function __resetForTesting(): void {
+  persistedStableUris.clear();
+  sessionUriCache.clear();
+  initializedKeys.clear();
+  // Also drain the save queues so a fresh set of tests starts clean.
+  saveQueues.clear();
+}
+
 const storageKey = (key: DraftKey) => `uc_form_draft:${key}`;
 
 // ── Serial save queue ─────────────────────────────────────────────────────────
