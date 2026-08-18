@@ -309,6 +309,12 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
 
+  // Add address column to uc_users so customers can store their delivery address.
+  await pool.query(`
+    ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS address text NOT NULL DEFAULT '';
+  `);
+  logger.info("Startup migration: uc_users.address column ensured");
+
   // Add notification log retention columns to team_settings so the team can
   // configure pruning windows from the admin panel without a server restart.
   await pool.query(`

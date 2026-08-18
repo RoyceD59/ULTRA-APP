@@ -162,6 +162,7 @@ router.post(
         phone: dbUser.phone,
         firstName: dbUser.firstName,
         lastName: dbUser.lastName,
+        address: dbUser.address ?? "",
       };
       res.json({ token: issueToken(user), user });
     } catch (err) {

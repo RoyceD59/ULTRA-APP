@@ -396,8 +396,8 @@ export function useApi() {
     validateCode: (code: string, userEmail?: string) =>
       post<CodeValidationResult>('/api/uc/referrals/validate', { code, userEmail }),
     getPromotions: () => get<UCPromotion[]>('/api/uc/promotions'),
-    /** Update the authenticated user's profile details (name / phone). */
-    updateProfile: (data: { firstName?: string; lastName?: string; phone?: string }) =>
+    /** Update the authenticated user's profile details (name / phone / address). */
+    updateProfile: (data: { firstName?: string; lastName?: string; phone?: string; address?: string }) =>
       patch<UCCustomer>('/api/uc/customer/profile', data),
 
     /** Download a machine-readable JSON copy of the authenticated user's data

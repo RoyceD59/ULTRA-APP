@@ -20,6 +20,8 @@ export const ucUsersTable = pgTable("uc_users", {
    *  in passwordHash that can never match a bcrypt comparison. */
   authProvider: text("auth_provider").notNull().default("password"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Delivery address as entered by the customer (free-form text). */
+  address:      text("address").notNull().default(""),
   /** Set when the customer exercises their GDPR/PDPA right to erasure.
    *  Any still-valid bearer token for this userId is rejected by DB-anchored
    *  customer routes once this timestamp is set. */

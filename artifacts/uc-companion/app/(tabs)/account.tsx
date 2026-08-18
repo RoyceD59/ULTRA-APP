@@ -41,6 +41,7 @@ interface EditProfileForm {
   firstName: string;
   lastName:  string;
   phone:     string;
+  address:   string;
 }
 
 interface EditProfileModalProps {
@@ -79,6 +80,10 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
       setError('Enter a valid phone number, e.g. +254712345678');
       return;
     }
+    if (form.address.trim().length > 500) {
+      setError('Address must be 500 characters or fewer');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSaving(true);
     setError('');
@@ -87,16 +92,19 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
         phone:     form.phone.replace(/\s/g, ''),
+        address:   form.address.trim(),
       });
       await updateUser({
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
         phone:     form.phone.replace(/\s/g, ''),
+        address:   form.address.trim(),
       });
       onSaved({
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
         phone:     form.phone.replace(/\s/g, ''),
+        address:   form.address.trim(),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
@@ -183,12 +191,35 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
                     placeholderTextColor={colors.mutedForeground}
                     style={[editStyles.input, { color: colors.text }]}
                     keyboardType="phone-pad"
-                    returnKeyType="done"
+                    returnKeyType="next"
                     editable={!saving}
                   />
                 </View>
                 <Text style={[editStyles.hint, { color: colors.mutedForeground }]}>
                   International format, e.g. +254712345678
+                </Text>
+              </View>
+
+              {/* Delivery Address */}
+              <View style={editStyles.fieldGroup}>
+                <Text style={[editStyles.label, { color: colors.mutedForeground }]}>Delivery Address</Text>
+                <View style={[editStyles.inputRow, editStyles.inputRowMultiline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Ionicons name="location-outline" size={15} color={colors.mutedForeground} style={{ marginTop: 2 }} />
+                  <TextInput
+                    value={form.address}
+                    onChangeText={v => setField('address', v)}
+                    placeholder="e.g. 14 Riverside Drive, Nairobi"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[editStyles.input, editStyles.inputMultiline, { color: colors.text }]}
+                    autoCapitalize="words"
+                    multiline
+                    numberOfLines={3}
+                    returnKeyType="done"
+                    editable={!saving}
+                  />
+                </View>
+                <Text style={[editStyles.hint, { color: colors.mutedForeground }]}>
+                  Used for deliveries and service visits
                 </Text>
               </View>
 
@@ -228,8 +259,10 @@ const editStyles = StyleSheet.create({
   body:        { paddingHorizontal: 20, paddingBottom: 16, gap: 16 },
   fieldGroup:  { gap: 6 },
   label:       { fontSize: 12, fontWeight: '600' as const, textTransform: 'uppercase', letterSpacing: 0.5 },
-  inputRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 12 : 10 },
-  input:       { flex: 1, fontSize: 15 },
+  inputRow:          { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 12 : 10 },
+  inputRowMultiline: { alignItems: 'flex-start', paddingVertical: 10 },
+  input:             { flex: 1, fontSize: 15 },
+  inputMultiline:    { minHeight: 60, textAlignVertical: 'top' as const },
   readOnly:    { flex: 1, fontSize: 15 },
   hint:        { fontSize: 11, marginTop: 2 },
   errorBox:    { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
@@ -495,6 +528,7 @@ function AccountScreenContent() {
     firstName: user.firstName,
     lastName:  user.lastName,
     phone:     user.phone ?? '',
+    address:   user.address ?? '',
   };
 
   return (
@@ -594,7 +628,7 @@ function AccountScreenContent() {
               </View>
 
               {/* Phone */}
-              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+              <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
                 <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
                   <Ionicons name="call-outline" size={15} color={colors.primary} />
                 </View>
@@ -602,6 +636,19 @@ function AccountScreenContent() {
                   <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Phone</Text>
                   <Text style={[styles.detailValue, { color: user.phone ? colors.text : colors.mutedForeground }]}>
                     {user.phone || 'Not added yet'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Delivery Address */}
+              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="location-outline" size={15} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Delivery Address</Text>
+                  <Text style={[styles.detailValue, { color: user.address ? colors.text : colors.mutedForeground }]}>
+                    {user.address || 'Not added yet'}
                   </Text>
                 </View>
               </View>

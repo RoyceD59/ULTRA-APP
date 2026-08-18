@@ -1399,7 +1399,7 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
           res.status(401).json({ error: "Invalid credentials" });
           return;
         }
-        const user = { id: dbUser.id, email: dbUser.email, phone: dbUser.phone, firstName: dbUser.firstName, lastName: dbUser.lastName };
+        const user = { id: dbUser.id, email: dbUser.email, phone: dbUser.phone, firstName: dbUser.firstName, lastName: dbUser.lastName, address: dbUser.address ?? "" };
         res.json({ token: issueToken(user), user });
         return;
       }
@@ -1465,7 +1465,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       firstName,
       lastName: lastName ?? "",
     }).returning();
-    const user = { id: dbUser!.id, email: dbUser!.email, phone: dbUser!.phone, firstName: dbUser!.firstName, lastName: dbUser!.lastName };
+    const user = { id: dbUser!.id, email: dbUser!.email, phone: dbUser!.phone, firstName: dbUser!.firstName, lastName: dbUser!.lastName, address: dbUser!.address ?? "" };
     // Durable folder record of the new account (sanitized — never password material).
     recordAccountRegistration({
       id: dbUser!.id, firstName: dbUser!.firstName, lastName: dbUser!.lastName,
@@ -1553,6 +1553,7 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
           phone: dbUser.phone,
           firstName: dbUser.firstName,
           lastName: dbUser.lastName,
+          address: dbUser.address ?? "",
           isAdmin: dbUser.isAdmin || adminEmailList().includes(dbUser.email.toLowerCase()),
           billing:  { firstName: dbUser.firstName, lastName: dbUser.lastName, city: "Nairobi", country: "KE", phone: dbUser.phone },
           shipping: { firstName: dbUser.firstName, lastName: dbUser.lastName, city: "Nairobi", country: "KE", phone: dbUser.phone },
@@ -1583,10 +1584,11 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
     return;
   }
 
-  const { firstName, lastName, phone } = req.body as {
+  const { firstName, lastName, phone, address } = req.body as {
     firstName?: string;
     lastName?:  string;
     phone?:     string;
+    address?:   string;
   };
 
   if (firstName !== undefined && !firstName.trim()) {
@@ -1599,6 +1601,10 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
       res.status(400).json({ error: "Enter a valid phone number in international format, e.g. +254712345678" });
       return;
     }
+  }
+  if (address !== undefined && address.length > 500) {
+    res.status(400).json({ error: "Address must be 500 characters or fewer" });
+    return;
   }
 
   const numericId = Number(claims.id);
@@ -1613,6 +1619,7 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
   if (firstName !== undefined) updates["firstName"] = firstName.trim();
   if (lastName  !== undefined) updates["lastName"]  = lastName.trim();
   if (phone     !== undefined) updates["phone"]     = phone.replace(/\s/g, "");
+  if (address   !== undefined) updates["address"]   = address.trim();
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "No fields to update" });
@@ -1637,6 +1644,7 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
       phone:     updated.phone,
       firstName: updated.firstName,
       lastName:  updated.lastName,
+      address:   updated.address ?? "",
     });
   } catch (err) {
     console.error("[profile patch] error:", err);
@@ -1753,6 +1761,7 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
         firstName: user.firstName,
         lastName:  user.lastName,
         phone:     user.phone,
+        address:   user.address ?? "",
         createdAt: user.createdAt,
       },
       orders: wooOrders !== null
@@ -2017,6 +2026,7 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
         firstName:    DELETED,
         lastName:     "",
         phone:        "",
+        address:      "",
         isAdmin:      false,
         deletedAt:    new Date(),
       })

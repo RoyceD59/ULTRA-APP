@@ -9,6 +9,7 @@ export interface UCUser {
   phone: string;
   firstName: string;
   lastName: string;
+  address?: string;
   token: string;
 }
 
@@ -22,7 +23,7 @@ interface AuthContextValue {
   socialLogin: (clerkToken: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   /** Persist updated user fields locally so the UI reflects profile changes immediately. */
-  updateUser: (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone'>>) => Promise<void>;
+  updateUser: (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone' | 'address'>>) => Promise<void>;
 }
 
 interface RegisterData {
@@ -168,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const updateUser = async (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone'>>) => {
+  const updateUser = async (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone' | 'address'>>) => {
     if (!user) return;
     const updated: UCUser = { ...user, ...updates };
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
