@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
-  PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut,
+  PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut, Search,
 } from 'lucide-react';
 import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit } from '@/lib/team-auth';
 
@@ -413,6 +413,9 @@ function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: stri
   // Delete confirm
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  // Search / filter
+  const [clientSearch, setClientSearch] = useState('');
+
   const loadRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -538,6 +541,16 @@ function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: stri
   const offlineLitres = data?.offlineStats.litresFiltered ?? 0;
   const offlineCount  = data?.offlineStats.clientCount    ?? 0;
 
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter(c =>
+      c.clientRef.toLowerCase().includes(q) ||
+      (c.phone  ?? '').toLowerCase().includes(q) ||
+      (c.email  ?? '').toLowerCase().includes(q),
+    );
+  }, [clients, clientSearch]);
+
   return (
     <div className="space-y-8 animate-in-up">
 
@@ -637,79 +650,117 @@ function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: stri
             <p className="text-xs mt-1">Add one for every sale made outside the app.</p>
           </div>
         ) : (
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Client / Ref</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phone</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Products</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Litres</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Notes</th>
-                    {!isReadOnly && <th className="px-4 py-3" />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.map((c, i) => {
-                    const litres = calcOfflineLitres(c.products);
-                    return (
-                      <tr key={c.id} className={`border-b last:border-0 ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{c.saleDate}</td>
-                        <td className="px-4 py-3">
-                          {c.clientRef
-                            ? <span className="font-medium text-foreground">{c.clientRef}</span>
-                            : <span className="text-muted-foreground italic">—</span>}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {c.phone
-                            ? <span className="text-foreground text-xs font-mono">{c.phone}</span>
-                            : <span className="text-muted-foreground/40">—</span>}
-                        </td>
-                        <td className="px-4 py-3 max-w-[180px]">
-                          {c.email
-                            ? <span className="text-foreground text-xs truncate block">{c.email}</span>
-                            : <span className="text-muted-foreground/40">—</span>}
-                        </td>
-                        <td className="px-4 py-3 max-w-xs">
-                          <span className="text-foreground">{productSummary(c.products)}</span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-emerald-600 font-medium">
-                          {litres > 0 ? fmt(litres) : '—'}
-                        </td>
-                        <td className="px-4 py-3 max-w-xs">
-                          {c.notes
-                            ? <span className="text-muted-foreground text-xs">{c.notes}</span>
-                            : <span className="text-muted-foreground/40">—</span>}
-                        </td>
-                        {!isReadOnly && (
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1 justify-end">
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="h-7 w-7 p-0">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                              {deletingId === c.id ? (
-                                <div className="flex items-center gap-1">
-                                  <Button variant="destructive" size="sm" onClick={() => deleteClient(c.id)} className="h-7 text-xs px-2">Confirm</Button>
-                                  <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)} className="h-7 w-7 p-0"><X className="w-3.5 h-3.5" /></Button>
-                                </div>
-                              ) : (
-                                <Button variant="ghost" size="sm" onClick={() => setDeletingId(c.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <>
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search by name, phone, or email…"
+                value={clientSearch}
+                onChange={e => setClientSearch(e.target.value)}
+                className="pl-9 pr-8"
+              />
+              {clientSearch && (
+                <button
+                  type="button"
+                  onClick={() => setClientSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          </Card>
+
+            {/* Match count */}
+            {clientSearch.trim() && (
+              <p className="text-xs text-muted-foreground -mt-1">
+                {filteredClients.length === 0
+                  ? 'No entries match.'
+                  : `${filteredClients.length} of ${clients.length} ${clients.length === 1 ? 'entry' : 'entries'} match`}
+              </p>
+            )}
+
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Client / Ref</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phone</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Products</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Litres</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Notes</th>
+                      {!isReadOnly && <th className="px-4 py-3" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredClients.length === 0 ? (
+                      <tr>
+                        <td colSpan={isReadOnly ? 7 : 8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          No entries match "{clientSearch}".
+                        </td>
+                      </tr>
+                    ) : filteredClients.map((c, i) => {
+                      const litres = calcOfflineLitres(c.products);
+                      return (
+                        <tr key={c.id} className={`border-b last:border-0 ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
+                          <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{c.saleDate}</td>
+                          <td className="px-4 py-3">
+                            {c.clientRef
+                              ? <span className="font-medium text-foreground">{c.clientRef}</span>
+                              : <span className="text-muted-foreground italic">—</span>}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {c.phone
+                              ? <span className="text-foreground text-xs font-mono">{c.phone}</span>
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          <td className="px-4 py-3 max-w-[180px]">
+                            {c.email
+                              ? <span className="text-foreground text-xs truncate block">{c.email}</span>
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          <td className="px-4 py-3 max-w-xs">
+                            <span className="text-foreground">{productSummary(c.products)}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-emerald-600 font-medium">
+                            {litres > 0 ? fmt(litres) : '—'}
+                          </td>
+                          <td className="px-4 py-3 max-w-xs">
+                            {c.notes
+                              ? <span className="text-muted-foreground text-xs">{c.notes}</span>
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          {!isReadOnly && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1 justify-end">
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="h-7 w-7 p-0">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                {deletingId === c.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button variant="destructive" size="sm" onClick={() => deleteClient(c.id)} className="h-7 text-xs px-2">Confirm</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)} className="h-7 w-7 p-0"><X className="w-3.5 h-3.5" /></Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="sm" onClick={() => setDeletingId(c.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
         )}
       </div>
 
