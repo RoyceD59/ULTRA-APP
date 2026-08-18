@@ -18,4 +18,6 @@ export interface AiPushEvent {
   statusDetail: string;
   statusUpdatedAt: Date;
   lastEchoAt?: Date;
+  targetAgent?: string;
+  taskTitle?: string;
 }
