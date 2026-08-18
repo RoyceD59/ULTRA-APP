@@ -16,6 +16,7 @@ import { db, ucRewardsRulesTable, ucRewardsLedgerTable, ucUsersTable } from "@wo
 import { eq, desc, sql, or, and, isNull, ilike } from "drizzle-orm";
 import { requireAdmin } from "../lib/adminAuth.js";
 import { verifyToken } from "../lib/jwt.js";
+import { sendPushToUser } from "../lib/push.js";
 
 const router: IRouter = Router();
 
@@ -226,10 +227,22 @@ router.post("/uc/admin/rewards/grant", async (req: Request, res: Response): Prom
       .from(ucRewardsLedgerTable)
       .where(eq(ucRewardsLedgerTable.userId, customer.id));
 
+    const newBalance = Number(balanceRow?.balance ?? 0);
+
+    // Notify the customer in-app about their manually granted points.
+    // Fire-and-forget: sendPushToUser never throws and respects opt-out prefs.
+    sendPushToUser(
+      String(customer.id),
+      "Points earned",
+      `🌟 You earned ${points} points! ${reason}. Your balance is now ${newBalance} pts.`,
+      { screen: "rewards" },
+      "orders"
+    );
+
     res.status(201).json({
       entry,
       customer: { id: customer.id, email: customer.email, firstName: customer.firstName, phone: customer.phone },
-      newBalance: Number(balanceRow?.balance ?? 0),
+      newBalance,
     });
   } catch (err) {
     console.error("[uc/admin/rewards/grant] error:", err);

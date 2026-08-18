@@ -56,6 +56,7 @@ import {
   ObjectStorageService,
 } from "../lib/objectStorage";
 import { creditQualifyingProductPoints } from "../lib/reminder-dispatch.js";
+import { sendPushToUser, getPushTokenRow, callExpoPushApi, removePushToken } from "../lib/push.js";
 
 const router = Router();
 
@@ -3548,80 +3549,7 @@ function userIdFromBearer(authHeader: string | undefined): string {
   return String(claims.id ?? claims.email ?? "anonymous");
 }
 
-/** Retrieve a user's push token row from the database. Returns null if not found. */
-async function getPushTokenRow(userId: string): Promise<{ pushToken: string; optOutOrders: boolean } | null> {
-  try {
-    const row = await db.query.ucPushTokensTable.findFirst({
-      where: eq(ucPushTokensTable.userId, userId),
-    });
-    if (!row) return null;
-    return { pushToken: row.pushToken, optOutOrders: row.optOutOrders };
-  } catch {
-    return null;
-  }
-}
-
-/** Remove a stale / unregistered token from the database. */
-async function removePushToken(userId: string): Promise<void> {
-  try {
-    await db.delete(ucPushTokensTable).where(eq(ucPushTokensTable.userId, userId));
-  } catch { /* ignore */ }
-}
-
-/**
- * Send a single push notification via the Expo Push API.
- * Returns true if the token is stale (DeviceNotRegistered) so the caller
- * can clean it up.
- */
-async function callExpoPushApi(
-  token: string,
-  title: string,
-  body: string,
-  data: Record<string, unknown> = {}
-): Promise<{ staleToken: boolean }> {
-  const res = await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: {
-      "Content-Type":    "application/json",
-      "Accept":          "application/json",
-      "Accept-Encoding": "gzip, deflate",
-    },
-    body: JSON.stringify([{ to: token, title, body, data }]),
-  });
-  try {
-    const json = await res.json() as { data?: Array<{ status: string; details?: { error?: string } }> };
-    const ticket = json?.data?.[0];
-    if (ticket?.status === "error" && ticket?.details?.error === "DeviceNotRegistered") {
-      return { staleToken: true };
-    }
-  } catch { /* response body parse error — not a stale token */ }
-  return { staleToken: false };
-}
-
-/**
- * Look up the registered push token for a user from the DB and fire a notification.
- * Fire-and-forget: failures are swallowed so they never block the caller.
- * Automatically removes stale tokens that Expo reports as unregistered.
- */
-/**
- * Send a push notification to a user, respecting their opt-out preferences.
- * `category` controls which opt-out flag is checked:
- *   - "orders": checked against optOutOrders
- */
-function sendPushToUser(
-  userId: string,
-  title: string,
-  body: string,
-  data: Record<string, unknown> = {},
-  category: "orders" | "general" = "general"
-): void {
-  getPushTokenRow(userId).then(async (row) => {
-    if (!row) return;
-    if (category === "orders" && row.optOutOrders) return;
-    const { staleToken } = await callExpoPushApi(row.pushToken, title, body, data);
-    if (staleToken) await removePushToken(userId);
-  }).catch(() => { /* ignore */ });
-}
+// sendPushToUser is imported from ../lib/push.js
 
 // ─── Contact lookup helper ────────────────────────────────────────────────────
 /** Look up phone, email, and firstName for a registered DB user. Returns null

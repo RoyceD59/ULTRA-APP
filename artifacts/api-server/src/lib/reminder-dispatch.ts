@@ -33,6 +33,7 @@ import {
   ucRewardsLedgerTable,
 } from "@workspace/db";
 import { logger } from "./logger";
+import { sendPushToUser } from "./push.js";
 import { sendViaResend } from "./resend.js";
 import { sendSms } from "./sms.js";
 import { sendWhatsAppMessage, getWhatsAppStatus } from "./whatsapp.js";
@@ -425,15 +426,34 @@ async function creditReplacementPoints(
   const numericUserId = parseInt(userId, 10);
   if (isNaN(numericUserId) || numericUserId <= 0) return;
 
+  const reason = `Filter replacement reward — ${productName} (${stageKey === "replace30" ? "30-day" : "15-day"} reminder)`;
+
   await db.insert(ucRewardsLedgerTable).values({
     userId:    numericUserId,
     points:    rule.pointsValue,
-    reason:    `Filter replacement reward — ${productName} (${stageKey === "replace30" ? "30-day" : "15-day"} reminder)`,
+    reason,
     eventType: "filter-replacement",
     refId,
   });
 
   logger.info({ userId, stageKey, points: rule.pointsValue }, "reminder-dispatch: rewards points credited");
+
+  // Notify the customer in-app about their earned points.
+  // Fire-and-forget: sendPushToUser never throws and respects opt-out prefs.
+  const [balanceRow] = await db
+    .select({ balance: sql<number>`COALESCE(SUM(${ucRewardsLedgerTable.points}), 0)` })
+    .from(ucRewardsLedgerTable)
+    .where(eq(ucRewardsLedgerTable.userId, numericUserId))
+    .catch(() => [null]);
+
+  const newBalance = Number(balanceRow?.balance ?? 0);
+  sendPushToUser(
+    userId,
+    "Points earned",
+    `🌟 You earned ${rule.pointsValue} points! ${reason}. Your balance is now ${newBalance} pts.`,
+    { screen: "rewards" },
+    "orders"
+  );
 }
 
 // ─── Qualifying-product rewards on paid orders ────────────────────────────────
