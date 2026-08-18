@@ -513,6 +513,16 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: ai_push_events table ensured");
 
+  // target_agent and task_title — added to record which agent received a
+  // task_dispatch push and which task was sent. Both nullable so existing rows
+  // are unaffected; idempotent via IF NOT EXISTS.
+  await pool.query(`
+    ALTER TABLE ai_push_events
+      ADD COLUMN IF NOT EXISTS target_agent text,
+      ADD COLUMN IF NOT EXISTS task_title   text;
+  `);
+  logger.info("Startup migration: ai_push_events target_agent/task_title columns ensured");
+
   // Phone and email fields on offline client entries for future customer
   // linkage and follow-up communications.  Both are nullable — adding either
   // field to an existing record is optional.

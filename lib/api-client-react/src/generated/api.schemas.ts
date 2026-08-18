@@ -269,6 +269,8 @@ export interface AiPushEvent {
   statusDetail: string;
   statusUpdatedAt: string;
   lastEchoAt?: string;
+  targetAgent?: string;
+  taskTitle?: string;
 }
 
 export type AiPushEchoInputStatus = typeof AiPushEchoInputStatus[keyof typeof AiPushEchoInputStatus];

@@ -1619,6 +1619,8 @@ components:
         statusDetail: { type: string }
         statusUpdatedAt: { type: string, format: date-time }
         lastEchoAt: { type: string, format: date-time }
+        targetAgent: { type: string }
+        taskTitle: { type: string }
 
     AiPushEchoInput:
       type: object

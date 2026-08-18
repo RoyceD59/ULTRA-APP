@@ -263,4 +263,11 @@ await pool.query(`
     ADD COLUMN IF NOT EXISTS auth_provider  text NOT NULL DEFAULT 'password';
 `);
 
+// ai_push_events: target_agent + task_title for task_dispatch rows
+await pool.query(`
+  ALTER TABLE ai_push_events
+    ADD COLUMN IF NOT EXISTS target_agent text,
+    ADD COLUMN IF NOT EXISTS task_title   text;
+`);
+
 console.log("[test-setup] all startup migrations applied");

@@ -335,6 +335,8 @@ router.post("/ai/push-task", requireTeamAuth, async (req, res): Promise<void> =>
       target: webhookUrl,
       sentAt,
       status: "pending",
+      targetAgent: agentName?.trim() || null,
+      taskTitle: task.title,
     })
     .returning({ id: aiPushEventsTable.id });
   const pushId = event.id;
@@ -537,7 +539,12 @@ router.get("/ai/pushes", requireTeamAuth, async (_req, res): Promise<void> => {
 
   res.json(
     ListAiPushEventsResponse.parse(
-      rows.map((r) => ({ ...r, lastEchoAt: r.lastEchoAt ?? undefined })),
+      rows.map((r) => ({
+        ...r,
+        lastEchoAt: r.lastEchoAt ?? undefined,
+        targetAgent: r.targetAgent ?? undefined,
+        taskTitle: r.taskTitle ?? undefined,
+      })),
     ),
   );
 });

@@ -172,7 +172,11 @@ function PushBoard() {
                 {p.payloadType === 'daily_project_status_report'
                   ? 'Daily status report'
                   : p.payloadType === 'task_dispatch'
-                  ? 'Task Dispatch'
+                  ? <>
+                      Task Dispatch
+                      {p.taskTitle && <span className="ml-1.5 font-normal text-foreground/80">"{p.taskTitle}"</span>}
+                      {p.targetAgent && <span className="ml-1.5 text-xs font-normal text-muted-foreground">→ {p.targetAgent}</span>}
+                    </>
                   : 'Status report'}
               </span>
               <span className="text-xs text-muted-foreground capitalize">{p.trigger}</span>

@@ -708,7 +708,9 @@ export const ListAiPushEventsResponseItem = zod.object({
   "status": zod.string(),
   "statusDetail": zod.string(),
   "statusUpdatedAt": zod.coerce.date(),
-  "lastEchoAt": zod.coerce.date().optional()
+  "lastEchoAt": zod.coerce.date().optional(),
+  "targetAgent": zod.string().optional(),
+  "taskTitle": zod.string().optional()
 })
 export const ListAiPushEventsResponse = zod.array(ListAiPushEventsResponseItem)
 

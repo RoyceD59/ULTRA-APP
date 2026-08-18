@@ -38,6 +38,10 @@ export const aiPushEventsTable = pgTable("ai_push_events", {
   statusUpdatedAt: timestamp("status_updated_at", { withTimezone: true }).notNull().defaultNow(),
   /** Set on every accepted echo callback; null until the orchestrator responds. */
   lastEchoAt:      timestamp("last_echo_at", { withTimezone: true }),
+  /** For task_dispatch payloads: the name of the agent the task was sent to. */
+  targetAgent:     text("target_agent"),
+  /** For task_dispatch payloads: the title of the task that was dispatched. */
+  taskTitle:       text("task_title"),
 });
 
 export const insertAiPushEventSchema = createInsertSchema(aiPushEventsTable).omit({ id: true });
