@@ -12,11 +12,57 @@
  * DELETE /api/uc/offline-clients/:id   — remove an entry
  */
 import { Router, type Request, type Response, type IRouter } from "express";
-import { db, ucOfflineClientsTable, type OfflineProduct } from "@workspace/db";
+import { db, ucOfflineClientsTable, teamUsersTable, type OfflineProduct } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireAdmin } from "../lib/adminAuth.js";
+import { requireAdmin, isAdminRequest } from "../lib/adminAuth.js";
+import { verifyToken } from "../lib/jwt.js";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
+
+// ─── Permission helpers ───────────────────────────────────────────────────────
+
+/**
+ * Returns true when the caller may READ offline clients.
+ *
+ * Accepted principals:
+ *   - ProjectHub team-session admin (role re-verified against team_users)
+ *   - ProjectHub team-session member with "view" or "edit" on the "impact" page
+ *   - Any principal accepted by isAdminRequest (WooCommerce token, DB-anchored user)
+ *
+ * Fails closed on DB errors.
+ */
+async function hasImpactReadAccess(req: Request): Promise<boolean> {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) return false;
+
+  if (claims.type === "team-session") {
+    const teamId = typeof claims.id === "string" ? claims.id : "";
+    if (!teamId) return false;
+    try {
+      const [row] = await db
+        .select({
+          role:        teamUsersTable.role,
+          isActive:    teamUsersTable.isActive,
+          permissions: teamUsersTable.permissions,
+        })
+        .from(teamUsersTable)
+        .where(eq(teamUsersTable.id, teamId))
+        .limit(1);
+      if (!row || !row.isActive) return false;
+      if (row.role === "admin") return true;
+      const level = (row.permissions as Record<string, string> | null)?.["impact"] ?? "none";
+      return level === "view" || level === "edit";
+    } catch (err) {
+      logger.error({ err }, "[uc/offline-clients] permission lookup failed");
+      return false; // DB unavailable → fail closed
+    }
+  }
+
+  // For non-team-session tokens (WooCommerce, DB-anchored uc_users) fall back
+  // to the existing admin gate.
+  return isAdminRequest(req.headers["authorization"]);
+}
 
 // ─── Validation helpers ───────────────────────────────────────────────────────
 
@@ -96,7 +142,10 @@ function parseId(raw: string | string[] | undefined): number | null {
 // ─── GET /api/uc/offline-clients ─────────────────────────────────────────────
 
 router.get("/uc/offline-clients", async (req: Request, res: Response): Promise<void> => {
-  if (!(await requireAdmin(req, res))) return;
+  if (!(await hasImpactReadAccess(req))) {
+    res.status(401).json({ error: "Impact view access required" });
+    return;
+  }
   try {
     const rows = await db
       .select()

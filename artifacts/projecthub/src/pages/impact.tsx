@@ -24,7 +24,7 @@ import {
   Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
   PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut,
 } from 'lucide-react';
-import { getTeamToken, isTeamAdmin, isTeamAuthenticated } from '@/lib/team-auth';
+import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit } from '@/lib/team-auth';
 
 const BASE      = import.meta.env.BASE_URL.replace(/\/$/, '');
 const TOKEN_KEY = 'uc_impact_admin_token';
@@ -344,10 +344,16 @@ export default function ImpactPage() {
   // form instead of retrying the same token in a loop.
   const [teamDenied, setTeamDenied] = useState(false);
 
-  // A logged-in ProjectHub admin gets straight in with their team session.
-  const teamToken = !teamDenied && isTeamAdmin() && isTeamAuthenticated() ? getTeamToken() : null;
+  // Any authenticated team member with at least "view" on the impact page gets
+  // straight in with their team session. Admins always pass (canView returns
+  // true for them). Members with no permission still hit the login gate.
+  const teamToken = !teamDenied && isTeamAuthenticated() && canView('impact') ? getTeamToken() : null;
   const token = ucToken ?? teamToken;
   const usingTeamSession = !ucToken && !!teamToken;
+
+  // Read-only when using a team session AND the member only has "view"
+  // (not "edit") on the impact page. UC-credential logins are always admins.
+  const isReadOnly = usingTeamSession && !isTeamAdmin() && !canEdit('impact');
 
   function handleToken(t: string) { setUcToken(t); }
   function handleSignOut() {
@@ -358,12 +364,12 @@ export default function ImpactPage() {
   }
 
   if (!token) return <LoginGate onToken={handleToken} teamDenied={teamDenied} />;
-  return <ImpactDashboard token={token} onSignOut={handleSignOut} />;
+  return <ImpactDashboard token={token} onSignOut={handleSignOut} isReadOnly={isReadOnly} />;
 }
 
 // ─── ImpactDashboard (authenticated) ─────────────────────────────────────────
 
-function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () => void }) {
+function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: string; onSignOut: () => void; isReadOnly?: boolean }) {
   const [data,    setData]    = useState<ImpactData | null>(null);
   const [clients, setClients] = useState<OfflineClient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -616,10 +622,12 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
               )}
             </p>
           </div>
-          <Button onClick={openAdd} className="gap-2">
-            <PlusCircle className="w-4 h-4" />
-            Add offline sale
-          </Button>
+          {!isReadOnly && (
+            <Button onClick={openAdd} className="gap-2">
+              <PlusCircle className="w-4 h-4" />
+              Add offline sale
+            </Button>
+          )}
         </div>
 
         {clients.length === 0 ? (
@@ -641,7 +649,7 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Products</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Litres</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Notes</th>
-                    <th className="px-4 py-3" />
+                    {!isReadOnly && <th className="px-4 py-3" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -676,23 +684,25 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
                             ? <span className="text-muted-foreground text-xs">{c.notes}</span>
                             : <span className="text-muted-foreground/40">—</span>}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 justify-end">
-                            <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="h-7 w-7 p-0">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            {deletingId === c.id ? (
-                              <div className="flex items-center gap-1">
-                                <Button variant="destructive" size="sm" onClick={() => deleteClient(c.id)} className="h-7 text-xs px-2">Confirm</Button>
-                                <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)} className="h-7 w-7 p-0"><X className="w-3.5 h-3.5" /></Button>
-                              </div>
-                            ) : (
-                              <Button variant="ghost" size="sm" onClick={() => setDeletingId(c.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
-                                <Trash2 className="w-3.5 h-3.5" />
+                        {!isReadOnly && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="h-7 w-7 p-0">
+                                <Pencil className="w-3.5 h-3.5" />
                               </Button>
-                            )}
-                          </div>
-                        </td>
+                              {deletingId === c.id ? (
+                                <div className="flex items-center gap-1">
+                                  <Button variant="destructive" size="sm" onClick={() => deleteClient(c.id)} className="h-7 text-xs px-2">Confirm</Button>
+                                  <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)} className="h-7 w-7 p-0"><X className="w-3.5 h-3.5" /></Button>
+                                </div>
+                              ) : (
+                                <Button variant="ghost" size="sm" onClick={() => setDeletingId(c.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -729,24 +739,32 @@ function ImpactDashboard({ token, onSignOut }: { token: string; onSignOut: () =>
                   <Droplets className="w-4 h-4 text-emerald-500" />
                   Additional Litres (bulk)
                 </Label>
-                <Input id="litresOffset" type="number" step="1" value={litresOffset}
-                  onChange={e => setLitresOffset(e.target.value)} placeholder="e.g. 250000" className="font-mono" />
+                {isReadOnly
+                  ? <p className="font-mono text-sm text-foreground px-1">{litresOffset || '0'}</p>
+                  : <Input id="litresOffset" type="number" step="1" value={litresOffset}
+                      onChange={e => setLitresOffset(e.target.value)} placeholder="e.g. 250000" className="font-mono" />}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="usersOffset" className="flex items-center gap-2 text-sm">
                   <Users className="w-4 h-4 text-blue-500" />
                   Additional Users (bulk)
                 </Label>
-                <Input id="usersOffset" type="number" step="1" value={usersOffset}
-                  onChange={e => setUsersOffset(e.target.value)} placeholder="e.g. 500" className="font-mono" />
+                {isReadOnly
+                  ? <p className="font-mono text-sm text-foreground px-1">{usersOffset || '0'}</p>
+                  : <Input id="usersOffset" type="number" step="1" value={usersOffset}
+                      onChange={e => setUsersOffset(e.target.value)} placeholder="e.g. 500" className="font-mono" />}
               </div>
             </div>
-            {legacyError && <p className="text-sm text-destructive">{legacyError}</p>}
-            {legacyMsg   && <p className="text-sm text-green-600">{legacyMsg}</p>}
-            <Button onClick={saveLegacyOffset} disabled={legacySaving} size="sm" className="gap-2">
-              <Save className="w-4 h-4" />
-              {legacySaving ? 'Saving…' : 'Save bulk adjustment'}
-            </Button>
+            {!isReadOnly && (
+              <>
+                {legacyError && <p className="text-sm text-destructive">{legacyError}</p>}
+                {legacyMsg   && <p className="text-sm text-green-600">{legacyMsg}</p>}
+                <Button onClick={saveLegacyOffset} disabled={legacySaving} size="sm" className="gap-2">
+                  <Save className="w-4 h-4" />
+                  {legacySaving ? 'Saving…' : 'Save bulk adjustment'}
+                </Button>
+              </>
+            )}
           </CardContent>
         )}
       </Card>
