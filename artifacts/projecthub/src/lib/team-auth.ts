@@ -246,6 +246,7 @@ export interface InviteResult {
   inviteUrl: string;
   email: string;
   expiresAt: string;
+  emailSent: boolean;
 }
 
 export async function inviteUser(email: string): Promise<InviteResult> {
@@ -276,6 +277,7 @@ export interface AdminResetResult {
   resetUrl: string;
   email: string;
   expiresAt: string;
+  emailSent: boolean;
 }
 
 export async function adminResetPassword(userId: string): Promise<AdminResetResult> {

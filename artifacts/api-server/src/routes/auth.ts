@@ -4,7 +4,7 @@
  * Public routes:
  *   POST /auth/login              — email + password → JWT
  *   POST /auth/register           — invite token + name + password → JWT
- *   POST /auth/forgot-password    — send reset email (always 200)
+ *   POST /auth/forgot-password    — send reset links (always 200)
  *   POST /auth/reset-password     — token + new password
  *   POST /auth/token              — legacy passcode → JWT (kept for WhatsApp)
  *
@@ -60,8 +60,8 @@ function projecthubBaseUrl(): string {
   return domain ? `https://${domain}` : "http://localhost:3000";
 }
 
-// Password reset links are delivered to the team WhatsApp number only — per
-// team decision, not by email. Overridable via TEAM_RESET_WHATSAPP.
+// Password reset links are also delivered to the team WhatsApp number for
+// visibility. Overridable via TEAM_RESET_WHATSAPP.
 const RESET_WHATSAPP_NUMBER =
   process.env["TEAM_RESET_WHATSAPP"] || "+13022448888";
 
@@ -248,23 +248,34 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
   logger.info({ email: user.email }, "Password reset token generated");
-  // Delivery is via the team WhatsApp number AND Slack ONLY (team decision) —
-  // never by email. The link goes to team channels, not the requester's
-  // inbox, so the team always sees who asked for a reset. Each channel fails
-  // soft; the token stays valid either way and an admin can still generate a
-  // link from the Team page.
+  // Deliver directly to the requester as well as the team channels. Each
+  // channel fails soft; the token stays valid either way and an admin can
+  // still generate a link from the Team page.
   const resetMessage =
     `🔐 ProjectHub password reset requested for ${user.email}.\n\n` +
     `Reset link (valid 24 hours):\n${resetUrl}\n\n` +
     `If nobody on the team requested this, ignore this message.`;
-  const [whatsappOk, slackOk] = await Promise.all([
+  const [emailOk, whatsappOk, slackOk] = await Promise.all([
+    sendViaResend({
+      from: "ProjectHub <noreply@contacts.ucfilters.com>",
+      to: user.email,
+      subject: "Reset your ProjectHub password",
+      text:
+        `A password reset was requested for your ProjectHub account.\n\n` +
+        `Reset link (valid 24 hours):\n${resetUrl}\n\n` +
+        `If you did not request this, you can ignore this email.`,
+      html:
+        `<p>A password reset was requested for your ProjectHub account.</p>` +
+        `<p><a href="${resetUrl}">Reset your password</a> (valid 24 hours)</p>` +
+        `<p>If you did not request this, you can ignore this email.</p>`,
+    }),
     deliverResetLinkViaWhatsApp(resetUrl, user.email),
     sendSlackTeamMessage(resetMessage, "PASSWORD_RESET"),
   ]);
-  if (!whatsappOk && !slackOk) {
+  if (!emailOk && !whatsappOk && !slackOk) {
     logger.error(
       { email: user.email },
-      "Password reset link could not be delivered on ANY channel (WhatsApp + Slack both failed)"
+      "Password reset link could not be delivered on ANY channel (email + WhatsApp + Slack all failed)"
     );
   }
   res.json({ ok: true });
@@ -378,7 +389,7 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
     html: `<p>You have been invited to join the Ultra-Clear ProjectHub team workspace.</p><p><a href="${inviteUrl}">Accept invitation</a> (valid 7 days)</p><p>Or copy this link: ${inviteUrl}</p>`,
   });
   if (!sent) logger.warn({ email: normalised }, "Invite email not delivered — link still valid");
-  res.status(201).json({ inviteUrl, email: normalised, expiresAt });
+  res.status(201).json({ inviteUrl, email: normalised, expiresAt, emailSent: sent });
 });
 
 /** PATCH /auth/users/:id/role  — promote or demote */
@@ -427,10 +438,31 @@ router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res)
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
   const resetUrl = `${projecthubBaseUrl()}/reset-password?token=${token}`;
-  // Deliver via the team WhatsApp channel (team decision — no email). Failure
-  // is non-fatal: the admin sees the link in the response and can share it.
-  await deliverResetLinkViaWhatsApp(resetUrl, user.email);
-  res.json({ resetUrl, email: user.email, expiresAt });
+  // Deliver via both direct email and the team WhatsApp channel. Failure is
+  // non-fatal: the admin sees the link in the response and can share it.
+  const [emailOk, whatsappOk] = await Promise.all([
+    sendViaResend({
+      from: "ProjectHub <noreply@contacts.ucfilters.com>",
+      to: user.email,
+      subject: "Reset your ProjectHub password",
+      text:
+        `A password reset was requested for your ProjectHub account.\n\n` +
+        `Reset link (valid 24 hours):\n${resetUrl}\n\n` +
+        `If you did not request this, you can ignore this email.`,
+      html:
+        `<p>A password reset was requested for your ProjectHub account.</p>` +
+        `<p><a href="${resetUrl}">Reset your password</a> (valid 24 hours)</p>` +
+        `<p>If you did not request this, you can ignore this email.</p>`,
+    }),
+    deliverResetLinkViaWhatsApp(resetUrl, user.email),
+  ]);
+  if (!emailOk && !whatsappOk) {
+    logger.error(
+      { email: user.email },
+      "Admin password reset link could not be delivered on ANY channel (email + WhatsApp both failed)"
+    );
+  }
+  res.json({ resetUrl, email: user.email, expiresAt, emailSent: emailOk });
 });
 
 // ─── Legacy: passcode-based token (WhatsApp + backward compat) ────────────────
