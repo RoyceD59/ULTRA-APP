@@ -477,6 +477,34 @@ async function wcFetchArray(
   }
 }
 
+const WC_PAGE_SIZE = 100;
+const MAX_WC_PAGES = 50;
+
+/**
+ * WooCommerce paginates every collection endpoint. Returning a partial list is
+ * worse than returning an error for catalogue filtering, because it presents a
+ * successful but incorrect category result to the shopper.
+ */
+export async function wcFetchAllPages(
+  path: string,
+  extra: Record<string, string> = {},
+): Promise<Record<string, unknown>[] | null> {
+  const all: Record<string, unknown>[] = [];
+  for (let page = 1; page <= MAX_WC_PAGES; page++) {
+    const batch = await wcFetchArray(path, {
+      ...extra,
+      per_page: String(WC_PAGE_SIZE),
+      page: String(page),
+    });
+    if (!batch) return null;
+    all.push(...batch);
+    if (batch.length < WC_PAGE_SIZE) return all;
+  }
+  // A bounded request prevents a bad upstream from causing unbounded work; do
+  // not serve a silently truncated catalogue when that bound is reached.
+  return null;
+}
+
 async function wcFetchOne(
   path: string,
   extra: Record<string, string> = {}
@@ -506,14 +534,14 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
   }
   return {
     id: p["id"],
-    name: p["name"],
-    price: p["price"],
+    name: typeof p["name"] === "string" ? p["name"] : "Product",
+    price: typeof p["price"] === "string" ? p["price"] : "",
     regularPrice: p["regular_price"] ?? p["regularPrice"],
     salePrice: p["sale_price"] ?? p["salePrice"],
-    description: p["description"],
+    description: typeof p["description"] === "string" ? p["description"] : "",
     shortDescription: p["short_description"] ?? p["shortDescription"],
     tagline: p["tagline"] ?? p["short_description"] ?? p["shortDescription"] ?? "",
-    categories: p["categories"],
+    categories: Array.isArray(p["categories"]) ? p["categories"] : [],
     // WooCommerce image srcs point at multi-megapixel originals on the store
     // CDN. Route eligible ones through the resize proxy so the app can load
     // width-appropriate WebP derivatives; ineligible srcs pass through as-is.
@@ -522,11 +550,11 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
           const src = typeof img?.["src"] === "string" ? (img["src"] as string) : "";
           return { src: remoteImageProxyPath(src) ?? src, alt: img?.["alt"] ?? "" };
         })
-      : p["images"],
+      : [],
     sku: p["sku"],
     stockStatus: p["stock_status"] ?? p["stockStatus"],
     stockQuantity: p["stock_quantity"] ?? p["stockQuantity"],
-    tags: p["tags"],
+    tags: Array.isArray(p["tags"]) ? p["tags"] : [],
     lifespanDays,
     enquiryOnly: p["enquiryOnly"] ?? false,
     // WooCommerce lifetime sales counter — used by the mobile app to rank
@@ -602,18 +630,42 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
     let payload: Record<string, unknown>[] | null = null;
     if (hasWCCredentials()) {
       const extra: Record<string, string> = { per_page: "50" };
-      if (req.query["category"]) extra["category"] = req.query["category"] as string;
+      const requestedCategory = typeof req.query["category"] === "string"
+        ? req.query["category"]
+        : "";
+      let categoryId: number | null = null;
+      if (requestedCategory) {
+        categoryId = await resolveWcCategoryId(requestedCategory);
+        if (categoryId) extra["category"] = String(categoryId);
+      }
       if (req.query["search"]) extra["search"] = req.query["search"] as string;
-      const products = await wcFetchArray("/products", extra);
-      if (products) payload = products.map(normalizeProduct);
+      const products = await wcFetchAllPages("/products", extra);
+      if (products) {
+        payload = products.map(normalizeProduct);
+        // If the category lookup was unavailable, fetch-all + normalized
+        // filtering is safer than sending a label to WooCommerce and showing
+        // an accidental blank grid.
+        if (requestedCategory && !categoryId) {
+          payload = payload.filter(product => {
+            const categories = Array.isArray(product["categories"])
+              ? product["categories"] as { name?: unknown }[]
+              : [];
+            return categories.some(category =>
+              categoryNameMatches(requestedCategory, String(category?.name ?? "")));
+          });
+        }
+      } else {
+        res.status(502).json({ error: "The product catalogue is temporarily unavailable" });
+        return;
+      }
     }
     if (!payload) {
       let data = MOCK_PRODUCTS;
       if (req.query["category"]) {
-        const cat = (req.query["category"] as string).toLowerCase();
+        const cat = req.query["category"] as string;
         data = data.filter((p) => {
           const cats = p["categories"] as { name: string }[] | undefined;
-          return cats?.some((c) => c.name.toLowerCase() === cat);
+          return cats?.some((c) => categoryNameMatches(cat, c.name));
         });
       }
       if (req.query["search"]) {
@@ -632,6 +684,93 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ error: "Failed to fetch products" });
   }
 });
+
+// ─── WooCommerce category resolution ─────────────────────────────────────────
+// The app sends customer-friendly labels, while WooCommerce's products endpoint
+// expects a numeric category id. Cache that mapping independently from product
+// responses so the category tabs remain fast without becoming stale forever.
+const STORE_CATEGORY_ALIASES: Record<string, string[]> = {
+  "bottle and portable": ["bottle portable", "portable filter", "water bottle"],
+  "home filter": ["household filter", "faucet filter", "under sink"],
+  "shower and skin": ["shower skin", "shower filter", "skin filter", "bathroom filter"],
+  accessory: ["accessories"],
+  solution: ["solutions", "commercial", "water treatment"],
+};
+const CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000;
+let _categoryCache: { at: number; byName: Map<string, number> } | null = null;
+let _categoryRefresh: Promise<Map<string, number> | null> | null = null;
+
+export function normalizeStoreCategory(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/filters?/g, "filter")
+    .replace(/bottles?/g, "bottle")
+    .replace(/showers?/g, "shower")
+    .replace(/skins?/g, "skin")
+    .replace(/accessories/g, "accessory")
+    .replace(/solutions?/g, "solution")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function categoryNameMatches(requested: string, actual: string): boolean {
+  const wanted = normalizeStoreCategory(requested);
+  const got = normalizeStoreCategory(actual);
+  if (!wanted || !got) return false;
+  const aliases = STORE_CATEGORY_ALIASES[wanted] ?? [];
+  return got === wanted || aliases.includes(got) ||
+    got.includes(wanted) || wanted.includes(got) ||
+    aliases.some(alias => got.includes(alias) || alias.includes(got));
+}
+
+async function getWcCategoryMap(): Promise<Map<string, number> | null> {
+  if (_categoryCache && Date.now() - _categoryCache.at < CATEGORY_CACHE_TTL_MS) {
+    return _categoryCache.byName;
+  }
+  if (_categoryRefresh) return _categoryRefresh;
+  _categoryRefresh = (async () => {
+    try {
+      const categories = await wcFetchAllPages("/products/categories", {
+        hide_empty: "false",
+      });
+      if (!categories) return _categoryCache?.byName ?? null;
+      const byName = new Map<string, number>();
+      for (const category of categories) {
+        const id = Number(category["id"]);
+        const name = String(category["name"] ?? "");
+        if (id > 0 && name) byName.set(normalizeStoreCategory(name), id);
+      }
+      _categoryCache = { at: Date.now(), byName };
+      return byName;
+    } finally {
+      _categoryRefresh = null;
+    }
+  })();
+  return _categoryRefresh;
+}
+
+export async function resolveWcCategoryId(category: string): Promise<number | null> {
+  const map = await getWcCategoryMap();
+  if (!map) return null;
+  const requested = normalizeStoreCategory(category);
+  const direct = map.get(requested);
+  if (direct) return direct;
+  const aliases = STORE_CATEGORY_ALIASES[requested] ?? [];
+  for (const [name, id] of map) {
+    if (aliases.some(alias => name === alias || name.includes(alias) || alias.includes(name))) {
+      return id;
+    }
+  }
+  return null;
+}
+
+/** Test hook — reset category lookup state between tests. */
+export function _resetCategoryCacheForTests(): void {
+  _categoryCache = null;
+  _categoryRefresh = null;
+}
 
 // ─── Lifespan audit ───────────────────────────────────────────────────────────
 // Replacement reminders depend on every live filter product carrying a

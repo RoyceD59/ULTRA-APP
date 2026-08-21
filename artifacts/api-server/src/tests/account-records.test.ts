@@ -84,11 +84,3 @@ describe("folder-only registration recovery", () => {
     assert.equal((await lines()).find((line) => line.email === failing)?.dbPersisted, false);
   });
 });
-
-    const loser  = r1.inserted ? r2 : r1;
-
-    const winner = r1.inserted ? r1 : r2;
-
-const { _ioSeams, listUnsyncedRegistrations, retryUnsyncedRegistration } = await import("../lib/account-records.js");
-
-    const realWrite = _ioSeams.writeFile;

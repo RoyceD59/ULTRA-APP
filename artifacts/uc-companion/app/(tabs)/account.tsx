@@ -416,6 +416,7 @@ function AccountScreenContent() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [exporting,          setExporting]          = useState(false);
   const [exportError,        setExportError]        = useState('');
+  const [ownerDetailsOpen,   setOwnerDetailsOpen]    = useState(false);
 
   // Auto-open the Edit Profile modal when navigated here with ?editProfile=1
   // (e.g. from the ticket form's "add phone number" link).
@@ -570,13 +571,7 @@ function AccountScreenContent() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>{user.firstName} {user.lastName}</Text>
-            <Text style={styles.profileEmail}>{user.email}</Text>
-            {!!user.phone && (
-              <View style={styles.profilePhoneRow}>
-                <Ionicons name="call-outline" size={12} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.profilePhone}>{user.phone}</Text>
-              </View>
-            )}
+              <Text style={styles.profileEmail}>My Ultra-Clear account</Text>
           </View>
           {/* Edit button in header */}
           <TouchableOpacity
@@ -588,71 +583,91 @@ function AccountScreenContent() {
         </View>
 
         <View style={styles.body}>
-          {/* My Details card */}
+          {/* Account owner details stay private until explicitly expanded. */}
           <View style={styles.section}>
             <View style={styles.sectionRow}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>My Details</Text>
-              <TouchableOpacity
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setEditModalVisible(true); }}
-                activeOpacity={0.75}
-                style={[styles.editBtn, { borderColor: colors.primary }]}>
-                <Ionicons name="pencil-outline" size={13} color={colors.primary} />
-                <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit</Text>
-              </TouchableOpacity>
+              <View style={styles.detailActions}>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setEditModalVisible(true); }}
+                  activeOpacity={0.75}
+                  style={[styles.editBtn, { borderColor: colors.primary }]}>
+                  <Ionicons name="pencil-outline" size={13} color={colors.primary} />
+                  <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {/* Name */}
-              <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => setOwnerDetailsOpen(open => !open)}
+                activeOpacity={0.75}
+                style={[styles.detailsDisclosure, { borderBottomColor: ownerDetailsOpen ? colors.border : 'transparent' }]}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: ownerDetailsOpen }}
+                accessibilityLabel={ownerDetailsOpen ? 'Hide account owner details' : 'Show account owner details'}
+              >
                 <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="person-outline" size={15} color={colors.primary} />
+                  <Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Full Name</Text>
                   <Text style={[styles.detailValue, { color: colors.text }]}>
-                    {[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}
+                    {ownerDetailsOpen ? 'Account owner details' : 'Show account owner details'}
+                  </Text>
+                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>
+                    {ownerDetailsOpen ? 'Email, phone and delivery address' : 'Details are hidden until you choose to view them'}
                   </Text>
                 </View>
-              </View>
-
-              {/* Email */}
-              <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
-                <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="mail-outline" size={15} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Email</Text>
-                  <Text style={[styles.detailValue, { color: colors.text }]}>{user.email}</Text>
-                </View>
-                <View style={[styles.lockedBadge, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="lock-closed-outline" size={11} color={colors.mutedForeground} />
-                </View>
-              </View>
-
-              {/* Phone */}
-              <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
-                <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="call-outline" size={15} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Phone</Text>
-                  <Text style={[styles.detailValue, { color: user.phone ? colors.text : colors.mutedForeground }]}>
-                    {user.phone || 'Not added yet'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Delivery Address */}
-              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-                <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="location-outline" size={15} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Delivery Address</Text>
-                  <Text style={[styles.detailValue, { color: user.address ? colors.text : colors.mutedForeground }]}>
-                    {user.address || 'Not added yet'}
-                  </Text>
-                </View>
-              </View>
+                <Ionicons name={ownerDetailsOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              {ownerDetailsOpen && (
+                <>
+                  <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
+                      <Ionicons name="person-outline" size={15} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Full Name</Text>
+                      <Text style={[styles.detailValue, { color: colors.text }]}>
+                        {[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
+                      <Ionicons name="mail-outline" size={15} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Email</Text>
+                      <Text style={[styles.detailValue, { color: colors.text }]}>{user.email}</Text>
+                    </View>
+                    <View style={[styles.lockedBadge, { backgroundColor: colors.surface }]}>
+                      <Ionicons name="lock-closed-outline" size={11} color={colors.mutedForeground} />
+                    </View>
+                  </View>
+                  <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
+                      <Ionicons name="call-outline" size={15} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Phone</Text>
+                      <Text style={[styles.detailValue, { color: user.phone ? colors.text : colors.mutedForeground }]}>
+                        {user.phone || 'Not added yet'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                    <View style={[styles.detailIconWrap, { backgroundColor: colors.surface }]}>
+                      <Ionicons name="location-outline" size={15} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Delivery Address</Text>
+                      <Text style={[styles.detailValue, { color: user.address ? colors.text : colors.mutedForeground }]}>
+                        {user.address || 'Not added yet'}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
           </View>
 
@@ -841,11 +856,13 @@ const styles = StyleSheet.create({
   body:             { padding: 16, gap: 20 },
   section:          { gap: 12 },
   sectionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  detailActions:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle:     { fontSize: 17, fontWeight: '700' as const },
   editBtn:          { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   editBtnText:      { fontSize: 13, fontWeight: '600' as const },
 
   detailsCard:      { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+  detailsDisclosure:{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1 },
   detailRow:        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1 },
   detailIconWrap:   { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   detailLabel:      { fontSize: 11, fontWeight: '500' as const, marginBottom: 2 },

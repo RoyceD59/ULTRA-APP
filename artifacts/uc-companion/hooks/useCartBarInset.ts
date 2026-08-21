@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 
 /** Height of the GlobalCartBar pill. Must match the `height` in _layout.tsx styles. */
-const CART_BAR_HEIGHT = 52;
+const CART_BAR_HEIGHT = 46;
 
 /** Breathing room above the top edge of the cart bar. */
 const GAP = 8;

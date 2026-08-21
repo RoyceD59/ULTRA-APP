@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useColors } from '@/hooks/useColors';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import { useCart } from '@/context/CartContext';
@@ -18,8 +18,9 @@ import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORE_CATEGORIES, visibleStoreCategory, type StoreCategory } from '@/lib/storeCategories';
 
-const CATEGORIES = ['All', 'Bottles & Portable', 'Home Filters', 'Shower & Skin', 'Accessories', 'Solutions'];
+const CATEGORIES = STORE_CATEGORIES;
 
 const ALISON_SEEN_KEY = 'hasSeenAlisonWelcome';
 function formatKES(price: number) {
@@ -85,13 +86,28 @@ export default function ProductsScreen() {
 function ProductsScreenContent() {
   const colors = useColors();
   const router = useRouter();
+  const { category: categoryParam } = useLocalSearchParams<{ category?: string }>();
   const api = useApi();
   const insets = useSafeAreaInsets();
   const { items, addItem, refreshCart, cartHydrated, totalItems } = useCart();
   const cartBarInset = useCartBarInset();
 
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('All');
+  const [category, setCategory] = useState<StoreCategory>('All');
+
+  // Products can be reached from a product-category chip or a deep link. Keep
+  // the UI state derived from the route so a back navigation never loses the
+  // shopper's selected segment.
+  useEffect(() => {
+    if (typeof categoryParam === 'string') {
+      setCategory(visibleStoreCategory(categoryParam) ?? 'All');
+    }
+  }, [categoryParam]);
+
+  const selectCategory = useCallback((next: StoreCategory) => {
+    setCategory(next);
+    router.setParams({ category: next });
+  }, [router]);
 
   // Alison collapsed state — persisted across visits
   const [alisonCollapsed, setAlisonCollapsed] = useState(true); // default collapsed until AsyncStorage resolves
@@ -171,7 +187,7 @@ function ProductsScreenContent() {
   }, []);
 
   // Main products query
-  const { data: products, isLoading, refetch, isRefetching } = useQuery({
+  const { data: products, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['products', category, search],
     queryFn: () => api.getProducts({
       category: category === 'All' ? undefined : category,
@@ -369,9 +385,9 @@ function ProductsScreenContent() {
           style={styles.cartIconBtn}
           accessibilityLabel={`Cart, ${items.length} items`}>
           <Ionicons name="cart-outline" size={24} color="#fff" />
-          {items.length > 0 && (
+          {cartHydrated && totalItems > 0 && (
             <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{items.length > 9 ? '9+' : items.length}</Text>
+              <Text style={styles.cartBadgeText}>{totalItems > 9 ? '9+' : totalItems}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -401,7 +417,7 @@ function ProductsScreenContent() {
           contentContainerStyle={styles.chips}
           keyboardShouldPersistTaps="handled">
           {CATEGORIES.map(cat => (
-            <FilterChip key={cat} label={cat} active={category === cat} onPress={() => setCategory(cat)} />
+            <FilterChip key={cat} label={cat} active={category === cat} onPress={() => selectCategory(cat)} />
           ))}
         </ScrollView>
       </View>
@@ -423,6 +439,21 @@ function ProductsScreenContent() {
         <View onLayout={e => { catalogOffsetY.current = e.nativeEvent.layout.y; }}>
           {isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+          ) : isError ? (
+            <View style={styles.empty}>
+              <Ionicons name="cloud-offline-outline" size={40} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.text }]}>Couldn&apos;t load products</Text>
+              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                Check your connection and try again.
+              </Text>
+              <TouchableOpacity
+                onPress={() => refetch()}
+                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <FlatList
               data={products ?? []}
@@ -446,12 +477,25 @@ function ProductsScreenContent() {
               ListEmptyComponent={
                 <View style={styles.empty}>
                   <Ionicons name="search-outline" size={40} color={colors.border} />
-                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No products found</Text>
+                  <Text style={[styles.emptyText, { color: colors.text }]}>
+                    {search || category !== 'All' ? 'No products in this selection' : 'No products found'}
+                  </Text>
+                  <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                    {search || category !== 'All'
+                      ? 'Try another category or clear your search.'
+                      : 'Please check back shortly.'}
+                  </Text>
                 </View>
               }
               renderItem={({ item }) => (
                 <View style={styles.cardWrap}>
-                  <ProductCard product={item} onPress={() => router.push(`/product/${item.id}` as never)} />
+                  <ProductCard
+                    product={item}
+                    onPress={() => router.push({
+                      pathname: '/product/[id]',
+                      params: { id: String(item.id), category },
+                    } as never)}
+                  />
                 </View>
               )}
             />
@@ -625,6 +669,9 @@ const styles = StyleSheet.create({
   grid: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 0 },
   row: { gap: 4, marginBottom: 8 },
   cardWrap: { flex: 1 },
-  empty: { alignItems: 'center', marginTop: 60, gap: 12 },
+  empty: { alignItems: 'center', marginTop: 60, gap: 12, paddingHorizontal: 28 },
   emptyText: { fontSize: 15 },
+  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  retryBtn: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 },
+  retryBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' as const },
 });

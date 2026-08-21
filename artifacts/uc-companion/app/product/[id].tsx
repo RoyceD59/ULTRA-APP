@@ -12,6 +12,7 @@ import { useColors } from '@/hooks/useColors';
 import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { visibleStoreCategory } from '@/lib/storeCategories';
 import TrustBadges from '@/components/TrustBadges';
 import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
@@ -32,7 +33,7 @@ type Slide =
   | { kind: 'video'; src: string };
 
 export default function ProductDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, category: returnCategory } = useLocalSearchParams<{ id: string; category?: string }>();
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
@@ -129,6 +130,24 @@ export default function ProductDetailScreen() {
 
         {/* ── Gallery ─────────────────────────────────────────────────── */}
         <View style={{ backgroundColor: '#0d0d0d' }}>
+          <TouchableOpacity
+            onPress={() => {
+              if (returnCategory) {
+                router.replace({
+                  pathname: '/(tabs)/products',
+                  params: { category: returnCategory },
+                } as never);
+              } else {
+                router.back();
+              }
+            }}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Back to products"
+          >
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+            <Text style={styles.backBtnText}>Products</Text>
+          </TouchableOpacity>
 
           {/* Main slide area */}
           <View style={{ height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
@@ -273,10 +292,37 @@ export default function ProductDetailScreen() {
         {/* ── /Gallery ─────────────────────────────────────────────────── */}
 
         <View style={styles.body}>
-          {/* Category */}
-          <Text style={[styles.category, { color: colors.accent }]}>
-            {product.categories[0]?.name ?? ''}
-          </Text>
+          {/* Categories are navigation controls, not passive metadata. */}
+          {product.categories.length > 0 && (
+            <View style={styles.categoryChips}>
+              {product.categories.map(category => {
+                const storeCategory = visibleStoreCategory(category.name);
+                return (
+                  <TouchableOpacity
+                    key={`${category.id}-${category.name}`}
+                    disabled={!storeCategory}
+                    onPress={() => {
+                      if (!storeCategory) return;
+                      router.replace({
+                        pathname: '/(tabs)/products',
+                        params: { category: storeCategory },
+                      } as never);
+                    }}
+                    style={[styles.categoryChip, {
+                      backgroundColor: colors.primaryLight,
+                      borderColor: colors.primary,
+                      opacity: storeCategory ? 1 : 0.7,
+                    }]}
+                    accessibilityRole={storeCategory ? 'button' : undefined}
+                    accessibilityLabel={storeCategory ? `Browse ${storeCategory}` : category.name}
+                  >
+                    <Text style={[styles.categoryChipText, { color: colors.primary }]}>{category.name}</Text>
+                    {storeCategory && <Ionicons name="arrow-forward" size={12} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           {/* Name & Price */}
           <Text style={[styles.name, { color: colors.text }]}>{product.name}</Text>
@@ -472,6 +518,13 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Gallery
+  backBtn: {
+    position: 'absolute', top: 12, left: 12, zIndex: 3,
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 18,
+    paddingHorizontal: 8, paddingVertical: 7,
+  },
+  backBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' as const },
   strikeBadge: {
     position: 'absolute', top: 12, right: 12,
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -486,7 +539,7 @@ const styles = StyleSheet.create({
   },
   durationHintTxt: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '600' as const },
   slideCounter: {
-    position: 'absolute', top: 12, left: 12,
+    position: 'absolute', top: 12, left: 98,
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20,
   },
@@ -518,7 +571,12 @@ const styles = StyleSheet.create({
 
   // Body
   body: { padding: 20, gap: 14 },
-  category: { fontSize: 12, fontWeight: '700' as const, textTransform: 'uppercase', letterSpacing: 1 },
+  categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6,
+  },
+  categoryChipText: { fontSize: 12, fontWeight: '700' as const },
   name: { fontSize: 22, fontWeight: '700' as const, lineHeight: 28 },
   skuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   sku: { fontSize: 12 },

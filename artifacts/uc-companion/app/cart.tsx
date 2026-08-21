@@ -163,6 +163,24 @@ export default function CartScreen() {
         keyExtractor={i => String(i.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.cartHeader}>
+            <View>
+              <Text style={[styles.cartTitle, { color: colors.text }]}>Your Basket</Text>
+              <Text style={[styles.cartSubtitle, { color: colors.mutedForeground }]}>
+                Review your items before checkout
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/products' as never)}
+              style={[styles.continueLink, { borderColor: colors.primary }]}
+              accessibilityRole="button"
+            >
+              <Ionicons name="storefront-outline" size={14} color={colors.primary} />
+              <Text style={[styles.continueLinkText, { color: colors.primary }]}>Keep shopping</Text>
+            </TouchableOpacity>
+          </View>
+        }
         ListFooterComponent={
           <View style={{ gap: 16 }}>
             {/* Summary */}
@@ -287,6 +305,11 @@ const styles = StyleSheet.create({
   shopBtn: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12, marginTop: 8 },
   shopBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
   list: { padding: 16, gap: 12, paddingBottom: 120 },
+  cartHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 },
+  cartTitle: { fontSize: 20, fontWeight: '700' as const },
+  cartSubtitle: { fontSize: 12, marginTop: 2 },
+  continueLink: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7 },
+  continueLinkText: { fontSize: 12, fontWeight: '700' as const },
   recHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   recTitle: { fontSize: 15, fontWeight: '700' as const, flex: 1 },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },

@@ -9,6 +9,7 @@
 - [Expo SDK-aligned package pins](expo-sdk-version-pins.md) — expo-* versions must match the SDK line (expo-doctor gate); a mismatched one crashes Expo Go at launch while web/tests/export still pass.
 - [image-size Metro compat](image-size-metro-compat.md) — image-size 2.x breaks Metro PNG processing via DataView byteOffset overflow; must stay on 1.x until metro upgrades.
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
+- [WooCommerce catalogue pagination](woocommerce-catalog-pagination.md) — category resolution and local category fallback must page all WooCommerce results or fail explicitly; never serve a silently truncated catalogue.
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines drop exports; spliced handler code → restore file from last good commit + re-apply legit lines.
 - [API test-DB isolation](api-test-db-isolation.md) — tests run in a per-run database; drizzle push always diffs public of the connected DB; raw-SQL-only tables (startup migrations) must be mirrored in lib/db schema.

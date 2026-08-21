@@ -15,6 +15,8 @@ import {
   type Guide, type GuideCategory,
 } from '@/data/guides';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
 
 const TABS = ['Guides', 'My Tickets', 'Water Test'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
@@ -111,6 +113,8 @@ function SupportScreenContent() {
   const colors = useColors();
   const router = useRouter();
   const api    = useApi();
+  const { user } = useAuth();
+  const { totalItems, cartHydrated } = useCart();
   const [tab, setTab]       = useState(0);
   const [search, setSearch] = useState('');
   const cartBarInset = useCartBarInset();
@@ -146,8 +150,28 @@ function SupportScreenContent() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* Compact store header keeps support part of the same customer journey. */}
+      <View style={[styles.customerHeader, { backgroundColor: colors.primary, paddingTop: topPad + 10 }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.customerHeaderTitle}>Support{user ? `, ${user.firstName}` : ''}</Text>
+          <Text style={styles.customerHeaderSub}>Guides and help for your water system</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/cart' as never)}
+          style={styles.cartBtn}
+          accessibilityRole="button"
+          accessibilityLabel={`Basket, ${cartHydrated ? totalItems : 0} items`}
+        >
+          <Ionicons name="cart-outline" size={22} color="#fff" />
+          {cartHydrated && totalItems > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{totalItems > 9 ? '9+' : totalItems}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
       {/* Tab bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: topPad }]}>
+      <View style={[styles.tabBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {TABS.map((t, i) => (
           <TouchableOpacity
             key={t}
@@ -295,6 +319,12 @@ function SupportScreenContent() {
 
 const styles = StyleSheet.create({
   screen:           { flex: 1 },
+  customerHeader:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+  customerHeaderTitle: { color: '#fff', fontSize: 18, fontWeight: '700' as const },
+  customerHeaderSub: { color: 'rgba(255,255,255,0.76)', fontSize: 12, marginTop: 2 },
+  cartBtn:          { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  cartBadge:        { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#F59E0B', alignItems: 'center', justifyContent: 'center' },
+  cartBadgeText:    { color: '#fff', fontSize: 9, fontWeight: '700' as const, paddingHorizontal: 2 },
   tabBar:           { flexDirection: 'row', borderBottomWidth: 1 },
   tab:              { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabText:          { fontSize: 14, fontWeight: '600' as const },

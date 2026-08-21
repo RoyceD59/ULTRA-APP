@@ -40,7 +40,7 @@ function GlobalCartBar() {
     }).start();
   }, [hasItems, anim]);
 
-  // Position the bar just above the tab bar.
+  // Position the compact bar just above the tab bar.
   // Tab bar is ~49 pt tall on iOS (+ safe-area bottom), ~56 on Android, ~84 on web.
   const tabBarHeight = Platform.OS === 'web' ? 84 : Platform.OS === 'ios' ? 49 : 56;
   const bottomOffset = tabBarHeight + (Platform.OS === 'web' ? 0 : insets.bottom);
@@ -70,7 +70,7 @@ function GlobalCartBar() {
         <View style={[styles.badgeCircle, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
           <Text style={styles.badgeText}>{totalItems}</Text>
         </View>
-        <Text style={styles.barTotal}>{formatKES(totalPrice)}</Text>
+        <Text style={styles.barTotal}>Subtotal {formatKES(totalPrice)}</Text>
       </View>
 
       {/* Right: Quick Checkout button */}
@@ -81,9 +81,11 @@ function GlobalCartBar() {
           router.push('/checkout');
         }}
         style={[styles.checkoutBtn, { backgroundColor: '#fff' }]}
+        accessibilityRole="button"
+        accessibilityLabel={`Checkout ${totalItems} items, subtotal ${formatKES(totalPrice)}`}
       >
         <Ionicons name="bag-check-outline" size={15} color={colors.primary} />
-        <Text style={[styles.checkoutBtnText, { color: colors.primary }]}>Quick Checkout</Text>
+        <Text style={[styles.checkoutBtnText, { color: colors.primary }]}>Checkout</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -225,9 +227,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    height: 52,
+    paddingVertical: 6,
+    borderRadius: 12,
+    height: 46,
     // Shadow
     shadowColor: '#000',
     shadowOpacity: 0.18,
@@ -248,14 +250,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  barTotal: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  barTotal: { color: '#fff', fontSize: 13, fontWeight: '700' },
   checkoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    minHeight: 34,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 10,
   },
-  checkoutBtnText: { fontSize: 13, fontWeight: '700' },
+  checkoutBtnText: { fontSize: 12, fontWeight: '700' },
 });
