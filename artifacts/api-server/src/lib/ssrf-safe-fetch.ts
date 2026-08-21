@@ -25,7 +25,7 @@
 
 import { resolve4, resolve6 } from "node:dns/promises";
 import https from "node:https";
-import { isIPv4 } from "node:net";
+import { isIPv4, isIPv6 } from "node:net";
 
 // ─── Private / reserved IP detection ─────────────────────────────────────────
 
@@ -39,31 +39,89 @@ export function isPrivateIpv4(ip: string): boolean {
   if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) {
     return false; // Malformed — not a valid IPv4 at all
   }
-  const [a, b] = parts as [number, number, number, number];
+  const [a, b, c] = parts as [number, number, number, number];
   return (
     a === 0 ||                              // 0.0.0.0/8 — "this" network
     a === 10 ||                             // 10.0.0.0/8 — RFC1918
+    (a === 100 && b >= 64 && b <= 127) ||   // 100.64.0.0/10 — shared address space
     a === 127 ||                            // 127.0.0.0/8 — loopback
     (a === 169 && b === 254) ||             // 169.254.0.0/16 — link-local + IMDS
     (a === 172 && b >= 16 && b <= 31) ||    // 172.16.0.0/12 — RFC1918
+    (a === 192 && b === 0) ||               // 192.0.0.0/24 — IETF protocol assignments
+    (a === 192 && b === 2) ||               // 192.0.2.0/24 — documentation
+    (a === 192 && b === 31 && c === 196) || // AS112-v4 direct delegation
+    (a === 192 && b === 52 && c === 193) || // AMT relay anycast
+    (a === 192 && b === 88 && c === 99) ||  // deprecated 6to4 relay anycast
     (a === 192 && b === 168) ||             // 192.168.0.0/16 — RFC1918
+    (a === 192 && b === 175 && c === 48) || // AS112-v4 direct delegation
+    (a === 198 && (b === 18 || b === 19)) || // 198.18.0.0/15 — benchmarking
+    (a === 198 && b === 51 && c === 100) || // 198.51.100.0/24 — documentation
+    (a === 203 && b === 0 && c === 113) ||  // 203.0.113.0/24 — documentation
     a >= 224                                // 224+ — multicast / reserved
   );
 }
 
+function ipv6ToBigInt(ip: string): bigint | null {
+  const normalized = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!isIPv6(normalized)) return null;
+
+  // Convert an optional dotted-quad tail to its two hextets first.
+  const withHexTail = normalized.replace(
+    /(\d{1,3}(?:\.\d{1,3}){3})$/,
+    (dotted) => {
+      const octets = dotted.split(".").map(Number);
+      if (octets.some(octet => octet < 0 || octet > 255)) return dotted;
+      return `${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`;
+    },
+  );
+  const halves = withHexTail.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const parts = halves.length === 2
+    ? [...left, ...Array(8 - left.length - right.length).fill("0"), ...right]
+    : left;
+  if (parts.length !== 8 || parts.some(part => !/^[0-9a-f]{1,4}$/.test(part))) return null;
+  return parts.reduce((value, part) => (value << 16n) | BigInt(parseInt(part, 16)), 0n);
+}
+
+function isIpv6InRange(ip: bigint, network: string, prefixLength: number): boolean {
+  const networkValue = ipv6ToBigInt(network);
+  if (networkValue === null) return true;
+  const shift = 128n - BigInt(prefixLength);
+  return (ip >> shift) === (networkValue >> shift);
+}
+
+const IPV6_SPECIAL_USE_RANGES: ReadonlyArray<readonly [network: string, prefixLength: number]> = [
+  ["64:ff9b::", 96],       // IPv4/IPv6 translation
+  ["64:ff9b:1::", 48],     // local-use IPv4/IPv6 translation
+  ["2001::", 23],          // IETF protocol assignments (Teredo, benchmark, AMT, ORCHID)
+  ["2001:db8::", 32],      // documentation
+  ["2002::", 16],          // 6to4 (embedded IPv4 destination)
+  ["2620:4f:8000::", 48],  // AS112-v6 direct delegation
+  ["3fff::", 20],          // documentation
+  ["5f00::", 16],          // Segment Routing (SRv6) SIDs
+];
+
 /**
- * Returns true for any IPv6 address that must never be used as a webhook
- * destination: loopback, ULA (fc00::/7), link-local (fe80::/10), and
- * IPv4-mapped addresses (which are re-blocked via the IPv4 path anyway).
+ * Returns true unless an IPv6 address is a global-unicast address
+ * (2000::/3). Default-denying every other IPv6 range blocks loopback, ULA,
+ * link-local (the entire fe80::/10 range), unspecified, multicast,
+ * documentation, IPv4-mapped, and any malformed value.
  */
 export function isPrivateIpv6(ip: string): boolean {
-  const lower = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  const value = ipv6ToBigInt(ip);
+  if (value === null) return true;
+
+  // The first 3 bits of a global-unicast address are 001 (2000::/3).
+  // Parsing the first hextet correctly covers all compressed forms and the
+  // whole fe80::/10 range (fe80 through febf), unlike string-prefix checks.
+  const firstHextet = Number(value >> 112n);
   return (
-    lower === "::1" ||               // loopback
-    lower.startsWith("fc") ||        // ULA fc00::/7
-    lower.startsWith("fd") ||
-    lower.startsWith("fe80:") ||     // link-local fe80::/10
-    lower.startsWith("::ffff:")      // IPv4-mapped — caller should re-check as IPv4
+    (firstHextet & 0xe000) !== 0x2000 ||
+    IPV6_SPECIAL_USE_RANGES.some(([network, prefixLength]) =>
+      isIpv6InRange(value, network, prefixLength),
+    )
   );
 }
 
@@ -101,6 +159,21 @@ const BLOCKED_HOSTNAMES = new Set([
 export async function getAllAddresses(
   hostname: string,
 ): Promise<Array<{ address: string; family: 4 | 6 }>> {
+  const literal = hostname.replace(/^\[|\]$/g, "");
+
+  // IP literals have no DNS record to resolve. Validate and return a pinned
+  // address directly so a URL accepted at save-time can also be delivered at
+  // request-time without calling resolve4/resolve6 (which returns ENOTFOUND
+  // for a literal).
+  if (isIPv4(literal)) {
+    if (isPrivateIpv4(literal)) throw new SsrfBlockedError(literal);
+    return [{ address: literal, family: 4 }];
+  }
+  if (isIPv6(literal)) {
+    if (isPrivateIpv6(literal)) throw new SsrfBlockedError(literal);
+    return [{ address: literal, family: 6 }];
+  }
+
   const [v4Result, v6Result] = await Promise.allSettled([
     resolve4(hostname),
     resolve6(hostname),
@@ -155,11 +228,17 @@ export async function validateWebhookDestination(rawUrl: string): Promise<string
 
   const hostname = url.hostname.toLowerCase();
 
-  // Bare IPv4 literals — checked immediately without DNS
+  // Bare IPv4 literals — checked immediately without DNS.
   if (isIPv4(hostname)) {
     return isPrivateIpv4(hostname)
       ? "Webhook URL must point to an external server (private/loopback IP not permitted)"
       : null; // Public IPv4 literal — OK
+  }
+  // URL.hostname preserves brackets around IPv6 literals.
+  if (isIPv6(hostname.replace(/^\[|\]$/g, ""))) {
+    return isPrivateIpv6(hostname)
+      ? "Webhook URL must point to an external server (private/loopback IP not permitted)"
+      : null; // Public IPv6 literal — OK
   }
 
   // Known-dangerous hostnames (also caught by DNS, but blocked first for speed)
@@ -196,9 +275,12 @@ export async function ssrfSafePost(
 ): Promise<number> {
   const url = new URL(webhookUrl);
   const hostname = url.hostname;
+  const hostnameWithoutBrackets = hostname.replace(/^\[|\]$/g, "");
   const port = url.port ? parseInt(url.port, 10) : 443;
+  const isIpLiteral = isIPv4(hostnameWithoutBrackets) || isIPv6(hostnameWithoutBrackets);
 
   // ── 1. Resolve ALL A/AAAA at request time — defeats DNS rebinding ──────────
+  // Public IP literals are validated and returned directly by getAllAddresses.
   const addresses = await getAllAddresses(hostname);
   const pinned = addresses[0]!; // First validated address
 
@@ -214,12 +296,13 @@ export async function ssrfSafePost(
         path: url.pathname + url.search,
         method: "POST",
         headers: {
-          Host:             hostname,       // Virtual-host routing on n8n
+          Host:             url.port ? url.host : hostname, // Virtual-host routing on n8n
           "Content-Type":   "application/json",
           "Content-Length": bodyBuf.byteLength,
         },
         // TLS SNI: cert is checked against the original hostname, not the raw IP.
-        servername: hostname,
+        // IP literals do not have an SNI hostname; TLS will validate their IP SAN.
+        servername: isIpLiteral ? undefined : hostnameWithoutBrackets,
         // Custom lookup always returns our pre-validated pinned IP.
         // This is an extra guard: even if Node internals re-resolve (e.g. for
         // proxies), our callback intercepts and returns only the validated IP.

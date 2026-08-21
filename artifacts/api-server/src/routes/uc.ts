@@ -4801,6 +4801,14 @@ const OFFICE_EMAIL  = "sales@ucfilters.com";
 interface _EmailSecretCache { value: string; expiresAt: number }
 let _teamAlertEmailCache: _EmailSecretCache | null = null;
 
+/** Resolve the configured recipient without reading process or database state. */
+export function resolveTeamAlertEmail(
+  databaseValue: string | null | undefined,
+  environmentValue: string | undefined,
+): string {
+  return databaseValue?.trim() || environmentValue?.trim() || "info@ucfilters.com";
+}
+
 /**
  * Resolve the team alert email address.
  * Priority: DB (team_settings.team_alert_email) → TEAM_ALERT_EMAIL env var → info@ucfilters.com
@@ -4812,7 +4820,7 @@ export async function getTeamAlertEmail(): Promise<string> {
     return _teamAlertEmailCache.value;
   }
 
-  let value: string | null = null;
+  let databaseValue: string | null = null;
 
   try {
     const [row] = await db
@@ -4822,15 +4830,13 @@ export async function getTeamAlertEmail(): Promise<string> {
       .limit(1);
 
     if (row?.teamAlertEmail) {
-      value = row.teamAlertEmail;
+      databaseValue = row.teamAlertEmail;
     }
   } catch (err) {
     console.error("[uc] DB read for team alert email failed — falling back to env var:", err);
   }
 
-  if (value === null) {
-    value = process.env["TEAM_ALERT_EMAIL"]?.trim() || "info@ucfilters.com";
-  }
+  const value = resolveTeamAlertEmail(databaseValue, process.env["TEAM_ALERT_EMAIL"]);
 
   _teamAlertEmailCache = { value, expiresAt: now + 60_000 };
   return value;

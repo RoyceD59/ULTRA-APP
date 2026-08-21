@@ -41,6 +41,9 @@ const _resetStorage: () => void = (AsyncStorageStub as any)._reset;
 import {
   scheduleAllFilterNotifications,
   syncActivationWithCatalogue,
+  recordFilterClean,
+  clearFilterActivation,
+  resetFilterCleanCount,
 } from '../useNotifications.js';
 import { toFilterProducts } from '../useFilterProducts.js';
 
@@ -122,6 +125,54 @@ describe('replacement reminders for a newly set lifespan', () => {
     // +2h nudge, day-30 check (90 > 45), day-60 check (90 > 75),
     // offer at 90−30 = 60, urgent at 90−15 = 75
     assertOffsets(scheduledOffsetsDays(activatedAt), [2 / 24, 30, 60, 60, 75]);
+  });
+
+  it('preserves the maintenance count across customer replacement and re-registration', async () => {
+    const userId = 707;
+    await scheduleAllFilterNotifications({
+      activatedAt: new Date().toISOString(),
+      productId: DISPENSER.id,
+      productName: DISPENSER.name,
+      lifespanDays: 60,
+    }, userId);
+    await recordFilterClean(userId);
+    await recordFilterClean(userId);
+
+    // A customer may clear/re-register their filter, but cannot erase the
+    // maintenance count as a side effect of starting the new cycle.
+    await clearFilterActivation(userId);
+    const reRegistered = await scheduleAllFilterNotifications({
+      activatedAt: new Date().toISOString(),
+      productId: PUMP.id,
+      productName: PUMP.name,
+      lifespanDays: 90,
+    }, userId);
+    assert.equal(reRegistered.cleanCount, 2);
+
+    // An explicit team-admin reset is the sole reset path.
+    const reset = await resetFilterCleanCount(userId);
+    assert.equal(reset?.cleanCount, 0);
+  });
+
+  it('preserves a pre-upgrade count through a customer clear and re-registration', async () => {
+    const userId = 708;
+    _storage.set(`uc_filter_activation_${userId}`, JSON.stringify({
+      activatedAt: new Date().toISOString(),
+      productId: DISPENSER.id,
+      productName: DISPENSER.name,
+      lifespanDays: 60,
+      notifIds: [],
+      cleanCount: 3,
+    }));
+
+    await clearFilterActivation(userId);
+    const reRegistered = await scheduleAllFilterNotifications({
+      activatedAt: new Date().toISOString(),
+      productId: PUMP.id,
+      productName: PUMP.name,
+      lifespanDays: 90,
+    }, userId);
+    assert.equal(reRegistered.cleanCount, 3);
   });
 
   it('catalogue lifespan change reschedules from the ORIGINAL purchase date', async () => {

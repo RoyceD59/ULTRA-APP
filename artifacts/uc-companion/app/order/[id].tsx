@@ -94,6 +94,7 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const api = useApi();
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -153,6 +154,14 @@ export default function OrderDetailScreen() {
         <View style={{ alignSelf: 'stretch', paddingHorizontal: 20, marginTop: 24 }}>
           <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
         </View>
+        <TouchableOpacity
+          testID="order-continue-shopping"
+          onPress={() => router.replace('/(tabs)/products' as never)}
+          style={[styles.continueShoppingBtn, { backgroundColor: colors.primary }]}
+        >
+          <Ionicons name="storefront-outline" size={18} color="#fff" />
+          <Text style={styles.continueShoppingText}>Continue shopping</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -311,6 +320,15 @@ export default function OrderDetailScreen() {
         </View>
       )}
 
+      <TouchableOpacity
+        testID="order-continue-shopping"
+        onPress={() => router.replace('/(tabs)/products' as never)}
+        style={[styles.continueShoppingBtn, { backgroundColor: colors.primary }]}
+      >
+        <Ionicons name="storefront-outline" size={18} color="#fff" />
+        <Text style={styles.continueShoppingText}>Continue shopping</Text>
+      </TouchableOpacity>
+
       {/* ── Return Request Modal ─────────────────────────────── */}
       <Modal
         visible={modalVisible}
@@ -435,4 +453,6 @@ const styles = StyleSheet.create({
   // Confirmed state (before order loads)
   successTitle: { fontSize: 26, fontWeight: '700' as const, marginTop: 16 },
   successSub: { fontSize: 15, textAlign: 'center' as const, paddingHorizontal: 40, marginTop: 8 },
+  continueShoppingBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 13, marginHorizontal: 20, marginTop: 20 },
+  continueShoppingText: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
 });

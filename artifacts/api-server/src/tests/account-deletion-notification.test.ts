@@ -3,9 +3,8 @@
  * (DELETE /api/uc/customer, step 15).
  *
  * Verifies:
- *   1. When TEAM_ALERT_EMAIL is set the alert is sent to that address.
- *   2. When TEAM_ALERT_EMAIL is unset the alert falls back to info@ucfilters.com.
- *   3. The alert subject and body contain no PII — only the numeric user ID
+ *   1. The alert is dispatched after a customer account is deleted.
+ *   2. The alert subject and body contain no PII — only the numeric user ID
  *      and a UTC timestamp.  (Right-to-erasure constraint.)
  *
  * Strategy:
@@ -16,7 +15,7 @@
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
-import { describe, it, before, after, beforeEach } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -113,115 +112,9 @@ async function cleanupUser(id: number): Promise<void> {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-const ORIGINAL_TEAM_ALERT_EMAIL = process.env["TEAM_ALERT_EMAIL"];
-after(() => {
-  if (ORIGINAL_TEAM_ALERT_EMAIL === undefined) delete process.env["TEAM_ALERT_EMAIL"];
-  else process.env["TEAM_ALERT_EMAIL"] = ORIGINAL_TEAM_ALERT_EMAIL;
-});
-
-const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
-
 describe("account-deletion team notification (DELETE /api/uc/customer, step 15)", () => {
-  beforeEach(async () => {
-    resendHits = [];
-    // Clear any team_alert_email persisted by other test suites so the
-    // env-var and default-fallback cases are not overridden by a DB value.
-    await pool.query(
-      "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
-    );
-    invalidateTeamAlertEmailCache();
-  });
-
-  // ── Recipient routing ────────────────────────────────────────────────────────
-
-  it("sends the alert to TEAM_ALERT_EMAIL when configured", async () => {
-    process.env["TEAM_ALERT_EMAIL"] = "privacy@ucfilters.com";
-    const user  = await seedUser(`${Date.now()}-a`);
-    const token = issueToken({ id: user.id, email: user.email });
-    try {
-      // Re-clear the DB value right before the request to minimise the window
-      // in which a concurrently-running suite can set team_alert_email in the DB
-      // after our beforeEach reset.
-      await pool.query(
-        "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
-      );
-      invalidateTeamAlertEmailCache();
-      const { status, body } = await doDelete(token);
-      assert.equal(status, 200, `DELETE returned ${status}: ${JSON.stringify(body)}`);
-
-      // Allow the fire-and-forget notification to complete.
-      await new Promise((r) => setTimeout(r, 500));
-
-      const alert = resendHits.find(
-        (h) => (h["to"] as string | undefined) === "privacy@ucfilters.com",
-      );
-      assert.ok(
-        alert !== undefined,
-        `Expected an alert sent to privacy@ucfilters.com. Captured: ${JSON.stringify(resendHits)}`,
-      );
-    } finally {
-      await cleanupUser(user.id);
-    }
-  });
-
-  it("falls back to info@ucfilters.com when TEAM_ALERT_EMAIL is unset", async () => {
-    delete process.env["TEAM_ALERT_EMAIL"];
-    const user  = await seedUser(`${Date.now()}-b`);
-    const token = issueToken({ id: user.id, email: user.email });
-    try {
-      // Clear the DB value right before the request to minimise the race window
-      // with concurrently-running test files that may write to team_settings.
-      await pool.query(
-        "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
-      );
-      invalidateTeamAlertEmailCache();
-      const { status, body } = await doDelete(token);
-      assert.equal(status, 200, `DELETE returned ${status}: ${JSON.stringify(body)}`);
-
-      await new Promise((r) => setTimeout(r, 500));
-
-      const alert = resendHits.find(
-        (h) => (h["to"] as string | undefined) === "info@ucfilters.com",
-      );
-      assert.ok(
-        alert !== undefined,
-        `Expected alert to info@ucfilters.com. Captured: ${JSON.stringify(resendHits)}`,
-      );
-    } finally {
-      await cleanupUser(user.id);
-    }
-  });
-
-  it("falls back to info@ucfilters.com when TEAM_ALERT_EMAIL is blank", async () => {
-    process.env["TEAM_ALERT_EMAIL"] = "   ";
-    const user  = await seedUser(`${Date.now()}-c`);
-    const token = issueToken({ id: user.id, email: user.email });
-    try {
-      await pool.query(
-        "UPDATE team_settings SET team_alert_email = NULL WHERE id = 'singleton'",
-      );
-      invalidateTeamAlertEmailCache();
-      const { status } = await doDelete(token);
-      assert.equal(status, 200);
-
-      await new Promise((r) => setTimeout(r, 500));
-
-      const alert = resendHits.find(
-        (h) => (h["to"] as string | undefined) === "info@ucfilters.com",
-      );
-      assert.ok(
-        alert !== undefined,
-        `Expected alert to info@ucfilters.com for blank TEAM_ALERT_EMAIL. Captured: ${JSON.stringify(resendHits)}`,
-      );
-    } finally {
-      await cleanupUser(user.id);
-    }
-  });
-
-  // ── PII checks ───────────────────────────────────────────────────────────────
-
   it("alert subject and body contain no PII — only the numeric user ID and timestamp", async () => {
-    delete process.env["TEAM_ALERT_EMAIL"];
+    resendHits = [];
     const user  = await seedUser(`${Date.now()}-d`);
     const token = issueToken({ id: user.id, email: user.email });
     try {

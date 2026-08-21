@@ -37,35 +37,37 @@ interface AddonCardProps {
 function AddonCard({ product, onAdd, onPress, colors }: AddonCardProps) {
   const price = parseFloat(product.salePrice || product.price || product.regularPrice);
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
+    <View
       style={[styles.addonCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.addonImageWrap, { backgroundColor: colors.surface }]}>
-        {product.images[0] ? (
-          <Image
-            source={{ uri: resizedImageUrl(product.images[0].src, 96) }}
-            style={styles.addonImage}
-            contentFit="contain"
-            transition={120}
-            recyclingKey={product.images[0].src}
-          />
-        ) : (
-          <Ionicons name="water-outline" size={22} color={colors.primary} />
-        )}
-      </View>
-      <Text style={[styles.addonName, { color: colors.text }]} numberOfLines={2}>{product.name}</Text>
-      <Text style={[styles.addonPrice, { color: colors.primary }]}>
-        {isNaN(price) ? '—' : formatKES(price)}
-      </Text>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={styles.addonInfoTap}>
+        <View style={[styles.addonImageWrap, { backgroundColor: colors.surface }]}>
+          {product.images[0] ? (
+            <Image
+              source={{ uri: resizedImageUrl(product.images[0].src, 64) }}
+              style={styles.addonImage}
+              contentFit="contain"
+              transition={120}
+              recyclingKey={product.images[0].src}
+            />
+          ) : (
+            <Ionicons name="water-outline" size={20} color={colors.primary} />
+          )}
+        </View>
+        <View style={styles.addonText}>
+          <Text style={[styles.addonName, { color: colors.text }]} numberOfLines={1}>{product.name}</Text>
+          <Text style={[styles.addonPrice, { color: colors.primary }]}>
+            {isNaN(price) ? '—' : formatKES(price)}
+          </Text>
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity
-        onPress={e => { e.stopPropagation?.(); onAdd(); }}
+        onPress={onAdd}
         activeOpacity={0.8}
         style={[styles.addonAddBtn, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
         <Ionicons name="add" size={13} color={colors.primary} />
-        <Text style={[styles.addonAddText, { color: colors.primary }]}>Add +</Text>
+        <Text style={[styles.addonAddText, { color: colors.primary }]}>Add</Text>
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -84,7 +86,7 @@ function ProductsScreenContent() {
   const router = useRouter();
   const api = useApi();
   const insets = useSafeAreaInsets();
-  const { items, addItem, refreshCart, cartHydrated } = useCart();
+  const { items, addItem, refreshCart, cartHydrated, totalItems } = useCart();
   const cartBarInset = useCartBarInset();
 
   const [search, setSearch] = useState('');
@@ -142,8 +144,23 @@ function ProductsScreenContent() {
 
   const addOnsSection = (
     <View style={styles.addonsSection}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Add-Ons & Recommended for Your System</Text>
-      <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Compatible with your current basket</Text>
+      <View style={styles.addonsHeading}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Compatible add-ons</Text>
+          <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Recommended for your basket</Text>
+        </View>
+        <TouchableOpacity
+          testID="products-view-basket"
+          onPress={() => router.push('/cart' as never)}
+          activeOpacity={0.8}
+          style={[styles.basketLink, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}
+        >
+          <Ionicons name="cart-outline" size={14} color={colors.primary} />
+          <Text style={[styles.basketLinkText, { color: colors.primary }]}>
+            {totalItems} item{totalItems === 1 ? '' : 's'}
+          </Text>
+        </TouchableOpacity>
+      </View>
       {addonsLoading ? (
         <View style={styles.addonsSkeletonRow}>
           {[0, 1, 2].map(k => (
@@ -157,7 +174,7 @@ function ProductsScreenContent() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.addonsRow}
           renderItem={({ item }) => (
-            <AddonCard
+                <AddonCard
               product={item}
               colors={colors}
               onPress={() => router.push(`/product/${item.id}` as never)}
@@ -315,9 +332,14 @@ function ProductsScreenContent() {
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
               ListHeaderComponent={
-                hasItems ? (
-                  <Text style={[styles.catalogLabel, { color: colors.mutedForeground }]}>Full Catalog</Text>
-                ) : null
+                <View style={styles.catalogHeader}>
+                  <Text style={[styles.catalogLabel, { color: colors.mutedForeground }]}>
+                    {category === 'All' ? 'All products' : category}
+                  </Text>
+                  <Text style={[styles.catalogCount, { color: colors.mutedForeground }]}>
+                    {(products ?? []).length} product{(products ?? []).length === 1 ? '' : 's'}
+                  </Text>
+                </View>
               }
               ListEmptyComponent={
                 <View style={styles.empty}>
@@ -357,24 +379,28 @@ const styles = StyleSheet.create({
   chips: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
 
   // Add-Ons
-  addonsSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  sectionTitle: { fontSize: 16, fontWeight: '700' as const, marginBottom: 2 },
-  sectionSub: { fontSize: 12, marginBottom: 12 },
-  addonsRow: { gap: 10, paddingRight: 16 },
+  addonsSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
+  addonsHeading: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 9 },
+  sectionTitle: { fontSize: 15, fontWeight: '700' as const },
+  sectionSub: { fontSize: 12, marginTop: 1 },
+  basketLink: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 6 },
+  basketLinkText: { fontSize: 12, fontWeight: '700' as const },
+  addonsRow: { gap: 8, paddingRight: 16 },
   addonsSkeletonRow: { flexDirection: 'row', gap: 10 },
   addonSkeletonCard: {
-    width: 140, height: 180,
+    width: 230, height: 72,
     borderRadius: 12, borderWidth: 1,
     opacity: 0.5,
   },
   addonCard: {
-    width: 140, borderRadius: 12, borderWidth: 1,
-    padding: 10, gap: 6,
+    width: 250, minHeight: 72, borderRadius: 12, borderWidth: 1,
+    padding: 8, flexDirection: 'row', alignItems: 'center', gap: 8,
   },
+  addonInfoTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  addonText: { flex: 1, gap: 3 },
   addonImageWrap: {
-    height: 80, borderRadius: 8,
+    width: 52, height: 52, borderRadius: 8,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 2,
   },
   addonImage: { width: '100%', height: '100%', borderRadius: 6 },
   addonName: { fontSize: 12, fontWeight: '600' as const, lineHeight: 16 },
@@ -382,7 +408,7 @@ const styles = StyleSheet.create({
   addonAddBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 3, borderWidth: 1, borderRadius: 7,
-    paddingVertical: 5, marginTop: 2,
+    paddingHorizontal: 7, paddingVertical: 7,
   },
   addonAddText: { fontSize: 12, fontWeight: '600' as const },
 
@@ -433,7 +459,9 @@ const styles = StyleSheet.create({
   chatBubbleText: { color: '#fff', fontSize: 13, fontWeight: '600' as const },
 
   // Products catalog
-  catalogLabel: { fontSize: 13, fontWeight: '600' as const, marginBottom: 8, letterSpacing: 0.3, textTransform: 'uppercase' },
+  catalogHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 },
+  catalogLabel: { fontSize: 13, fontWeight: '700' as const, letterSpacing: 0.3, textTransform: 'uppercase' },
+  catalogCount: { fontSize: 12 },
   grid: { padding: 12, paddingBottom: 0 },
   row: { gap: 12, marginBottom: 12 },
   cardWrap: { flex: 1 },

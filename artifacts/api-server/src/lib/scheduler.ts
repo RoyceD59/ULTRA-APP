@@ -271,30 +271,37 @@ export async function runLowStockAlert(
   deps: {
     fetchProducts?: typeof fetchAllPublishedProducts;
     sendEmail?: typeof sendViaResend;
+    /** Test seam: avoid reading process-wide Woo credentials. */
+    isWcConfigured?: () => boolean;
+    /** Test seam: avoid reading the shared settings row. */
+    threshold?: number;
     /** When true, returns immediately without sending if nothing is flagged. */
     skipIfEmpty?: boolean;
   } = {},
 ): Promise<{ outOfStock: number; lowStock: number; emailed: boolean }> {
   const fetchProducts = deps.fetchProducts ?? fetchAllPublishedProducts;
   const sendEmail     = deps.sendEmail     ?? sendViaResend;
+  const isWcConfigured = deps.isWcConfigured ?? hasWCCredentials;
   const skipIfEmpty   = deps.skipIfEmpty   ?? true;
 
-  if (!hasWCCredentials()) {
+  if (!isWcConfigured()) {
     logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
     return { outOfStock: 0, lowStock: 0, emailed: false };
   }
 
   // Read threshold from DB (admin-configurable), fall back to default of 5.
-  let threshold = 5;
-  try {
-    const [row] = await db
-      .select({ lowStockThreshold: teamSettingsTable.lowStockThreshold })
-      .from(teamSettingsTable)
-      .where(eq(teamSettingsTable.id, "singleton"))
-      .limit(1);
-    if (row?.lowStockThreshold != null) threshold = row.lowStockThreshold;
-  } catch (err) {
-    logger.warn({ err }, "Low-stock alert: could not read threshold from DB — using default (5)");
+  let threshold = deps.threshold ?? 5;
+  if (deps.threshold === undefined) {
+    try {
+      const [row] = await db
+        .select({ lowStockThreshold: teamSettingsTable.lowStockThreshold })
+        .from(teamSettingsTable)
+        .where(eq(teamSettingsTable.id, "singleton"))
+        .limit(1);
+      if (row?.lowStockThreshold != null) threshold = row.lowStockThreshold;
+    } catch (err) {
+      logger.warn({ err }, "Low-stock alert: could not read threshold from DB — using default (5)");
+    }
   }
 
   logger.info({ threshold }, "Scheduler: running low-stock / out-of-stock alert check");
@@ -312,14 +319,29 @@ export async function runLowStockAlert(
     return { outOfStock: 0, lowStock: 0, emailed: false };
   }
 
-  type StockItem = { id: number; name: string; sku: string; qty: number; permalink: string | null };
+  type StockItem = {
+    id: number;
+    name: string;
+    sku: string;
+    /** null means WooCommerce explicitly marked an unmanaged product out of stock. */
+    qty: number | null;
+    permalink: string | null;
+  };
   const outOfStockItems: StockItem[] = [];
   const lowStockItems:   StockItem[] = [];
 
   for (const raw of products) {
     const p = normalizeProduct(raw);
-    const qty = typeof p["stockQuantity"] === "number" ? p["stockQuantity"] : 0;
-    if (qty > threshold) continue; // above threshold — skip
+    const rawQty = p["stockQuantity"];
+    const qty = typeof rawQty === "number" && Number.isFinite(rawQty) ? rawQty : null;
+    const status = String(p["stockStatus"] ?? "").toLowerCase();
+
+    // WooCommerce represents products that do not use stock management with
+    // stock_quantity: null. Do not invent a quantity of zero for those products.
+    // An explicit outofstock status remains actionable even without a quantity.
+    const explicitlyOutOfStock = status === "outofstock";
+    if (!explicitlyOutOfStock && (qty === null || qty > threshold)) continue;
+
     const item: StockItem = {
       id:        Number(p["id"]),
       name:      String(p["name"] ?? ""),
@@ -327,7 +349,7 @@ export async function runLowStockAlert(
       qty,
       permalink: typeof p["permalink"] === "string" ? p["permalink"] : null,
     };
-    if (qty === 0) outOfStockItems.push(item);
+    if (explicitlyOutOfStock || qty === 0) outOfStockItems.push(item);
     else           lowStockItems.push(item);
   }
 
@@ -349,7 +371,8 @@ export async function runLowStockAlert(
   }
 
   const formatItem = (item: StockItem) =>
-    `  • ${item.name}${item.sku ? ` (SKU ${item.sku})` : ""} — qty: ${item.qty} | ${wcEditUrl(item)}`;
+    `  • ${item.name}${item.sku ? ` (SKU ${item.sku})` : ""} — ` +
+    `${item.qty === null ? "status: out of stock (quantity not managed)" : `qty: ${item.qty}`} | ${wcEditUrl(item)}`;
 
   const sections: string[] = [];
 
@@ -615,7 +638,26 @@ function parseRetentionDays(raw: string | undefined, defaultDays: number): numbe
   return n;
 }
 
-export async function runNotificationLogPruning(): Promise<{
+export interface NotificationLogPruningDeps {
+  /**
+   * Optional seams keep retention policy tests independent of the shared
+   * team_settings singleton and process environment.
+   */
+  readRetentionSettings?: () => Promise<{
+    successDays: number | null;
+    failureDays: number | null;
+  }>;
+  deleteLogs?: (
+    status: "sent" | "failed",
+    cutoff: Date,
+  ) => Promise<{ rowCount?: number }>;
+  environment?: Readonly<Record<string, string | undefined>>;
+  now?: () => Date;
+}
+
+export async function runNotificationLogPruning(
+  deps: NotificationLogPruningDeps = {},
+): Promise<{
   deletedSuccess: number;
   deletedFailure: number;
 }> {
@@ -623,9 +665,7 @@ export async function runNotificationLogPruning(): Promise<{
   // env vars or hard defaults only when the DB row has no override.
   // If the settings read fails, abort pruning entirely — better to keep logs
   // than to delete them with a potentially wrong retention window.
-  let settingsSuccess: number | null = null;
-  let settingsFailure: number | null = null;
-  try {
+  const readRetentionSettings = deps.readRetentionSettings ?? (async () => {
     const [settingsRow] = await db
       .select({
         successDays: teamSettingsTable.notificationLogSuccessRetentionDays,
@@ -634,8 +674,25 @@ export async function runNotificationLogPruning(): Promise<{
       .from(teamSettingsTable)
       .where(eq(teamSettingsTable.id, "singleton"))
       .limit(1);
-    settingsSuccess = settingsRow?.successDays ?? null;
-    settingsFailure = settingsRow?.failureDays ?? null;
+    return {
+      successDays: settingsRow?.successDays ?? null,
+      failureDays: settingsRow?.failureDays ?? null,
+    };
+  });
+  const deleteLogs = deps.deleteLogs ?? (async (status: "sent" | "failed", cutoff: Date) =>
+    db
+      .delete(ucNotificationLogTable)
+      .where(
+        and(
+          eq(ucNotificationLogTable.status, status),
+          lt(ucNotificationLogTable.sentAt, cutoff),
+        ),
+      ));
+
+  let settingsSuccess: number | null;
+  let settingsFailure: number | null;
+  try {
+    ({ successDays: settingsSuccess, failureDays: settingsFailure } = await readRetentionSettings());
   } catch (err) {
     logger.error(
       { err },
@@ -644,19 +701,21 @@ export async function runNotificationLogPruning(): Promise<{
     throw err;
   }
 
+  const environment = deps.environment ?? process.env;
   const successDays = Math.max(
     1,
     settingsSuccess ??
-      parseRetentionDays(process.env["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"], 30),
+      parseRetentionDays(environment["UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS"], 30),
   );
   const failureDays = Math.max(
     1,
     settingsFailure ??
-      parseRetentionDays(process.env["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"], 90),
+      parseRetentionDays(environment["UC_NOTIFICATION_LOG_FAILURE_RETENTION_DAYS"], 90),
   );
 
-  const successCutoff = new Date(Date.now() - successDays * 24 * 60 * 60 * 1000);
-  const failureCutoff = new Date(Date.now() - failureDays * 24 * 60 * 60 * 1000);
+  const now = deps.now?.() ?? new Date();
+  const successCutoff = new Date(now.getTime() - successDays * 24 * 60 * 60 * 1000);
+  const failureCutoff = new Date(now.getTime() - failureDays * 24 * 60 * 60 * 1000);
 
   logger.info(
     { successDays, failureDays, successCutoff, failureCutoff },
@@ -664,25 +723,10 @@ export async function runNotificationLogPruning(): Promise<{
   );
 
   try {
-    // Prune successful rows beyond the shorter retention window
-    const successResult = await db
-      .delete(ucNotificationLogTable)
-      .where(
-        and(
-          eq(ucNotificationLogTable.status, "sent"),
-          lt(ucNotificationLogTable.sentAt, successCutoff),
-        ),
-      );
-
-    // Prune failed rows beyond the longer retention window
-    const failureResult = await db
-      .delete(ucNotificationLogTable)
-      .where(
-        and(
-          eq(ucNotificationLogTable.status, "failed"),
-          lt(ucNotificationLogTable.sentAt, failureCutoff),
-        ),
-      );
+    // Prune successful rows beyond the shorter retention window, then failed
+    // rows beyond the longer retention window.
+    const successResult = await deleteLogs("sent", successCutoff);
+    const failureResult = await deleteLogs("failed", failureCutoff);
 
     const deletedSuccess = (successResult as { rowCount?: number }).rowCount ?? 0;
     const deletedFailure = (failureResult as { rowCount?: number }).rowCount ?? 0;

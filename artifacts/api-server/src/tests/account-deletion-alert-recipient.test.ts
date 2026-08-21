@@ -10,49 +10,28 @@
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
-import { describe, it, beforeEach, after } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-process.env["SESSION_SECRET"] ??= "test-secret-for-deletion-alert-tests";
-
-const { accountDeletionAlertRecipient, invalidateTeamAlertEmailCache } =
-  await import("../routes/uc.js");
-
-const ORIGINAL = process.env["TEAM_ALERT_EMAIL"];
-
-after(() => {
-  if (ORIGINAL === undefined) delete process.env["TEAM_ALERT_EMAIL"];
-  else process.env["TEAM_ALERT_EMAIL"] = ORIGINAL;
-});
+import { resolveTeamAlertEmail } from "../routes/uc.js";
 
 describe("accountDeletionAlertRecipient", () => {
-  beforeEach(() => {
-    delete process.env["TEAM_ALERT_EMAIL"];
-    // Clear the in-process cache so each test starts from a fresh DB/env read.
-    invalidateTeamAlertEmailCache();
+  it("uses the database value when configured", () => {
+    assert.equal(
+      resolveTeamAlertEmail("alerts@ucfilters.com", "privacy@ucfilters.com"),
+      "alerts@ucfilters.com",
+    );
   });
 
-  it("uses TEAM_ALERT_EMAIL when configured (no DB override)", async () => {
-    process.env["TEAM_ALERT_EMAIL"] = "privacy@ucfilters.com";
-    assert.equal(await accountDeletionAlertRecipient(), "privacy@ucfilters.com");
+  it("uses a trimmed environment value when no database override exists", () => {
+    assert.equal(resolveTeamAlertEmail(null, "  privacy@ucfilters.com  "), "privacy@ucfilters.com");
   });
 
-  it("trims surrounding whitespace from a configured value", async () => {
-    process.env["TEAM_ALERT_EMAIL"] = "  privacy@ucfilters.com  ";
-    assert.equal(await accountDeletionAlertRecipient(), "privacy@ucfilters.com");
+  it("falls back when the database and environment values are blank", () => {
+    assert.equal(resolveTeamAlertEmail("   ", ""), "info@ucfilters.com");
   });
 
-  it("falls back to info@ucfilters.com when the value is blank", async () => {
-    process.env["TEAM_ALERT_EMAIL"] = "";
-    assert.equal(await accountDeletionAlertRecipient(), "info@ucfilters.com");
-  });
-
-  it("falls back to info@ucfilters.com when the value is whitespace-only", async () => {
-    process.env["TEAM_ALERT_EMAIL"] = "   ";
-    assert.equal(await accountDeletionAlertRecipient(), "info@ucfilters.com");
-  });
-
-  it("falls back to info@ucfilters.com when unset", async () => {
-    assert.equal(await accountDeletionAlertRecipient(), "info@ucfilters.com");
+  it("falls back when no recipient is configured", () => {
+    assert.equal(resolveTeamAlertEmail(undefined, undefined), "info@ucfilters.com");
   });
 });

@@ -228,7 +228,17 @@ export default function CartScreen() {
         renderItem={({ item }) => (
           <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.itemImage, { backgroundColor: colors.surface }]}>
-              <Ionicons name="water-outline" size={24} color={colors.primary} />
+              {item.image ? (
+                <Image
+                  source={{ uri: item.image }}
+                  style={styles.itemImageAsset}
+                  contentFit="contain"
+                  transition={120}
+                  recyclingKey={item.image}
+                />
+              ) : (
+                <Ionicons name="water-outline" size={24} color={colors.primary} />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
@@ -289,7 +299,8 @@ const styles = StyleSheet.create({
   recPrice: { fontSize: 13.5, fontWeight: '700' as const, marginTop: 2 },
   recAddBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   item: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
-  itemImage: { width: 60, height: 60, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  itemImage: { width: 60, height: 60, borderRadius: 8, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  itemImageAsset: { width: 54, height: 54 },
   itemName: { fontSize: 13, fontWeight: '600' as const, lineHeight: 18 },
   itemPrice: { fontSize: 15, fontWeight: '700' as const, marginTop: 4 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

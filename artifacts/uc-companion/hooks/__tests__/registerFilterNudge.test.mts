@@ -144,7 +144,7 @@ describe('register-filter nudge — activation suppression', () => {
       productId:    1,
       productName:  'Hydra Flux',
       lifespanDays: 90,
-    });
+    }, 1);
 
     // Simulate app restart: readNudgeState is called again
     const after = await readNudgeState(1);
@@ -162,7 +162,7 @@ describe('register-filter nudge — activation suppression', () => {
     });
     assert.equal((await readNudgeState(1)).hasActivation, true, 'sanity: activation exists');
 
-    await clearFilterActivation();
+    await clearFilterActivation(1);
 
     const state = await readNudgeState(1);
     assert.equal(state.hasActivation, false,

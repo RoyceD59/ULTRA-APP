@@ -321,6 +321,30 @@ describe("Rewards push notification — admin grant endpoint", () => {
     assert.match(payload.body, /Your balance is now \d+ pts\.$/, "body must include updated balance");
   });
 
+  it("accepts the exact rewards QR payload rendered by a customer account", async () => {
+    await clearPushToken();
+    const appQrPayload = `uc-rewards:${testUserId}:+254700099801`;
+
+    const r = await apiFetch("/api/uc/admin/rewards/grant", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: adminAuthHeader(),
+      },
+      body: JSON.stringify({
+        lookup: appQrPayload,
+        points: 15,
+        reason: "QR account scan test",
+        grantedBy: "test-admin",
+      }),
+    });
+
+    assert.equal(r.status, 201, `expected QR scan to grant points: ${JSON.stringify(r.body)}`);
+    const body = r.body as { customer?: { id?: number }; newBalance?: number };
+    assert.equal(body.customer?.id, testUserId, "QR payload must resolve the account encoded by the app");
+    assert.equal(body.newBalance, 15, "the scan must credit the selected account");
+  });
+
   it("does not send a push when the customer has no push token (grant still succeeds)", async () => {
     await clearPushToken();
 

@@ -39,8 +39,24 @@ import {
   LIBRARY_PATH_PREFIX,
   type FinalizerDeps,
 } from "../lib/libraryFinalizer.js";
-const router: IRouter = Router();
-const storage = new ObjectStorageService();
+
+type LibraryStorage = Pick<
+  ObjectStorageService,
+  | "getLibraryUploadURL"
+  | "normalizeObjectEntityPath"
+  | "getObjectEntityFile"
+  | "copyLibraryFileWithGenerationCheck"
+>;
+
+/**
+ * Creates the Team Library router with an explicit storage dependency.
+ * Production uses the default adapter; tests can supply an isolated in-memory
+ * adapter without mutating ObjectStorageService's process-global prototype.
+ */
+export function createLibraryRouter(
+  storage: LibraryStorage = new ObjectStorageService(),
+): IRouter {
+  const router: IRouter = Router();
 
 // Presigned URLs are valid for 15 minutes; give the upload slot a generous
 // 30-minute window to account for slow connections.
@@ -323,4 +339,8 @@ router.get("/library/download/:id", async (req: Request, res: Response): Promise
   }
 });
 
+  return router;
+}
+
+const router = createLibraryRouter();
 export default router;

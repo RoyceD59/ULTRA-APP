@@ -36,6 +36,10 @@ const REGISTERED_PUSH_TOKEN_KEY  = 'uc_push_token_registered';
 // Legacy unscoped key — kept for one-time migration in getFilterActivation.
 const FILTER_ACTIVATION_KEY_LEGACY      = 'uc_filter_activation';
 const FILTER_LAST_CHANGED_KEY_LEGACY    = 'uc_filter_last_changed';
+// Separate the maintenance count from an individual filter registration. A
+// customer may re-register or replace a filter, but that must never silently
+// erase their cleaning history. Only the team-admin reset flow may clear it.
+const FILTER_CLEAN_COUNT_KEY_PREFIX     = 'uc_filter_clean_count_';
 const NOTIF_PREFS_KEY            = 'uc_notif_prefs';
 // Set to 'true' when a catalogue sync detects the registered product's
 // filter_lifespan_days meta has been removed (lifespan <= 0). Cleared when
@@ -47,14 +51,40 @@ const ZERO_LIFESPAN_KEY          = 'uc_zero_lifespan_notice';
  * Scoped so two accounts on the same device never share activation state.
  */
 export function filterActivationKey(userId: number): string {
-  return `uc_filter_activation_${userId}`;
+  // Preserve the legacy guest/test key for callers that do not yet have an
+  // authenticated account ID. Signed-in accounts always use an isolated key.
+  return Number.isSafeInteger(userId) && userId > 0
+    ? `uc_filter_activation_${userId}`
+    : FILTER_ACTIVATION_KEY_LEGACY;
 }
 
 /**
  * Per-user AsyncStorage key for the "filter last changed" timestamp (ms).
  */
 export function filterLastChangedKey(userId: number): string {
-  return `uc_filter_last_changed_${userId}`;
+  return Number.isSafeInteger(userId) && userId > 0
+    ? `uc_filter_last_changed_${userId}`
+    : FILTER_LAST_CHANGED_KEY_LEGACY;
+}
+
+function filterCleanCountKey(userId: number): string {
+  return Number.isSafeInteger(userId) && userId > 0
+    ? `${FILTER_CLEAN_COUNT_KEY_PREFIX}${userId}`
+    : `${FILTER_CLEAN_COUNT_KEY_PREFIX}guest`;
+}
+
+async function savedFilterCleanCount(userId: number): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(filterCleanCountKey(userId));
+    const count = Number(raw);
+    return Number.isSafeInteger(count) && count > 0 ? count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function saveFilterCleanCount(userId: number, count: number): Promise<void> {
+  await AsyncStorage.setItem(filterCleanCountKey(userId), String(Math.max(0, Math.floor(count))));
 }
 
 // ── Notification preferences ─────────────────────────────────────────────────
@@ -124,7 +154,7 @@ export interface FilterActivation {
   lifespanDays:   number;               // total rated lifespan for this product
   notifIds:       string[];             // IDs of all scheduled local notifications for this cycle
   // Performance tracking (all optional so old stored records still parse)
-  cleanCount?:    number;               // how many times user has cleaned this filter
+  cleanCount?:    number;               // account maintenance count; customer flows never decrease it
   lastCleanedAt?: string;               // ISO date of most recent clean
   lastWaterSource?: WaterSource;        // water source from most recent check-in
   lastCheckIn?:   PerformanceCheckIn;   // most recent performance check-in
@@ -472,6 +502,9 @@ export async function getFilterActivation(userId: number): Promise<FilterActivat
     const key = filterActivationKey(userId);
     const s = await AsyncStorage.getItem(key);
     if (s) return JSON.parse(s) as FilterActivation;
+    // Guests and legacy tests use the original shared key above; there is no
+    // account-scoped migration to perform in that case.
+    if (!Number.isSafeInteger(userId) || userId <= 0) return null;
 
     // ── One-time migration from the legacy unscoped key ──────────────────────
     const legacy = await AsyncStorage.getItem(FILTER_ACTIVATION_KEY_LEGACY);
@@ -515,11 +548,27 @@ export async function scheduleAllFilterNotifications(
 ): Promise<FilterActivation> {
   const activationKey    = filterActivationKey(userId);
   const lastChangedKey   = filterLastChangedKey(userId);
+  // A fresh registration used to omit cleanCount, which reset it to zero when
+  // the new activation replaced the stored one. Keep the largest known count
+  // across every customer-side registration/reschedule. Admin-only maintenance
+  // tools can use resetFilterCleanCount() before initiating a new cycle.
+  const priorActivation = await getFilterActivation(userId);
+  const retainedCleanCount = Math.max(
+    params.cleanCount ?? 0,
+    priorActivation?.cleanCount ?? 0,
+    await savedFilterCleanCount(userId),
+  );
+  const normalizedParams: Omit<FilterActivation, 'notifIds'> = {
+    ...params,
+    cleanCount: retainedCleanCount,
+    lastCleanedAt: params.lastCleanedAt ?? priorActivation?.lastCleanedAt,
+  };
+  await saveFilterCleanCount(userId, retainedCleanCount);
 
   if (Platform.OS === 'web') {
-    const activation: FilterActivation = { ...params, notifIds: [] };
+    const activation: FilterActivation = { ...normalizedParams, notifIds: [] };
     await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
-    await AsyncStorage.setItem(lastChangedKey, new Date(params.activatedAt).getTime().toString());
+    await AsyncStorage.setItem(lastChangedKey, new Date(normalizedParams.activatedAt).getTime().toString());
     void syncReminderToServer(activation);
     return activation;
   }
@@ -529,11 +578,11 @@ export async function scheduleAllFilterNotifications(
   // Guard: a non-positive lifespan means the product is not trackable —
   // persist the activation but never schedule offers at nonsensical dates.
   // Set the notice flag so the UI can inform the user.
-  if (!(params.lifespanDays > 0)) {
+  if (!(normalizedParams.lifespanDays > 0)) {
     await setZeroLifespanNotice(true);
-    const activation: FilterActivation = { ...params, notifIds: [] };
+    const activation: FilterActivation = { ...normalizedParams, notifIds: [] };
     await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
-    await AsyncStorage.setItem(lastChangedKey, new Date(params.activatedAt).getTime().toString());
+    await AsyncStorage.setItem(lastChangedKey, new Date(normalizedParams.activatedAt).getTime().toString());
     void syncReminderToServer(activation);
     return activation;
   }
@@ -547,17 +596,17 @@ export async function scheduleAllFilterNotifications(
   // (activationKey and lastChangedKey are captured in the closure above)
 
   if (status !== 'granted' || !prefs.filterReminders) {
-    const activation: FilterActivation = { ...params, notifIds: [] };
+    const activation: FilterActivation = { ...normalizedParams, notifIds: [] };
     await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
-    await AsyncStorage.setItem(lastChangedKey, new Date(params.activatedAt).getTime().toString());
+    await AsyncStorage.setItem(lastChangedKey, new Date(normalizedParams.activatedAt).getTime().toString());
     void syncReminderToServer(activation);
     return activation;
   }
 
   await ensureAndroidChannel();
 
-  const { productName, lifespanDays } = params;
-  const activationDate = new Date(params.activatedAt);
+  const { productName, lifespanDays } = normalizedParams;
+  const activationDate = new Date(normalizedParams.activatedAt);
   const now             = Date.now();
   const ids: string[]   = [];
 
@@ -621,7 +670,7 @@ export async function scheduleAllFilterNotifications(
   // When stored adjusted offsets exist (from a check-in rescheduling), honour
   // them so a re-enabled local schedule fires on the same dates as the server
   // dispatch — avoids handset/server drift on disable→re-enable or catalogue correction.
-  const offset4 = params.adjustedOffsets?.replace30
+  const offset4 = normalizedParams.adjustedOffsets?.replace30
     ?? Math.max(Math.min(lifespanDays - 30, lifespanDays - 1), Math.floor(daysSinceActivation) + 1);
   await scheduleAt(
     new Date(activationDate.getTime() + offset4 * 86_400_000),
@@ -633,7 +682,7 @@ export async function scheduleAllFilterNotifications(
   );
 
   // ── 5. 15 days before replacement — urgent 48-hour offer
-  const offset5 = params.adjustedOffsets?.replace15
+  const offset5 = normalizedParams.adjustedOffsets?.replace15
     ?? Math.max(offset4 + 1, lifespanDays - 15);
   await scheduleAt(
     new Date(activationDate.getTime() + offset5 * 86_400_000),
@@ -644,7 +693,7 @@ export async function scheduleAllFilterNotifications(
     }
   );
 
-  const activation: FilterActivation = { ...params, notifIds: ids };
+  const activation: FilterActivation = { ...normalizedParams, notifIds: ids };
   await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
   await AsyncStorage.setItem(lastChangedKey, activationDate.getTime().toString());
   void syncReminderToServer(activation);
@@ -730,12 +779,40 @@ export async function syncActivationWithCatalogue(
 
 /** Remove the filter activation record (call when user resets / unregisters filter). */
 export async function clearFilterActivation(userId: number): Promise<void> {
+  // Upgrade safety: older app versions stored the count only on the activation
+  // record. Copy it to the account-level key before removing that record.
+  const existing = await getFilterActivation(userId);
+  if (existing?.cleanCount != null) {
+    await saveFilterCleanCount(
+      userId,
+      Math.max(existing.cleanCount, await savedFilterCleanCount(userId)),
+    );
+  }
   await cancelAllFilterNotifications(userId);
   await AsyncStorage.removeItem(filterActivationKey(userId));
   await AsyncStorage.removeItem(filterLastChangedKey(userId));
   await setZeroLifespanNotice(false);
   // Stop server-side email/SMS/WhatsApp reminders for the cleared filter too.
   void syncReminderToServer(null);
+}
+
+/**
+ * Clears the account's maintenance count. This is intentionally not exposed
+ * through customer screens; call it only from an authenticated team-admin
+ * action after a verified replacement or correction.
+ */
+export async function resetFilterCleanCount(userId: number): Promise<FilterActivation | null> {
+  await AsyncStorage.removeItem(filterCleanCountKey(userId));
+  const existing = await getFilterActivation(userId);
+  if (!existing) return null;
+
+  const updated: FilterActivation = {
+    ...existing,
+    cleanCount: 0,
+    lastCleanedAt: undefined,
+  };
+  await AsyncStorage.setItem(filterActivationKey(userId), JSON.stringify(updated));
+  return updated;
 }
 
 // ── Performance check-in ──────────────────────────────────────────────────────
@@ -818,6 +895,7 @@ export async function recordFilterClean(userId: number): Promise<FilterActivatio
     };
 
     await AsyncStorage.setItem(filterActivationKey(userId), JSON.stringify(updated));
+    await saveFilterCleanCount(userId, updated.cleanCount ?? 0);
     return updated;
   } catch {
     return null;

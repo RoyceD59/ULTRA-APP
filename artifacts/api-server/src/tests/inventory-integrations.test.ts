@@ -51,6 +51,7 @@ import type { AddressInfo } from "node:net";
 import {
   isPrivateIpv4,
   isPrivateIpv6,
+  getAllAddresses,
   validateWebhookDestination,
 } from "../lib/ssrf-safe-fetch.js";
 import { issueToken } from "../lib/jwt.js";
@@ -199,6 +200,12 @@ describe("isPrivateIpv4", () => {
     assert.equal(isPrivateIpv4("255.255.255.255"), true);
   });
 
+  it("(a) other non-global special-use ranges → true", () => {
+    assert.equal(isPrivateIpv4("100.64.0.1"), true);   // carrier-grade NAT
+    assert.equal(isPrivateIpv4("198.18.0.1"), true);   // benchmarking
+    assert.equal(isPrivateIpv4("203.0.113.1"), true);  // documentation
+  });
+
   it("(c) public addresses → false", () => {
     assert.equal(isPrivateIpv4("1.1.1.1"), false);
     assert.equal(isPrivateIpv4("8.8.8.8"), false);
@@ -218,14 +225,27 @@ describe("isPrivateIpv6", () => {
     assert.equal(isPrivateIpv6("fd12:3456:789a::1"), true);
   });
 
-  it("(a) link-local fe80::/10 → true", () => {
+  it("(a) link-local fe80::/10 → true across its full CIDR range", () => {
     assert.equal(isPrivateIpv6("fe80::1"), true);
     assert.equal(isPrivateIpv6("fe80::dead:beef"), true);
+    assert.equal(isPrivateIpv6("fe90::1"), true);
+    assert.equal(isPrivateIpv6("febf::1"), true);
   });
 
-  it("(a) IPv4-mapped ::ffff: → true", () => {
+  it("(a) non-global/mapped IPv6 ranges → true", () => {
+    assert.equal(isPrivateIpv6("::"), true);
+    assert.equal(isPrivateIpv6("ff02::1"), true); // multicast
     assert.equal(isPrivateIpv6("::ffff:192.168.1.1"), true);
     assert.equal(isPrivateIpv6("::ffff:8.8.8.8"), true); // Still blocked — checked as IPv6
+  });
+
+  it("(a) special-use prefixes within global-unicast → true", () => {
+    assert.equal(isPrivateIpv6("2001:db8::1"), true);       // documentation
+    assert.equal(isPrivateIpv6("2001:2::1"), true);         // benchmarking
+    assert.equal(isPrivateIpv6("64:ff9b::808:808"), true);  // NAT64
+    assert.equal(isPrivateIpv6("2002:c0a8:101::1"), true);  // 6to4/private IPv4
+    assert.equal(isPrivateIpv6("2620:4f:8000::1"), true);   // AS112
+    assert.equal(isPrivateIpv6("5f00::1"), true);           // SRv6 SID
   });
 
   it("(b) public global unicast → false", () => {
@@ -277,6 +297,18 @@ describe("validateWebhookDestination", () => {
     assert.ok(err !== null, "Expected an error for cloud metadata IP");
   });
 
+  it("(c) accepts public IPv4 and global-unicast IPv6 literals", async () => {
+    assert.equal(await validateWebhookDestination("https://1.1.1.1/webhook"), null);
+    assert.equal(await validateWebhookDestination("https://[2606:4700:4700::1111]/webhook"), null);
+  });
+
+  it("(c) blocks special-use literals at save time", async () => {
+    assert.notEqual(await validateWebhookDestination("https://100.64.0.1/webhook"), null);
+    assert.notEqual(await validateWebhookDestination("https://[2001:db8::1]/webhook"), null);
+    assert.notEqual(await validateWebhookDestination("https://[2620:4f:8000::1]/webhook"), null);
+    assert.notEqual(await validateWebhookDestination("https://[5f00::1]/webhook"), null);
+  });
+
   it("(d) metadata.google.internal → error", async () => {
     const err = await validateWebhookDestination("https://metadata.google.internal/computeMetadata/v1/");
     assert.ok(err !== null, "Expected an error for metadata.google.internal");
@@ -285,6 +317,30 @@ describe("validateWebhookDestination", () => {
   it("(e) localhost → error", async () => {
     const err = await validateWebhookDestination("https://localhost:5678/webhook/test");
     assert.ok(err !== null, "Expected an error for localhost");
+  });
+});
+
+describe("getAllAddresses", () => {
+  it("returns public IP literals directly without DNS resolution", async () => {
+    assert.deepEqual(await getAllAddresses("1.1.1.1"), [{ address: "1.1.1.1", family: 4 }]);
+    assert.deepEqual(await getAllAddresses("[2606:4700:4700::1111]"), [
+      { address: "2606:4700:4700::1111", family: 6 },
+    ]);
+  });
+
+  it("blocks non-global IPv6 literals before a connection can be made", async () => {
+    await assert.rejects(() => getAllAddresses("fe90::1"));
+    await assert.rejects(() => getAllAddresses("::"));
+    await assert.rejects(() => getAllAddresses("ff02::1"));
+  });
+
+  it("blocks special-use IPv4/IPv6 literals before a connection can be made", async () => {
+    await assert.rejects(() => getAllAddresses("100.64.0.1"));
+    await assert.rejects(() => getAllAddresses("198.18.0.1"));
+    await assert.rejects(() => getAllAddresses("2001:db8::1"));
+    await assert.rejects(() => getAllAddresses("64:ff9b::808:808"));
+    await assert.rejects(() => getAllAddresses("2620:4f:8000::1"));
+    await assert.rejects(() => getAllAddresses("5f00::1"));
   });
 });
 

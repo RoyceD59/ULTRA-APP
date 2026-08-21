@@ -23,6 +23,7 @@ import { useCartBarInset } from '@/hooks/useCartBarInset';
 import SwipeTabs from '@/components/SwipeTabs';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
+import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -678,7 +679,8 @@ function AccountScreenContent() {
                   <Text style={[rewardStyles.qrLabel, { color: colors.mutedForeground }]}>Your Rewards QR Code</Text>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
                     <QRCode
-                      value={`uc-rewards:${user.id}:${user.phone ?? ''}`}
+                      testID="account-rewards-qr"
+                      value={buildRewardsQrPayload(user.id, user.phone)}
                       size={120}
                       color="#1a1a1a"
                       backgroundColor="#ffffff"

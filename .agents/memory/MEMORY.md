@@ -12,6 +12,7 @@
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines drop exports; spliced handler code → restore file from last good commit + re-apply legit lines.
 - [API test-DB isolation](api-test-db-isolation.md) — tests run in a per-run database; drizzle push always diffs public of the connected DB; raw-SQL-only tables (startup migrations) must be mirrored in lib/db schema.
+- [Shared settings in parallel tests](shared-settings-parallel-tests.md) — unit tests must inject settings and clocks rather than rely on the singleton team_settings row or process env.
 - [API order-flow test harness](api-order-test-harness.md) — tests hitting /uc/orders must delete MPESA_*/WC_* env vars; a stub returning {id:…} is mistaken for a real WC order.
 - [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).
 - [UC admin gate provenance](uc-admin-gate.md) — single shared gate; email trusted only with src:"woo" issue-time claim; team-session admin re-verified against team_users row; never JWT claims alone.
@@ -22,3 +23,7 @@
 - [WhatsApp session storage](whatsapp-session-storage.md) — Baileys creds live outside the repo (~/.uc-whatsapp-session); git history still holds old creds, re-link if repo goes public.
 - [Orders CSV column contract](uc-orders-csv-contract.md) — never insert a column mid-row in the admin orders CSV; append new fields after the legacy static columns, before item columns.
 - [API data-dir resolution](api-data-dir-resolution.md) — durable data folder must be probed relative to both dist bundle and src/tsx; fixed-depth paths silently wrote JSONL nowhere.
+- [Filter maintenance count policy](filter-maintenance-count-policy.md) — customer lifecycle changes retain cleaning history; only an explicit staff correction may reset it.
+- [Inventory webhook SSRF policy](inventory-webhook-ssrf-policy.md) — outbound n8n URLs must block private and IANA special-use IPs; request-time resolution is pinned.
+- [API test storage isolation](api-test-storage-isolation.md) — library route tests inject storage adapters; global prototype mocks race under parallel test execution.
+- [WooCommerce stock alert semantics](woocommerce-stock-alert-semantics.md) — null quantity means unmanaged stock, not zero; explicit out-of-stock remains actionable.
