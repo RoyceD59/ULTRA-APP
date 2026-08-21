@@ -56,7 +56,8 @@ type UserPublic = {
 function projecthubBaseUrl(): string {
   if (process.env["PROJECTHUB_URL"]) return process.env["PROJECTHUB_URL"].replace(/\/$/, "");
   const domain = process.env["REPLIT_DEV_DOMAIN"];
-  return domain ? `https://${domain}/projecthub` : "http://localhost:3000/projecthub";
+  // ProjectHub is mounted at the root path ("/"), not at "/projecthub".
+  return domain ? `https://${domain}` : "http://localhost:3000";
 }
 
 // Password reset links are delivered to the team WhatsApp number only — per

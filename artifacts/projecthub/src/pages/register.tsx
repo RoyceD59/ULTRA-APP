@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isConflict, setIsConflict] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
   const [loading, setLoading] = useState(false);
 
   if (!inviteToken) {
@@ -35,15 +37,60 @@ export default function RegisterPage() {
     if (password !== confirm) { setError("Passwords do not match."); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     setError(null);
+    setIsConflict(false);
+    setIsExpired(false);
     setLoading(true);
     try {
       await register(inviteToken, name.trim(), password);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed.");
+      const msg = err instanceof Error ? err.message : "Registration failed.";
+      if (msg.toLowerCase().includes("already exists")) {
+        setIsConflict(true);
+        setError(null);
+      } else if (
+        msg.toLowerCase().includes("invalid") ||
+        msg.toLowerCase().includes("expired")
+      ) {
+        setIsExpired(true);
+        setError(null);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
+  }
+
+  // ── Error state: email already has an account ────────────────────────────
+  if (isConflict) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center space-y-3 max-w-sm">
+          <p className="text-lg font-semibold">You already have an account</p>
+          <p className="text-sm text-muted-foreground">
+            This email address is already registered.
+          </p>
+          <Link href="/login">
+            <Button className="w-full mt-2">Sign in instead</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error state: token expired or already used ───────────────────────────
+  if (isExpired) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center space-y-3 max-w-sm">
+          <p className="text-lg font-semibold">This invite has expired or was already used</p>
+          <p className="text-sm text-muted-foreground">
+            Ask your admin to send a new invite link.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -80,7 +127,12 @@ export default function RegisterPage() {
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirm password</Label>
                 <Input id="confirm" type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={loading} autoComplete="new-password" />
-                {error && <p className="text-xs text-destructive">{error}</p>}
+                {error && (
+                  <p className="text-xs text-destructive">
+                    {error}{" "}
+                    <span className="text-muted-foreground">Ask your admin to send a new invite link.</span>
+                  </p>
+                )}
               </div>
               <Button type="submit" className="w-full" disabled={loading || !name.trim() || !password || !confirm}>
                 {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating account…</> : "Create account"}
