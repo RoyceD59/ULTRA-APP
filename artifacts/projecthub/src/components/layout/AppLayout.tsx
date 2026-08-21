@@ -4,7 +4,7 @@ import {
   Bot, Leaf, MessageSquareOff, Contact2, BellRing, Activity,
   Webhook, ShoppingBag, LogOut, KeyRound, Loader2, Shield,
   UserCog, ChevronDown, BellOff, CreditCard, Wrench, Droplets, BookOpen,
-  AlertTriangle, X, Gauge, Package, Link2, Gift,
+  AlertTriangle, X, Gauge, Package, Link2, Gift, UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -25,7 +25,6 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-
 /** sessionStorage key for the M-Pesa security banner dismissal.
  *  Survives navigation within the session; cleared on sign-out (and naturally
  *  absent in a fresh browser session), so the banner re-appears on next login. */
@@ -402,6 +401,259 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   Customers
                 </button>
               </Link>
+              <Link href="/admin/unsynced-registrations">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/unsynced-registrations")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <UserX className="w-4 h-4 flex-shrink-0" />
+                  Unsynced Registrations
+                </button>
+              </Link>
+            </>
+          )}
+        </nav>
+
+        {/* User section */}
+        <div className="flex-shrink-0 border-t p-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors group">
+                <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-semibold text-primary">
+                    {(user?.name ?? user?.email ?? "?")[0]?.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-xs font-medium truncate">{user?.name ?? user?.email ?? "Team"}</p>
+                  <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
+                    {user?.role === "admin" ? <><Shield className="w-2.5 h-2.5" />Admin</> : "Member"}
+                  </p>
+                </div>
+                <ChevronDown className="w-3 h-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              {user?.email && (
+                <>
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">{user.email}</div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={() => setChangePassOpen(true)}>
+                <KeyRound className="w-4 h-4 mr-2" /> Change password
+              </DropdownMenuItem>
+              {admin && (
+                <DropdownMenuItem onClick={() => navigate("/admin/users")}>
+                  <UserCog className="w-4 h-4 mr-2" /> User Management
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+                <LogOut className="w-4 h-4 mr-2" /> Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {showSecurityBanner && (
+          <SecurityMisconfigBanner onDismiss={dismissSecurityBanner} />
+        )}
+        <header className="h-16 border-b bg-background/80 backdrop-blur-md flex items-center justify-between px-8 flex-shrink-0 sticky top-0 z-10">
+          <div className="flex items-center gap-4" />
+          <div className="flex items-center gap-2">
+            {admin && (
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Shield className="w-3 h-3" /> Admin
+              </Badge>
+            )}
+            <button className="relative p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-accent/10">
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-destructive border-2 border-background" />
+            </button>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground gap-2">
+              <LogOut className="w-4 h-4" /> Sign out
+            </Button>
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto p-8 relative">
+          <div className="max-w-6xl mx-auto">{children}</div>
+        </main>
+      </div>
+
+      <ChangePasswordDialog open={changePassOpen} onClose={() => setChangePassOpen(false)} />
+    </div>
+  );
+}
+function discardedMergeBranchAppLayoutTheirs({ children }: { children: React.ReactNode }) {
+  const [location, navigate] = useLocation();
+  const { toast } = useToast();
+  const [changePassOpen, setChangePassOpen] = useState(false);
+  const [securityBannerDismissed, setSecurityBannerDismissed] = useState(readBannerDismissed);
+  const admin = isTeamAdmin();
+  const user = getTeamUser();
+  const recoveryCount = useRecoveryOrderCount();
+  const reminderGapCount = useReminderGapCount();
+  const { mpesaSecretMissing, securityStatusKnown } = useSecurityWarnings();
+
+  // Once polling positively confirms the secret has been set, clear the
+  // dismissal so the banner automatically re-appears if the secret ever goes
+  // missing again. Gated on securityStatusKnown so the initial (pre-fetch)
+  // `mpesaSecretMissing === false` doesn't wipe a stored dismissal on remount.
+  useEffect(() => {
+    if (securityStatusKnown && !mpesaSecretMissing && securityBannerDismissed) {
+      writeBannerDismissed(false);
+      setSecurityBannerDismissed(false);
+    }
+  }, [securityStatusKnown, mpesaSecretMissing, securityBannerDismissed]);
+
+  function dismissSecurityBanner() {
+    writeBannerDismissed(true);
+    setSecurityBannerDismissed(true);
+  }
+
+  const showSecurityBanner = admin && mpesaSecretMissing && !securityBannerDismissed;
+
+  // Filter nav to pages the current user can access
+  const navigation = ALL_NAVIGATION.filter((item) => canView(item.slug));
+
+  function handleSignOut() {
+    // Reset the banner dismissal so it re-appears on the next login session
+    writeBannerDismissed(false);
+    clearTeamAuth();
+    toast({ title: "Signed out", description: "See you next time." });
+    navigate("/login", { replace: true });
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Sidebar */}
+      <div className="w-64 flex-shrink-0 border-r bg-sidebar flex flex-col">
+        {/* Logo */}
+        <div className="h-16 flex items-center px-6 border-b flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-mono text-sm font-bold">P</span>
+            </div>
+            <span className="font-semibold text-sm tracking-tight">ProjectHub</span>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+          {navigation.map((item) => {
+            const active = item.href === "/" ? location === "/" : location.startsWith(item.href);
+            const isOrders = item.slug === "orders";
+            const showRecoveryBadge = isOrders && recoveryCount > 0;
+            const showReminderGapBadge = isOrders && reminderGapCount > 0;
+            return (
+              <Link key={item.href} href={item.href}>
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  active
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <item.icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="flex-1 text-left">{item.name}</span>
+                  {showRecoveryBadge && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem] leading-none py-0.5"
+                      title={`${recoveryCount} unresolved recovery order${recoveryCount > 1 ? "s" : ""}`}
+                    >
+                      {recoveryCount}
+                    </span>
+                  )}
+                  {showReminderGapBadge && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem] leading-none py-0.5"
+                      title={`${reminderGapCount} order${reminderGapCount > 1 ? "s" : ""} with reminder gaps`}
+                    >
+                      {reminderGapCount}
+                    </span>
+                  )}
+                </button>
+              </Link>
+            );
+          })}
+
+          {/* Admin section */}
+          {admin && (
+            <>
+              <div className="pt-4 pb-1 px-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Admin</p>
+              </div>
+              <Link href="/admin/users">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/users")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <UserCog className="w-4 h-4 flex-shrink-0" />
+                  User Management
+                </button>
+              </Link>
+              <Link href="/admin/payment-settings">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/payment-settings")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <CreditCard className="w-4 h-4 flex-shrink-0" />
+                  Payment Settings
+                </button>
+              </Link>
+              <Link href="/admin/notification-settings">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/notification-settings")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <Bell className="w-4 h-4 flex-shrink-0" />
+                  Notification Settings
+                </button>
+              </Link>
+              <Link href="/admin/inventory">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/inventory")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <Package className="w-4 h-4 flex-shrink-0" />
+                  Inventory
+                </button>
+              </Link>
+              <Link href="/admin/integrations">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/integrations")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <Link2 className="w-4 h-4 flex-shrink-0" />
+                  Integrations
+                </button>
+              </Link>
+              <Link href="/admin/unsynced-registrations">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/unsynced-registrations")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <UserX className="w-4 h-4 flex-shrink-0" />
+                  Unsynced Registrations
+                </button>
+              </Link>
             </>
           )}
         </nav>
@@ -481,6 +733,226 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function discardedMergeBranchAppLayout({ children }: { children: React.ReactNode }) {
+  const [location, navigate] = useLocation();
+  const { toast } = useToast();
+  const [changePassOpen, setChangePassOpen] = useState(false);
+  const [securityBannerDismissed, setSecurityBannerDismissed] = useState(readBannerDismissed);
+  const admin = isTeamAdmin();
+  const user = getTeamUser();
+  const recoveryCount = useRecoveryOrderCount();
+  const reminderGapCount = useReminderGapCount();
+  const { mpesaSecretMissing, securityStatusKnown } = useSecurityWarnings();
+
+  // Once polling positively confirms the secret has been set, clear the
+  // dismissal so the banner automatically re-appears if the secret ever goes
+  // missing again. Gated on securityStatusKnown so the initial (pre-fetch)
+  // `mpesaSecretMissing === false` doesn't wipe a stored dismissal on remount.
+  useEffect(() => {
+    if (securityStatusKnown && !mpesaSecretMissing && securityBannerDismissed) {
+      writeBannerDismissed(false);
+      setSecurityBannerDismissed(false);
+    }
+  }, [securityStatusKnown, mpesaSecretMissing, securityBannerDismissed]);
+
+  function dismissSecurityBanner() {
+    writeBannerDismissed(true);
+    setSecurityBannerDismissed(true);
+  }
+
+  const showSecurityBanner = admin && mpesaSecretMissing && !securityBannerDismissed;
+
+  // Filter nav to pages the current user can access
+  const navigation = ALL_NAVIGATION.filter((item) => canView(item.slug));
+
+  function handleSignOut() {
+    // Reset the banner dismissal so it re-appears on the next login session
+    writeBannerDismissed(false);
+    clearTeamAuth();
+    toast({ title: "Signed out", description: "See you next time." });
+    navigate("/login", { replace: true });
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Sidebar */}
+      <div className="w-64 flex-shrink-0 border-r bg-sidebar flex flex-col">
+        {/* Logo */}
+        <div className="h-16 flex items-center px-6 border-b flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-mono text-sm font-bold">P</span>
+            </div>
+            <span className="font-semibold text-sm tracking-tight">ProjectHub</span>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+          {navigation.map((item) => {
+            const active = item.href === "/" ? location === "/" : location.startsWith(item.href);
+            const isOrders = item.slug === "orders";
+            const showRecoveryBadge = isOrders && recoveryCount > 0;
+            const showReminderGapBadge = isOrders && reminderGapCount > 0;
+            return (
+              <Link key={item.href} href={item.href}>
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  active
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <item.icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="flex-1 text-left">{item.name}</span>
+                  {showRecoveryBadge && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem] leading-none py-0.5"
+                      title={`${recoveryCount} unresolved recovery order${recoveryCount > 1 ? "s" : ""}`}
+                    >
+                      {recoveryCount}
+                    </span>
+                  )}
+                  {showReminderGapBadge && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 min-w-[1.1rem] leading-none py-0.5"
+                      title={`${reminderGapCount} order${reminderGapCount > 1 ? "s" : ""} with reminder gaps`}
+                    >
+                      {reminderGapCount}
+                    </span>
+                  )}
+                </button>
+              </Link>
+            );
+          })}
+
+          {/* Admin section */}
+          {admin && (
+            <>
+              <div className="pt-4 pb-1 px-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Admin</p>
+              </div>
+              <Link href="/admin/users">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/users")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <UserCog className="w-4 h-4 flex-shrink-0" />
+                  User Management
+                </button>
+              </Link>
+              <Link href="/admin/payment-settings">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/payment-settings")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <CreditCard className="w-4 h-4 flex-shrink-0" />
+                  Payment Settings
+                </button>
+              </Link>
+              <Link href="/admin/notification-settings">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/notification-settings")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <Bell className="w-4 h-4 flex-shrink-0" />
+                  Notification Settings
+                </button>
+              </Link>
+              <Link href="/admin/unsynced-registrations">
+                <button className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  location.startsWith("/admin/unsynced-registrations")
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}>
+                  <UserX className="w-4 h-4 flex-shrink-0" />
+                  Unsynced Registrations
+                </button>
+              </Link>
+            </>
+          )}
+        </nav>
+
+        {/* User section */}
+        <div className="flex-shrink-0 border-t p-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors group">
+                <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-semibold text-primary">
+                    {(user?.name ?? user?.email ?? "?")[0]?.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-xs font-medium truncate">{user?.name ?? user?.email ?? "Team"}</p>
+                  <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
+                    {user?.role === "admin" ? <><Shield className="w-2.5 h-2.5" />Admin</> : "Member"}
+                  </p>
+                </div>
+                <ChevronDown className="w-3 h-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              {user?.email && (
+                <>
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">{user.email}</div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={() => setChangePassOpen(true)}>
+                <KeyRound className="w-4 h-4 mr-2" /> Change password
+              </DropdownMenuItem>
+              {admin && (
+                <DropdownMenuItem onClick={() => navigate("/admin/users")}>
+                  <UserCog className="w-4 h-4 mr-2" /> User Management
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+                <LogOut className="w-4 h-4 mr-2" /> Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {showSecurityBanner && (
+          <SecurityMisconfigBanner onDismiss={dismissSecurityBanner} />
+        )}
+        <header className="h-16 border-b bg-background/80 backdrop-blur-md flex items-center justify-between px-8 flex-shrink-0 sticky top-0 z-10">
+          <div className="flex items-center gap-4" />
+          <div className="flex items-center gap-2">
+            {admin && (
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Shield className="w-3 h-3" /> Admin
+              </Badge>
+            )}
+            <button className="relative p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-accent/10">
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-destructive border-2 border-background" />
+            </button>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground gap-2">
+              <LogOut className="w-4 h-4" /> Sign out
+            </Button>
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto p-8 relative">
+          <div className="max-w-6xl mx-auto">{children}</div>
+        </main>
+      </div>
+
+      <ChangePasswordDialog open={changePassOpen} onClose={() => setChangePassOpen(false)} />
+    </div>
+  );
+}
 function SecurityMisconfigBanner({
   onDismiss,
 }: {

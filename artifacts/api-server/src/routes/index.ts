@@ -32,6 +32,7 @@ import adminNotificationSettingsRouter from "./admin-notification-settings.js";
 import adminIntegrationsRouter from "./admin-integrations.js";
 import adminInventorySettingsRouter from "./admin-inventory-settings.js";
 import ucRewardsRouter from "./uc-rewards.js";
+import adminUnsyncedRegistrationsRouter from "./admin-unsynced-registrations.js";
 
 const router: IRouter = Router();
 
@@ -87,6 +88,7 @@ router.use(adminPaymentSettingsRouter);
 router.use(adminNotificationSettingsRouter);
 router.use(adminIntegrationsRouter);
 router.use(adminInventorySettingsRouter);
+router.use(adminUnsyncedRegistrationsRouter);
 router.use(authRouter);
 router.use(contactsRouter);
 router.use(contactsSyncRouter);
@@ -95,5 +97,4 @@ router.use(systemStatusRouter);
 router.use(monitoringRouter);
 router.use(webhookRouter);
 router.use(whatsappRouter);
-
 export default router;

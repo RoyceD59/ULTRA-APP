@@ -10,11 +10,14 @@
  * explicitly (allow-list) — request bodies or DB rows are never spread into
  * a record, so `password` / `passwordHash` can never leak into the folder.
  */
-import { appendFile as _appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile as _appendFile, mkdir, readFile, rename as _rename, unlink as _unlink, writeFile as _writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 import { db, ucUsersTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
+import bcryptjs from "bcryptjs";
 import { logger } from "./logger";
 
 /**
@@ -48,6 +51,9 @@ export const ACCOUNT_DATA_DIR = resolveDataDir();
  */
 export const _ioSeams = {
   appendFile: _appendFile,
+  rename: _rename,
+  unlink: _unlink,
+  writeFile: _writeFile,
 };
 
 const ACCOUNTS_FILE = "accounts.jsonl";
@@ -93,9 +99,12 @@ function toIso(v: Date | string | null | undefined): string {
   return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
 }
 
+let writeQueue: Promise<void> = Promise.resolve();
 async function appendRecord(record: AccountRecord): Promise<void> {
-  await mkdir(ACCOUNT_DATA_DIR, { recursive: true });
-  await _ioSeams.appendFile(join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE), JSON.stringify(record) + "\n", "utf8");
+  return withWriteLock(async () => {
+    await mkdir(ACCOUNT_DATA_DIR, { recursive: true });
+    await _ioSeams.appendFile(join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE), JSON.stringify(record) + "\n", "utf8");
+  });
 }
 
 /**
@@ -178,6 +187,127 @@ export async function backfillAccountRecords(): Promise<void> {
     written++;
   }
   await mkdir(ACCOUNT_DATA_DIR, { recursive: true });
-  await writeFile(markerPath, `${new Date().toISOString()} backfilled=${written}\n`, "utf8");
+  await _writeFile(markerPath, `${new Date().toISOString()} backfilled=${written}\n`, "utf8");
   logger.info({ written, total: users.length }, "[account-records] one-time backfill complete");
+}
+
+/** Read and parse all lines from accounts.jsonl; malformed lines are skipped. */
+async function readAllRecords(): Promise<AccountRecord[]> {
+  try {
+    const raw = await readFile(join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE), "utf8");
+    return raw
+      .split("\n")
+      .filter((l) => l.trim())
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as AccountRecord];
+        } catch {
+          return [];
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
+async function writeRecordsAtomically(records: AccountRecord[]): Promise<void> {
+  await mkdir(ACCOUNT_DATA_DIR, { recursive: true });
+  const destination = join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE);
+  const temp = join(ACCOUNT_DATA_DIR, `.${ACCOUNTS_FILE}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`);
+  try {
+    await _ioSeams.writeFile(temp, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+    await _ioSeams.rename(temp, destination);
+  } finally {
+    await _ioSeams.unlink(temp).catch(() => undefined);
+  }
+}
+
+/**
+ * Attempt to create a uc_users row for a folder-only registration and, on
+ * success (or email already exists), flip every matching folder record's
+ * dbPersisted flag to true.
+ *
+ * Password handling:
+ * - "password" auth: a cryptographically random 16-char temporary password is
+ *   generated, hashed, and stored. The plaintext is returned ONCE in the
+ *   response so the admin can relay it to the customer out-of-band. It is
+ *   never logged or stored beyond this call.
+ * - "social" auth: a random hash is stored (account is accessed via Clerk
+ *   OAuth, not a password), so no temp password is needed or returned.
+ *
+ * @returns `{ inserted, alreadyExists, id, tempPassword? }` — tempPassword is
+ *   present only when a new password-auth row was inserted.
+ */
+export async function retryUnsyncedRegistration(
+  email: string,
+  recordedAt: string,
+): Promise<{
+  inserted: boolean;
+  alreadyExists: boolean;
+  id: number | null;
+  tempPassword?: string;
+}> {
+  return withWriteLock(() => db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${email}))`);
+    const target = (await readAllRecords()).find((record) => record.email === email && record.recordedAt === recordedAt);
+    if (!target) throw new Error(`No folder record found for email=${email} recordedAt=${recordedAt}`);
+
+    const [existing] = await tx.select({ id: ucUsersTable.id }).from(ucUsersTable)
+      .where(eq(ucUsersTable.email, email)).limit(1);
+    if (target.dbPersisted && existing) return { inserted: false, alreadyExists: true, id: existing.id };
+
+    let dbId = existing?.id ?? null;
+    let inserted = false;
+    let tempPassword: string | undefined;
+    if (!existing) {
+      const passwordHash = target.authProvider === "password"
+        ? await (async () => { tempPassword = randomBytes(12).toString("hex"); return bcryptjs.hash(tempPassword, 10); })()
+        : await bcryptjs.hash(randomBytes(16).toString("hex"), 10);
+      const [created] = await tx.insert(ucUsersTable).values({
+        email: target.email, passwordHash, phone: target.phone, firstName: target.firstName,
+        lastName: target.lastName, authProvider: target.authProvider, createdAt: new Date(target.createdAt),
+      }).onConflictDoNothing({ target: ucUsersTable.email }).returning({ id: ucUsersTable.id });
+      if (created) {
+        dbId = created.id;
+        inserted = true;
+      } else {
+        const [raced] = await tx.select({ id: ucUsersTable.id }).from(ucUsersTable)
+          .where(eq(ucUsersTable.email, email)).limit(1);
+        if (!raced) throw new Error(`Email conflict did not produce a row for ${email}`);
+        dbId = raced.id;
+        tempPassword = undefined;
+      }
+    }
+
+    const updated = (await readAllRecords()).map((record) =>
+      record.email === email && record.recordedAt === recordedAt
+        ? { ...record, dbPersisted: true, id: record.id ?? dbId }
+        : record,
+    );
+    await writeRecordsAtomically(updated);
+    return { inserted, alreadyExists: !inserted, id: dbId, ...(tempPassword ? { tempPassword } : {}) };
+  }));
+}
+
+/** Return all folder records that were never persisted to the database. */
+export async function listUnsyncedRegistrations(): Promise<AccountRecord[]> {
+  const all = await readAllRecords();
+  const explicit = all.filter((record) => !record.dbPersisted);
+  try {
+    const rows = await db.select({ email: ucUsersTable.email }).from(ucUsersTable);
+    const persisted = new Set(rows.map((row) => row.email));
+    return all.filter((record) => !record.dbPersisted || !persisted.has(record.email));
+  } catch {
+    return explicit;
+  }
+}
+
+function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  const result = writeQueue.then(fn);
+  // Keep the queue advancing regardless of success/failure.
+  writeQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }

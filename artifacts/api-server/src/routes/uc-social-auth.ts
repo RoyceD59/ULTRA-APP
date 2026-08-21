@@ -35,31 +35,38 @@ router.post(
   "/uc/auth/social",
   authLimiter,
   async (req: Request, res: Response): Promise<void> => {
+    // ── Phase 1: verify Clerk identity — no DB involved ──────────────────────
+    // Capture identity fields here so the DB-error handler below can write a
+    // durable folder record even when the very first DB lookup fails.
+    const auth = getAuth(req);
+    const clerkUserId = auth?.userId;
+    if (!clerkUserId) {
+      res.status(401).json({ error: "Social sign-in not verified" });
+      return;
+    }
+
+    const cu = await clerkClient.users.getUser(clerkUserId);
+    type EmailAddr = (typeof cu.emailAddresses)[number];
+    const verified = cu.emailAddresses.filter(
+      (e: EmailAddr) => e.verification?.status === "verified",
+    );
+    const primaryEmail =
+      verified.find((e: EmailAddr) => e.id === cu.primaryEmailAddressId) ?? verified[0];
+    const email = primaryEmail?.emailAddress?.toLowerCase().trim();
+    if (!email) {
+      res.status(403).json({ error: "Your sign-in account has no verified email address" });
+      return;
+    }
+
+    // These are captured before any DB operations so the outer catch can write
+    // a durable folder record regardless of which DB call failed.
+    const firstName = cu.firstName || email.split("@")[0] || "Customer";
+    const lastName = cu.lastName || "";
+
+    // ── Phase 2: DB operations ────────────────────────────────────────────────
+    // Any unhandled error here (including the very first findFirst) is caught
+    // below and triggers a durable folder record write before responding.
     try {
-      const auth = getAuth(req);
-      const clerkUserId = auth?.userId;
-      if (!clerkUserId) {
-        res.status(401).json({ error: "Social sign-in not verified" });
-        return;
-      }
-
-      // Fetch the identity from Clerk (email, name). Only a VERIFIED email may
-      // be used — linking by an unverified address would let an attacker
-      // claim someone else's app account by adding their email to a Clerk
-      // profile without proving ownership.
-      const cu = await clerkClient.users.getUser(clerkUserId);
-      type EmailAddr = (typeof cu.emailAddresses)[number];
-      const verified = cu.emailAddresses.filter(
-        (e: EmailAddr) => e.verification?.status === "verified",
-      );
-      const primaryEmail =
-        verified.find((e: EmailAddr) => e.id === cu.primaryEmailAddressId) ?? verified[0];
-      const email = primaryEmail?.emailAddress?.toLowerCase().trim();
-      if (!email) {
-        res.status(403).json({ error: "Your sign-in account has no verified email address" });
-        return;
-      }
-
       // 1) Already linked?
       let dbUser = await db.query.ucUsersTable.findFirst({
         where: eq(ucUsersTable.clerkUserId, clerkUserId),
@@ -114,35 +121,67 @@ router.post(
         const values = {
           email,
           passwordHash: SOCIAL_PASSWORD_SENTINEL,
-          firstName: cu.firstName || email.split("@")[0] || "Customer",
-          lastName: cu.lastName || "",
+          firstName,
+          lastName,
           clerkUserId,
           authProvider: "social",
         };
+
         try {
           [dbUser] = await db.insert(ucUsersTable).values(values).returning();
           if (dbUser) {
-            // Durable folder record of the new social account (sanitized —
-            // never password material; the sentinel hash is NOT written).
             recordAccountRegistration({
-              id: dbUser.id, firstName: dbUser.firstName, lastName: dbUser.lastName,
-              email: dbUser.email, phone: dbUser.phone,
-              authProvider: "social", createdAt: dbUser.createdAt,
-              source: "social-registration", dbPersisted: true,
+              id: dbUser.id,
+              firstName: dbUser.firstName,
+              lastName: dbUser.lastName,
+              email: dbUser.email,
+              phone: dbUser.phone,
+              authProvider: "social",
+              createdAt: dbUser.createdAt,
+              source: "social-registration",
+              dbPersisted: true,
             }).catch(() => {});
           }
-        } catch {
-          // Unique-constraint race (two concurrent first sign-ins): the other
-          // request won — reuse its row, but only if it belongs to this same
-          // Clerk identity (or is still unlinked, which we then claim).
-          const existing = await db.query.ucUsersTable.findFirst({
-            where: eq(ucUsersTable.email, email),
-          });
-          if (existing && (!existing.clerkUserId || existing.clerkUserId === clerkUserId)) {
-            dbUser = existing;
-          } else {
+        } catch (insertErr) {
+          // A concurrent social exchange may have inserted this email first.
+          // Reuse that row only when it is unlinked or belongs to this Clerk
+          // identity; a different linked identity must never be claimed.
+          let existingRow: Awaited<ReturnType<typeof db.query.ucUsersTable.findFirst>>;
+          try {
+            existingRow = await db.query.ucUsersTable.findFirst({
+              where: eq(ucUsersTable.email, email),
+            });
+          } catch {
+            // DB outage: the durable folder entry is now the only recovery
+            // path, so failure to append it must be surfaced explicitly.
+            try {
+              await recordAccountRegistration({
+                id: null,
+                firstName: values.firstName,
+                lastName: values.lastName,
+                email: values.email,
+                phone: "",
+                authProvider: "social",
+                createdAt: null,
+                source: "social-registration",
+                dbPersisted: false,
+              }, { critical: true });
+            } catch {
+              logger.error({ email }, "[uc-social-auth] dual failure: DB insert and folder write both failed");
+              res.status(503).json({
+                error: "We could not complete your sign-up and your details were not recorded. Please contact us directly.",
+              });
+              return;
+            }
+            throw insertErr;
+          }
+          if (existingRow && (!existingRow.clerkUserId || existingRow.clerkUserId === clerkUserId)) {
+            dbUser = existingRow;
+          } else if (existingRow) {
             res.status(409).json({ error: "This email is already linked to another sign-in. Use your original sign-in method." });
             return;
+          } else {
+            throw insertErr; // DB genuinely down — outer catch writes folder record
           }
         }
       }
@@ -162,12 +201,35 @@ router.post(
         phone: dbUser.phone,
         firstName: dbUser.firstName,
         lastName: dbUser.lastName,
-        address: dbUser.address ?? "",
       };
       res.json({ token: issueToken(user), user });
     } catch (err) {
       logger.error({ err }, "[uc-social-auth] social sign-in failed");
-      res.status(500).json({ error: "Sign-in failed. Please try again." });
+      if (res.headersSent) return;
+
+      // Any DB failure after Clerk identity is verified: write a durable folder
+      // record so the admin can recover the registration via the unsynced panel.
+      try {
+        await recordAccountRegistration({
+          id: null,
+          firstName,
+          lastName,
+          email,
+          phone: "",
+          authProvider: "social",
+          createdAt: null,
+          source: "social-registration",
+          dbPersisted: false,
+        }, { critical: true });
+        res.status(503).json({
+          error: "Sign-in failed. Your details have been safely recorded. Please try again later.",
+        });
+      } catch {
+        logger.error({ email }, "[uc-social-auth] dual failure: DB and folder write both failed");
+        res.status(503).json({
+          error: "We could not complete your sign-up and your details were not recorded. Please contact us directly.",
+        });
+      }
     }
   },
 );

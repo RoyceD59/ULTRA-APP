@@ -42,6 +42,7 @@ import AdminInventoryPage from '@/pages/admin/inventory';
 import AdminIntegrationsPage from '@/pages/admin/integrations';
 import AdminRewardsPage from '@/pages/admin/rewards';
 import AdminCustomersPage from '@/pages/admin/customers';
+import AdminUnsyncedRegistrationsPage from '@/pages/admin/unsynced-registrations';
 
 const queryClient = new QueryClient();
 
@@ -180,6 +181,104 @@ function Router() {
               </Route>
               <Route path="/admin/customers">
                 <AdminGuard><AdminCustomersPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/unsynced-registrations">
+                <AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard>
+              </Route>
+              <Route component={NotFound} />
+            </Switch>
+          </AppLayout>
+        </AuthGuard>
+      </Route>
+    </Switch>
+  );
+}
+function discardedMergeBranchRouter() {
+  return (
+    <Switch>
+      {/* Public routes */}
+      <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
+
+      {/* All other routes require authentication */}
+      <Route>
+        <AuthGuard>
+          <AppLayout>
+            <Switch>
+              <Route path="/">
+                <PageGuard page="dashboard"><Dashboard /></PageGuard>
+              </Route>
+              <Route path="/projects">
+                <PageGuard page="projects"><Projects /></PageGuard>
+              </Route>
+              <Route path="/projects/:id">
+                <PageGuard page="projects"><ProjectDetail /></PageGuard>
+              </Route>
+              <Route path="/tasks">
+                <PageGuard page="tasks"><Tasks /></PageGuard>
+              </Route>
+              <Route path="/team">
+                <PageGuard page="team"><Team /></PageGuard>
+              </Route>
+              <Route path="/ai-monitor">
+                <PageGuard page="ai-monitor"><AiMonitor /></PageGuard>
+              </Route>
+              <Route path="/impact">
+                <PageGuard page="impact"><ImpactPage /></PageGuard>
+              </Route>
+              <Route path="/alison-feedback">
+                <PageGuard page="alison-feedback"><AlisonFeedbackPage /></PageGuard>
+              </Route>
+              <Route path="/contacts">
+                <PageGuard page="contacts"><Contacts /></PageGuard>
+              </Route>
+              <Route path="/notifications">
+                <PageGuard page="notifications"><Notifications /></PageGuard>
+              </Route>
+              <Route path="/system">
+                <PageGuard page="system"><SystemStatus /></PageGuard>
+              </Route>
+              <Route path="/monitoring">
+                <PageGuard page="monitoring"><MonitoringPage /></PageGuard>
+              </Route>
+              <Route path="/webhook">
+                <PageGuard page="webhook"><WebhookTester /></PageGuard>
+              </Route>
+              <Route path="/orders">
+                <PageGuard page="orders"><OrdersPage /></PageGuard>
+              </Route>
+              <Route path="/tickets">
+                <PageGuard page="tickets"><TicketsPage /></PageGuard>
+              </Route>
+              <Route path="/water-tests">
+                <PageGuard page="water-tests"><WaterTestsPage /></PageGuard>
+              </Route>
+              <Route path="/uc-notifications">
+                <PageGuard page="uc-notifications"><UcNotificationFailuresPage /></PageGuard>
+              </Route>
+              <Route path="/library">
+                <PageGuard page="library"><LibraryPage /></PageGuard>
+              </Route>
+              {/* Admin-only */}
+              <Route path="/admin/users">
+                <AdminGuard><AdminUsersPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/payment-settings">
+                <AdminGuard><AdminPaymentSettingsPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/notification-settings">
+                <AdminGuard><AdminNotificationSettingsPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/inventory">
+                <AdminGuard><AdminInventoryPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/integrations">
+                <AdminGuard><AdminIntegrationsPage /></AdminGuard>
+              </Route>
+              <Route path="/admin/unsynced-registrations">
+                <AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard>
               </Route>
               <Route component={NotFound} />
             </Switch>
