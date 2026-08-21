@@ -197,6 +197,10 @@ async function applyStartupMigrations(): Promise<void> {
     );
   `);
   logger.info("Startup migration: team_invitations table ensured");
+  await pool.query(`
+    ALTER TABLE team_invitations ADD COLUMN IF NOT EXISTS permissions jsonb;
+  `);
+  logger.info("Startup migration: team_invitations.permissions column ensured");
 
   // Create password_reset_tokens table.
   await pool.query(`

@@ -30,6 +30,75 @@ const LEVEL_LABELS: Record<PagePermission, string> = {
   edit: "Edit",
 };
 
+function initialPermissions(
+  existing: Record<string, PagePermission> | null = null,
+): Record<string, PagePermission> {
+  const base: Record<string, PagePermission> = {};
+  for (const page of PAGES) base[page.slug] = "none";
+  return { ...base, ...(existing ?? {}) };
+}
+
+function PermissionsMatrix({
+  permissions,
+  onChange,
+  radioNamePrefix,
+}: {
+  permissions: Record<string, PagePermission>;
+  onChange: (permissions: Record<string, PagePermission>) => void;
+  radioNamePrefix: string;
+}) {
+  function setAll(level: PagePermission) {
+    const next: Record<string, PagePermission> = {};
+    for (const page of PAGES) next[page.slug] = level;
+    onChange(next);
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="mr-1">Set all:</span>
+        {(["none", "view", "edit"] as PagePermission[]).map((level) => (
+          <Button key={level} size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setAll(level)}>
+            {LEVEL_LABELS[level]}
+          </Button>
+        ))}
+      </div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-40">Page</TableHead>
+              <TableHead className="text-center">No access</TableHead>
+              <TableHead className="text-center">View</TableHead>
+              <TableHead className="text-center">Edit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {PAGES.map((page) => (
+              <TableRow key={page.slug}>
+                <TableCell className="font-medium text-sm">{page.label}</TableCell>
+                {(["none", "view", "edit"] as PagePermission[]).map((level) => (
+                  <TableCell key={level} className="text-center">
+                    <input
+                      type="radio"
+                      name={`${radioNamePrefix}-${page.slug}`}
+                      value={level}
+                      checked={(permissions[page.slug] ?? "none") === level}
+                      onChange={() => onChange({ ...permissions, [page.slug]: level })}
+                      className="accent-primary cursor-pointer w-4 h-4"
+                    />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
 function PermissionsDialog({
   user,
   open,
@@ -40,15 +109,8 @@ function PermissionsDialog({
 
   const [perms, setPerms] = useState<Record<string, PagePermission>>({});
 
-  // Reset local state when dialog opens for a new user
-  function initialPerms(u: TeamUserRecord) {
-    const base: Record<string, PagePermission> = {};
-    for (const p of PAGES) base[p.slug] = "none";
-    return { ...base, ...(u.permissions ?? {}) } as Record<string, PagePermission>;
-  }
-
   function handleOpen(u: TeamUserRecord) {
-    setPerms(initialPerms(u));
+    setPerms(initialPermissions(u.permissions));
   }
 
   const mutation = useMutation({
@@ -60,12 +122,6 @@ function PermissionsDialog({
     },
     onError: (err: Error) => toast({ title: "Save failed", description: err.message, variant: "destructive" }),
   });
-
-  function setAll(level: PagePermission) {
-    const next: Record<string, PagePermission> = {};
-    for (const p of PAGES) next[p.slug] = level;
-    setPerms(next);
-  }
 
   return (
     <Dialog
@@ -87,48 +143,11 @@ function PermissionsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Quick-set row */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="mr-1">Set all:</span>
-          {(["none", "view", "edit"] as PagePermission[]).map((lvl) => (
-            <Button key={lvl} size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setAll(lvl)}>
-              {LEVEL_LABELS[lvl]}
-            </Button>
-          ))}
-        </div>
-
-        {/* Per-page permission matrix */}
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-40">Page</TableHead>
-                <TableHead className="text-center">No access</TableHead>
-                <TableHead className="text-center">View</TableHead>
-                <TableHead className="text-center">Edit</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {PAGES.map((page) => (
-                <TableRow key={page.slug}>
-                  <TableCell className="font-medium text-sm">{page.label}</TableCell>
-                  {(["none", "view", "edit"] as PagePermission[]).map((lvl) => (
-                    <TableCell key={lvl} className="text-center">
-                      <input
-                        type="radio"
-                        name={`perm-${page.slug}`}
-                        value={lvl}
-                        checked={(perms[page.slug] ?? "none") === lvl}
-                        onChange={() => setPerms((p) => ({ ...p, [page.slug]: lvl }))}
-                        className="accent-primary cursor-pointer w-4 h-4"
-                      />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <PermissionsMatrix
+          permissions={perms}
+          onChange={setPerms}
+          radioNamePrefix="member-permission"
+        />
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
@@ -147,12 +166,14 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const { toast } = useToast();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
+  const [step, setStep] = useState<"email" | "permissions">("email");
+  const [perms, setPerms] = useState<Record<string, PagePermission>>(initialPermissions);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () => inviteUser(email.trim()),
+    mutationFn: (permissions?: Record<string, PagePermission>) => inviteUser(email.trim(), permissions),
     onSuccess: (data) => {
       setEmail(data.email);
       setInviteUrl(data.inviteUrl);
@@ -173,6 +194,8 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   function handleClose() {
     setEmail("");
+    setStep("email");
+    setPerms(initialPermissions());
     setInviteUrl(null);
     setEmailSent(null);
     setCopied(false);
@@ -181,15 +204,18 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={step === "permissions" ? "sm:max-w-lg max-h-[90vh] overflow-y-auto" : "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-primary" />
-            Invite team member
+            {step === "permissions" && !inviteUrl ? "Set page permissions" : "Invite team member"}
           </DialogTitle>
           <DialogDescription>
-            An invite link will be generated (valid 7 days). We'll also try to email it.
-            After they join, set their page permissions from the Users table.
+            {step === "permissions" && !inviteUrl ? (
+              <>Choose what <strong>{email}</strong> can access when they first sign in.</>
+            ) : (
+              <>An invite link will be generated (valid 7 days). We'll also try to email it.</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -216,7 +242,7 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
             <p className="text-xs text-muted-foreground">Share this link with the invitee. It expires in 7 days.</p>
             <DialogFooter><Button onClick={handleClose}>Done</Button></DialogFooter>
           </div>
-        ) : (
+        ) : step === "email" ? (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="invite-email">Email address</Label>
@@ -227,13 +253,29 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={mutation.isPending}
-                onKeyDown={(e) => e.key === "Enter" && email.trim() && mutation.mutate()}
+                onKeyDown={(e) => e.key === "Enter" && email.trim() && setStep("permissions")}
               />
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={handleClose}>Cancel</Button>
-              <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !email.trim()}>
-                {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</> : "Send invite"}
+              <Button onClick={() => setStep("permissions")} disabled={!email.trim()}>Continue</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">Step 2 of 2 — this is optional and can be changed later.</p>
+            <PermissionsMatrix
+              permissions={perms}
+              onChange={setPerms}
+              radioNamePrefix="invite-permission"
+            />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setStep("email")} disabled={mutation.isPending}>Back</Button>
+              <Button variant="outline" onClick={() => mutation.mutate(undefined)} disabled={mutation.isPending}>
+                {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</> : "Skip"}
+              </Button>
+              <Button onClick={() => mutation.mutate(perms)} disabled={mutation.isPending}>
+                {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending…</> : "Send invite"}
               </Button>
             </DialogFooter>
           </div>

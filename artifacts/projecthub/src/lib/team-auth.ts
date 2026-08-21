@@ -249,10 +249,13 @@ export interface InviteResult {
   emailSent: boolean;
 }
 
-export async function inviteUser(email: string): Promise<InviteResult> {
+export async function inviteUser(
+  email: string,
+  permissions?: Record<string, PagePermission>,
+): Promise<InviteResult> {
   return apiFetch<InviteResult>("/auth/invitations", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, ...(permissions ? { permissions } : {}) }),
   });
 }
 

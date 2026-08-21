@@ -218,7 +218,7 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     passwordHash,
     role: "member",
     isActive: true,
-    permissions: {},
+    permissions: invite.permissions ?? {},
   });
   await db.update(teamInvitationsTable)
     .set({ acceptedAt: new Date() })
@@ -362,9 +362,17 @@ router.get("/auth/users", requireTeamAdmin, async (_req, res): Promise<void> => 
 
 /** POST /auth/invitations  — invite a user by email (7-day link) */
 router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<void> => {
-  const { email } = req.body ?? {};
+  const { email, permissions } = req.body ?? {};
   if (!email || typeof email !== "string") {
     res.status(400).json({ error: "email is required." });
+    return;
+  }
+  if (
+    permissions !== undefined
+    && (permissions === null || typeof permissions !== "object" || Array.isArray(permissions)
+      || !Object.values(permissions).every((level) => typeof level === "string"))
+  ) {
+    res.status(400).json({ error: "permissions must be a map of page permission levels." });
     return;
   }
   const normalised = email.toLowerCase().trim();
@@ -379,7 +387,13 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
   const token = randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const invitedById = (req as AuthRequest).teamUser!.id;
-  await db.insert(teamInvitationsTable).values({ email: normalised, token, invitedById, expiresAt });
+  await db.insert(teamInvitationsTable).values({
+    email: normalised,
+    token,
+    invitedById,
+    expiresAt,
+    permissions: permissions as Record<string, string> | undefined,
+  });
   const inviteUrl = `${projecthubBaseUrl()}/register?token=${token}`;
   const sent = await sendViaResend({
     from: "ProjectHub <noreply@contacts.ucfilters.com>",

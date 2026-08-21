@@ -121,6 +121,7 @@ await pool.query(`
     created_at    timestamptz NOT NULL DEFAULT now()
   );
 `);
+await pool.query(`ALTER TABLE team_invitations ADD COLUMN IF NOT EXISTS permissions jsonb;`);
 
 // password_reset_tokens
 await pool.query(`
