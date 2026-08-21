@@ -4,6 +4,7 @@ import {
   ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -16,11 +17,11 @@ import FilterChip from '@/components/FilterChip';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CATEGORIES = ['All', 'Bottles & Portable', 'Home Filters', 'Shower & Skin', 'Accessories', 'Solutions'];
-const topPad = Platform.OS === 'web' ? 67 : 0;
 
+const ALISON_SEEN_KEY = 'hasSeenAlisonWelcome';
 function formatKES(price: number) {
   return `KES ${price.toLocaleString('en-KE')}`;
 }
@@ -92,6 +93,18 @@ function ProductsScreenContent() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
 
+  // Alison collapsed state — persisted across visits
+  const [alisonCollapsed, setAlisonCollapsed] = useState(true); // default collapsed until AsyncStorage resolves
+  const [alisonReady, setAlisonReady] = useState(false); // true once AsyncStorage check is done
+
+  // Floating bubble — session-only auto-dismiss
+  const bubbleDismissedRef = useRef(false);
+  const [showBubble, setShowBubble] = useState(false);
+  const bubbleFade = useRef(new Animated.Value(0)).current;
+
+  // True when the user has an active filter — suppress Alison surfaces
+  const isFiltering = search.length > 0 || category !== 'All';
+
   // Basket-derived state
   const hasItems = items.length > 0;
   const basketSkus = items.map(i => i.sku).filter(Boolean).join(',');
@@ -100,13 +113,50 @@ function ProductsScreenContent() {
   // the live item count/total even when items were added from another screen.
   useFocusEffect(useCallback(() => { refreshCart(); }, [refreshCart]));
 
+  // Load/set Alison seen flag from AsyncStorage once on mount
+  useEffect(() => {
+    AsyncStorage.getItem(ALISON_SEEN_KEY).then(val => {
+      if (val === 'true') {
+        setAlisonCollapsed(true);
+      } else {
+        // First visit — show full card and mark as seen for future visits
+        setAlisonCollapsed(false);
+        AsyncStorage.setItem(ALISON_SEEN_KEY, 'true').catch(() => {});
+      }
+      setAlisonReady(true);
+    }).catch(() => {
+      setAlisonCollapsed(false);
+      setAlisonReady(true);
+    });
+  }, []);
+
+  // Floating bubble: appears after 8s when basket has items, auto-dismisses
+  // after 6 more seconds, then stays hidden for the rest of the session.
+  useEffect(() => {
+    if (!hasItems || bubbleDismissedRef.current) return;
+    let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+    const appearTimer = setTimeout(() => {
+      if (bubbleDismissedRef.current) return;
+      setShowBubble(true);
+      Animated.timing(bubbleFade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+      dismissTimer = setTimeout(() => {
+        Animated.timing(bubbleFade, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+          setShowBubble(false);
+          bubbleDismissedRef.current = true;
+        });
+      }, 6000);
+    }, 8000);
+    return () => {
+      clearTimeout(appearTimer);
+      if (dismissTimer) clearTimeout(dismissTimer);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasItems]);
+
   // Animated transition for the empty-basket view: 1 = visible, 0 = hidden.
-  // Always start at 0 — we don't know the saved cart state until AsyncStorage
-  // resolves, so we suppress it until cartHydrated is true.
   const emptyAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Don't animate until we know what the cart actually contains.
     if (!cartHydrated) return;
     Animated.timing(emptyAnim, { toValue: hasItems ? 0 : 1, duration: 280, useNativeDriver: true }).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,33 +249,23 @@ function ProductsScreenContent() {
 
   // ── Empty state ──────────────────────────────────────────────────────────────
 
-  const emptyState = (
-    <Animated.View
-      style={[
-        styles.emptyStateWrap,
-        {
-          opacity: emptyAnim,
-          transform: [{
-            translateY: emptyAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }),
-          }],
-        },
-      ]}>
-      {/* Empty basket card */}
-      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Ionicons name="cart-outline" size={52} color={colors.border} />
-        <Text style={[styles.emptyCardTitle, { color: colors.text }]}>Your basket is empty</Text>
-        <Text style={[styles.emptyCardSub, { color: colors.mutedForeground }]}>
-          Discover water filtration solutions for your home or business
-        </Text>
-        <TouchableOpacity
-          onPress={scrollToProducts}
-          activeOpacity={0.8}
-          style={[styles.emptyBrowseBtn, { backgroundColor: colors.primary }]}>
-          <Text style={styles.emptyBrowseBtnText}>Browse Products</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Inline chatbot welcome card */}
+  // Alison inline card — collapsed to a slim row after the first visit,
+  // or hidden entirely when the user is actively filtering.
+  const alisonInlineCard = !isFiltering && alisonReady ? (
+    alisonCollapsed ? (
+      // Slim link row shown on subsequent visits
+      <TouchableOpacity
+        onPress={() => router.push('/ai-chat' as never)}
+        activeOpacity={0.8}
+        style={[styles.alisonSlimRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.chatAvatar, styles.chatAvatarSm, { backgroundColor: colors.primary }]}>
+          <Text style={styles.chatAvatarText}>A</Text>
+        </View>
+        <Text style={[styles.alisonSlimText, { color: colors.text }]}>Chat with Alison — water filtration guide</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    ) : (
+      // Full welcome card — first visit only
       <View style={[styles.chatPromptCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.chatPromptHeader}>
           <View style={[styles.chatAvatar, { backgroundColor: colors.primary }]}>
@@ -258,36 +298,89 @@ function ProductsScreenContent() {
           </TouchableOpacity>
         </View>
       </View>
+    )
+  ) : null;
+
+  const emptyState = (
+    <Animated.View
+      style={[
+        styles.emptyStateWrap,
+        {
+          opacity: emptyAnim,
+          transform: [{
+            translateY: emptyAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }),
+          }],
+        },
+      ]}>
+      {/* Empty basket card */}
+      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Ionicons name="cart-outline" size={52} color={colors.border} />
+        <Text style={[styles.emptyCardTitle, { color: colors.text }]}>Your basket is empty</Text>
+        <Text style={[styles.emptyCardSub, { color: colors.mutedForeground }]}>
+          Discover water filtration solutions for your home or business
+        </Text>
+        <TouchableOpacity
+          onPress={scrollToProducts}
+          activeOpacity={0.8}
+          style={[styles.emptyBrowseBtn, { backgroundColor: colors.primary }]}>
+          <Text style={styles.emptyBrowseBtnText}>Browse Products</Text>
+        </TouchableOpacity>
+      </View>
+
+      {alisonInlineCard}
     </Animated.View>
   );
 
-  // ── Floating chatbot bubble ───────────────────────────────────────────────────
+  // ── Floating chatbot bubble (session-timed, basket non-empty) ─────────────────
 
   const bubbleBottom = Platform.OS === 'web' ? 96 : (72 + insets.bottom);
 
-  const chatBubble = hasItems ? (
-    <TouchableOpacity
-      onPress={() => router.push('/ai-chat' as never)}
-      activeOpacity={0.85}
-      style={[styles.chatBubble, { backgroundColor: colors.primary, bottom: bubbleBottom }]}>
-      <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
-      <Text style={styles.chatBubbleText}>Need help?</Text>
-    </TouchableOpacity>
+  const chatBubble = showBubble && !isFiltering ? (
+    <Animated.View
+      style={[styles.chatBubbleWrap, { bottom: bubbleBottom, opacity: bubbleFade }]}
+      pointerEvents="box-none">
+      <TouchableOpacity
+        onPress={() => router.push('/ai-chat' as never)}
+        activeOpacity={0.85}
+        style={[styles.chatBubble, { backgroundColor: colors.primary }]}>
+        <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+        <Text style={styles.chatBubbleText}>Need help?</Text>
+      </TouchableOpacity>
+    </Animated.View>
   ) : null;
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
+  const headerTop = Platform.OS === 'web' ? 0 : insets.top;
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <Animated.ScrollView
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}>
 
+      {/* ── Branded header bar ── */}
+      <View style={[styles.brandHeader, { paddingTop: headerTop }]}>
+        <Image
+          source={require('@/assets/images/logo-lockup-white.png')}
+          style={styles.brandLogo}
+          contentFit="contain"
+        />
+        <TouchableOpacity
+          onPress={() => router.push('/cart' as never)}
+          activeOpacity={0.8}
+          style={styles.cartIconBtn}
+          accessibilityLabel={`Cart, ${items.length} items`}>
+          <Ionicons name="cart-outline" size={24} color="#fff" />
+          {items.length > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{items.length > 9 ? '9+' : items.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Sticky search + category chips ── */}
+      <View style={[styles.stickyControls, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         {/* Search */}
-        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: topPad }]}>
+        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
           <TextInput
             value={search}
@@ -301,16 +394,25 @@ function ProductsScreenContent() {
           )}
         </View>
 
-        {/* Category chips */}
-        <HorizontalCarousel
-          data={CATEGORIES}
-          keyExtractor={i => i}
+        {/* Category chips — plain ScrollView to avoid gesture conflict with SwipeTabs */}
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chips}
-          renderItem={({ item }) => (
-            <FilterChip label={item} active={category === item} onPress={() => setCategory(item)} />
-          )}
-        />
+          keyboardShouldPersistTaps="handled">
+          {CATEGORIES.map(cat => (
+            <FilterChip key={cat} label={cat} active={category === cat} onPress={() => setCategory(cat)} />
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* ── Scrollable content ── */}
+      <Animated.ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}>
 
         {/* Empty state (basket empty) or Add-Ons section (basket has items).
             Suppressed until cartHydrated to prevent a flash of the empty card
@@ -357,7 +459,7 @@ function ProductsScreenContent() {
         </View>
       </Animated.ScrollView>
 
-      {/* Floating chatbot bubble (basket non-empty) */}
+      {/* Floating chatbot bubble (timed, basket non-empty, not filtering) */}
       {chatBubble}
     </View>
   );
@@ -366,24 +468,65 @@ function ProductsScreenContent() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
 
+  // ── Branded header ────────────────────────────────────────────────────────────
+  brandHeader: {
+    backgroundColor: '#005d8f',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  brandLogo: {
+    width: 120,
+    height: 36,
+  },
+  cartIconBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#f59e0b',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' as const },
+
+  // ── Sticky search + chips ─────────────────────────────────────────────────────
+  stickyControls: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 6,
+  },
+
   // Search
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    margin: 16, marginBottom: 8,
+    marginHorizontal: 16, marginTop: 12, marginBottom: 8,
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 12, borderWidth: 1,
   },
   searchInput: { flex: 1, fontSize: 15 },
 
   // Category chips
-  chips: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  chips: { paddingHorizontal: 16, paddingBottom: 6, gap: 8, flexDirection: 'row' },
 
-  // Add-Ons
+  // ── Add-Ons ───────────────────────────────────────────────────────────────────
   addonsSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
   addonsHeading: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 9 },
   sectionTitle: { fontSize: 15, fontWeight: '700' as const },
   sectionSub: { fontSize: 12, marginTop: 1 },
-  basketLink: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 6 },
+  basketLink: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 6,
+  },
   basketLinkText: { fontSize: 12, fontWeight: '700' as const },
   addonsRow: { gap: 8, paddingRight: 16 },
   addonsSkeletonRow: { flexDirection: 'row', gap: 10 },
@@ -412,7 +555,7 @@ const styles = StyleSheet.create({
   },
   addonAddText: { fontSize: 12, fontWeight: '600' as const },
 
-  // Empty state
+  // ── Empty state ───────────────────────────────────────────────────────────────
   emptyStateWrap: { paddingHorizontal: 16, paddingTop: 8, gap: 14 },
   emptyCard: {
     borderRadius: 16, borderWidth: 1,
@@ -426,7 +569,16 @@ const styles = StyleSheet.create({
   },
   emptyBrowseBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' as const },
 
-  // Chatbot welcome card
+  // ── Alison slim row (collapsed) ───────────────────────────────────────────────
+  alisonSlimRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 10,
+  },
+  chatAvatarSm: { width: 28, height: 28, borderRadius: 14 },
+  alisonSlimText: { flex: 1, fontSize: 13 },
+
+  // ── Alison full welcome card ──────────────────────────────────────────────────
   chatPromptCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
   chatPromptHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chatAvatar: {
@@ -446,24 +598,32 @@ const styles = StyleSheet.create({
   },
   quickReplyText: { fontSize: 13, fontWeight: '500' as const },
 
-  // Floating chatbot bubble
-  chatBubble: {
+  // ── Floating chatbot bubble ───────────────────────────────────────────────────
+  chatBubbleWrap: {
     position: 'absolute', right: 16,
+    zIndex: 10,
+  },
+  chatBubble: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 24,
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
     elevation: 5,
-    zIndex: 10,
   },
   chatBubbleText: { color: '#fff', fontSize: 13, fontWeight: '600' as const },
 
-  // Products catalog
-  catalogHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 },
-  catalogLabel: { fontSize: 13, fontWeight: '700' as const, letterSpacing: 0.3, textTransform: 'uppercase' },
+  // ── Products catalog ──────────────────────────────────────────────────────────
+  catalogHeader: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+    marginTop: 16, marginBottom: 8,
+  },
+  catalogLabel: {
+    fontSize: 12, fontWeight: '600' as const,
+    letterSpacing: 0.8, textTransform: 'uppercase',
+  },
   catalogCount: { fontSize: 12 },
-  grid: { padding: 12, paddingBottom: 0 },
-  row: { gap: 12, marginBottom: 12 },
+  grid: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 0 },
+  row: { gap: 4, marginBottom: 8 },
   cardWrap: { flex: 1 },
   empty: { alignItems: 'center', marginTop: 60, gap: 12 },
   emptyText: { fontSize: 15 },

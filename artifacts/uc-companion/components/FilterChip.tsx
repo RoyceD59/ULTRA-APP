@@ -14,14 +14,20 @@ export default function FilterChip({ label, active, onPress }: Props) {
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.75}
-      style={[styles.chip,
-        { backgroundColor: active ? colors.primary : colors.surface, borderColor: active ? colors.primary : colors.border }]}>
-      <Text style={[styles.label, { color: active ? '#fff' : colors.mutedForeground }]}>{label}</Text>
+      style={[
+        styles.chip,
+        active
+          ? { backgroundColor: colors.primaryLight, borderColor: colors.primary, borderWidth: 2 }
+          : { backgroundColor: 'transparent', borderColor: colors.border, borderWidth: 1 },
+      ]}>
+      <Text style={[styles.label, { color: active ? colors.primary : colors.mutedForeground, fontWeight: active ? '700' : '500' }]}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  label: { fontSize: 13, fontWeight: '500' as const },
+  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
+  label: { fontSize: 13 },
 });

@@ -164,14 +164,27 @@ export default function ProductCard({ product, onPress, layout = 'grid' }: Props
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 12, borderWidth: 1, overflow: 'hidden', width: '100%' },
+  // Grid card — increased border-radius and soft shadow
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    width: '100%',
+    // Soft shadow
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   saleBadge: { position: 'absolute', top: 8, left: 8, zIndex: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   saleBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.5 },
   imageWrap: { height: 140, alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   info: { padding: 12, gap: 4 },
   category: { fontSize: 11, fontWeight: '600' as const, textTransform: 'uppercase', letterSpacing: 0.5 },
-  name: { fontSize: 13, fontWeight: '600' as const, lineHeight: 18 },
+  // Bolder product name with tighter line height
+  name: { fontSize: 13, fontWeight: '700' as const, lineHeight: 17 },
   tagline: { fontSize: 11, lineHeight: 15 },
   sku: { fontSize: 10, letterSpacing: 0.3 },
   listTagline: { fontSize: 12, lineHeight: 16, marginTop: 1 },
