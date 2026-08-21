@@ -25,9 +25,9 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { timingSafeEqual, randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { issueToken, verifyToken } from "../lib/jwt.js";
-import { db, teamSettingsTable, teamUsersTable, teamInvitationsTable, passwordResetTokensTable } from "@workspace/db";
-import { eq, and, gt, isNull } from "drizzle-orm";
-import { sendViaResend } from "../lib/resend.js";
+import { db, teamSettingsTable, teamUsersTable, teamInvitationsTable, passwordResetTokensTable, ucNotificationLogTable } from "@workspace/db";
+import { eq, and, gt, isNull, desc, inArray } from "drizzle-orm";
+import { sendViaResend, getResendDeliveryEvent, type ResendDeliveryEvent } from "../lib/resend.js";
 import { sendWhatsAppMessage } from "../lib/whatsapp.js";
 import { sendSlackTeamMessage } from "../lib/slack.js";
 import { logger } from "../lib/logger.js";
@@ -50,6 +50,13 @@ type UserPublic = {
   permissions: Record<string, string> | null;
   createdAt: Date;
 };
+
+const RECOVERY_EMAIL_TEMPLATES = {
+  invitation: "projecthub_invitation",
+  passwordReset: "projecthub_password_reset",
+} as const;
+
+type RecoveryEmailType = keyof typeof RECOVERY_EMAIL_TEMPLATES;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -268,6 +275,10 @@ router.post("/auth/forgot-password", authLimiter, async (req, res): Promise<void
         `<p>A password reset was requested for your ProjectHub account.</p>` +
         `<p><a href="${resetUrl}">Reset your password</a> (valid 24 hours)</p>` +
         `<p>If you did not request this, you can ignore this email.</p>`,
+      meta: {
+        template: RECOVERY_EMAIL_TEMPLATES.passwordReset,
+        auditMode: "metadata-only",
+      },
     }),
     deliverResetLinkViaWhatsApp(resetUrl, user.email),
     sendSlackTeamMessage(resetMessage, "PASSWORD_RESET"),
@@ -360,6 +371,71 @@ router.get("/auth/users", requireTeamAdmin, async (_req, res): Promise<void> => 
   res.json(users);
 });
 
+/**
+ * GET /auth/recovery-emails — latest ProjectHub invitation/reset email state.
+ * This deliberately projects only delivery metadata: it never returns message
+ * bodies, reset links, Resend IDs, or any other email contents.
+ */
+router.get("/auth/recovery-emails", requireTeamAdmin, async (req, res): Promise<void> => {
+  const parsedLimit = Number(req.query["limit"]);
+  const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20;
+  const templateToType = new Map<string, RecoveryEmailType>([
+    [RECOVERY_EMAIL_TEMPLATES.invitation, "invitation"],
+    [RECOVERY_EMAIL_TEMPLATES.passwordReset, "passwordReset"],
+  ]);
+
+  const logs = await db.select({
+    id: ucNotificationLogTable.id,
+    recipient: ucNotificationLogTable.recipient,
+    template: ucNotificationLogTable.template,
+    status: ucNotificationLogTable.status,
+    errorMessage: ucNotificationLogTable.errorMessage,
+    resendMessageId: ucNotificationLogTable.resendMessageId,
+    deliveryEvent: ucNotificationLogTable.deliveryEvent,
+    deliveryEventAt: ucNotificationLogTable.deliveryEventAt,
+    sentAt: ucNotificationLogTable.sentAt,
+  }).from(ucNotificationLogTable)
+    .where(and(
+      eq(ucNotificationLogTable.provider, "resend"),
+      inArray(ucNotificationLogTable.template, Object.values(RECOVERY_EMAIL_TEMPLATES)),
+    ))
+    .orderBy(desc(ucNotificationLogTable.sentAt))
+    .limit(limit);
+
+  const refreshed = await Promise.all(logs.map(async (log) => {
+    let deliveryEvent = log.deliveryEvent as ResendDeliveryEvent | null;
+    let deliveryEventAt = log.deliveryEventAt;
+
+    if (log.status === "sent" && log.resendMessageId) {
+      const latest = await getResendDeliveryEvent(log.resendMessageId);
+      if (latest && (latest.event !== deliveryEvent || !deliveryEventAt)) {
+        deliveryEvent = latest.event;
+        deliveryEventAt = latest.occurredAt ?? new Date();
+        try {
+          await db.update(ucNotificationLogTable)
+            .set({ deliveryEvent, deliveryEventAt })
+            .where(eq(ucNotificationLogTable.id, log.id));
+        } catch (err) {
+          req.log.warn({ err, notificationId: log.id }, "Could not persist Resend delivery event");
+        }
+      }
+    }
+
+    return {
+      id: log.id,
+      recipient: log.recipient,
+      type: templateToType.get(log.template)!,
+      sendStatus: log.status === "sent" ? "accepted" : "failed",
+      deliveryEvent: deliveryEvent ?? (log.status === "sent" ? "accepted" : "failed"),
+      deliveryEventAt,
+      sentAt: log.sentAt,
+      errorMessage: log.status === "failed" ? log.errorMessage : null,
+    };
+  }));
+
+  res.json(refreshed);
+});
+
 /** POST /auth/invitations  — invite a user by email (7-day link) */
 router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<void> => {
   const { email, permissions } = req.body ?? {};
@@ -401,6 +477,10 @@ router.post("/auth/invitations", requireTeamAdmin, async (req, res): Promise<voi
     subject: "You've been invited to ProjectHub",
     text: `You have been invited to join the Ultra-Clear ProjectHub team workspace.\n\nAccept your invitation here (valid 7 days):\n${inviteUrl}`,
     html: `<p>You have been invited to join the Ultra-Clear ProjectHub team workspace.</p><p><a href="${inviteUrl}">Accept invitation</a> (valid 7 days)</p><p>Or copy this link: ${inviteUrl}</p>`,
+    meta: {
+      template: RECOVERY_EMAIL_TEMPLATES.invitation,
+      auditMode: "metadata-only",
+    },
   });
   if (!sent) logger.warn({ email: normalised }, "Invite email not delivered — link still valid");
   res.status(201).json({ inviteUrl, email: normalised, expiresAt, emailSent: sent });
@@ -467,6 +547,10 @@ router.post("/auth/users/:id/reset-password", requireTeamAdmin, async (req, res)
         `<p>A password reset was requested for your ProjectHub account.</p>` +
         `<p><a href="${resetUrl}">Reset your password</a> (valid 24 hours)</p>` +
         `<p>If you did not request this, you can ignore this email.</p>`,
+      meta: {
+        template: RECOVERY_EMAIL_TEMPLATES.passwordReset,
+        auditMode: "metadata-only",
+      },
     }),
     deliverResetLinkViaWhatsApp(resetUrl, user.email),
   ]);

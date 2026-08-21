@@ -12,9 +12,15 @@ process.env["SESSION_SECRET"] ??= "projecthub-auth-email-test-secret";
 let resendStub: http.Server;
 let resendStatus = 200;
 let resendHits: Array<Record<string, unknown>> = [];
+let resendLastEvent = "email.delivered";
 
 before(async () => {
   resendStub = http.createServer((req, res) => {
+    if (req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ last_event: resendLastEvent }));
+      return;
+    }
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -75,6 +81,14 @@ async function request(path: string, body?: unknown): Promise<{ status: number; 
   return { status: response.status, body: await response.json() as Record<string, unknown> };
 }
 
+async function getRequest(path: string): Promise<{ status: number; body: unknown }> {
+  const { port } = appServer.address() as { port: number };
+  const response = await fetch(`http://127.0.0.1:${port}/api${path}`, {
+    headers: { authorization: `Bearer ${adminToken()}` },
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 describe("ProjectHub auth email delivery", () => {
   it("returns emailSent when Resend accepts an invitation", async () => {
     const email = "projecthub-invite-email-466@example.invalid";
@@ -118,6 +132,49 @@ describe("ProjectHub auth email delivery", () => {
     } finally {
       await pool.query("DELETE FROM password_reset_tokens WHERE user_id = $1", [userId]);
       await pool.query("DELETE FROM team_users WHERE id = $1", [userId]);
+    }
+  });
+
+  it("retains a Resend message ID and safely exposes delayed and bounced recovery delivery events", async () => {
+    const email = "projecthub-recovery-delivery-566@example.invalid";
+    resendStatus = 200;
+    resendLastEvent = "email.delivery_delayed";
+    resendHits = [];
+    await pool.query("DELETE FROM team_invitations WHERE email = $1", [email]);
+    await pool.query("DELETE FROM uc_notification_log WHERE recipient = $1", [email]);
+
+    try {
+      const invite = await request("/auth/invitations", { email });
+      assert.equal(invite.status, 201);
+
+      const delayed = await getRequest("/auth/recovery-emails?limit=20");
+      assert.equal(delayed.status, 200);
+      const delayedRows = delayed.body as Array<Record<string, unknown>>;
+      const row = delayedRows.find((item) => item["recipient"] === email);
+      assert.ok(row, "the invitation should appear in recovery email delivery history");
+      assert.equal(row["type"], "invitation");
+      assert.equal(row["sendStatus"], "accepted");
+      assert.equal(row["deliveryEvent"], "delayed");
+      assert.equal("resendMessageId" in row, false);
+      assert.equal("messageBody" in row, false);
+      assert.equal("resetUrl" in row, false);
+
+      const persisted = await pool.query(
+        "SELECT resend_message_id, delivery_event, message_body FROM uc_notification_log WHERE recipient = $1",
+        [email],
+      );
+      assert.equal(persisted.rows[0]?.["resend_message_id"], "resend-stub");
+      assert.equal(persisted.rows[0]?.["delivery_event"], "delayed");
+      assert.equal(persisted.rows[0]?.["message_body"], "");
+
+      resendLastEvent = "email.bounced";
+      const bounced = await getRequest("/auth/recovery-emails?limit=20");
+      const bouncedRows = bounced.body as Array<Record<string, unknown>>;
+      const bouncedRow = bouncedRows.find((item) => item["recipient"] === email);
+      assert.equal(bouncedRow?.["deliveryEvent"], "bounced");
+    } finally {
+      await pool.query("DELETE FROM team_invitations WHERE email = $1", [email]);
+      await pool.query("DELETE FROM uc_notification_log WHERE recipient = $1", [email]);
     }
   });
 });

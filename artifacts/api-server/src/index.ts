@@ -285,6 +285,19 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS uc_notification_log_status_sent_at_idx ON uc_notification_log (status, sent_at)`
   );
+  // Keep the Resend provider identifier and its latest event separate from
+  // the email body. ProjectHub uses these metadata fields to show recovery
+  // email delivery without exposing invitation/reset links.
+  await pool.query(`
+    ALTER TABLE uc_notification_log
+      ADD COLUMN IF NOT EXISTS resend_message_id text,
+      ADD COLUMN IF NOT EXISTS delivery_event text,
+      ADD COLUMN IF NOT EXISTS delivery_event_at timestamptz
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS uc_notification_log_recovery_delivery_idx
+      ON uc_notification_log (provider, template, sent_at)`
+  );
   logger.info("Startup migration: uc_notification_log table ensured");
 
   // Create uc_return_requests table for customer return/refund requests.

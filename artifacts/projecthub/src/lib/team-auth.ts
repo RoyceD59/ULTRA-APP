@@ -289,6 +289,31 @@ export async function adminResetPassword(userId: string): Promise<AdminResetResu
   });
 }
 
+export type RecoveryEmailType = "invitation" | "passwordReset";
+export type RecoveryEmailDeliveryEvent =
+  | "accepted"
+  | "delivered"
+  | "delayed"
+  | "bounced"
+  | "complained"
+  | "failed";
+
+/** Provider metadata only — never includes message contents or recovery links. */
+export interface RecoveryEmailDelivery {
+  id: number;
+  recipient: string;
+  type: RecoveryEmailType;
+  sendStatus: "accepted" | "failed";
+  deliveryEvent: RecoveryEmailDeliveryEvent;
+  deliveryEventAt: string | null;
+  sentAt: string;
+  errorMessage: string | null;
+}
+
+export async function listRecoveryEmailDeliveries(): Promise<RecoveryEmailDelivery[]> {
+  return apiFetch<RecoveryEmailDelivery[]>("/auth/recovery-emails?limit=20");
+}
+
 // ─── Legacy: passcode-based token (kept for WhatsApp external auth) ─────────
 
 export async function loginWithPasscode(passcode: string): Promise<void> {

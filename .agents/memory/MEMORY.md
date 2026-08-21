@@ -27,4 +27,5 @@
 - [Filter maintenance count policy](filter-maintenance-count-policy.md) — customer lifecycle changes retain cleaning history; only an explicit staff correction may reset it.
 - [Inventory webhook SSRF policy](inventory-webhook-ssrf-policy.md) — outbound n8n URLs must block private and IANA special-use IPs; request-time resolution is pinned.
 - [API test storage isolation](api-test-storage-isolation.md) — library route tests inject storage adapters; global prototype mocks race under parallel test execution.
+- [API schema rollout paths](api-schema-rollout-paths.md) — shared SQL migrations cover tests, but deployed API startup needs matching idempotent DDL for existing databases.
 - [WooCommerce stock alert semantics](woocommerce-stock-alert-semantics.md) — null quantity means unmanaged stock, not zero; explicit out-of-stock remains actionable.

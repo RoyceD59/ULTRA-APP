@@ -28,6 +28,13 @@ export const ucNotificationLogTable = pgTable(
     testId:       text("test_id"),
     status:       text("status").notNull(),         // 'sent' | 'failed'
     errorMessage: text("error_message"),
+    // Resend's opaque message ID. Kept so privileged ProjectHub users can
+    // retrieve delivery events without storing or exposing email contents.
+    resendMessageId: text("resend_message_id"),
+    // Most recent delivery event observed from Resend, e.g. accepted,
+    // delivered, delayed, or bounced.
+    deliveryEvent: text("delivery_event"),
+    deliveryEventAt: timestamp("delivery_event_at", { withTimezone: true }),
     sentAt:       timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -37,6 +44,7 @@ export const ucNotificationLogTable = pgTable(
     // Also covers status-only filters via its leading column, so the old
     // single-column uc_notification_log_status_idx is not needed.
     index("uc_notification_log_status_sent_at_idx").on(t.status, t.sentAt),
+    index("uc_notification_log_recovery_delivery_idx").on(t.provider, t.template, t.sentAt),
   ]
 );
 

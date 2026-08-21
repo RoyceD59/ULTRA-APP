@@ -143,6 +143,12 @@ function callRetry(id: number, token?: string): Promise<Response> {
   });
 }
 
+function callList(token: string): Promise<Response> {
+  return fetch(`${base}/uc/admin/notification-logs?limit=500`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 /**
  * Stub only external API calls (AT, SendGrid, Resend, …) without intercepting
  * requests to our own server on 127.0.0.1/localhost.
@@ -180,6 +186,44 @@ describe("POST /uc/admin/notification-logs/:id/retry — sent-row rejection", ()
       body.error?.toLowerCase().includes("failed"),
       "error message should explain only failed rows can be retried",
     );
+  });
+});
+
+describe("ProjectHub recovery notifications — privacy and retry guard", () => {
+  it("redacts legacy recovery bodies and provider IDs from the generic log endpoint", async () => {
+    const id = await insertLog({
+      channel: "email",
+      recipient: "projecthub-recovery-log@example.invalid",
+      template: "projecthub_password_reset",
+      messageBody: "https://projecthub.example/reset-password?token=secret-token",
+      status: "failed",
+    });
+    await db.update(ucNotificationLogTable)
+      .set({ resendMessageId: "resend-provider-id" })
+      .where(eq(ucNotificationLogTable.id, id));
+
+    const response = await callList(adminJwt);
+    assert.equal(response.status, 200);
+    const rows = await response.json() as Array<Record<string, unknown>>;
+    const row = rows.find((item) => item["id"] === id);
+    assert.ok(row, "recovery log row should be present");
+    assert.equal(row["messageBody"], "");
+    assert.equal("resendMessageId" in row, false);
+  });
+
+  it("requires a fresh secure link instead of retrying a failed recovery email", async () => {
+    const id = await insertLog({
+      channel: "email",
+      recipient: "projecthub-recovery-retry@example.invalid",
+      template: "projecthub_invitation",
+      messageBody: "",
+      status: "failed",
+    });
+
+    const response = await callRetry(id, adminJwt);
+    assert.equal(response.status, 409);
+    const body = await response.json() as { error?: string };
+    assert.match(body.error ?? "", /fresh secure link/i);
   });
 });
 

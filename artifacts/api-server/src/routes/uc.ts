@@ -3475,6 +3475,15 @@ router.patch("/uc/admin/water-tests/:id", async (req: Request, res: Response): P
 
 // ─── Admin notification log endpoints ────────────────────────────────────────
 
+const PROJECTHUB_RECOVERY_EMAIL_TEMPLATES = new Set([
+  "projecthub_invitation",
+  "projecthub_password_reset",
+]);
+
+function isProjecthubRecoveryEmail(template: string): boolean {
+  return PROJECTHUB_RECOVERY_EMAIL_TEMPLATES.has(template);
+}
+
 /**
  * GET /api/uc/admin/notification-logs
  * Returns recent SMS/email send attempts from uc_notification_log.
@@ -3504,7 +3513,15 @@ router.get("/uc/admin/notification-logs", async (req: Request, res: Response): P
       .orderBy(desc(ucNotificationLogTable.sentAt))
       .limit(limit);
 
-    res.json(rows);
+    // ProjectHub recovery entries must never disclose stale reset/invitation
+    // links via this older, general-purpose log endpoint. New recovery sends
+    // are metadata-only; this redaction also protects rows recorded before
+    // that policy existed. Provider IDs are internal lookup keys, not UI data.
+    res.json(rows.map(({ resendMessageId: _resendMessageId, ...row }) => (
+      isProjecthubRecoveryEmail(row.template)
+        ? { ...row, messageBody: "" }
+        : row
+    )));
   } catch (err) {
     logger.error({ err }, "Failed to load notification logs");
     res.status(500).json({ error: "Failed to load notification logs" });
@@ -3578,6 +3595,13 @@ router.post("/uc/admin/notification-logs/:id/retry", async (req: Request, res: R
     // Only failed notifications make sense to retry.
     if (row.status !== "failed") {
       res.status(400).json({ error: "Only failed notifications can be retried" });
+      return;
+    }
+
+    if (isProjecthubRecoveryEmail(row.template)) {
+      res.status(409).json({
+        error: "ProjectHub recovery emails must be reissued from User Management so a fresh secure link is created",
+      });
       return;
     }
 

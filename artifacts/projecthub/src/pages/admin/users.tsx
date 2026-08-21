@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users, UserPlus, Shield, ShieldOff, RotateCcw,
   Copy, Check, Loader2, UserX, UserCheck, Mail, Settings2,
+  AlertCircle, CheckCircle2, CircleAlert, RefreshCw, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +19,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   listUsers, inviteUser, updateUserRole, updateUser, adminResetPassword,
+  listRecoveryEmailDeliveries,
   isTeamAdmin, PAGES,
   type AdminResetResult, type TeamUserRecord, type PagePermission,
+  type RecoveryEmailDelivery, type RecoveryEmailDeliveryEvent,
 } from "@/lib/team-auth";
 
 // ─── Permissions Dialog ────────────────────────────────────────────────────────
@@ -179,6 +182,7 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
       setInviteUrl(data.inviteUrl);
       setEmailSent(data.emailSent);
       void qc.invalidateQueries({ queryKey: ["team-users"] });
+      void qc.invalidateQueries({ queryKey: ["recovery-email-deliveries"] });
     },
     onError: (err: Error) => {
       toast({ title: "Invite failed", description: err.message, variant: "destructive" });
@@ -291,12 +295,16 @@ function ResetPasswordDialog({
   user, open, onClose,
 }: { user: TeamUserRecord | null; open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [result, setResult] = useState<AdminResetResult | null>(null);
   const [copied, setCopied] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => adminResetPassword(user!.id),
-    onSuccess: (data) => setResult(data),
+    onSuccess: (data) => {
+      setResult(data);
+      void qc.invalidateQueries({ queryKey: ["recovery-email-deliveries"] });
+    },
     onError: (err: Error) => {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
     },
@@ -372,6 +380,88 @@ function PermissionSummary({ user }: { user: TeamUserRecord }) {
   return <span className="text-xs text-muted-foreground">{parts.join(", ")}</span>;
 }
 
+function RecoveryDeliveryBadge({
+  event,
+}: {
+  event: RecoveryEmailDeliveryEvent;
+}) {
+  if (event === "delivered") {
+    return <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Delivered</Badge>;
+  }
+  if (event === "delayed") {
+    return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 gap-1"><CircleAlert className="w-3.5 h-3.5" /> Delayed</Badge>;
+  }
+  if (event === "bounced" || event === "complained") {
+    return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1"><XCircle className="w-3.5 h-3.5" /> {event === "bounced" ? "Bounced" : "Complained"}</Badge>;
+  }
+  if (event === "failed") {
+    return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1"><XCircle className="w-3.5 h-3.5" /> Not accepted</Badge>;
+  }
+  return <Badge variant="outline" className="gap-1"><Check className="w-3.5 h-3.5" /> Accepted</Badge>;
+}
+
+function displayDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleString();
+}
+
+function RecoveryEmailHistory({
+  deliveries,
+  loading,
+  refreshing,
+  onRefresh,
+}: {
+  deliveries: RecoveryEmailDelivery[];
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Mail className="w-5 h-5" /> Recovery email delivery</h2>
+          <p className="text-sm text-muted-foreground">Recent invitation and password-reset sends. Status is checked with Resend; email contents and recovery links are never shown here.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing} className="shrink-0 gap-2">
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Recipient</TableHead>
+              <TableHead>Message</TableHead>
+              <TableHead>Delivery status</TableHead>
+              <TableHead>Sent</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Checking recent delivery events…</TableCell></TableRow>
+            ) : deliveries.length === 0 ? (
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">No invitation or password-reset emails have been sent yet.</TableCell></TableRow>
+            ) : deliveries.map((delivery) => (
+              <TableRow key={delivery.id}>
+                <TableCell className="text-sm">{delivery.recipient}</TableCell>
+                <TableCell className="text-sm">{delivery.type === "invitation" ? "Invitation" : "Password reset"}</TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <RecoveryDeliveryBadge event={delivery.deliveryEvent} />
+                    {delivery.errorMessage && <p className="text-xs text-destructive flex gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{delivery.errorMessage}</p>}
+                  </div>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{displayDate(delivery.sentAt)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminUsersPage() {
@@ -380,10 +470,17 @@ export default function AdminUsersPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<TeamUserRecord | null>(null);
   const [permTarget, setPermTarget] = useState<TeamUserRecord | null>(null);
+  const isAdmin = isTeamAdmin();
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["team-users"],
     queryFn: listUsers,
+  });
+  const recoveryEmails = useQuery({
+    queryKey: ["recovery-email-deliveries"],
+    queryFn: listRecoveryEmailDeliveries,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
   });
 
   const roleMutation = useMutation({
@@ -398,7 +495,7 @@ export default function AdminUsersPage() {
     onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
-  if (!isTeamAdmin()) {
+  if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         You don't have permission to view this page.
@@ -515,6 +612,12 @@ export default function AdminUsersPage() {
       <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <ResetPasswordDialog user={resetTarget} open={!!resetTarget} onClose={() => setResetTarget(null)} />
       <PermissionsDialog user={permTarget} open={!!permTarget} onClose={() => setPermTarget(null)} />
+      <RecoveryEmailHistory
+        deliveries={recoveryEmails.data ?? []}
+        loading={recoveryEmails.isLoading}
+        refreshing={recoveryEmails.isFetching}
+        onRefresh={() => { void recoveryEmails.refetch(); }}
+      />
     </div>
   );
 }
