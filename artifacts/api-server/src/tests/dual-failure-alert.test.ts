@@ -11,7 +11,7 @@
  *
  * Test strategy:
  *   - Spin up a configurable stub Resend HTTP server.
- *   - Force db.insert to throw ("DB down").
+ *   - Force db.transaction to throw ("DB down").
  *   - Force _ioSeams.appendFile to throw ("disk full").
  *   - Intercept Slack via _slackSeams.sendMessage to capture or fail calls.
  */
@@ -106,7 +106,7 @@ async function post(
 
 // ── Shared helper: force both DB and folder to fail ──────────────────────────
 function simulateDualFailure() {
-  const insertMock = mock.method(db, "insert", () => {
+  const transactionMock = mock.method(db, "transaction", () => {
     throw new Error("DB_DOWN_SIMULATION");
   });
   const realAppendFile = _ioSeams.appendFile;
@@ -115,7 +115,7 @@ function simulateDualFailure() {
   };
   return {
     restore() {
-      insertMock.mock.restore();
+      transactionMock.mock.restore();
       _ioSeams.appendFile = realAppendFile;
     },
   };

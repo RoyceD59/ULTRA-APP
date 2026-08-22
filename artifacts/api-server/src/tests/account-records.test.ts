@@ -61,14 +61,19 @@ describe("folder-only registration recovery", () => {
 
   it("serializes retries and rolls back the DB insert when atomic ledger replacement fails", async () => {
     const suffix = Date.now(), at = now(), concurrent = `concurrent-${suffix}@test.internal`, failing = `failing-${suffix}@test.internal`;
-    await seed(concurrent, at);
+    // The earlier recovery test creates an account with the seed helper's
+    // default phone. Use distinct identities here so phone conflict handling
+    // does not mask the retry serialization behavior.
+    await seed(concurrent, at, { phone: "+254700000002" });
     const [one, two] = await Promise.all([retryUnsyncedRegistration(concurrent, at), retryUnsyncedRegistration(concurrent, at)]);
     assert.equal(Number(one.inserted) + Number(two.inserted), 1);
     assert.equal(one.id, two.id);
+    assert.equal(one.status, "synced");
+    assert.equal(two.status, "synced");
     const winningPassword = one.tempPassword ?? two.tempPassword;
     assert.ok(winningPassword);
 
-    await seed(failing, at);
+    await seed(failing, at, { phone: "+254700000003" });
     const realWrite = _ioSeams.writeFile;
     _ioSeams.writeFile = async (path, content, encoding) => {
       await realWrite(path, String(content).slice(0, 8), encoding);
@@ -79,8 +84,12 @@ describe("folder-only registration recovery", () => {
     } finally {
       _ioSeams.writeFile = realWrite;
     }
+    // The failed transaction must not leak a recovered account, and the
+    // durable record must remain eligible for a later retry.
     const [row] = await db.select({ id: ucUsersTable.id }).from(ucUsersTable).where(eq(ucUsersTable.email, failing));
     assert.equal(row, undefined);
-    assert.equal((await lines()).find((line) => line.email === failing)?.dbPersisted, false);
+    const failedRecord = (await lines()).find((line) => line.email === failing);
+    assert.equal(failedRecord?.dbPersisted, false);
+    assert.equal(failedRecord?.recoveryAttempts, undefined);
   });
 });
