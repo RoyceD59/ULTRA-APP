@@ -8,7 +8,7 @@
 
 export type ListUcCustomersParams = {
 /**
- * Search by name or email (case-insensitive)
+ * Search by name, email, or normalized international phone number (case-insensitive)
  */
 q?: string;
 /**

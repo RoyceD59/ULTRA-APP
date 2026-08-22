@@ -60,6 +60,9 @@ interface LedgerEntry {
   eventType: string;
   grantedBy: string | null;
   createdAt: string;
+  notificationStatus: "sent" | "failed" | "skipped" | null;
+  notificationEvent: string | null;
+  notificationError: string | null;
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -408,6 +411,7 @@ function LedgerDrawer({
                   <TableHead>Reason</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Granted by</TableHead>
+                  <TableHead>Notification</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -429,6 +433,19 @@ function LedgerDrawer({
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {entry.grantedBy ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {!entry.notificationEvent ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <Badge
+                          variant={entry.notificationStatus === "sent" ? "secondary" : entry.notificationStatus === "failed" ? "destructive" : "outline"}
+                          className="text-xs"
+                          title={entry.notificationError ?? undefined}
+                        >
+                          {entry.notificationEvent.replace(/_/g, " ")}
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

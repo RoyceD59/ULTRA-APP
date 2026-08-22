@@ -26,6 +26,8 @@ export const ucNotificationLogTable = pgTable(
     orderId:      integer("order_id"),             // optional FK-ish reference
     ticketId:     text("ticket_id"),
     testId:       text("test_id"),
+    /** Links a rewards-push outcome to the corresponding ledger entry. */
+    rewardLedgerId: integer("reward_ledger_id"),
     status:       text("status").notNull(),         // 'sent' | 'failed'
     errorMessage: text("error_message"),
     // Resend's opaque message ID. Kept so privileged ProjectHub users can
@@ -45,6 +47,7 @@ export const ucNotificationLogTable = pgTable(
     // single-column uc_notification_log_status_idx is not needed.
     index("uc_notification_log_status_sent_at_idx").on(t.status, t.sentAt),
     index("uc_notification_log_recovery_delivery_idx").on(t.provider, t.template, t.sentAt),
+    index("uc_notification_log_reward_ledger_idx").on(t.rewardLedgerId, t.sentAt),
   ]
 );
 

@@ -50,6 +50,7 @@ import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import { ACCOUNT_DATA_DIR, recordAccountRegistration } from "../lib/account-records";
+import { normalizeEmail, normalizePhone, phoneValidationMessage } from "../lib/customer-identity";
 import {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -1590,30 +1591,55 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     res.status(400).json({ error: "Password must be at least 6 characters" });
     return;
   }
-  // Basic phone sanity check — must start with + and contain 10-15 digits
-  const cleanPhone = phone.replace(/\s/g, "");
-  if (!/^\+\d{10,15}$/.test(cleanPhone)) {
-    res.status(400).json({ error: "Enter a valid phone number in international format, e.g. +254712345678" });
+  const normalizedEmail = normalizeEmail(email);
+  const cleanPhone = normalizePhone(phone);
+  if (!cleanPhone) {
+    res.status(400).json({ error: phoneValidationMessage() });
     return;
   }
   try {
-    // Check for duplicate email
-    const existing = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.email, email.toLowerCase().trim()) }).catch(() => null);
-    if (existing) {
+    // Serialize both identity values before querying. This protects races even
+    // when a legacy duplicate prevents the optional partial unique index from
+    // being installed.
+    const registration = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + normalizedEmail}))`);
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + cleanPhone}))`);
+      const [emailOwner] = await tx.select({ id: ucUsersTable.id })
+        .from(ucUsersTable)
+        .where(and(eq(ucUsersTable.email, normalizedEmail), isNull(ucUsersTable.deletedAt)))
+        .limit(1);
+      if (emailOwner) return { kind: "email-conflict" as const };
+      const [phoneOwner] = await tx.select({ id: ucUsersTable.id })
+        .from(ucUsersTable)
+        .where(and(eq(ucUsersTable.phone, cleanPhone), isNull(ucUsersTable.deletedAt)))
+        .limit(1);
+      if (phoneOwner) return { kind: "phone-conflict" as const };
+
+      const passwordHash = await bcryptjs.hash(password, 10);
+      const [dbUser] = await tx.insert(ucUsersTable).values({
+        email: normalizedEmail,
+        passwordHash,
+        phone: cleanPhone,
+        firstName: firstName.trim(),
+        lastName: lastName?.trim() ?? "",
+      }).returning();
+      return { kind: "created" as const, dbUser: dbUser! };
+    });
+
+    if (registration.kind === "email-conflict") {
       res.status(409).json({
         error: "An account with this email already exists. If you recently tried to register and hit an error, your account was created — please use 'Forgot password' to set a new password and log in.",
         hint: "forgot_password",
       });
       return;
     }
-    const passwordHash = await bcryptjs.hash(password, 10);
-    const [dbUser] = await db.insert(ucUsersTable).values({
-      email:    email.toLowerCase().trim(),
-      passwordHash,
-      phone:    cleanPhone,
-      firstName,
-      lastName: lastName ?? "",
-    }).returning();
+    if (registration.kind === "phone-conflict") {
+      res.status(409).json({
+        error: "An active account already uses this phone number. Sign in to that account or use a different number.",
+      });
+      return;
+    }
+    const dbUser = registration.dbUser;
     const user = {
       id: dbUser!.id,
       email: dbUser!.email,
@@ -1632,8 +1658,8 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     }).catch(() => {});
     // Store referral association so first-order discount can be applied later
     if (referralCode?.trim()) {
-      await registerReferralAtSignup(email, referralCode.trim()).catch((err) => {
-        logger.warn({ err, email }, "[register] referral signup association failed (non-fatal)");
+      await registerReferralAtSignup(normalizedEmail, referralCode.trim()).catch((err) => {
+        logger.warn({ err, email: normalizedEmail }, "[register] referral signup association failed (non-fatal)");
       });
     }
     res.json({ token: issueToken(user), user });
@@ -1641,11 +1667,11 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     // DB insert failed. Never silently issue a session with no saved account —
     // write the registration to the durable folder record and tell the caller
     // what happened so they can retry once the database is back.
-    console.error("[register] DB error — writing folder record instead of ephemeral session:", err);
+    logger.error({ err, email: normalizedEmail }, "[register] DB error — writing folder record instead of ephemeral session");
     try {
       await recordAccountRegistration({
         id: null, firstName, lastName: lastName ?? "",
-        email: email.toLowerCase().trim(), phone: cleanPhone,
+        email: normalizedEmail, phone: cleanPhone,
         authProvider: "password", createdAt: new Date(),
         source: "registration", dbPersisted: false,
       }, { critical: true });
@@ -2033,9 +2059,8 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
     return;
   }
   if (phone !== undefined && phone !== "") {
-    const cleanPhone = phone.replace(/\s/g, "");
-    if (!/^\+\d{10,15}$/.test(cleanPhone)) {
-      res.status(400).json({ error: "Enter a valid phone number in international format, e.g. +254712345678" });
+    if (!normalizePhone(phone)) {
+      res.status(400).json({ error: phoneValidationMessage() });
       return;
     }
   }
@@ -2055,7 +2080,8 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
   const updates: Record<string, string> = {};
   if (firstName !== undefined) updates["firstName"] = firstName.trim();
   if (lastName  !== undefined) updates["lastName"]  = lastName.trim();
-  if (phone     !== undefined) updates["phone"]     = phone.replace(/\s/g, "");
+  const normalizedPhone = phone === undefined || phone === "" ? phone : normalizePhone(phone);
+  if (phone     !== undefined) updates["phone"]     = normalizedPhone ?? "";
   if (address   !== undefined) updates["address"]   = address.trim();
 
   if (Object.keys(updates).length === 0) {
@@ -2064,14 +2090,35 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
   }
 
   try {
-    const [updated] = await db
-      .update(ucUsersTable)
-      .set(updates)
-      .where(eq(ucUsersTable.id, numericId))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      if (normalizedPhone) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + normalizedPhone}))`);
+        const [owner] = await tx.select({ id: ucUsersTable.id })
+          .from(ucUsersTable)
+          .where(and(
+            eq(ucUsersTable.phone, normalizedPhone),
+            isNull(ucUsersTable.deletedAt),
+            ne(ucUsersTable.id, numericId),
+          ))
+          .limit(1);
+        if (owner) return null;
+      }
+      const [row] = await tx
+        .update(ucUsersTable)
+        .set(updates)
+        .where(eq(ucUsersTable.id, numericId))
+        .returning();
+      return row ?? undefined;
+    });
 
     if (!updated) {
-      res.status(404).json({ error: "User not found" });
+      const [user] = await db.select({ id: ucUsersTable.id }).from(ucUsersTable)
+        .where(eq(ucUsersTable.id, numericId)).limit(1);
+      res.status(user ? 409 : 404).json({
+        error: user
+          ? "An active account already uses this phone number. Use a different number."
+          : "User not found",
+      });
       return;
     }
 
@@ -2084,7 +2131,7 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
       address:   updated.address ?? "",
     });
   } catch (err) {
-    console.error("[profile patch] error:", err);
+    logger.error({ err, userId: numericId }, "[profile patch] error");
     res.status(500).json({ error: "Failed to update profile. Please try again." });
   }
 });
@@ -6018,7 +6065,7 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
 
     if (q) {
       conditions.push(
-        `(u.email ILIKE $${pi} OR u.first_name ILIKE $${pi} OR u.last_name ILIKE $${pi} OR CONCAT(u.first_name,' ',u.last_name) ILIKE $${pi})`
+        `(u.email ILIKE $${pi} OR u.phone ILIKE $${pi} OR u.first_name ILIKE $${pi} OR u.last_name ILIKE $${pi} OR CONCAT(u.first_name,' ',u.last_name) ILIKE $${pi})`
       );
       params.push(`%${q}%`);
       pi++;

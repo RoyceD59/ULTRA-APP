@@ -495,6 +495,8 @@ function AccountScreenContent() {
     queryKey: ['customer-rewards'],
     queryFn: () => api.getRewards(),
     enabled: !!user,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Must be called unconditionally before any early return (Rules of Hooks).

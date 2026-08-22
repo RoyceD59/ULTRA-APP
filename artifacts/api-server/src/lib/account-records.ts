@@ -16,9 +16,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { db, ucUsersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
 import { logger } from "./logger";
+import { normalizeEmail, normalizePhone } from "./customer-identity";
 
 /**
  * Resolve the api-server `data/` directory across every execution mode:
@@ -77,6 +78,12 @@ export interface AccountRecord {
   source: "registration" | "social-registration" | "backfill";
   /** False when the DB insert failed and the folder is the only record. */
   dbPersisted: boolean;
+  /** Latest reconciliation state, retained for staff visibility. */
+  recoveryStatus?: "pending" | "blocked";
+  /** Why staff intervention is required, if a recovery is blocked. */
+  recoveryReason?: "email_conflict" | "phone_conflict" | "invalid_phone";
+  recoveryAttempts?: number;
+  lastRecoveryAttemptAt?: string;
   /** Present only for backfilled rows of erased accounts. */
   deletedAt?: string;
 }
@@ -123,8 +130,8 @@ export async function recordAccountRegistration(
     id: input.id,
     firstName: input.firstName,
     lastName: input.lastName,
-    email: input.email.toLowerCase().trim(),
-    phone: input.phone,
+    email: normalizeEmail(input.email),
+    phone: normalizePhone(input.phone) ?? input.phone.trim(),
     authProvider: input.authProvider,
     createdAt: toIso(input.createdAt),
     recordedAt: new Date().toISOString(),
@@ -245,48 +252,124 @@ export async function retryUnsyncedRegistration(
   inserted: boolean;
   alreadyExists: boolean;
   id: number | null;
+  status: "synced" | "blocked";
+  reason?: "email_conflict" | "phone_conflict" | "invalid_phone";
   tempPassword?: string;
 }> {
   return withWriteLock(() => db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${email}))`);
-    const target = (await readAllRecords()).find((record) => record.email === email && record.recordedAt === recordedAt);
+    const normalizedEmail = normalizeEmail(email);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + normalizedEmail}))`);
+    const target = (await readAllRecords()).find((record) =>
+      normalizeEmail(record.email) === normalizedEmail && record.recordedAt === recordedAt
+    );
     if (!target) throw new Error(`No folder record found for email=${email} recordedAt=${recordedAt}`);
 
-    const [existing] = await tx.select({ id: ucUsersTable.id }).from(ucUsersTable)
-      .where(eq(ucUsersTable.email, email)).limit(1);
-    if (target.dbPersisted && existing) return { inserted: false, alreadyExists: true, id: existing.id };
+    const normalizedPhone = normalizePhone(target.phone);
+    const attemptedAt = new Date().toISOString();
+    const updateRecord = async (
+      patch: Partial<AccountRecord>,
+    ): Promise<void> => {
+      const updated = (await readAllRecords()).map((record) =>
+        normalizeEmail(record.email) === normalizedEmail && record.recordedAt === recordedAt
+          ? {
+              ...record,
+              ...patch,
+              recoveryAttempts: (record.recoveryAttempts ?? 0) + 1,
+              lastRecoveryAttemptAt: attemptedAt,
+            }
+          : record,
+      );
+      await writeRecordsAtomically(updated);
+    };
 
-    let dbId = existing?.id ?? null;
-    let inserted = false;
-    let tempPassword: string | undefined;
-    if (!existing) {
-      const passwordHash = target.authProvider === "password"
-        ? await (async () => { tempPassword = randomBytes(12).toString("hex"); return bcryptjs.hash(tempPassword, 10); })()
-        : await bcryptjs.hash(randomBytes(16).toString("hex"), 10);
-      const [created] = await tx.insert(ucUsersTable).values({
-        email: target.email, passwordHash, phone: target.phone, firstName: target.firstName,
-        lastName: target.lastName, authProvider: target.authProvider, createdAt: new Date(target.createdAt),
-      }).onConflictDoNothing({ target: ucUsersTable.email }).returning({ id: ucUsersTable.id });
-      if (created) {
-        dbId = created.id;
-        inserted = true;
-      } else {
-        const [raced] = await tx.select({ id: ucUsersTable.id }).from(ucUsersTable)
-          .where(eq(ucUsersTable.email, email)).limit(1);
-        if (!raced) throw new Error(`Email conflict did not produce a row for ${email}`);
-        dbId = raced.id;
-        tempPassword = undefined;
+    if (!normalizedPhone) {
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: "invalid_phone" });
+      return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "invalid_phone" };
+    }
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + normalizedPhone}))`);
+
+    const [emailMatch] = await tx.select({
+      id: ucUsersTable.id,
+      phone: ucUsersTable.phone,
+    }).from(ucUsersTable)
+      .where(and(eq(ucUsersTable.email, normalizedEmail), isNull(ucUsersTable.deletedAt))).limit(1);
+    const [phoneMatch] = await tx.select({
+      id: ucUsersTable.id,
+      email: ucUsersTable.email,
+    }).from(ucUsersTable)
+      .where(and(eq(ucUsersTable.phone, normalizedPhone), isNull(ucUsersTable.deletedAt))).limit(1);
+
+    // A matching email and phone represents the same registration that reached
+    // the DB before its durable-folder marker could be rewritten.
+    if (emailMatch) {
+      if (emailMatch.phone !== normalizedPhone) {
+        await updateRecord({ recoveryStatus: "blocked", recoveryReason: "email_conflict" });
+        return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "email_conflict" };
       }
+      await updateRecord({
+        dbPersisted: true,
+        id: target.id ?? emailMatch.id,
+        recoveryStatus: undefined,
+        recoveryReason: undefined,
+      });
+      return { inserted: false, alreadyExists: true, id: emailMatch.id, status: "synced" };
+    }
+    if (phoneMatch) {
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: "phone_conflict" });
+      return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "phone_conflict" };
     }
 
-    const updated = (await readAllRecords()).map((record) =>
-      record.email === email && record.recordedAt === recordedAt
-        ? { ...record, dbPersisted: true, id: record.id ?? dbId }
-        : record,
-    );
-    await writeRecordsAtomically(updated);
-    return { inserted, alreadyExists: !inserted, id: dbId, ...(tempPassword ? { tempPassword } : {}) };
+    let dbId: number | null = null;
+    let inserted = false;
+    let tempPassword: string | undefined;
+    const passwordHash = target.authProvider === "password"
+      ? await (async () => { tempPassword = randomBytes(12).toString("hex"); return bcryptjs.hash(tempPassword, 10); })()
+      : await bcryptjs.hash(randomBytes(16).toString("hex"), 10);
+    const [created] = await tx.insert(ucUsersTable).values({
+      email: normalizedEmail, passwordHash, phone: normalizedPhone, firstName: target.firstName,
+      lastName: target.lastName, authProvider: target.authProvider, createdAt: new Date(target.createdAt),
+    }).onConflictDoNothing({ target: ucUsersTable.email }).returning({ id: ucUsersTable.id });
+    if (created) {
+      dbId = created.id;
+      inserted = true;
+    } else {
+      // A concurrent registration won after the identity checks. Re-run staff
+      // reconciliation later rather than guessing which account it belongs to.
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: "email_conflict" });
+      return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "email_conflict" };
+    }
+
+    await updateRecord({
+      dbPersisted: true,
+      id: target.id ?? dbId,
+      recoveryStatus: undefined,
+      recoveryReason: undefined,
+    });
+    return { inserted, alreadyExists: !inserted, id: dbId, status: "synced", ...(tempPassword ? { tempPassword } : {}) };
   }));
+}
+
+/**
+ * Best-effort boot reconciliation. It safely closes markers for registrations
+ * that already exist in the DB and restores missing accounts with a fresh,
+ * one-time server credential. Password-account customers can use the normal
+ * reset-password flow after automatic recovery; no original password is ever
+ * retained in the durable folder.
+ */
+export async function recoverUnsyncedRegistrations(limit = 25): Promise<{ attempted: number; synced: number; blocked: number }> {
+  const records = (await listUnsyncedRegistrations()).slice(0, limit);
+  let synced = 0;
+  let blocked = 0;
+  for (const record of records) {
+    try {
+      const result = await retryUnsyncedRegistration(record.email, record.recordedAt);
+      if (result.status === "synced") synced++;
+      else blocked++;
+    } catch (err) {
+      logger.warn({ err, email: record.email }, "[account-records] automatic social-account recovery failed");
+    }
+  }
+  return { attempted: records.length, synced, blocked };
 }
 
 /** Return all folder records that were never persisted to the database. */
@@ -295,8 +378,8 @@ export async function listUnsyncedRegistrations(): Promise<AccountRecord[]> {
   const explicit = all.filter((record) => !record.dbPersisted);
   try {
     const rows = await db.select({ email: ucUsersTable.email }).from(ucUsersTable);
-    const persisted = new Set(rows.map((row) => row.email));
-    return all.filter((record) => !record.dbPersisted || !persisted.has(record.email));
+    const persisted = new Set(rows.map((row) => normalizeEmail(row.email)));
+    return all.filter((record) => !record.dbPersisted || !persisted.has(normalizeEmail(record.email)));
   } catch {
     return explicit;
   }

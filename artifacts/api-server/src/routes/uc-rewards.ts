@@ -12,11 +12,12 @@
  *   GET    /uc/customer/rewards          — returns { balance, ledger: last 20 }
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, ucRewardsRulesTable, ucRewardsLedgerTable, ucUsersTable } from "@workspace/db";
+import { db, ucNotificationLogTable, ucRewardsRulesTable, ucRewardsLedgerTable, ucUsersTable } from "@workspace/db";
 import { eq, desc, sql, or, and, isNull, ilike } from "drizzle-orm";
 import { requireAdmin } from "../lib/adminAuth.js";
 import { verifyToken } from "../lib/jwt.js";
-import { sendPushToUser } from "../lib/push.js";
+import { sendRewardPushNotification } from "../lib/push.js";
+import { normalizeEmail, normalizePhone } from "../lib/customer-identity.js";
 
 const router: IRouter = Router();
 
@@ -167,16 +168,18 @@ async function resolveCustomer(
     const [row] = await db
       .select({ id: ucUsersTable.id, email: ucUsersTable.email, firstName: ucUsersTable.firstName, phone: ucUsersTable.phone })
       .from(ucUsersTable)
-      .where(and(eq(ucUsersTable.email, trimmed.toLowerCase()), isNull(ucUsersTable.deletedAt)))
+      .where(and(eq(ucUsersTable.email, normalizeEmail(trimmed)), isNull(ucUsersTable.deletedAt)))
       .limit(1);
     return row ?? null;
   }
 
-  // Phone — strip spaces and try
+  // Phone — use the same canonical identity format as registration.
+  const phone = normalizePhone(trimmed);
+  if (!phone) return null;
   const [row] = await db
     .select({ id: ucUsersTable.id, email: ucUsersTable.email, firstName: ucUsersTable.firstName, phone: ucUsersTable.phone })
     .from(ucUsersTable)
-    .where(and(eq(ucUsersTable.phone, trimmed), isNull(ucUsersTable.deletedAt)))
+    .where(and(eq(ucUsersTable.phone, phone), isNull(ucUsersTable.deletedAt)))
     .limit(1);
   return row ?? null;
 }
@@ -229,20 +232,18 @@ router.post("/uc/admin/rewards/grant", async (req: Request, res: Response): Prom
 
     const newBalance = Number(balanceRow?.balance ?? 0);
 
-    // Notify the customer in-app about their manually granted points.
-    // Fire-and-forget: sendPushToUser never throws and respects opt-out prefs.
-    sendPushToUser(
-      String(customer.id),
-      "Points earned",
-      `🌟 You earned ${points} points! ${reason}. Your balance is now ${newBalance} pts.`,
-      { screen: "rewards" },
-      "orders"
-    );
+    const notification = await sendRewardPushNotification({
+      userId: customer.id,
+      ledgerId: entry!.id,
+      title: "Points earned",
+      body: `🌟 You earned ${points} points! ${reason}. Your balance is now ${newBalance} pts.`,
+    });
 
     res.status(201).json({
       entry,
       customer: { id: customer.id, email: customer.email, firstName: customer.firstName, phone: customer.phone },
       newBalance,
+      notification,
     });
   } catch (err) {
     console.error("[uc/admin/rewards/grant] error:", err);
@@ -337,9 +338,16 @@ router.get("/uc/admin/rewards/ledger", async (req: Request, res: Response): Prom
         eventType: ucRewardsLedgerTable.eventType,
         grantedBy: ucRewardsLedgerTable.grantedBy,
         createdAt: ucRewardsLedgerTable.createdAt,
+        notificationStatus: ucNotificationLogTable.status,
+        notificationEvent: ucNotificationLogTable.deliveryEvent,
+        notificationError: ucNotificationLogTable.errorMessage,
       })
       .from(ucRewardsLedgerTable)
       .innerJoin(ucUsersTable, eq(ucUsersTable.id, ucRewardsLedgerTable.userId))
+      .leftJoin(ucNotificationLogTable, and(
+        eq(ucNotificationLogTable.rewardLedgerId, ucRewardsLedgerTable.id),
+        eq(ucNotificationLogTable.template, "reward-points"),
+      ))
       .where(userId ? eq(ucRewardsLedgerTable.userId, userId) : undefined)
       .orderBy(desc(ucRewardsLedgerTable.createdAt));
 

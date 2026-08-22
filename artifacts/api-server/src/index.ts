@@ -4,7 +4,7 @@ import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
 import { sendViaResend } from "./lib/resend.js";
 import { migrateAndGuardSessionDir } from "./lib/whatsapp";
-import { backfillAccountRecords } from "./lib/account-records.js";
+import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/account-records.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -298,6 +298,14 @@ async function applyStartupMigrations(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS uc_notification_log_recovery_delivery_idx
       ON uc_notification_log (provider, template, sent_at)`
   );
+  await pool.query(`
+    ALTER TABLE uc_notification_log
+      ADD COLUMN IF NOT EXISTS reward_ledger_id integer
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS uc_notification_log_reward_ledger_idx
+      ON uc_notification_log (reward_ledger_id, sent_at)`
+  );
   logger.info("Startup migration: uc_notification_log table ensured");
 
   // Create uc_return_requests table for customer return/refund requests.
@@ -504,6 +512,13 @@ async function applyStartupMigrations(): Promise<void> {
     END $$;
   `);
   logger.info("Startup migration: uc_users clerk_user_id / auth_provider columns ensured");
+
+  // Identity ownership is enforced by canonical values, active-account checks,
+  // and transaction-scoped advisory locks in customer-facing routes. Do not
+  // retain an old global phone constraint: legacy/system records legitimately
+  // reuse placeholder numbers and must remain reviewable rather than blocked.
+  await pool.query(`DROP INDEX IF EXISTS uc_users_active_phone_unique`);
+  logger.info("Startup migration: legacy active-phone unique index removed");
 
   // AI Monitor durability: persisted AI status reports + orchestrator push
   // history. Reports survive API restarts (no silent regeneration) and every
@@ -737,6 +752,11 @@ applyStartupMigrations()
     // (marker-guarded; retries on next boot if the DB is unavailable).
     backfillAccountRecords().catch((err) => {
       logger.error({ err }, "Account records backfill failed — will retry on next start");
+    });
+    recoverUnsyncedRegistrations().then((summary) => {
+      logger.info(summary, "Automatic unsynced-registration recovery completed");
+    }).catch((err) => {
+      logger.error({ err }, "Automatic unsynced-registration recovery failed");
     });
 
     const server = app.listen(port, (err?: Error) => {

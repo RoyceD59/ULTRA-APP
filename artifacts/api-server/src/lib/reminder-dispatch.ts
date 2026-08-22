@@ -33,7 +33,7 @@ import {
   ucRewardsLedgerTable,
 } from "@workspace/db";
 import { logger } from "./logger";
-import { sendPushToUser } from "./push.js";
+import { sendRewardPushNotification } from "./push.js";
 import { sendViaResend } from "./resend.js";
 import { sendSms } from "./sms.js";
 import { sendWhatsAppMessage, getWhatsAppStatus } from "./whatsapp.js";
@@ -428,18 +428,16 @@ async function creditReplacementPoints(
 
   const reason = `Filter replacement reward — ${productName} (${stageKey === "replace30" ? "30-day" : "15-day"} reminder)`;
 
-  await db.insert(ucRewardsLedgerTable).values({
+  const [entry] = await db.insert(ucRewardsLedgerTable).values({
     userId:    numericUserId,
     points:    rule.pointsValue,
     reason,
     eventType: "filter-replacement",
     refId,
-  });
+  }).returning({ id: ucRewardsLedgerTable.id });
 
   logger.info({ userId, stageKey, points: rule.pointsValue }, "reminder-dispatch: rewards points credited");
 
-  // Notify the customer in-app about their earned points.
-  // Fire-and-forget: sendPushToUser never throws and respects opt-out prefs.
   const [balanceRow] = await db
     .select({ balance: sql<number>`COALESCE(SUM(${ucRewardsLedgerTable.points}), 0)` })
     .from(ucRewardsLedgerTable)
@@ -447,13 +445,12 @@ async function creditReplacementPoints(
     .catch(() => [null]);
 
   const newBalance = Number(balanceRow?.balance ?? 0);
-  sendPushToUser(
-    userId,
-    "Points earned",
-    `🌟 You earned ${rule.pointsValue} points! ${reason}. Your balance is now ${newBalance} pts.`,
-    { screen: "rewards" },
-    "orders"
-  );
+  await sendRewardPushNotification({
+    userId: numericUserId,
+    ledgerId: entry!.id,
+    title: "Points earned",
+    body: `🌟 You earned ${rule.pointsValue} points! ${reason}. Your balance is now ${newBalance} pts.`,
+  });
 }
 
 // ─── Qualifying-product rewards on paid orders ────────────────────────────────
@@ -498,15 +495,26 @@ export async function creditQualifyingProductPoints(
 
   if (!rule || rule.pointsValue <= 0) return;
 
-  await db.insert(ucRewardsLedgerTable).values({
+  const [entry] = await db.insert(ucRewardsLedgerTable).values({
     userId,
     points:    rule.pointsValue,
     reason:    `Qualifying product purchase — order #${orderId}`,
     eventType: "qualifying-product",
     refId,
-  });
+  }).returning({ id: ucRewardsLedgerTable.id });
 
   logger.info({ userId, orderId, points: rule.pointsValue }, "rewards: qualifying-product points credited");
+  const [balanceRow] = await db
+    .select({ balance: sql<number>`COALESCE(SUM(${ucRewardsLedgerTable.points}), 0)` })
+    .from(ucRewardsLedgerTable)
+    .where(eq(ucRewardsLedgerTable.userId, userId))
+    .catch(() => [null]);
+  await sendRewardPushNotification({
+    userId,
+    ledgerId: entry!.id,
+    title: "Points earned",
+    body: `🌟 You earned ${rule.pointsValue} points! Qualifying product purchase — order #${orderId}. Your balance is now ${Number(balanceRow?.balance ?? 0)} pts.`,
+  });
 }
 
 // ─── Replacement rewards pass — decoupled from notification opt-in ─────────────

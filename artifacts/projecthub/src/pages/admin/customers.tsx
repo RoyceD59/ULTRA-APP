@@ -349,7 +349,7 @@ export default function AdminCustomersPage() {
         <div className="relative flex-1 min-w-52">
           <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name or email…"
+            placeholder="Search by name, email, or phone…"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-8"

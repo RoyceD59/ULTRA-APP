@@ -53,12 +53,17 @@ interface UnsyncedRecord {
   recordedAt: string;
   source: string;
   dbPersisted: boolean;
+  recoveryStatus?: "pending" | "blocked";
+  recoveryReason?: "email_conflict" | "phone_conflict" | "invalid_phone";
+  recoveryAttempts?: number;
 }
 
 interface RetryResult {
   inserted: boolean;
   alreadyExists: boolean;
   id: number | null;
+  status: "synced" | "blocked";
+  reason?: "email_conflict" | "phone_conflict" | "invalid_phone";
   tempPassword?: string;
 }
 
@@ -199,6 +204,19 @@ export default function AdminUnsyncedRegistrationsPage() {
     mutationFn: ({ email, recordedAt }: { email: string; recordedAt: string }) =>
       retryRecord(email, recordedAt),
     onSuccess: (result, { email }) => {
+      if (result.status === "blocked") {
+        toast({
+          variant: "destructive",
+          title: "Staff review required",
+          description: result.reason === "phone_conflict"
+            ? "Another active account already owns this phone number. No account was created."
+            : result.reason === "email_conflict"
+              ? "Another active account already owns this email address. No account was created."
+              : "The saved phone number must be corrected before recovery.",
+        });
+        qc.invalidateQueries({ queryKey: ["admin-unsynced-registrations"] });
+        return;
+      }
       // Show the temp password dialog whenever a credential was issued — this
       // covers both a fresh insert AND the re-issue path (alreadyExists but
       // folder-rewrite failed on a prior attempt).
@@ -316,6 +334,7 @@ export default function AdminUnsyncedRegistrationsPage() {
                   <TableHead>Phone</TableHead>
                   <TableHead>Auth</TableHead>
                   <TableHead>Recorded at</TableHead>
+                  <TableHead>Recovery</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -343,6 +362,29 @@ export default function AdminUnsyncedRegistrationsPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDate(record.recordedAt)}
+                      </TableCell>
+                      <TableCell>
+                        {record.recoveryStatus === "blocked" ? (
+                          <div className="space-y-1">
+                            <Badge variant="destructive">Staff review</Badge>
+                            <p className="text-xs text-muted-foreground">
+                              {record.recoveryReason === "phone_conflict"
+                                ? "Phone belongs to an active account"
+                                : record.recoveryReason === "email_conflict"
+                                  ? "Email belongs to an active account"
+                                  : "Phone needs correction"}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <Badge variant="secondary">Pending</Badge>
+                            {record.recoveryAttempts ? (
+                              <p className="text-xs text-muted-foreground">
+                                {record.recoveryAttempts} attempt{record.recoveryAttempts === 1 ? "" : "s"}
+                              </p>
+                            ) : null}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

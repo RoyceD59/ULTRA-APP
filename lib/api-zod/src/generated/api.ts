@@ -91,7 +91,7 @@ export const listUcCustomersQueryLimitMax = 100;
 
 
 export const ListUcCustomersQueryParams = zod.object({
-  "q": zod.coerce.string().optional().describe('Search by name or email (case-insensitive)'),
+  "q": zod.coerce.string().optional().describe('Search by name, email, or normalized international phone number (case-insensitive)'),
   "from": zod.date().optional().describe('Registration date range start (inclusive)'),
   "to": zod.date().optional().describe('Registration date range end (inclusive)'),
   "page": zod.coerce.number().default(listUcCustomersQueryPageDefault),
