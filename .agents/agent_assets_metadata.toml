@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "hr6AMKQQ20TmKri3JqRIx"
+uri = "file://docs/projecthub-webhook-guide.html"
+type = "text"
+title = "ProjectHub — Webhook & Agent Dispatch Guide"
+description = "Full reference for the Webhook Tester, live ingest endpoint, payload schema, agent dispatch, and end-to-end walkthrough."
