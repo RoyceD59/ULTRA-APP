@@ -82,7 +82,20 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
   res.end(html);
 }
 
-function getWebBundlePath() {
+/**
+ * Module-level cache for the web bundle path.
+ *
+ * `undefined`  → not yet resolved (initial state before startup scan).
+ * `null`       → resolved; no bundle found in static-build.
+ * `string`     → absolute path to bundle.js that existed at scan time.
+ *
+ * The cached string path is re-validated with existsSync on each call so
+ * that a rebuild (which replaces the timestamped directory) automatically
+ * triggers a fresh scan rather than serving a stale, missing file.
+ */
+let _cachedWebBundlePath;
+
+function scanForWebBundlePath() {
   if (!fs.existsSync(STATIC_ROOT)) return null;
 
   const buildDirectories = fs
@@ -106,6 +119,19 @@ function getWebBundlePath() {
   }
 
   return null;
+}
+
+function getWebBundlePath() {
+  // Return the cached path when it is still present on disk.
+  if (_cachedWebBundlePath !== undefined) {
+    if (_cachedWebBundlePath === null || fs.existsSync(_cachedWebBundlePath)) {
+      return _cachedWebBundlePath;
+    }
+    // Cached path no longer exists (e.g. after a rebuild) — rescan below.
+  }
+
+  _cachedWebBundlePath = scanForWebBundlePath();
+  return _cachedWebBundlePath;
 }
 
 function serveWebApp(res, webBundlePath) {
@@ -158,6 +184,11 @@ function serveStaticFile(urlPath, res) {
 
 const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
 const appName = getAppName();
+
+// Warm the bundle-path cache once at startup so no request ever pays the
+// filesystem scan cost.  Subsequent calls return the cached value instantly
+// (or rescan only when the file has been replaced by a rebuild).
+getWebBundlePath();
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
