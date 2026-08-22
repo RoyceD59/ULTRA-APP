@@ -691,4 +691,26 @@ describe('serve.js — absent STATIC_ROOT', () => {
     const body = await res.text();
     assert.equal(body, 'ok', 'expected body to be "ok"');
   });
+
+  // ── 3. Platform manifest routes return 404 when STATIC_ROOT is absent ─────
+
+  test('GET / with expo-platform: ios returns HTTP 404 when STATIC_ROOT does not exist', async () => {
+    const res = await get(`${BASE_PATH}/`, { 'expo-platform': 'ios' });
+
+    assert.equal(
+      res.status,
+      404,
+      'expected HTTP 404 for iOS manifest when STATIC_ROOT is absent',
+    );
+  });
+
+  test('GET / with expo-platform: android returns HTTP 404 when STATIC_ROOT does not exist', async () => {
+    const res = await get(`${BASE_PATH}/`, { 'expo-platform': 'android' });
+
+    assert.equal(
+      res.status,
+      404,
+      'expected HTTP 404 for Android manifest when STATIC_ROOT is absent',
+    );
+  });
 });
