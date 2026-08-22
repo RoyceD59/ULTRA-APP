@@ -14,6 +14,7 @@
   },
   "include": [
     "hooks/__tests__/**/*.mts",
+    "lib/__tests__/**/*.test.mts",
     "hooks/useNotifications.ts",
     "hooks/mpesaStatusClassifier.ts",
     "hooks/mpesaRetryGuard.ts",
@@ -21,6 +22,7 @@
     "context/cartStorage.ts",
     "context/CartContext.tsx",
     "lib/formDrafts.ts",
+    "lib/passwordReset.ts",
     "components/MediaPicker.tsx",
     "__mocks__/expo-file-system.ts"
   ]

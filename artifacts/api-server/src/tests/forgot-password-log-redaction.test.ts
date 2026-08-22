@@ -62,7 +62,7 @@ describe("forgot-password: reset token must not be stored in notification log", 
       body: JSON.stringify({ email: userEmail }),
     });
     assert.equal(status, 200, `expected 200, got ${status}: ${JSON.stringify(body)}`);
-    assert.equal((body as { ok?: boolean }).ok, true);
+    assert.deepEqual(body, { ok: true });
   });
 
   it("returns 200 (ok: true) even for an email not in the database", async () => {
@@ -72,7 +72,11 @@ describe("forgot-password: reset token must not be stored in notification log", 
       body: JSON.stringify({ email: "nobody@notexist.example.com" }),
     });
     assert.equal(status, 200);
-    assert.equal((body as { ok?: boolean }).ok, true);
+    assert.deepEqual(
+      body,
+      { ok: true },
+      "unknown addresses must receive the same public response as known addresses",
+    );
   });
 
   it("no reset token or reset URL appears in uc_notification_log message_body", async () => {

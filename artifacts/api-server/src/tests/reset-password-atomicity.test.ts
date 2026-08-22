@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { createHash } from "node:crypto";
 import { pool } from "@workspace/db";
+import bcryptjs from "bcryptjs";
 
 function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
@@ -33,6 +34,7 @@ async function apiFetch(
 let server: http.Server;
 let userId: number;
 let userEmail: string;
+let consumedToken: string;
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-atomicity-tests";
@@ -63,10 +65,12 @@ after(async () => {
  *  Must supply `id` explicitly because the column uses a Drizzle $defaultFn
  *  (application-side UUID generation) rather than a DB-level default.
  */
-async function insertResetToken(uid: number): Promise<string> {
+async function insertResetToken(
+  uid: number,
+  expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000),
+): Promise<string> {
   const id       = crypto.randomUUID();
   const rawToken = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   await pool.query(
     `INSERT INTO password_reset_tokens (id, user_id, token, expires_at)
      VALUES ($1, $2, $3, $4)`,
@@ -78,6 +82,7 @@ async function insertResetToken(uid: number): Promise<string> {
 describe("reset-password atomicity — single-use token enforcement", () => {
   it("exactly one concurrent request succeeds; the other is rejected (400)", async () => {
     const token = await insertResetToken(userId);
+    consumedToken = token;
 
     // Fire two simultaneous reset requests with the same token.
     const [r1, r2] = await Promise.all([
@@ -106,6 +111,20 @@ describe("reset-password atomicity — single-use token enforcement", () => {
       true,
       "the successful response must carry ok: true",
     );
+
+    const passwordRow = await pool.query<{ password_hash: string }>(
+      "SELECT password_hash FROM uc_users WHERE id = $1",
+      [userId],
+    );
+    const [firstPasswordMatches, secondPasswordMatches] = await Promise.all([
+      bcryptjs.compare("newpass1", passwordRow.rows[0]!.password_hash),
+      bcryptjs.compare("newpass2", passwordRow.rows[0]!.password_hash),
+    ]);
+    assert.equal(
+      firstPasswordMatches || secondPasswordMatches,
+      true,
+      "the winning reset must update the stored password hash",
+    );
   });
 
   it("credential_version is incremented exactly once after the concurrent reset", async () => {
@@ -119,17 +138,44 @@ describe("reset-password atomicity — single-use token enforcement", () => {
   });
 
   it("the same raw token cannot be reused after a successful reset (400)", async () => {
-    // We don't have the original raw token anymore (it was only returned once
-    // by insertResetToken). Use an arbitrary UUID: if the hash matches a
-    // consumed row the server must still reject it (used_at IS NOT NULL guard).
-    // Here we simply confirm a second POST with any token value for a consumed
-    // row returns 400 (the hash won't match a live row).
-    const { status } = await apiFetch(server, "/api/uc/auth/reset-password", {
+    const { status, body } = await apiFetch(server, "/api/uc/auth/reset-password", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: crypto.randomUUID(), newPassword: "anotherPass" }),
+      body: JSON.stringify({ token: consumedToken, newPassword: "anotherPass" }),
     });
     assert.equal(status, 400, "unknown/replayed token must be rejected");
+    assert.deepEqual(
+      body,
+      { error: "Invalid or expired reset link. Please request a new one." },
+      "replayed links must return the same safe error as other invalid links",
+    );
+  });
+
+  it("an expired token returns a safe error and does not change credentials", async () => {
+    const before = await pool.query<{ password_hash: string; credential_version: number }>(
+      "SELECT password_hash, credential_version FROM uc_users WHERE id = $1",
+      [userId],
+    );
+    const expiredToken = await insertResetToken(userId, new Date(Date.now() - 1_000));
+
+    const { status, body } = await apiFetch(server, "/api/uc/auth/reset-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: expiredToken, newPassword: "expiredPass1" }),
+    });
+
+    assert.equal(status, 400);
+    assert.deepEqual(
+      body,
+      { error: "Invalid or expired reset link. Please request a new one." },
+    );
+
+    const after = await pool.query<{ password_hash: string; credential_version: number }>(
+      "SELECT password_hash, credential_version FROM uc_users WHERE id = $1",
+      [userId],
+    );
+    assert.equal(after.rows[0]!.password_hash, before.rows[0]!.password_hash);
+    assert.equal(after.rows[0]!.credential_version, before.rows[0]!.credential_version);
   });
 
   it("a fresh token for the same user works correctly after a prior reset", async () => {

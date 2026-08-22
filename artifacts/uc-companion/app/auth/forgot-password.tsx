@@ -7,12 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import BrandLogo from '@/components/BrandLogo';
+import { readResetTokenParam } from '@/lib/passwordReset';
 
 export default function ForgotPasswordScreen() {
   const colors = useColors();
   const router = useRouter();
   const { email: prefillEmail, resetToken: resetTokenParam } = useLocalSearchParams<{ email?: string; resetToken?: string }>();
-  const resetToken = typeof resetTokenParam === 'string' ? resetTokenParam : '';
+  const resetToken = readResetTokenParam(resetTokenParam);
   const [email, setEmail] = useState(prefillEmail ?? '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -137,6 +138,7 @@ export default function ForgotPasswordScreen() {
                   <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
                     <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
                     <TextInput
+                      testID="reset-new-password"
                       value={newPassword}
                       onChangeText={v => { setNewPassword(v); setError(null); }}
                       placeholder="At least 6 characters"
@@ -152,6 +154,7 @@ export default function ForgotPasswordScreen() {
                   <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
                     <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
                     <TextInput
+                      testID="reset-confirm-password"
                       value={confirmPassword}
                       onChangeText={v => { setConfirmPassword(v); setError(null); }}
                       placeholder="Repeat your password"
@@ -169,6 +172,7 @@ export default function ForgotPasswordScreen() {
                 <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
                   <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
+                    testID="reset-email"
                     value={email}
                     onChangeText={v => { setEmail(v); setError(null); }}
                     placeholder="you@example.com"
@@ -184,6 +188,7 @@ export default function ForgotPasswordScreen() {
             {resetToken && error && <Text style={styles.errorText}>{error}</Text>}
 
             <TouchableOpacity
+              testID="reset-submit"
               onPress={resetToken ? handleReset : handleSubmit}
               disabled={loading}
               style={[styles.submitBtn, { backgroundColor: loading ? colors.muted : colors.primary }]}
@@ -194,6 +199,7 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID="reset-back"
               onPress={() => router.back()}
               style={styles.cancelBtn}
             >
