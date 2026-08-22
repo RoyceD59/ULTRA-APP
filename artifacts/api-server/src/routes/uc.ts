@@ -1759,7 +1759,9 @@ router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: R
   });
 
   // The raw token is sent exactly once via email; it never touches the DB.
-  const resetUrl = `${resetBaseUrl}/uc/auth/reset-password?token=${rawToken}`;
+  const webResetUrl = `${resetBaseUrl}/uc/auth/reset-password?token=${rawToken}`;
+  const companionResetBase = (process.env["UC_COMPANION_RESET_URL"] ?? "uc-companion://auth/forgot-password").replace(/\/$/, "");
+  const companionResetUrl = `${companionResetBase}?resetToken=${encodeURIComponent(rawToken)}`;
   logger.info({ email: user.email }, "UC password reset token generated");
 
   const firstName = user.firstName ?? "there";
@@ -1771,14 +1773,15 @@ router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: R
       `Hi ${firstName},\n\n` +
       `We received a request to reset the password for your Ultra-Clear account (${user.email}).\n\n` +
       `Click the link below to choose a new password. The link expires in 24 hours.\n\n` +
-      `${resetUrl}\n\n` +
+      `${companionResetUrl}\n\n` +
+      `If the app does not open, use the web reset page:\n${webResetUrl}\n\n` +
       `If you didn't request this, you can safely ignore this email — your password hasn't changed.\n\n` +
       `— The Ultra-Clear team`,
     html:
       `<p>Hi ${firstName},</p>` +
       `<p>We received a request to reset the password for your Ultra-Clear account (<strong>${user.email}</strong>).</p>` +
-      `<p><a href="${resetUrl}" style="background:#005d8f;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:bold">Reset my password</a></p>` +
-      `<p>Or copy this link into your browser:<br><a href="${resetUrl}">${resetUrl}</a></p>` +
+      `<p><a href="${companionResetUrl}" style="background:#005d8f;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:bold">Reset in the Ultra-Clear app</a></p>` +
+      `<p>If the app is not installed, <a href="${webResetUrl}">reset your password on the web</a>.</p>` +
       `<p><em>This link expires in 24 hours. If you didn't request a reset, you can safely ignore this email.</em></p>` +
       `<p>— The Ultra-Clear team</p>`,
     meta: { template: "uc-password-reset" },

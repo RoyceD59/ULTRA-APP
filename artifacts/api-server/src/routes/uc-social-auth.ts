@@ -21,6 +21,7 @@ import { issueToken } from "../lib/jwt";
 import { authLimiter } from "../lib/rate-limiters";
 import { logger } from "../lib/logger";
 import { recordAccountRegistration } from "../lib/account-records";
+import { sendViaResend } from "../lib/resend";
 
 const router: IRouter = Router();
 
@@ -62,6 +63,7 @@ router.post(
     // a durable folder record regardless of which DB call failed.
     const firstName = cu.firstName || email.split("@")[0] || "Customer";
     const lastName = cu.lastName || "";
+    let createdSocialAccount = false;
 
     // ── Phase 2: DB operations ────────────────────────────────────────────────
     // Any unhandled error here (including the very first findFirst) is caught
@@ -129,6 +131,7 @@ router.post(
 
         try {
           [dbUser] = await db.insert(ucUsersTable).values(values).returning();
+          createdSocialAccount = Boolean(dbUser);
           if (dbUser) {
             recordAccountRegistration({
               id: dbUser.id,
@@ -204,6 +207,22 @@ router.post(
         credentialVersion: dbUser.credentialVersion,
       };
       res.json({ token: issueToken(user), user });
+      const subject = createdSocialAccount
+        ? "Welcome to Ultra-Clear"
+        : "New sign-in to your Ultra-Clear account";
+      const message = createdSocialAccount
+        ? `Hi ${firstName},\n\nWelcome to Ultra-Clear. Your account is ready and you can now manage your clean-water products, reminders, and support requests in the Companion app.\n\n— The Ultra-Clear team`
+        : `Hi ${firstName},\n\nYour Ultra-Clear account was just used to sign in with Google or Apple. If this was not you, please secure your social account and contact support.\n\n— The Ultra-Clear team`;
+      void sendViaResend({
+        from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+        to: email,
+        subject,
+        text: message,
+        html: message.replace(/\n/g, "<br>"),
+        meta: { template: createdSocialAccount ? "uc-social-welcome" : "uc-social-sign-in" },
+      }).then((sent) => {
+        if (!sent) logger.warn({ email, createdSocialAccount }, "Social sign-in email delivery failed");
+      }).catch((err) => logger.warn({ err, email }, "Social sign-in email dispatch failed"));
     } catch (err) {
       logger.error({ err }, "[uc-social-auth] social sign-in failed");
       if (res.headersSent) return;

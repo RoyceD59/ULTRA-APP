@@ -76,6 +76,7 @@ export * from './systemStatusInput';
 export * from './systemStatusRecord';
 export * from './systemStatusUpdate';
 export * from './task';
+export * from './taskAssignmentEmailStatus';
 export * from './taskInput';
 export * from './taskPriority';
 export * from './taskStatus';

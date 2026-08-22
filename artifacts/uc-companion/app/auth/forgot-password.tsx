@@ -11,10 +11,14 @@ import BrandLogo from '@/components/BrandLogo';
 export default function ForgotPasswordScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { email: prefillEmail } = useLocalSearchParams<{ email?: string }>();
+  const { email: prefillEmail, resetToken: resetTokenParam } = useLocalSearchParams<{ email?: string; resetToken?: string }>();
+  const resetToken = typeof resetTokenParam === 'string' ? resetTokenParam : '';
   const [email, setEmail] = useState(prefillEmail ?? '');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [reset, setReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const getBase = () =>
@@ -48,6 +52,36 @@ export default function ForgotPasswordScreen() {
     }
   }
 
+  async function handleReset() {
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${getBase()}/api/uc/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, newPassword }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? 'This reset link is invalid or expired.');
+        return;
+      }
+      setReset(true);
+    } catch {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
@@ -56,18 +90,36 @@ export default function ForgotPasswordScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <BrandLogo width={84} style={{ marginBottom: 4 }} />
-        <Text style={[styles.title, { color: colors.text }]}>Forgot Password?</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          {resetToken ? 'Set a new password' : 'Forgot Password?'}
+        </Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-          Enter the email on your account and we'll send you a reset link.
+          {resetToken
+            ? 'Choose a new password for your Ultra-Clear account.'
+            : "Enter the email on your account and we'll send you a reset link."}
         </Text>
 
-        {sent ? (
+        {reset ? (
+          <View style={styles.sentBox}>
+            <Ionicons name="checkmark-circle" size={48} color="#22C55E" style={{ marginBottom: 12 }} />
+            <Text style={[styles.sentTitle, { color: colors.text }]}>Password updated</Text>
+            <Text style={[styles.sentBody, { color: colors.mutedForeground }]}>
+              Your password has been changed. Sign in with your new password.
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.replace('/auth/login' as never)}
+              style={[styles.backBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={styles.backBtnText}>Back to Sign In</Text>
+            </TouchableOpacity>
+          </View>
+        ) : sent ? (
           <View style={styles.sentBox}>
             <Ionicons name="checkmark-circle" size={48} color="#22C55E" style={{ marginBottom: 12 }} />
             <Text style={[styles.sentTitle, { color: colors.text }]}>Check your inbox</Text>
             <Text style={[styles.sentBody, { color: colors.mutedForeground }]}>
-              If <Text style={{ fontWeight: '700' }}>{email.trim()}</Text> is registered, you'll receive a
-              password-reset link shortly. Check your spam folder too.
+              If an account matches that address, you'll receive a password-reset link shortly.
+              Check your spam folder too.
             </Text>
             <TouchableOpacity
               onPress={() => router.replace('/auth/login' as never)}
@@ -78,33 +130,67 @@ export default function ForgotPasswordScreen() {
           </View>
         ) : (
           <View style={styles.form}>
-            <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email address</Text>
-              <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
-                <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
-                <TextInput
-                  value={email}
-                  onChangeText={v => { setEmail(v); setError(null); }}
-                  placeholder="you@example.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  placeholderTextColor={colors.border}
-                  style={[styles.input, { color: colors.text }]}
-                />
+            {resetToken ? (
+              <>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>New password</Text>
+                  <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
+                    <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      value={newPassword}
+                      onChangeText={v => { setNewPassword(v); setError(null); }}
+                      placeholder="At least 6 characters"
+                      secureTextEntry
+                      autoCapitalize="none"
+                      placeholderTextColor={colors.border}
+                      style={[styles.input, { color: colors.text }]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Confirm password</Text>
+                  <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
+                    <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      value={confirmPassword}
+                      onChangeText={v => { setConfirmPassword(v); setError(null); }}
+                      placeholder="Repeat your password"
+                      secureTextEntry
+                      autoCapitalize="none"
+                      placeholderTextColor={colors.border}
+                      style={[styles.input, { color: colors.text }]}
+                    />
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.field}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email address</Text>
+                <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
+                  <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                  <TextInput
+                    value={email}
+                    onChangeText={v => { setEmail(v); setError(null); }}
+                    placeholder="you@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    placeholderTextColor={colors.border}
+                    style={[styles.input, { color: colors.text }]}
+                  />
+                </View>
+                {error && <Text style={styles.errorText}>{error}</Text>}
               </View>
-              {error && (
-                <Text style={styles.errorText}>{error}</Text>
-              )}
-            </View>
+            )}
+            {resetToken && error && <Text style={styles.errorText}>{error}</Text>}
 
             <TouchableOpacity
-              onPress={handleSubmit}
+              onPress={resetToken ? handleReset : handleSubmit}
               disabled={loading}
               style={[styles.submitBtn, { backgroundColor: loading ? colors.muted : colors.primary }]}
             >
               {loading
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={styles.submitBtnText}>Send Reset Link</Text>}
+                : <Text style={styles.submitBtnText}>{resetToken ? 'Save New Password' : 'Send Reset Link'}</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TaskAssignmentEmailStatus } from './taskAssignmentEmailStatus';
 import type { TaskPriority } from './taskPriority';
 import type { TaskStatus } from './taskStatus';
 
@@ -26,6 +27,9 @@ export interface Task {
   deliveryFormat: string | null;
   /** @nullable */
   notifyVia: string | null;
+  assignmentEmailStatus?: TaskAssignmentEmailStatus;
+  /** @nullable */
+  assignmentEmailError?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

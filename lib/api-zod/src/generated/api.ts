@@ -400,6 +400,8 @@ export const ListTasksResponseItem = zod.object({
   "resourceRequired": zod.unknown().optional(),
   "deliveryFormat": zod.string().nullable(),
   "notifyVia": zod.string().nullable(),
+  "assignmentEmailStatus": zod.enum(['sent', 'failed', 'skipped']).optional(),
+  "assignmentEmailError": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -439,6 +441,8 @@ export const CreateTaskResponse = zod.object({
   "resourceRequired": zod.unknown().optional(),
   "deliveryFormat": zod.string().nullable(),
   "notifyVia": zod.string().nullable(),
+  "assignmentEmailStatus": zod.enum(['sent', 'failed', 'skipped']).optional(),
+  "assignmentEmailError": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -464,6 +468,8 @@ export const GetTaskResponse = zod.object({
   "resourceRequired": zod.unknown().optional(),
   "deliveryFormat": zod.string().nullable(),
   "notifyVia": zod.string().nullable(),
+  "assignmentEmailStatus": zod.enum(['sent', 'failed', 'skipped']).optional(),
+  "assignmentEmailError": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -506,6 +512,8 @@ export const UpdateTaskResponse = zod.object({
   "resourceRequired": zod.unknown().optional(),
   "deliveryFormat": zod.string().nullable(),
   "notifyVia": zod.string().nullable(),
+  "assignmentEmailStatus": zod.enum(['sent', 'failed', 'skipped']).optional(),
+  "assignmentEmailError": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

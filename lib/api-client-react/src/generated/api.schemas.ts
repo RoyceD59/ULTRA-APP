@@ -112,6 +112,15 @@ export interface ProjectSummary {
   overdueCount: number;
 }
 
+export type TaskAssignmentEmailStatus = typeof TaskAssignmentEmailStatus[keyof typeof TaskAssignmentEmailStatus];
+
+
+export const TaskAssignmentEmailStatus = {
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+
 export interface Task {
   id: number;
   projectId: number;
@@ -130,6 +139,9 @@ export interface Task {
   deliveryFormat: string | null;
   /** @nullable */
   notifyVia: string | null;
+  assignmentEmailStatus?: TaskAssignmentEmailStatus;
+  /** @nullable */
+  assignmentEmailError?: string | null;
   createdAt: string;
   updatedAt: string;
 }

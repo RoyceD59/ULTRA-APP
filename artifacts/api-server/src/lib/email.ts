@@ -196,7 +196,7 @@ export async function sendEmail(params: {
   orderId?:  number | string;
   ticketId?: string;
   testId?:   string;
-}): Promise<void> {
+}): Promise<boolean> {
   if (!hasSendGrid() && !hasSmtp()) {
     console.log("[email] No provider configured — skipping email to", params.to);
     logEmailAttempt({
@@ -210,7 +210,7 @@ export async function sendEmail(params: {
       status:       "failed",
       errorMessage: "No email provider configured (SENDGRID_API_KEY or SMTP_HOST required)",
     });
-    return;
+    return false;
   }
 
   // Store the full plain-text body so retries can reconstruct a useful message.
@@ -223,39 +223,34 @@ export async function sendEmail(params: {
     testId:      params.testId,
   };
 
-  // Kick off the delivery chain asynchronously — never blocks the caller.
-  (async () => {
-    if (hasSendGrid()) {
-      try {
-        await sendViaSendGrid(params.to, params.subject, params.html, params.text);
-        console.log("[email] sent via SendGrid to", params.to);
-        logEmailAttempt({ ...logBase, provider: "sendgrid", status: "sent" });
-        return; // success — done
-      } catch (sgErr: unknown) {
-        const errMsg = sgErr instanceof Error ? sgErr.message : String(sgErr);
-        console.warn("[email] SendGrid failed:", errMsg);
-        // Log the SendGrid failure immediately — every provider attempt is recorded
-        // regardless of whether a fallback provider later succeeds.
-        logEmailAttempt({ ...logBase, provider: "sendgrid", status: "failed", errorMessage: errMsg });
-        if (!hasSmtp()) {
-          console.error("[email] No SMTP fallback configured — email not delivered to", params.to);
-          return;
-        }
-        console.log("[email] Trying SMTP fallback for", params.to);
-      }
-    }
-    // Either SendGrid was not configured, or it failed and SMTP is available.
-    // This attempt is logged separately so the log captures every provider tried.
+  if (hasSendGrid()) {
     try {
-      await sendViaSmtp(params.to, params.subject, params.html, params.text);
-      console.log("[email] sent via SMTP to", params.to);
-      logEmailAttempt({ ...logBase, provider: "smtp", status: "sent" });
-    } catch (smtpErr: unknown) {
-      const errMsg = smtpErr instanceof Error ? smtpErr.message : String(smtpErr);
-      console.error("[email] SMTP also failed:", errMsg);
-      logEmailAttempt({ ...logBase, provider: "smtp", status: "failed", errorMessage: errMsg });
+      await sendViaSendGrid(params.to, params.subject, params.html, params.text);
+      console.log("[email] sent via SendGrid to", params.to);
+      logEmailAttempt({ ...logBase, provider: "sendgrid", status: "sent" });
+      return true;
+    } catch (sgErr: unknown) {
+      const errMsg = sgErr instanceof Error ? sgErr.message : String(sgErr);
+      console.warn("[email] SendGrid failed:", errMsg);
+      logEmailAttempt({ ...logBase, provider: "sendgrid", status: "failed", errorMessage: errMsg });
+      if (!hasSmtp()) {
+        console.error("[email] No SMTP fallback configured — email not delivered to", params.to);
+        return false;
+      }
+      console.log("[email] Trying SMTP fallback for", params.to);
     }
-  })();
+  }
+  try {
+    await sendViaSmtp(params.to, params.subject, params.html, params.text);
+    console.log("[email] sent via SMTP to", params.to);
+    logEmailAttempt({ ...logBase, provider: "smtp", status: "sent" });
+    return true;
+  } catch (smtpErr: unknown) {
+    const errMsg = smtpErr instanceof Error ? smtpErr.message : String(smtpErr);
+    console.error("[email] SMTP also failed:", errMsg);
+    logEmailAttempt({ ...logBase, provider: "smtp", status: "failed", errorMessage: errMsg });
+    return false;
+  }
 }
 
 // ─── Booking confirmation templates ──────────────────────────────────────────

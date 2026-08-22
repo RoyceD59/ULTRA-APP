@@ -1,8 +1,64 @@
 import { db, contactsTable, contactMethodsTable, notificationLogsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { sendViaResend } from "./resend";
+import { sendEmail } from "./email";
 
 export type TemplateId = "STAKEHOLDER_UPDATE" | "OWNER_ALERT" | "RESOURCE_REQ";
+
+export type AssignmentEmailResult = {
+  status: "sent" | "failed";
+  error?: string;
+};
+
+export async function sendTaskAssignmentEmail(params: {
+  to: string;
+  memberName: string;
+  taskTitle: string;
+  projectName: string;
+  taskId: number;
+  dueDate?: string | null;
+}): Promise<AssignmentEmailResult> {
+  const subject = `New task assigned: ${params.taskTitle}`;
+  const due = params.dueDate ? `\nDue date: ${params.dueDate}` : "";
+  const text =
+    `Hi ${params.memberName},\n\n` +
+    `You have been assigned "${params.taskTitle}" in the ${params.projectName} project.` +
+    `${due}\n\n` +
+    `Open ProjectHub to review the task details.\n\nTeam Horizon`;
+  const html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+
+  try {
+    const accepted = await sendViaResend({
+      from: "ProjectHub <noreply@contacts.ucfilters.com>",
+      to: params.to,
+      subject,
+      text,
+      html,
+      meta: { template: "task-assignment" },
+    });
+    if (accepted) return { status: "sent" };
+
+    const fallbackAccepted = await sendEmail({
+      to: params.to,
+      subject,
+      text,
+      html,
+      template: "task-assignment",
+    });
+    return fallbackAccepted
+      ? { status: "sent" }
+      : { status: "failed", error: "Resend and fallback email providers rejected the message" };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    logger.warn({ to: params.to, error }, "Task assignment email failed");
+    return { status: "failed", error };
+  }
+}
 
 interface NotificationContext {
   taskId?: number | null;

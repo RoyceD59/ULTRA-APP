@@ -1426,6 +1426,11 @@ components:
           type: ["string", "null"]
         notifyVia:
           type: ["string", "null"]
+        assignmentEmailStatus:
+          type: string
+          enum: [sent, failed, skipped]
+        assignmentEmailError:
+          type: ["string", "null"]
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 

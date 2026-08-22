@@ -74,10 +74,18 @@ function TaskDialog({
   });
 
   const createTask = useCreateTask({
-    mutation: {
-      onSuccess: () => {
+      mutation: {
+       onSuccess: (result) => {
         queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        toast({ title: "Task created" });
+         toast({
+           title: "Task created",
+           description: result.assignmentEmailStatus === "failed"
+             ? `Task saved, but the assignment email failed: ${result.assignmentEmailError ?? "unknown error"}`
+             : result.assignmentEmailStatus === "sent"
+               ? "Assignment email sent."
+               : undefined,
+           variant: result.assignmentEmailStatus === "failed" ? "destructive" : undefined,
+         });
         onOpenChange(false);
         form.reset();
       },
@@ -86,9 +94,17 @@ function TaskDialog({
 
   const updateTask = useUpdateTask({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (result) => {
         queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        toast({ title: "Task updated" });
+        toast({
+          title: "Task updated",
+          description: result.assignmentEmailStatus === "failed"
+            ? `Task saved, but the assignment email failed: ${result.assignmentEmailError ?? "unknown error"}`
+            : result.assignmentEmailStatus === "sent"
+              ? "Assignment email sent."
+              : undefined,
+          variant: result.assignmentEmailStatus === "failed" ? "destructive" : undefined,
+        });
         onOpenChange(false);
       },
     }
