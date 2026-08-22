@@ -459,3 +459,84 @@ describe('serve.js production server', () => {
     }
   });
 });
+
+// ── Absent STATIC_ROOT suite ─────────────────────────────────────────────────
+
+describe('serve.js — absent STATIC_ROOT', () => {
+  /** @type {import('node:child_process').ChildProcess} */
+  let serverProcess;
+  let port;
+
+  before(async () => {
+    // Point STATIC_ROOT at a path that does not exist on disk — never create it.
+    const absentRoot = join(tmpdir(), `uc-serve-absent-${Date.now()}`);
+
+    port = await findFreePort();
+    serverProcess = spawn(process.execPath, [SERVE_JS], {
+      env: {
+        ...process.env,
+        PORT: String(port),
+        BASE_PATH,
+        STATIC_ROOT: absentRoot,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    const stderrChunks = [];
+    serverProcess.stderr.on('data', (d) => stderrChunks.push(d));
+    serverProcess.on('exit', (code) => {
+      if (code && code !== 0) {
+        process.stderr.write(Buffer.concat(stderrChunks));
+      }
+    });
+
+    await waitForReady(port);
+  });
+
+  after(() => {
+    serverProcess?.kill();
+  });
+
+  /** Convenience wrapper that always targets the absent-root server. */
+  function get(urlPath, headers = {}) {
+    return fetch(`http://127.0.0.1:${port}${urlPath}`, { headers });
+  }
+
+  // ── 1. Root path returns the landing page (no bundle script tag) ──────────
+
+  test('GET / returns HTTP 200 with a landing page and no <script src="…bundle.js"> when STATIC_ROOT is absent', async () => {
+    const res = await get(`${BASE_PATH}/`);
+
+    assert.equal(
+      res.status,
+      200,
+      'expected HTTP 200 for landing page even when STATIC_ROOT does not exist',
+    );
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /text\/html/,
+      'expected text/html content-type for landing page',
+    );
+
+    const html = await res.text();
+
+    // The landing page may include its own <script> tags (e.g. QR-code library),
+    // but must NOT contain a <script src="…bundle.js"> injected by serveWebApp().
+    const bundleSrcMatch = html.match(/<script\b[^>]*\bsrc="([^"]*bundle\.js[^"]*)"[^>]*>/);
+    assert.equal(
+      bundleSrcMatch,
+      null,
+      'landing page must not contain a <script src="…bundle.js"> tag when STATIC_ROOT is absent',
+    );
+  });
+
+  // ── 2. Health-check is unaffected by the missing directory ────────────────
+
+  test('GET /status returns "ok" when STATIC_ROOT is absent', async () => {
+    const res = await get(`${BASE_PATH}/status`);
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for /status');
+    const body = await res.text();
+    assert.equal(body, 'ok', 'expected body to be "ok"');
+  });
+});
