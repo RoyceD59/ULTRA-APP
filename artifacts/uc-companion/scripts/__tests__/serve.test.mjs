@@ -352,4 +352,110 @@ describe('serve.js production server', () => {
       rmSync(emptyRoot, { recursive: true, force: true });
     }
   });
+
+  // ── 8. Rebuild scenario: server picks up a new bundle without restarting ──
+
+  test('server re-scans and serves the new bundle after the old timestamped directory is replaced', async () => {
+    // This test exercises the bundle-path cache invalidation path in
+    // getWebBundlePath(): when the cached path no longer exists on disk (old
+    // directory deleted by a rebuild), the server must rescan and find the
+    // newly-written bundle — all without a restart.
+
+    const rebuildRoot = mkdtempSync(join(tmpdir(), 'uc-serve-rebuild-'));
+    const rebuildPort = await findFreePort();
+
+    /**
+     * Helper: create a timestamped web-bundle directory inside rebuildRoot.
+     * Returns the bundle path so callers can verify or delete it.
+     * @param {string} timestamp  directory name — must sort correctly (higher = newer)
+     * @param {string} marker     content written into bundle.js to identify the build
+     */
+    function createBundle(timestamp, marker) {
+      const bundleDir = join(
+        rebuildRoot,
+        timestamp,
+        '_expo',
+        'static',
+        'js',
+        'web',
+      );
+      mkdirSync(bundleDir, { recursive: true });
+      writeFileSync(
+        join(bundleDir, 'bundle.js'),
+        `// ${marker}\nconsole.log("${marker}");\n`,
+      );
+      return join(bundleDir, 'bundle.js');
+    }
+
+    // "Old" build: lower timestamp → sorts earlier alphabetically
+    const oldTimestamp = '1000000000-00001';
+    createBundle(oldTimestamp, 'old-bundle');
+
+    const rebuildServer = spawn(process.execPath, [SERVE_JS], {
+      env: {
+        ...process.env,
+        PORT: String(rebuildPort),
+        BASE_PATH,
+        STATIC_ROOT: rebuildRoot,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    try {
+      await waitForReady(rebuildPort);
+
+      // ── Step 1: warm the cache — verify the server finds the old bundle ──
+      const res1 = await fetch(`http://127.0.0.1:${rebuildPort}${BASE_PATH}/`);
+      assert.equal(res1.status, 200, 'expected HTTP 200 before rebuild');
+      const html1 = await res1.text();
+      const src1 = extractScriptSrc(html1);
+      assert.ok(src1, 'root HTML should contain a <script src="…"> before rebuild');
+      assert.match(src1, /bundle\.js$/, 'src should end with bundle.js before rebuild');
+      assert.ok(
+        src1.includes(oldTimestamp),
+        `initial bundle URL should contain the old timestamp "${oldTimestamp}"; got: ${src1}`,
+      );
+
+      // ── Step 2: simulate a rebuild ────────────────────────────────────────
+      // Remove the old timestamped directory (invalidates the cache) and write
+      // a new one with a higher-sorting timestamp.
+      rmSync(join(rebuildRoot, oldTimestamp), { recursive: true, force: true });
+
+      const newTimestamp = '2000000000-00002';
+      createBundle(newTimestamp, 'new-bundle');
+
+      // ── Step 3: request again — server must rescan and serve the new bundle
+      const res2 = await fetch(`http://127.0.0.1:${rebuildPort}${BASE_PATH}/`);
+      assert.equal(res2.status, 200, 'expected HTTP 200 after rebuild');
+      const html2 = await res2.text();
+      const src2 = extractScriptSrc(html2);
+      assert.ok(src2, 'root HTML should contain a <script src="…"> after rebuild');
+      assert.match(src2, /bundle\.js$/, 'src should end with bundle.js after rebuild');
+      assert.ok(
+        src2.includes(newTimestamp),
+        `post-rebuild bundle URL should contain the new timestamp "${newTimestamp}"; got: ${src2}`,
+      );
+      assert.notEqual(
+        src2,
+        src1,
+        'bundle URL should differ from the pre-rebuild URL after the directory is replaced',
+      );
+
+      // ── Step 4: the new bundle file itself should be fetchable ────────────
+      const bundleRes = await fetch(`http://127.0.0.1:${rebuildPort}${src2}`);
+      assert.equal(
+        bundleRes.status,
+        200,
+        `expected HTTP 200 fetching new bundle at ${src2}`,
+      );
+      assert.match(
+        bundleRes.headers.get('content-type') ?? '',
+        /application\/javascript/,
+        'new bundle should be served with application/javascript content-type',
+      );
+    } finally {
+      rebuildServer.kill();
+      rmSync(rebuildRoot, { recursive: true, force: true });
+    }
+  });
 });
