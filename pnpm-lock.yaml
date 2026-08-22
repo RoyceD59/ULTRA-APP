@@ -80,6 +80,11 @@ overrides:
   postcss: 8.5.26
   fast-xml-parser: 5.10.1
 
+patchedDependencies:
+  image-size@1.2.1:
+    hash: 55a94d3a3562105438aa62011c0c267ebd46c8ab2a7d9388d820ce73f06ba37f
+    path: patches/image-size@1.2.1.patch
+
 importers:
 
   .:
@@ -15172,7 +15177,7 @@ snapshots:
 
   ignore@5.3.2: {}
 
-  image-size@1.2.1:
+  image-size@1.2.1(patch_hash=55a94d3a3562105438aa62011c0c267ebd46c8ab2a7d9388d820ce73f06ba37f):
     dependencies:
       queue: 6.0.2
 
@@ -15900,7 +15905,7 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.32.0
-      image-size: 1.2.1
+      image-size: 1.2.1(patch_hash=55a94d3a3562105438aa62011c0c267ebd46c8ab2a7d9388d820ce73f06ba37f)
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4
@@ -15946,7 +15951,7 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.35.0
-      image-size: 1.2.1
+      image-size: 1.2.1(patch_hash=55a94d3a3562105438aa62011c0c267ebd46c8ab2a7d9388d820ce73f06ba37f)
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4

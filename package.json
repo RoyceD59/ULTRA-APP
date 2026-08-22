@@ -12,6 +12,9 @@
       "fast-uri": "4.1.2",
       "postcss": "8.5.26",
       "fast-xml-parser": "5.10.1"
+    },
+    "patchedDependencies": {
+      "image-size@1.2.1": "patches/image-size@1.2.1.patch"
     }
   },
   "scripts": {

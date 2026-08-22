@@ -1,0 +1,15 @@
+diff --git a/dist/types/jxl.js b/dist/types/jxl.js
+index f557b0aea7e679d2cb84d9915e957dd2254eba97..27026e2675d44791e9f6124b099557b9aca94eba 100644
+--- a/dist/types/jxl.js
++++ b/dist/types/jxl.js
+@@ -24,7 +24,9 @@ function extractPartialStreams(input) {
+         if (!jxlpBox)
+             break;
+         partialStreams.push(input.slice(jxlpBox.offset + 12, jxlpBox.offset + jxlpBox.size));
+-        offset = jxlpBox.offset + jxlpBox.size;
++        // ISO BMFF boxes with a zero size extend to the end of the file.
++        // Advance beyond the header so malformed JXLP input cannot loop forever.
++        offset = jxlpBox.offset + (jxlpBox.size > 0 ? jxlpBox.size : 8);
+     }
+     return partialStreams;
+ }
