@@ -1,282 +1,555 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ProjectHub — Webhook &amp; Agent Dispatch Guide</title>
-<style>
-  :root {
-    --uc-blue: #005d8f;
-    --uc-amber: #f59e0b;
-    --bg: #f8fafc;
-    --card: #ffffff;
-    --border: #e2e8f0;
-    --muted: #64748b;
-    --code-bg: #0f172a;
-    --code-fg: #e2e8f0;
-    --green: #16a34a;
-    --red: #dc2626;
-    --section-gap: 2.5rem;
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background: var(--bg);
-    color: #1e293b;
-    line-height: 1.65;
-    font-size: 15px;
-  }
-  a { color: var(--uc-blue); }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ProjectHub — Webhook &amp; Agent Dispatch Guide</title>
+    <style>
+      :root {
+        --uc-blue: #005d8f;
+        --uc-amber: #f59e0b;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --border: #e2e8f0;
+        --muted: #64748b;
+        --code-bg: #0f172a;
+        --code-fg: #e2e8f0;
+        --green: #16a34a;
+        --red: #dc2626;
+        --section-gap: 2.5rem;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: var(--bg);
+        color: #1e293b;
+        line-height: 1.65;
+        font-size: 15px;
+      }
+      a {
+        color: var(--uc-blue);
+      }
 
-  /* ── Layout ── */
-  .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+      /* ── Layout ── */
+      .page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+      }
 
-  /* ── Header ── */
-  header {
-    background: linear-gradient(135deg, var(--uc-blue) 0%, #003f62 100%);
-    color: #fff;
-    padding: 2.5rem 2rem 2rem;
-    border-radius: 16px;
-    margin-bottom: var(--section-gap);
-    position: relative;
-    overflow: hidden;
-  }
-  header::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse at 80% 50%, rgba(245,158,11,.15) 0%, transparent 70%);
-    pointer-events: none;
-  }
-  header h1 { font-size: 1.85rem; font-weight: 800; letter-spacing: -.02em; }
-  header p  { margin-top: .5rem; opacity: .85; max-width: 600px; }
-  .badge {
-    display: inline-flex; align-items: center; gap: .35rem;
-    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25);
-    border-radius: 99px; padding: .25rem .75rem;
-    font-size: .75rem; font-weight: 600; letter-spacing: .04em;
-    margin-bottom: 1rem;
-  }
+      /* ── Header ── */
+      header {
+        background: linear-gradient(135deg, var(--uc-blue) 0%, #003f62 100%);
+        color: #fff;
+        padding: 2.5rem 2rem 2rem;
+        border-radius: 16px;
+        margin-bottom: var(--section-gap);
+        position: relative;
+        overflow: hidden;
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          ellipse at 80% 50%,
+          rgba(245, 158, 11, 0.15) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      header h1 {
+        font-size: 1.85rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      header p {
+        margin-top: 0.5rem;
+        opacity: 0.85;
+        max-width: 600px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 99px;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        margin-bottom: 1rem;
+      }
 
-  /* ── TOC ── */
-  nav.toc {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 1.25rem 1.5rem;
-    margin-bottom: var(--section-gap);
-  }
-  nav.toc h2 { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: .75rem; }
-  nav.toc ol { padding-left: 1.2rem; }
-  nav.toc li { margin: .3rem 0; }
-  nav.toc a { text-decoration: none; color: var(--uc-blue); font-size: .9rem; }
-  nav.toc a:hover { text-decoration: underline; }
+      /* ── TOC ── */
+      nav.toc {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: var(--section-gap);
+      }
+      nav.toc h2 {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 0.75rem;
+      }
+      nav.toc ol {
+        padding-left: 1.2rem;
+      }
+      nav.toc li {
+        margin: 0.3rem 0;
+      }
+      nav.toc a {
+        text-decoration: none;
+        color: var(--uc-blue);
+        font-size: 0.9rem;
+      }
+      nav.toc a:hover {
+        text-decoration: underline;
+      }
 
-  /* ── Section ── */
-  section { margin-bottom: var(--section-gap); }
-  h2.section-title {
-    font-size: 1.2rem; font-weight: 700;
-    border-bottom: 2px solid var(--uc-amber);
-    padding-bottom: .4rem; margin-bottom: 1.1rem;
-    display: flex; align-items: center; gap: .5rem;
-  }
-  h2.section-title .icon { font-size: 1.1rem; }
-  h3 { font-size: 1rem; font-weight: 700; margin: 1.2rem 0 .5rem; }
+      /* ── Section ── */
+      section {
+        margin-bottom: var(--section-gap);
+      }
+      h2.section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        border-bottom: 2px solid var(--uc-amber);
+        padding-bottom: 0.4rem;
+        margin-bottom: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      h2.section-title .icon {
+        font-size: 1.1rem;
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 1.2rem 0 0.5rem;
+      }
 
-  /* ── Card ── */
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 1.25rem 1.5rem;
-    margin-bottom: 1rem;
-  }
-  .card-amber { border-left: 4px solid var(--uc-amber); }
-  .card-blue  { border-left: 4px solid var(--uc-blue);  }
-  .card-green { border-left: 4px solid var(--green);    }
-  .card-red   { border-left: 4px solid var(--red);      }
+      /* ── Card ── */
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1rem;
+      }
+      .card-amber {
+        border-left: 4px solid var(--uc-amber);
+      }
+      .card-blue {
+        border-left: 4px solid var(--uc-blue);
+      }
+      .card-green {
+        border-left: 4px solid var(--green);
+      }
+      .card-red {
+        border-left: 4px solid var(--red);
+      }
 
-  /* ── Pill labels ── */
-  .pill {
-    display: inline-block; border-radius: 99px;
-    padding: .15rem .65rem; font-size: .72rem; font-weight: 700;
-    letter-spacing: .04em; margin-right: .3rem;
-  }
-  .pill-required { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
-  .pill-optional { background: #f0fdf4; color: var(--green); border: 1px solid #bbf7d0; }
-  .pill-get      { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-  .pill-post     { background: #fefce8; color: #92400e; border: 1px solid #fde68a; }
-  .pill-auth     { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
-  .pill-hmac     { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+      /* ── Pill labels ── */
+      .pill {
+        display: inline-block;
+        border-radius: 99px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        margin-right: 0.3rem;
+      }
+      .pill-required {
+        background: #fef2f2;
+        color: var(--red);
+        border: 1px solid #fecaca;
+      }
+      .pill-optional {
+        background: #f0fdf4;
+        color: var(--green);
+        border: 1px solid #bbf7d0;
+      }
+      .pill-get {
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+      }
+      .pill-post {
+        background: #fefce8;
+        color: #92400e;
+        border: 1px solid #fde68a;
+      }
+      .pill-auth {
+        background: #f5f3ff;
+        color: #6d28d9;
+        border: 1px solid #ddd6fe;
+      }
+      .pill-hmac {
+        background: #fff7ed;
+        color: #9a3412;
+        border: 1px solid #fed7aa;
+      }
 
-  /* ── Code blocks ── */
-  pre {
-    background: var(--code-bg); color: var(--code-fg);
-    border-radius: 10px; padding: 1rem 1.25rem;
-    overflow-x: auto; font-size: .8rem; line-height: 1.6;
-    margin: .75rem 0;
-  }
-  code { font-family: "SF Mono", "Fira Code", monospace; }
-  p code, li code {
-    background: #f1f5f9; border-radius: 4px;
-    padding: .1rem .35rem; font-size: .82em; color: #0f172a;
-  }
+      /* ── Code blocks ── */
+      pre {
+        background: var(--code-bg);
+        color: var(--code-fg);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        overflow-x: auto;
+        font-size: 0.8rem;
+        line-height: 1.6;
+        margin: 0.75rem 0;
+      }
+      code {
+        font-family: "SF Mono", "Fira Code", monospace;
+      }
+      p code,
+      li code {
+        background: #f1f5f9;
+        border-radius: 4px;
+        padding: 0.1rem 0.35rem;
+        font-size: 0.82em;
+        color: #0f172a;
+      }
 
-  /* ── Table ── */
-  .field-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-  .field-table th {
-    background: #f8fafc; text-align: left;
-    padding: .5rem .75rem; border-bottom: 2px solid var(--border);
-    font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-  }
-  .field-table td { padding: .5rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
-  .field-table tr:last-child td { border-bottom: none; }
-  .field-name { font-family: monospace; font-weight: 700; color: #0f172a; }
+      /* ── Table ── */
+      .field-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+      }
+      .field-table th {
+        background: #f8fafc;
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 2px solid var(--border);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .field-table td {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      .field-table tr:last-child td {
+        border-bottom: none;
+      }
+      .field-name {
+        font-family: monospace;
+        font-weight: 700;
+        color: #0f172a;
+      }
 
-  /* ── Flow diagram ── */
-  .flow {
-    display: flex; align-items: flex-start; gap: 0;
-    flex-wrap: wrap;
-    margin: 1rem 0;
-  }
-  .flow-step {
-    flex: 1; min-width: 120px;
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: .75rem .9rem;
-    font-size: .82rem; text-align: center;
-    position: relative;
-  }
-  .flow-step .step-label {
-    font-size: .65rem; text-transform: uppercase; letter-spacing: .07em;
-    color: var(--muted); margin-bottom: .25rem;
-  }
-  .flow-step .step-name { font-weight: 700; }
-  .flow-arrow {
-    align-self: center; font-size: 1.2rem; color: var(--uc-amber);
-    padding: 0 .35rem; flex-shrink: 0;
-  }
-  .flow-step.highlight { background: var(--uc-blue); color: #fff; border-color: var(--uc-blue); }
-  .flow-step.highlight .step-label { color: rgba(255,255,255,.7); }
+      /* ── Flow diagram ── */
+      .flow {
+        display: flex;
+        align-items: flex-start;
+        gap: 0;
+        flex-wrap: wrap;
+        margin: 1rem 0;
+      }
+      .flow-step {
+        flex: 1;
+        min-width: 120px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        font-size: 0.82rem;
+        text-align: center;
+        position: relative;
+      }
+      .flow-step .step-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        margin-bottom: 0.25rem;
+      }
+      .flow-step .step-name {
+        font-weight: 700;
+      }
+      .flow-arrow {
+        align-self: center;
+        font-size: 1.2rem;
+        color: var(--uc-amber);
+        padding: 0 0.35rem;
+        flex-shrink: 0;
+      }
+      .flow-step.highlight {
+        background: var(--uc-blue);
+        color: #fff;
+        border-color: var(--uc-blue);
+      }
+      .flow-step.highlight .step-label {
+        color: rgba(255, 255, 255, 0.7);
+      }
 
-  /* ── Callout ── */
-  .callout {
-    border-radius: 10px; padding: .9rem 1.1rem;
-    font-size: .88rem; margin: .75rem 0;
-    display: flex; gap: .6rem; align-items: flex-start;
-  }
-  .callout-warn { background: #fffbeb; border: 1px solid #fde68a; }
-  .callout-info { background: #eff6ff; border: 1px solid #bfdbfe; }
-  .callout-ok   { background: #f0fdf4; border: 1px solid #bbf7d0; }
-  .callout-icon { font-size: 1rem; flex-shrink: 0; margin-top: .05rem; }
-  .callout-body { flex: 1; }
-  .callout-body strong { display: block; margin-bottom: .2rem; }
+      /* ── Callout ── */
+      .callout {
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem;
+        font-size: 0.88rem;
+        margin: 0.75rem 0;
+        display: flex;
+        gap: 0.6rem;
+        align-items: flex-start;
+      }
+      .callout-warn {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+      }
+      .callout-info {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+      }
+      .callout-ok {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+      }
+      .callout-icon {
+        font-size: 1rem;
+        flex-shrink: 0;
+        margin-top: 0.05rem;
+      }
+      .callout-body {
+        flex: 1;
+      }
+      .callout-body strong {
+        display: block;
+        margin-bottom: 0.2rem;
+      }
 
-  /* ── Step list ── */
-  .steps { counter-reset: step-counter; list-style: none; padding: 0; }
-  .steps li {
-    counter-increment: step-counter;
-    display: flex; gap: .85rem; margin-bottom: .9rem; align-items: flex-start;
-  }
-  .steps li::before {
-    content: counter(step-counter);
-    background: var(--uc-blue); color: #fff;
-    min-width: 24px; height: 24px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: .75rem; font-weight: 800; flex-shrink: 0; margin-top: .1rem;
-  }
+      /* ── Step list ── */
+      .steps {
+        counter-reset: step-counter;
+        list-style: none;
+        padding: 0;
+      }
+      .steps li {
+        counter-increment: step-counter;
+        display: flex;
+        gap: 0.85rem;
+        margin-bottom: 0.9rem;
+        align-items: flex-start;
+      }
+      .steps li::before {
+        content: counter(step-counter);
+        background: var(--uc-blue);
+        color: #fff;
+        min-width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 800;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+      }
 
-  /* ── Comparison grid ── */
-  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+      /* ── Comparison grid ── */
+      .compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      @media (max-width: 600px) {
+        .compare {
+          grid-template-columns: 1fr;
+        }
+      }
 
-  /* ── Footer ── */
-  footer {
-    text-align: center; color: var(--muted); font-size: .8rem;
-    border-top: 1px solid var(--border); padding-top: 1.5rem;
-    margin-top: 3rem;
-  }
-</style>
-</head>
-<body>
-<div class="page">
+      /* ── Footer ── */
+      footer {
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.8rem;
+        border-top: 1px solid var(--border);
+        padding-top: 1.5rem;
+        margin-top: 3rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <!-- ── Header ── -->
+      <header>
+        <div class="badge">📡 Live Feature Guide</div>
+        <h1>ProjectHub — Webhook &amp; Agent Dispatch</h1>
+        <p>
+          How external systems push tasks into ProjectHub, how the team tests
+          integrations without touching production, and how tasks are dispatched
+          to the AI agent team.
+        </p>
+      </header>
 
-<!-- ── Header ── -->
-<header>
-  <div class="badge">📡 Live Feature Guide</div>
-  <h1>ProjectHub — Webhook &amp; Agent Dispatch</h1>
-  <p>How external systems push tasks into ProjectHub, how the team tests integrations without touching production, and how tasks are dispatched to the AI agent team.</p>
-</header>
+      <!-- ── TOC ── -->
+      <nav class="toc">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#overview">What these tools do</a></li>
+          <li>
+            <a href="#webhook-tester"
+              >Webhook Tester — testing payloads from inside ProjectHub</a
+            >
+          </li>
+          <li>
+            <a href="#live-ingest"
+              >Live Webhook Ingest — connecting real external systems</a
+            >
+          </li>
+          <li><a href="#payload-schema">Full payload schema</a></li>
+          <li>
+            <a href="#response-shape">Response shape &amp; validation errors</a>
+          </li>
+          <li>
+            <a href="#push-agent"
+              >Push Task to Agent — dispatching to the AI team</a
+            >
+          </li>
+          <li><a href="#system-status">System Status integration</a></li>
+          <li><a href="#end-to-end">End-to-end example walkthrough</a></li>
+          <li><a href="#tips">Tips, limits &amp; security notes</a></li>
+        </ol>
+      </nav>
 
-<!-- ── TOC ── -->
-<nav class="toc">
-  <h2>Contents</h2>
-  <ol>
-    <li><a href="#overview">What these tools do</a></li>
-    <li><a href="#webhook-tester">Webhook Tester — testing payloads from inside ProjectHub</a></li>
-    <li><a href="#live-ingest">Live Webhook Ingest — connecting real external systems</a></li>
-    <li><a href="#payload-schema">Full payload schema</a></li>
-    <li><a href="#response-shape">Response shape &amp; validation errors</a></li>
-    <li><a href="#push-agent">Push Task to Agent — dispatching to the AI team</a></li>
-    <li><a href="#system-status">System Status integration</a></li>
-    <li><a href="#end-to-end">End-to-end example walkthrough</a></li>
-    <li><a href="#tips">Tips, limits &amp; security notes</a></li>
-  </ol>
-</nav>
+      <!-- ── 1. Overview ── -->
+      <section id="overview">
+        <h2 class="section-title">
+          <span class="icon">🗺</span> 1 — What these tools do
+        </h2>
 
-<!-- ── 1. Overview ── -->
-<section id="overview">
-  <h2 class="section-title"><span class="icon">🗺</span> 1 — What these tools do</h2>
+        <p>
+          ProjectHub has two complementary bridges between external systems and
+          internal work:
+        </p>
 
-  <p>ProjectHub has two complementary bridges between external systems and internal work:</p>
+        <div class="compare" style="margin-top: 1rem">
+          <div class="card card-amber">
+            <h3 style="margin-top: 0">📡 Webhook Ingestion</h3>
+            <p>
+              External tools (Jira, Salesforce, n8n, Make, custom scripts)
+              <strong>push task payloads</strong> into ProjectHub automatically.
+              Tasks appear in the board instantly — no manual entry.
+            </p>
+          </div>
+          <div class="card card-blue">
+            <h3 style="margin-top: 0">🤖 Agent Dispatch</h3>
+            <p>
+              Team members
+              <strong>push an existing task to an AI agent worker</strong> from
+              the task card. The agent receives the full task context and can
+              act on it autonomously.
+            </p>
+          </div>
+        </div>
 
-  <div class="compare" style="margin-top:1rem">
-    <div class="card card-amber">
-      <h3 style="margin-top:0">📡 Webhook Ingestion</h3>
-      <p>External tools (Jira, Salesforce, n8n, Make, custom scripts) <strong>push task payloads</strong> into ProjectHub automatically. Tasks appear in the board instantly — no manual entry.</p>
-    </div>
-    <div class="card card-blue">
-      <h3 style="margin-top:0">🤖 Agent Dispatch</h3>
-      <p>Team members <strong>push an existing task to an AI agent worker</strong> from the task card. The agent receives the full task context and can act on it autonomously.</p>
-    </div>
-  </div>
+        <div class="card" style="margin-top: 1rem">
+          <strong>How the two endpoints relate</strong>
+          <div class="flow" style="margin-top: 0.75rem">
+            <div class="flow-step">
+              <div class="step-label">External</div>
+              <div class="step-name">Jira / n8n / Script</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step highlight">
+              <div class="step-label">Public route</div>
+              <div class="step-name">POST /api/webhook/ingest</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <div class="step-label">DB</div>
+              <div class="step-name">Task created</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <div class="step-label">Optional</div>
+              <div class="step-name">Agent dispatch</div>
+            </div>
+          </div>
+          <p
+            style="font-size: 0.82rem; color: var(--muted); margin-top: 0.5rem"
+          >
+            The <strong>Webhook Tester</strong> in ProjectHub is a safe sandbox
+            that exercises the same ingest logic without requiring HMAC signing
+            — useful for building payloads and debugging validation errors
+            before connecting a real system.
+          </p>
+        </div>
+      </section>
 
-  <div class="card" style="margin-top:1rem">
-    <strong>How the two endpoints relate</strong>
-    <div class="flow" style="margin-top:.75rem">
-      <div class="flow-step"><div class="step-label">External</div><div class="step-name">Jira / n8n / Script</div></div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step highlight"><div class="step-label">Public route</div><div class="step-name">POST /api/webhook/ingest</div></div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step"><div class="step-label">DB</div><div class="step-name">Task created</div></div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step"><div class="step-label">Optional</div><div class="step-name">Agent dispatch</div></div>
-    </div>
-    <p style="font-size:.82rem;color:var(--muted);margin-top:.5rem">
-      The <strong>Webhook Tester</strong> in ProjectHub is a safe sandbox that exercises the same ingest logic without requiring HMAC signing — useful for building payloads and debugging validation errors before connecting a real system.
-    </p>
-  </div>
-</section>
+      <!-- ── 2. Webhook Tester ── -->
+      <section id="webhook-tester">
+        <h2 class="section-title">
+          <span class="icon">🧪</span> 2 — Webhook Tester (inside ProjectHub)
+        </h2>
 
-<!-- ── 2. Webhook Tester ── -->
-<section id="webhook-tester">
-  <h2 class="section-title"><span class="icon">🧪</span> 2 — Webhook Tester (inside ProjectHub)</h2>
+        <p>
+          Navigate to <strong>Webhook Tester</strong> in the ProjectHub sidebar
+          (the amber 📡 icon). The page lets any authenticated team member fire
+          a test payload against the live server without needing the webhook
+          secret or an external tool.
+        </p>
 
-  <p>Navigate to <strong>Webhook Tester</strong> in the ProjectHub sidebar (the amber 📡 icon). The page lets any authenticated team member fire a test payload against the live server without needing the webhook secret or an external tool.</p>
+        <h3>How it works</h3>
+        <ul class="steps">
+          <li>
+            Fill in <strong>Source Platform</strong> — identifies which system
+            the event is pretending to come from (e.g. <code>jira</code>,
+            <code>salesforce</code>, <code>n8n</code>).
+          </li>
+          <li>
+            Fill in <strong>Event Name</strong> — the lifecycle event being
+            simulated. The only event that creates a task today is
+            <code>task.created</code>.
+          </li>
+          <li>
+            Edit the <strong>Task Data JSON</strong> textarea — this is the task
+            payload. See the schema reference below for all recognised fields.
+          </li>
+          <li>
+            Click <strong>Send Payload</strong>. The server validates the
+            payload, (optionally) creates the task, and returns a JSON response
+            displayed in the Response panel on the right.
+          </li>
+        </ul>
 
-  <h3>How it works</h3>
-  <ul class="steps">
-    <li>Fill in <strong>Source Platform</strong> — identifies which system the event is pretending to come from (e.g. <code>jira</code>, <code>salesforce</code>, <code>n8n</code>).</li>
-    <li>Fill in <strong>Event Name</strong> — the lifecycle event being simulated. The only event that creates a task today is <code>task.created</code>.</li>
-    <li>Edit the <strong>Task Data JSON</strong> textarea — this is the task payload. See the schema reference below for all recognised fields.</li>
-    <li>Click <strong>Send Payload</strong>. The server validates the payload, (optionally) creates the task, and returns a JSON response displayed in the Response panel on the right.</li>
-  </ul>
+        <div class="callout callout-info">
+          <div class="callout-icon">ℹ️</div>
+          <div class="callout-body">
+            <strong>No HMAC needed in the Tester</strong>
+            The Tester posts to <code>POST /api/webhook/test-dispatch</code>, an
+            authenticated team-only route. The server signs the ingest
+            internally on your behalf, so you never handle the webhook secret in
+            the browser. The exact same validation logic runs as on the public
+            endpoint.
+          </div>
+        </div>
 
-  <div class="callout callout-info">
-    <div class="callout-icon">ℹ️</div>
-    <div class="callout-body">
-      <strong>No HMAC needed in the Tester</strong>
-      The Tester posts to <code>POST /api/webhook/test-dispatch</code>, an authenticated team-only route. The server signs the ingest internally on your behalf, so you never handle the webhook secret in the browser. The exact same validation logic runs as on the public endpoint.
-    </div>
-  </div>
-
-  <h3>Default payload loaded in the form</h3>
-  <pre><code>{
+        <h3>Default payload loaded in the form</h3>
+        <pre><code>{
   "event": "task.created",
   "sourcePlatform": "jira",
   "taskData": {
@@ -286,16 +559,20 @@
   }
 }</code></pre>
 
-  <div class="callout callout-warn">
-    <div class="callout-icon">⚠️</div>
-    <div class="callout-body">
-      <strong>The default payload will fail validation</strong>
-      The defaults above are missing three <em>required</em> fields: <code>assigneeId</code>, <code>resourceRequired</code>, and <code>deliveryFormat</code>. You will see a <code>400</code> response with a <code>validationErrors</code> array until all three are present. See the schema table below.
-    </div>
-  </div>
+        <div class="callout callout-warn">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-body">
+            <strong>The default payload will fail validation</strong>
+            The defaults above are missing three <em>required</em> fields:
+            <code>assigneeId</code>, <code>resourceRequired</code>, and
+            <code>deliveryFormat</code>. You will see a
+            <code>400</code> response with a <code>validationErrors</code> array
+            until all three are present. See the schema table below.
+          </div>
+        </div>
 
-  <h3>A payload that passes</h3>
-  <pre><code>{
+        <h3>A payload that passes</h3>
+        <pre><code>{
   "event": "task.created",
   "sourcePlatform": "jira",
   "taskData": {
@@ -311,31 +588,42 @@
   }
 }</code></pre>
 
-  <p>A successful response looks like:</p>
-  <pre><code>{
+        <p>A successful response looks like:</p>
+        <pre><code>{
   "accepted": true,
   "taskId": 42,
   "message": "Event 'task.created' from 'jira' accepted",
   "validationErrors": []
 }</code></pre>
-</section>
+      </section>
 
-<!-- ── 3. Live ingest ── -->
-<section id="live-ingest">
-  <h2 class="section-title"><span class="icon">🌐</span> 3 — Live Webhook Ingest (external systems)</h2>
+      <!-- ── 3. Live ingest ── -->
+      <section id="live-ingest">
+        <h2 class="section-title">
+          <span class="icon">🌐</span> 3 — Live Webhook Ingest (external
+          systems)
+        </h2>
 
-  <p>To push tasks from a real external system, call the public endpoint with an HMAC-SHA256 signature:</p>
+        <p>
+          To push tasks from a real external system, call the public endpoint
+          with an HMAC-SHA256 signature:
+        </p>
 
-  <div class="card card-amber">
-    <span class="pill pill-post">POST</span>
-    <span class="pill pill-hmac">HMAC required</span>
-    <code>/api/webhook/ingest</code>
-  </div>
+        <div class="card card-amber">
+          <span class="pill pill-post">POST</span>
+          <span class="pill pill-hmac">HMAC required</span>
+          <code>/api/webhook/ingest</code>
+        </div>
 
-  <h3>Authentication — HMAC-SHA256</h3>
-  <p>Every request must include an <code>X-Webhook-Signature</code> header. The value is the HMAC-SHA256 digest of the <strong>exact raw request body bytes</strong>, computed using the shared <code>PROJECTHUB_WEBHOOK_SECRET</code>.</p>
+        <h3>Authentication — HMAC-SHA256</h3>
+        <p>
+          Every request must include an <code>X-Webhook-Signature</code> header.
+          The value is the HMAC-SHA256 digest of the
+          <strong>exact raw request body bytes</strong>, computed using the
+          shared <code>PROJECTHUB_WEBHOOK_SECRET</code>.
+        </p>
 
-  <pre><code># bash example (curl)
+        <pre><code># bash example (curl)
 SECRET="your-webhook-secret"
 BODY='{"event":"task.created","sourcePlatform":"n8n","taskData":{...}}'
 
@@ -346,16 +634,20 @@ curl -X POST https://your-projecthub-domain/api/webhook/ingest \
   -H "X-Webhook-Signature: sha256=$SIG" \
   -d "$BODY"</code></pre>
 
-  <div class="callout callout-warn">
-    <div class="callout-icon">⚠️</div>
-    <div class="callout-body">
-      <strong>Sign the exact bytes you send</strong>
-      Do not re-serialise the payload before signing — use the same bytes that go over the wire. Re-serialising (e.g. <code>JSON.stringify(JSON.parse(body))</code>) may produce a different key order or whitespace, causing the HMAC to fail for a valid request.
-    </div>
-  </div>
+        <div class="callout callout-warn">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-body">
+            <strong>Sign the exact bytes you send</strong>
+            Do not re-serialise the payload before signing — use the same bytes
+            that go over the wire. Re-serialising (e.g.
+            <code>JSON.stringify(JSON.parse(body))</code>) may produce a
+            different key order or whitespace, causing the HMAC to fail for a
+            valid request.
+          </div>
+        </div>
 
-  <h3>Node.js / n8n example</h3>
-  <pre><code>import { createHmac } from "crypto";
+        <h3>Node.js / n8n example</h3>
+        <pre><code>import { createHmac } from "crypto";
 
 const secret = process.env.PROJECTHUB_WEBHOOK_SECRET;
 const body   = JSON.stringify(payload);          // do not re-parse before signing
@@ -370,69 +662,211 @@ await fetch("https://your-domain/api/webhook/ingest", {
   body,
 });</code></pre>
 
-  <h3>Error responses for bad signatures</h3>
-  <div class="compare">
-    <div class="card card-red" style="font-size:.85rem">
-      <strong>503 — secret not configured</strong><br>
-      <code>{"error":"Webhook ingestion is not available: webhook secret is not configured."}</code>
-    </div>
-    <div class="card card-red" style="font-size:.85rem">
-      <strong>401 — wrong or missing signature</strong><br>
-      <code>{"error":"Invalid or missing webhook signature"}</code>
-    </div>
-  </div>
-</section>
+        <h3>Error responses for bad signatures</h3>
+        <div class="compare">
+          <div class="card card-red" style="font-size: 0.85rem">
+            <strong>503 — secret not configured</strong><br />
+            <code
+              >{"error":"Webhook ingestion is not available: webhook secret is
+              not configured."}</code
+            >
+          </div>
+          <div class="card card-red" style="font-size: 0.85rem">
+            <strong>401 — wrong or missing signature</strong><br />
+            <code>{"error":"Invalid or missing webhook signature"}</code>
+          </div>
+        </div>
+      </section>
 
-<!-- ── 4. Schema ── -->
-<section id="payload-schema">
-  <h2 class="section-title"><span class="icon">📋</span> 4 — Full payload schema</h2>
+      <!-- ── 4. Schema ── -->
+      <section id="payload-schema">
+        <h2 class="section-title">
+          <span class="icon">📋</span> 4 — Full payload schema
+        </h2>
 
-  <h3>Top-level envelope</h3>
-  <table class="field-table">
-    <thead><tr><th>Field</th><th>Type</th><th>Required?</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td class="field-name">event</td><td><code>string</code></td><td><span class="pill pill-required">Required</span></td><td>Lifecycle event name. Use <code>task.created</code> to create a task.</td></tr>
-      <tr><td class="field-name">sourcePlatform</td><td><code>string</code></td><td><span class="pill pill-required">Required</span></td><td>Identifies the sending system, e.g. <code>jira</code>, <code>salesforce</code>, <code>n8n</code>. Updates the System Status watchdog for this platform.</td></tr>
-      <tr><td class="field-name">taskData</td><td><code>object</code></td><td><span class="pill pill-optional">Optional</span></td><td>Task fields. If present, all three business-logic required fields inside must also be present. Omit entirely to ping the system status without creating a task.</td></tr>
-      <tr><td class="field-name">meta</td><td><code>any</code></td><td><span class="pill pill-optional">Optional</span></td><td>Arbitrary metadata for logging or future routing. Not persisted to the task.</td></tr>
-    </tbody>
-  </table>
+        <h3>Top-level envelope</h3>
+        <table class="field-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required?</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="field-name">event</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-required">Required</span></td>
+              <td>
+                Lifecycle event name. Use <code>task.created</code> to create a
+                task.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">sourcePlatform</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-required">Required</span></td>
+              <td>
+                Identifies the sending system, e.g. <code>jira</code>,
+                <code>salesforce</code>, <code>n8n</code>. Updates the System
+                Status watchdog for this platform.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">taskData</td>
+              <td><code>object</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>
+                Task fields. If present, all three business-logic required
+                fields inside must also be present. Omit entirely to ping the
+                system status without creating a task.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">meta</td>
+              <td><code>any</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>
+                Arbitrary metadata for logging or future routing. Not persisted
+                to the task.
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-  <h3>taskData fields</h3>
-  <table class="field-table">
-    <thead><tr><th>Field</th><th>Type</th><th>Required?</th><th>Notes</th></tr></thead>
-    <tbody>
-      <tr><td class="field-name">title</td><td><code>string</code></td><td><span class="pill pill-required">Required</span></td><td>Task name. Also required (with <code>projectId</code>) for the task row to be inserted.</td></tr>
-      <tr><td class="field-name">assigneeId</td><td><code>integer | null</code></td><td><span class="pill pill-required">Required (non-null)</span></td><td>Numeric ID of the team member from the Members page. Must not be <code>null</code> or missing.</td></tr>
-      <tr><td class="field-name">resourceRequired</td><td><code>boolean</code></td><td><span class="pill pill-required">Required (truthy)</span></td><td>Flags whether external resources (tools, budget, third-party access) are needed.</td></tr>
-      <tr><td class="field-name">deliveryFormat</td><td><code>string</code></td><td><span class="pill pill-required">Required</span></td><td>How the task output will be delivered. Examples: <code>pull_request</code>, <code>report</code>, <code>document</code>, <code>design_file</code>.</td></tr>
-      <tr><td class="field-name">projectId</td><td><code>integer</code></td><td><span class="pill pill-optional">Optional*</span></td><td>Links the task to a project. Without this, the task is accepted but not inserted into the board.</td></tr>
-      <tr><td class="field-name">description</td><td><code>string</code></td><td><span class="pill pill-optional">Optional</span></td><td>Detailed context. Defaults to empty string.</td></tr>
-      <tr><td class="field-name">status</td><td><code>string</code></td><td><span class="pill pill-optional">Optional</span></td><td><code>todo</code> | <code>in_progress</code> | <code>review</code> | <code>done</code>. Defaults to <code>todo</code>.</td></tr>
-      <tr><td class="field-name">priority</td><td><code>string</code></td><td><span class="pill pill-optional">Optional</span></td><td><code>low</code> | <code>medium</code> | <code>high</code> | <code>urgent</code>. Defaults to <code>medium</code>.</td></tr>
-      <tr><td class="field-name">dueDate</td><td><code>string | null</code></td><td><span class="pill pill-optional">Optional</span></td><td>ISO date string, e.g. <code>"2026-09-30"</code>.</td></tr>
-      <tr><td class="field-name">notifyVia</td><td><code>string</code></td><td><span class="pill pill-optional">Optional</span></td><td>Comma-separated notification channels: <code>"email"</code>, <code>"whatsapp"</code>, <code>"slack"</code>.</td></tr>
-    </tbody>
-  </table>
+        <h3>taskData fields</h3>
+        <table class="field-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required?</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="field-name">title</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-required">Required</span></td>
+              <td>
+                Task name. Also required (with <code>projectId</code>) for the
+                task row to be inserted.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">assigneeId</td>
+              <td><code>integer | null</code></td>
+              <td>
+                <span class="pill pill-required">Required (non-null)</span>
+              </td>
+              <td>
+                Numeric ID of the team member from the Members page. Must not be
+                <code>null</code> or missing.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">resourceRequired</td>
+              <td><code>boolean</code></td>
+              <td><span class="pill pill-required">Required (truthy)</span></td>
+              <td>
+                Flags whether external resources (tools, budget, third-party
+                access) are needed.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">deliveryFormat</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-required">Required</span></td>
+              <td>
+                How the task output will be delivered. Examples:
+                <code>pull_request</code>, <code>report</code>,
+                <code>document</code>, <code>design_file</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">projectId</td>
+              <td><code>integer</code></td>
+              <td><span class="pill pill-optional">Optional*</span></td>
+              <td>
+                Links the task to a project. Without this, the task is accepted
+                but not inserted into the board.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">description</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>Detailed context. Defaults to empty string.</td>
+            </tr>
+            <tr>
+              <td class="field-name">status</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>
+                <code>todo</code> | <code>in_progress</code> |
+                <code>review</code> | <code>done</code>. Defaults to
+                <code>todo</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">priority</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>
+                <code>low</code> | <code>medium</code> | <code>high</code> |
+                <code>urgent</code>. Defaults to <code>medium</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="field-name">dueDate</td>
+              <td><code>string | null</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>ISO date string, e.g. <code>"2026-09-30"</code>.</td>
+            </tr>
+            <tr>
+              <td class="field-name">notifyVia</td>
+              <td><code>string</code></td>
+              <td><span class="pill pill-optional">Optional</span></td>
+              <td>
+                Comma-separated notification channels: <code>"email"</code>,
+                <code>"whatsapp"</code>, <code>"slack"</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-  <p style="font-size:.82rem;color:var(--muted);margin-top:.5rem">* A task with <code>taskData</code> but no <code>projectId</code> passes validation and returns <code>accepted: true</code> with <code>taskId: null</code> — nothing is written to the board.</p>
-</section>
+        <p style="font-size: 0.82rem; color: var(--muted); margin-top: 0.5rem">
+          * A task with <code>taskData</code> but no
+          <code>projectId</code> passes validation and returns
+          <code>accepted: true</code> with <code>taskId: null</code> — nothing
+          is written to the board.
+        </p>
+      </section>
 
-<!-- ── 5. Response ── -->
-<section id="response-shape">
-  <h2 class="section-title"><span class="icon">📨</span> 5 — Response shape &amp; validation errors</h2>
+      <!-- ── 5. Response ── -->
+      <section id="response-shape">
+        <h2 class="section-title">
+          <span class="icon">📨</span> 5 — Response shape &amp; validation
+          errors
+        </h2>
 
-  <p>Every response from both <code>/webhook/ingest</code> and <code>/webhook/test-dispatch</code> follows the same shape:</p>
+        <p>
+          Every response from both <code>/webhook/ingest</code> and
+          <code>/webhook/test-dispatch</code> follows the same shape:
+        </p>
 
-  <pre><code>{
+        <pre><code>{
   "accepted":        boolean,
   "taskId":          number | null,
   "message":         string,
   "validationErrors": string[]     // empty array on success
 }</code></pre>
 
-  <h3>Validation error example</h3>
-  <pre><code>// Request with only title and description (missing 3 required fields)
+        <h3>Validation error example</h3>
+        <pre><code>// Request with only title and description (missing 3 required fields)
 →  HTTP 400
 {
   "accepted": false,
@@ -445,8 +879,8 @@ await fetch("https://your-domain/api/webhook/ingest", {
   ]
 }</code></pre>
 
-  <h3>Success — task created</h3>
-  <pre><code>// All required fields present, projectId and title provided
+        <h3>Success — task created</h3>
+        <pre><code>// All required fields present, projectId and title provided
 →  HTTP 200
 {
   "accepted": true,
@@ -455,8 +889,8 @@ await fetch("https://your-domain/api/webhook/ingest", {
   "validationErrors": []
 }</code></pre>
 
-  <h3>Success — ping only (no taskData)</h3>
-  <pre><code>// Payload with no taskData — updates System Status only
+        <h3>Success — ping only (no taskData)</h3>
+        <pre><code>// Payload with no taskData — updates System Status only
 →  HTTP 200
 {
   "accepted": true,
@@ -464,27 +898,52 @@ await fetch("https://your-domain/api/webhook/ingest", {
   "message": "Event 'heartbeat' from 'salesforce' accepted",
   "validationErrors": []
 }</code></pre>
-</section>
+      </section>
 
-<!-- ── 6. Push to Agent ── -->
-<section id="push-agent">
-  <h2 class="section-title"><span class="icon">🤖</span> 6 — Push Task to Agent (AI team dispatch)</h2>
+      <!-- ── 6. Push to Agent ── -->
+      <section id="push-agent">
+        <h2 class="section-title">
+          <span class="icon">🤖</span> 6 — Push Task to Agent (AI team dispatch)
+        </h2>
 
-  <p>Once a task exists on the board — whether created manually, imported by webhook, or via the task form — any team member can dispatch it to an AI agent worker.</p>
+        <p>
+          Once a task exists on the board — whether created manually, imported
+          by webhook, or via the task form — any team member can dispatch it to
+          an AI agent worker.
+        </p>
 
-  <h3>How to dispatch from ProjectHub</h3>
-  <ul class="steps">
-    <li>Open the <strong>Tasks</strong> page and find the task you want to dispatch.</li>
-    <li>Click the task's action menu (three-dot menu or the task detail panel) and select <strong>Push to Agent</strong>. A dialog opens.</li>
-    <li>The dialog lists all available agent workers (fetched live from <code>GET /api/ai/agents</code>). Each card shows the agent's <strong>name</strong> and <strong>role</strong>.</li>
-    <li>Select the target agent and click <strong>Push to Agent</strong>.</li>
-    <li>A success toast confirms dispatch. The agent receives the full task context via the orchestrator webhook.</li>
-  </ul>
+        <h3>How to dispatch from ProjectHub</h3>
+        <ul class="steps">
+          <li>
+            Open the <strong>Tasks</strong> page and find the task you want to
+            dispatch.
+          </li>
+          <li>
+            Click the task's action menu (three-dot menu or the task detail
+            panel) and select <strong>Push to Agent</strong>. A dialog opens.
+          </li>
+          <li>
+            The dialog lists all available agent workers (fetched live from
+            <code>GET /api/ai/agents</code>). Each card shows the agent's
+            <strong>name</strong> and <strong>role</strong>.
+          </li>
+          <li>
+            Select the target agent and click <strong>Push to Agent</strong>.
+          </li>
+          <li>
+            A success toast confirms dispatch. The agent receives the full task
+            context via the orchestrator webhook.
+          </li>
+        </ul>
 
-  <h3>What the agent receives</h3>
-  <p>The server builds an outbound payload and forwards it to the configured orchestrator URL (<code>AI_ORCHESTRATOR_WEBHOOK_URL</code>) with an HMAC signature:</p>
+        <h3>What the agent receives</h3>
+        <p>
+          The server builds an outbound payload and forwards it to the
+          configured orchestrator URL (<code>AI_ORCHESTRATOR_WEBHOOK_URL</code>)
+          with an HMAC signature:
+        </p>
 
-  <pre><code>{
+        <pre><code>{
   "source": "projecthub",
   "type": "task_dispatch",
   "pushId": "uuid",
@@ -505,56 +964,98 @@ await fetch("https://your-domain/api/webhook/ingest", {
   }
 }</code></pre>
 
-  <h3>Dispatch audit trail</h3>
-  <p>Every dispatch attempt is written to the <code>ai_push_events</code> table with status <code>pending → sent | failed</code>. The Push Task monitoring page shows the history, outcome, and timestamp of every dispatch. Failures trigger an internal alert so no dispatch can silently disappear.</p>
+        <h3>Dispatch audit trail</h3>
+        <p>
+          Every dispatch attempt is written to the
+          <code>ai_push_events</code> table with status
+          <code>pending → sent | failed</code>. The Push Task monitoring page
+          shows the history, outcome, and timestamp of every dispatch. Failures
+          trigger an internal alert so no dispatch can silently disappear.
+        </p>
 
-  <h3>Endpoint reference</h3>
-  <div class="compare">
-    <div class="card card-blue" style="font-size:.85rem">
-      <span class="pill pill-get">GET</span> <span class="pill pill-auth">Team auth</span><br>
-      <code>/api/ai/agents</code><br>
-      <p style="margin-top:.4rem">Returns the list of registered agent workers. Each item has <code>id</code>, <code>name</code>, <code>role</code>, <code>status</code>.</p>
-    </div>
-    <div class="card card-blue" style="font-size:.85rem">
-      <span class="pill pill-post">POST</span> <span class="pill pill-auth">Team auth</span><br>
-      <code>/api/ai/push-task</code><br>
-      <p style="margin-top:.4rem">Dispatches a task to an agent. Body: <code>{ taskId, agentId, agentName }</code>. Returns <code>{ success, message, sentAt, pushId }</code>.</p>
-    </div>
-  </div>
-</section>
+        <h3>Endpoint reference</h3>
+        <div class="compare">
+          <div class="card card-blue" style="font-size: 0.85rem">
+            <span class="pill pill-get">GET</span>
+            <span class="pill pill-auth">Team auth</span><br />
+            <code>/api/ai/agents</code><br />
+            <p style="margin-top: 0.4rem">
+              Returns the list of registered agent workers. Each item has
+              <code>id</code>, <code>name</code>, <code>role</code>,
+              <code>status</code>.
+            </p>
+          </div>
+          <div class="card card-blue" style="font-size: 0.85rem">
+            <span class="pill pill-post">POST</span>
+            <span class="pill pill-auth">Team auth</span><br />
+            <code>/api/ai/push-task</code><br />
+            <p style="margin-top: 0.4rem">
+              Dispatches a task to an agent. Body:
+              <code>{ taskId, agentId, agentName }</code>. Returns
+              <code>{ success, message, sentAt, pushId }</code>.
+            </p>
+          </div>
+        </div>
+      </section>
 
-<!-- ── 7. System Status ── -->
-<section id="system-status">
-  <h2 class="section-title"><span class="icon">💚</span> 7 — System Status integration</h2>
+      <!-- ── 7. System Status ── -->
+      <section id="system-status">
+        <h2 class="section-title">
+          <span class="icon">💚</span> 7 — System Status integration
+        </h2>
 
-  <p>Every accepted webhook — even a payload with no <code>taskData</code> — updates the <code>system_status</code> table for the <code>sourcePlatform</code> value. This powers the <strong>System Status</strong> page in ProjectHub, which shows which external systems are actively connected and when they last synced.</p>
+        <p>
+          Every accepted webhook — even a payload with no
+          <code>taskData</code> — updates the <code>system_status</code> table
+          for the <code>sourcePlatform</code> value. This powers the
+          <strong>System Status</strong> page in ProjectHub, which shows which
+          external systems are actively connected and when they last synced.
+        </p>
 
-  <div class="card card-green">
-    <strong>Use case: heartbeat pings</strong>
-    <p style="margin-top:.4rem;font-size:.88rem">
-      Schedule a lightweight webhook every 5–15 minutes from each external system using only the required envelope fields and <em>no</em> <code>taskData</code>. ProjectHub will mark that platform as <code>connected</code> and update <code>lastSync</code>. The team can immediately spot a disconnected integration without needing to trace logs.
-    </p>
-    <pre style="margin-top:.6rem"><code>{
+        <div class="card card-green">
+          <strong>Use case: heartbeat pings</strong>
+          <p style="margin-top: 0.4rem; font-size: 0.88rem">
+            Schedule a lightweight webhook every 5–15 minutes from each external
+            system using only the required envelope fields and <em>no</em>
+            <code>taskData</code>. ProjectHub will mark that platform as
+            <code>connected</code> and update <code>lastSync</code>. The team
+            can immediately spot a disconnected integration without needing to
+            trace logs.
+          </p>
+          <pre style="margin-top: 0.6rem"><code>{
   "event": "heartbeat",
   "sourcePlatform": "salesforce"
 }</code></pre>
-  </div>
-</section>
+        </div>
+      </section>
 
-<!-- ── 8. End-to-end walkthrough ── -->
-<section id="end-to-end">
-  <h2 class="section-title"><span class="icon">🔁</span> 8 — End-to-end example walkthrough</h2>
+      <!-- ── 8. End-to-end walkthrough ── -->
+      <section id="end-to-end">
+        <h2 class="section-title">
+          <span class="icon">🔁</span> 8 — End-to-end example walkthrough
+        </h2>
 
-  <p>The scenario: an n8n automation detects a new Jira ticket and should create a matching task in ProjectHub, assigned to a team member, and then dispatch it to an AI agent for initial research.</p>
+        <p>
+          The scenario: an n8n automation detects a new Jira ticket and should
+          create a matching task in ProjectHub, assigned to a team member, and
+          then dispatch it to an AI agent for initial research.
+        </p>
 
-  <h3>Step 1 — Look up the assignee ID</h3>
-  <p>In ProjectHub, open <strong>Team</strong> → note the numeric ID next to the member you want. Example: <em>David — ID 3</em>.</p>
+        <h3>Step 1 — Look up the assignee ID</h3>
+        <p>
+          In ProjectHub, open <strong>Team</strong> → note the numeric ID next
+          to the member you want. Example: <em>David — ID 3</em>.
+        </p>
 
-  <h3>Step 2 — Look up the project ID</h3>
-  <p>Open <strong>Projects</strong> → hover or open the target project. The URL or project detail shows the numeric ID. Example: <em>Q4 Roadmap — ID 1</em>.</p>
+        <h3>Step 2 — Look up the project ID</h3>
+        <p>
+          Open <strong>Projects</strong> → hover or open the target project. The
+          URL or project detail shows the numeric ID. Example:
+          <em>Q4 Roadmap — ID 1</em>.
+        </p>
 
-  <h3>Step 3 — Test the payload in the Webhook Tester</h3>
-  <pre><code>{
+        <h3>Step 3 — Test the payload in the Webhook Tester</h3>
+        <pre><code>{
   "event": "task.created",
   "sourcePlatform": "jira",
   "taskData": {
@@ -569,67 +1070,124 @@ await fetch("https://your-domain/api/webhook/ingest", {
     "notifyVia": "email"
   }
 }</code></pre>
-  <p>Confirm the Response panel shows <code>"accepted": true</code> and a <code>taskId</code>.</p>
+        <p>
+          Confirm the Response panel shows <code>"accepted": true</code> and a
+          <code>taskId</code>.
+        </p>
 
-  <h3>Step 4 — Verify the task appeared on the board</h3>
-  <p>Go to <strong>Tasks</strong> → the new task should be visible under the selected project, assigned to David, marked Urgent.</p>
+        <h3>Step 4 — Verify the task appeared on the board</h3>
+        <p>
+          Go to <strong>Tasks</strong> → the new task should be visible under
+          the selected project, assigned to David, marked Urgent.
+        </p>
 
-  <h3>Step 5 — Push to the AI agent</h3>
-  <p>Open the task, click <strong>Push to Agent</strong>, select the target agent, and confirm. The agent receives the full task JSON and begins working.</p>
+        <h3>Step 5 — Push to the AI agent</h3>
+        <p>
+          Open the task, click <strong>Push to Agent</strong>, select the target
+          agent, and confirm. The agent receives the full task JSON and begins
+          working.
+        </p>
 
-  <h3>Step 6 — Wire n8n to the live endpoint</h3>
-  <p>Replace the Tester with an n8n HTTP Request node:</p>
-  <pre><code>URL:     https://your-projecthub-domain/api/webhook/ingest
+        <h3>Step 6 — Wire n8n to the live endpoint</h3>
+        <p>Replace the Tester with an n8n HTTP Request node:</p>
+        <pre><code>URL:     https://your-projecthub-domain/api/webhook/ingest
 Method:  POST
 Headers:
   Content-Type:        application/json
   X-Webhook-Signature: sha256={{ $hmacSha256(JSON.stringify($json.body), $env.PROJECTHUB_WEBHOOK_SECRET) }}
 Body:    {{ JSON.stringify($json.body) }}</code></pre>
-</section>
+      </section>
 
-<!-- ── 9. Tips ── -->
-<section id="tips">
-  <h2 class="section-title"><span class="icon">💡</span> 9 — Tips, limits &amp; security notes</h2>
+      <!-- ── 9. Tips ── -->
+      <section id="tips">
+        <h2 class="section-title">
+          <span class="icon">💡</span> 9 — Tips, limits &amp; security notes
+        </h2>
 
-  <div class="card card-amber">
-    <h3 style="margin-top:0">Security</h3>
-    <ul style="margin-left:1rem;font-size:.9rem;margin-top:.4rem">
-      <li>The <code>PROJECTHUB_WEBHOOK_SECRET</code> is a shared secret — treat it like a password. Rotate it if it leaks.</li>
-      <li>The Tester route (<code>/webhook/test-dispatch</code>) never exposes the secret to the browser. It reuses team JWT auth so only logged-in team members can fire test payloads.</li>
-      <li>HMAC verification uses <code>timingSafeEqual</code> to prevent timing-based signature guessing.</li>
-      <li>If <code>PROJECTHUB_WEBHOOK_SECRET</code> is not set, <em>both</em> routes return 503 — there is no unauthenticated processing path.</li>
-    </ul>
-  </div>
+        <div class="card card-amber">
+          <h3 style="margin-top: 0">Security</h3>
+          <ul style="margin-left: 1rem; font-size: 0.9rem; margin-top: 0.4rem">
+            <li>
+              The <code>PROJECTHUB_WEBHOOK_SECRET</code> is a shared secret —
+              treat it like a password. Rotate it if it leaks.
+            </li>
+            <li>
+              The Tester route (<code>/webhook/test-dispatch</code>) never
+              exposes the secret to the browser. It reuses team JWT auth so only
+              logged-in team members can fire test payloads.
+            </li>
+            <li>
+              HMAC verification uses <code>timingSafeEqual</code> to prevent
+              timing-based signature guessing.
+            </li>
+            <li>
+              If <code>PROJECTHUB_WEBHOOK_SECRET</code> is not set,
+              <em>both</em> routes return 503 — there is no unauthenticated
+              processing path.
+            </li>
+          </ul>
+        </div>
 
-  <div class="card card-blue">
-    <h3 style="margin-top:0">Common pitfalls</h3>
-    <ul style="margin-left:1rem;font-size:.9rem;margin-top:.4rem">
-      <li><strong>Missing <code>projectId</code></strong> — a valid payload with all three required fields but no <code>projectId</code> returns <code>accepted: true, taskId: null</code>. The task is not created.</li>
-      <li><strong><code>assigneeId: null</code></strong> — explicitly setting <code>null</code> fails validation the same as omitting the field. Must be a non-null integer.</li>
-      <li><strong>Re-serialising before signing</strong> — always sign the original body string, not a re-parsed version of it.</li>
-      <li><strong>Wrong assigneeId</strong> — IDs are internal numeric IDs, not usernames or email addresses. Check the Team page.</li>
-    </ul>
-  </div>
+        <div class="card card-blue">
+          <h3 style="margin-top: 0">Common pitfalls</h3>
+          <ul style="margin-left: 1rem; font-size: 0.9rem; margin-top: 0.4rem">
+            <li>
+              <strong>Missing <code>projectId</code></strong> — a valid payload
+              with all three required fields but no
+              <code>projectId</code> returns
+              <code>accepted: true, taskId: null</code>. The task is not
+              created.
+            </li>
+            <li>
+              <strong><code>assigneeId: null</code></strong> — explicitly
+              setting <code>null</code> fails validation the same as omitting
+              the field. Must be a non-null integer.
+            </li>
+            <li>
+              <strong>Re-serialising before signing</strong> — always sign the
+              original body string, not a re-parsed version of it.
+            </li>
+            <li>
+              <strong>Wrong assigneeId</strong> — IDs are internal numeric IDs,
+              not usernames or email addresses. Check the Team page.
+            </li>
+          </ul>
+        </div>
 
-  <div class="card card-green">
-    <h3 style="margin-top:0">Rate limiting</h3>
-    <p style="font-size:.9rem;margin-top:.2rem">Both ingest routes share the API server's global rate limiter. For high-volume integrations, send payloads in batches or back off on 429 responses.</p>
-  </div>
+        <div class="card card-green">
+          <h3 style="margin-top: 0">Rate limiting</h3>
+          <p style="font-size: 0.9rem; margin-top: 0.2rem">
+            Both ingest routes share the API server's global rate limiter. For
+            high-volume integrations, send payloads in batches or back off on
+            429 responses.
+          </p>
+        </div>
 
-  <div class="callout callout-ok">
-    <div class="callout-icon">✅</div>
-    <div class="callout-body">
-      <strong>Assignment emails on webhook-created tasks</strong>
-      Tasks created through the webhook ingest route are written directly to the database and do not currently trigger the automatic assignment email that fires on the task create/update UI form. To send an assignment notification, update the task via the ProjectHub task edit flow after it is created.
+        <div class="callout callout-ok">
+          <div class="callout-icon">✅</div>
+          <div class="callout-body">
+            <strong>Assignment emails on webhook-created tasks</strong>
+            Tasks created through the webhook ingest route are written directly
+            to the database and do not currently trigger the automatic
+            assignment email that fires on the task create/update UI form. To
+            send an assignment notification, update the task via the ProjectHub
+            task edit flow after it is created.
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Ultra-Clear / ProjectHub — Internal Engineering Reference
+          &nbsp;·&nbsp; Generated August 2026
+        </p>
+        <p style="margin-top: 0.3rem">
+          Live endpoints: <code>/api/webhook/ingest</code> &nbsp;·&nbsp;
+          <code>/api/webhook/test-dispatch</code> &nbsp;·&nbsp;
+          <code>/api/ai/agents</code> &nbsp;·&nbsp;
+          <code>/api/ai/push-task</code>
+        </p>
+      </footer>
     </div>
-  </div>
-</section>
-
-<footer>
-  <p>Ultra-Clear / ProjectHub — Internal Engineering Reference &nbsp;·&nbsp; Generated August 2026</p>
-  <p style="margin-top:.3rem">Live endpoints: <code>/api/webhook/ingest</code> &nbsp;·&nbsp; <code>/api/webhook/test-dispatch</code> &nbsp;·&nbsp; <code>/api/ai/agents</code> &nbsp;·&nbsp; <code>/api/ai/push-task</code></p>
-</footer>
-
-</div>
-</body>
+  </body>
 </html>
