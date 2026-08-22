@@ -458,6 +458,158 @@ describe('serve.js production server', () => {
       rmSync(rebuildRoot, { recursive: true, force: true });
     }
   });
+
+  // ── 9. Deep-link during rebuild gap: bundle deleted, replacement not yet written ──
+
+  test('deep-link GET with Accept: text/html returns the landing page when the bundle directory has been deleted but not yet replaced', async () => {
+    // This test covers the window between old-bundle removal and new-bundle
+    // arrival.  The server must never crash or return a blank response; instead
+    // it should fall back to the landing page so the user sees something
+    // meaningful rather than an empty page or a 500.
+
+    const gapRoot = mkdtempSync(join(tmpdir(), 'uc-serve-gap-'));
+    const gapPort = await findFreePort();
+
+    // Start with a valid bundle so the server warms its cache.
+    const initialTimestamp = '1000000000-00001';
+    const bundleDir = join(
+      gapRoot,
+      initialTimestamp,
+      '_expo',
+      'static',
+      'js',
+      'web',
+    );
+    mkdirSync(bundleDir, { recursive: true });
+    writeFileSync(
+      join(bundleDir, 'bundle.js'),
+      '// initial bundle\nconsole.log("initial");\n',
+    );
+
+    const gapServer = spawn(process.execPath, [SERVE_JS], {
+      env: {
+        ...process.env,
+        PORT: String(gapPort),
+        BASE_PATH,
+        STATIC_ROOT: gapRoot,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    try {
+      await waitForReady(gapPort);
+
+      // Warm the cache: the server now knows about the initial bundle.
+      const warmRes = await fetch(`http://127.0.0.1:${gapPort}${BASE_PATH}/`);
+      assert.equal(warmRes.status, 200, 'expected HTTP 200 before bundle removal');
+
+      // Simulate the rebuild gap: delete the bundle directory without writing
+      // a replacement — exactly the intermediate state the task covers.
+      rmSync(join(gapRoot, initialTimestamp), { recursive: true, force: true });
+
+      // A deep-link request (Accept: text/html) must NOT crash or return a
+      // blank page; it should fall back to the landing page gracefully.
+      const deepLinkRes = await fetch(
+        `http://127.0.0.1:${gapPort}${BASE_PATH}/guide/filter-care`,
+        { headers: { accept: 'text/html,application/xhtml+xml,*/*' } },
+      );
+
+      assert.equal(
+        deepLinkRes.status,
+        200,
+        'deep-link during rebuild gap should return HTTP 200 (landing page), not a 500 or crash',
+      );
+      assert.match(
+        deepLinkRes.headers.get('content-type') ?? '',
+        /text\/html/,
+        'deep-link during rebuild gap should return text/html (landing page)',
+      );
+
+      const body = await deepLinkRes.text();
+      assert.ok(
+        body.trim().length > 0,
+        'landing-page response body must not be empty during the rebuild gap',
+      );
+      // The landing page must NOT embed a <script src="…bundle.js"> reference
+      // because no bundle exists yet; a dangling bundle reference would cause a
+      // blank/broken page in the browser.  Note: the landing page may contain
+      // other <script src> tags (e.g. QR-code library) which are fine.
+      const bundleScriptMatch = body.match(
+        /<script\b[^>]*\bsrc="([^"]*bundle\.js[^"]*)"[^>]*>/,
+      );
+      assert.equal(
+        bundleScriptMatch,
+        null,
+        'landing page served during rebuild gap must not embed a <script src> pointing to a missing bundle.js',
+      );
+
+      // ── Recovery phase: write the replacement bundle ─────────────────────
+      // Simulate the rebuild completing — write a new timestamped bundle.
+      // The server must automatically discover it on the next request without
+      // a restart; the cached null from the gap must not be sticky.
+      const replacementTimestamp = '2000000000-00002';
+      const replacementBundleDir = join(
+        gapRoot,
+        replacementTimestamp,
+        '_expo',
+        'static',
+        'js',
+        'web',
+      );
+      mkdirSync(replacementBundleDir, { recursive: true });
+      writeFileSync(
+        join(replacementBundleDir, 'bundle.js'),
+        '// replacement bundle\nconsole.log("replacement");\n',
+      );
+
+      // Next deep-link request must serve the web-app HTML (with the new
+      // bundle URL), not the landing page, because the bundle now exists.
+      const recoveryRes = await fetch(
+        `http://127.0.0.1:${gapPort}${BASE_PATH}/guide/filter-care`,
+        { headers: { accept: 'text/html,application/xhtml+xml,*/*' } },
+      );
+
+      assert.equal(
+        recoveryRes.status,
+        200,
+        'deep-link after bundle replacement should return HTTP 200',
+      );
+
+      const recoveryHtml = await recoveryRes.text();
+      const recoverySrc = extractScriptSrc(recoveryHtml);
+      assert.ok(
+        recoverySrc !== null,
+        'HTML after recovery should contain a <script src="…"> pointing to the new bundle',
+      );
+      assert.match(
+        recoverySrc,
+        /bundle\.js$/,
+        'recovered <script src> should end with bundle.js',
+      );
+      assert.ok(
+        recoverySrc.includes(replacementTimestamp),
+        `recovered bundle URL should contain the replacement timestamp "${replacementTimestamp}"; got: ${recoverySrc}`,
+      );
+
+      // Confirm the embedded bundle URL is actually fetchable.
+      const recoveryBundleRes = await fetch(
+        `http://127.0.0.1:${gapPort}${recoverySrc}`,
+      );
+      assert.equal(
+        recoveryBundleRes.status,
+        200,
+        `expected HTTP 200 fetching recovered bundle at ${recoverySrc}`,
+      );
+      assert.match(
+        recoveryBundleRes.headers.get('content-type') ?? '',
+        /application\/javascript/,
+        'recovered bundle should be served with application/javascript content-type',
+      );
+    } finally {
+      gapServer.kill();
+      rmSync(gapRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Absent STATIC_ROOT suite ─────────────────────────────────────────────────

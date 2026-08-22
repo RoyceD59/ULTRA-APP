@@ -86,12 +86,17 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
  * Module-level cache for the web bundle path.
  *
  * `undefined`  → not yet resolved (initial state before startup scan).
- * `null`       → resolved; no bundle found in static-build.
+ * `null`       → last scan found no bundle; will rescan on the next call.
  * `string`     → absolute path to bundle.js that existed at scan time.
  *
  * The cached string path is re-validated with existsSync on each call so
  * that a rebuild (which replaces the timestamped directory) automatically
  * triggers a fresh scan rather than serving a stale, missing file.
+ *
+ * A cached `null` is never treated as a permanent result: a rescan is always
+ * attempted so that a newly-written replacement bundle is discovered without a
+ * server restart — essential for the window between old-bundle removal and
+ * new-bundle arrival during a rebuild cycle.
  */
 let _cachedWebBundlePath;
 
@@ -122,14 +127,22 @@ function scanForWebBundlePath() {
 }
 
 function getWebBundlePath() {
-  // Return the cached path when it is still present on disk.
-  if (_cachedWebBundlePath !== undefined) {
-    if (_cachedWebBundlePath === null || fs.existsSync(_cachedWebBundlePath)) {
-      return _cachedWebBundlePath;
-    }
-    // Cached path no longer exists (e.g. after a rebuild) — rescan below.
+  // Return the cached path only when it is a non-null string that still exists
+  // on disk — the common case where the bundle is stable between requests.
+  if (
+    _cachedWebBundlePath !== undefined &&
+    _cachedWebBundlePath !== null &&
+    fs.existsSync(_cachedWebBundlePath)
+  ) {
+    return _cachedWebBundlePath;
   }
 
+  // Rescan when:
+  //   (a) no cache yet (first request),
+  //   (b) the cached file was deleted (rebuild started), or
+  //   (c) the previous scan found nothing (rebuild gap).
+  // This ensures a newly-written replacement bundle is picked up automatically
+  // without requiring a server restart.
   _cachedWebBundlePath = scanForWebBundlePath();
   return _cachedWebBundlePath;
 }
@@ -221,8 +234,13 @@ const server = http.createServer((req, res) => {
   if (serveStaticFile(pathname, res)) return;
 
   const acceptsHtml = req.headers.accept?.includes('text/html');
-  if (req.method === 'GET' && acceptsHtml && serveWebApp(res, webBundlePath)) {
-    return;
+  if (req.method === 'GET' && acceptsHtml) {
+    // Serve the web bundle when one is available; fall back to the landing page
+    // when the bundle is absent (e.g. the window between old-bundle removal and
+    // new-bundle arrival during a rebuild).  This prevents a blank or 404
+    // response for deep-link navigations during that intermediate state.
+    if (serveWebApp(res, webBundlePath)) return;
+    return serveLandingPage(req, res, landingPageTemplate, appName);
   }
 
   res.writeHead(404);
