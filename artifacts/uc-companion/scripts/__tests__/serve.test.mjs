@@ -714,3 +714,90 @@ describe('serve.js — absent STATIC_ROOT', () => {
     );
   });
 });
+
+// ── Empty STATIC_ROOT suite ──────────────────────────────────────────────────
+// Covers the second null-return path in scanForWebBundlePath(): the directory
+// exists but contains no timestamped subdirectories with a bundle.js.
+
+describe('serve.js — empty STATIC_ROOT (directory exists, no build output)', () => {
+  /** @type {import('node:child_process').ChildProcess} */
+  let serverProcess;
+  let port;
+  /** @type {string} */
+  let emptyRoot;
+
+  before(async () => {
+    // Create the directory so existsSync returns true, but leave it empty —
+    // scanForWebBundlePath() will find no timestamped dirs and return null.
+    emptyRoot = mkdtempSync(join(tmpdir(), 'uc-serve-emptyroot-'));
+
+    port = await findFreePort();
+    serverProcess = spawn(process.execPath, [SERVE_JS], {
+      env: {
+        ...process.env,
+        PORT: String(port),
+        BASE_PATH,
+        STATIC_ROOT: emptyRoot,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    const stderrChunks = [];
+    serverProcess.stderr.on('data', (d) => stderrChunks.push(d));
+    serverProcess.on('exit', (code) => {
+      if (code && code !== 0) {
+        process.stderr.write(Buffer.concat(stderrChunks));
+      }
+    });
+
+    await waitForReady(port);
+  });
+
+  after(() => {
+    serverProcess?.kill();
+    if (emptyRoot) rmSync(emptyRoot, { recursive: true, force: true });
+  });
+
+  /** Convenience wrapper that always targets the empty-root server. */
+  function get(urlPath, headers = {}) {
+    return fetch(`http://127.0.0.1:${port}${urlPath}`, { headers });
+  }
+
+  // ── 1. Root path returns the landing page (no bundle script tag) ──────────
+
+  test('GET / returns HTTP 200 with a landing page and no <script src="…bundle.js"> when STATIC_ROOT is empty', async () => {
+    const res = await get(`${BASE_PATH}/`);
+
+    assert.equal(
+      res.status,
+      200,
+      'expected HTTP 200 for landing page even when STATIC_ROOT has no build output',
+    );
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /text\/html/,
+      'expected text/html content-type for landing page',
+    );
+
+    const html = await res.text();
+
+    // The landing page may include its own <script> tags (e.g. QR-code library),
+    // but must NOT contain a <script src="…bundle.js"> injected by serveWebApp().
+    const bundleSrcMatch = html.match(/<script\b[^>]*\bsrc="([^"]*bundle\.js[^"]*)"[^>]*>/);
+    assert.equal(
+      bundleSrcMatch,
+      null,
+      'landing page must not contain a <script src="…bundle.js"> tag when STATIC_ROOT has no build output',
+    );
+  });
+
+  // ── 2. Health-check is unaffected by the empty directory ─────────────────
+
+  test('GET /status returns "ok" when STATIC_ROOT exists but has no build output', async () => {
+    const res = await get(`${BASE_PATH}/status`);
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for /status');
+    const body = await res.text();
+    assert.equal(body, 'ok', 'expected body to be "ok"');
+  });
+});
