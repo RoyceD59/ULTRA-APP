@@ -1,0 +1,228 @@
+/**
+ * End-to-end tests for the production serve.js server.
+ *
+ * The suite forms a true document → bundle chain:
+ *
+ *  1. GET /uc-companion/  → HTML contains <script src="…bundle.js">
+ *  2. Fetch the exact src URL extracted from that HTML → HTTP 200,
+ *     content-type: application/javascript
+ *  3. GET /uc-companion/guide/filter-care (with Accept: text/html) also
+ *     returns HTML whose <script src> resolves to the same bundle URL
+ *  4. GET /uc-companion/status → "ok"
+ *
+ * The server is started against a minimal temporary static-build fixture so
+ * the test is self-contained and does not depend on a previously-built
+ * artefact.
+ */
+
+import { test, describe, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import net from 'node:net';
+
+const SERVE_JS = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'server',
+  'serve.js',
+);
+
+const BASE_PATH = '/uc-companion';
+
+/** Ask the OS for an available TCP port. */
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, '127.0.0.1', () => {
+      const port = /** @type {net.AddressInfo} */ (srv.address()).port;
+      srv.close(() => resolve(port));
+    });
+    srv.on('error', reject);
+  });
+}
+
+/** Poll /status until the server responds or the timeout elapses. */
+async function waitForReady(port, maxWaitMs = 8000) {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}${BASE_PATH}/status`);
+      if (res.ok) return;
+    } catch {
+      /* not yet */
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(
+    `serve.js did not respond on port ${port} within ${maxWaitMs} ms`,
+  );
+}
+
+/**
+ * Extract the first <script src="…"> value from an HTML string.
+ * Returns null if none found.
+ * @param {string} html
+ */
+function extractScriptSrc(html) {
+  const match = html.match(/<script\b[^>]*\bsrc="([^"]+)"[^>]*>/);
+  return match ? match[1] : null;
+}
+
+describe('serve.js production server', () => {
+  /** @type {import('node:child_process').ChildProcess} */
+  let serverProcess;
+  let port;
+  let staticRoot;
+
+  /**
+   * The bundle URL extracted from the root HTML response.
+   * e.g. /uc-companion/1234567890-99999/_expo/static/js/web/bundle.js
+   * Set during the before() hook so all tests share the real document-derived URL.
+   * @type {string}
+   */
+  let bundleSrcFromRoot;
+
+  before(async () => {
+    // ----- build a minimal static-build fixture -----
+    staticRoot = mkdtempSync(join(tmpdir(), 'uc-serve-test-'));
+
+    const timestamp = '1234567890-99999';
+    const webBundleDir = join(
+      staticRoot,
+      timestamp,
+      '_expo',
+      'static',
+      'js',
+      'web',
+    );
+    mkdirSync(webBundleDir, { recursive: true });
+    writeFileSync(
+      join(webBundleDir, 'bundle.js'),
+      '// minimal test bundle\nconsole.log("uc-companion-web");\n',
+    );
+
+    // ----- start the server -----
+    port = await findFreePort();
+    serverProcess = spawn(process.execPath, [SERVE_JS], {
+      env: {
+        ...process.env,
+        PORT: String(port),
+        BASE_PATH,
+        STATIC_ROOT: staticRoot,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // Surface server stderr only when the process exits non-zero.
+    const stderrChunks = [];
+    serverProcess.stderr.on('data', (d) => stderrChunks.push(d));
+    serverProcess.on('exit', (code) => {
+      if (code && code !== 0) {
+        process.stderr.write(Buffer.concat(stderrChunks));
+      }
+    });
+
+    await waitForReady(port);
+
+    // ----- fetch root HTML and extract the bundle src once -----
+    // All subsequent tests that need the bundle URL reuse this value so
+    // they exercise the actual document-to-bundle path.
+    const rootRes = await fetch(`http://127.0.0.1:${port}${BASE_PATH}/`);
+    const rootHtml = await rootRes.text();
+    const src = extractScriptSrc(rootHtml);
+    if (!src) {
+      throw new Error(
+        'Could not extract <script src="…"> from root HTML during test setup',
+      );
+    }
+    bundleSrcFromRoot = src;
+  });
+
+  after(() => {
+    serverProcess?.kill();
+    if (staticRoot) rmSync(staticRoot, { recursive: true, force: true });
+  });
+
+  /** Convenience wrapper that always targets the local server. */
+  function get(path, headers = {}) {
+    return fetch(`http://127.0.0.1:${port}${path}`, { headers });
+  }
+
+  // ── 1. Root path returns HTML with a <script src="…bundle.js"> ──────────
+
+  test('GET /uc-companion/ returns HTML containing a <script src="…/bundle.js"> tag', async () => {
+    const res = await get(`${BASE_PATH}/`);
+
+    assert.equal(res.status, 200, 'expected HTTP 200');
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /text\/html/,
+      'expected text/html content-type',
+    );
+
+    const html = await res.text();
+    const src = extractScriptSrc(html);
+    assert.ok(src !== null, 'HTML should contain a <script src="…"> tag');
+    assert.match(src, /bundle\.js$/, '<script src> should end with bundle.js');
+  });
+
+  // ── 2. The src extracted from root HTML fetches a real JS file ───────────
+
+  test('The <script src> from root HTML fetches HTTP 200 with content-type: application/javascript', async () => {
+    // bundleSrcFromRoot is the *actual* URL the server embedded in the HTML,
+    // e.g. /uc-companion/1234567890-99999/_expo/static/js/web/bundle.js
+    assert.ok(
+      bundleSrcFromRoot,
+      'bundleSrcFromRoot must have been set during before()',
+    );
+    assert.match(bundleSrcFromRoot, /bundle\.js$/, 'src should end with bundle.js');
+
+    const res = await get(bundleSrcFromRoot);
+
+    assert.equal(res.status, 200, `expected HTTP 200 fetching ${bundleSrcFromRoot}`);
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /application\/javascript/,
+      'expected application/javascript content-type for bundle URL',
+    );
+  });
+
+  // ── 3. Deep-link paths fall back to the same web bundle HTML ─────────────
+
+  test('GET /uc-companion/guide/filter-care serves HTML whose <script src> resolves to the same bundle', async () => {
+    const res = await get(`${BASE_PATH}/guide/filter-care`, {
+      accept: 'text/html,application/xhtml+xml,*/*',
+    });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for deep-link path');
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /text\/html/,
+      'expected text/html content-type for deep-link path',
+    );
+
+    const html = await res.text();
+    const src = extractScriptSrc(html);
+    assert.ok(src !== null, 'deep-link HTML should contain a <script src="…"> tag');
+    assert.equal(
+      src,
+      bundleSrcFromRoot,
+      'deep-link HTML should embed the same bundle URL as the root page',
+    );
+  });
+
+  // ── 4. Health-check endpoint ──────────────────────────────────────────────
+
+  test('GET /uc-companion/status returns "ok"', async () => {
+    const res = await get(`${BASE_PATH}/status`);
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for /status');
+    const body = await res.text();
+    assert.equal(body, 'ok', 'expected body to be "ok"');
+  });
+});

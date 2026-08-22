@@ -13,7 +13,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
+const STATIC_ROOT =
+  process.env.STATIC_ROOT || path.resolve(__dirname, '..', 'static-build');
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
 
