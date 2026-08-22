@@ -106,6 +106,32 @@ describe('serve.js production server', () => {
       '// minimal test bundle\nconsole.log("uc-companion-web");\n',
     );
 
+    // ----- create ios and android manifest fixtures -----
+    // Mirrors the shape written by build.js updateManifests():
+    //   launchAsset.url is the absolute bundle URL embedded during the build.
+    for (const platform of ['ios', 'android']) {
+      const platformDir = join(staticRoot, platform);
+      mkdirSync(platformDir, { recursive: true });
+      writeFileSync(
+        join(platformDir, 'manifest.json'),
+        JSON.stringify(
+          {
+            launchAsset: {
+              url: `https://example.com${BASE_PATH}/${timestamp}/_expo/static/js/${platform}/bundle.js`,
+              key: `bundle-${timestamp}`,
+            },
+            assets: [],
+            extra: {
+              expoClient: { hostUri: 'example.com' },
+              expoGo: { debuggerHost: 'example.com', packagerOpts: { dev: false } },
+            },
+          },
+          null,
+          2,
+        ),
+      );
+    }
+
     // ----- start the server -----
     port = await findFreePort();
     serverProcess = spawn(process.execPath, [SERVE_JS], {
@@ -224,5 +250,106 @@ describe('serve.js production server', () => {
     assert.equal(res.status, 200, 'expected HTTP 200 for /status');
     const body = await res.text();
     assert.equal(body, 'ok', 'expected body to be "ok"');
+  });
+
+  // ── 5. iOS manifest route ─────────────────────────────────────────────────
+
+  test('GET / with expo-platform: ios returns 200 JSON with expo-protocol-version header', async () => {
+    const res = await get(`${BASE_PATH}/`, { 'expo-platform': 'ios' });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for iOS manifest');
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /application\/json/,
+      'expected application/json content-type for iOS manifest',
+    );
+    assert.equal(
+      res.headers.get('expo-protocol-version'),
+      '1',
+      'expected expo-protocol-version: 1 header for iOS manifest',
+    );
+  });
+
+  test('iOS manifest launchAsset.url points to the expected bundle path', async () => {
+    const res = await get(`${BASE_PATH}/`, { 'expo-platform': 'ios' });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for iOS manifest');
+    const manifest = await res.json();
+    assert.ok(
+      manifest.launchAsset && typeof manifest.launchAsset.url === 'string',
+      'iOS manifest should have a launchAsset.url string',
+    );
+    assert.match(
+      manifest.launchAsset.url,
+      /\/_expo\/static\/js\/ios\/bundle\.js$/,
+      'iOS manifest launchAsset.url should point to the ios bundle.js',
+    );
+  });
+
+  // ── 6. Android manifest route ─────────────────────────────────────────────
+
+  test('GET / with expo-platform: android returns 200 JSON with expo-protocol-version header', async () => {
+    const res = await get(`${BASE_PATH}/`, { 'expo-platform': 'android' });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for Android manifest');
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /application\/json/,
+      'expected application/json content-type for Android manifest',
+    );
+    assert.equal(
+      res.headers.get('expo-protocol-version'),
+      '1',
+      'expected expo-protocol-version: 1 header for Android manifest',
+    );
+  });
+
+  test('Android manifest launchAsset.url points to the expected bundle path', async () => {
+    const res = await get(`${BASE_PATH}/`, { 'expo-platform': 'android' });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for Android manifest');
+    const manifest = await res.json();
+    assert.ok(
+      manifest.launchAsset && typeof manifest.launchAsset.url === 'string',
+      'Android manifest should have a launchAsset.url string',
+    );
+    assert.match(
+      manifest.launchAsset.url,
+      /\/_expo\/static\/js\/android\/bundle\.js$/,
+      'Android manifest launchAsset.url should point to the android bundle.js',
+    );
+  });
+
+  // ── 7. Manifest route: missing manifest returns 404 ───────────────────────
+
+  test('GET / with expo-platform: ios returns 404 when manifest.json is absent', async () => {
+    // Start a separate server instance with an empty static root so there is
+    // no ios/manifest.json.  We reuse the same SERVE_JS but point it at a
+    // fresh, empty tmpdir.
+    const emptyRoot = mkdtempSync(join(tmpdir(), 'uc-serve-empty-'));
+    const emptyPort = await findFreePort();
+    const emptyServer = spawn(process.execPath, [SERVE_JS], {
+      env: {
+        ...process.env,
+        PORT: String(emptyPort),
+        BASE_PATH,
+        STATIC_ROOT: emptyRoot,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    try {
+      await waitForReady(emptyPort);
+      const res = await fetch(`http://127.0.0.1:${emptyPort}${BASE_PATH}/`, {
+        headers: { 'expo-platform': 'ios' },
+      });
+      assert.equal(
+        res.status,
+        404,
+        'expected HTTP 404 when ios/manifest.json does not exist',
+      );
+    } finally {
+      emptyServer.kill();
+      rmSync(emptyRoot, { recursive: true, force: true });
+    }
   });
 });
