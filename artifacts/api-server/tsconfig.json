@@ -7,6 +7,7 @@
     "rootDir": "src",
     "types": ["node"]
   },
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
   "include": ["src"],
   "references": [
     {

@@ -125,7 +125,14 @@ export function LifespanAuditWarning() {
             const isRepeat = (p.alertCount ?? 0) > 1;
             return (
               <li key={p.id} className="text-sm flex flex-wrap items-center gap-2">
-                <span className="font-medium text-foreground">{p.name}</span>
+                <a
+                  href={`https://ucfilters.com/wp-admin/post.php?post=${p.id}&action=edit`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:underline"
+                >
+                  {p.name}
+                </a>
                 {p.sku && (
                   <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{p.sku}</span>
                 )}
