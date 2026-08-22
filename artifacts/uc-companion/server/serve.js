@@ -81,6 +81,58 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
   res.end(html);
 }
 
+function getWebBundlePath() {
+  if (!fs.existsSync(STATIC_ROOT)) return null;
+
+  const buildDirectories = fs
+    .readdirSync(STATIC_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+
+  for (const buildDirectory of buildDirectories) {
+    const bundlePath = path.join(
+      STATIC_ROOT,
+      buildDirectory,
+      '_expo',
+      'static',
+      'js',
+      'web',
+      'bundle.js',
+    );
+    if (fs.existsSync(bundlePath)) return bundlePath;
+  }
+
+  return null;
+}
+
+function serveWebApp(res, webBundlePath) {
+  if (!webBundlePath) return false;
+
+  const relativeBundlePath = path
+    .relative(STATIC_ROOT, webBundlePath)
+    .split(path.sep)
+    .join('/');
+  const scriptUrl = `${basePath}/${relativeBundlePath}`;
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${getAppName()}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="${scriptUrl}"></script>
+  </body>
+</html>`;
+
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  res.end(html);
+  return true;
+}
+
 function serveStaticFile(urlPath, res) {
   const safePath = path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, '');
   const filePath = path.join(STATIC_ROOT, safePath);
@@ -88,13 +140,11 @@ function serveStaticFile(urlPath, res) {
   if (!filePath.startsWith(STATIC_ROOT)) {
     res.writeHead(403);
     res.end('Forbidden');
-    return;
+    return true;
   }
 
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    res.writeHead(404);
-    res.end('Not Found');
-    return;
+    return false;
   }
 
   const ext = path.extname(filePath).toLowerCase();
@@ -102,6 +152,7 @@ function serveStaticFile(urlPath, res) {
   const content = fs.readFileSync(filePath);
   res.writeHead(200, { 'content-type': contentType });
   res.end(content);
+  return true;
 }
 
 const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
@@ -115,6 +166,14 @@ const server = http.createServer((req, res) => {
     pathname = pathname.slice(basePath.length) || '/';
   }
 
+  if (pathname === '/status') {
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('ok');
+    return;
+  }
+
+  const webBundlePath = getWebBundlePath();
+
   if (pathname === '/' || pathname === '/manifest') {
     const platform = req.headers['expo-platform'];
     if (platform === 'ios' || platform === 'android') {
@@ -122,11 +181,20 @@ const server = http.createServer((req, res) => {
     }
 
     if (pathname === '/') {
+      if (serveWebApp(res, webBundlePath)) return;
       return serveLandingPage(req, res, landingPageTemplate, appName);
     }
   }
 
-  serveStaticFile(pathname, res);
+  if (serveStaticFile(pathname, res)) return;
+
+  const acceptsHtml = req.headers.accept?.includes('text/html');
+  if (req.method === 'GET' && acceptsHtml && serveWebApp(res, webBundlePath)) {
+    return;
+  }
+
+  res.writeHead(404);
+  res.end('Not Found');
 });
 
 const port = parseInt(process.env.PORT || '3000', 10);

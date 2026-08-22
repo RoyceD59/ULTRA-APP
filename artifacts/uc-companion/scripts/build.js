@@ -1,10 +1,12 @@
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
 let metroProcess = null;
+let metroPort = null;
 
 const projectRoot = path.resolve(__dirname, '..');
 
@@ -86,6 +88,7 @@ function prepareDirectories(timestamp) {
   const dirs = [
     path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'ios'),
     path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'android'),
+    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'web'),
     path.join(staticBuild, 'ios'),
     path.join(staticBuild, 'android'),
   ];
@@ -114,9 +117,79 @@ function clearMetroCache() {
   console.log('Cache cleared');
 }
 
+function metroUrl(pathname = '/') {
+  if (!metroPort) {
+    throw new Error('Metro port has not been assigned');
+  }
+
+  return new URL(pathname, `http://127.0.0.1:${metroPort}`);
+}
+
+function parseConfiguredMetroPort() {
+  const value = process.env.METRO_PORT;
+  if (!value) return null;
+
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(
+      `METRO_PORT must be 0 (auto-select) or an integer between 1 and 65535: ${value}`,
+    );
+  }
+  return port;
+}
+
+function reserveAvailablePort(port) {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+
+    const onError = (error) => {
+      probe.removeListener('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      const address = probe.address();
+      const assignedPort =
+        address && typeof address === 'object' ? address.port : null;
+
+      probe.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        if (!assignedPort) {
+          reject(new Error('Could not determine the available Metro port'));
+          return;
+        }
+        resolve(assignedPort);
+      });
+    };
+
+    probe.once('error', onError);
+    probe.once('listening', onListening);
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+async function findMetroPort() {
+  const configuredPort = parseConfiguredMetroPort();
+  if (configuredPort) {
+    try {
+      return await reserveAvailablePort(configuredPort);
+    } catch (error) {
+      if (error.code !== 'EADDRINUSE') throw error;
+      console.warn(
+        `METRO_PORT=${configuredPort} is already in use; selecting an ephemeral port`,
+      );
+    }
+  }
+
+  // Port 0 asks the operating system for an available ephemeral port.
+  return reserveAvailablePort(0);
+}
+
 async function checkMetroHealth() {
   try {
-    const response = await fetch('http://localhost:8081/status', {
+    const response = await fetch(metroUrl('/status'), {
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
@@ -130,13 +203,10 @@ function getExpoPublicReplId() {
 }
 
 async function startMetro(expoPublicDomain, expoPublicReplId) {
-  const isRunning = await checkMetroHealth();
-  if (isRunning) {
-    console.log('Metro already running');
-    return;
-  }
+  metroPort = await findMetroPort();
 
   console.log('Starting Metro...');
+  console.log(`Metro port: ${metroPort}`);
   console.log(`Setting EXPO_PUBLIC_DOMAIN=${expoPublicDomain}`);
   // Clerk (social sign-in): forward the publishable key and construct the
   // production proxy URL from the deployment domain.
@@ -150,6 +220,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
     EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || '',
     EXPO_PUBLIC_CLERK_PROXY_URL: clerkProxyUrl,
+    METRO_PORT: String(metroPort),
   };
 
   if (expoPublicReplId) {
@@ -158,7 +229,16 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
 
   metroProcess = spawn(
     'pnpm',
-    ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost'],
+    [
+      'exec',
+      'expo',
+      'start',
+      '--no-dev',
+      '--minify',
+      '--localhost',
+      '--port',
+      String(metroPort),
+    ],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
@@ -238,7 +318,7 @@ async function downloadBundle(platform, timestamp) {
     'entry',
   );
   const bundlePath = path.relative(workspaceRoot, entryPath);
-  const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
+  const url = metroUrl(`/${bundlePath}.bundle`);
   url.searchParams.set('platform', platform);
   url.searchParams.set('dev', 'false');
   url.searchParams.set('hot', 'false');
@@ -266,7 +346,7 @@ async function downloadManifest(platform) {
 
   try {
     console.log(`Fetching ${platform} manifest...`);
-    const response = await fetch('http://localhost:8081/manifest', {
+    const response = await fetch(metroUrl('/manifest'), {
       headers: { 'expo-platform': platform },
       signal: controller.signal,
     });
@@ -299,6 +379,7 @@ async function downloadBundlesAndManifests(timestamp) {
     // without stalling. Manifests are cheap and run in parallel after.
     await downloadBundle('ios', timestamp);
     await downloadBundle('android', timestamp);
+    await downloadBundle('web', timestamp);
 
     const [iosManifest, androidManifest] = await Promise.all([
       downloadManifest('ios'),
@@ -339,6 +420,18 @@ function extractAssets(timestamp) {
       ),
       'utf-8',
     ),
+    web: fs.readFileSync(
+      path.join(
+        staticBuild,
+        timestamp,
+        '_expo',
+        'static',
+        'js',
+        'web',
+        'bundle.js',
+      ),
+      'utf-8',
+    ),
   };
 
   const assetsMap = new Map();
@@ -350,7 +443,7 @@ function extractAssets(timestamp) {
       const originalPath = match[1];
       const filename = match[3] + '.' + match[4];
 
-      const tempUrl = new URL(`http://localhost:8081${originalPath}`);
+      const tempUrl = metroUrl(originalPath);
       const unstablePath = tempUrl.searchParams.get('unstable_path');
 
       if (!unstablePath) {
@@ -378,6 +471,7 @@ function extractAssets(timestamp) {
 
   extractFromBundle(bundles.ios, 'ios');
   extractFromBundle(bundles.android, 'android');
+  extractFromBundle(bundles.web, 'web');
 
   return Array.from(assetsMap.values());
 }
@@ -392,7 +486,7 @@ async function downloadAssets(assets, timestamp) {
   const failures = [];
 
   const downloadPromises = assets.map(async (asset) => {
-    const tempUrl = new URL(`http://localhost:8081${asset.originalPath}`);
+    const tempUrl = metroUrl(asset.originalPath);
     const unstablePath = tempUrl.searchParams.get('unstable_path');
 
     if (!unstablePath) {
@@ -465,7 +559,7 @@ function updateBundleUrls(timestamp, baseUrl) {
     bundle = bundle.replace(
       /httpServerLocation:"(\/[^"]+)"/g,
       (_match, capturedPath) => {
-        const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
+        const tempUrl = metroUrl(capturedPath);
         const unstablePath = tempUrl.searchParams.get('unstable_path');
 
         if (!unstablePath) {
@@ -484,6 +578,7 @@ function updateBundleUrls(timestamp, baseUrl) {
 
   updateForPlatform('ios');
   updateForPlatform('android');
+  updateForPlatform('web');
   console.log('Updated bundle URLs');
 }
 

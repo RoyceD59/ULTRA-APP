@@ -21,3 +21,4 @@ run = [ "pnpm", "--filter", "@workspace/uc-companion", "run", "serve" ]
 [services.env]
 PORT = "20002"
 BASE_PATH = "/uc-companion/"
+METRO_PORT = "0"
