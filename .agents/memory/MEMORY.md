@@ -29,3 +29,4 @@
 - [API test storage isolation](api-test-storage-isolation.md) — library route tests inject storage adapters; global prototype mocks race under parallel test execution.
 - [API schema rollout paths](api-schema-rollout-paths.md) — shared SQL migrations cover tests, but deployed API startup needs matching idempotent DDL for existing databases.
 - [WooCommerce stock alert semantics](woocommerce-stock-alert-semantics.md) — null quantity means unmanaged stock, not zero; explicit out-of-stock remains actionable.
+- [UC password-reset security](uc-password-reset-security.md) — reset credentials are hashed at rest; delivery links must resolve to a public domain and never expose localhost in production.

@@ -201,6 +201,7 @@ router.post(
         phone: dbUser.phone,
         firstName: dbUser.firstName,
         lastName: dbUser.lastName,
+        credentialVersion: dbUser.credentialVersion,
       };
       res.json({ token: issueToken(user), user });
     } catch (err) {

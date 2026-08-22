@@ -326,6 +326,13 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
 
+  // Add credential_version for post-password-reset session revocation.
+  // Incrementing it on reset invalidates bearer tokens minted before the reset.
+  await pool.query(`
+    ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS credential_version integer NOT NULL DEFAULT 0;
+  `);
+  logger.info("Startup migration: uc_users.credential_version column ensured");
+
   // Add address column to uc_users so customers can store their delivery address.
   await pool.query(`
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS address text NOT NULL DEFAULT '';

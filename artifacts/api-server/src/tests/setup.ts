@@ -179,6 +179,11 @@ await pool.query(`
 
 // uc_users.deleted_at
 await pool.query(`ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;`);
+// Password resets bump this version so JWTs minted before a reset are revoked.
+await pool.query(`
+  ALTER TABLE uc_users
+    ADD COLUMN IF NOT EXISTS credential_version integer NOT NULL DEFAULT 0;
+`);
 
 // team_library_docs
 await pool.query(`

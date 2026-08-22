@@ -48,6 +48,11 @@ export interface JwtClaims {
    */
   src?:       string;
   exp?:       number;
+  /** Monotonically-increasing credential version for DB-anchored UC customer
+   *  accounts. Incremented on password reset so pre-reset tokens are rejected
+   *  by the UC deleted-account guard. Absent on WooCommerce, mock, and
+   *  ProjectHub team-session tokens. */
+  credentialVersion?: number;
 }
 
 /**

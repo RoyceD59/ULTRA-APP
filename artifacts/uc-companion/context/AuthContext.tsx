@@ -18,7 +18,7 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string; hint?: string }>;
   /** Exchange a verified Clerk session token (Google/Apple sign-in) for the app's own session. */
   socialLogin: (clerkToken: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -121,9 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(d),
       });
-      const data = await res.json() as { token?: string; user?: UCUser; error?: string };
+      const data = await res.json() as { token?: string; user?: UCUser; error?: string; hint?: string };
       const registerErr = authErrorMessage(res.status, res.ok, data.error, 'Registration failed');
-      if (registerErr) return { success: false, error: registerErr };
+      if (registerErr) return { success: false, error: registerErr, hint: data.hint };
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user!));
       setToken(data.token!);

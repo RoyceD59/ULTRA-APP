@@ -70,13 +70,27 @@ export async function rejectDeletedUcAccounts(
   }
 
   try {
-    const result = await pool.query<{ deleted_at: string | null }>(
-      "SELECT deleted_at FROM uc_users WHERE id = $1 LIMIT 1",
+    const result = await pool.query<{ deleted_at: string | null; credential_version: number }>(
+      "SELECT deleted_at, credential_version FROM uc_users WHERE id = $1 LIMIT 1",
       [numericId]
     );
-    if (result.rows[0]?.deleted_at) {
+    const row = result.rows[0];
+    if (row?.deleted_at) {
       res.status(401).json({ error: "This account has been deleted" });
       return;
+    }
+    // Reject tokens issued before a password reset. Tokens minted before this
+    // feature existed carry no credentialVersion claim; treat those as 0 (the
+    // column default) so they remain valid until the customer resets their
+    // password (which bumps the DB value to 1, invalidating all version-0 tokens).
+    if (row !== undefined) {
+      const tokenVersion = typeof claims.credentialVersion === "number"
+        ? claims.credentialVersion
+        : 0;
+      if (tokenVersion !== row.credential_version) {
+        res.status(401).json({ error: "Session expired. Please sign in again." });
+        return;
+      }
     }
     next();
   } catch {

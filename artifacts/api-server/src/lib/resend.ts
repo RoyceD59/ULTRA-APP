@@ -32,6 +32,11 @@ export interface ResendEmail {
     /** Keep only provider metadata in the audit log (for recovery links). */
     auditMode?: "metadata-only";
   };
+  /**
+   * Override what is written to the notification log. Use this for sensitive
+   * emails whose body contains a credential or bearer token. Not sent to Resend.
+   */
+  logBody?: string;
 }
 
 /** Write a send-attempt row to uc_notification_log. Never throws. */
@@ -141,13 +146,13 @@ export async function sendViaResend(email: ResendEmail): Promise<boolean> {
   const apiKey = process.env["RESEND_API_KEY"];
   const baseUrl = process.env["RESEND_BASE_URL"];
 
-  // Strip the meta field before sending — Resend API doesn't know about it.
-  const { meta, ...resendPayload } = email;
+  // Strip helper-only fields before sending — Resend API doesn't know about them.
+  const { meta, logBody, ...resendPayload } = email;
   // Store the full plain-text body so retries can reconstruct a useful message.
   const logBase = {
     recipient:   email.to,
     template:    meta?.template ?? "",
-    messageBody: meta?.auditMode === "metadata-only" ? "" : email.text,
+    messageBody: meta?.auditMode === "metadata-only" ? "" : (logBody ?? email.text),
     orderId:     meta?.orderId,
     ticketId:    meta?.ticketId,
     testId:      meta?.testId,

@@ -63,6 +63,7 @@ export default function RegisterScreen() {
   const [referralCode, setReferralCode] = useState('');
   const [showPass,     setShowPass]     = useState(false);
   const [loading,      setLoading]      = useState(false);
+  const [registerError, setRegisterError] = useState<{ message: string; hint?: string } | null>(null);
 
   function handlePhoneChange(text: string) {
     setPhone(liveFormatPhone(text));
@@ -82,6 +83,7 @@ export default function RegisterScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRegisterError(null);
     setLoading(true);
     const result = await register({
       firstName,
@@ -95,7 +97,7 @@ export default function RegisterScreen() {
     if (result.success) {
       navigateAfterAuth();
     } else {
-      Alert.alert('Registration failed', result.error ?? 'Please try again.');
+      setRegisterError({ message: result.error ?? 'Please try again.', hint: result.hint });
     }
   }
 
@@ -219,6 +221,25 @@ export default function RegisterScreen() {
               ? <ActivityIndicator color="#fff" size="small" />
               : <Text style={styles.registerBtnText}>Create Account</Text>}
           </TouchableOpacity>
+
+          {registerError && (
+            <View style={[styles.errorBox, { backgroundColor: colors.card, borderColor: '#EF4444' }]}>
+              <Ionicons name="alert-circle-outline" size={16} color="#EF4444" style={{ marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.errorMsg}>{registerError.message}</Text>
+                {registerError.hint === 'forgot_password' && (
+                  <TouchableOpacity
+                    onPress={() => router.push(
+                      ({ pathname: '/auth/forgot-password', params: { email: email.trim() } } as never)
+                    )}
+                    style={styles.forgotBtn}
+                  >
+                    <Text style={[styles.forgotBtnText, { color: colors.primary }]}>Forgot password?</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
         </View>
 
         <SocialAuthButtons onSuccess={navigateAfterAuth} />
@@ -253,6 +274,10 @@ const styles = StyleSheet.create({
   inputInner:     { flex: 1, fontSize: 16 },
   registerBtn:    { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   registerBtnText:{ color: '#fff', fontSize: 16, fontWeight: '700' as const },
+  errorBox:       { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1, borderRadius: 10, padding: 12 },
+  errorMsg:       { fontSize: 13, color: '#EF4444', lineHeight: 18 },
+  forgotBtn:      { marginTop: 6 },
+  forgotBtnText:  { fontSize: 13, fontWeight: '600' as const, textDecorationLine: 'underline' },
   footer:         { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
   footerText:     { fontSize: 14 },
   footerLink:     { fontSize: 14, fontWeight: '600' as const },

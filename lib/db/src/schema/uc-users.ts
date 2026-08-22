@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 
 /**
  * Stores registered Ultra-Clear Companion user accounts.
@@ -25,7 +25,11 @@ export const ucUsersTable = pgTable("uc_users", {
   /** Set when the customer exercises their GDPR/PDPA right to erasure.
    *  Any still-valid bearer token for this userId is rejected by DB-anchored
    *  customer routes once this timestamp is set. */
-  deletedAt:    timestamp("deleted_at", { withTimezone: true }),
+  deletedAt:          timestamp("deleted_at", { withTimezone: true }),
+  /** Incremented on every password reset. Included in issued JWTs so that any
+   *  token minted before the reset is rejected by the guard, invalidating all
+   *  active sessions immediately after a successful password change. */
+  credentialVersion:  integer("credential_version").notNull().default(0),
 });
 
 export type UcUser = typeof ucUsersTable.$inferSelect;

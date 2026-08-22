@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { appendFile, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -36,16 +36,17 @@ import { decryptSecret } from "../lib/secret-crypto.js";
 import { ssrfSafePost, SsrfBlockedError } from "../lib/ssrf-safe-fetch.js";
 import { sendViaResend } from "../lib/resend.js";
 import { sendSlackTeamMessage } from "../lib/slack.js";
+import { ucApiBaseUrl } from "../lib/uc-reset-url.js";
 import {
   pool,
   db,
   ucPushTokensTable, ucEnquiriesTable, ucNotifPrefsTable,
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
-  ucLifespanAlertsTable, teamSettingsTable,
+  ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
-import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql } from "drizzle-orm";
+import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import { ACCOUNT_DATA_DIR, recordAccountRegistration } from "../lib/account-records";
@@ -1539,7 +1540,15 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
           res.status(401).json({ error: "Invalid credentials" });
           return;
         }
-        const user = { id: dbUser.id, email: dbUser.email, phone: dbUser.phone, firstName: dbUser.firstName, lastName: dbUser.lastName, address: dbUser.address ?? "" };
+        const user = {
+          id: dbUser.id,
+          email: dbUser.email,
+          phone: dbUser.phone,
+          firstName: dbUser.firstName,
+          lastName: dbUser.lastName,
+          address: dbUser.address ?? "",
+          credentialVersion: dbUser.credentialVersion,
+        };
         res.json({ token: issueToken(user), user });
         return;
       }
@@ -1605,7 +1614,15 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       firstName,
       lastName: lastName ?? "",
     }).returning();
-    const user = { id: dbUser!.id, email: dbUser!.email, phone: dbUser!.phone, firstName: dbUser!.firstName, lastName: dbUser!.lastName, address: dbUser!.address ?? "" };
+    const user = {
+      id: dbUser!.id,
+      email: dbUser!.email,
+      phone: dbUser!.phone,
+      firstName: dbUser!.firstName,
+      lastName: dbUser!.lastName,
+      address: dbUser!.address ?? "",
+      credentialVersion: dbUser!.credentialVersion,
+    };
     // Durable folder record of the new account (sanitized — never password material).
     recordAccountRegistration({
       id: dbUser!.id, firstName: dbUser!.firstName, lastName: dbUser!.lastName,
@@ -1664,6 +1681,286 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
         error: "We couldn't save your details right now. Please contact us directly to complete your registration — your information was not recorded.",
       });
     }
+  }
+});
+
+// ─── Password reset ───────────────────────────────────────────────────────────
+
+/**
+ * SHA-256 hash of a reset token for at-rest storage.
+ * Only the hash is persisted; the raw token travels over email/HTTPS only.
+ * High-entropy random tokens (UUID v4) don't need bcrypt's key-stretching —
+ * a fast digest is sufficient and keeps lookups cheap.
+ */
+function hashResetToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+/** POST /uc/auth/forgot-password — always 200 to prevent account enumeration */
+router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+  const { email } = req.body ?? {};
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "email is required." });
+    return;
+  }
+  const normalised = email.toLowerCase().trim();
+  const user = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.email, normalised) });
+  // Always 200 — do not reveal whether the email is registered.
+  if (!user) { res.json({ ok: true }); return; }
+
+  // Do not email a localhost link in production. Returning the same generic
+  // success response preserves anti-enumeration if reset URL configuration is
+  // missing, while the server log remains actionable for operators. Validate
+  // before persisting a token so bad deployment config creates no orphan token.
+  let resetBaseUrl: string;
+  try {
+    resetBaseUrl = ucApiBaseUrl();
+  } catch (err) {
+    logger.error({ err, email: user.email }, "UC password-reset URL configuration invalid");
+    res.json({ ok: true });
+    return;
+  }
+
+  // Generate a high-entropy raw token; store only its SHA-256 hash so that
+  // DB/backup access cannot be used to claim the link on a customer's behalf.
+  const rawToken = randomUUID();
+  const tokenHash = hashResetToken(rawToken);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await db.insert(passwordResetTokensTable).values({
+    userId: String(user.id),
+    token:  tokenHash,
+    expiresAt,
+  });
+
+  // The raw token is sent exactly once via email; it never touches the DB.
+  const resetUrl = `${resetBaseUrl}/uc/auth/reset-password?token=${rawToken}`;
+  logger.info({ email: user.email }, "UC password reset token generated");
+
+  const firstName = user.firstName ?? "there";
+  const sent = await sendViaResend({
+    from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+    to: user.email,
+    subject: "Reset your Ultra-Clear password",
+    text:
+      `Hi ${firstName},\n\n` +
+      `We received a request to reset the password for your Ultra-Clear account (${user.email}).\n\n` +
+      `Click the link below to choose a new password. The link expires in 24 hours.\n\n` +
+      `${resetUrl}\n\n` +
+      `If you didn't request this, you can safely ignore this email — your password hasn't changed.\n\n` +
+      `— The Ultra-Clear team`,
+    html:
+      `<p>Hi ${firstName},</p>` +
+      `<p>We received a request to reset the password for your Ultra-Clear account (<strong>${user.email}</strong>).</p>` +
+      `<p><a href="${resetUrl}" style="background:#005d8f;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:bold">Reset my password</a></p>` +
+      `<p>Or copy this link into your browser:<br><a href="${resetUrl}">${resetUrl}</a></p>` +
+      `<p><em>This link expires in 24 hours. If you didn't request a reset, you can safely ignore this email.</em></p>` +
+      `<p>— The Ultra-Clear team</p>`,
+    meta: { template: "uc-password-reset" },
+    // Never persist the reset URL (which contains a live token) in the
+    // notification log — store only delivery metadata so the log cannot be
+    // used to hijack a customer's account.
+    logBody: `Password reset email dispatched for ${user.email} (URL redacted)`,
+  });
+
+  if (!sent) {
+    logger.error({ email: user.email }, "UC password reset email delivery failed");
+  }
+
+  res.json({ ok: true });
+});
+
+/** GET /uc/auth/reset-password — serve a simple HTML form the email link points to */
+router.get("/uc/auth/reset-password", async (req: Request, res: Response): Promise<void> => {
+  const { token } = req.query;
+  if (!token || typeof token !== "string") {
+    res.status(400).send("<h2>Invalid reset link</h2><p>This link is missing a reset token. Please request a new one.</p>");
+    return;
+  }
+
+  // Hash the incoming raw token before looking it up — only the hash is stored.
+  const tokenHash = hashResetToken(token);
+  const [resetToken] = await db.select().from(passwordResetTokensTable)
+    .where(and(
+      eq(passwordResetTokensTable.token, tokenHash),
+      isNull(passwordResetTokensTable.usedAt),
+      gt(passwordResetTokensTable.expiresAt, new Date()),
+    ))
+    .limit(1);
+
+  if (!resetToken) {
+    res.status(400).send(`
+      <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Reset link expired</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <style>body{font-family:system-ui,sans-serif;max-width:420px;margin:60px auto;padding:0 24px;color:#1a1a1a}
+      h2{color:#EF4444}a{color:#005d8f}</style></head>
+      <body><h2>Link expired or already used</h2>
+      <p>This password-reset link is no longer valid. Links expire after 24 hours and can only be used once.</p>
+      <p>Please open the Ultra-Clear app and request a new reset link.</p></body></html>
+    `);
+    return;
+  }
+
+  res.send(`
+    <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Reset your password — Ultra-Clear</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      *{box-sizing:border-box}
+      body{font-family:system-ui,sans-serif;background:#f5f5f5;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:24px}
+      .card{background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;box-shadow:0 2px 16px rgba(0,0,0,.08)}
+      h1{font-size:22px;margin:0 0 8px;color:#005d8f}
+      p{color:#555;font-size:14px;margin:0 0 20px}
+      label{display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:6px}
+      input{width:100%;border:1.5px solid #ddd;border-radius:10px;padding:12px 14px;font-size:16px;outline:none;transition:border-color .15s}
+      input:focus{border-color:#005d8f}
+      .field{margin-bottom:16px}
+      button{width:100%;background:#005d8f;color:#fff;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
+      button:hover{background:#004a75}
+      .error{color:#EF4444;font-size:13px;margin-top:8px;display:none}
+      .success{text-align:center}
+      .success h1{color:#22C55E}
+    </style></head>
+    <body>
+      <div class="card" id="formCard">
+        <h1>Set a new password</h1>
+        <p>Choose a strong password for your Ultra-Clear account. You'll use it to sign in on the app.</p>
+        <form id="resetForm">
+          <div class="field">
+            <label for="pw">New password</label>
+            <input type="password" id="pw" placeholder="Min. 6 characters" autocomplete="new-password">
+          </div>
+          <div class="field">
+            <label for="pw2">Confirm password</label>
+            <input type="password" id="pw2" placeholder="Repeat your password" autocomplete="new-password">
+          </div>
+          <p class="error" id="err"></p>
+          <button type="submit" id="submitBtn">Save new password</button>
+        </form>
+      </div>
+      <div class="card success" id="successCard" style="display:none">
+        <h1>✓ Password updated</h1>
+        <p style="text-align:center">Your password has been changed. Open the Ultra-Clear app and sign in with your new password.</p>
+      </div>
+      <script>
+        const form = document.getElementById('resetForm');
+        const errEl = document.getElementById('err');
+        const btn = document.getElementById('submitBtn');
+        form.addEventListener('submit', async e => {
+          e.preventDefault();
+          const pw = document.getElementById('pw').value;
+          const pw2 = document.getElementById('pw2').value;
+          errEl.style.display = 'none';
+          if (pw.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display='block'; return; }
+          if (pw !== pw2) { errEl.textContent = 'Passwords do not match.'; errEl.style.display='block'; return; }
+          btn.disabled = true; btn.textContent = 'Saving…';
+          try {
+            const r = await fetch(window.location.pathname, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: '${token}', newPassword: pw }),
+            });
+            const data = await r.json();
+            if (r.ok && data.ok) {
+              document.getElementById('formCard').style.display='none';
+              document.getElementById('successCard').style.display='block';
+            } else {
+              errEl.textContent = data.error || 'Something went wrong. Please try again.';
+              errEl.style.display = 'block';
+              btn.disabled = false; btn.textContent = 'Save new password';
+            }
+          } catch { errEl.textContent = 'Network error. Please check your connection.'; errEl.style.display='block'; btn.disabled=false; btn.textContent='Save new password'; }
+        });
+      </script>
+    </body></html>
+  `);
+});
+
+/** POST /uc/auth/reset-password — atomically consume token and update UC user password.
+ *
+ * The token is marked used_at in the same transaction as the password change so
+ * concurrent requests with the same link cannot both succeed (classic TOCTOU race).
+ * The conditional UPDATE returns 0 rows if the token was already consumed or has
+ * expired, making the entire operation idempotent and race-free.
+ */
+router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+  const { token, newPassword } = req.body ?? {};
+  if (!token || typeof token !== "string" || !newPassword) {
+    res.status(400).json({ error: "token and newPassword are required." });
+    return;
+  }
+  if (typeof newPassword !== "string" || newPassword.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters." });
+    return;
+  }
+
+  // Reject arbitrary/expired tokens before spending bcrypt CPU. This is only a
+  // precheck: the conditional update inside the transaction remains the atomic
+  // source of truth, so a concurrent reset cannot win a TOCTOU race.
+  const tokenHash = hashResetToken(token);
+  const [validToken] = await db.select({ id: passwordResetTokensTable.id })
+    .from(passwordResetTokensTable)
+    .where(and(
+      eq(passwordResetTokensTable.token, tokenHash),
+      isNull(passwordResetTokensTable.usedAt),
+      gt(passwordResetTokensTable.expiresAt, new Date()),
+    ))
+    .limit(1);
+  if (!validToken) {
+    res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+    return;
+  }
+
+  // Hash after the inexpensive token precheck. bcrypt is CPU-bound; no DB
+  // connection is held while hashing.
+  const passwordHash = await bcryptjs.hash(newPassword, 10);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Atomically claim the token by hash. The conditional WHERE (used_at IS NULL
+    // AND expires_at > now()) means exactly one concurrent request can succeed;
+    // all others get 0 rows and are rejected before touching uc_users.
+    const claimed = await client.query<{ user_id: string }>(
+      `UPDATE password_reset_tokens
+         SET used_at = now()
+       WHERE token = $1
+         AND used_at IS NULL
+         AND expires_at > now()
+       RETURNING user_id`,
+      [tokenHash],
+    );
+
+    if ((claimed.rowCount ?? 0) === 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+      return;
+    }
+
+    const userId = Number(claimed.rows[0]!.user_id);
+    if (isNaN(userId) || userId <= 0) {
+      await client.query("ROLLBACK");
+      res.status(500).json({ error: "Invalid reset token state." });
+      return;
+    }
+
+    // Update password and bump credential_version in the same transaction so
+    // a crash between these two statements never leaves a partially-reset state.
+    await client.query(
+      `UPDATE uc_users
+          SET password_hash = $1,
+              credential_version = credential_version + 1
+        WHERE id = $2`,
+      [passwordHash, userId],
+    );
+
+    await client.query("COMMIT");
+    logger.info({ userId }, "UC user password reset successfully — credential version incremented");
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
   }
 });
 
