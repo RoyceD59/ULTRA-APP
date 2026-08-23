@@ -320,7 +320,61 @@ describe('serve.js production server', () => {
     );
   });
 
-  // ── 7. Manifest route: missing manifest returns 404 ───────────────────────
+  // ── 7. /manifest route with a valid STATIC_ROOT ──────────────────────────
+
+  test('GET /manifest with expo-platform: ios returns 200 JSON with expo-protocol-version header and a valid launchAsset.url', async () => {
+    const res = await get(`${BASE_PATH}/manifest`, { 'expo-platform': 'ios' });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for iOS manifest via /manifest route');
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /application\/json/,
+      'expected application/json content-type for iOS manifest via /manifest route',
+    );
+    assert.equal(
+      res.headers.get('expo-protocol-version'),
+      '1',
+      'expected expo-protocol-version: 1 header for iOS manifest via /manifest route',
+    );
+    const manifest = await res.json();
+    assert.ok(
+      manifest.launchAsset && typeof manifest.launchAsset.url === 'string',
+      'iOS manifest from /manifest route should have a launchAsset.url string',
+    );
+    assert.match(
+      manifest.launchAsset.url,
+      /\/_expo\/static\/js\/ios\/bundle\.js$/,
+      'iOS manifest from /manifest route launchAsset.url should point to the ios bundle.js',
+    );
+  });
+
+  test('GET /manifest with expo-platform: android returns 200 JSON with expo-protocol-version header and a valid launchAsset.url', async () => {
+    const res = await get(`${BASE_PATH}/manifest`, { 'expo-platform': 'android' });
+
+    assert.equal(res.status, 200, 'expected HTTP 200 for Android manifest via /manifest route');
+    assert.match(
+      res.headers.get('content-type') ?? '',
+      /application\/json/,
+      'expected application/json content-type for Android manifest via /manifest route',
+    );
+    assert.equal(
+      res.headers.get('expo-protocol-version'),
+      '1',
+      'expected expo-protocol-version: 1 header for Android manifest via /manifest route',
+    );
+    const manifest = await res.json();
+    assert.ok(
+      manifest.launchAsset && typeof manifest.launchAsset.url === 'string',
+      'Android manifest from /manifest route should have a launchAsset.url string',
+    );
+    assert.match(
+      manifest.launchAsset.url,
+      /\/_expo\/static\/js\/android\/bundle\.js$/,
+      'Android manifest from /manifest route launchAsset.url should point to the android bundle.js',
+    );
+  });
+
+  // ── 8. Manifest route: missing manifest returns 404 ───────────────────────
 
   test('GET / with expo-platform: ios returns 404 when manifest.json is absent', async () => {
     // Start a separate server instance with an empty static root so there is
