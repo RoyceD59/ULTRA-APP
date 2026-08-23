@@ -8,8 +8,8 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateAndStoreReport, pushReportToOrchestrator } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, aiPushEventsTable } from "@workspace/db";
-import { lt, lte, desc, eq, and, or, inArray, isNull, sql } from "drizzle-orm";
+import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, aiPushEventsTable, ucWishlistTable } from "@workspace/db";
+import { lt, lte, desc, eq, and, or, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
   hasWCCredentials,
@@ -22,8 +22,130 @@ import { sendSms, sendSmsAwaitable } from "./sms.js";
 import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
 import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
+import { sendPushToUser } from "./push.js";
+
+// ─── Wishlist restock check ───────────────────────────────────────────────────
+// Runs every 4 hours. For each distinct product in the wishlist:
+//   • If WC says instock  → push notification to all un-notified users, set notifiedRestockAt.
+//   • If WC says outofstock → reset notifiedRestockAt to NULL so the user
+//     is notified again when it restocks for a second time.
+async function checkWishlistRestocks(): Promise<void> {
+  if (!hasWCCredentials()) {
+    logger.info("Scheduler: no WC credentials — skipping wishlist restock check");
+    return;
+  }
+
+  // Distinct product IDs from the wishlist
+  const rows = await db
+    .select({ productId: ucWishlistTable.productId })
+    .from(ucWishlistTable);
+
+  const productIds = [...new Set(rows.map((r) => r.productId))];
+  if (productIds.length === 0) {
+    logger.info("Scheduler: wishlist is empty — skipping restock check");
+    return;
+  }
+
+  logger.info({ count: productIds.length }, "Scheduler: checking wishlist products for restocks");
+
+  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
+  const ck   = process.env["WC_CONSUMER_KEY"]!;
+  const cs   = process.env["WC_CONSUMER_SECRET"]!;
+
+  for (const productId of productIds) {
+    try {
+      const url = `${base}/wp-json/wc/v3/products/${productId}?consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`;
+      const fetchRes = await fetch(url);
+      if (!fetchRes.ok) continue;
+
+      const text = await fetchRes.text();
+      const jsonStart = text.search(/[{[]/);
+      if (jsonStart === -1) continue;
+
+      const data = JSON.parse(text.slice(jsonStart)) as Record<string, unknown>;
+      const stockStatus = String(data["stock_status"] ?? "");
+
+      if (stockStatus === "instock") {
+        // Find wishlist rows for this product that have NOT been notified yet
+        const pending = await db
+          .select({
+            id:          ucWishlistTable.id,
+            userId:      ucWishlistTable.userId,
+            productName: ucWishlistTable.productName,
+          })
+          .from(ucWishlistTable)
+          .where(
+            and(
+              eq(ucWishlistTable.productId,        productId),
+              isNull(ucWishlistTable.notifiedRestockAt),
+            )
+          );
+
+        if (pending.length === 0) continue;
+
+        const productName = pending[0]!.productName;
+        logger.info(
+          { productId, productName, userCount: pending.length },
+          "Scheduler: product back in stock — notifying wishlist users",
+        );
+
+        // Fire push notifications (fire-and-forget per user)
+        for (const row of pending) {
+          sendPushToUser(
+            row.userId,
+            "Back in Stock! 🎉",
+            `${row.productName} is now available. Tap to order before it sells out.`,
+            { screen: "product", productId },
+            "general",
+          );
+        }
+
+        // Stamp the notification time so we don't fire again until next out-of-stock cycle
+        await db
+          .update(ucWishlistTable)
+          .set({ notifiedRestockAt: new Date() })
+          .where(
+            and(
+              eq(ucWishlistTable.productId,        productId),
+              isNull(ucWishlistTable.notifiedRestockAt),
+            )
+          );
+
+        logger.info(
+          { productId, notifiedCount: pending.length },
+          "Scheduler: wishlist restock notifications sent",
+        );
+      } else {
+        // Product is out of stock again — reset so users get notified on the NEXT restock
+        await db
+          .update(ucWishlistTable)
+          .set({ notifiedRestockAt: null })
+          .where(
+            and(
+              eq(ucWishlistTable.productId, productId),
+              isNotNull(ucWishlistTable.notifiedRestockAt),
+            )
+          );
+      }
+    } catch (err) {
+      logger.warn({ err, productId }, "Scheduler: restock check for product failed (non-fatal)");
+    }
+  }
+}
 
 export function startScheduler() {
+  // Every 4 hours: check wishlisted out-of-stock products for restocks.
+  cron.schedule("0 */4 * * *", async () => {
+    logger.info("Scheduler: running wishlist restock check");
+    try {
+      await checkWishlistRestocks();
+    } catch (err) {
+      logger.error({ err }, "Scheduler: wishlist restock check failed");
+    }
+  }, { timezone: "UTC" });
+
+  logger.info("Scheduler: wishlist restock check registered (every 4 hours)");
+
   // Daily at 07:30 UTC (10:30 Nairobi) — deliver filter lifecycle reminders
   // via email / SMS / WhatsApp to customers who opted in.
   cron.schedule("30 7 * * *", async () => {

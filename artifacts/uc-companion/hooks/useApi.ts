@@ -529,5 +529,36 @@ export function useApi() {
       question: string,
       answer:   string,
     ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer }),
+
+    // ── Wishlist ──────────────────────────────────────────────────────────────
+    /** Return the authenticated user's wishlist. */
+    getWishlist: () =>
+      get<Array<{
+        id:                number;
+        productId:         number;
+        productName:       string;
+        addedAt:           string;
+        notifiedRestockAt: string | null;
+      }>>('/api/uc/wishlist'),
+
+    /** Add a product to the wishlist (idempotent). */
+    addToWishlist: (productId: number, productName: string) =>
+      post<{ id: number; productId: number; productName: string; addedAt: string }>(
+        '/api/uc/wishlist',
+        { productId, productName },
+      ),
+
+    /** Remove a product from the wishlist. */
+    removeFromWishlist: async (productId: number): Promise<{ ok: boolean }> => {
+      const res = await fetch(`${getBase()}/api/uc/wishlist/${productId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || `${res.status}`);
+      }
+      return res.json() as Promise<{ ok: boolean }>;
+    },
   };
 }

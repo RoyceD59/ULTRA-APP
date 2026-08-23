@@ -43,7 +43,7 @@ import {
   ucPushTokensTable, ucEnquiriesTable, ucNotifPrefsTable,
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
-  ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable,
+  ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable, ucWishlistTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
@@ -6292,6 +6292,92 @@ router.get("/uc/admin/customers/:id", async (req, res): Promise<void> => {
     });
   } catch (err) {
     logger.error({ err }, "[customers/detail] query failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
+// Three endpoints let the Companion app add / remove / list wishlist items for
+// out-of-stock products. The scheduler periodically checks whether any wishlisted
+// product has come back in stock and fires push notifications automatically.
+
+/** GET /api/uc/wishlist — return the authenticated user's wishlist. */
+router.get("/uc/wishlist", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) { res.status(401).json({ error: "Authentication required" }); return; }
+  const userId = String(claims.id);
+  try {
+    const rows = await db
+      .select()
+      .from(ucWishlistTable)
+      .where(eq(ucWishlistTable.userId, userId))
+      .orderBy(desc(ucWishlistTable.addedAt));
+    res.json(rows.map((r) => ({
+      id:                r.id,
+      productId:         r.productId,
+      productName:       r.productName,
+      addedAt:           r.addedAt,
+      notifiedRestockAt: r.notifiedRestockAt,
+    })));
+  } catch (err) {
+    logger.error({ err, userId }, "Wishlist GET failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** POST /api/uc/wishlist — add a product; idempotent (upserts). */
+router.post("/uc/wishlist", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) { res.status(401).json({ error: "Authentication required" }); return; }
+  const userId = String(claims.id);
+
+  const { productId, productName } = req.body as {
+    productId?: unknown; productName?: unknown;
+  };
+  if (!productId || typeof productId !== "number") {
+    res.status(400).json({ error: "productId (number) is required" }); return;
+  }
+  if (!productName || typeof productName !== "string" || !productName.trim()) {
+    res.status(400).json({ error: "productName (string) is required" }); return;
+  }
+
+  try {
+    const [row] = await db
+      .insert(ucWishlistTable)
+      .values({ userId, productId, productName: productName.trim() })
+      .onConflictDoUpdate({
+        target: [ucWishlistTable.userId, ucWishlistTable.productId],
+        set: { productName: productName.trim() },
+      })
+      .returning();
+    res.status(201).json({
+      id:          row!.id,
+      productId:   row!.productId,
+      productName: row!.productName,
+      addedAt:     row!.addedAt,
+    });
+  } catch (err) {
+    logger.error({ err, userId, productId }, "Wishlist POST failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** DELETE /api/uc/wishlist/:productId — remove a product from the wishlist. */
+router.delete("/uc/wishlist/:productId", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) { res.status(401).json({ error: "Authentication required" }); return; }
+  const userId = String(claims.id);
+
+  const pid = parseInt(String(req.params["productId"] ?? ""), 10);
+  if (isNaN(pid)) { res.status(400).json({ error: "Invalid productId" }); return; }
+
+  try {
+    await db
+      .delete(ucWishlistTable)
+      .where(and(eq(ucWishlistTable.userId, userId), eq(ucWishlistTable.productId, pid)));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, userId, productId: pid }, "Wishlist DELETE failed");
     res.status(500).json({ error: "Internal server error" });
   }
 });

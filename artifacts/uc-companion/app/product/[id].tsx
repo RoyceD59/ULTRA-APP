@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
   ActivityIndicator, useWindowDimensions,
@@ -6,7 +6,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useColors } from '@/hooks/useColors';
 import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia } from '@/hooks/useApi';
@@ -42,8 +42,11 @@ export default function ProductDetailScreen() {
   const { width } = useWindowDimensions();
 
   const pid = parseInt(id ?? '');
+  const queryClient = useQueryClient();
   const [slideIndex, setSlideIndex] = useState(0);
   const [viewerItem, setViewerItem] = useState<UCReviewMedia | null>(null);
+  // Optimistic wishlist toggle state: null = use server data
+  const [wishlistPending, setWishlistPending] = useState<boolean | null>(null);
   const galleryRef = useRef<ScrollView>(null);
   const thumbStripRef = useRef<ScrollView>(null);
 
@@ -75,6 +78,35 @@ export default function ProductDetailScreen() {
     enabled: !!token,
   });
   const isAdmin = profile?.isAdmin === true;
+
+  // Wishlist — only fetched when logged in; used to detect if this product is already saved.
+  const { data: wishlist } = useQuery({
+    queryKey: ['wishlist'],
+    queryFn: () => api.getWishlist(),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+  const serverWishlisted = wishlist?.some((w) => w.productId === pid) ?? false;
+  // Optimistic override: null = fall back to server data.
+  const isWishlisted = wishlistPending ?? serverWishlisted;
+
+  const toggleWishlist = useCallback(async () => {
+    if (!token || !product) return;
+    const next = !isWishlisted;
+    setWishlistPending(next);
+    try {
+      if (next) {
+        await api.addToWishlist(pid, product.name);
+      } else {
+        await api.removeFromWishlist(pid);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+    } catch {
+      setWishlistPending(null); // revert on error
+    } finally {
+      setWishlistPending(null);
+    }
+  }, [token, product, isWishlisted, pid, api, queryClient]);
 
   // Strike video player — muted, looping, auto-plays.
   const player = useVideoPlayer(null as unknown as string, (p) => {
@@ -484,27 +516,50 @@ export default function ProductDetailScreen() {
                 <View style={styles.badge}><Text style={styles.badgeText}>{totalItems}</Text></View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              disabled={!inStock}
-              onPress={() => {
-                if (!inStock) return;
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                addItem({
-                  id: product.id,
-                  name: product.name,
-                  price: parseFloat(displayPrice),
-                  quantity: 1,
-                  image: resolveMediaUrl(product.images[0]?.src ?? ''),
-                  sku: product.sku,
-                });
-                router.push('/cart');
-              }}
-              style={[styles.addBtn, { backgroundColor: inStock ? colors.primary : colors.muted }]}>
-              <Ionicons name="cart-outline" size={20} color={inStock ? '#fff' : colors.mutedForeground} />
-              <Text style={[styles.addBtnText, { color: inStock ? '#fff' : colors.mutedForeground }]}>
-                {inStock ? 'Add to Cart' : 'Out of Stock'}
-              </Text>
-            </TouchableOpacity>
+            {inStock ? (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  addItem({
+                    id: product.id,
+                    name: product.name,
+                    price: parseFloat(displayPrice),
+                    quantity: 1,
+                    image: resolveMediaUrl(product.images[0]?.src ?? ''),
+                    sku: product.sku,
+                  });
+                  router.push('/cart');
+                }}
+                style={[styles.addBtn, { backgroundColor: colors.primary }]}
+                activeOpacity={0.85}>
+                <Ionicons name="cart-outline" size={20} color="#fff" />
+                <Text style={[styles.addBtnText, { color: '#fff' }]}>Add to Cart</Text>
+              </TouchableOpacity>
+            ) : (
+              /* Out of stock — show wishlist toggle so the user can be notified on restock */
+              <TouchableOpacity
+                onPress={() => {
+                  if (!token) { router.push('/auth/login'); return; }
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  toggleWishlist();
+                }}
+                activeOpacity={0.85}
+                style={[
+                  styles.addBtn,
+                  isWishlisted
+                    ? { backgroundColor: '#FFF0F0', borderWidth: 1.5, borderColor: colors.destructive }
+                    : { backgroundColor: colors.primaryLight, borderWidth: 1.5, borderColor: colors.primary },
+                ]}>
+                <Ionicons
+                  name={isWishlisted ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={isWishlisted ? colors.destructive : colors.primary}
+                />
+                <Text style={[styles.addBtnText, { color: isWishlisted ? colors.destructive : colors.primary }]}>
+                  {isWishlisted ? 'Remove from Wishlist' : 'Notify When Back in Stock'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </View>
