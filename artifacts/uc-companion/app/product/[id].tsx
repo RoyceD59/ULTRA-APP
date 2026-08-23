@@ -490,6 +490,24 @@ export default function ProductDetailScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           )}
+
+          {/* Team-only: edit product name, description, pricing, stock */}
+          {isAdmin && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.push({ pathname: '/admin/product-edit', params: reviewParams })}
+              style={[styles.adminRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.adminTitle, { color: colors.text }]}>Edit product details</Text>
+                <Text style={[styles.adminSub, { color: colors.mutedForeground }]}>
+                  Team only — update name, description, pricing and stock status
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 

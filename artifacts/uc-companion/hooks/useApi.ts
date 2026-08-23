@@ -530,6 +530,25 @@ export function useApi() {
       answer:   string,
     ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer }),
 
+    // ── Admin: product detail edit ────────────────────────────────────────────
+    /** Admin-only: update product fields in WooCommerce. All fields optional. */
+    updateProductDetails: (
+      productId: number,
+      data: {
+        name?:             string;
+        description?:      string;
+        shortDescription?: string;
+        regularPrice?:     string;
+        salePrice?:        string;
+        stockStatus?:      'instock' | 'outofstock';
+        stockQuantity?:    number;
+      },
+    ) =>
+      patch<{ ok: boolean; productId: number; updated: string[]; source: string }>(
+        `/api/uc/admin/products/${productId}`,
+        data,
+      ),
+
     // ── Wishlist ──────────────────────────────────────────────────────────────
     /** Return the authenticated user's wishlist. */
     getWishlist: () =>

@@ -5856,6 +5856,121 @@ router.get("/uc/admin/inventory", async (req, res): Promise<void> => {
   res.json({ products: items, source: "woocommerce" });
 });
 
+// ─── Admin: edit product details (name, description, price, stock) ────────────
+// Forwards a partial update to WooCommerce. All fields are optional — only
+// provided keys are forwarded. Falls back to a mock acknowledgement when no
+// WC credentials exist so the screen works in dev/demo environments.
+router.patch("/uc/admin/products/:id", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const productId = Number(req.params["id"]);
+  if (!Number.isInteger(productId) || productId <= 0) {
+    res.status(400).json({ error: "Invalid product id" });
+    return;
+  }
+
+  const body = req.body as {
+    name?:             unknown;
+    description?:      unknown;
+    shortDescription?: unknown;
+    regularPrice?:     unknown;
+    salePrice?:        unknown;
+    stockStatus?:      unknown;
+    stockQuantity?:    unknown;
+  };
+
+  // Build the WooCommerce payload with only the fields supplied by the caller.
+  const wcPayload: Record<string, unknown> = {};
+
+  if (body.name !== undefined) {
+    if (typeof body.name !== "string" || !body.name.trim()) {
+      res.status(400).json({ error: "name must be a non-empty string" }); return;
+    }
+    wcPayload["name"] = body.name.trim();
+  }
+  if (body.description !== undefined) {
+    if (typeof body.description !== "string") {
+      res.status(400).json({ error: "description must be a string" }); return;
+    }
+    wcPayload["description"] = body.description;
+  }
+  if (body.shortDescription !== undefined) {
+    if (typeof body.shortDescription !== "string") {
+      res.status(400).json({ error: "shortDescription must be a string" }); return;
+    }
+    wcPayload["short_description"] = body.shortDescription;
+  }
+  if (body.regularPrice !== undefined) {
+    const p = String(body.regularPrice ?? "");
+    if (isNaN(parseFloat(p)) || parseFloat(p) < 0) {
+      res.status(400).json({ error: "regularPrice must be a non-negative number" }); return;
+    }
+    wcPayload["regular_price"] = p;
+  }
+  if (body.salePrice !== undefined) {
+    // Empty string removes sale price
+    const p = String(body.salePrice ?? "");
+    if (p !== "" && (isNaN(parseFloat(p)) || parseFloat(p) < 0)) {
+      res.status(400).json({ error: "salePrice must be a non-negative number or empty string" }); return;
+    }
+    wcPayload["sale_price"] = p;
+  }
+  if (body.stockStatus !== undefined) {
+    if (body.stockStatus !== "instock" && body.stockStatus !== "outofstock") {
+      res.status(400).json({ error: "stockStatus must be 'instock' or 'outofstock'" }); return;
+    }
+    wcPayload["stock_status"] = body.stockStatus;
+  }
+  if (body.stockQuantity !== undefined) {
+    const qty = Number(body.stockQuantity);
+    if (!Number.isInteger(qty) || qty < 0) {
+      res.status(400).json({ error: "stockQuantity must be a non-negative integer" }); return;
+    }
+    wcPayload["stock_quantity"] = qty;
+    wcPayload["manage_stock"]   = true;
+  }
+
+  if (Object.keys(wcPayload).length === 0) {
+    res.status(400).json({ error: "No editable fields provided" });
+    return;
+  }
+
+  if (!hasWCCredentials()) {
+    // Dev/demo mode — acknowledge without hitting WooCommerce
+    res.json({ ok: true, productId, updated: Object.keys(wcPayload), source: "mock" });
+    return;
+  }
+
+  try {
+    const url = wcUrl(`/products/${productId}`);
+    const wcRes = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(wcPayload),
+    });
+    const text = await wcRes.text();
+    const data = parseWcJson(text) as Record<string, unknown>;
+
+    if (!wcRes.ok) {
+      logger.warn({ productId, status: wcRes.status, wcPayload }, "[product-edit] WooCommerce update failed");
+      res.status(502).json({
+        error:  "WooCommerce update failed",
+        detail: String(data?.["message"] ?? wcRes.statusText),
+      });
+      return;
+    }
+
+    logger.info({ productId, updated: Object.keys(wcPayload) }, "[product-edit] product updated in WooCommerce");
+    res.json({ ok: true, productId, updated: Object.keys(wcPayload), source: "woocommerce" });
+  } catch (err) {
+    logger.error({ err, productId }, "[product-edit] WooCommerce PUT error");
+    res.status(502).json({ error: "Failed to reach WooCommerce" });
+  }
+});
+
 // ─── Inventory: update a product's stock quantity in WooCommerce ──────────────
 router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> => {
   if (!(await isAdminRequest(req.headers["authorization"]))) {
