@@ -29,10 +29,53 @@ import { sendPushToUser } from "./push.js";
 //   • If WC says instock  → push notification to all un-notified users, set notifiedRestockAt.
 //   • If WC says outofstock → reset notifiedRestockAt to NULL so the user
 //     is notified again when it restocks for a second time.
-async function checkWishlistRestocks(): Promise<void> {
-  if (!hasWCCredentials()) {
+
+/** Default live lookup: fetch a product's WooCommerce stock_status, or null on any failure. */
+async function fetchWcStockStatus(productId: number): Promise<string | null> {
+  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
+  const ck   = process.env["WC_CONSUMER_KEY"]!;
+  const cs   = process.env["WC_CONSUMER_SECRET"]!;
+
+  const url = `${base}/wp-json/wc/v3/products/${productId}?consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`;
+  const fetchRes = await fetch(url);
+  if (!fetchRes.ok) return null;
+
+  const text = await fetchRes.text();
+  const jsonStart = text.search(/[{[]/);
+  if (jsonStart === -1) return null;
+
+  const data = JSON.parse(text.slice(jsonStart)) as Record<string, unknown>;
+  return String(data["stock_status"] ?? "");
+}
+
+export interface WishlistRestockDeps {
+  /** Test seam: avoid reading process-wide Woo credentials. */
+  isWcConfigured?: () => boolean;
+  /** Test seam: replace the live WooCommerce lookup. */
+  fetchStockStatus?: (productId: number) => Promise<string | null>;
+  /** Test seam: replace the push-notification sender. */
+  sendPush?: typeof sendPushToUser;
+}
+
+export interface WishlistRestockResult {
+  /** Number of wishlist rows that were notified (restock this cycle). */
+  notified: number;
+  /** Number of wishlist rows reset back to "un-notified" (out of stock again). */
+  reset: number;
+}
+
+export async function checkWishlistRestocks(
+  deps: WishlistRestockDeps = {},
+): Promise<WishlistRestockResult> {
+  const isWcConfigured  = deps.isWcConfigured  ?? hasWCCredentials;
+  const fetchStockStatus = deps.fetchStockStatus ?? fetchWcStockStatus;
+  const sendPush        = deps.sendPush        ?? sendPushToUser;
+
+  const result: WishlistRestockResult = { notified: 0, reset: 0 };
+
+  if (!isWcConfigured()) {
     logger.info("Scheduler: no WC credentials — skipping wishlist restock check");
-    return;
+    return result;
   }
 
   // Distinct product IDs from the wishlist
@@ -43,27 +86,15 @@ async function checkWishlistRestocks(): Promise<void> {
   const productIds = [...new Set(rows.map((r) => r.productId))];
   if (productIds.length === 0) {
     logger.info("Scheduler: wishlist is empty — skipping restock check");
-    return;
+    return result;
   }
 
   logger.info({ count: productIds.length }, "Scheduler: checking wishlist products for restocks");
 
-  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-  const ck   = process.env["WC_CONSUMER_KEY"]!;
-  const cs   = process.env["WC_CONSUMER_SECRET"]!;
-
   for (const productId of productIds) {
     try {
-      const url = `${base}/wp-json/wc/v3/products/${productId}?consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`;
-      const fetchRes = await fetch(url);
-      if (!fetchRes.ok) continue;
-
-      const text = await fetchRes.text();
-      const jsonStart = text.search(/[{[]/);
-      if (jsonStart === -1) continue;
-
-      const data = JSON.parse(text.slice(jsonStart)) as Record<string, unknown>;
-      const stockStatus = String(data["stock_status"] ?? "");
+      const stockStatus = await fetchStockStatus(productId);
+      if (stockStatus === null) continue;
 
       if (stockStatus === "instock") {
         // Find wishlist rows for this product that have NOT been notified yet
@@ -91,7 +122,7 @@ async function checkWishlistRestocks(): Promise<void> {
 
         // Fire push notifications (fire-and-forget per user)
         for (const row of pending) {
-          sendPushToUser(
+          sendPush(
             row.userId,
             "Back in Stock! 🎉",
             `${row.productName} is now available. Tap to order before it sells out.`,
@@ -111,13 +142,15 @@ async function checkWishlistRestocks(): Promise<void> {
             )
           );
 
+        result.notified += pending.length;
+
         logger.info(
           { productId, notifiedCount: pending.length },
           "Scheduler: wishlist restock notifications sent",
         );
       } else {
         // Product is out of stock again — reset so users get notified on the NEXT restock
-        await db
+        const resetRows = await db
           .update(ucWishlistTable)
           .set({ notifiedRestockAt: null })
           .where(
@@ -125,12 +158,17 @@ async function checkWishlistRestocks(): Promise<void> {
               eq(ucWishlistTable.productId, productId),
               isNotNull(ucWishlistTable.notifiedRestockAt),
             )
-          );
+          )
+          .returning({ id: ucWishlistTable.id });
+
+        result.reset += resetRows.length;
       }
     } catch (err) {
       logger.warn({ err, productId }, "Scheduler: restock check for product failed (non-fatal)");
     }
   }
+
+  return result;
 }
 
 export function startScheduler() {
