@@ -135,7 +135,9 @@ export default function ProductDetailScreen() {
 
   const isEnquiryOnly = product.enquiryOnly === true;
   const displayPrice = product.salePrice || product.price || product.regularPrice;
-  const isOnSale = !isEnquiryOnly && product.salePrice && parseFloat(product.salePrice) < parseFloat(product.regularPrice);
+  // NB: must be a real boolean — an empty-string salePrice would otherwise make
+  // this '' and render a stray text node inside the surrounding View on web.
+  const isOnSale = !isEnquiryOnly && !!product.salePrice && parseFloat(product.salePrice) < parseFloat(product.regularPrice);
   const inStock = product.stockStatus === 'instock';
 
   // Up to 6 photos, then exactly one strike-video slot.
