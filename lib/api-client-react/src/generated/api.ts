@@ -52,6 +52,7 @@ import type {
   InventoryList,
   InventoryStockUpdate,
   InventoryUpdateResult,
+  InventoryWishlistDemand,
   ListNotificationLogsParams,
   ListTasksParams,
   ListUcCustomersParams,
@@ -181,6 +182,83 @@ export function useListUcInventory<TData = Awaited<ReturnType<typeof listUcInven
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListUcInventoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListUcInventoryWishlistDemandUrl = () => {
+
+
+
+
+  return `/api/uc/admin/inventory/wishlist-demand`
+}
+
+/**
+ * @summary List product demand from active restock wishlist entries
+ */
+export const listUcInventoryWishlistDemand = async ( options?: RequestInit): Promise<InventoryWishlistDemand[]> => {
+
+  return customFetch<InventoryWishlistDemand[]>(getListUcInventoryWishlistDemandUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcInventoryWishlistDemandQueryKey = () => {
+    return [
+    `/api/uc/admin/inventory/wishlist-demand`
+    ] as const;
+    }
+
+
+export const getListUcInventoryWishlistDemandQueryOptions = <TData = Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcInventoryWishlistDemandQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>> = ({ signal }) => listUcInventoryWishlistDemand({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcInventoryWishlistDemandQueryResult = NonNullable<Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>>
+export type ListUcInventoryWishlistDemandQueryError = ErrorType<void>
+
+
+/**
+ * @summary List product demand from active restock wishlist entries
+ */
+
+export function useListUcInventoryWishlistDemand<TData = Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcInventoryWishlistDemand>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcInventoryWishlistDemandQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

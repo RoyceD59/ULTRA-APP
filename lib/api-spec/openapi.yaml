@@ -52,6 +52,25 @@ paths:
         "401":
           description: Unauthorized
 
+  /uc/admin/inventory/wishlist-demand:
+    get:
+      operationId: listUcInventoryWishlistDemand
+      tags: [uc-admin]
+      summary: List product demand from active restock wishlist entries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Wishlist demand summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryWishlistDemand"
+        "401":
+          description: Unauthorized
+
   /uc/admin/inventory/{productId}:
     patch:
       operationId: updateUcInventoryItem
@@ -2001,6 +2020,25 @@ components:
         productId:     { type: integer }
         stockQuantity: { type: integer }
         source:        { type: string }
+
+    InventoryWishlistDemand:
+      type: object
+      required:
+        - productId
+        - productName
+        - waitingCustomerCount
+        - pendingCustomerCount
+        - notifiedCustomerCount
+        - lastAddedAt
+        - lastNotifiedRestockAt
+      properties:
+        productId:                 { type: integer }
+        productName:               { type: string }
+        waitingCustomerCount:      { type: integer }
+        pendingCustomerCount:      { type: integer }
+        notifiedCustomerCount:     { type: integer }
+        lastAddedAt:               { type: ["string", "null"], format: date-time }
+        lastNotifiedRestockAt:     { type: ["string", "null"], format: date-time }
 
     SyncTriggered:
       type: object

@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2,
+  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,16 @@ interface InventoryResponse {
 
 interface InventorySettings {
   lowStockThreshold: { value: number; source: "db" | "default" };
+}
+
+interface WishlistDemand {
+  productId: number;
+  productName: string;
+  waitingCustomerCount: number;
+  pendingCustomerCount: number;
+  notifiedCustomerCount: number;
+  lastAddedAt: string | null;
+  lastNotifiedRestockAt: string | null;
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -76,6 +86,17 @@ async function fetchInventorySettings(): Promise<InventorySettings> {
     throw new Error(d.error ?? `Request failed (${res.status})`);
   }
   return res.json() as Promise<InventorySettings>;
+}
+
+async function fetchWishlistDemand(): Promise<WishlistDemand[]> {
+  const res = await fetch(`${BASE}/api/uc/admin/inventory/wishlist-demand`, {
+    headers: getAuthHeaders() ?? {},
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(d.error ?? `Request failed (${res.status})`);
+  }
+  return res.json() as Promise<WishlistDemand[]>;
 }
 
 async function saveInventorySettings(lowStockThreshold: number): Promise<void> {
@@ -305,6 +326,16 @@ export default function AdminInventoryPage() {
     staleTime: 60_000,
   });
 
+  const {
+    data: wishlistDemand,
+    isLoading: wishlistDemandLoading,
+    error: wishlistDemandError,
+  } = useQuery({
+    queryKey: ["uc-inventory-wishlist-demand"],
+    queryFn: fetchWishlistDemand,
+    staleTime: 30_000,
+  });
+
   const syncMutation = useMutation({
     mutationFn: triggerSync,
     onSuccess: () => {
@@ -359,8 +390,11 @@ export default function AdminInventoryPage() {
           <Button
             variant="outline"
             className="gap-2"
-            onClick={() => void qc.invalidateQueries({ queryKey: ["uc-inventory"] })}
-            disabled={isLoading}
+            onClick={() => {
+              void qc.invalidateQueries({ queryKey: ["uc-inventory"] });
+              void qc.invalidateQueries({ queryKey: ["uc-inventory-wishlist-demand"] });
+            }}
+            disabled={isLoading || wishlistDemandLoading}
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
@@ -400,6 +434,96 @@ export default function AdminInventoryPage() {
 
       {/* Alert Settings */}
       <AlertSettingsPanel />
+
+      {/* Restock demand */}
+      <section className="rounded-lg border bg-card overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b px-4 py-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Users className="w-4 h-4 text-muted-foreground" /> Restock demand
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Customers waiting for products to come back in stock.
+            </p>
+          </div>
+          {wishlistDemand && wishlistDemand.length > 0 && (
+            <Badge variant="secondary" className="shrink-0">
+              {wishlistDemand.reduce((total, item) => total + item.waitingCustomerCount, 0)} waiting
+            </Badge>
+          )}
+        </div>
+
+        {wishlistDemandLoading ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading restock demand…
+          </div>
+        ) : wishlistDemandError ? (
+          <div className="px-4 py-6 text-sm text-destructive">
+            Failed to load restock demand: {(wishlistDemandError as Error).message}
+          </div>
+        ) : wishlistDemand && wishlistDemand.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead>Waiting</TableHead>
+                <TableHead>Notification cycle</TableHead>
+                <TableHead className="text-right">Latest activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {wishlistDemand.map((item) => (
+                <TableRow key={item.productId}>
+                  <TableCell className="font-medium">
+                    <span className="block max-w-[280px] truncate">{item.productName}</span>
+                    <span className="text-xs text-muted-foreground">ID: {item.productId}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-semibold">{item.waitingCustomerCount}</span>
+                    <span className="ml-1 text-sm text-muted-foreground">
+                      customer{item.waitingCustomerCount !== 1 ? "s" : ""}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.pendingCustomerCount > 0 ? (
+                        <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                          <BellRing className="w-3 h-3" />
+                          {item.pendingCustomerCount} pending
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1 border-green-300 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                          <CheckCircle2 className="w-3 h-3" />
+                          All notified
+                        </Badge>
+                      )}
+                      {item.notifiedCustomerCount > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {item.notifiedCustomerCount} notified this cycle
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground">
+                    <span className="block">
+                      Added {item.lastAddedAt ? new Date(item.lastAddedAt).toLocaleDateString() : "—"}
+                    </span>
+                    <span className="block">
+                      {item.lastNotifiedRestockAt
+                        ? `Notified ${new Date(item.lastNotifiedRestockAt).toLocaleDateString()}`
+                        : "No restock notification yet"}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            No customers are currently waiting for a restock.
+          </div>
+        )}
+      </section>
 
       {/* Table */}
       {isLoading ? (

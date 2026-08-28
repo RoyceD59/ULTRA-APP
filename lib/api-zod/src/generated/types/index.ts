@@ -43,6 +43,7 @@ export * from './inventoryListSource';
 export * from './inventoryProduct';
 export * from './inventoryStockUpdate';
 export * from './inventoryUpdateResult';
+export * from './inventoryWishlistDemand';
 export * from './listNotificationLogsParams';
 export * from './listTasksParams';
 export * from './listUcCustomersParams';

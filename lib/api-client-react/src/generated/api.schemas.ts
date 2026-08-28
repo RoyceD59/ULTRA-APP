@@ -624,6 +624,18 @@ export interface InventoryUpdateResult {
   source: string;
 }
 
+export interface InventoryWishlistDemand {
+  productId: number;
+  productName: string;
+  waitingCustomerCount: number;
+  pendingCustomerCount: number;
+  notifiedCustomerCount: number;
+  /** @nullable */
+  lastAddedAt: string | null;
+  /** @nullable */
+  lastNotifiedRestockAt: string | null;
+}
+
 export interface SyncTriggered {
   ok: boolean;
   triggeredAt: string;

@@ -5856,6 +5856,45 @@ router.get("/uc/admin/inventory", async (req, res): Promise<void> => {
   res.json({ products: items, source: "woocommerce" });
 });
 
+// ─── Inventory: summarize active wishlist demand ─────────────────────────────
+// Admin-only. Wishlist rows stay active after a restock notification so the
+// team can see both the total demand and whether the current cycle has fired.
+router.get("/uc/admin/inventory/wishlist-demand", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const rows = await db
+      .select({
+        productId:                 ucWishlistTable.productId,
+        productName:               sql<string>`MAX(${ucWishlistTable.productName})`,
+        waitingCustomerCount:      sql<number>`COUNT(*)`,
+        pendingCustomerCount:      sql<number>`COUNT(*) FILTER (WHERE ${ucWishlistTable.notifiedRestockAt} IS NULL)`,
+        notifiedCustomerCount:     sql<number>`COUNT(*) FILTER (WHERE ${ucWishlistTable.notifiedRestockAt} IS NOT NULL)`,
+        lastAddedAt:               sql<Date | null>`MAX(${ucWishlistTable.addedAt})`,
+        lastNotifiedRestockAt:     sql<Date | null>`MAX(${ucWishlistTable.notifiedRestockAt})`,
+      })
+      .from(ucWishlistTable)
+      .groupBy(ucWishlistTable.productId)
+      .orderBy(desc(sql`COUNT(*)`), asc(sql`MAX(${ucWishlistTable.productName})`));
+
+    res.json(rows.map((row) => ({
+      productId:             row.productId,
+      productName:           row.productName,
+      waitingCustomerCount:  Number(row.waitingCustomerCount),
+      pendingCustomerCount:  Number(row.pendingCustomerCount),
+      notifiedCustomerCount: Number(row.notifiedCustomerCount),
+      lastAddedAt:           row.lastAddedAt,
+      lastNotifiedRestockAt: row.lastNotifiedRestockAt,
+    })));
+  } catch (err) {
+    logger.error({ err }, "[inventory/wishlist-demand] Failed to load wishlist demand");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ─── Admin: edit product details (name, description, price, stock) ────────────
 // Forwards a partial update to WooCommerce. All fields are optional — only
 // provided keys are forwarded. Falls back to a mock acknowledgement when no

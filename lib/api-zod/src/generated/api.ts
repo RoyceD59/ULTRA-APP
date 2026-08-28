@@ -26,6 +26,21 @@ export const ListUcInventoryResponse = zod.object({
 
 
 /**
+ * @summary List product demand from active restock wishlist entries
+ */
+export const ListUcInventoryWishlistDemandResponseItem = zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "waitingCustomerCount": zod.number(),
+  "pendingCustomerCount": zod.number(),
+  "notifiedCustomerCount": zod.number(),
+  "lastAddedAt": zod.coerce.date().nullable(),
+  "lastNotifiedRestockAt": zod.coerce.date().nullable()
+})
+export const ListUcInventoryWishlistDemandResponse = zod.array(ListUcInventoryWishlistDemandResponseItem)
+
+
+/**
  * @summary Update a product's stock quantity in WooCommerce
  */
 export const UpdateUcInventoryItemParams = zod.object({

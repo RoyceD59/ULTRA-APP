@@ -21,7 +21,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { issueToken } from "../lib/jwt.js";
-import { db, ucWishlistTable } from "@workspace/db";
+import { db, teamUsersTable, ucWishlistTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 
 let server: http.Server;
@@ -33,9 +33,21 @@ const USER_EMAIL = "wishlist-test@ucfilters-test.internal";
 
 const TEST_PRODUCT_ID = 887702;
 const TEST_PRODUCT_NAME = "Wishlist Test Filter";
+const ADMIN_ID = "wishlist-test-admin";
+const DEMAND_PRODUCT_ID = 887703;
+const DEMAND_PRODUCT_NAME = "Demand Test Filter";
 
 function bearerFor(id: string): string {
   return `Bearer ${issueToken({ id: Number(id), email: USER_EMAIL, firstName: "Wish", lastName: "List" })}`;
+}
+
+function adminBearer(): string {
+  return `Bearer ${issueToken({
+    id: ADMIN_ID,
+    email: "wishlist-admin@ucfilters-test.internal",
+    type: "team-session",
+    role: "admin",
+  })}`;
 }
 
 async function get(path: string, auth?: string) {
@@ -77,10 +89,19 @@ before(async () => {
   base = `http://localhost:${(server.address() as { port: number }).port}/api`;
 
   await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, [USER_ID, OTHER_USER_ID]));
+  await db.insert(teamUsersTable).values({
+    id: ADMIN_ID,
+    email: "wishlist-admin@ucfilters-test.internal",
+    name: "Wishlist Admin",
+    passwordHash: "x",
+    role: "admin",
+    isActive: true,
+  });
 });
 
 after(async () => {
   await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, [USER_ID, OTHER_USER_ID]));
+  await db.delete(teamUsersTable).where(eq(teamUsersTable.id, ADMIN_ID));
   await new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())));
 });
 
@@ -205,5 +226,58 @@ describe("Wishlist endpoints — add / list / duplicate / remove", () => {
     const { status, json } = await del(`/uc/wishlist/${TEST_PRODUCT_ID}`, bearerFor(USER_ID));
     assert.equal(status, 200);
     assert.deepEqual(json, { ok: true });
+  });
+});
+
+describe("GET /uc/admin/inventory/wishlist-demand", () => {
+  it("requires admin authentication", async () => {
+    const { status } = await get("/uc/admin/inventory/wishlist-demand");
+    assert.equal(status, 401);
+  });
+
+  it("groups waiting customers and reports pending versus notified rows", async () => {
+    const notifiedAt = new Date("2026-08-26T10:00:00.000Z");
+    await db.insert(ucWishlistTable).values([
+      {
+        userId: USER_ID,
+        productId: DEMAND_PRODUCT_ID,
+        productName: DEMAND_PRODUCT_NAME,
+        notifiedRestockAt: null,
+      },
+      {
+        userId: OTHER_USER_ID,
+        productId: DEMAND_PRODUCT_ID,
+        productName: DEMAND_PRODUCT_NAME,
+        notifiedRestockAt: notifiedAt,
+      },
+      {
+        userId: OTHER_USER_ID,
+        productId: TEST_PRODUCT_ID,
+        productName: TEST_PRODUCT_NAME,
+        notifiedRestockAt: notifiedAt,
+      },
+    ]);
+
+    const { status, json } = await get("/uc/admin/inventory/wishlist-demand", adminBearer());
+    assert.equal(status, 200);
+    const rows = json as Array<{
+      productId: number;
+      productName: string;
+      waitingCustomerCount: number;
+      pendingCustomerCount: number;
+      notifiedCustomerCount: number;
+      lastNotifiedRestockAt: string;
+    }>;
+    const demand = rows.find((row) => row.productId === DEMAND_PRODUCT_ID);
+    assert.ok(demand);
+    assert.equal(demand.productName, DEMAND_PRODUCT_NAME);
+    assert.equal(demand.waitingCustomerCount, 2);
+    assert.equal(demand.pendingCustomerCount, 1);
+    assert.equal(demand.notifiedCustomerCount, 1);
+    assert.equal(new Date(demand.lastNotifiedRestockAt).toISOString(), notifiedAt.toISOString());
+
+    await db.delete(ucWishlistTable).where(
+      inArray(ucWishlistTable.productId, [DEMAND_PRODUCT_ID, TEST_PRODUCT_ID]),
+    );
   });
 });
