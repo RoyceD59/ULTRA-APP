@@ -732,6 +732,36 @@ export interface UcCustomersCount {
   newThisMonth: number;
 }
 
+export type UpdateUcOrderCustomerStageBodyStage = typeof UpdateUcOrderCustomerStageBodyStage[keyof typeof UpdateUcOrderCustomerStageBodyStage];
+
+
+export const UpdateUcOrderCustomerStageBodyStage = {
+  accepted: 'accepted',
+  shipped: 'shipped',
+  delivered: 'delivered',
+} as const;
+
+export type UpdateUcOrderCustomerStageBody = {
+  stage: UpdateUcOrderCustomerStageBodyStage;
+  idempotencyKey: string;
+};
+
+export type UpdateUcWaterTestCustomerStageBodyStage = typeof UpdateUcWaterTestCustomerStageBodyStage[keyof typeof UpdateUcWaterTestCustomerStageBodyStage];
+
+
+export const UpdateUcWaterTestCustomerStageBodyStage = {
+  accepted: 'accepted',
+  conducted: 'conducted',
+  result_sent: 'result_sent',
+} as const;
+
+export type UpdateUcWaterTestCustomerStageBody = {
+  stage: UpdateUcWaterTestCustomerStageBodyStage;
+  idempotencyKey: string;
+  /** Required for result_sent */
+  resultDeliveryReference?: string;
+};
+
 export type ListUcCustomersParams = {
 /**
  * Search by name, email, or normalized international phone number (case-insensitive)

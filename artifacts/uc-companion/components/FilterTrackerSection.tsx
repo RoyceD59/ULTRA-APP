@@ -47,6 +47,8 @@ import { DAY_OFFSETS, closestDayOffset } from '@/hooks/filterNudge';
 interface Props {
   activation:    FilterActivation | null;
   onActivationChange: (a: FilterActivation | null) => void;
+  /** Receipt registration also creates a server-side capacity-tracked filter. */
+  onRegistrationCommitted?: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,7 +82,7 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function FilterTrackerSection({ activation, onActivationChange }: Props) {
+export default function FilterTrackerSection({ activation, onActivationChange, onRegistrationCommitted }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -331,6 +333,7 @@ export default function FilterTrackerSection({ activation, onActivationChange }:
         onClose={() => setShowRegisterModal(false)}
         onSave={async a => {
           onActivationChange(a);
+          onRegistrationCommitted?.();
           setShowRegisterModal(false);
           // Invite signed-in users to enable message reminder channels.
           // Only show the prompt once per registration (keyed by productId+activatedAt).
@@ -507,8 +510,16 @@ export function RegisterModal({
       if (status !== 'granted') {
         await requestNotificationPermission();
       }
+      const activatedAt = purchase.dateCreated || new Date().toISOString();
+      // Commit the selected receipt item before storing local reminder state.
+      // This is what makes the filter available to the capacity-enforced impact
+      // ledger; a failed commit deliberately schedules no local reminders.
+      await api.registerFilterPurchase(receipt.trim(), phone.trim(), {
+        productId: item.productId,
+        activatedAt,
+      });
       const activation = await scheduleAllFilterNotifications({
-        activatedAt:   purchase.dateCreated || new Date().toISOString(),
+        activatedAt,
         productId:     item.productId,
         productName:   item.name,
         lifespanDays:  item.lifespanDays,

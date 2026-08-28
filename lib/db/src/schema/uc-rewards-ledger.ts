@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, varchar, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, timestamp, numeric, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { ucUsersTable } from "./uc-users.js";
 
@@ -31,6 +31,9 @@ export const ucRewardsLedgerTable = pgTable("uc_rewards_ledger", {
   refId:     text("ref_id"),
   /** Admin email when granted manually; null for automated credits */
   grantedBy: varchar("granted_by", { length: 255 }),
+  /** Immutable conversion rule applied to redemptions; null for awards. */
+  conversionMode: text("conversion_mode"),
+  conversionValue: numeric("conversion_value", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   // Partial unique index: dedup automated credits by (user, ref), skip manual (null refId)

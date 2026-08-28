@@ -495,6 +495,79 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_filter_reminders effective_lifespan / adjusted_replace_offsets / synced_at columns ensured");
 
+  await pool.query(`
+    ALTER TABLE uc_users
+      ADD COLUMN IF NOT EXISTS rewards_qr_hash text,
+      ADD COLUMN IF NOT EXISTS rewards_qr_revoked_at timestamptz;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_users_rewards_qr_hash_idx
+      ON uc_users (rewards_qr_hash) WHERE rewards_qr_hash IS NOT NULL;
+    ALTER TABLE uc_orders
+      ADD COLUMN IF NOT EXISTS customer_stage text,
+      ADD COLUMN IF NOT EXISTS customer_stage_updated_at timestamptz;
+    ALTER TABLE uc_water_tests
+      ADD COLUMN IF NOT EXISTS customer_stage text,
+      ADD COLUMN IF NOT EXISTS customer_stage_updated_at timestamptz,
+      ADD COLUMN IF NOT EXISTS result_delivery_reference text;
+    ALTER TABLE uc_notif_prefs
+      ADD COLUMN IF NOT EXISTS opt_out_water_tests boolean NOT NULL DEFAULT false;
+    CREATE TABLE IF NOT EXISTS uc_customer_stage_events (
+      id serial PRIMARY KEY,
+      resource_type text NOT NULL,
+      resource_id text NOT NULL,
+      stage text NOT NULL,
+      idempotency_key text NOT NULL,
+      actor text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (resource_type, resource_id, stage),
+      UNIQUE (resource_type, resource_id, idempotency_key)
+    );
+    CREATE TABLE IF NOT EXISTS uc_registered_filters (
+      id serial PRIMARY KEY,
+      user_id integer NOT NULL REFERENCES uc_users(id),
+      product_id integer NOT NULL,
+      product_name text NOT NULL,
+      rated_capacity_litres integer NOT NULL,
+      activated_at timestamptz NOT NULL,
+      source_order_id integer,
+      active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_user_order_product_idx
+      ON uc_registered_filters (user_id, source_order_id, product_id);
+    CREATE INDEX IF NOT EXISTS uc_registered_filters_user_active_idx
+      ON uc_registered_filters (user_id, active);
+    CREATE TABLE IF NOT EXISTS uc_water_impact_ledger (
+      id serial PRIMARY KEY,
+      user_id integer NOT NULL REFERENCES uc_users(id),
+      registered_filter_id integer NOT NULL REFERENCES uc_registered_filters(id),
+      litres integer NOT NULL,
+      reason text NOT NULL,
+      actor text NOT NULL,
+      idempotency_key text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_water_impact_idempotency_idx
+      ON uc_water_impact_ledger (user_id, idempotency_key);
+    CREATE INDEX IF NOT EXISTS uc_water_impact_user_created_idx
+      ON uc_water_impact_ledger (user_id, created_at);
+    CREATE INDEX IF NOT EXISTS uc_water_impact_filter_idx
+      ON uc_water_impact_ledger (registered_filter_id, created_at);
+    CREATE TABLE IF NOT EXISTS uc_reward_conversion (
+      id text PRIMARY KEY DEFAULT 'singleton',
+      mode text NOT NULL DEFAULT 'kes',
+      value numeric(12,2) NOT NULL DEFAULT 100,
+      active boolean NOT NULL DEFAULT true,
+      updated_by text,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    INSERT INTO uc_reward_conversion (id) VALUES ('singleton')
+      ON CONFLICT (id) DO NOTHING;
+    ALTER TABLE uc_rewards_ledger
+      ADD COLUMN IF NOT EXISTS conversion_mode text,
+      ADD COLUMN IF NOT EXISTS conversion_value numeric(12,2);
+  `);
+  logger.info("Startup migration: rewards, registered filters, impact ledger, and customer-stage columns ensured");
+
   // Opt-in channel flags for filter replacement reminders (email / SMS / WhatsApp).
   // All default false — customers explicitly enable each channel.
   await pool.query(`

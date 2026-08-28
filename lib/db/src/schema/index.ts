@@ -58,3 +58,6 @@ export * from "./uc-rewards-ledger";
 export * from "./uc-referrals";
 export * from "./uc-wishlist";
 export * from "./uc-restock-demand-alerts";
+export * from "./uc-registered-filters";
+export * from "./uc-water-impact";
+export * from "./uc-reward-conversion";

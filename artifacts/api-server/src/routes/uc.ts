@@ -44,7 +44,8 @@ import {
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
   ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable, ucWishlistTable,
-  ucRestockDemandAlertsTable,
+  ucRestockDemandAlertsTable, ucRegisteredFiltersTable, ucWaterImpactLedgerTable,
+  ucRewardConversionTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
@@ -530,10 +531,19 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
   // never guess a lifespan for unknown products (the mobile filter tracker
   // treats lifespanDays > 0 as "trackable" and schedules reminders from it).
   let lifespanDays: number = typeof p["lifespanDays"] === "number" ? p["lifespanDays"] : 0;
+  const mockCapacityById: Record<number, number> = {
+    1: 150, 2: 150, 3: 150, 4: 150, 5: 150, 6: 150, 7: 400,
+    8: 150, 9: 400, 11: 2000, 13: 400, 22: 150, 23: 2000, 26: 400,
+  };
+  let filterCapacityLitres =
+    Number(p["filterCapacityLitres"] ?? p["capacityLitres"] ?? mockCapacityById[Number(p["id"])] ?? 0) || 0;
   if (Array.isArray(p["meta_data"])) {
     const meta = (p["meta_data"] as Array<{ key: string; value: unknown }>)
       .find(m => m.key === "filter_lifespan_days");
     if (meta && Number(meta.value) > 0) lifespanDays = Number(meta.value);
+    const capacityMeta = (p["meta_data"] as Array<{ key: string; value: unknown }>)
+      .find(m => m.key === "filter_capacity_litres");
+    if (capacityMeta && Number(capacityMeta.value) > 0) filterCapacityLitres = Number(capacityMeta.value);
   }
   return {
     id: p["id"],
@@ -559,6 +569,7 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
     stockQuantity: p["stock_quantity"] ?? p["stockQuantity"],
     tags: Array.isArray(p["tags"]) ? p["tags"] : [],
     lifespanDays,
+    filterCapacityLitres,
     enquiryOnly: p["enquiryOnly"] ?? false,
     // WooCommerce lifetime sales counter — used by the mobile app to rank
     // recommendations. Mock products have no sales history → 0.
@@ -888,6 +899,25 @@ export async function getProductLifespanMap(): Promise<Map<number, number> | nul
     }
   })();
   return _lifespanRefresh;
+}
+
+export async function getProductCapacityMap(): Promise<Map<number, number> | null> {
+  let normalized: Record<string, unknown>[] | null = null;
+  if (hasWCCredentials()) {
+    const products = await fetchAllPublishedProducts();
+    if (products) normalized = products.map(normalizeProduct);
+  } else {
+    normalized = MOCK_PRODUCTS.map(normalizeProduct);
+  }
+  if (!normalized) return null;
+  const map = new Map<number, number>();
+  for (const product of normalized) {
+    const capacity = Number(product["filterCapacityLitres"]);
+    if (Number.isInteger(capacity) && capacity > 0) {
+      map.set(Number(product["id"]), capacity);
+    }
+  }
+  return map;
 }
 
 /** Test hook — reset the lifespan cache between test cases. */
@@ -2983,6 +3013,81 @@ router.post("/uc/orders/:orderId/return-request", async (req: Request, res: Resp
 // ─── Admin: all orders (team view) ───────────────────────────────────────────
 // Returns every order in the database regardless of userId.
 // Requires admin auth (DB-anchored: caller must be a registered admin user).
+const ORDER_CUSTOMER_STAGES = ["accepted", "shipped", "delivered"] as const;
+const WATER_TEST_CUSTOMER_STAGES = ["accepted", "conducted", "result_sent"] as const;
+
+async function auditCustomerStagePush(input: {
+  resourceType: "order" | "water_test"; resourceId: string; userId: string;
+  stage: string; optOut: boolean;
+}): Promise<{ status: "sent" | "failed" | "skipped"; deliveryEvent: string }> {
+  const template = `${input.resourceType}-customer-stage`;
+  const audit = async (status: "sent" | "failed" | "skipped", deliveryEvent: string, errorMessage?: string) => {
+    await db.insert(ucNotificationLogTable).values({
+      channel: "push", provider: "expo", recipient: input.userId, template,
+      messageBody: `${input.resourceType} ${input.resourceId}: ${input.stage}`,
+      ...(input.resourceType === "order" ? { orderId: Number(input.resourceId) } : { testId: input.resourceId }),
+      status, deliveryEvent, deliveryEventAt: new Date(), errorMessage: errorMessage ?? null,
+    }).catch((err) => logger.warn({ err, ...input }, "Customer-stage push audit write failed"));
+  };
+  if (input.optOut) { await audit("skipped", "opted_out"); return { status: "skipped", deliveryEvent: "opted_out" }; }
+  const push = await getPushTokenRow(input.userId);
+  if (!push) { await audit("skipped", "no_push_token"); return { status: "skipped", deliveryEvent: "no_push_token" }; }
+  const noun = input.resourceType === "order" ? "order" : "water test";
+  const result = await callExpoPushApi(push.pushToken, `Your ${noun} update`, `Your ${noun} is ${input.stage.replace("_", " ")}.`, {
+    screen: input.resourceType === "order" ? "order-detail" : "water-test", id: input.resourceId, stage: input.stage,
+  });
+  if (result.staleToken) await removePushToken(input.userId);
+  if (!result.accepted) {
+    const event = result.staleToken ? "stale_token" : "provider_failure";
+    await audit("failed", event, result.error);
+    return { status: "failed", deliveryEvent: event };
+  }
+  await audit("sent", "accepted");
+  return { status: "sent", deliveryEvent: "accepted" };
+}
+
+async function saveCustomerStage(input: {
+  resourceType: "order" | "water_test"; resourceId: string; stage: string; userId: string;
+  currentStage: string | null; idempotencyKey: string; actor: string; resultDeliveryReference?: string;
+}): Promise<{ repeated: boolean }> {
+  const stages = input.resourceType === "order" ? ORDER_CUSTOMER_STAGES : WATER_TEST_CUSTOMER_STAGES;
+  const targetIndex = stages.indexOf(input.stage as never);
+  const currentIndex = input.currentStage ? stages.indexOf(input.currentStage as never) : -1;
+  if (targetIndex < 0 || targetIndex < currentIndex || targetIndex > currentIndex + 1) {
+    const error = new Error("Customer stages may only move forward one stage at a time") as Error & { code?: string };
+    error.code = "INVALID_STAGE_TRANSITION"; throw error;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${input.resourceType}:${input.resourceId}`]);
+    const existing = await client.query(
+      `SELECT stage FROM uc_customer_stage_events WHERE resource_type=$1 AND resource_id=$2 AND (stage=$3 OR idempotency_key=$4) LIMIT 1`,
+      [input.resourceType, input.resourceId, input.stage, input.idempotencyKey],
+    );
+    if (existing.rows[0]) { await client.query("COMMIT"); return { repeated: true }; }
+    // Re-read after lock so stale callers cannot bypass forward-only semantics.
+    const table = input.resourceType === "order" ? "uc_orders" : "uc_water_tests";
+    const row = await client.query(`SELECT customer_stage FROM ${table} WHERE id=$1 FOR UPDATE`, [input.resourceId]);
+    if (!row.rows[0]) { const e = new Error("Record not found") as Error & { code?: string }; e.code = "NOT_FOUND"; throw e; }
+    const lockedCurrent = row.rows[0].customer_stage as string | null;
+    const lockedIndex = lockedCurrent ? stages.indexOf(lockedCurrent as never) : -1;
+    if (targetIndex < lockedIndex || targetIndex > lockedIndex + 1) {
+      const e = new Error("Customer stages may only move forward one stage at a time") as Error & { code?: string }; e.code = "INVALID_STAGE_TRANSITION"; throw e;
+    }
+    if (input.resourceType === "water_test" && input.stage === "result_sent") {
+      await client.query(`UPDATE uc_water_tests SET customer_stage=$2, customer_stage_updated_at=now(), result_delivery_reference=$3 WHERE id=$1`,
+        [input.resourceId, input.stage, input.resultDeliveryReference]);
+    } else {
+      await client.query(`UPDATE ${table} SET customer_stage=$2, customer_stage_updated_at=now() WHERE id=$1`, [input.resourceId, input.stage]);
+    }
+    await client.query(`INSERT INTO uc_customer_stage_events (resource_type, resource_id, stage, idempotency_key, actor) VALUES ($1,$2,$3,$4,$5)`,
+      [input.resourceType, input.resourceId, input.stage, input.idempotencyKey, input.actor]);
+    await client.query("COMMIT");
+    return { repeated: false };
+  } catch (err) { await client.query("ROLLBACK").catch(() => undefined); throw err; } finally { client.release(); }
+}
+
 router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void> => {
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) {
@@ -3039,6 +3144,8 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
       // True only for orders inserted by the webhook recovery path —
       // persisted at insert time, never derived from userId heuristics.
       webhookRecovery:  o.webhookRecovery ?? false,
+      customerStage:    o.customerStage ?? null,
+      customerStageUpdatedAt: o.customerStageUpdatedAt ?? null,
       lineItems: (itemsByOrder[o.id] ?? []).map(i => ({
         productId: i.productId,
         name:      i.name,
@@ -3087,6 +3194,37 @@ router.patch("/uc/admin/orders/:id/status", async (req: Request, res: Response):
   } catch (err) {
     logger.error({ err, orderId: id }, "Failed to update order status");
     res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
+router.patch("/uc/admin/orders/:id/customer-stage", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const id = Number(req.params["id"]);
+  const stage = typeof req.body?.stage === "string" ? req.body.stage.trim().toLowerCase() : "";
+  const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey.trim().slice(0, 200) : "";
+  if (!Number.isInteger(id) || id <= 0 || !(ORDER_CUSTOMER_STAGES as readonly string[]).includes(stage) || !idempotencyKey) {
+    res.status(400).json({ error: "A valid order id, stage (accepted, shipped, delivered), and idempotencyKey are required" }); return;
+  }
+  const [order] = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.id, id)).limit(1);
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  try {
+    const saved = await saveCustomerStage({ resourceType: "order", resourceId: String(id), stage, userId: order.userId,
+      currentStage: order.customerStage, idempotencyKey, actor: String(verifyToken(req.headers["authorization"])?.email ?? "admin") });
+    if (saved.repeated) { res.json({ ok: true, id, customerStage: stage, repeated: true, notification: { status: "skipped", deliveryEvent: "already_processed" } }); return; }
+    const numericUserId = Number(order.userId);
+    const [activeUsers, prefs] = await Promise.all([
+      Number.isInteger(numericUserId) ? db.select({ id: ucUsersTable.id }).from(ucUsersTable).where(and(eq(ucUsersTable.id, numericUserId), isNull(ucUsersTable.deletedAt))).limit(1) : Promise.resolve([]),
+      db.select().from(ucNotifPrefsTable).where(eq(ucNotifPrefsTable.userId, order.userId)).limit(1),
+    ]);
+    if (!activeUsers[0]) {
+      await db.insert(ucNotificationLogTable).values({ channel: "push", provider: "expo", recipient: order.userId, template: "order-customer-stage", messageBody: `order ${id}: ${stage}`, orderId: id, status: "skipped", deliveryEvent: "no_active_account", deliveryEventAt: new Date() });
+      res.json({ ok: true, id, customerStage: stage, notification: { status: "skipped", deliveryEvent: "no_active_account" }, warning: "No active Companion account is linked to this order" }); return;
+    }
+    res.json({ ok: true, id, customerStage: stage, notification: await auditCustomerStagePush({ resourceType: "order", resourceId: String(id), userId: order.userId, stage, optOut: prefs[0]?.optOutOrders ?? false }) });
+  } catch (err) {
+    const e = err as Error & { code?: string };
+    if (e.code === "INVALID_STAGE_TRANSITION") res.status(409).json({ error: e.message });
+    else { logger.error({ err, orderId: id }, "Failed to update order customer stage"); res.status(500).json({ error: "Failed to update order customer stage" }); }
   }
 });
 
@@ -3431,11 +3569,50 @@ router.get("/uc/admin/water-tests", async (req: Request, res: Response): Promise
       photos:      w.photos ?? [],
       videos:      w.videos ?? [],
       status:      w.status,
+      customerStage: w.customerStage ?? null,
+      customerStageUpdatedAt: w.customerStageUpdatedAt ?? null,
+      resultDeliveryReference: w.resultDeliveryReference ?? null,
       createdAt:   w.createdAt,
     })));
   } catch (err) {
     logger.error({ err }, "Failed to load admin water tests");
     res.status(500).json({ error: "Failed to load water tests" });
+  }
+});
+
+router.patch("/uc/admin/water-tests/:id/customer-stage", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const id = String(req.params["id"] ?? "").trim();
+  const stage = typeof req.body?.stage === "string" ? req.body.stage.trim().toLowerCase() : "";
+  const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey.trim().slice(0, 200) : "";
+  const resultDeliveryReference = typeof req.body?.resultDeliveryReference === "string" ? req.body.resultDeliveryReference.trim().slice(0, 500) : "";
+  if (!id || !(WATER_TEST_CUSTOMER_STAGES as readonly string[]).includes(stage) || !idempotencyKey) {
+    res.status(400).json({ error: "A water test id, stage (accepted, conducted, result_sent), and idempotencyKey are required" }); return;
+  }
+  if (stage === "result_sent" && !resultDeliveryReference) {
+    res.status(400).json({ error: "resultDeliveryReference is required before marking a water test result sent" }); return;
+  }
+  const [test] = await db.select().from(ucWaterTestsTable).where(eq(ucWaterTestsTable.id, id)).limit(1);
+  if (!test) { res.status(404).json({ error: "Water test not found" }); return; }
+  try {
+    const saved = await saveCustomerStage({ resourceType: "water_test", resourceId: id, stage, userId: test.userId,
+      currentStage: test.customerStage, idempotencyKey, resultDeliveryReference: resultDeliveryReference || undefined,
+      actor: String(verifyToken(req.headers["authorization"])?.email ?? "admin") });
+    if (saved.repeated) { res.json({ ok: true, id, customerStage: stage, repeated: true, notification: { status: "skipped", deliveryEvent: "already_processed" } }); return; }
+    const numericUserId = Number(test.userId);
+    const [activeUsers, prefs] = await Promise.all([
+      Number.isInteger(numericUserId) ? db.select({ id: ucUsersTable.id }).from(ucUsersTable).where(and(eq(ucUsersTable.id, numericUserId), isNull(ucUsersTable.deletedAt))).limit(1) : Promise.resolve([]),
+      db.select().from(ucNotifPrefsTable).where(eq(ucNotifPrefsTable.userId, test.userId)).limit(1),
+    ]);
+    if (!activeUsers[0]) {
+      await db.insert(ucNotificationLogTable).values({ channel: "push", provider: "expo", recipient: test.userId, template: "water_test-customer-stage", messageBody: `water_test ${id}: ${stage}`, testId: id, status: "skipped", deliveryEvent: "no_active_account", deliveryEventAt: new Date() });
+      res.json({ ok: true, id, customerStage: stage, notification: { status: "skipped", deliveryEvent: "no_active_account" }, warning: "No active Companion account is linked to this water test" }); return;
+    }
+    res.json({ ok: true, id, customerStage: stage, notification: await auditCustomerStagePush({ resourceType: "water_test", resourceId: id, userId: test.userId, stage, optOut: prefs[0]?.optOutWaterTests ?? false }) });
+  } catch (err) {
+    const e = err as Error & { code?: string };
+    if (e.code === "INVALID_STAGE_TRANSITION") res.status(409).json({ error: e.message });
+    else { logger.error({ err, waterTestId: id }, "Failed to update water-test customer stage"); res.status(500).json({ error: "Failed to update water-test customer stage" }); }
   }
 });
 
@@ -4181,7 +4358,27 @@ router.post(
   "/uc/filters/register-purchase",
   lookupLimiter,
   async (req: Request, res: Response): Promise<void> => {
-    const { receipt, phone } = req.body as { receipt?: unknown; phone?: unknown };
+    const claims = verifyToken(req.headers["authorization"]);
+    const accountId = claims ? Number(claims.id) : 0;
+    if (!Number.isInteger(accountId) || accountId <= 0 || accountId >= 1_000_000_000) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const [account] = await db.select({ id: ucUsersTable.id })
+      .from(ucUsersTable)
+      .where(and(eq(ucUsersTable.id, accountId), isNull(ucUsersTable.deletedAt)))
+      .limit(1);
+    if (!account) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const { receipt, phone, productId: commitProductId, activatedAt: commitActivatedAt } = req.body as {
+      receipt?: unknown;
+      phone?: unknown;
+      productId?: unknown;
+      activatedAt?: unknown;
+    };
     const receiptDigits = String(receipt ?? "").trim().replace(/^#/, "");
     const phoneDigits = String(phone ?? "").replace(/\D/g, "");
     if (!/^\d{1,10}$/.test(receiptDigits) || phoneDigits.length < 9) {
@@ -4193,7 +4390,7 @@ router.post(
     const orderId = Number(receiptDigits);
 
     type RegisterItem = {
-      productId: number; name: string; quantity: number; lifespanDays: number;
+      productId: number; name: string; quantity: number; lifespanDays: number; capacityLitres: number;
     };
     const respond = async (
       source: "app" | "store",
@@ -4215,10 +4412,53 @@ router.post(
         });
         return;
       }
+      const capacities = await getProductCapacityMap();
+      if (!capacities) {
+        res.status(503).json({
+          error: "Product capacity data temporarily unreachable — please try again shortly.",
+          retryable: true,
+        });
+        return;
+      }
       const items: RegisterItem[] = rawItems.map((i) => ({
         ...i,
         lifespanDays: lifespans.get(i.productId) ?? 0, // 0 = not trackable, never guessed
+        capacityLitres: capacities.get(i.productId) ?? 0,
       }));
+      if (commitProductId !== undefined || commitActivatedAt !== undefined) {
+        const productId = Number(commitProductId);
+        const item = items.find((candidate) => candidate.productId === productId);
+        const activatedAt = new Date(String(commitActivatedAt ?? dateCreated ?? ""));
+        if (!item || item.lifespanDays <= 0) {
+          res.status(400).json({ error: "Select an eligible filter from this purchase." });
+          return;
+        }
+        if (!item.capacityLitres || !Number.isInteger(item.capacityLitres)) {
+          res.status(422).json({ error: "This filter does not have a rated litre capacity yet. Contact Ultra-Clear support." });
+          return;
+        }
+        if (Number.isNaN(activatedAt.getTime()) || activatedAt.getTime() > Date.now() + 60 * 60 * 1000) {
+          res.status(400).json({ error: "Invalid activation date." });
+          return;
+        }
+        const inserted = await db.insert(ucRegisteredFiltersTable)
+          .values({
+            userId: accountId,
+            productId,
+            productName: item.name,
+            ratedCapacityLitres: item.capacityLitres,
+            activatedAt,
+            sourceOrderId: orderId,
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (inserted.length === 0) {
+          res.status(409).json({ error: "This filter from this receipt is already registered to your account." });
+          return;
+        }
+        res.status(201).json({ source, orderId, status, dateCreated, items, registration: inserted[0] });
+        return;
+      }
       res.json({ source, orderId, status, dateCreated, items });
     };
 
@@ -5168,7 +5408,7 @@ router.delete("/uc/notify/register", async (req: Request, res: Response): Promis
  * Works even when no push token has been registered yet: prefs are stored in
  * uc_notif_prefs and synced into uc_push_tokens the next time a token is
  * registered, so user opt-outs are never silently lost.
- * Body: { optOutOrders?: boolean, reminderEmail?: boolean,
+ * Body: { optOutOrders?: boolean, optOutWaterTests?: boolean, reminderEmail?: boolean,
  *         reminderSms?: boolean, reminderWhatsapp?: boolean }
  * The reminder* flags are the OPT-IN switches for filter-reminder delivery
  * via external channels (email / SMS / WhatsApp) — only provided keys are
@@ -5182,13 +5422,15 @@ router.post("/uc/notify/prefs", async (req: Request, res: Response): Promise<voi
   }
   const prefsNumericId = Number(userId);
   if (await guardDeletedAccount(prefsNumericId, res)) return;
-  const { optOutOrders, reminderEmail, reminderSms, reminderWhatsapp } = req.body as {
+  const { optOutOrders, optOutWaterTests, reminderEmail, reminderSms, reminderWhatsapp } = req.body as {
     optOutOrders?: boolean;
+    optOutWaterTests?: boolean;
     reminderEmail?: boolean;
     reminderSms?: boolean;
     reminderWhatsapp?: boolean;
   };
   const value = optOutOrders ?? false;
+  const waterTestValue = optOutWaterTests ?? false;
   // Only include reminder flags that were explicitly provided (and boolean).
   const reminderSet: Partial<{
     reminderEmail: boolean; reminderSms: boolean; reminderWhatsapp: boolean;
@@ -5200,11 +5442,12 @@ router.post("/uc/notify/prefs", async (req: Request, res: Response): Promise<voi
     // Upsert into the dedicated prefs table — always works, even without a push token row.
     await db
       .insert(ucNotifPrefsTable)
-      .values({ userId, optOutOrders: value, ...reminderSet, updatedAt: new Date() })
+      .values({ userId, optOutOrders: value, optOutWaterTests: waterTestValue, ...reminderSet, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: ucNotifPrefsTable.userId,
         set: {
           ...(optOutOrders !== undefined ? { optOutOrders: value } : {}),
+          ...(optOutWaterTests !== undefined ? { optOutWaterTests: waterTestValue } : {}),
           ...reminderSet,
           updatedAt: new Date(),
         },
@@ -5243,6 +5486,7 @@ router.get("/uc/notify/prefs", async (req: Request, res: Response): Promise<void
       .limit(1);
     res.json({
       optOutOrders:     row?.optOutOrders     ?? false,
+      optOutWaterTests: row?.optOutWaterTests ?? false,
       reminderEmail:    row?.reminderEmail    ?? false,
       reminderSms:      row?.reminderSms      ?? false,
       reminderWhatsapp: row?.reminderWhatsapp ?? false,

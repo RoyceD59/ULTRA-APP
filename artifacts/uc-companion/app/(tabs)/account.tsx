@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Share,
   Modal, TextInput, ActivityIndicator, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import { useApi } from '@/hooks/useApi';
+import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
 import * as Haptics from 'expo-haptics';
@@ -24,6 +24,8 @@ import SwipeTabs from '@/components/SwipeTabs';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { buildRewardsQrPayload } from '@/lib/rewardsQr';
+import { readStoredRewardsQrToken, storeRewardsQrToken } from '@/lib/rewardsQrStorage';
+import PersonalImpactSection from '@/components/PersonalImpactSection';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -417,6 +419,8 @@ function AccountScreenContent() {
   const [exporting,          setExporting]          = useState(false);
   const [exportError,        setExportError]        = useState('');
   const [ownerDetailsOpen,   setOwnerDetailsOpen]    = useState(false);
+  const [rewardsQrToken,     setRewardsQrToken]       = useState<string | null>(null);
+  const qrRecoveryForUser = useRef<number | null>(null);
 
   // Auto-open the Edit Profile modal when navigated here with ?editProfile=1
   // (e.g. from the ticket form's "add phone number" link).
@@ -498,6 +502,54 @@ function AccountScreenContent() {
     staleTime: 0,
     refetchOnMount: 'always',
   });
+
+  const { data: referral } = useQuery({
+    queryKey: ['my-referral'],
+    queryFn: () => api.getMyReferral(),
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // A token returned by rewards is only present at server assignment time.
+  // Persist it securely; if the API has no token and this device has none,
+  // recover once with the dedicated rotation endpoint.
+  useEffect(() => {
+    if (!user || !rewards) return;
+    let active = true;
+    (async () => {
+      const local = await readStoredRewardsQrToken(user.id);
+      if (!active) return;
+      if (local) { setRewardsQrToken(local); return; }
+      if (rewards.qrToken) {
+        await storeRewardsQrToken(user.id, rewards.qrToken);
+        if (active) setRewardsQrToken(rewards.qrToken);
+        return;
+      }
+      if (qrRecoveryForUser.current === user.id) return;
+      qrRecoveryForUser.current = user.id;
+      const replacement = await api.rotateRewardsQr();
+      await storeRewardsQrToken(user.id, replacement.qrToken);
+      if (active) setRewardsQrToken(replacement.qrToken);
+    })().catch(() => {
+      // Keep the QR unavailable rather than falling back to an identifying value.
+      if (active) setRewardsQrToken(null);
+    });
+    return () => { active = false; };
+  }, [api, rewards, user]);
+
+  async function shareImpact() {
+    if (!rewards) return;
+    await Share.share({
+      message: `I’ve refilled ${rewards.impact.totalLitres} litres with Ultra-Clear and reached ${rewards.impact.starLevel} stars. Cleaner water, less waste — proud to be part of the Ultra-Clear green-living community!`,
+    });
+  }
+
+  async function shareCompanionApp() {
+    await Share.share({
+      // Referral service owns the public app URL and attribution wording.
+      message: referral?.shareMessage ?? 'Join me on the Ultra-Clear Companion app for filter care and cleaner-water living.',
+    });
+  }
 
   // Must be called unconditionally before any early return (Rules of Hooks).
   const cartBarInset = useCartBarInset();
@@ -695,14 +747,16 @@ function AccountScreenContent() {
                 <View style={[rewardStyles.qrSection, { borderBottomColor: colors.border }]}>
                   <Text style={[rewardStyles.qrLabel, { color: colors.mutedForeground }]}>Your Rewards QR Code</Text>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
-                    <QRCode
+                    {rewardsQrToken ? <QRCode
                       testID="account-rewards-qr"
-                      value={buildRewardsQrPayload(user.id, user.phone)}
+                      value={buildRewardsQrPayload(rewardsQrToken)}
                       size={120}
                       color="#1a1a1a"
                       backgroundColor="#ffffff"
-                    />
+                    /> : <ActivityIndicator testID="account-rewards-qr-loading" color={colors.primary} size="large" />}
                   </View>
+                  {rewards?.impact.hasRefilled ? <View style={[rewardStyles.refilledBadge, { backgroundColor: colors.primaryLight }]}><Ionicons name="water" size={13} color={colors.primary} /><Text style={[rewardStyles.refilledText, { color: colors.primary }]}>I refilled</Text></View> : null}
+                  {rewards ? <Text style={[rewardStyles.impactSummary, { color: colors.mutedForeground }]}>{rewards.impact.totalLitres} L refilled · {rewards.impact.starLevel} ★ private level</Text> : null}
                   <Text style={[rewardStyles.qrHint, { color: colors.mutedForeground }]}>
                     Show this to field staff or scan in the admin panel to earn points
                   </Text>
@@ -733,6 +787,18 @@ function AccountScreenContent() {
             </View>
           )}
 
+          {rewards ? <PersonalImpactSection impact={rewards.impact} onUpdated={impact => {
+            queryClient.setQueryData<CustomerRewards>(['customer-rewards'], current => current ? { ...current, impact } : current);
+          }} /> : null}
+
+          {rewards ? <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Share Ultra-Clear</Text>
+            <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <TouchableOpacity testID="share-impact" onPress={shareImpact} style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: colors.border }]}><View style={[styles.menuIcon, { backgroundColor: colors.primaryLight }]}><Ionicons name="leaf-outline" size={18} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={[styles.menuLabel, { color: colors.text }]}>Share my impact</Text><Text style={[styles.shareSub, { color: colors.mutedForeground }]}>Celebrate your green-living contribution</Text></View><Ionicons name="share-outline" size={18} color={colors.primary} /></TouchableOpacity>
+              <TouchableOpacity testID="share-companion-app" onPress={shareCompanionApp} style={styles.menuItem}><View style={[styles.menuIcon, { backgroundColor: colors.primaryLight }]}><Ionicons name="people-outline" size={18} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={[styles.menuLabel, { color: colors.text }]}>Share Ultra-Clear app</Text><Text style={[styles.shareSub, { color: colors.mutedForeground }]}>Invite a friend to Companion</Text></View><Ionicons name="share-outline" size={18} color={colors.primary} /></TouchableOpacity>
+            </View>
+          </View> : null}
+
           {/* Filter tracker */}
           <FilterTrackerSection
             activation={filterActivation}
@@ -740,6 +806,7 @@ function AccountScreenContent() {
               setFilterActivation(a);
               refreshNotifStatus();
             }}
+            onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: ['customer-rewards'] })}
           />
 
           {/* Recent orders */}
@@ -875,6 +942,7 @@ const styles = StyleSheet.create({
   menuItem:         { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   menuIcon:         { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   menuLabel:        { flex: 1, fontSize: 15, fontWeight: '500' as const },
+  shareSub:         { fontSize: 11, marginTop: 2 },
   logoutBtn:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14 },
   logoutText:          { fontSize: 15, fontWeight: '600' as const },
   downloadDataBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14 },
@@ -903,6 +971,9 @@ const rewardStyles = StyleSheet.create({
   qrLabel:        { fontSize: 12, fontWeight: '600' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   qrWrap:         { padding: 12, borderRadius: 12, borderWidth: 1 },
   qrHint:         { fontSize: 11, textAlign: 'center' as const, maxWidth: 240 },
+  refilledBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10 },
+  refilledText:   { fontSize: 11, fontWeight: '700' as const },
+  impactSummary:  { fontSize: 12, textAlign: 'center' as const },
   historySection: { padding: 14, gap: 0 },
   historyTitle:   { fontSize: 13, fontWeight: '700' as const, marginBottom: 8 },
   historyRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, gap: 8 },

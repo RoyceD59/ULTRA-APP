@@ -34,6 +34,8 @@ export const ucOrdersTable = pgTable("uc_orders", {
   // path (customer paid but the app lost connectivity before createOrder fired).
   // Set at insert time — never derived from userId heuristics.
   webhookRecovery:  boolean("webhook_recovery").notNull().default(false),
+  customerStage:    text("customer_stage"),
+  customerStageUpdatedAt: timestamp("customer_stage_updated_at", { withTimezone: true }),
 }, (t) => [
   // Partial unique index: prevent duplicate orders for the same payment reference.
   // Excludes empty strings so that COD orders (no reference) are not affected.

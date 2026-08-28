@@ -256,6 +256,7 @@ export interface RegisterPurchaseItem {
   name:         string;
   quantity:     number;
   lifespanDays: number; // 0 = not trackable (no catalogue lifespan — never guessed)
+  capacityLitres?: number;
 }
 
 export interface RegisterPurchaseResult {
@@ -264,6 +265,43 @@ export interface RegisterPurchaseResult {
   status:      string;
   dateCreated: string;
   items:       RegisterPurchaseItem[];
+  registration?: RegisteredImpactFilter;
+}
+
+export interface RegisteredImpactFilter {
+  id: number;
+  productId: number;
+  productName: string;
+  ratedCapacityLitres: number;
+  usedLitres: number;
+  remainingCapacityLitres: number;
+  activatedAt: string;
+  sourceOrderId: number | null;
+}
+
+export interface PersonalImpact {
+  totalLitres: number;
+  starLevel: number;
+  hasRefilled: boolean;
+  remainingCapacityLitres: number;
+  filters: RegisteredImpactFilter[];
+  history: Array<{
+    id: number;
+    registeredFilterId: number;
+    productName: string;
+    litres: number;
+    reason: string;
+    actor: string;
+    createdAt: string;
+  }>;
+}
+
+export interface CustomerRewards {
+  balance: number;
+  ledger: Array<{ id: number; points: number; reason: string; eventType: string; createdAt: string }>;
+  /** Returned only when the API has just assigned/reassigned the opaque token. */
+  qrToken: string | null;
+  impact: PersonalImpact;
 }
 
 export interface CodeValidationResult {
@@ -354,8 +392,8 @@ export function useApi() {
      * Look up a purchase by receipt/order number + the checkout phone number
      * so the buyer can register their filter from the purchase record.
      */
-    registerFilterPurchase: (receipt: string, phone: string) =>
-      post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone }),
+    registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string }) =>
+      post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone, ...registration }),
     getLocations: () => get<MapLocation[]>('/api/uc/locations'),
     getTickets: () => get<MaintenanceTicket[]>('/api/uc/tickets'),
     createTicket: (data: {
@@ -517,11 +555,15 @@ export function useApi() {
     ) => post<{ ok: boolean }>('/api/uc/impact/override', { litresOffset, usersOffset, updatedBy }),
 
     /** Fetch the current user's loyalty-points balance and recent ledger. */
-    getRewards: () =>
-      get<{
-        balance: number;
-        ledger: Array<{ id: number; points: number; reason: string; eventType: string; createdAt: string }>;
-      }>('/api/uc/customer/rewards'),
+    getRewards: () => get<CustomerRewards>('/api/uc/customer/rewards'),
+    /** Explicit recovery action; normally the issued token is reused from SecureStore. */
+    rotateRewardsQr: () => post<{ qrToken: string }>('/api/uc/customer/rewards/qr/rotate'),
+    addPersonalImpact: (data: {
+      registeredFilterId: number;
+      litres: number;
+      reason?: string;
+      idempotencyKey: string;
+    }) => post<{ repeated: boolean; entryId: number; impact: PersonalImpact }>('/api/uc/customer/impact', data),
 
     /** Submit a thumbs-up or thumbs-down rating for an Alison response. */
     chatFeedback: (

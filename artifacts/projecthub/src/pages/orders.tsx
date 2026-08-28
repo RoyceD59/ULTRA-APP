@@ -42,8 +42,14 @@ interface AdminOrder {
   paymentMethod: string;
   paymentReference: string;
   webhookRecovery: boolean;
+  customerStage?: "accepted" | "shipped" | "delivered" | null;
+  customerStageUpdatedAt?: string | null;
   lineItems: { productId: number; name: string; quantity: number; total: string }[];
 }
+
+const CUSTOMER_STAGES = ["accepted", "shipped", "delivered"] as const;
+type CustomerStage = typeof CUSTOMER_STAGES[number];
+function customerStageLabel(stage: CustomerStage) { return stage.charAt(0).toUpperCase() + stage.slice(1); }
 
 interface ReminderGapItem {
   productId: number;
@@ -370,6 +376,35 @@ function OrderActions({
   );
 }
 
+/** This is intentionally separate from payment/fulfilment status above. */
+function CustomerStageActions({ order, token, onChanged }: { order: AdminOrder; token: string; onChanged: () => void }) {
+  const [pending, setPending] = useState<CustomerStage | null>(null);
+  const [result, setResult] = useState("");
+  const [error, setError] = useState("");
+  const currentIndex = order.customerStage ? CUSTOMER_STAGES.indexOf(order.customerStage) : -1;
+  async function advance(stage: CustomerStage) {
+    setPending(stage); setError(""); setResult("");
+    try {
+      const response = await fetch(`${BASE}/api/uc/admin/orders/${order.id}/customer-stage`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ stage }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string; notification?: { status?: string; message?: string }; push?: { status?: string; message?: string }; customerStage?: string };
+      if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
+      const notification = body.notification ?? body.push;
+      setResult(notification?.status ? `Customer stage saved. Push ${notification.status}${notification.message ? `: ${notification.message}` : ""}.` : "Customer stage saved. Push outcome recorded.");
+      onChanged();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not update customer stage."); }
+    finally { setPending(null); }
+  }
+  return <div className="mt-3 pt-3 border-t space-y-2">
+    <p className="text-xs font-medium">Customer-facing delivery update <span className="font-normal text-muted-foreground">— separate from internal order status</span></p>
+    <div className="flex flex-wrap gap-1.5">{CUSTOMER_STAGES.map((stage, index) => <Button key={stage} size="sm" variant={order.customerStage === stage ? "default" : "outline"} className="h-7 text-xs" disabled={pending !== null || index <= currentIndex} onClick={() => advance(stage)}>{pending === stage ? "Saving…" : customerStageLabel(stage)}</Button>)}</div>
+    {result && <p className="text-xs text-emerald-700" role="status">{result}</p>}
+    {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
+  </div>;
+}
+
 // ─── Order card ───────────────────────────────────────────────────────────────
 
 function OrderCard({
@@ -529,6 +564,7 @@ function OrderCard({
           </div>
         </div>
         <OrderActions order={order} token={token} onChanged={onChanged} />
+        <CustomerStageActions order={order} token={token} onChanged={onChanged} />
       </CardContent>
     </Card>
   );

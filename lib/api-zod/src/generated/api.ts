@@ -9,6 +9,37 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Advance an order's customer-visible status and send one audited push
+ */
+export const UpdateUcOrderCustomerStageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateUcOrderCustomerStageBody = zod.object({
+  "stage": zod.enum(['accepted', 'shipped', 'delivered']),
+  "idempotencyKey": zod.string()
+})
+
+export const UpdateUcOrderCustomerStageResponse = zod.unknown()
+
+
+/**
+ * @summary Advance a water-test customer stage and send one audited push
+ */
+export const UpdateUcWaterTestCustomerStageParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateUcWaterTestCustomerStageBody = zod.object({
+  "stage": zod.enum(['accepted', 'conducted', 'result_sent']),
+  "idempotencyKey": zod.string(),
+  "resultDeliveryReference": zod.string().optional().describe('Required for result_sent')
+})
+
+export const UpdateUcWaterTestCustomerStageResponse = zod.unknown()
+
+
+/**
  * @summary List all UC products with live stock from WooCommerce
  */
 export const ListUcInventoryResponse = zod.object({

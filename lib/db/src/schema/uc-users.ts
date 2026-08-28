@@ -30,6 +30,9 @@ export const ucUsersTable = pgTable("uc_users", {
    *  token minted before the reset is rejected by the guard, invalidating all
    *  active sessions immediately after a successful password change. */
   credentialVersion:  integer("credential_version").notNull().default(0),
+  /** SHA-256 of the permanent, opaque Rewards QR token. */
+  rewardsQrHash:     text("rewards_qr_hash").unique(),
+  rewardsQrRevokedAt: timestamp("rewards_qr_revoked_at", { withTimezone: true }),
 });
 
 export type UcUser = typeof ucUsersTable.$inferSelect;

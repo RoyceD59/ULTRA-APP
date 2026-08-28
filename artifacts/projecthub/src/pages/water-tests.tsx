@@ -35,7 +35,16 @@ interface AdminWaterTest {
   photos: string[];
   videos: string[];
   status: string;
+  customerStage?: "accepted" | "conducted" | "result_sent" | null;
+  customerStageUpdatedAt?: string | null;
+  hasResult?: boolean;
   createdAt: string;
+}
+
+const CUSTOMER_STAGES = ["accepted", "conducted", "result_sent"] as const;
+type CustomerStage = typeof CUSTOMER_STAGES[number];
+function customerStageLabel(stage: CustomerStage) {
+  return stage === "result_sent" ? "Result sent" : stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
 // ─── Login Gate ───────────────────────────────────────────────────────────────
@@ -158,6 +167,10 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
   const [updating, setUpdating] = useState(false);
   const [error, setError]       = useState("");
   const [saved, setSaved]       = useState(false);
+  const [stageSaving, setStageSaving] = useState<CustomerStage | null>(null);
+  const [stageResult, setStageResult] = useState("");
+  const [stageError, setStageError] = useState("");
+  const [deliveryReference, setDeliveryReference] = useState("");
 
   // Auto-dismiss the "Saved ✓" confirmation after ~2 seconds
   useEffect(() => {
@@ -190,6 +203,25 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
     } finally {
       setUpdating(false);
     }
+  }
+
+  async function changeCustomerStage(stage: CustomerStage) {
+    if (stageSaving) return;
+    setStageSaving(stage); setStageError(""); setStageResult("");
+    try {
+      const res = await fetch(`${BASE}/api/uc/admin/water-tests/${test.id}/customer-stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ stage, ...(deliveryReference.trim() ? { resultDeliveryReference: deliveryReference.trim() } : {}) }),
+      });
+      const body = await res.json().catch(() => ({})) as { error?: string; notification?: { status?: string; message?: string }; push?: { status?: string; message?: string }; customerStage?: string };
+      if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
+      const push = body.notification ?? body.push;
+      setStageResult(push?.status ? `Customer stage saved. Push ${push.status}${push.message ? `: ${push.message}` : ""}.` : "Customer stage saved. Push outcome recorded.");
+      onUpdate({ ...test, customerStage: (body.customerStage ?? stage) as CustomerStage });
+    } catch (cause) {
+      setStageError(cause instanceof Error ? cause.message : "Could not update customer stage.");
+    } finally { setStageSaving(null); }
   }
 
   return (
@@ -266,6 +298,17 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
           )}
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
+        <div className="pt-3 mt-3 border-t space-y-2">
+          <p className="text-xs font-medium">Customer-facing test update <span className="font-normal text-muted-foreground">— separate from internal booking status</span></p>
+          {(!test.hasResult && !deliveryReference) && <div className="max-w-sm"><Label htmlFor={`result-reference-${test.id}`} className="text-xs">Result-delivery reference <span className="text-muted-foreground">(required before Result sent if no result is attached)</span></Label><Input id={`result-reference-${test.id}`} className="h-8 mt-1 text-xs" value={deliveryReference} onChange={event => setDeliveryReference(event.target.value)} placeholder="Result link, file, or delivery note" /></div>}
+          <div className="flex flex-wrap gap-1.5">{CUSTOMER_STAGES.map((stage, index) => {
+            const current = test.customerStage ? CUSTOMER_STAGES.indexOf(test.customerStage) : -1;
+            const needsReference = stage === "result_sent" && !test.hasResult && !deliveryReference.trim();
+            return <Button key={stage} size="sm" variant={test.customerStage === stage ? "default" : "outline"} className="h-7 text-xs" disabled={stageSaving !== null || index <= current || needsReference} onClick={() => changeCustomerStage(stage)}>{stageSaving === stage ? "Saving…" : customerStageLabel(stage)}</Button>;
+          })}</div>
+          {stageResult && <p className="text-xs text-emerald-700" role="status">{stageResult}</p>}
+          {stageError && <p className="text-xs text-destructive" role="alert">{stageError}</p>}
+        </div>
       </CardContent>
     </Card>
   );

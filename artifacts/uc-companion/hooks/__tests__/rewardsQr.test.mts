@@ -2,17 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildRewardsQrPayload } from "../../lib/rewardsQr";
 
-test("rewards QR payload carries the account ID and normalized phone", () => {
-  assert.equal(
-    buildRewardsQrPayload(123, " +254 700 123 456 "),
-    "uc-rewards:123:+254 700 123 456",
-  );
+test("rewards QR payload contains only the opaque server token", () => {
+  const token = "vYcEoZCdkj-Qr_Token";
+  const payload = buildRewardsQrPayload(token);
+  assert.equal(payload, "uc-rewards:v1:vYcEoZCdkj-Qr_Token");
+  assert.equal(payload.includes("254"), false);
+  assert.equal(payload.includes("42"), false);
 });
 
-test("rewards QR payload supports accounts without a saved phone", () => {
-  assert.equal(buildRewardsQrPayload("42", null), "uc-rewards:42:");
-});
-
-test("rewards QR payload rejects invalid account IDs", () => {
-  assert.throws(() => buildRewardsQrPayload(0, "+254700123456"), /valid account ID/i);
+test("rewards QR payload rejects missing tokens", () => {
+  assert.throws(() => buildRewardsQrPayload("  "), /token/i);
 });

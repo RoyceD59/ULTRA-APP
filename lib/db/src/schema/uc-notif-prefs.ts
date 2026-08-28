@@ -9,6 +9,8 @@ import { pgTable, text, boolean, timestamp } from "drizzle-orm/pg-core";
 export const ucNotifPrefsTable = pgTable("uc_notif_prefs", {
   userId:       text("user_id").primaryKey(),
   optOutOrders: boolean("opt_out_orders").notNull().default(false),
+  /** Water-test status notifications are independently controllable. */
+  optOutWaterTests: boolean("opt_out_water_tests").notNull().default(false),
   // ── Filter-reminder delivery channels (strictly opt-in — default false) ──
   // When enabled, the daily reminder-dispatch job also sends the filter
   // lifecycle messages through the corresponding external channel.

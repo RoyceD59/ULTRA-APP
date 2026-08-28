@@ -35,6 +35,61 @@ tags:
   - name: whatsapp
     description: WhatsApp session management and messaging
 paths:
+  /uc/admin/orders/{id}/customer-stage:
+    patch:
+      operationId: updateUcOrderCustomerStage
+      tags: [uc-admin]
+      summary: Advance an order's customer-visible status and send one audited push
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage, idempotencyKey]
+              properties:
+                stage: { type: string, enum: [accepted, shipped, delivered] }
+                idempotencyKey: { type: string }
+      responses:
+        "200": { description: Stage saved (possibly idempotent repeat) }
+        "400": { description: Invalid input }
+        "403": { description: Admin access required }
+        "404": { description: Order not found }
+        "409": { description: Invalid forward transition }
+  /uc/admin/water-tests/{id}/customer-stage:
+    patch:
+      operationId: updateUcWaterTestCustomerStage
+      tags: [uc-admin]
+      summary: Advance a water-test customer stage and send one audited push
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage, idempotencyKey]
+              properties:
+                stage: { type: string, enum: [accepted, conducted, result_sent] }
+                idempotencyKey: { type: string }
+                resultDeliveryReference: { type: string, description: Required for result_sent }
+      responses:
+        "200": { description: Stage saved (possibly idempotent repeat) }
+        "400": { description: Invalid input or missing result delivery reference }
+        "403": { description: Admin access required }
+        "404": { description: Water test not found }
+        "409": { description: Invalid forward transition }
   /uc/admin/inventory:
     get:
       operationId: listUcInventory
