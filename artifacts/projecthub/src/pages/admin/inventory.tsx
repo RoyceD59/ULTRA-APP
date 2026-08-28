@@ -33,6 +33,7 @@ interface InventoryResponse {
 
 interface InventorySettings {
   lowStockThreshold: { value: number; source: "db" | "default" };
+  restockDemandThreshold: { value: number; source: "db" | "default" };
 }
 
 interface WishlistDemand {
@@ -43,6 +44,7 @@ interface WishlistDemand {
   notifiedCustomerCount: number;
   lastAddedAt: string | null;
   lastNotifiedRestockAt: string | null;
+  restockDemandAlertedAt: string | null;
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -99,11 +101,14 @@ async function fetchWishlistDemand(): Promise<WishlistDemand[]> {
   return res.json() as Promise<WishlistDemand[]>;
 }
 
-async function saveInventorySettings(lowStockThreshold: number): Promise<void> {
+async function saveInventorySettings(settings: {
+  lowStockThreshold?: number;
+  restockDemandThreshold?: number;
+}): Promise<void> {
   const res = await fetch(`${BASE}/api/admin/inventory-settings`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...(getAuthHeaders() ?? {}) },
-    body: JSON.stringify({ lowStockThreshold }),
+    body: JSON.stringify(settings),
   });
   if (!res.ok) {
     const d = await res.json().catch(() => ({})) as { error?: string };
@@ -223,7 +228,7 @@ function wcAdminUrl(productId: number, permalink: string | null): string {
 function AlertSettingsPanel() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<"stock" | "demand" | null>(null);
   const [draft, setDraft] = useState("");
 
   const { data, isLoading } = useQuery({
@@ -233,10 +238,20 @@ function AlertSettingsPanel() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: () => saveInventorySettings(Number(draft)),
-    onSuccess: () => {
-      toast({ title: "Settings saved", description: `Low-stock alert threshold set to ${draft} units.` });
-      setEditing(false);
+    mutationFn: ({ type, value }: { type: "stock" | "demand"; value: number }) =>
+      saveInventorySettings(
+        type === "stock"
+          ? { lowStockThreshold: value }
+          : { restockDemandThreshold: value },
+      ),
+    onSuccess: (_data, variables) => {
+      toast({
+        title: "Settings saved",
+        description: variables.type === "stock"
+          ? `Low-stock alert threshold set to ${variables.value} units.`
+          : `Restock-demand alert threshold set to ${variables.value} waiting customers.`,
+      });
+      setEditing(null);
       void qc.invalidateQueries({ queryKey: ["inventory-settings"] });
     },
     onError: (err: Error) => {
@@ -244,7 +259,11 @@ function AlertSettingsPanel() {
     },
   });
 
-  const currentThreshold = data?.lowStockThreshold.value ?? 5;
+  const currentStockThreshold = data?.lowStockThreshold.value ?? 5;
+  const currentDemandThreshold = data?.restockDemandThreshold.value ?? 5;
+  const save = (type: "stock" | "demand") => {
+    saveMutation.mutate({ type, value: Number(draft) });
+  };
 
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -253,8 +272,9 @@ function AlertSettingsPanel() {
         <h2 className="text-sm font-semibold">Alert Settings</h2>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap border-b pb-4">
         <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">Low stock</p>
           <p className="text-sm text-muted-foreground">
             Send a stock alert email when a product's quantity reaches this level or below (0 = out-of-stock only).
             Alerts fire daily at 04:30 UTC and immediately after a manual stock edit.
@@ -265,7 +285,7 @@ function AlertSettingsPanel() {
           <span className="text-sm text-muted-foreground">Threshold:</span>
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          ) : editing ? (
+          ) : editing === "stock" ? (
             <>
               <Input
                 type="number"
@@ -276,27 +296,80 @@ function AlertSettingsPanel() {
                 className="h-7 w-20 font-mono text-sm"
                 disabled={saveMutation.isPending}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !saveMutation.isPending) saveMutation.mutate();
-                  if (e.key === "Escape") setEditing(false);
+                  if (e.key === "Enter" && !saveMutation.isPending) save("stock");
+                  if (e.key === "Escape") setEditing(null);
                 }}
                 autoFocus
               />
               <span className="text-sm text-muted-foreground">units</span>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || draft === ""}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => save("stock")} disabled={saveMutation.isPending || draft === ""}>
                 {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)} disabled={saveMutation.isPending}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(null)} disabled={saveMutation.isPending}>
                 <X className="w-3.5 h-3.5 text-destructive" />
               </Button>
             </>
           ) : (
             <>
-              <span className="font-mono text-sm font-medium">{currentThreshold}</span>
+              <span className="font-mono text-sm font-medium">{currentStockThreshold}</span>
               <span className="text-sm text-muted-foreground">units</span>
               <button
-                onClick={() => { setDraft(String(currentThreshold)); setEditing(true); }}
+                onClick={() => { setDraft(String(currentStockThreshold)); setEditing("stock"); }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
-                title="Edit threshold"
+                title="Edit low-stock threshold"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap pt-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">Restock demand</p>
+          <p className="text-sm text-muted-foreground">
+            Alert the team once when this many customers are waiting for an out-of-stock product.
+            The alert re-arms after the product is restocked or demand falls below the threshold.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm text-muted-foreground">Threshold:</span>
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          ) : editing === "demand" ? (
+            <>
+              <Input
+                type="number"
+                min={1}
+                max={10000}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="h-7 w-20 font-mono text-sm"
+                disabled={saveMutation.isPending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !saveMutation.isPending) save("demand");
+                  if (e.key === "Escape") setEditing(null);
+                }}
+                autoFocus
+              />
+              <span className="text-sm text-muted-foreground">customers</span>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => save("demand")} disabled={saveMutation.isPending || draft === ""}>
+                {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(null)} disabled={saveMutation.isPending}>
+                <X className="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-sm font-medium">{currentDemandThreshold}</span>
+              <span className="text-sm text-muted-foreground">customers</span>
+              <button
+                onClick={() => { setDraft(String(currentDemandThreshold)); setEditing("demand"); }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Edit restock-demand threshold"
               >
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
@@ -356,6 +429,7 @@ export default function AdminInventoryPage() {
 
   const products = data?.products ?? [];
   const threshold = settings?.lowStockThreshold.value ?? 5;
+  const restockDemandThreshold = settings?.restockDemandThreshold.value ?? 5;
   const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : null;
 
   const outOfStockCount = products.filter((p) => p.stockQuantity === 0).length;
@@ -443,7 +517,8 @@ export default function AdminInventoryPage() {
               <Users className="w-4 h-4 text-muted-foreground" /> Restock demand
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Customers waiting for products to come back in stock.
+              Customers waiting for products to come back in stock. The team is alerted at{" "}
+              {restockDemandThreshold} waiting customer{restockDemandThreshold === 1 ? "" : "s"}.
             </p>
           </div>
           {wishlistDemand && wishlistDemand.length > 0 && (
@@ -502,6 +577,17 @@ export default function AdminInventoryPage() {
                           {item.notifiedCustomerCount} notified this cycle
                         </span>
                       )}
+                      {item.restockDemandAlertedAt ? (
+                        <Badge variant="outline" className="gap-1 border-red-300 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          Demand alert sent
+                        </Badge>
+                      ) : item.waitingCustomerCount >= restockDemandThreshold ? (
+                        <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                          <BellRing className="w-3 h-3" />
+                          Demand alert pending
+                        </Badge>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">

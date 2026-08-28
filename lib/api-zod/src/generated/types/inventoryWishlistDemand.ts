@@ -16,4 +16,6 @@ export interface InventoryWishlistDemand {
   lastAddedAt: Date | null;
   /** @nullable */
   lastNotifiedRestockAt: Date | null;
+  /** @nullable */
+  restockDemandAlertedAt: Date | null;
 }

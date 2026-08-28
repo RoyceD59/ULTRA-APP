@@ -75,6 +75,23 @@ await pool.query(`
   ALTER TABLE team_settings
     ADD COLUMN IF NOT EXISTS team_alert_email text;
 `);
+await pool.query(`
+  ALTER TABLE team_settings
+    ADD COLUMN IF NOT EXISTS restock_demand_threshold integer;
+`);
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS uc_restock_demand_alerts (
+    product_id       integer     PRIMARY KEY,
+    product_name     text        NOT NULL,
+    waiting_count    integer     NOT NULL,
+    threshold        integer     NOT NULL,
+    idempotency_key  text        NOT NULL,
+    status           text        NOT NULL,
+    claim_expires_at timestamptz NOT NULL,
+    alerted_at       timestamptz,
+    updated_at       timestamptz NOT NULL DEFAULT now()
+  );
+`);
 
 // uc_orders payment_reference unique index (dedup guard)
 await pool.query(`

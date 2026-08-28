@@ -23,6 +23,8 @@ export interface ResendEmail {
   subject: string;
   text: string;
   html?: string;
+  /** Stable provider key used to absorb retries of the same logical email. */
+  idempotencyKey?: string;
   /** Optional metadata stored in the notification log. Not sent to Resend. */
   meta?: {
     template?: string;
@@ -147,7 +149,7 @@ export async function sendViaResend(email: ResendEmail): Promise<boolean> {
   const baseUrl = process.env["RESEND_BASE_URL"];
 
   // Strip helper-only fields before sending — Resend API doesn't know about them.
-  const { meta, logBody, ...resendPayload } = email;
+  const { meta, logBody, idempotencyKey, ...resendPayload } = email;
   // Store the full plain-text body so retries can reconstruct a useful message.
   const logBase = {
     recipient:   email.to,
@@ -163,13 +165,20 @@ export async function sendViaResend(email: ResendEmail): Promise<boolean> {
     if (apiKey || baseUrl) {
       resp = await fetch(`${baseUrl ?? "https://api.resend.com"}/emails`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey ?? ""}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey ?? ""}`,
+          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        },
         body: JSON.stringify(resendPayload),
       });
     } else {
       resp = await connectors.proxy("resend", "/emails", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        },
         body: JSON.stringify(resendPayload),
       });
     }

@@ -35,7 +35,8 @@ export const ListUcInventoryWishlistDemandResponseItem = zod.object({
   "pendingCustomerCount": zod.number(),
   "notifiedCustomerCount": zod.number(),
   "lastAddedAt": zod.coerce.date().nullable(),
-  "lastNotifiedRestockAt": zod.coerce.date().nullable()
+  "lastNotifiedRestockAt": zod.coerce.date().nullable(),
+  "restockDemandAlertedAt": zod.coerce.date().nullable()
 })
 export const ListUcInventoryWishlistDemandResponse = zod.array(ListUcInventoryWishlistDemandResponseItem)
 

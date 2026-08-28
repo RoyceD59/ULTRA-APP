@@ -46,6 +46,11 @@ export const teamSettingsTable = pgTable("team_settings", {
    * email alert to the team. Defaults to 5 when null.
    */
   lowStockThreshold: integer("low_stock_threshold"),
+  /**
+   * Number of customers waiting for a product before the team receives a
+   * restock-demand alert. Defaults to 5 when null.
+   */
+  restockDemandThreshold: integer("restock_demand_threshold"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -20,7 +20,7 @@ import { describe, it, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { eq, inArray } from "drizzle-orm";
 
-import { db, ucWishlistTable } from "@workspace/db";
+import { db, ucRestockDemandAlertsTable, ucWishlistTable } from "@workspace/db";
 import { checkWishlistRestocks } from "../lib/scheduler.js";
 
 // ── Test fixtures ────────────────────────────────────────────────────────────
@@ -28,6 +28,13 @@ import { checkWishlistRestocks } from "../lib/scheduler.js";
 const TEST_PRODUCT_ID = 887701;
 const USER_A = "wishlist-restock-user-a";
 const USER_B = "wishlist-restock-user-b";
+const DEMAND_PRODUCT_ID = 887702;
+const DEMAND_USERS = [
+  "wishlist-demand-user-a",
+  "wishlist-demand-user-b",
+  "wishlist-demand-user-c",
+  "wishlist-demand-user-d",
+];
 
 interface PushCall {
   userId: string;
@@ -83,6 +90,7 @@ describe("checkWishlistRestocks", () => {
       isWcConfigured: () => false,
       fetchStockStatus: async () => { throw new Error("must not be called"); },
       sendPush: stubSendPush,
+      demandThreshold: 10_000,
     });
     assert.deepEqual(result, { notified: 0, reset: 0 });
     assert.equal(pushCalls.length, 0);
@@ -93,6 +101,7 @@ describe("checkWishlistRestocks", () => {
       isWcConfigured: () => true,
       fetchStockStatus: async (productId) => (productId === TEST_PRODUCT_ID ? "instock" : null),
       sendPush: stubSendPush,
+      demandThreshold: 10_000,
     });
 
     assert.equal(result.notified, 2, "both wishlist rows should be notified");
@@ -115,6 +124,7 @@ describe("checkWishlistRestocks", () => {
       isWcConfigured: () => true,
       fetchStockStatus: async () => "instock",
       sendPush: stubSendPush,
+      demandThreshold: 10_000,
     });
 
     assert.equal(result.notified, 0, "no rows are pending — all already notified this cycle");
@@ -126,6 +136,7 @@ describe("checkWishlistRestocks", () => {
       isWcConfigured: () => true,
       fetchStockStatus: async () => "outofstock",
       sendPush: stubSendPush,
+      demandThreshold: 10_000,
     });
 
     assert.equal(result.reset, 2, "both previously-notified rows must be reset");
@@ -142,6 +153,7 @@ describe("checkWishlistRestocks", () => {
       isWcConfigured: () => true,
       fetchStockStatus: async () => "outofstock",
       sendPush: stubSendPush,
+      demandThreshold: 10_000,
     });
     assert.deepEqual(result, { notified: 0, reset: 0 });
   });
@@ -151,6 +163,7 @@ describe("checkWishlistRestocks", () => {
       isWcConfigured: () => true,
       fetchStockStatus: async () => "instock",
       sendPush: stubSendPush,
+      demandThreshold: 10_000,
     });
 
     assert.equal(result.notified, 2, "the reset cycle must re-arm notifications");
@@ -159,5 +172,264 @@ describe("checkWishlistRestocks", () => {
     const stamps = await notifiedAtByUser();
     assert.ok(stamps[USER_A] instanceof Date);
     assert.ok(stamps[USER_B] instanceof Date);
+  });
+});
+
+describe("checkWishlistRestocks — urgent restock demand alerts", () => {
+  it("alerts once per threshold crossing and re-arms after demand falls below the threshold", async () => {
+    const emails: Array<{ subject: string; text: string }> = [];
+    const checkDemand = (stockStatus = "outofstock") =>
+      checkWishlistRestocks({
+        isWcConfigured: () => true,
+        fetchStockStatus: async (productId) =>
+          productId === DEMAND_PRODUCT_ID ? stockStatus : null,
+        sendPush: () => undefined,
+        sendEmail: async (email) => {
+          emails.push({ subject: email.subject, text: email.text });
+          return true;
+        },
+        demandThreshold: 2,
+        inventoryUrl: "https://projecthub.test/admin/inventory",
+      });
+
+    await db
+      .delete(ucWishlistTable)
+      .where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Urgent Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Urgent Demand Filter",
+        },
+      ]);
+
+      await checkDemand();
+      assert.equal(emails.length, 1, "crossing the threshold should send one alert");
+      assert.match(emails[0]!.subject, /Urgent Demand Filter/);
+      assert.match(emails[0]!.text, /2 waiting customers/);
+      assert.match(emails[0]!.text, /https:\/\/projecthub\.test\/admin\/inventory/);
+
+      let [demandState] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(demandState?.status, "sent");
+      assert.ok(demandState?.alertedAt instanceof Date);
+
+      await checkDemand();
+      assert.equal(emails.length, 1, "a repeated check must not send a duplicate");
+
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[2]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Urgent Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[3]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Urgent Demand Filter",
+        },
+      ]);
+      await db
+        .delete(ucWishlistTable)
+        .where(inArray(ucWishlistTable.userId, [DEMAND_USERS[0]!, DEMAND_USERS[1]!]));
+      await checkDemand();
+      assert.equal(
+        emails.length,
+        1,
+        "removing all original customers while urgent demand remains must not duplicate",
+      );
+
+      await db
+        .delete(ucWishlistTable)
+        .where(eq(ucWishlistTable.userId, DEMAND_USERS[3]!));
+      await checkDemand();
+
+      [demandState] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(demandState, undefined);
+
+      await db.insert(ucWishlistTable).values({
+        userId: DEMAND_USERS[0]!,
+        productId: DEMAND_PRODUCT_ID,
+        productName: "Urgent Demand Filter",
+      });
+      await checkDemand();
+      assert.equal(emails.length, 2, "the next threshold crossing should alert again");
+
+      await db
+        .delete(ucWishlistTable)
+        .where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await checkDemand();
+      [demandState] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(demandState, undefined, "an empty waiting list should clear cycle state");
+
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[2]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Urgent Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[3]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Urgent Demand Filter",
+        },
+      ]);
+      await checkDemand();
+      assert.equal(
+        emails.length,
+        3,
+        "a new waiting list should produce a new threshold-crossing alert",
+      );
+
+      await checkDemand("instock");
+      [demandState] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(demandState, undefined, "restocking should re-arm the next demand surge");
+    } finally {
+      await db
+        .delete(ucWishlistTable)
+        .where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
+  });
+
+  it("retries a failed delivery with the same provider idempotency key", async () => {
+    await db
+      .delete(ucWishlistTable)
+      .where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Retry Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Retry Demand Filter",
+        },
+      ]);
+
+      const idempotencyKeys: string[] = [];
+      let shouldSucceed = false;
+      const check = () => checkWishlistRestocks({
+        isWcConfigured: () => true,
+        fetchStockStatus: async (productId) =>
+          productId === DEMAND_PRODUCT_ID ? "outofstock" : null,
+        sendPush: () => undefined,
+        sendEmail: async (email) => {
+          idempotencyKeys.push(email.idempotencyKey ?? "");
+          return shouldSucceed;
+        },
+        demandThreshold: 2,
+        inventoryUrl: "https://projecthub.test/admin/inventory",
+      });
+
+      await check();
+      shouldSucceed = true;
+      await check();
+
+      assert.equal(idempotencyKeys.length, 2);
+      assert.equal(idempotencyKeys[0], idempotencyKeys[1]);
+      const [state] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(state?.status, "sent");
+    } finally {
+      await db
+        .delete(ucWishlistTable)
+        .where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
+  });
+
+  it("uses an atomic claim so concurrent checks send only one email", async () => {
+    await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Concurrent Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Concurrent Demand Filter",
+        },
+      ]);
+
+      let sendCount = 0;
+      let releaseSend!: () => void;
+      const sendStarted = new Promise<void>((resolve) => {
+        releaseSend = resolve;
+      });
+      let firstSendEntered!: () => void;
+      const firstSend = new Promise<void>((resolve) => {
+        firstSendEntered = resolve;
+      });
+      const check = () => checkWishlistRestocks({
+        isWcConfigured: () => true,
+        fetchStockStatus: async (productId) =>
+          productId === DEMAND_PRODUCT_ID ? "outofstock" : null,
+        sendPush: () => undefined,
+        sendEmail: async () => {
+          sendCount += 1;
+          firstSendEntered();
+          await sendStarted;
+          return true;
+        },
+        demandThreshold: 2,
+        inventoryUrl: "https://projecthub.test/admin/inventory",
+      });
+
+      const first = check();
+      await firstSend;
+      const second = check();
+      await second;
+      releaseSend();
+      await first;
+
+      assert.equal(sendCount, 1);
+    } finally {
+      await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
   });
 });

@@ -634,6 +634,8 @@ export interface InventoryWishlistDemand {
   lastAddedAt: string | null;
   /** @nullable */
   lastNotifiedRestockAt: string | null;
+  /** @nullable */
+  restockDemandAlertedAt: string | null;
 }
 
 export interface SyncTriggered {

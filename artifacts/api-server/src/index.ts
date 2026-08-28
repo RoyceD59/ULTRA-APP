@@ -222,6 +222,29 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: team_settings.low_stock_threshold column ensured");
 
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS restock_demand_threshold integer;
+  `);
+  logger.info("Startup migration: team_settings.restock_demand_threshold column ensured");
+
+  // Product-level restock-demand state provides an atomic claim and retains the
+  // provider idempotency key across retries.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_restock_demand_alerts (
+      product_id       integer     PRIMARY KEY,
+      product_name     text        NOT NULL,
+      waiting_count    integer     NOT NULL,
+      threshold        integer     NOT NULL,
+      idempotency_key  text        NOT NULL,
+      status           text        NOT NULL,
+      claim_expires_at timestamptz NOT NULL,
+      alerted_at       timestamptz,
+      updated_at       timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  logger.info("Startup migration: uc_restock_demand_alerts table ensured");
+
   // Seed first admin from environment variables (runs once; idempotent).
   const adminEmail = process.env["PROJECTHUB_ADMIN_EMAIL"]?.toLowerCase().trim();
   const adminPassword = process.env["PROJECTHUB_ADMIN_PASSWORD"];

@@ -2031,6 +2031,7 @@ components:
         - notifiedCustomerCount
         - lastAddedAt
         - lastNotifiedRestockAt
+        - restockDemandAlertedAt
       properties:
         productId:                 { type: integer }
         productName:               { type: string }
@@ -2039,6 +2040,7 @@ components:
         notifiedCustomerCount:     { type: integer }
         lastAddedAt:               { type: ["string", "null"], format: date-time }
         lastNotifiedRestockAt:     { type: ["string", "null"], format: date-time }
+        restockDemandAlertedAt:    { type: ["string", "null"], format: date-time }
 
     SyncTriggered:
       type: object

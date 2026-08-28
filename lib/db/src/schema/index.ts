@@ -57,3 +57,4 @@ export * from "./uc-rewards-rules";
 export * from "./uc-rewards-ledger";
 export * from "./uc-referrals";
 export * from "./uc-wishlist";
+export * from "./uc-restock-demand-alerts";

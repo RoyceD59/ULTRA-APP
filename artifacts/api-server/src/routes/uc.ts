@@ -44,6 +44,7 @@ import {
   ucUsersTable, ucOrdersTable, ucOrderItemsTable, ucTicketsTable, ucWaterTestsTable,
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
   ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable, ucWishlistTable,
+  ucRestockDemandAlertsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
@@ -5880,6 +5881,22 @@ router.get("/uc/admin/inventory/wishlist-demand", async (req, res): Promise<void
       .groupBy(ucWishlistTable.productId)
       .orderBy(desc(sql`COUNT(*)`), asc(sql`MAX(${ucWishlistTable.productName})`));
 
+    const demandAlertStates = rows.length === 0
+      ? []
+      : await db
+        .select({
+          productId: ucRestockDemandAlertsTable.productId,
+          alertedAt: ucRestockDemandAlertsTable.alertedAt,
+        })
+        .from(ucRestockDemandAlertsTable)
+        .where(inArray(
+          ucRestockDemandAlertsTable.productId,
+          rows.map((row) => row.productId),
+        ));
+    const alertedAtByProduct = new Map(
+      demandAlertStates.map((state) => [state.productId, state.alertedAt]),
+    );
+
     res.json(rows.map((row) => ({
       productId:             row.productId,
       productName:           row.productName,
@@ -5888,6 +5905,7 @@ router.get("/uc/admin/inventory/wishlist-demand", async (req, res): Promise<void
       notifiedCustomerCount: Number(row.notifiedCustomerCount),
       lastAddedAt:           row.lastAddedAt,
       lastNotifiedRestockAt: row.lastNotifiedRestockAt,
+      restockDemandAlertedAt: alertedAtByProduct.get(row.productId) ?? null,
     })));
   } catch (err) {
     logger.error({ err }, "[inventory/wishlist-demand] Failed to load wishlist demand");
