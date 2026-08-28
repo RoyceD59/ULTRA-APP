@@ -16,6 +16,12 @@ The same ProjectHub-to-Companion path will also send customer-facing push
 messages when staff advances an order or water-test request through its
 customer-visible stages.
 
+The Companion account will also help customers express belonging to the
+Ultra-Clear green-living community. Customers can record and celebrate the
+amount of water they have filtered or refilled, show their private impact
+badge and star level, and share an impact message or app invitation with
+friends and social networks.
+
 ## Users and permissions
 
 - Any active ProjectHub team admin may:
@@ -23,6 +29,7 @@ customer-visible stages.
   - Request camera access and scan a customer's QR code.
   - Review the resolved customer and current balance.
   - Award points or redeem points.
+  - Add filtered-water litre contributions through the resolved customer.
   - View the resulting transaction and ledger history.
 - Only the primary/super-admin may:
   - Change the points-to-value conversion configuration.
@@ -93,6 +100,25 @@ points, conversion value where applicable, reason, and the staff member who will
 be recorded as the actor. While the request is pending, controls are disabled.
 On success, the updated balance and transaction receipt appear immediately, the
 ledger is refreshed, and the scanner can be started for the next customer.
+
+### Contribution state
+
+After a customer is resolved, the staff may choose **Add contribution** in
+addition to the points actions:
+
+- **Add points** creates a positive entry in the existing Rewards ledger.
+- **Add filtered-water litres** creates an entry in the customer's water-impact
+  ledger.
+
+The staff member must enter a positive whole-litre amount, select the
+registered filter product to which the water is attributed, and confirm the
+remaining rated litre capacity before saving. The API enforces the capacity
+limit atomically; the ProjectHub UI must not rely on a client-side remaining
+capacity value.
+
+The scanner should make the two purposes clear: points change the Rewards
+balance, while litres update the customer's green-living impact. Each action
+has its own reason, actor, timestamp, idempotency key, and receipt.
 
 ## Conversion configuration
 
@@ -180,6 +206,12 @@ Required behavior:
   active account can be resolved.
 - Persist an idempotency key for each record and customer stage so retries do
   not send duplicate pushes.
+- Store customer and admin water contributions in an append-only ledger linked
+  to a registered filter product.
+- Enforce remaining rated litre capacity inside the transaction that creates a
+  water contribution; never trust a client-provided balance or capacity.
+- Return updated personal litres, remaining capacity, and star level after a
+  successful water contribution.
 
 Update the OpenAPI contract and regenerate the shared clients before consuming
 new endpoints from either frontend. Add the necessary database schema and
@@ -199,6 +231,77 @@ idempotency/concurrency protection using the existing migration conventions.
   section.
 - Do not add a Companion-side redemption control in this scope; staff controls
   the transaction from ProjectHub.
+
+## Companion personal water impact and belonging
+
+Personal water impact is separate from the global UC Impact metrics. It is
+calculated from an auditable water-impact ledger linked to the customer's
+registered filter products.
+
+### Customer input
+
+Companion provides an **I refilled** or **Add my litres** action in the
+customer's account area. A customer:
+
+1. Selects one of their registered, capacity-tracked filter products.
+2. Enters a positive whole number of filtered/refilled litres.
+3. Sees the product's remaining rated capacity and the resulting total.
+4. Confirms the entry.
+
+The server rejects amounts above the selected product's remaining rated
+capacity, zero or negative values, invalid products, and submissions for
+accounts that are not authenticated. The remaining capacity is the registered
+product's rated litre capacity minus all committed customer and admin
+water-impact entries attributed to that product. When capacity is exhausted,
+the customer must register a replacement filter before adding more litres.
+
+The water ledger is append-only. Corrections use a compensating entry with an
+actor and reason rather than deleting the original contribution.
+
+### Profile and QR presentation
+
+Under **My Ultra-Clear account**, Companion shows:
+
+- `Total input refilled liters`
+- The current star level
+- Remaining available capacity across registered filters
+- A concise personal impact history
+
+The customer's existing QR card shows a top-right **I refilled** badge once
+the customer has at least one committed water-impact entry. Beneath the
+customer's name it shows the total input refilled litres and the private star
+level. These values refresh after a successful customer or ProjectHub entry.
+The QR token, account ID, phone number, email address, and rewards balance are
+never placed in a social share.
+
+Star levels are private and appear only in the customer's Companion profile
+and QR card:
+
+- **1 star:** 0–99 litres
+- **2 stars:** 100–499 litres
+- **3 stars:** 500–999 litres
+- **4 stars:** 1,000–4,999 litres
+- **5 stars:** 5,000 litres and above
+
+There is no public or admin leaderboard in this scope.
+
+### Sharing and green-living identity
+
+Companion provides two separate share actions:
+
+- **Share my impact** creates a celebratory, social-friendly message or share
+  card containing the customer's total litres, star level, and a concise
+  green-living message about supporting cleaner water and belonging to the
+  Ultra-Clear community.
+- **Share Ultra-Clear app** shares the public Companion app link and the
+  customer's existing referral code when available.
+
+Both actions use the platform share sheet so the customer chooses WhatsApp,
+Facebook, Instagram, SMS, or another installed service. The share content must
+contain only values the customer is intentionally publishing. It must not
+expose private account fields or the permanent QR token. The existing Refer &
+Earn flow remains the source of referral attribution and is reused by the
+app-invitation action.
 
 ## Error handling and abuse prevention
 
@@ -236,6 +339,14 @@ idempotency/concurrency protection using the existing migration conventions.
 - Conversion mode/value validation and super-admin-only updates.
 - Ledger entry records staff actor and conversion snapshot.
 - Notification failures do not undo committed points.
+- Authenticated customer litre entries require a registered product and positive
+  whole-litre amount.
+- Customer and admin litre entries cannot exceed the product's remaining rated
+  capacity, including under concurrent submissions.
+- Water-ledger retries are idempotent and corrections preserve the original
+  entry with an actor and reason.
+- Star-level boundaries resolve to 1/2/3/4/5 stars at 0/100/500/1,000/5,000
+  litres.
 - Order customer stages accept only the allowed forward transitions and emit
   one opt-out-aware push per new stage.
 - Water-test customer stages accept only the allowed forward transitions,
@@ -254,6 +365,13 @@ idempotency/concurrency protection using the existing migration conventions.
   success, and failure states.
 - Redemption is visibly blocked when the balance is too low.
 - Balance and ledger update after a successful transaction.
+- Customer water contributions reject amounts above registered product
+  capacity and appear in the profile after success.
+- Admin QR water contributions update the same personal water ledger.
+- The QR card shows the **I refilled** badge, total litres, and private star
+  level without exposing the QR token in share content.
+- Impact sharing produces a celebratory green-living message/card, and app
+  sharing includes the public app/referral link.
 - Conversion settings are hidden or read-only for ordinary team admins.
 - Order cards expose Accepted, Shipped, and Delivered controls only in the
   Orders section and show the push result.
@@ -273,6 +391,7 @@ idempotency/concurrency protection using the existing migration conventions.
 ## Out of scope
 
 - Customer self-service redemption inside Companion.
+- Public or admin water-impact leaderboards.
 - Product-specific coupons or checkout discount application.
 - Cash payouts.
 - Changing existing automated reward rules unrelated to scanner transactions.
