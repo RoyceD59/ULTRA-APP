@@ -21,11 +21,22 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { issueToken } from "../lib/jwt.js";
-import { db, teamUsersTable, ucWishlistTable } from "@workspace/db";
+import {
+  db,
+  teamSettingsTable,
+  teamUsersTable,
+  ucRestockDemandAlertsTable,
+  ucWishlistTable,
+} from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 
 let server: http.Server;
+let resendServer: http.Server;
 let base: string;
+let previousResendApiKey: string | undefined;
+let previousResendBaseUrl: string | undefined;
+let previousDemandThreshold: number | null | undefined;
+const resendIdempotencyKeys: string[] = [];
 
 const USER_ID    = "998877701";
 const OTHER_USER_ID = "998877702";
@@ -36,6 +47,8 @@ const TEST_PRODUCT_NAME = "Wishlist Test Filter";
 const ADMIN_ID = "wishlist-test-admin";
 const DEMAND_PRODUCT_ID = 887703;
 const DEMAND_PRODUCT_NAME = "Demand Test Filter";
+const CONCURRENT_PRODUCT_ID = 887704;
+const CONCURRENT_USERS = ["998877703", "998877704"];
 
 function bearerFor(id: string): string {
   return `Bearer ${issueToken({ id: Number(id), email: USER_EMAIL, firstName: "Wish", lastName: "List" })}`;
@@ -82,13 +95,55 @@ async function del(path: string, auth?: string) {
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-wishlist-route-tests";
+  previousResendApiKey = process.env["RESEND_API_KEY"];
+  previousResendBaseUrl = process.env["RESEND_BASE_URL"];
+
+  resendServer = http.createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/emails") {
+      resendIdempotencyKeys.push(String(req.headers["idempotency-key"] ?? ""));
+      req.resume();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ id: `wishlist-demand-${resendIdempotencyKeys.length}` }));
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise<void>((resolve, reject) => {
+    resendServer.listen(0, "127.0.0.1", (err?: Error) => (err ? reject(err) : resolve()));
+  });
+  process.env["RESEND_API_KEY"] = "wishlist-route-test-key";
+  process.env["RESEND_BASE_URL"] =
+    `http://127.0.0.1:${(resendServer.address() as { port: number }).port}`;
+
   const { default: app } = await import("../app.js");
   await new Promise<void>((resolve, reject) => {
     server = app.listen(0, "127.0.0.1", (err?: Error) => (err ? reject(err) : resolve()));
   });
   base = `http://localhost:${(server.address() as { port: number }).port}/api`;
 
-  await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, [USER_ID, OTHER_USER_ID]));
+  await db.delete(ucWishlistTable).where(
+    inArray(ucWishlistTable.userId, [USER_ID, OTHER_USER_ID, ...CONCURRENT_USERS]),
+  );
+  await db.delete(ucRestockDemandAlertsTable).where(
+    inArray(ucRestockDemandAlertsTable.productId, [
+      TEST_PRODUCT_ID,
+      DEMAND_PRODUCT_ID,
+      CONCURRENT_PRODUCT_ID,
+    ]),
+  );
+  const [settings] = await db
+    .select({ restockDemandThreshold: teamSettingsTable.restockDemandThreshold })
+    .from(teamSettingsTable)
+    .where(eq(teamSettingsTable.id, "singleton"))
+    .limit(1);
+  previousDemandThreshold = settings?.restockDemandThreshold;
+  await db
+    .insert(teamSettingsTable)
+    .values({ id: "singleton", restockDemandThreshold: 2 })
+    .onConflictDoUpdate({
+      target: teamSettingsTable.id,
+      set: { restockDemandThreshold: 2, updatedAt: new Date() },
+    });
   await db.insert(teamUsersTable).values({
     id: ADMIN_ID,
     email: "wishlist-admin@ucfilters-test.internal",
@@ -100,9 +155,32 @@ before(async () => {
 });
 
 after(async () => {
-  await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, [USER_ID, OTHER_USER_ID]));
+  await db.delete(ucWishlistTable).where(
+    inArray(ucWishlistTable.userId, [USER_ID, OTHER_USER_ID, ...CONCURRENT_USERS]),
+  );
+  await db.delete(ucRestockDemandAlertsTable).where(
+    inArray(ucRestockDemandAlertsTable.productId, [
+      TEST_PRODUCT_ID,
+      DEMAND_PRODUCT_ID,
+      CONCURRENT_PRODUCT_ID,
+    ]),
+  );
+  await db
+    .update(teamSettingsTable)
+    .set({
+      restockDemandThreshold: previousDemandThreshold ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(teamSettingsTable.id, "singleton"));
   await db.delete(teamUsersTable).where(eq(teamUsersTable.id, ADMIN_ID));
   await new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())));
+  await new Promise<void>((resolve, reject) =>
+    resendServer.close((e) => (e ? reject(e) : resolve())),
+  );
+  if (previousResendApiKey === undefined) delete process.env["RESEND_API_KEY"];
+  else process.env["RESEND_API_KEY"] = previousResendApiKey;
+  if (previousResendBaseUrl === undefined) delete process.env["RESEND_BASE_URL"];
+  else process.env["RESEND_BASE_URL"] = previousResendBaseUrl;
 });
 
 describe("Wishlist endpoints — authentication", () => {
@@ -226,6 +304,40 @@ describe("Wishlist endpoints — add / list / duplicate / remove", () => {
     const { status, json } = await del(`/uc/wishlist/${TEST_PRODUCT_ID}`, bearerFor(USER_ID));
     assert.equal(status, 200);
     assert.deepEqual(json, { ok: true });
+  });
+});
+
+describe("Wishlist endpoints — immediate urgent-demand alert", () => {
+  it("sends one protected alert when simultaneous additions cross the threshold", async () => {
+    resendIdempotencyKeys.length = 0;
+
+    const results = await Promise.all(
+      CONCURRENT_USERS.map((userId) =>
+        post(
+          "/uc/wishlist",
+          {
+            productId: CONCURRENT_PRODUCT_ID,
+            productName: "Concurrent Route Demand Filter",
+          },
+          bearerFor(userId),
+        ),
+      ),
+    );
+
+    assert.deepEqual(results.map((result) => result.status), [201, 201]);
+    assert.equal(resendIdempotencyKeys.length, 1, "threshold crossing must send one email");
+    assert.match(
+      resendIdempotencyKeys[0]!,
+      new RegExp(`^restock-demand-${CONCURRENT_PRODUCT_ID}-`),
+    );
+
+    const [state] = await db
+      .select()
+      .from(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, CONCURRENT_PRODUCT_ID));
+    assert.equal(state?.status, "sent");
+    assert.equal(state?.waitingCount, 2);
+    assert.equal(state?.idempotencyKey, resendIdempotencyKeys[0]);
   });
 });
 

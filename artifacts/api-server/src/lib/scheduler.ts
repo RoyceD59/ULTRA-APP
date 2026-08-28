@@ -6,7 +6,6 @@
  * - Daily 06:00 UTC: sync contacts from Google Sheets; alerts team on failure.
  */
 import cron from "node-cron";
-import { randomUUID } from "node:crypto";
 import { logger } from "./logger";
 import { generateAndStoreReport, pushReportToOrchestrator } from "../routes/ai/monitor";
 import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, aiPushEventsTable, ucWishlistTable, ucRestockDemandAlertsTable } from "@workspace/db";
@@ -25,6 +24,11 @@ import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
 import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
 import { sendPushToUser } from "./push.js";
+import {
+  checkRestockDemandForProduct,
+  getRestockDemandThreshold,
+  projectHubInventoryUrl,
+} from "./wishlist-demand.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -66,6 +70,8 @@ export interface WishlistRestockDeps {
   demandThreshold?: number;
   /** Test seam: use a deterministic inventory link in alert emails. */
   inventoryUrl?: string;
+  /** Test seam: pause a demand rearm between its delete and pending transition. */
+  beforeDemandRearmTransition?: () => Promise<void>;
 }
 
 export interface WishlistRestockResult {
@@ -73,147 +79,6 @@ export interface WishlistRestockResult {
   notified: number;
   /** Number of wishlist rows reset back to "un-notified" (out of stock again). */
   reset: number;
-}
-
-const DEFAULT_RESTOCK_DEMAND_THRESHOLD = 5;
-const DEMAND_ALERT_CLAIM_TTL_MS = 15 * 60 * 1000;
-
-function projectHubInventoryUrl(): string {
-  const configured = process.env["PROJECTHUB_URL"]?.trim() || "https://app.ucfilters.com";
-  const origin = /^https?:\/\//i.test(configured)
-    ? configured.replace(/\/+$/, "")
-    : `https://${configured.replace(/\/+$/, "")}`;
-  return `${origin}/admin/inventory`;
-}
-
-/**
- * Check one product's waiting list after its WooCommerce stock status is known.
- *
- * Product-level state is claimed atomically before delivery. Concurrent
- * scheduler instances therefore cannot both send, and retries reuse the same
- * provider idempotency key. The row is deleted only when the cycle re-arms.
- */
-async function checkRestockDemandForProduct(params: {
-  productId: number;
-  stockStatus: string;
-  threshold: number;
-  sendEmail: typeof sendViaResend;
-  inventoryUrl: string;
-}): Promise<"alerted" | "reset" | "unchanged" | "failed"> {
-  const rows = await db
-    .select({
-      id: ucWishlistTable.id,
-      productName: ucWishlistTable.productName,
-    })
-    .from(ucWishlistTable)
-    .where(eq(ucWishlistTable.productId, params.productId));
-
-  if (rows.length === 0) return "unchanged";
-
-  const shouldReset = params.stockStatus === "instock" || rows.length < params.threshold;
-  if (shouldReset) {
-    const deleted = await db
-      .delete(ucRestockDemandAlertsTable)
-      .where(eq(ucRestockDemandAlertsTable.productId, params.productId))
-      .returning({ productId: ucRestockDemandAlertsTable.productId });
-    return deleted.length > 0 ? "reset" : "unchanged";
-  }
-
-  const productName = rows[0]!.productName;
-  const now = new Date();
-  const claimExpiresAt = new Date(now.getTime() + DEMAND_ALERT_CLAIM_TTL_MS);
-  const newIdempotencyKey = `restock-demand-${params.productId}-${randomUUID()}`;
-
-  const [insertedClaim] = await db
-    .insert(ucRestockDemandAlertsTable)
-    .values({
-      productId: params.productId,
-      productName,
-      waitingCount: rows.length,
-      threshold: params.threshold,
-      idempotencyKey: newIdempotencyKey,
-      status: "claimed",
-      claimExpiresAt,
-      updatedAt: now,
-    })
-    .onConflictDoNothing()
-    .returning({ idempotencyKey: ucRestockDemandAlertsTable.idempotencyKey });
-
-  // A failed or interrupted send becomes reclaimable after its short lease.
-  // The idempotency key is deliberately retained across retries.
-  const [reclaimedClaim] = insertedClaim
-    ? []
-    : await db
-      .update(ucRestockDemandAlertsTable)
-      .set({
-        productName,
-        waitingCount: rows.length,
-        threshold: params.threshold,
-        claimExpiresAt,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(ucRestockDemandAlertsTable.productId, params.productId),
-          eq(ucRestockDemandAlertsTable.status, "claimed"),
-          lte(ucRestockDemandAlertsTable.claimExpiresAt, now),
-        ),
-      )
-      .returning({ idempotencyKey: ucRestockDemandAlertsTable.idempotencyKey });
-
-  const claim = insertedClaim ?? reclaimedClaim;
-  if (!claim) return "unchanged";
-
-  const waitingLabel = `${rows.length} waiting customer${rows.length === 1 ? "" : "s"}`;
-  const body = [
-    `URGENT RESTOCK DEMAND: ${productName}`,
-    "",
-    `${waitingLabel} for this out-of-stock product.`,
-    `The waiting-customer threshold is ${params.threshold}.`,
-    "",
-    `Open the inventory page: ${params.inventoryUrl}`,
-    "",
-    "This alert will not repeat unless demand falls below the threshold and crosses it again.",
-  ].join("\n");
-
-  const emailAccepted = await params.sendEmail({
-    from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
-    to: await getTeamAlertEmail(),
-    subject: `⚠️ Restock demand: ${productName} — ${rows.length} waiting`,
-    text: body,
-    idempotencyKey: claim.idempotencyKey,
-    meta: { template: "restock_demand_alert" },
-  });
-
-  if (!emailAccepted) {
-    await db
-      .update(ucRestockDemandAlertsTable)
-      .set({ claimExpiresAt: now, updatedAt: new Date() })
-      .where(
-        and(
-          eq(ucRestockDemandAlertsTable.productId, params.productId),
-          eq(ucRestockDemandAlertsTable.idempotencyKey, claim.idempotencyKey),
-          eq(ucRestockDemandAlertsTable.status, "claimed"),
-        ),
-      );
-    return "failed";
-  }
-
-  await db
-    .update(ucRestockDemandAlertsTable)
-    .set({
-      status: "sent",
-      waitingCount: rows.length,
-      alertedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(ucRestockDemandAlertsTable.productId, params.productId),
-        eq(ucRestockDemandAlertsTable.idempotencyKey, claim.idempotencyKey),
-      ),
-    );
-  return "alerted";
 }
 
 export async function checkWishlistRestocks(
@@ -231,25 +96,7 @@ export async function checkWishlistRestocks(
     return result;
   }
 
-  let demandThreshold = deps.demandThreshold ?? DEFAULT_RESTOCK_DEMAND_THRESHOLD;
-  if (deps.demandThreshold === undefined) {
-    try {
-      const [settings] = await db
-        .select({ restockDemandThreshold: teamSettingsTable.restockDemandThreshold })
-        .from(teamSettingsTable)
-        .where(eq(teamSettingsTable.id, "singleton"))
-        .limit(1);
-      if (settings?.restockDemandThreshold != null) {
-        demandThreshold = settings.restockDemandThreshold;
-      }
-    } catch (err) {
-      logger.warn(
-        { err },
-        "Restock-demand alert: could not read threshold from DB — using default (5)",
-      );
-    }
-  }
-  demandThreshold = Math.max(1, Math.floor(demandThreshold));
+  const demandThreshold = await getRestockDemandThreshold(deps.demandThreshold);
   const inventoryUrl = deps.inventoryUrl ?? projectHubInventoryUrl();
 
   // Distinct product IDs from the wishlist
@@ -338,9 +185,13 @@ export async function checkWishlistRestocks(
         const demandResult = await checkRestockDemandForProduct({
           productId,
           stockStatus,
-          threshold: demandThreshold,
-          sendEmail,
-          inventoryUrl,
+          deps: {
+            threshold: demandThreshold,
+            sendEmail,
+            getAlertEmail: getTeamAlertEmail,
+            inventoryUrl,
+            beforeRearmTransition: deps.beforeDemandRearmTransition,
+          },
         });
         if (demandResult === "reset") {
           logger.info({ productId }, "Scheduler: restock demand alert re-armed after restock");
@@ -363,9 +214,13 @@ export async function checkWishlistRestocks(
         const demandResult = await checkRestockDemandForProduct({
           productId,
           stockStatus,
-          threshold: demandThreshold,
-          sendEmail,
-          inventoryUrl,
+          deps: {
+            threshold: demandThreshold,
+            sendEmail,
+            getAlertEmail: getTeamAlertEmail,
+            inventoryUrl,
+            beforeRearmTransition: deps.beforeDemandRearmTransition,
+          },
         });
         if (demandResult === "alerted") {
           logger.info(

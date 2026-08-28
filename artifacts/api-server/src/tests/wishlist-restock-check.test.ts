@@ -22,6 +22,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { db, ucRestockDemandAlertsTable, ucWishlistTable } from "@workspace/db";
 import { checkWishlistRestocks } from "../lib/scheduler.js";
+import { checkRestockDemandForProduct } from "../lib/wishlist-demand.js";
 
 // ── Test fixtures ────────────────────────────────────────────────────────────
 
@@ -373,6 +374,135 @@ describe("checkWishlistRestocks — urgent restock demand alerts", () => {
     }
   });
 
+  it("retries a thrown delivery with the same provider idempotency key", async () => {
+    await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Thrown Retry Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Thrown Retry Demand Filter",
+        },
+      ]);
+
+      const idempotencyKeys: string[] = [];
+      let shouldThrow = true;
+      const check = () => checkWishlistRestocks({
+        isWcConfigured: () => true,
+        fetchStockStatus: async (productId) =>
+          productId === DEMAND_PRODUCT_ID ? "outofstock" : null,
+        sendPush: () => undefined,
+        sendEmail: async (email) => {
+          idempotencyKeys.push(email.idempotencyKey ?? "");
+          if (shouldThrow) throw new Error("simulated provider interruption");
+          return true;
+        },
+        demandThreshold: 2,
+        inventoryUrl: "https://projecthub.test/admin/inventory",
+      });
+
+      await check();
+      shouldThrow = false;
+      await check();
+
+      assert.equal(idempotencyKeys.length, 2);
+      assert.equal(idempotencyKeys[0], idempotencyKeys[1]);
+      const [state] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(state?.status, "sent");
+    } finally {
+      await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
+  });
+
+  it("aborts provider delivery before its claim lease expires", async () => {
+    await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Bounded Delivery Demand Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Bounded Delivery Demand Filter",
+        },
+      ]);
+
+      const idempotencyKeys: string[] = [];
+      let aborted = false;
+      const firstResult = await checkRestockDemandForProduct({
+        productId: DEMAND_PRODUCT_ID,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: 2,
+          getAlertEmail: async () => "purchasing@ucfilters-test.internal",
+          inventoryUrl: "https://projecthub.test/admin/inventory",
+          claimTtlMs: 100,
+          emailTimeoutMs: 10,
+          sendEmail: async (email) =>
+            new Promise<boolean>((resolve) => {
+              email.signal?.addEventListener("abort", () => {
+                aborted = true;
+                idempotencyKeys.push(email.idempotencyKey ?? "");
+                resolve(false);
+              }, { once: true });
+            }),
+        },
+      });
+
+      assert.equal(firstResult, "failed");
+      assert.equal(aborted, true);
+
+      const secondResult = await checkRestockDemandForProduct({
+        productId: DEMAND_PRODUCT_ID,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: 2,
+          getAlertEmail: async () => "purchasing@ucfilters-test.internal",
+          inventoryUrl: "https://projecthub.test/admin/inventory",
+          sendEmail: async (email) => {
+            idempotencyKeys.push(email.idempotencyKey ?? "");
+            return true;
+          },
+        },
+      });
+
+      assert.equal(secondResult, "alerted");
+      assert.equal(idempotencyKeys.length, 2);
+      assert.equal(
+        idempotencyKeys[0],
+        idempotencyKeys[1],
+        "the bounded retry must retain the original provider key",
+      );
+    } finally {
+      await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
+  });
+
   it("uses an atomic claim so concurrent checks send only one email", async () => {
     await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
     await db
@@ -425,6 +555,210 @@ describe("checkWishlistRestocks — urgent restock demand alerts", () => {
       await first;
 
       assert.equal(sendCount, 1);
+    } finally {
+      await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
+  });
+
+  it("keeps one claim when an immediate request overlaps a scheduler rearm", async () => {
+    await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Request Scheduler Overlap Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Request Scheduler Overlap Filter",
+        },
+      ]);
+
+      let sendCount = 0;
+      let releaseSend!: () => void;
+      const sendReleased = new Promise<void>((resolve) => {
+        releaseSend = resolve;
+      });
+      let sendEntered!: () => void;
+      const firstSendEntered = new Promise<void>((resolve) => {
+        sendEntered = resolve;
+      });
+      const sendEmail = async () => {
+        sendCount += 1;
+        sendEntered();
+        await sendReleased;
+        return true;
+      };
+
+      const requestCheck = checkRestockDemandForProduct({
+        productId: DEMAND_PRODUCT_ID,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: 2,
+          sendEmail,
+          getAlertEmail: async () => "purchasing@ucfilters-test.internal",
+          inventoryUrl: "https://projecthub.test/admin/inventory",
+        },
+      });
+      await firstSendEntered;
+
+      const schedulerCheck = checkWishlistRestocks({
+        isWcConfigured: () => true,
+        fetchStockStatus: async (productId) =>
+          productId === DEMAND_PRODUCT_ID ? "instock" : null,
+        sendPush: () => undefined,
+        sendEmail,
+        demandThreshold: 2,
+        inventoryUrl: "https://projecthub.test/admin/inventory",
+      });
+      await schedulerCheck;
+
+      const overlappingRequest = await checkRestockDemandForProduct({
+        productId: DEMAND_PRODUCT_ID,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: 2,
+          sendEmail,
+          getAlertEmail: async () => "purchasing@ucfilters-test.internal",
+          inventoryUrl: "https://projecthub.test/admin/inventory",
+        },
+      });
+      assert.equal(overlappingRequest, "unchanged");
+
+      releaseSend();
+      await requestCheck;
+
+      assert.equal(sendCount, 1, "scheduler rearm must not open a second email claim");
+      const [state] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(state, undefined, "the completed in-flight claim should finish rearming");
+    } finally {
+      await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+      await db
+        .delete(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+    }
+  });
+
+  it("reconciles when delivery completes between scheduler rearm statements", async () => {
+    await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
+    await db
+      .delete(ucRestockDemandAlertsTable)
+      .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+
+    try {
+      await db.insert(ucWishlistTable).values([
+        {
+          userId: DEMAND_USERS[0]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Rearm Completion Race Filter",
+        },
+        {
+          userId: DEMAND_USERS[1]!,
+          productId: DEMAND_PRODUCT_ID,
+          productName: "Rearm Completion Race Filter",
+        },
+      ]);
+
+      const idempotencyKeys: string[] = [];
+      let releaseFirstSend!: () => void;
+      const firstSendReleased = new Promise<void>((resolve) => {
+        releaseFirstSend = resolve;
+      });
+      let firstSendEntered!: () => void;
+      const firstSendStarted = new Promise<void>((resolve) => {
+        firstSendEntered = resolve;
+      });
+      let sendCount = 0;
+      const sendEmail = async (email: { idempotencyKey?: string }) => {
+        sendCount += 1;
+        idempotencyKeys.push(email.idempotencyKey ?? "");
+        if (sendCount === 1) {
+          firstSendEntered();
+          await firstSendReleased;
+        }
+        return true;
+      };
+
+      const requestCheck = checkRestockDemandForProduct({
+        productId: DEMAND_PRODUCT_ID,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: 2,
+          sendEmail,
+          getAlertEmail: async () => "purchasing@ucfilters-test.internal",
+          inventoryUrl: "https://projecthub.test/admin/inventory",
+        },
+      });
+      await firstSendStarted;
+
+      let releaseRearm!: () => void;
+      const rearmReleased = new Promise<void>((resolve) => {
+        releaseRearm = resolve;
+      });
+      let rearmPaused!: () => void;
+      const rearmReachedTransition = new Promise<void>((resolve) => {
+        rearmPaused = resolve;
+      });
+      const schedulerCheck = checkWishlistRestocks({
+        isWcConfigured: () => true,
+        fetchStockStatus: async (productId) =>
+          productId === DEMAND_PRODUCT_ID ? "instock" : null,
+        sendPush: () => undefined,
+        sendEmail,
+        demandThreshold: 2,
+        inventoryUrl: "https://projecthub.test/admin/inventory",
+        beforeDemandRearmTransition: async () => {
+          rearmPaused();
+          await rearmReleased;
+        },
+      });
+      await rearmReachedTransition;
+
+      releaseFirstSend();
+      await requestCheck;
+      releaseRearm();
+      await schedulerCheck;
+
+      let [state] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(state, undefined, "scheduler must clear the claim completed during rearm");
+
+      await checkRestockDemandForProduct({
+        productId: DEMAND_PRODUCT_ID,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: 2,
+          sendEmail,
+          getAlertEmail: async () => "purchasing@ucfilters-test.internal",
+          inventoryUrl: "https://projecthub.test/admin/inventory",
+        },
+      });
+
+      assert.equal(sendCount, 2, "the next demand cycle must be able to alert");
+      assert.notEqual(
+        idempotencyKeys[0],
+        idempotencyKeys[1],
+        "a rearmed demand cycle must receive a new provider key",
+      );
+      [state] = await db
+        .select()
+        .from(ucRestockDemandAlertsTable)
+        .where(eq(ucRestockDemandAlertsTable.productId, DEMAND_PRODUCT_ID));
+      assert.equal(state?.status, "sent");
     } finally {
       await db.delete(ucWishlistTable).where(inArray(ucWishlistTable.userId, DEMAND_USERS));
       await db

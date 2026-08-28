@@ -61,6 +61,11 @@ import {
 } from "../lib/objectStorage";
 import { creditQualifyingProductPoints } from "../lib/reminder-dispatch.js";
 import { sendPushToUser, getPushTokenRow, callExpoPushApi, removePushToken } from "../lib/push.js";
+import {
+  checkRestockDemandForProduct,
+  getRestockDemandThreshold,
+  projectHubInventoryUrl,
+} from "../lib/wishlist-demand.js";
 
 const router = Router();
 
@@ -6766,6 +6771,32 @@ router.post("/uc/wishlist", async (req: Request, res: Response): Promise<void> =
         set: { productName: productName.trim() },
       })
       .returning();
+
+    // Wishlist membership is the out-of-stock demand signal. Evaluate it
+    // before responding so the threshold crossing is not delayed until the
+    // four-hour scheduler check. The scheduler uses the same atomic claim and
+    // provider idempotency key as this request path.
+    try {
+      const demandThreshold = await getRestockDemandThreshold();
+      const demandResult = await checkRestockDemandForProduct({
+        productId,
+        stockStatus: "outofstock",
+        deps: {
+          threshold: demandThreshold,
+          sendEmail: sendViaResend,
+          getAlertEmail: getTeamAlertEmail,
+          inventoryUrl: projectHubInventoryUrl(),
+        },
+      });
+      if (demandResult === "failed") {
+        logger.warn({ productId }, "Wishlist POST: restock-demand alert email failed");
+      }
+    } catch (err) {
+      // The customer must still be able to join the waiting list if alert
+      // delivery is temporarily unavailable; the scheduled check retries it.
+      logger.warn({ err, productId }, "Wishlist POST: restock-demand evaluation failed");
+    }
+
     res.status(201).json({
       id:          row!.id,
       productId:   row!.productId,
