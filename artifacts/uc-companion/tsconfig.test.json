@@ -6,6 +6,7 @@
       "react":                                     ["./__mocks__/react.ts"],
       "react/jsx-runtime":                         ["./__mocks__/react-jsx-runtime.ts"],
       "react-native":                              ["./__mocks__/react-native.ts"],
+      "expo-constants":                            ["./__mocks__/expo-constants.ts"],
       "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
       "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"],
       "expo-file-system":                          ["./__mocks__/expo-file-system.ts"]
@@ -24,6 +25,7 @@
     "lib/formDrafts.ts",
     "lib/passwordReset.ts",
     "components/MediaPicker.tsx",
-    "__mocks__/expo-file-system.ts"
+    "__mocks__/expo-file-system.ts",
+    "__mocks__/expo-constants.ts"
   ]
 }

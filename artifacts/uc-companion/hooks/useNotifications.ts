@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -278,8 +279,18 @@ export async function ensureAndroidChannel(): Promise<void> {
   });
 }
 
+/**
+ * Android Expo Go supports permissions and local notifications, but Expo
+ * remote push-token registration is unavailable there. Keep this check scoped
+ * to the remote-token paths so local reminders continue to work.
+ */
+export function isRemotePushTokenUnsupported(): boolean {
+  return Platform.OS === 'android'
+    && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+}
+
 export async function getExpoPushToken(): Promise<string | null> {
-  if (Platform.OS === 'web') return null;
+  if (Platform.OS === 'web' || isRemotePushTokenUnsupported()) return null;
   try {
     const cached = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
     if (cached) return cached;
@@ -326,7 +337,7 @@ export async function registerCurrentPushToken(
   authToken: string,
   { allowPrompt = false, force = false }: RegisterPushTokenOptions = {},
 ): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'web' || isRemotePushTokenUnsupported()) return false;
   return enqueuePushRegistration(async () => {
     try {
       const granted = allowPrompt
@@ -368,7 +379,7 @@ export async function registerCurrentPushToken(
  * can never interleave with the delete. Best-effort — never throws.
  */
 export async function unregisterPushToken(authToken: string): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || isRemotePushTokenUnsupported()) return;
   await enqueuePushRegistration(async () => {
     try {
       // Identify this device's token before clearing local state.

@@ -31,6 +31,8 @@ const STUBS = {
     path.join(mocks, 'react-native.ts'),
   'expo-notifications':
     path.join(mocks, 'expo-notifications.ts'),
+  'expo-constants':
+    path.join(mocks, 'expo-constants.ts'),
   '@react-native-async-storage/async-storage':
     path.join(mocks, '@react-native-async-storage', 'async-storage.ts'),
   'expo-file-system':

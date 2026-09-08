@@ -16,6 +16,10 @@ import assert from 'node:assert/strict';
 import notifStub from 'expo-notifications';
 // @ts-ignore
 import AsyncStorageStub from '@react-native-async-storage/async-storage';
+// @ts-ignore
+import ConstantsStub, { ExecutionEnvironment } from 'expo-constants';
+// @ts-ignore
+import ReactNativeStub from 'react-native';
 
 const _resetNotifs: () => void            = (notifStub as any)._reset;
 const _setPushToken: (t: string) => void  = (notifStub as any)._setPushToken;
@@ -23,8 +27,20 @@ const _setDelay: (ms: number) => void     = (notifStub as any)._setPushTokenDela
 
 const _storage: Map<string, string> = (AsyncStorageStub as any)._storage;
 const _resetStorage: () => void     = (AsyncStorageStub as any)._reset;
+const _resetConstants: () => void   = (ConstantsStub as any)._reset;
+const _setExecutionEnvironment: (value: ExecutionEnvironment) => void =
+  (ConstantsStub as any)._setExecutionEnvironment;
+const _setPlatform: (value: 'ios' | 'android' | 'web') => void =
+  (ReactNativeStub as any).__setPlatform;
+const _getPushTokenFetchCount: () => number = (notifStub as any)._getPushTokenFetchCount;
+const _scheduled: string[] = (notifStub as any)._scheduled;
 
-import { registerCurrentPushToken, syncPushTokenWithServer } from '../useNotifications.js';
+import {
+  registerCurrentPushToken,
+  requestNotificationPermission,
+  scheduleAllFilterNotifications,
+  syncPushTokenWithServer,
+} from '../useNotifications.js';
 
 const REGISTERED_KEY = 'uc_push_token_registered';
 const CACHED_KEY     = 'uc_push_token';
@@ -46,10 +62,39 @@ let completionCounter = 0;
 beforeEach(() => {
   _resetNotifs();
   _resetStorage();
+  _resetConstants();
+  _setPlatform('ios');
   posts = [];
   postDelayMs = 0;
   postOk = true;
   completionCounter = 0;
+});
+
+describe('Android Expo Go runtime boundary', () => {
+  beforeEach(() => {
+    _setPlatform('android');
+    _setExecutionEnvironment(ExecutionEnvironment.StoreClient);
+  });
+
+  it('keeps permission requests and local reminders enabled without fetching or posting a remote token', async () => {
+    assert.equal(await requestNotificationPermission(), true);
+
+    const activation = await scheduleAllFilterNotifications({
+      activatedAt: new Date().toISOString(),
+      productId: 1,
+      productName: 'Portable Water Filter Pump',
+      lifespanDays: 120,
+    }, 42);
+
+    assert.ok(activation.notifIds.length > 0);
+    assert.equal(_scheduled.length, activation.notifIds.length);
+
+    assert.equal(await registerCurrentPushToken('auth-tok', { allowPrompt: true, force: true }), false);
+    await syncPushTokenWithServer('auth-tok');
+
+    assert.equal(_getPushTokenFetchCount(), 0);
+    assert.equal(posts.length, 0);
+  });
 });
 
 describe('syncPushTokenWithServer (foreground sync)', () => {

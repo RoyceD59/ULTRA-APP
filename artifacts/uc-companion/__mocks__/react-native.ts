@@ -1,5 +1,5 @@
 /** Minimal react-native stub for the Node.js test runner. */
-export const Platform = { OS: 'ios' as const };
+export const Platform: { OS: 'ios' | 'android' | 'web' } = { OS: 'ios' };
 export const Alert    = { alert: () => {} };
 
 // ── Controllable AppState mock ────────────────────────────────────────────────
@@ -34,4 +34,8 @@ export function __appStateListenerCount(): number {
 export function __resetAppState(): void {
   listeners.clear();
   AppState.currentState = 'active';
+}
+
+export function __setPlatform(next: 'ios' | 'android' | 'web'): void {
+  Platform.OS = next;
 }
