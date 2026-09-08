@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateUcOrderCustomerStageBodyStage = typeof UpdateUcOrderCustomerStageBodyStage[keyof typeof UpdateUcOrderCustomerStageBodyStage];
+export type UcOrderCustomerStageInputStage = typeof UcOrderCustomerStageInputStage[keyof typeof UcOrderCustomerStageInputStage];
 
 
-export const UpdateUcOrderCustomerStageBodyStage = {
+export const UcOrderCustomerStageInputStage = {
   accepted: 'accepted',
   shipped: 'shipped',
   delivered: 'delivered',

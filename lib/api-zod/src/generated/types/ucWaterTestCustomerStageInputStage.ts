@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateUcWaterTestCustomerStageBodyStage = typeof UpdateUcWaterTestCustomerStageBodyStage[keyof typeof UpdateUcWaterTestCustomerStageBodyStage];
+export type UcWaterTestCustomerStageInputStage = typeof UcWaterTestCustomerStageInputStage[keyof typeof UcWaterTestCustomerStageInputStage];
 
 
-export const UpdateUcWaterTestCustomerStageBodyStage = {
+export const UcWaterTestCustomerStageInputStage = {
   accepted: 'accepted',
   conducted: 'conducted',
   result_sent: 'result_sent',

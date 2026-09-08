@@ -83,8 +83,8 @@ import type {
   UcCustomerDetail,
   UcCustomerList,
   UcCustomersCount,
-  UpdateUcOrderCustomerStageBody,
-  UpdateUcWaterTestCustomerStageBody,
+  UcOrderCustomerStageInput,
+  UcWaterTestCustomerStageInput,
   WebhookIngestResult,
   WebhookPayload,
   WhatsAppSendInput,
@@ -131,14 +131,14 @@ export const getUpdateUcOrderCustomerStageUrl = (id: number,) => {
  * @summary Advance an order's customer-visible status and send one audited push
  */
 export const updateUcOrderCustomerStage = async (id: number,
-    updateUcOrderCustomerStageBody: UpdateUcOrderCustomerStageBody, options?: RequestInit): Promise<void> => {
+    ucOrderCustomerStageInput: UcOrderCustomerStageInput, options?: RequestInit): Promise<void> => {
 
   return customFetch<void>(getUpdateUcOrderCustomerStageUrl(id),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateUcOrderCustomerStageBody)
+    body: JSON.stringify(ucOrderCustomerStageInput)
   }
 );}
 
@@ -147,8 +147,8 @@ export const updateUcOrderCustomerStage = async (id: number,
 
 
 export const getUpdateUcOrderCustomerStageMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, TError,{id: number;data: BodyType<UpdateUcOrderCustomerStageBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, TError,{id: number;data: BodyType<UpdateUcOrderCustomerStageBody>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, TError,{id: number;data: BodyType<UcOrderCustomerStageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, TError,{id: number;data: BodyType<UcOrderCustomerStageInput>}, TContext> => {
 
 const mutationKey = ['updateUcOrderCustomerStage'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -160,7 +160,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, {id: number;data: BodyType<UpdateUcOrderCustomerStageBody>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, {id: number;data: BodyType<UcOrderCustomerStageInput>}> = (props) => {
           const {id,data} = props ?? {};
 
           return  updateUcOrderCustomerStage(id,data,requestOptions)
@@ -174,18 +174,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateUcOrderCustomerStageMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>>
-    export type UpdateUcOrderCustomerStageMutationBody = BodyType<UpdateUcOrderCustomerStageBody>
+    export type UpdateUcOrderCustomerStageMutationBody = BodyType<UcOrderCustomerStageInput>
     export type UpdateUcOrderCustomerStageMutationError = ErrorType<void>
 
     /**
  * @summary Advance an order's customer-visible status and send one audited push
  */
 export const useUpdateUcOrderCustomerStage = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, TError,{id: number;data: BodyType<UpdateUcOrderCustomerStageBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderCustomerStage>>, TError,{id: number;data: BodyType<UcOrderCustomerStageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateUcOrderCustomerStage>>,
         TError,
-        {id: number;data: BodyType<UpdateUcOrderCustomerStageBody>},
+        {id: number;data: BodyType<UcOrderCustomerStageInput>},
         TContext
       > => {
       return useMutation(getUpdateUcOrderCustomerStageMutationOptions(options));
@@ -203,14 +203,14 @@ export const getUpdateUcWaterTestCustomerStageUrl = (id: string,) => {
  * @summary Advance a water-test customer stage and send one audited push
  */
 export const updateUcWaterTestCustomerStage = async (id: string,
-    updateUcWaterTestCustomerStageBody: UpdateUcWaterTestCustomerStageBody, options?: RequestInit): Promise<void> => {
+    ucWaterTestCustomerStageInput: UcWaterTestCustomerStageInput, options?: RequestInit): Promise<void> => {
 
   return customFetch<void>(getUpdateUcWaterTestCustomerStageUrl(id),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateUcWaterTestCustomerStageBody)
+    body: JSON.stringify(ucWaterTestCustomerStageInput)
   }
 );}
 
@@ -219,8 +219,8 @@ export const updateUcWaterTestCustomerStage = async (id: string,
 
 
 export const getUpdateUcWaterTestCustomerStageMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, TError,{id: string;data: BodyType<UpdateUcWaterTestCustomerStageBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, TError,{id: string;data: BodyType<UpdateUcWaterTestCustomerStageBody>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, TError,{id: string;data: BodyType<UcWaterTestCustomerStageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, TError,{id: string;data: BodyType<UcWaterTestCustomerStageInput>}, TContext> => {
 
 const mutationKey = ['updateUcWaterTestCustomerStage'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -232,7 +232,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, {id: string;data: BodyType<UpdateUcWaterTestCustomerStageBody>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, {id: string;data: BodyType<UcWaterTestCustomerStageInput>}> = (props) => {
           const {id,data} = props ?? {};
 
           return  updateUcWaterTestCustomerStage(id,data,requestOptions)
@@ -246,18 +246,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateUcWaterTestCustomerStageMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>>
-    export type UpdateUcWaterTestCustomerStageMutationBody = BodyType<UpdateUcWaterTestCustomerStageBody>
+    export type UpdateUcWaterTestCustomerStageMutationBody = BodyType<UcWaterTestCustomerStageInput>
     export type UpdateUcWaterTestCustomerStageMutationError = ErrorType<void>
 
     /**
  * @summary Advance a water-test customer stage and send one audited push
  */
 export const useUpdateUcWaterTestCustomerStage = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, TError,{id: string;data: BodyType<UpdateUcWaterTestCustomerStageBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>, TError,{id: string;data: BodyType<UcWaterTestCustomerStageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateUcWaterTestCustomerStage>>,
         TError,
-        {id: string;data: BodyType<UpdateUcWaterTestCustomerStageBody>},
+        {id: string;data: BodyType<UcWaterTestCustomerStageInput>},
         TContext
       > => {
       return useMutation(getUpdateUcWaterTestCustomerStageMutationOptions(options));

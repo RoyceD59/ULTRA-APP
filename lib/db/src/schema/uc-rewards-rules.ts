@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
  * Admin-configurable rules that map reward event types to point values.
@@ -8,7 +8,7 @@ import { pgTable, serial, varchar, integer, boolean, timestamp } from "drizzle-o
 export const ucRewardsRulesTable = pgTable("uc_rewards_rules", {
   id:          serial("id").primaryKey(),
   /** Machine-readable event type key, e.g. "filter-replacement", "qualifying-product" */
-  eventType:   varchar("event_type", { length: 100 }).notNull().unique(),
+  eventType:   varchar("event_type", { length: 100 }).notNull(),
   /** Human-readable label shown in the admin panel */
   label:       varchar("label", { length: 255 }).notNull(),
   /** Points awarded when this event fires */
@@ -18,6 +18,8 @@ export const ucRewardsRulesTable = pgTable("uc_rewards_rules", {
   /** Email or identifier of the team member who last modified this rule */
   updatedBy:   varchar("updated_by", { length: 255 }),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("uc_rewards_rules_event_type_unique").on(table.eventType),
+]);
 
 export type UcRewardsRule = typeof ucRewardsRulesTable.$inferSelect;

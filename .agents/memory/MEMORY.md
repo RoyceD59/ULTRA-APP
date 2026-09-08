@@ -36,3 +36,4 @@
 - [Stray text node from non-boolean JSX conditions](stray-text-node-truthy-check.md) — `{x && <JSX/>}` renders a real crash on native (web only warns) when `x` is a falsy non-boolean like `''`; coerce with `!!`.
 - [API test global-fetch stubbing](api-test-global-fetch-stub.md) — a test's own HTTP helper must call a saved `realFetch`, never bare `fetch`, once `globalThis.fetch` is stubbed for an outbound-call test.
 - [Lease-based alert rearming](lease-based-alert-rearming.md) — rearming must preserve live claims; provider calls must abort before lease expiry so an expired claim cannot still be sending.
+- [Drizzle post-merge false success](drizzle-post-merge-false-success.md) — push-force may print a non-TTY prompt error yet exit 0; detect the text and align constraint/index declarations instead of forcing truncation.

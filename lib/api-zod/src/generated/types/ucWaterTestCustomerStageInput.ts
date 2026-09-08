@@ -5,11 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { UpdateUcWaterTestCustomerStageBodyStage } from './updateUcWaterTestCustomerStageBodyStage';
+import type { UcWaterTestCustomerStageInputStage } from './ucWaterTestCustomerStageInputStage';
 
-export type UpdateUcWaterTestCustomerStageBody = {
-  stage: UpdateUcWaterTestCustomerStageBodyStage;
+export interface UcWaterTestCustomerStageInput {
+  stage: UcWaterTestCustomerStageInputStage;
   idempotencyKey: string;
   /** Required for result_sent */
   resultDeliveryReference?: string;
-};
+}

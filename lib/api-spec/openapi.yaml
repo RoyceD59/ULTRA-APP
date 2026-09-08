@@ -51,11 +51,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [stage, idempotencyKey]
-              properties:
-                stage: { type: string, enum: [accepted, shipped, delivered] }
-                idempotencyKey: { type: string }
+              $ref: "#/components/schemas/UcOrderCustomerStageInput"
       responses:
         "200": { description: Stage saved (possibly idempotent repeat) }
         "400": { description: Invalid input }
@@ -78,12 +74,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [stage, idempotencyKey]
-              properties:
-                stage: { type: string, enum: [accepted, conducted, result_sent] }
-                idempotencyKey: { type: string }
-                resultDeliveryReference: { type: string, description: Required for result_sent }
+              $ref: "#/components/schemas/UcWaterTestCustomerStageInput"
       responses:
         "200": { description: Stage saved (possibly idempotent repeat) }
         "400": { description: Invalid input or missing result delivery reference }
@@ -1344,6 +1335,21 @@ components:
         type: integer
 
   schemas:
+    UcOrderCustomerStageInput:
+      type: object
+      required: [stage, idempotencyKey]
+      properties:
+        stage: { type: string, enum: [accepted, shipped, delivered] }
+        idempotencyKey: { type: string }
+
+    UcWaterTestCustomerStageInput:
+      type: object
+      required: [stage, idempotencyKey]
+      properties:
+        stage: { type: string, enum: [accepted, conducted, result_sent] }
+        idempotencyKey: { type: string }
+        resultDeliveryReference: { type: string, description: Required for result_sent }
+
     HealthStatus:
       type: object
       properties:

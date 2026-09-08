@@ -5,6 +5,36 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type UcOrderCustomerStageInputStage = typeof UcOrderCustomerStageInputStage[keyof typeof UcOrderCustomerStageInputStage];
+
+
+export const UcOrderCustomerStageInputStage = {
+  accepted: 'accepted',
+  shipped: 'shipped',
+  delivered: 'delivered',
+} as const;
+
+export interface UcOrderCustomerStageInput {
+  stage: UcOrderCustomerStageInputStage;
+  idempotencyKey: string;
+}
+
+export type UcWaterTestCustomerStageInputStage = typeof UcWaterTestCustomerStageInputStage[keyof typeof UcWaterTestCustomerStageInputStage];
+
+
+export const UcWaterTestCustomerStageInputStage = {
+  accepted: 'accepted',
+  conducted: 'conducted',
+  result_sent: 'result_sent',
+} as const;
+
+export interface UcWaterTestCustomerStageInput {
+  stage: UcWaterTestCustomerStageInputStage;
+  idempotencyKey: string;
+  /** Required for result_sent */
+  resultDeliveryReference?: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -731,36 +761,6 @@ export interface UcCustomersCount {
   /** Customers who registered since the start of the current calendar month */
   newThisMonth: number;
 }
-
-export type UpdateUcOrderCustomerStageBodyStage = typeof UpdateUcOrderCustomerStageBodyStage[keyof typeof UpdateUcOrderCustomerStageBodyStage];
-
-
-export const UpdateUcOrderCustomerStageBodyStage = {
-  accepted: 'accepted',
-  shipped: 'shipped',
-  delivered: 'delivered',
-} as const;
-
-export type UpdateUcOrderCustomerStageBody = {
-  stage: UpdateUcOrderCustomerStageBodyStage;
-  idempotencyKey: string;
-};
-
-export type UpdateUcWaterTestCustomerStageBodyStage = typeof UpdateUcWaterTestCustomerStageBodyStage[keyof typeof UpdateUcWaterTestCustomerStageBodyStage];
-
-
-export const UpdateUcWaterTestCustomerStageBodyStage = {
-  accepted: 'accepted',
-  conducted: 'conducted',
-  result_sent: 'result_sent',
-} as const;
-
-export type UpdateUcWaterTestCustomerStageBody = {
-  stage: UpdateUcWaterTestCustomerStageBodyStage;
-  idempotencyKey: string;
-  /** Required for result_sent */
-  resultDeliveryReference?: string;
-};
 
 export type ListUcCustomersParams = {
 /**

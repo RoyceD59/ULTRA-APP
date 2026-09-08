@@ -1,4 +1,5 @@
-import { pgTable, serial, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, serial, text, timestamp, boolean, integer, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
  * Stores registered Ultra-Clear Companion user accounts.
@@ -31,8 +32,12 @@ export const ucUsersTable = pgTable("uc_users", {
    *  active sessions immediately after a successful password change. */
   credentialVersion:  integer("credential_version").notNull().default(0),
   /** SHA-256 of the permanent, opaque Rewards QR token. */
-  rewardsQrHash:     text("rewards_qr_hash").unique(),
+  rewardsQrHash:     text("rewards_qr_hash"),
   rewardsQrRevokedAt: timestamp("rewards_qr_revoked_at", { withTimezone: true }),
-});
+}, (table) => [
+  uniqueIndex("uc_users_rewards_qr_hash_idx")
+    .on(table.rewardsQrHash)
+    .where(sql`${table.rewardsQrHash} IS NOT NULL`),
+]);
 
 export type UcUser = typeof ucUsersTable.$inferSelect;
