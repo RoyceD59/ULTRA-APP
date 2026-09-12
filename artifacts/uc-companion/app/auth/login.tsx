@@ -77,6 +77,18 @@ export default function LoginScreen() {
             {loading ? <ActivityIndicator color="#fff" size="small" /> :
               <Text style={styles.loginBtnText}>Sign In</Text>}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="forgot-password-link"
+            onPress={() => router.push(
+              email.trim()
+                ? ({ pathname: '/auth/forgot-password', params: { email: email.trim() } } as never)
+                : ('/auth/forgot-password' as never),
+            )}
+            style={styles.forgotPasswordBtn}
+          >
+            <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>Forgot password?</Text>
+          </TouchableOpacity>
         </View>
 
         <SocialAuthButtons onSuccess={navigateAfterAuth} />
@@ -107,6 +119,8 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16 },
   loginBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' as const },
+  forgotPasswordBtn: { alignSelf: 'center', paddingHorizontal: 8, paddingVertical: 4 },
+  forgotPasswordText: { fontSize: 14, fontWeight: '600' as const },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
   footerText: { fontSize: 14 },
   footerLink: { fontSize: 14, fontWeight: '600' as const },
