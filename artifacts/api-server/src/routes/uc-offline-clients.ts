@@ -14,7 +14,7 @@
 import { Router, type Request, type Response, type IRouter } from "express";
 import { db, ucOfflineClientsTable, teamUsersTable, type OfflineProduct } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireAdmin, isAdminRequest } from "../lib/adminAuth.js";
+import { isAdminRequest, requireImpactEditAccess } from "../lib/adminAuth.js";
 import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
 
@@ -161,7 +161,7 @@ router.get("/uc/offline-clients", async (req: Request, res: Response): Promise<v
 // ─── POST /api/uc/offline-clients ────────────────────────────────────────────
 
 router.post("/uc/offline-clients", async (req: Request, res: Response): Promise<void> => {
-  if (!(await requireAdmin(req, res))) return;
+  if (!(await requireImpactEditAccess(req, res))) return;
 
   const { clientRef, products, saleDate, notes, phone, email } = req.body as Record<string, unknown>;
 
@@ -209,7 +209,7 @@ router.post("/uc/offline-clients", async (req: Request, res: Response): Promise<
 // ─── PUT /api/uc/offline-clients/:id ─────────────────────────────────────────
 
 router.put("/uc/offline-clients/:id", async (req: Request, res: Response): Promise<void> => {
-  if (!(await requireAdmin(req, res))) return;
+  if (!(await requireImpactEditAccess(req, res))) return;
 
   const id = parseId(req.params["id"]);
   if (id === null) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -263,7 +263,7 @@ router.put("/uc/offline-clients/:id", async (req: Request, res: Response): Promi
 // ─── DELETE /api/uc/offline-clients/:id ──────────────────────────────────────
 
 router.delete("/uc/offline-clients/:id", async (req: Request, res: Response): Promise<void> => {
-  if (!(await requireAdmin(req, res))) return;
+  if (!(await requireImpactEditAccess(req, res))) return;
 
   const id = parseId(req.params["id"]);
   if (id === null) { res.status(400).json({ error: "Invalid id" }); return; }

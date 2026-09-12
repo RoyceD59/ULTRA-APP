@@ -28,6 +28,11 @@ import { db, ucUsersTable, teamUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { verifyToken } from "./jwt.js";
 
+export const IMPACT_EDIT_ERROR = {
+  error: "Your UC Impact edit access has changed. Refresh your ProjectHub permissions to continue.",
+  code: "IMPACT_EDIT_ACCESS_REQUIRED",
+} as const;
+
 export function adminEmailList(): string[] {
   return (process.env["UC_ADMIN_EMAILS"] ?? "")
     .split(",")
@@ -88,4 +93,45 @@ export async function requireAdmin(req: Request, res: Response): Promise<boolean
     return false;
   }
   return true;
+}
+
+/** Re-checks live ProjectHub impact edit access while preserving non-team admin support. */
+export async function requireImpactEditAccess(req: Request, res: Response): Promise<boolean> {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (claims?.type !== "team-session") {
+    return requireAdmin(req, res);
+  }
+
+  const teamId = typeof claims.id === "string" ? claims.id : "";
+  if (!teamId) {
+    res.status(401).json({ error: "Admin authentication required" });
+    return false;
+  }
+
+  try {
+    const [row] = await db
+      .select({
+        role: teamUsersTable.role,
+        isActive: teamUsersTable.isActive,
+        permissions: teamUsersTable.permissions,
+      })
+      .from(teamUsersTable)
+      .where(eq(teamUsersTable.id, teamId))
+      .limit(1);
+
+    if (!row || !row.isActive) {
+      res.status(401).json({ error: "Admin authentication required" });
+      return false;
+    }
+    if (row.role === "admin") return true;
+
+    const level = (row.permissions as Record<string, string> | null)?.["impact"] ?? "none";
+    if (level === "edit") return true;
+
+    res.status(403).json(IMPACT_EDIT_ERROR);
+    return false;
+  } catch {
+    res.status(503).json({ error: "Could not verify UC Impact edit access" });
+    return false;
+  }
 }

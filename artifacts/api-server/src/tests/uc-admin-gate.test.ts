@@ -29,8 +29,9 @@ const DEV_EMAIL    = "gate-devfallback@ucfilters.com"; // on the list, but Woo s
 
 const TEAM_ADMIN_ID    = "test-uc-gate-team-admin";
 const TEAM_MEMBER_ID   = "test-uc-gate-team-member";
+const TEAM_EDITOR_ID   = "test-uc-gate-team-editor";
 const TEAM_INACTIVE_ID = "test-uc-gate-team-inactive";
-const TEAM_IDS = [TEAM_ADMIN_ID, TEAM_MEMBER_ID, TEAM_INACTIVE_ID];
+const TEAM_IDS = [TEAM_ADMIN_ID, TEAM_MEMBER_ID, TEAM_EDITOR_ID, TEAM_INACTIVE_ID];
 
 let wooStub: http.Server;
 let server: http.Server;
@@ -76,6 +77,7 @@ before(async () => {
   await db.insert(teamUsersTable).values([
     { id: TEAM_ADMIN_ID,    email: "gate-team-admin@test.internal",    name: "Gate Admin",    passwordHash: "x", role: "admin",  isActive: true },
     { id: TEAM_MEMBER_ID,   email: "gate-team-member@test.internal",   name: "Gate Member",   passwordHash: "x", role: "member", isActive: true },
+    { id: TEAM_EDITOR_ID,   email: "gate-team-editor@test.internal",   name: "Gate Editor",   passwordHash: "x", role: "member", isActive: true, permissions: { impact: "edit" } },
     { id: TEAM_INACTIVE_ID, email: "gate-team-inactive@test.internal", name: "Gate Inactive", passwordHash: "x", role: "admin",  isActive: false },
   ]);
 
@@ -182,6 +184,48 @@ describe("UC admin gate — ProjectHub team sessions", () => {
     } finally {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db as any).select = original;
+    }
+  });
+});
+
+describe("UC offline-client live edit permission", () => {
+  it("allows exposed writes with edit access, then returns a specific 403 after access becomes view-only", async () => {
+    const token = teamToken(TEAM_EDITOR_ID, "member");
+    await db.update(teamUsersTable)
+      .set({ permissions: { impact: "edit" } })
+      .where(inArray(teamUsersTable.id, [TEAM_EDITOR_ID]));
+
+    for (const [method, path, expectedStatus] of [
+      ["POST", "/api/uc/offline-clients", 400],
+      ["PUT", "/api/uc/offline-clients/1", 400],
+      ["DELETE", "/api/uc/offline-clients/1", 404],
+      ["POST", "/api/uc/impact/override", 400],
+    ] as const) {
+      const response = await apiFetch(path, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: method === "DELETE" ? undefined : JSON.stringify({ litresOffset: "invalid" }),
+      });
+      assert.equal(response.status, expectedStatus, `${method} ${path} should pass the edit gate`);
+    }
+
+    await db.update(teamUsersTable)
+      .set({ permissions: { impact: "view" } })
+      .where(inArray(teamUsersTable.id, [TEAM_EDITOR_ID]));
+
+    for (const [method, path] of [
+      ["POST", "/api/uc/offline-clients"],
+      ["PUT", "/api/uc/offline-clients/1"],
+      ["DELETE", "/api/uc/offline-clients/1"],
+      ["POST", "/api/uc/impact/override"],
+    ] as const) {
+      const response = await apiFetch(path, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: method === "DELETE" ? undefined : JSON.stringify({}),
+      });
+      assert.equal(response.status, 403);
+      assert.equal((response.body as { code?: string }).code, "IMPACT_EDIT_ACCESS_REQUIRED");
     }
   });
 });

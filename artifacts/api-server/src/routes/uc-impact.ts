@@ -28,7 +28,7 @@ import {
   type OfflineProduct,
 } from "@workspace/db";
 import { inArray } from "drizzle-orm";
-import { requireAdmin } from "../lib/adminAuth.js";
+import { requireImpactEditAccess } from "../lib/adminAuth.js";
 import { getProductLifespanMap } from "./uc.js";
 
 const router: IRouter = Router();
@@ -218,7 +218,7 @@ router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => 
 // ─── POST /api/uc/impact/override ─────────────────────────────────────────────
 
 router.post("/uc/impact/override", async (req: Request, res: Response): Promise<void> => {
-  if (!(await requireAdmin(req, res))) return;
+  if (!(await requireImpactEditAccess(req, res))) return;
   const { litresOffset, usersOffset, updatedBy } = req.body as {
     litresOffset?: unknown;
     usersOffset?:  unknown;

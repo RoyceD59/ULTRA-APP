@@ -24,7 +24,7 @@ import {
   Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
   PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut, Search,
 } from 'lucide-react';
-import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit } from '@/lib/team-auth';
+import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit, refreshTeamUser } from '@/lib/team-auth';
 
 const BASE      = import.meta.env.BASE_URL.replace(/\/$/, '');
 const TOKEN_KEY = 'uc_impact_admin_token';
@@ -343,6 +343,7 @@ export default function ImpactPage() {
   // (or explicitly signed out of this page) — fall back to the UC-credentials
   // form instead of retrying the same token in a loop.
   const [teamDenied, setTeamDenied] = useState(false);
+  const [permissionRevision, setPermissionRevision] = useState(0);
 
   // Any authenticated team member with at least "view" on the impact page gets
   // straight in with their team session. Admins always pass (canView returns
@@ -364,16 +365,34 @@ export default function ImpactPage() {
   }
 
   if (!token) return <LoginGate onToken={handleToken} teamDenied={teamDenied} />;
-  return <ImpactDashboard token={token} onSignOut={handleSignOut} isReadOnly={isReadOnly} />;
+  return (
+    <ImpactDashboard
+      token={token}
+      onSignOut={handleSignOut}
+      isReadOnly={isReadOnly}
+      onPermissionsChanged={() => setPermissionRevision(revision => revision + 1)}
+    />
+  );
 }
 
 // ─── ImpactDashboard (authenticated) ─────────────────────────────────────────
 
-export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: string; onSignOut: () => void; isReadOnly?: boolean }) {
+export function ImpactDashboard({
+  token,
+  onSignOut,
+  isReadOnly = false,
+  onPermissionsChanged,
+}: {
+  token: string;
+  onSignOut: () => void;
+  isReadOnly?: boolean;
+  onPermissionsChanged: () => void;
+}) {
   const [data,    setData]    = useState<ImpactData | null>(null);
   const [clients, setClients] = useState<OfflineClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
+  const [permissionMessage, setPermissionMessage] = useState('');
 
   // Registered app-user count — fetched with the team session token (if present).
   // Silently skipped when only a UC-credentials token is in use.
@@ -449,6 +468,18 @@ export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { toke
 
   useEffect(() => { load(); }, [load]);
 
+  async function handleLostEditAccess() {
+    setDialogOpen(false);
+    setDeletingId(null);
+    setPermissionMessage('Your UC Impact edit access changed while this page was open. Your ProjectHub session is still active, and this page is now read-only.');
+    try {
+      await refreshTeamUser();
+      onPermissionsChanged();
+    } catch {
+      setPermissionMessage('Your UC Impact edit access changed while this page was open. You are still signed in to ProjectHub. Refresh the page to load your latest permissions.');
+    }
+  }
+
   // ── Legacy offset save ────────────────────────────────────────────────────
 
   async function saveLegacyOffset() {
@@ -461,6 +492,11 @@ export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { toke
         headers: authHeaders(token),
         body:    JSON.stringify({ litresOffset: litres, usersOffset: users, updatedBy: 'admin' }),
       });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
       if (res.status === 401) { onSignOut(); return; }
       if (!res.ok) {
         const err = await res.json().catch(() => ({} as Record<string, unknown>)) as { error?: string };
@@ -510,6 +546,11 @@ export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { toke
         headers: authHeaders(token),
         body:    JSON.stringify({ clientRef: formRef.trim(), phone: formPhone.trim() || null, email: formEmail.trim() || null, products: validProducts, saleDate: formDate, notes: formNotes.trim() }),
       });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
       if (res.status === 401) { onSignOut(); return; }
       if (!res.ok) {
         const err = await res.json().catch(() => ({} as Record<string, unknown>)) as { error?: string };
@@ -529,6 +570,11 @@ export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { toke
       const res = await fetch(`${BASE}/api/uc/offline-clients/${id}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
       });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
       if (res.status === 401) { onSignOut(); return; }
       if (!res.ok) throw new Error(`${res.status}`);
       setDeletingId(null);
@@ -582,6 +628,13 @@ export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { toke
         <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
+        </div>
+      )}
+
+      {permissionMessage && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          {permissionMessage}
         </div>
       )}
 
@@ -715,12 +768,12 @@ export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { toke
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             {c.phone
-                               ? <a href={`tel:${c.phone}`} className="text-foreground text-xs font-mono hover:underline">{c.phone}</a>
+                              ? <a href={`tel:${c.phone}`} className="text-foreground text-xs font-mono hover:underline">{c.phone}</a>
                               : <span className="text-muted-foreground/40">—</span>}
                           </td>
                           <td className="px-4 py-3 max-w-[180px]">
                             {c.email
-                               ? <a href={`mailto:${c.email}`} className="text-foreground text-xs truncate block hover:underline">{c.email}</a>
+                              ? <a href={`mailto:${c.email}`} className="text-foreground text-xs truncate block hover:underline">{c.email}</a>
                               : <span className="text-muted-foreground/40">—</span>}
                           </td>
                           <td className="px-4 py-3 max-w-xs">

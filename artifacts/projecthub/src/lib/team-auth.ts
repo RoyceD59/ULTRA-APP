@@ -142,6 +142,13 @@ export function canEdit(page: PageSlug | string): boolean {
   return (user.permissions[page] ?? "none") === "edit";
 }
 
+/** Refreshes the stored user profile and its live page permissions. */
+export async function refreshTeamUser(): Promise<TeamUser> {
+  const user = await apiFetch<TeamUser>("/auth/me");
+  setStoredUser(user);
+  return user;
+}
+
 // ─── Auth state helpers ───────────────────────────────────────────────────────
 
 export function clearTeamAuth(): void {
