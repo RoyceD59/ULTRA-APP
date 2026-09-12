@@ -4,14 +4,24 @@
   "license": "MIT",
   "pnpm": {
     "overrides": {
+      "@xmldom/xmldom@>=0.7 <0.9": "0.8.15",
+      "@xmldom/xmldom@>=0.9 <0.10": "0.9.12",
       "brace-expansion@>=1.1.16 <2": "1.1.18",
       "brace-expansion@>=2.1.2 <3": "2.1.4",
       "brace-expansion@>=5.0.7": "5.0.9",
+      "browserslist": "4.28.9",
+      "decode-uri-component": "0.5.0",
+      "esbuild@<=0.24.2": "0.25.8",
+      "fast-uri": "4.1.4",
       "js-yaml@>=3 <4": "3.15.1",
       "js-yaml@>=4 <5": "4.3.1",
-      "fast-uri": "4.1.2",
+      "nanoid@<3.3.18": "3.3.18",
       "postcss": "8.5.26",
-      "fast-xml-parser": "5.10.1"
+      "fast-xml-parser": "5.10.1",
+      "qs": "6.16.0",
+      "tar": "7.5.22",
+      "undici@<6.28.0": "6.28.1",
+      "uuid": "11.1.1"
     },
     "patchedDependencies": {
       "image-size@1.2.1": "patches/image-size@1.2.1.patch"
