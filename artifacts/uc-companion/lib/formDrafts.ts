@@ -190,15 +190,9 @@ export async function loadDraft<T extends object>(key: DraftKey): Promise<T | nu
   }
 }
 
-/**
- * Remove the draft and delete any durable media copies associated with it.
- *
- * IMPORTANT: callers must set their cancellation flag and await
- * drainDraftSaveQueue before calling this, so no queued write can recreate
- * the draft after clearDraft returns.
- */
-export async function clearDraft(key: DraftKey): Promise<void> {
-  // 1. Determine which stable URIs to clean up.
+/** Delete durable media copies associated with a draft and reset their tracking state. */
+export async function clearDraftMedia(key: DraftKey): Promise<void> {
+  // Determine which stable URIs to clean up.
   //    Prefer the in-memory tracking set (populated if persistMediaForDraft
   //    ran this session).  Fall back to reading the draft from AsyncStorage
   //    for cold-restart submits where persistMediaForDraft was never called.
@@ -211,17 +205,28 @@ export async function clearDraft(key: DraftKey): Promise<void> {
         return loadStableUrisFromDraft(key, dir);
       })();
 
-  // 2. Delete the durable copies.
+  // Delete the durable copies.
   for (const uri of urisToDelete) {
     deleteDraftMediaFile(uri);
   }
 
-  // 3. Clean up all tracking state for this key.
+  // Clean up all tracking state for this key.
   persistedStableUris.delete(key);
   sessionUriCache.delete(key);
   initializedKeys.delete(key);
+}
 
-  // 4. Remove the AsyncStorage entry.
+/**
+ * Remove the draft and delete any durable media copies associated with it.
+ *
+ * IMPORTANT: callers must set their cancellation flag and await
+ * drainDraftSaveQueue before calling this, so no queued write can recreate
+ * the draft after clearDraft returns.
+ */
+export async function clearDraft(key: DraftKey): Promise<void> {
+  await clearDraftMedia(key);
+
+  // Remove the AsyncStorage entry only after media cleanup has inspected it.
   try {
     await AsyncStorage.removeItem(storageKey(key));
   } catch {

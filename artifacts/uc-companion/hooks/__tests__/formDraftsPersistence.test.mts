@@ -55,6 +55,7 @@ import {
   saveDraft,
   loadDraft,
   clearDraft,
+  clearDraftMedia,
   __resetForTesting,
 } from '../../lib/formDrafts.js';
 import type { MediaItem } from '../../components/MediaPicker.js';
@@ -313,6 +314,40 @@ describe('F: clearDraft — removes durable copies and AsyncStorage entry', () =
   it('F2: clearDraft on a draft with no attachments does not throw', async () => {
     await saveDraft('ticket', { media: [] });
     await assert.doesNotReject(() => clearDraft('ticket'));
+  });
+
+  it('F3: clearDraftMedia removes water-test files but leaves the draft available', async () => {
+    const src = pickerUri('water-test-clear.jpg');
+    _setFileExists(src, true);
+
+    const persisted = await persistMediaForDraft([photo(src)], 'water-test');
+    const stableUri = persisted[0]!.uri;
+    await saveDraft('water-test', { media: persisted });
+
+    await clearDraftMedia('water-test');
+
+    assert.ok(!_vfs.has(stableUri),
+      'water-test stable file must be deleted by clearDraftMedia');
+    assert.ok(_storage.has('uc_form_draft:water-test'),
+      'media-only cleanup must not remove the draft entry');
+  });
+
+  it('F4: media remains available while a submission has not succeeded', async () => {
+    const src = pickerUri('retry-after-failure.mp4');
+    _setFileExists(src, true);
+
+    const persisted = await persistMediaForDraft(
+      [{ uri: src, type: 'video' }],
+      'ticket',
+    );
+    const stableUri = persisted[0]!.uri;
+    await saveDraft('ticket', { media: persisted });
+
+    // Failed submissions do not call clearDraft; the saved media must remain
+    // available so the user can retry without selecting it again.
+    assert.ok(_vfs.has(stableUri),
+      'stable file must remain available before successful submission cleanup');
+    assert.deepEqual((await loadDraft<{ media: MediaItem[] }>('ticket'))?.media, persisted);
   });
 });
 
