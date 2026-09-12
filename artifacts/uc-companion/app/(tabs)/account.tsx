@@ -26,6 +26,12 @@ import { File, Paths } from 'expo-file-system';
 import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 import { readStoredRewardsQrToken, storeRewardsQrToken } from '@/lib/rewardsQrStorage';
 import PersonalImpactSection from '@/components/PersonalImpactSection';
+import {
+  clearProfileDraft,
+  loadProfileDraft,
+  saveProfileDraft,
+  type ProfileDraftFields,
+} from '@/lib/profileDraft';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -40,22 +46,18 @@ const MENU_ITEMS = [
 
 // ── Edit Profile Modal ────────────────────────────────────────────────────────
 
-interface EditProfileForm {
-  firstName: string;
-  lastName:  string;
-  phone:     string;
-  address:   string;
-}
+type EditProfileForm = ProfileDraftFields;
 
 interface EditProfileModalProps {
   visible:    boolean;
   initial:    EditProfileForm;
+  accountId:  number;
   email:      string;
   onClose:    () => void;
   onSaved:    (updated: EditProfileForm) => void;
 }
 
-function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditProfileModalProps) {
+function EditProfileModal({ visible, initial, accountId, email, onClose, onSaved }: EditProfileModalProps) {
   const colors  = useColors();
   const api     = useApi();
   const { updateUser } = useAuth();
@@ -63,11 +65,45 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
   const [form,    setForm]    = useState<EditProfileForm>(initial);
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
+  const draftReady = useRef(false);
 
-  // Reset form when modal opens with new initial values
   useEffect(() => {
-    if (visible) { setForm(initial); setError(''); }
-  }, [visible, initial]);
+    if (!visible) {
+      draftReady.current = false;
+      return;
+    }
+    let active = true;
+    setError('');
+    loadProfileDraft(accountId)
+      .then(draft => {
+        if (!active) return;
+        setForm(draft ?? initial);
+        draftReady.current = true;
+      })
+      .catch(() => {
+        if (!active) return;
+        setForm(initial);
+        draftReady.current = true;
+      });
+    return () => { active = false; };
+  }, [
+    visible,
+    accountId,
+    initial.firstName,
+    initial.lastName,
+    initial.phone,
+    initial.address,
+  ]);
+
+  useEffect(() => {
+    if (!visible || !draftReady.current || saving) return;
+    saveProfileDraft(accountId, form).catch(() => {});
+  }, [accountId, form, saving, visible]);
+
+  function handleClose() {
+    clearProfileDraft().catch(() => {});
+    onClose();
+  }
 
   function setField(field: keyof EditProfileForm, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -109,6 +145,7 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
         phone:     form.phone.replace(/\s/g, ''),
         address:   form.address.trim(),
       });
+      await clearProfileDraft();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
     } finally {
@@ -117,7 +154,7 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -129,7 +166,7 @@ function EditProfileModal({ visible, initial, email, onClose, onSaved }: EditPro
             {/* Header */}
             <View style={editStyles.header}>
               <Text style={[editStyles.title, { color: colors.text }]}>Edit Profile</Text>
-              <TouchableOpacity onPress={onClose} style={editStyles.closeBtn} disabled={saving}>
+              <TouchableOpacity onPress={handleClose} style={editStyles.closeBtn} disabled={saving}>
                 <Ionicons name="close" size={22} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
@@ -882,6 +919,7 @@ function AccountScreenContent() {
       <EditProfileModal
         visible={editModalVisible}
         initial={editInitial}
+        accountId={user.id}
         email={user.email}
         onClose={() => setEditModalVisible(false)}
         onSaved={() => setEditModalVisible(false)}

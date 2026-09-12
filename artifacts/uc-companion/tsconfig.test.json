@@ -23,6 +23,7 @@
     "context/cartStorage.ts",
     "context/CartContext.tsx",
     "lib/formDrafts.ts",
+    "lib/profileDraft.ts",
     "lib/passwordReset.ts",
     "lib/catalogueQuery.ts",
     "components/MediaPicker.tsx",
