@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerCurrentPushToken, unregisterPushToken } from '@/hooks/useNotifications';
 import { authErrorMessage } from '@/hooks/rateLimitAlert';
+import { setDeletedAccountHandler } from '@/hooks/deletedAccountResponse';
 
 export interface UCUser {
   id: number;
@@ -22,6 +23,8 @@ interface AuthContextValue {
   /** Exchange a verified Clerk session token (Google/Apple sign-in) for the app's own session. */
   socialLogin: (clerkToken: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  /** Clear a session rejected because its backing account was deleted. */
+  handleDeletedAccount: () => Promise<void>;
   /** Persist updated user fields locally so the UI reflects profile changes immediately. */
   updateUser: (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone' | 'address'>>) => Promise<void>;
 }
@@ -43,6 +46,7 @@ const AuthContext = createContext<AuthContextValue>({
   register: async () => ({ success: false }),
   socialLogin: async () => ({ success: false }),
   logout: async () => {},
+  handleDeletedAccount: async () => {},
   updateUser: async () => {},
 });
 
@@ -72,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<UCUser | null>(null);
   const [token, setToken]     = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const deletedAccountCleanup = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -104,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = data.user!;
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(u));
+      deletedAccountCleanup.current = null;
       setToken(data.token!);
       setUser(u);
       // Register push token after successful login (fire-and-forget)
@@ -126,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (registerErr) return { success: false, error: registerErr, hint: data.hint };
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user!));
+      deletedAccountCleanup.current = null;
       setToken(data.token!);
       setUser(data.user!);
       // Register push token after successful registration (fire-and-forget)
@@ -149,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      deletedAccountCleanup.current = null;
       setToken(data.token);
       setUser(data.user);
       // Register push token after successful sign-in (fire-and-forget)
@@ -169,6 +177,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const handleDeletedAccount = useCallback(async () => {
+    if (deletedAccountCleanup.current) {
+      return deletedAccountCleanup.current;
+    }
+
+    // Drop memory state first so mounted queries stop issuing authenticated
+    // requests while durable credentials are being removed.
+    setToken(null);
+    setUser(null);
+    deletedAccountCleanup.current = AsyncStorage
+      .multiRemove([TOKEN_KEY, USER_KEY])
+      .catch(() => {});
+    return deletedAccountCleanup.current;
+  }, []);
+
+  useEffect(
+    () => setDeletedAccountHandler(handleDeletedAccount),
+    [handleDeletedAccount],
+  );
+
   const updateUser = async (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone' | 'address'>>) => {
     if (!user) return;
     const updated: UCUser = { ...user, ...updates };
@@ -177,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, socialLogin, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, socialLogin, logout, handleDeletedAccount, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

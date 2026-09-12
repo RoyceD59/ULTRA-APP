@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React, { useEffect, useRef } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -43,10 +43,21 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const router = useRouter();
   const { token } = useAuth();
+  const client = useQueryClient();
+  const previousToken = useRef<string | null>(token);
 
   // Keep the server's push token fresh: re-registers on app foreground if
   // Expo has rotated the token since the last registration.
   usePushTokenSync(token);
+
+  useEffect(() => {
+    const wasSignedIn = previousToken.current !== null;
+    previousToken.current = token;
+    if (wasSignedIn && token === null) {
+      client.clear();
+      router.replace('/auth/login' as never);
+    }
+  }, [client, router, token]);
 
   // Handle notification taps: route user to the relevant screen
   useEffect(() => {

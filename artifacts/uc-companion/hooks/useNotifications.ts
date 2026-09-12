@@ -14,6 +14,7 @@ import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { handleDeletedAccountResponse } from './deletedAccountResponse';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
 if (Platform.OS !== 'web') {
@@ -362,7 +363,11 @@ export async function registerCurrentPushToken(
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({ pushToken: current }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        await handleDeletedAccountResponse(res.status, body);
+        return false;
+      }
       await AsyncStorage.setItem(REGISTERED_PUSH_TOKEN_KEY, current);
       return true;
     } catch { return false; }
@@ -387,11 +392,15 @@ export async function unregisterPushToken(authToken: string): Promise<void> {
         (await AsyncStorage.getItem(REGISTERED_PUSH_TOKEN_KEY)) ??
         (await AsyncStorage.getItem(PUSH_TOKEN_KEY));
       await AsyncStorage.removeItem(REGISTERED_PUSH_TOKEN_KEY);
-      await fetch(`${getApiBase()}/api/uc/notify/register`, {
+      const res = await fetch(`${getApiBase()}/api/uc/notify/register`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         ...(localToken ? { body: JSON.stringify({ pushToken: localToken }) } : {}),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        await handleDeletedAccountResponse(res.status, body);
+      }
     } catch { /* non-critical — silently ignore */ }
   });
 }
@@ -469,7 +478,7 @@ export async function syncReminderToServer(
       if (eff < activation.lifespanDays) effDaysPayload = eff;
     }
 
-    await fetch(`${getApiBase()}/api/uc/reminders/sync`, {
+    const res = await fetch(`${getApiBase()}/api/uc/reminders/sync`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -494,6 +503,10 @@ export async function syncReminderToServer(
           : null,
       }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      await handleDeletedAccountResponse(res.status, body);
+    }
   } catch {
     /* non-critical — the next sync (register / clear / prefs visit) retries */
   }

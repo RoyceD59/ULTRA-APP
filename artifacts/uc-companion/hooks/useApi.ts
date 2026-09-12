@@ -10,6 +10,7 @@ const getBase = () =>
 // ApiError lives in its own dependency-free module so the rate-limit tests can
 // exercise it under node:test; re-exported here so app imports keep working.
 import { ApiError } from './apiError';
+import { handleDeletedAccountResponse } from './deletedAccountResponse';
 export { ApiError };
 
 /**
@@ -329,14 +330,19 @@ export function useApi() {
     return h;
   }, [token]);
 
+  const throwResponseError = useCallback(async (res: Response): Promise<never> => {
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    await handleDeletedAccountResponse(res.status, body);
+    throw new ApiError(String(body['error'] ?? res.status), res.status, body);
+  }, []);
+
   const get = useCallback(async <T>(path: string, signal?: AbortSignal): Promise<T> => {
     const res = await fetch(`${getBase()}${path}`, { headers: authHeaders(), signal });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      throw new ApiError(String(body['error'] ?? res.status), res.status, body);
+      return throwResponseError(res);
     }
     return res.json() as Promise<T>;
-  }, [authHeaders]);
+  }, [authHeaders, throwResponseError]);
 
   const post = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
     const res = await fetch(`${getBase()}${path}`, {
@@ -345,11 +351,10 @@ export function useApi() {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
-      const errBody = await res.json().catch(() => ({})) as Record<string, unknown>;
-      throw new ApiError(String(errBody['error'] ?? res.status), res.status, errBody);
+      return throwResponseError(res);
     }
     return res.json() as Promise<T>;
-  }, [authHeaders]);
+  }, [authHeaders, throwResponseError]);
 
   const patch = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
     const res = await fetch(`${getBase()}${path}`, {
@@ -358,11 +363,10 @@ export function useApi() {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
-      const errBody = await res.json().catch(() => ({})) as Record<string, unknown>;
-      throw new ApiError(String(errBody['error'] ?? res.status), res.status, errBody);
+      return throwResponseError(res);
     }
     return res.json() as Promise<T>;
-  }, [authHeaders]);
+  }, [authHeaders, throwResponseError]);
 
   return {
     getProducts: (params?: { category?: string; search?: string }, signal?: AbortSignal) => {
@@ -445,8 +449,7 @@ export function useApi() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        throw new ApiError(String(body['error'] ?? res.status), res.status, body);
+        return throwResponseError(res);
       }
       return res.text();
     },
@@ -458,8 +461,7 @@ export function useApi() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error || `${res.status}`);
+        return throwResponseError(res);
       }
       return res.json() as Promise<{ ok: boolean }>;
     },
@@ -516,8 +518,7 @@ export function useApi() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error || `${res.status}`);
+        return throwResponseError(res);
       }
       return res.json() as Promise<{ ok: boolean }>;
     },
@@ -616,8 +617,7 @@ export function useApi() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error || `${res.status}`);
+        return throwResponseError(res);
       }
       return res.json() as Promise<{ ok: boolean }>;
     },
