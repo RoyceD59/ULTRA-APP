@@ -84,6 +84,10 @@ export interface AccountRecord {
   recoveryReason?: "email_conflict" | "phone_conflict" | "invalid_phone";
   recoveryAttempts?: number;
   lastRecoveryAttemptAt?: string;
+  /** Staff follow-up state for folder-only registrations. */
+  followUpStatus?: "resolved";
+  /** When a team member marked the registration as contacted/resolved. */
+  resolvedAt?: string;
   /** Present only for backfilled rows of erased accounts. */
   deletedAt?: string;
 }
@@ -383,6 +387,33 @@ export async function listUnsyncedRegistrations(): Promise<AccountRecord[]> {
   } catch {
     return explicit;
   }
+}
+
+/** Mark one folder-only registration as contacted/resolved without claiming it reached the DB. */
+export async function resolveUnsyncedRegistration(
+  email: string,
+  recordedAt: string,
+): Promise<AccountRecord> {
+  return withWriteLock(async () => {
+    const normalizedEmail = normalizeEmail(email);
+    let resolved: AccountRecord | undefined;
+    const updated = (await readAllRecords()).map((record) => {
+      if (normalizeEmail(record.email) !== normalizedEmail || record.recordedAt !== recordedAt) {
+        return record;
+      }
+      resolved = {
+        ...record,
+        followUpStatus: "resolved",
+        resolvedAt: record.resolvedAt ?? new Date().toISOString(),
+      };
+      return resolved;
+    });
+    if (!resolved) {
+      throw new Error(`No folder record found for email=${email} recordedAt=${recordedAt}`);
+    }
+    await writeRecordsAtomically(updated);
+    return resolved;
+  });
 }
 
 function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {

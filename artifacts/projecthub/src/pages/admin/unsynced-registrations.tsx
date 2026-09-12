@@ -56,6 +56,8 @@ interface UnsyncedRecord {
   recoveryStatus?: "pending" | "blocked";
   recoveryReason?: "email_conflict" | "phone_conflict" | "invalid_phone";
   recoveryAttempts?: number;
+  followUpStatus?: "resolved";
+  resolvedAt?: string;
 }
 
 interface RetryResult {
@@ -86,6 +88,17 @@ async function retryRecord(email: string, recordedAt: string): Promise<RetryResu
     throw new Error(body.error ?? `Server error ${res.status}`);
   }
   return res.json() as Promise<RetryResult>;
+}
+
+async function resolveRecord(email: string, recordedAt: string): Promise<void> {
+  const res = await authFetch("/api/admin/unsynced-registrations/resolve", {
+    method: "POST",
+    body: JSON.stringify({ email, recordedAt }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Server error ${res.status}`);
+  }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -253,6 +266,25 @@ export default function AdminUnsyncedRegistrationsPage() {
     },
   });
 
+  const resolveMutation = useMutation({
+    mutationFn: ({ email, recordedAt }: { email: string; recordedAt: string }) =>
+      resolveRecord(email, recordedAt),
+    onSuccess: (_result, { email }) => {
+      toast({
+        title: "Follow-up resolved",
+        description: `${email} has been marked as contacted / resolved.`,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-unsynced-registrations"] });
+    },
+    onError: (err: Error, { email }) => {
+      toast({
+        title: "Could not update follow-up",
+        description: `Could not mark ${email} as resolved: ${err.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   function handleRetry(record: UnsyncedRecord) {
     const key = `${record.email}::${record.recordedAt}`;
     setRetrying((prev) => new Set(prev).add(key));
@@ -387,24 +419,45 @@ export default function AdminUnsyncedRegistrationsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={isRowRetrying}
-                          onClick={() => handleRetry(record)}
-                        >
-                          {isRowRetrying ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                              Retrying…
-                            </>
+                        <div className="flex justify-end gap-2">
+                          {record.followUpStatus === "resolved" ? (
+                            <Badge variant="outline" className="border-green-600 text-green-700">
+                              <Check className="w-3.5 h-3.5 mr-1.5" />
+                              Resolved
+                            </Badge>
                           ) : (
-                            <>
-                              <UserX className="w-3.5 h-3.5 mr-1.5" />
-                              Retry DB insert
-                            </>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={resolveMutation.isPending}
+                              onClick={() => resolveMutation.mutate({
+                                email: record.email,
+                                recordedAt: record.recordedAt,
+                              })}
+                            >
+                              <Check className="w-3.5 h-3.5 mr-1.5" />
+                              Contacted / resolved
+                            </Button>
                           )}
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isRowRetrying}
+                            onClick={() => handleRetry(record)}
+                          >
+                            {isRowRetrying ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                Retrying…
+                              </>
+                            ) : (
+                              <>
+                                <UserX className="w-3.5 h-3.5 mr-1.5" />
+                                Retry DB insert
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

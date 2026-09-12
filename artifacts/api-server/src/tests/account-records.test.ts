@@ -7,7 +7,12 @@ import bcryptjs from "bcryptjs";
 
 const dataDir = await mkdtemp(join(tmpdir(), "uc-account-records-"));
 process.env.UC_ACCOUNTS_DATA_DIR = dataDir;
-const { _ioSeams, listUnsyncedRegistrations, retryUnsyncedRegistration } = await import("../lib/account-records.js");
+const {
+  _ioSeams,
+  listUnsyncedRegistrations,
+  resolveUnsyncedRegistration,
+  retryUnsyncedRegistration,
+} = await import("../lib/account-records.js");
 const { db, ucUsersTable } = await import("@workspace/db");
 const { eq } = await import("drizzle-orm");
 
@@ -57,6 +62,23 @@ describe("folder-only registration recovery", () => {
     const [existingRow] = await db.select({ passwordHash: ucUsersTable.passwordHash }).from(ucUsersTable).where(eq(ucUsersTable.email, existing));
     assert.equal(reconciled.tempPassword, undefined);
     assert.equal(await bcryptjs.compare("CustomerPass1!", existingRow!.passwordHash), true);
+  });
+
+  it("durably marks a folder-only registration as contacted and resolved", async () => {
+    const at = now();
+    const email = `resolved-${Date.now()}@test.internal`;
+    await seed(email, at, { phone: "+254700000009" });
+
+    const resolved = await resolveUnsyncedRegistration(email, at);
+    assert.equal(resolved.followUpStatus, "resolved");
+    assert.ok(resolved.resolvedAt);
+
+    const listed = (await listUnsyncedRegistrations()).find(
+      (record) => record.email === email && record.recordedAt === at,
+    );
+    assert.equal(listed?.followUpStatus, "resolved");
+    assert.equal(listed?.resolvedAt, resolved.resolvedAt);
+    assert.equal(listed?.dbPersisted, false);
   });
 
   it("serializes retries and rolls back the DB insert when atomic ledger replacement fails", async () => {
