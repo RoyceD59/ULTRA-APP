@@ -1438,6 +1438,49 @@ describe("GET /api/uc/admin/orders.csv — CSV rows match list API response", ()
       .filter(id => !isNaN(id) && id > 0);
   }
 
+  /** Extract fixture order IDs and dateCreated values from the CSV. */
+  function csvFixtureDates(csvText: string): Array<{ id: number; dateCreated: string }> {
+    return csvText
+      .split("\r\n")
+      .filter(l => l.trim())
+      .slice(1)
+      .map(parseCsvRow)
+      .map(cells => ({ id: Number(cells[0]), dateCreated: cells[3] ?? "" }))
+      .filter(row => parityOrderIds.includes(row.id));
+  }
+
+  it("exports dateCreated as spreadsheet-recognisable ISO datetimes that sort chronologically", async () => {
+    const { status, text } = await apiFetch(
+      `/api/uc/admin/orders.csv?status=${PARITY_STATUS}`,
+      { headers: parityAuth() },
+    );
+    assert.equal(status, 200);
+
+    const rows = csvFixtureDates(text);
+    assert.equal(rows.length, 3, "CSV must contain all three dated fixtures");
+
+    for (const row of rows) {
+      assert.match(
+        row.dateCreated,
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+        `Order ${row.id} dateCreated must be an ISO 8601 UTC datetime`,
+      );
+      assert.ok(
+        Number.isFinite(Date.parse(row.dateCreated)),
+        `Order ${row.id} dateCreated must parse as a datetime, not plain text`,
+      );
+    }
+
+    const ascendingIds = [...rows]
+      .sort((a, b) => Date.parse(a.dateCreated) - Date.parse(b.dateCreated))
+      .map(row => row.id);
+    assert.deepEqual(
+      ascendingIds,
+      parityOrderIds,
+      "Sorting dateCreated ascending must produce January 10, January 25, then March 5",
+    );
+  });
+
   // ── Test 1: status + date range ──────────────────────────────────────────────
 
   it("status + date range: CSV IDs match list API IDs (both return P and Q only)", async () => {
