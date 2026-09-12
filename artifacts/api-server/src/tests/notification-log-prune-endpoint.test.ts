@@ -222,6 +222,12 @@ function callPrune(token?: string): Promise<Response> {
   });
 }
 
+function callPrunePreview(token?: string): Promise<Response> {
+  return fetch(`${base}/uc/admin/notification-logs/prune-preview`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+
 /** Return true iff the given log row still exists in the DB. */
 async function rowExists(id: number): Promise<boolean> {
   const rows = await db
@@ -243,6 +249,33 @@ describe("POST /uc/admin/notification-logs/prune — authorization", () => {
   it("(b) returns 403 when a non-admin token is provided", async () => {
     const resp = await callPrune(regularJwt);
     assert.equal(resp.status, 403, "non-admin token must be rejected with 403");
+  });
+});
+
+describe("GET /uc/admin/notification-logs/prune-preview", () => {
+  it("requires admin authorization", async () => {
+    assert.equal((await callPrunePreview()).status, 403);
+    assert.equal((await callPrunePreview(regularJwt)).status, 403);
+  });
+
+  it("counts eligible rows without deleting them", async () => {
+    const oldSentId = await insertLog({ status: "sent", sentAt: daysAgo(SUCCESS_DAYS + 3) });
+    const oldFailedId = await insertLog({ status: "failed", sentAt: daysAgo(FAILURE_DAYS + 3) });
+    const recentSentId = await insertLog({ status: "sent", sentAt: daysAgo(2) });
+
+    const resp = await callPrunePreview(adminJwt);
+    assert.equal(resp.status, 200);
+    const body = await resp.json() as {
+      eligibleSuccess: number;
+      eligibleFailure: number;
+      eligibleTotal: number;
+    };
+    assert.ok(body.eligibleSuccess >= 1);
+    assert.ok(body.eligibleFailure >= 1);
+    assert.equal(body.eligibleTotal, body.eligibleSuccess + body.eligibleFailure);
+    assert.equal(await rowExists(oldSentId), true);
+    assert.equal(await rowExists(oldFailedId), true);
+    assert.equal(await rowExists(recentSentId), true);
   });
 });
 

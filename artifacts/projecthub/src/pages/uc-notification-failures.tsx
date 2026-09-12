@@ -42,6 +42,12 @@ interface NotificationLog {
   sentAt: string;
 }
 
+interface PrunePreview {
+  eligibleSuccess: number;
+  eligibleFailure: number;
+  eligibleTotal: number;
+}
+
 // ─── Login Gate ───────────────────────────────────────────────────────────────
 
 function LoginGate({ onToken }: { onToken: (t: string) => void }) {
@@ -283,10 +289,23 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
         description: `${result.deletedTotal} old log entr${result.deletedTotal === 1 ? "y" : "ies"} deleted (${result.deletedSuccess} sent, ${result.deletedFailure} failed).`,
       });
       queryClient.invalidateQueries({ queryKey: ["uc-notification-failures", token] });
+      queryClient.invalidateQueries({ queryKey: ["uc-notification-prune-preview", token] });
     },
     onError: (err: Error) => {
       toast({ title: "Pruning failed", description: err.message, variant: "destructive" });
     },
+  });
+
+  const { data: prunePreview, isLoading: isPrunePreviewLoading } = useQuery<PrunePreview>({
+    queryKey: ["uc-notification-prune-preview", token],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/notification-logs/prune-preview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load prune preview");
+      return res.json() as Promise<PrunePreview>;
+    },
+    refetchOnWindowFocus: false,
   });
 
   const { data: logs, isLoading, isError, refetch, isFetching } = useQuery<NotificationLog[]>({
@@ -327,17 +346,24 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
             Failed SMS and email sends — retry from here without opening the database.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => pruneMutation.mutate()}
-            disabled={pruneMutation.isPending}
-            title="Delete log entries past their retention window now, without waiting for the nightly job"
-          >
-            <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
-            {pruneMutation.isPending ? "Pruning…" : "Prune now"}
-          </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {isPrunePreviewLoading
+                ? "Checking prune eligibility…"
+                : `${(prunePreview?.eligibleTotal ?? 0).toLocaleString()} ${prunePreview?.eligibleTotal === 1 ? "entry" : "entries"} eligible for pruning`}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pruneMutation.mutate()}
+              disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
+              title="Delete log entries past their retention window now, without waiting for the nightly job"
+            >
+              <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
+              {pruneMutation.isPending ? "Pruning…" : "Prune now"}
+            </Button>
+          </div>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Refresh

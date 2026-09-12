@@ -4064,6 +4064,32 @@ router.get("/uc/admin/notification-logs", async (req: Request, res: Response): P
 });
 
 /**
+ * GET /api/uc/admin/notification-logs/prune-preview
+ * Counts rows currently eligible for pruning without deleting them.
+ * Protected by admin auth.
+ */
+router.get("/uc/admin/notification-logs/prune-preview", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  try {
+    const { getNotificationLogPrunePreview } = await import("../lib/scheduler.js");
+    const { eligibleSuccess, eligibleFailure } = await getNotificationLogPrunePreview();
+    res.json({
+      eligibleSuccess,
+      eligibleFailure,
+      eligibleTotal: eligibleSuccess + eligibleFailure,
+    });
+  } catch (err) {
+    logger.error({ err }, "Notification log prune preview failed");
+    res.status(500).json({ error: "Failed to preview notification log pruning" });
+  }
+});
+
+/**
  * POST /api/uc/admin/notification-logs/prune
  * Immediately runs the same pruning pass as the nightly 03:00 UTC job,
  * deleting sent/failed rows past their retention windows.

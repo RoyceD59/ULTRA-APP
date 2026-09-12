@@ -885,15 +885,21 @@ export interface NotificationLogPruningDeps {
     status: "sent" | "failed",
     cutoff: Date,
   ) => Promise<{ rowCount?: number }>;
+  countLogs?: (
+    status: "sent" | "failed",
+    cutoff: Date,
+  ) => Promise<number>;
   environment?: Readonly<Record<string, string | undefined>>;
   now?: () => Date;
 }
 
-export async function runNotificationLogPruning(
+async function resolveNotificationLogRetentionCutoffs(
   deps: NotificationLogPruningDeps = {},
 ): Promise<{
-  deletedSuccess: number;
-  deletedFailure: number;
+  successDays: number;
+  failureDays: number;
+  successCutoff: Date;
+  failureCutoff: Date;
 }> {
   // Read retention windows from team_settings (admin panel), falling back to
   // env vars or hard defaults only when the DB row has no override.
@@ -913,16 +919,6 @@ export async function runNotificationLogPruning(
       failureDays: settingsRow?.failureDays ?? null,
     };
   });
-  const deleteLogs = deps.deleteLogs ?? (async (status: "sent" | "failed", cutoff: Date) =>
-    db
-      .delete(ucNotificationLogTable)
-      .where(
-        and(
-          eq(ucNotificationLogTable.status, status),
-          lt(ucNotificationLogTable.sentAt, cutoff),
-        ),
-      ));
-
   let settingsSuccess: number | null;
   let settingsFailure: number | null;
   try {
@@ -950,6 +946,53 @@ export async function runNotificationLogPruning(
   const now = deps.now?.() ?? new Date();
   const successCutoff = new Date(now.getTime() - successDays * 24 * 60 * 60 * 1000);
   const failureCutoff = new Date(now.getTime() - failureDays * 24 * 60 * 60 * 1000);
+  return { successDays, failureDays, successCutoff, failureCutoff };
+}
+
+export async function getNotificationLogPrunePreview(
+  deps: NotificationLogPruningDeps = {},
+): Promise<{
+  eligibleSuccess: number;
+  eligibleFailure: number;
+}> {
+  const { successCutoff, failureCutoff } = await resolveNotificationLogRetentionCutoffs(deps);
+  const countLogs = deps.countLogs ?? (async (status: "sent" | "failed", cutoff: Date) => {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(ucNotificationLogTable)
+      .where(
+        and(
+          eq(ucNotificationLogTable.status, status),
+          lt(ucNotificationLogTable.sentAt, cutoff),
+        ),
+      );
+    return result?.count ?? 0;
+  });
+
+  const [eligibleSuccess, eligibleFailure] = await Promise.all([
+    countLogs("sent", successCutoff),
+    countLogs("failed", failureCutoff),
+  ]);
+  return { eligibleSuccess, eligibleFailure };
+}
+
+export async function runNotificationLogPruning(
+  deps: NotificationLogPruningDeps = {},
+): Promise<{
+  deletedSuccess: number;
+  deletedFailure: number;
+}> {
+  const { successDays, failureDays, successCutoff, failureCutoff } =
+    await resolveNotificationLogRetentionCutoffs(deps);
+  const deleteLogs = deps.deleteLogs ?? (async (status: "sent" | "failed", cutoff: Date) =>
+    db
+      .delete(ucNotificationLogTable)
+      .where(
+        and(
+          eq(ucNotificationLogTable.status, status),
+          lt(ucNotificationLogTable.sentAt, cutoff),
+        ),
+      ));
 
   logger.info(
     { successDays, failureDays, successCutoff, failureCutoff },
