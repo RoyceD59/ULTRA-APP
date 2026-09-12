@@ -16,6 +16,7 @@ import {
   auditProductLifespans,
   fetchAllPublishedProducts,
   normalizeProduct,
+  warnForMissingProductLifespans,
 } from "../routes/uc.js";
 
 const filterCat = { id: 2, name: "Home Filters" };
@@ -92,6 +93,37 @@ describe("auditProductLifespans", () => {
       meta_data: [{ key: "filter_lifespan_days", value: "120" }],
     });
     assert.equal(auditProductLifespans([norm]).length, 0);
+  });
+});
+
+describe("warnForMissingProductLifespans", () => {
+  it("warns with the ID and name of an emitted trackable product missing its lifespan", () => {
+    const warnings: Array<{ details: { productId: number; productName: string }; message: string }> = [];
+
+    warnForMissingProductLifespans(
+      [{ id: 501, name: "New Widget", price: "2999", lifespanDays: 0, categories: [filterCat] }],
+      (details, message) => warnings.push({ details, message }),
+    );
+
+    assert.deepEqual(warnings, [{
+      details: { productId: 501, productName: "New Widget" },
+      message: "Product catalogue is emitting a trackable product without filter_lifespan_days",
+    }]);
+  });
+
+  it("does not warn for trackable products with a lifespan or legitimate non-trackable products", () => {
+    const warnings: unknown[] = [];
+
+    warnForMissingProductLifespans(
+      [
+        { id: 1, name: "Hydra Flux", price: "3499", lifespanDays: 90, categories: [filterCat] },
+        { id: 40, name: "Bottle Stand", price: "999", lifespanDays: 0, categories: [accessCat] },
+        { id: 30, name: "Water ATMs", price: "0", lifespanDays: 0, categories: [{ name: "Solutions" }] },
+      ],
+      (...args) => warnings.push(args),
+    );
+
+    assert.equal(warnings.length, 0);
   });
 });
 

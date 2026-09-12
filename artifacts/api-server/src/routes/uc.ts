@@ -697,6 +697,7 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
       }
       payload = data;
     }
+    warnForMissingProductLifespans(payload);
     const mediaMap = await fetchProductMediaMap(payload.map((p) => Number(p["id"])));
     res.json(payload.map((p) => applyProductMedia(p, mediaMap.get(Number(p["id"])))));
   } catch {
@@ -827,6 +828,31 @@ export function auditProductLifespans(
     }
     return true;
   });
+}
+
+type LifespanWarningLogger = (
+  details: { productId: number; productName: string },
+  message: string,
+) => void;
+
+/**
+ * Warn whenever the customer catalogue is about to emit a trackable product
+ * whose reminder lifespan has disappeared. Products legitimately exempt from
+ * reminders are filtered by auditProductLifespans.
+ */
+export function warnForMissingProductLifespans(
+  products: Record<string, unknown>[],
+  warn: LifespanWarningLogger = (details, message) => logger.warn(details, message),
+): void {
+  for (const product of auditProductLifespans(products)) {
+    warn(
+      {
+        productId: Number(product["id"]),
+        productName: String(product["name"] ?? "Product"),
+      },
+      "Product catalogue is emitting a trackable product without filter_lifespan_days",
+    );
+  }
 }
 
 /**
