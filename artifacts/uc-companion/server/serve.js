@@ -76,6 +76,10 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
   const html = landingPageTemplate
     .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
     .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
+    .replace(
+      /BUNDLE_STATUS_URL_PLACEHOLDER/g,
+      `${basePath || ''}/bundle-status`,
+    )
     .replace(/APP_NAME_PLACEHOLDER/g, appName);
 
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -218,6 +222,14 @@ const server = http.createServer((req, res) => {
   }
 
   const webBundlePath = getWebBundlePath();
+
+  if (pathname === '/bundle-status') {
+    res.writeHead(webBundlePath ? 204 : 503, {
+      'cache-control': 'no-store',
+    });
+    res.end();
+    return;
+  }
 
   if (pathname === '/' || pathname === '/manifest') {
     const platform = req.headers['expo-platform'];

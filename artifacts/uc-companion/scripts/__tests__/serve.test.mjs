@@ -252,6 +252,21 @@ describe('serve.js production server', () => {
     assert.equal(body, 'ok', 'expected body to be "ok"');
   });
 
+  test('HEAD /uc-companion/bundle-status reports availability without returning bundle bytes', async () => {
+    const res = await fetch(
+      `http://127.0.0.1:${port}${BASE_PATH}/bundle-status`,
+      { method: 'HEAD' },
+    );
+
+    assert.equal(res.status, 204, 'expected HTTP 204 when a web bundle exists');
+    assert.equal(
+      res.headers.get('cache-control'),
+      'no-store',
+      'bundle availability checks must not be cached',
+    );
+    assert.equal(await res.text(), '', 'availability response must have no body');
+  });
+
   // ── 5. iOS manifest route ─────────────────────────────────────────────────
 
   test('GET / with expo-platform: ios returns 200 JSON with expo-protocol-version header', async () => {
@@ -596,6 +611,31 @@ describe('serve.js production server', () => {
         null,
         'landing page served during rebuild gap must not embed a <script src> pointing to a missing bundle.js',
       );
+      assert.match(
+        body,
+        /const bundleStatusUrl = ["']\/uc-companion\/bundle-status["']/,
+        'landing page should target the lightweight bundle-status endpoint',
+      );
+      assert.match(
+        body,
+        /fetch\(bundleStatusUrl,/,
+        'landing page should poll the configured bundle-status URL',
+      );
+
+      const unavailableRes = await fetch(
+        `http://127.0.0.1:${gapPort}${BASE_PATH}/bundle-status`,
+        { method: 'HEAD' },
+      );
+      assert.equal(
+        unavailableRes.status,
+        503,
+        'bundle-status should report unavailable during the rebuild gap',
+      );
+      assert.equal(
+        await unavailableRes.text(),
+        '',
+        'unavailable bundle-status response must have no body',
+      );
 
       // ── Recovery phase: write the replacement bundle ─────────────────────
       // Simulate the rebuild completing — write a new timestamped bundle.
@@ -614,6 +654,16 @@ describe('serve.js production server', () => {
       writeFileSync(
         join(replacementBundleDir, 'bundle.js'),
         '// replacement bundle\nconsole.log("replacement");\n',
+      );
+
+      const availableRes = await fetch(
+        `http://127.0.0.1:${gapPort}${BASE_PATH}/bundle-status`,
+        { method: 'HEAD' },
+      );
+      assert.equal(
+        availableRes.status,
+        204,
+        'bundle-status should report available after the replacement is written',
       );
 
       // Next deep-link request must serve the web-app HTML (with the new
