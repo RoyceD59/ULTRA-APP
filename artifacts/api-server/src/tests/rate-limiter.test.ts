@@ -4,8 +4,9 @@
  * Confirms:
  *   1. POST /auth/login blocks with HTTP 429 on the 11th request within a window
  *      (authLimiter: max 10).
- *   2. POST /payments/mpesa blocks with HTTP 429 on the 6th request within a window
- *      (paymentLimiter: max 5).
+ *   2. POST /payments/mpesa, /payments/stripe/session, and
+ *      /payments/paystack/init block with HTTP 429 on the 6th request within a
+ *      window (paymentLimiter: max 5).
  *   3. The 429 response body contains the user-facing `error` string defined in
  *      rate-limiters.ts, so the client always receives a human-readable message.
  *
@@ -415,6 +416,52 @@ describe("Rate limiter — POST /payments/mpesa (max 5 per minute)", () => {
       legitimateUser.status,
       429,
       `a different IP must not be blocked by the attacker's window; got ${legitimateUser.status}`,
+    );
+  });
+});
+
+describe("Rate limiter — POST /payments/stripe/session (max 5 per minute)", () => {
+  it("6th request returns HTTP 429 with a user-facing error", async () => {
+    const ip = uniqueIp();
+    await fireRequests("/payments/stripe/session", {}, ip, 5);
+
+    const sixth = await post("/payments/stripe/session", {}, ip);
+
+    assert.equal(
+      sixth.status,
+      429,
+      `6th request must be blocked by the rate limiter (429); got ${sixth.status}`,
+    );
+    assert.ok(
+      typeof sixth.body["error"] === "string" && sixth.body["error"].length > 0,
+      `429 body must have a non-empty 'error' string; got: ${JSON.stringify(sixth.body)}`,
+    );
+    assert.ok(
+      (sixth.body["error"] as string).toLowerCase().includes("payment"),
+      `error message should mention 'payment'; got: "${sixth.body["error"]}"`,
+    );
+  });
+});
+
+describe("Rate limiter — POST /payments/paystack/init (max 5 per minute)", () => {
+  it("6th request returns HTTP 429 with a user-facing error", async () => {
+    const ip = uniqueIp();
+    await fireRequests("/payments/paystack/init", {}, ip, 5);
+
+    const sixth = await post("/payments/paystack/init", {}, ip);
+
+    assert.equal(
+      sixth.status,
+      429,
+      `6th request must be blocked by the rate limiter (429); got ${sixth.status}`,
+    );
+    assert.ok(
+      typeof sixth.body["error"] === "string" && sixth.body["error"].length > 0,
+      `429 body must have a non-empty 'error' string; got: ${JSON.stringify(sixth.body)}`,
+    );
+    assert.ok(
+      (sixth.body["error"] as string).toLowerCase().includes("payment"),
+      `error message should mention 'payment'; got: "${sixth.body["error"]}"`,
     );
   });
 });
