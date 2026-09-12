@@ -11,6 +11,7 @@
  *   (g) AT returning 500 still sends the email and logs status=failed in uc_notification_log
  *   (h) alertTeamRecoveryOrder() still calls AT SMS when Resend is down
  *   (i) alertTeamRecoveryOrder() uses the DB phone number when set in team_settings
+ *   (k) runStaleRecoveryOrderDigest() logs a thrown AT network error without rethrowing
  *   (e2)/(e3) runStaleRecoveryOrderDigest() still attempts the email and logs
  *             status=failed when AT returns 401 / 500
  *
@@ -852,6 +853,62 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
     } finally {
       globalThis.fetch = savedFetch;
       delete process.env["RESEND_BASE_URL"];
+    }
+  });
+
+  it("(k) Resend and AT network outage — logs the thrown SMS error and completes", async () => {
+    process.env["TEAM_ALERT_PHONE"] = "+254700000031";
+
+    const createdAt = new Date(Date.now() - 30 * 60 * 60 * 1000);
+    selectStub = [
+      {
+        id: 402,
+        paymentMethod: "mpesa",
+        total: "6000",
+        status: "processing",
+        paymentReference: "LGR402",
+        dateCreated: createdAt,
+        webhookRecovery: true,
+        userId: "anon",
+        currency: "KES",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {},
+      },
+    ];
+
+    const atNetworkError = new Error("Simulated AT network outage");
+    const { logger } = await import("../lib/logger.js");
+    const originalLoggerError = logger.error;
+    const errorLogs: unknown[][] = [];
+    logger.error = ((...args: unknown[]) => {
+      errorLogs.push(args);
+    }) as typeof logger.error;
+
+    try {
+      const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+
+      await assert.doesNotReject(
+        runStaleRecoveryOrderDigest({
+          sendEmail: async () => false,
+          sendSmsAwaitable: async () => {
+            throw atNetworkError;
+          },
+        }),
+        "digest must not rethrow when the AT network is down during a Resend outage",
+      );
+
+      assert.ok(
+        errorLogs.some(
+          ([context, message]) =>
+            (context as { err?: unknown } | undefined)?.err === atNetworkError &&
+            message === "Scheduler: stale recovery order digest job failed",
+        ),
+        "scheduler should log the thrown AT network error",
+      );
+    } finally {
+      logger.error = originalLoggerError;
     }
   });
 
