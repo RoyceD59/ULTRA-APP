@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing,
+  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,15 @@ interface WishlistDemand {
   lastNotifiedRestockAt: string | null;
   restockDemandAlertedAt: string | null;
 }
+
+type StockStatusFilter = "all" | "instock" | "outofstock" | "onbackorder";
+
+const STOCK_STATUS_FILTERS: Array<{ value: StockStatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "instock", label: "In stock" },
+  { value: "outofstock", label: "Out of stock" },
+  { value: "onbackorder", label: "On backorder" },
+];
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
@@ -386,6 +395,8 @@ function AlertSettingsPanel() {
 export default function AdminInventoryPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<StockStatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data, isLoading, error, dataUpdatedAt } = useQuery({
     queryKey: ["uc-inventory"],
@@ -434,6 +445,20 @@ export default function AdminInventoryPage() {
 
   const outOfStockCount = products.filter((p) => p.stockQuantity === 0).length;
   const lowStockCount   = products.filter((p) => p.stockQuantity > 0 && p.stockQuantity <= threshold).length;
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch = normalizedSearch === ""
+      || product.name.toLocaleLowerCase().includes(normalizedSearch)
+      || product.sku.toLocaleLowerCase().includes(normalizedSearch);
+    const matchesStatus = statusFilter === "all"
+      || (statusFilter === "outofstock"
+        ? product.stockStatus === "outofstock" || product.stockQuantity === 0
+        : statusFilter === "instock"
+          ? product.stockStatus === "instock" && product.stockQuantity > 0
+          : product.stockStatus === "onbackorder");
+
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-6">
@@ -622,6 +647,46 @@ export default function AdminInventoryPage() {
         </div>
       ) : (
         <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
+            <fieldset className="flex flex-wrap items-center gap-2">
+              <legend className="sr-only">Filter products by stock status</legend>
+              {STOCK_STATUS_FILTERS.map((filter) => (
+                <label
+                  key={filter.value}
+                  className={`inline-flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    statusFilter === filter.value
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="inventory-stock-status"
+                    value={filter.value}
+                    checked={statusFilter === filter.value}
+                    onChange={() => setStatusFilter(filter.value)}
+                    className="sr-only"
+                  />
+                  {filter.label}
+                </label>
+              ))}
+            </fieldset>
+
+            <div className="relative w-full lg:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by product name or SKU"
+                aria-label="Search inventory by product name or SKU"
+                className="pl-9"
+              />
+            </div>
+          </div>
+          <div className="border-b px-4 py-2 text-xs text-muted-foreground">
+            Showing {filteredProducts.length} of {products.length} product{products.length === 1 ? "" : "s"}
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -633,7 +698,7 @@ export default function AdminInventoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <TableRow
                   key={product.id}
                   className={
@@ -672,10 +737,12 @@ export default function AdminInventoryPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {products.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
-                    No products found.
+                    {products.length === 0
+                      ? "No products found."
+                      : "No products match the selected filters."}
                   </TableCell>
                 </TableRow>
               )}
