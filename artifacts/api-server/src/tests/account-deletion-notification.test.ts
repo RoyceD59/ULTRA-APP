@@ -30,6 +30,7 @@ process.env["SESSION_SECRET"] ??= "test-secret-for-deletion-notification-tests";
 // ── Resend stub — captures every outgoing sendViaResend payload ───────────────
 let resendStub: http.Server;
 let resendHits: Array<Record<string, unknown>> = [];
+let resendStatus = 200;
 
 before(async () => {
   resendStub = http.createServer((req, res) => {
@@ -38,7 +39,7 @@ before(async () => {
     req.on("end", () => {
       try { resendHits.push(JSON.parse(body) as Record<string, unknown>); }
       catch  { resendHits.push({}); }
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(resendStatus, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ id: "stub-deletion-notif" }));
     });
   });
@@ -59,6 +60,8 @@ after(async () => {
 const { default: app }  = await import("../app.js");
 const { issueToken }    = await import("../lib/jwt.js");
 const { pool }          = await import("@workspace/db");
+const { notifyTeamAccountDeletion } = await import("../routes/uc.js");
+const { _slackSeams } = await import("../lib/slack.js");
 
 let appServer: http.Server;
 
@@ -154,6 +157,68 @@ describe("account-deletion team notification (DELETE /api/uc/customer, step 15)"
         );
       }
     } finally {
+      await cleanupUser(user.id);
+    }
+  });
+
+  it("logs a warning and tries the fallback when Resend returns false", async () => {
+    const warnings: Array<{ details: Record<string, unknown>; message: string }> = [];
+    const fallbackCalls: Array<{ to: string; template?: string }> = [];
+
+    await notifyTeamAccountDeletion(
+      987,
+      "Sat, 12 Sep 2026 10:00:00 GMT",
+      "team@example.com",
+      {
+        resendSender: async () => false,
+        fallbackSender: async (email) => {
+          fallbackCalls.push({ to: email.to, template: email.template });
+          return true;
+        },
+        warn: (details, message) => warnings.push({ details, message }),
+      },
+    );
+
+    assert.equal(fallbackCalls.length, 1);
+    assert.deepEqual(fallbackCalls[0], {
+      to: "team@example.com",
+      template: "account_deleted",
+    });
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!.message, /not sent via Resend/i);
+    assert.equal(warnings[0]!.details["provider"], "resend");
+  });
+
+  it("still completes deletion when Resend is temporarily unavailable", async () => {
+    resendHits = [];
+    resendStatus = 503;
+    const slackHits: Array<{ text: string; template: string }> = [];
+    _slackSeams.sendMessage = async (text, template) => {
+      slackHits.push({ text, template });
+      return true;
+    };
+    const user = await seedUser(`${Date.now()}-outage`);
+    const token = issueToken({ id: user.id, email: user.email });
+    try {
+      const { status, body } = await doDelete(token);
+      assert.equal(status, 200);
+      assert.deepEqual(body, { ok: true });
+
+      await new Promise((r) => setTimeout(r, 500));
+      assert.ok(resendHits.length >= 1, "Expected the failed Resend attempt");
+      assert.equal(slackHits.length, 1, "Slack must receive the alert when all email paths are unavailable");
+      assert.equal(slackHits[0]!.template, "account_deleted");
+      assert.match(slackHits[0]!.text, new RegExp(`user #${user.id}`));
+      assert.ok(!slackHits[0]!.text.includes(user.email), "Slack fallback must not contain customer PII");
+
+      const deleted = await pool.query<{ deleted_at: Date | null }>(
+        "SELECT deleted_at FROM uc_users WHERE id = $1",
+        [user.id],
+      );
+      assert.ok(deleted.rows[0]?.deleted_at, "Account deletion must remain committed");
+    } finally {
+      _slackSeams.sendMessage = null;
+      resendStatus = 200;
       await cleanupUser(user.id);
     }
   });

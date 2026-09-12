@@ -2741,30 +2741,7 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
     //     privacy@ mailbox); falls back to the team inbox when unset.
     const deletedAt = new Date().toUTCString();
     const deletionAlertTo = await accountDeletionAlertRecipient();
-    sendViaResend({
-      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
-      to:   deletionAlertTo,
-      subject: `Account deleted — user #${numericId}`,
-      text: [
-        "A customer has exercised their right to erasure.",
-        "",
-        `User ID   : ${numericId}`,
-        `Deleted at: ${deletedAt} (UTC)`,
-        "",
-        "All personal data has been anonymised. No action is required unless",
-        "a dispute or order investigation is in progress for this account.",
-      ].join("\n"),
-      html: [
-        "<p>A customer has exercised their right to erasure.</p>",
-        "<ul>",
-        `<li><strong>User ID:</strong> ${numericId}</li>`,
-        `<li><strong>Deleted at:</strong> ${deletedAt} (UTC)</li>`,
-        "</ul>",
-        "<p>All personal data has been anonymised. No action is required unless",
-        "a dispute or order investigation is in progress for this account.</p>",
-      ].join("\n"),
-      meta: { template: "account_deleted" },
-    }).catch(err => logger.warn({ err, userId: numericId }, "Account-deletion team notification not sent"));
+    void notifyTeamAccountDeletion(numericId, deletedAt, deletionAlertTo);
 
     res.json({ ok: true });
   } catch (err) {
@@ -5641,6 +5618,94 @@ export function invalidateTeamAlertEmailCache(): void {
  */
 export async function accountDeletionAlertRecipient(): Promise<string> {
   return getTeamAlertEmail();
+}
+
+type AccountDeletionNotifierDeps = {
+  resendSender?: typeof sendViaResend;
+  fallbackSender?: typeof sendEmail;
+  slackSender?: typeof sendSlackTeamMessage;
+  warn?: (details: Record<string, unknown>, message: string) => void;
+};
+
+/**
+ * Best-effort team alert for completed account deletions.
+ * Resend returns false for ordinary delivery failures, so that result must be
+ * handled explicitly before trying the secondary email chain. Never throws:
+ * notification delivery must not undo a completed erasure.
+ *
+ * @internal Exported for focused failure-path tests.
+ */
+export async function notifyTeamAccountDeletion(
+  userId: number,
+  deletedAt: string,
+  recipient: string,
+  deps: AccountDeletionNotifierDeps = {},
+): Promise<void> {
+  const resendSender = deps.resendSender ?? sendViaResend;
+  const fallbackSender = deps.fallbackSender ?? sendEmail;
+  const slackSender = deps.slackSender ?? sendSlackTeamMessage;
+  const warn = deps.warn ?? ((details, message) => logger.warn(details, message));
+  const subject = `Account deleted — user #${userId}`;
+  const text = [
+    "A customer has exercised their right to erasure.",
+    "",
+    `User ID   : ${userId}`,
+    `Deleted at: ${deletedAt} (UTC)`,
+    "",
+    "All personal data has been anonymised. No action is required unless",
+    "a dispute or order investigation is in progress for this account.",
+  ].join("\n");
+  const html = [
+    "<p>A customer has exercised their right to erasure.</p>",
+    "<ul>",
+    `<li><strong>User ID:</strong> ${userId}</li>`,
+    `<li><strong>Deleted at:</strong> ${deletedAt} (UTC)</li>`,
+    "</ul>",
+    "<p>All personal data has been anonymised. No action is required unless",
+    "a dispute or order investigation is in progress for this account.</p>",
+  ].join("\n");
+
+  try {
+    const sent = await resendSender({
+      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to: recipient,
+      subject,
+      text,
+      html,
+      meta: { template: "account_deleted" },
+    });
+    if (sent) return;
+
+    warn(
+      { userId, provider: "resend" },
+      "Account-deletion team notification not sent via Resend — trying SendGrid/SMTP fallback",
+    );
+    const fallbackSent = await fallbackSender({
+      to: recipient,
+      subject,
+      text,
+      html,
+      template: "account_deleted",
+    });
+    if (fallbackSent) return;
+
+    warn(
+      { userId, provider: "sendgrid/smtp" },
+      "Account-deletion team notification not delivered by any email provider — trying Slack fallback",
+    );
+    const slackSent = await slackSender(
+      `Account deleted — user #${userId}\nDeleted at: ${deletedAt} (UTC)\nNo customer PII is included.`,
+      "account_deleted",
+    );
+    if (slackSent) return;
+
+    warn(
+      { userId, provider: "slack" },
+      "Account-deletion team notification not delivered by any provider",
+    );
+  } catch (err) {
+    warn({ err, userId }, "Account-deletion team notification failed unexpectedly");
+  }
 }
 const SERVICE_EMAIL = "service@ucfilters.com";
 
