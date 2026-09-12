@@ -4772,6 +4772,11 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     | { status: "not_found" }
     | { status: "error" };
 
+  // A normal WooCommerce request should finish well inside this window. Older
+  // anchors may be left behind by a crashed process, but are released only
+  // after WooCommerce definitively confirms it has no matching order.
+  const WC_PENDING_ANCHOR_MAX_AGE_MS = 15 * 60 * 1000;
+
   async function findWcOrderByRef(ref: string): Promise<WcLookupResult> {
     const PER_PAGE = 100;
     const MAX_PAGES = 5; // up to 500 orders before failing closed
@@ -4877,6 +4882,61 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       let wcAnchorId: number | null = null;
 
       if (paymentReference) {
+        const [pendingAnchor] = await db
+          .select({
+            id: ucOrdersTable.id,
+            userId: ucOrdersTable.userId,
+            dateCreated: ucOrdersTable.dateCreated,
+          })
+          .from(ucOrdersTable)
+          .where(and(
+            eq(ucOrdersTable.paymentReference, paymentReference),
+            eq(ucOrdersTable.status, "pending-wc"),
+          ))
+          .limit(1);
+
+        const staleBefore = new Date(Date.now() - WC_PENDING_ANCHOR_MAX_AGE_MS);
+        if (pendingAnchor && pendingAnchor.dateCreated <= staleBefore) {
+          const staleLookup = await findWcOrderByRef(paymentReference);
+          if (staleLookup.status === "found") {
+            const normalized = normalizeOrder(staleLookup.order);
+            const iConfirmed = await confirmWcAnchor(
+              pendingAnchor.id,
+              Number(staleLookup.order["id"]),
+            );
+            if (iConfirmed) {
+              sendWcOrderNotifications(normalized, pendingAnchor.userId);
+              const pendingOwnerId = Number(pendingAnchor.userId);
+              if (pendingOwnerId > 0 && !isNaN(pendingOwnerId)) {
+                creditQualifyingProductPoints(pendingOwnerId, pendingAnchor.id).catch((err) => {
+                  logger.warn(
+                    { err, userId: pendingOwnerId, orderId: pendingAnchor.id },
+                    "createOrder (stale WC reconcile): qualifying-product rewards credit failed (non-fatal)",
+                  );
+                });
+              }
+            }
+            res.json(normalized);
+            return;
+          }
+          if (staleLookup.status === "not_found") {
+            const released = await db
+              .delete(ucOrdersTable)
+              .where(and(
+                eq(ucOrdersTable.id, pendingAnchor.id),
+                eq(ucOrdersTable.status, "pending-wc"),
+                sql`${ucOrdersTable.dateCreated} <= ${staleBefore}`,
+              ))
+              .returning({ id: ucOrdersTable.id });
+            if (released.length > 0) {
+              logger.info(
+                { anchorId: pendingAnchor.id, paymentReference },
+                "[orders] released stale WC anchor after confirmed absence",
+              );
+            }
+          }
+        }
+
         try {
           // Atomic insert of anchor + items — if either fails, both roll back.
           wcAnchorId = await db.transaction(async (tx) => {
@@ -4953,11 +5013,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             }
 
             if (winner?.status === "pending-wc") {
-              // A stale "pending-wc" anchor from a previous failed attempt.
-              // Reconcile against WC: if the order exists there, confirm it;
-              // if not (or the query itself fails), keep the anchor intact so
-              // the next retry can attempt reconciliation again — never delete
-              // an anchor on uncertain data.
+              // Another request still owns this anchor, or stale reconciliation
+              // could not confirm absence. Reconcile against WC without deleting
+              // on uncertain data.
               const wcLookup = await findWcOrderByRef(paymentReference);
               if (wcLookup.status === "found") {
                 // WC has the order — atomically claim the confirmation.
@@ -4981,8 +5039,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
                 res.json(normalized);
                 return;
               }
-              // "not_found" or "error" — both mean we cannot confirm the anchor.
-              // Keep it intact so the next retry can attempt reconciliation again.
+              // "not_found" for a young anchor may still be an in-flight WC POST;
+              // "error" is uncertain. Keep either intact for the next retry.
               res.status(503).json({ error: "Order is being processed, please retry shortly", retryable: true });
               return;
             }

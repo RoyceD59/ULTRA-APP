@@ -48,7 +48,9 @@ let server: http.Server;
 let base: string;
 
 const PAY_REF = `wc_race_test_${Date.now()}`;
+const STALE_PAY_REF = `wc_stale_anchor_test_${Date.now()}`;
 const WC_ORDER_ID = 990_001;
+const STALE_RETRY_WC_ORDER_ID = 990_002;
 const TEST_PUSH_TOKEN = "ExponentPushToken[wc-race-confirmation-test]";
 
 const createdUserIds: number[] = [];
@@ -147,11 +149,11 @@ before(
 );
 
 after(async () => {
-  // Remove any orders carrying the test payment reference.
+  // Remove any orders carrying the test payment references.
   const rows = await db
     .select({ id: ucOrdersTable.id })
     .from(ucOrdersTable)
-    .where(eq(ucOrdersTable.paymentReference, PAY_REF))
+    .where(inArray(ucOrdersTable.paymentReference, [PAY_REF, STALE_PAY_REF]))
     .catch(() => [] as { id: number }[]);
   const ids = rows.map((r) => r.id);
   if (ids.length > 0) {
@@ -370,6 +372,91 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
         rewardRows.length, 1,
         `exactly one rewards settlement must be queued for the surviving anchor; got ${rewardRows.length}`,
       );
+    } finally {
+      delete process.env["WC_CONSUMER_KEY"];
+      delete process.env["WC_CONSUMER_SECRET"];
+      delete process.env["WC_BASE_URL"];
+      globalThis.fetch = savedFetch;
+    }
+  });
+
+  it("releases an old pending-wc anchor absent from WC and creates a fresh order", { timeout: 30_000 }, async () => {
+    const { id: userId, jwt } = await createTestUser();
+    const [staleAnchor] = await db
+      .insert(ucOrdersTable)
+      .values({
+        userId: String(userId),
+        status: "pending-wc",
+        total: "3999",
+        currency: "KES",
+        paymentMethod: "paystack",
+        paymentReference: STALE_PAY_REF,
+        shippingAddress: {},
+        dateCreated: new Date(Date.now() - 60 * 60 * 1000),
+      })
+      .returning({ id: ucOrdersTable.id });
+    await db.insert(ucOrderItemsTable).values({
+      orderId: staleAnchor!.id,
+      productId: 1,
+      name: "Hydra Flux",
+      quantity: 1,
+      total: "3499",
+    });
+
+    let wcPostCount = 0;
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
+      const u = String(url);
+      if (u.includes("/wp-json/wc/v3/orders")) {
+        if ((init?.method ?? "GET").toUpperCase() === "POST") {
+          wcPostCount++;
+          return new Response(JSON.stringify({
+            id: STALE_RETRY_WC_ORDER_ID,
+            status: "processing",
+            date_created: new Date().toISOString(),
+            total: "3999",
+            currency: "KES",
+            payment_method: "paystack",
+            shipping: { first_name: "Test", last_name: "Racer" },
+            line_items: [{ product_id: 1, name: "Hydra Flux", quantity: 1, total: "3499" }],
+            meta_data: [{ key: "payment_reference", value: STALE_PAY_REF }],
+          }), { status: 201 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+
+    process.env["WC_CONSUMER_KEY"] = "ck_test_stale";
+    process.env["WC_CONSUMER_SECRET"] = "cs_test_stale";
+    process.env["WC_BASE_URL"] = "https://wc-stale.test.internal";
+
+    try {
+      const result = await postOrders({
+        lineItems: [{ productId: 1, quantity: 1 }],
+        paymentMethod: "paystack",
+        paymentReference: STALE_PAY_REF,
+        shippingAddress: {
+          firstName: "Test",
+          lastName: "Racer",
+          address1: "1 Retry St",
+          city: "Nairobi",
+          country: "KE",
+          phone: "+254711000042",
+        },
+      }, jwt);
+
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.equal(result.body["id"], STALE_RETRY_WC_ORDER_ID);
+      assert.equal(wcPostCount, 1, "retry must create exactly one fresh WC order");
+
+      const anchors = await db
+        .select({ id: ucOrdersTable.id, status: ucOrdersTable.status })
+        .from(ucOrdersTable)
+        .where(eq(ucOrdersTable.paymentReference, STALE_PAY_REF));
+      assert.equal(anchors.length, 1);
+      assert.notEqual(anchors[0]!.id, staleAnchor!.id, "the abandoned anchor must be replaced");
+      assert.equal(anchors[0]!.status, "processing");
     } finally {
       delete process.env["WC_CONSUMER_KEY"];
       delete process.env["WC_CONSUMER_SECRET"];
