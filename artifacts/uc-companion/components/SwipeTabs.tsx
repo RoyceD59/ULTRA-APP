@@ -19,8 +19,8 @@ import { CarouselRegisterContext, type CarouselRef } from './SwipeTabsContext';
  * (damped) for tactile feedback, then springs back.
  *
  * The Map tab is deliberately NOT wrapped: panning is how you move the map,
- * so a swipe there must never switch tabs. You can still swipe *to* the map
- * from its neighbours and leave it via the tab bar.
+ * so a swipe there must never switch tabs. Map is also skipped as a swipe
+ * destination; enter and leave it via the tab bar.
  *
  * Gesture arbitration:
  * Each horizontal FlatList in this screen must be wrapped in HorizontalCarousel,
