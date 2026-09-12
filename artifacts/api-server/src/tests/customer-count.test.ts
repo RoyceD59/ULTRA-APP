@@ -7,6 +7,7 @@
  *   3. Soft-deleted users (deleted_at IS NOT NULL) are excluded from the count
  *   4. Re-registering (clearing deleted_at) a user increments the count back
  *   5. The active-customer partial index exists and serves the endpoint query
+ *   6. Weekly and monthly sub-counts classify rows on both sides of each boundary
  *
  * Isolation strategy
  * ------------------
@@ -22,7 +23,7 @@
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
-import { describe, it, before, after } from "node:test";
+import { describe, it, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { pool } from "@workspace/db";
@@ -71,7 +72,7 @@ before(async () => {
     role:  "admin",
   })}`;
 
-  const suffix = Date.now();
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   // Insert 3 bystander users + 1 target user before any count reads happen.
   const actives = await pool.query<{ id: number }>(
@@ -118,15 +119,17 @@ async function getMyActiveCount(): Promise<number> {
 
 describe("GET /uc/admin/customers/count — auth gate", () => {
   it("returns 401 with no Authorization header", async () => {
-    const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count");
+      const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
+        headers: { authorization: teamHeader },
+      });
     assert.equal(status, 401, `expected 401, got ${status}: ${JSON.stringify(body)}`);
   });
 
   it("returns 401 for a UC-user token (type is not 'team-session')", async () => {
     const ucHeader = `Bearer ${issueToken({ id: 9999, email: "uc-user@test.internal" })}`;
-    const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
-      headers: { authorization: ucHeader },
-    });
+      const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
+        headers: { authorization: teamHeader },
+      });
     assert.equal(status, 401, `expected 401, got ${status}: ${JSON.stringify(body)}`);
   });
 });
@@ -184,6 +187,105 @@ describe("GET /uc/admin/customers/count — count accuracy", () => {
       typeof (b2 as { count?: unknown }).count === "number",
       `expected a numeric count field, got: ${JSON.stringify(b2)}`
     );
+  });
+
+  it("resets weekly and monthly counts at their boundaries and excludes deleted users", async () => {
+    type CountBody = { count: number; newThisWeek: number; newThisMonth: number };
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const seeded = await pool.query<{
+      id: number;
+      created_at: Date;
+      deleted_at: Date | null;
+      week_start: Date;
+      month_start: Date;
+    }>(
+      `WITH boundaries AS (
+         SELECT
+           date_trunc('week', now()) AS week_start,
+           date_trunc('month', now()) AS month_start
+       ),
+       seed(email, created_at, deleted_at) AS (
+         SELECT 'ccount-week-before-${suffix}@test.internal', week_start - interval '1 millisecond', NULL::timestamptz FROM boundaries
+         UNION ALL
+         SELECT 'ccount-week-after-${suffix}@test.internal', week_start + interval '1 millisecond', NULL::timestamptz FROM boundaries
+         UNION ALL
+         SELECT 'ccount-month-before-${suffix}@test.internal', month_start - interval '1 millisecond', NULL::timestamptz FROM boundaries
+         UNION ALL
+         SELECT 'ccount-month-after-${suffix}@test.internal', month_start + interval '1 millisecond', NULL::timestamptz FROM boundaries
+         UNION ALL
+         SELECT 'ccount-deleted-${suffix}@test.internal',
+                GREATEST(week_start, month_start) + interval '1 millisecond',
+                now()
+         FROM boundaries
+       ),
+       inserted AS (
+         INSERT INTO uc_users (email, password_hash, first_name, last_name, phone, created_at, deleted_at)
+         SELECT email, 'x', 'Boundary', 'Tester', '', created_at, deleted_at
+         FROM seed
+         RETURNING id, created_at, deleted_at
+       )
+       SELECT inserted.*, boundaries.week_start, boundaries.month_start
+       FROM inserted CROSS JOIN boundaries`
+    );
+    insertedIds.push(...seeded.rows.map(row => row.id));
+
+    try {
+      const boundaryIds = seeded.rows.map(row => row.id);
+      const realQuery = pool.query.bind(pool);
+      const queryMock = mock.method(
+        pool,
+        "query",
+        async (queryText: string, values?: unknown[]) => {
+          if (
+            typeof queryText === "string" &&
+            queryText.includes("AS new_this_week") &&
+            queryText.includes("AS new_this_month")
+          ) {
+            return realQuery(
+              queryText.replace(
+                "WHERE deleted_at IS NULL",
+                "WHERE deleted_at IS NULL AND id = ANY($1::int[])"
+              ),
+              [boundaryIds]
+            );
+          }
+          return realQuery(queryText, values);
+        }
+      );
+
+      const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
+        headers: { authorization: teamHeader },
+      });
+      queryMock.mock.restore();
+      assert.equal(status, 200, `expected 200, got ${status}: ${JSON.stringify(body)}`);
+      const counts = body as CountBody;
+      const activeRows = seeded.rows.filter(row => row.deleted_at === null);
+      const expectedWeekIncrease = activeRows.filter(
+        row => row.created_at.getTime() >= row.week_start.getTime()
+      ).length;
+      const expectedMonthIncrease = activeRows.filter(
+        row => row.created_at.getTime() >= row.month_start.getTime()
+      ).length;
+
+      assert.equal(counts.count, 4, "only the four active boundary rows count");
+      assert.equal(
+        counts.newThisWeek,
+        expectedWeekIncrease,
+        "weekly count should include only active rows at or after the Monday boundary"
+      );
+      assert.equal(
+        counts.newThisMonth,
+        expectedMonthIncrease,
+        "monthly count should include only active rows at or after the first-of-month boundary"
+      );
+    } finally {
+      const boundaryIds = seeded.rows.map(row => row.id);
+      await pool.query("DELETE FROM uc_users WHERE id = ANY($1::int[])", [boundaryIds]);
+      for (const id of boundaryIds) {
+        const index = insertedIds.indexOf(id);
+        if (index !== -1) insertedIds.splice(index, 1);
+      }
+    }
   });
 });
 
