@@ -124,10 +124,9 @@ function ProductsScreenContent() {
   const [alisonCollapsed, setAlisonCollapsed] = useState(true); // default collapsed until AsyncStorage resolves
   const [alisonReady, setAlisonReady] = useState(false); // true once AsyncStorage check is done
 
-  // Floating bubble — session-only auto-dismiss
-  const bubbleDismissedRef = useRef(false);
-  const [showBubble, setShowBubble] = useState(false);
-  const bubbleFade = useRef(new Animated.Value(0)).current;
+  // In-grid Alison nudge — session-only dismissal
+  const nudgeDismissedRef = useRef(false);
+  const [nudgeReady, setNudgeReady] = useState(false);
 
   // True when the user has an active filter — suppress Alison surfaces
   const isFiltering = search.length > 0 || category !== 'All';
@@ -157,28 +156,19 @@ function ProductsScreenContent() {
     });
   }, []);
 
-  // Floating bubble: appears after 8s when basket has items, auto-dismisses
-  // after 6 more seconds, then stays hidden for the rest of the session.
+  // Make the inline nudge eligible after 8 seconds of browsing. Filtering only
+  // suppresses its display; clearing the filter can reveal it unless dismissed.
   useEffect(() => {
-    if (!hasItems || bubbleDismissedRef.current) return;
-    let dismissTimer: ReturnType<typeof setTimeout> | undefined;
-    const appearTimer = setTimeout(() => {
-      if (bubbleDismissedRef.current) return;
-      setShowBubble(true);
-      Animated.timing(bubbleFade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-      dismissTimer = setTimeout(() => {
-        Animated.timing(bubbleFade, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
-          setShowBubble(false);
-          bubbleDismissedRef.current = true;
-        });
-      }, 6000);
+    const timer = setTimeout(() => {
+      if (!nudgeDismissedRef.current) setNudgeReady(true);
     }, 8000);
-    return () => {
-      clearTimeout(appearTimer);
-      if (dismissTimer) clearTimeout(dismissTimer);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasItems]);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const dismissNudge = useCallback(() => {
+    nudgeDismissedRef.current = true;
+    setNudgeReady(false);
+  }, []);
 
   // Animated transition for the empty-basket view: 1 = visible, 0 = hidden.
   const emptyAnim = useRef(new Animated.Value(0)).current;
@@ -361,22 +351,36 @@ function ProductsScreenContent() {
     </Animated.View>
   );
 
-  // ── Floating chatbot bubble (session-timed, basket non-empty) ─────────────────
+  // ── In-grid Alison nudge (session-timed) ──────────────────────────────────────
 
-  const bubbleBottom = Platform.OS === 'web' ? 96 : (72 + insets.bottom);
-
-  const chatBubble = showBubble && !isFiltering ? (
-    <Animated.View
-      style={[styles.chatBubbleWrap, { bottom: bubbleBottom, opacity: bubbleFade }]}
-      pointerEvents="box-none">
+  const showNudge = nudgeReady && !isFiltering && (products?.length ?? 0) > numColumns;
+  const alisonNudge = showNudge ? (
+    <View
+      testID="products-alison-nudge"
+      style={[styles.alisonNudge, { backgroundColor: colors.surface, borderColor: colors.primary + '55' }]}>
+      <View style={[styles.chatAvatar, { backgroundColor: colors.primary }]}>
+        <Text style={styles.chatAvatarText}>A</Text>
+      </View>
       <TouchableOpacity
+        testID="products-alison-nudge-open"
         onPress={() => router.push('/ai-chat' as never)}
         activeOpacity={0.85}
-        style={[styles.chatBubble, { backgroundColor: colors.primary }]}>
-        <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
-        <Text style={styles.chatBubbleText}>Need help?</Text>
+        style={styles.alisonNudgeContent}>
+        <Text style={[styles.alisonNudgeTitle, { color: colors.text }]}>Not sure which filter fits?</Text>
+        <Text style={[styles.alisonNudgeText, { color: colors.mutedForeground }]}>
+          Ask Alison for a quick recommendation
+        </Text>
       </TouchableOpacity>
-    </Animated.View>
+      <TouchableOpacity
+        testID="products-alison-nudge-dismiss"
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss filter help"
+        hitSlop={10}
+        onPress={dismissNudge}
+        style={styles.alisonNudgeDismiss}>
+        <Ionicons name="close" size={18} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    </View>
   ) : null;
 
   // ── Layout ────────────────────────────────────────────────────────────────────
@@ -470,7 +474,6 @@ function ProductsScreenContent() {
             </View>
           ) : (
             <FlatList
-              data={products ?? []}
               key={`grid-${numColumns}`}
               numColumns={numColumns}
               keyExtractor={i => String(i.id)}
@@ -479,13 +482,33 @@ function ProductsScreenContent() {
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
               ListHeaderComponent={
-                <View style={styles.catalogHeader}>
-                  <Text style={[styles.catalogLabel, { color: colors.mutedForeground }]}>
-                    {category === 'All' ? 'All products' : category}
-                  </Text>
-                  <Text style={[styles.catalogCount, { color: colors.mutedForeground }]}>
-                    {(products ?? []).length} product{(products ?? []).length === 1 ? '' : 's'}
-                  </Text>
+                <View>
+                  <View style={styles.catalogHeader}>
+                    <Text style={[styles.catalogLabel, { color: colors.mutedForeground }]}>
+                      {category === 'All' ? 'All products' : category}
+                    </Text>
+                    <Text style={[styles.catalogCount, { color: colors.mutedForeground }]}>
+                      {(products ?? []).length} product{(products ?? []).length === 1 ? '' : 's'}
+                    </Text>
+                  </View>
+                  {showNudge && (
+                    <>
+                      <View style={styles.row}>
+                        {(products ?? []).slice(0, numColumns).map(product => (
+                          <View key={product.id} style={styles.cardWrap}>
+                            <ProductCard
+                              product={product}
+                              onPress={() => router.push({
+                                pathname: '/product/[id]',
+                                params: { id: String(product.id), category },
+                              } as never)}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                      {alisonNudge}
+                    </>
+                  )}
                 </View>
               }
               ListEmptyComponent={
@@ -512,13 +535,12 @@ function ProductsScreenContent() {
                   />
                 </View>
               )}
+              data={showNudge ? (products ?? []).slice(numColumns) : (products ?? [])}
             />
           )}
         </View>
       </Animated.ScrollView>
 
-      {/* Floating chatbot bubble (timed, basket non-empty, not filtering) */}
-      {chatBubble}
     </View>
   );
 }
@@ -656,19 +678,20 @@ const styles = StyleSheet.create({
   },
   quickReplyText: { fontSize: 13, fontWeight: '500' as const },
 
-  // ── Floating chatbot bubble ───────────────────────────────────────────────────
-  chatBubbleWrap: {
-    position: 'absolute', right: 16,
-    zIndex: 10,
+  // ── In-grid Alison nudge ───────────────────────────────────────────────────────
+  alisonNudge: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 8,
   },
-  chatBubble: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 24,
-    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+  alisonNudgeContent: { flex: 1 },
+  alisonNudgeTitle: { fontSize: 14, fontWeight: '700' as const },
+  alisonNudgeText: { fontSize: 12, marginTop: 2 },
+  alisonNudgeDismiss: {
+    width: 32, height: 32,
+    alignItems: 'center', justifyContent: 'center',
   },
-  chatBubbleText: { color: '#fff', fontSize: 13, fontWeight: '600' as const },
 
   // ── Products catalog ──────────────────────────────────────────────────────────
   catalogHeader: {
