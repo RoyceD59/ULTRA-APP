@@ -10,6 +10,89 @@ import assert from "node:assert/strict";
 
 import { runLowStockAlert } from "../lib/scheduler.js";
 
+describe("runLowStockAlert — daily alert behavior", () => {
+  it("does not email when WooCommerce is unreachable", async () => {
+    let sendCount = 0;
+
+    const result = await runLowStockAlert({
+      isWcConfigured: () => true,
+      threshold: 5,
+      fetchProducts: async () => null,
+      sendEmail: async () => {
+        sendCount += 1;
+        return true;
+      },
+    });
+
+    assert.deepEqual(result, { outOfStock: 0, lowStock: 0, emailed: false });
+    assert.equal(sendCount, 0);
+  });
+
+  it("does not email when every product is above the threshold", async () => {
+    let sendCount = 0;
+
+    const result = await runLowStockAlert({
+      isWcConfigured: () => true,
+      threshold: 5,
+      fetchProducts: async () => [{
+        id: 20,
+        name: "Healthy stock filter",
+        sku: "HEALTHY-20",
+        stock_quantity: 6,
+        stock_status: "instock",
+      }],
+      sendEmail: async () => {
+        sendCount += 1;
+        return true;
+      },
+    });
+
+    assert.deepEqual(result, { outOfStock: 0, lowStock: 0, emailed: false });
+    assert.equal(sendCount, 0);
+  });
+
+  it("emails the correct subject and body for products at or below the threshold", async () => {
+    const emails: Array<{ subject: string; text: string }> = [];
+
+    const result = await runLowStockAlert({
+      isWcConfigured: () => true,
+      threshold: 5,
+      fetchProducts: async () => [
+        {
+          id: 30,
+          name: "Empty Filter",
+          sku: "EMPTY-30",
+          stock_quantity: 0,
+          stock_status: "outofstock",
+          permalink: "https://shop.example.com/products/empty-filter",
+        },
+        {
+          id: 31,
+          name: "Threshold Filter",
+          sku: "LOW-31",
+          stock_quantity: 5,
+          stock_status: "instock",
+          permalink: "https://shop.example.com/products/threshold-filter",
+        },
+      ],
+      sendEmail: async (email) => {
+        emails.push({ subject: email.subject, text: email.text });
+        return true;
+      },
+    });
+
+    assert.deepEqual(result, { outOfStock: 1, lowStock: 1, emailed: true });
+    assert.deepEqual(emails.map((email) => email.subject), [
+      "📦 Stock alert: 1 out of stock, 1 low stock",
+    ]);
+    assert.match(emails[0]!.text, /2 products need restocking \(threshold: ≤ 5 units\)\./);
+    assert.match(emails[0]!.text, /OUT OF STOCK \(1 product\):/);
+    assert.match(emails[0]!.text, /Empty Filter \(SKU EMPTY-30\) — qty: 0/);
+    assert.match(emails[0]!.text, /LOW STOCK — 5 units or fewer \(1 product\):/);
+    assert.match(emails[0]!.text, /Threshold Filter \(SKU LOW-31\) — qty: 5/);
+  });
+});
+
 describe("runLowStockAlert — unmanaged WooCommerce stock", () => {
   it("skips null-quantity in-stock products but reports explicit out-of-stock products", async () => {
     const emails: Array<{ subject: string; text: string }> = [];
