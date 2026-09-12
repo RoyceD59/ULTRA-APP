@@ -251,10 +251,17 @@ console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 // connects to the isolated database.
 
 const testGlob = process.env["TEST_GLOB"] ?? "src/tests/**/*.test.ts";
+const TEST_CONCURRENCY = 32;
 
 const childExitCode = await spawnAsync(
   "node",
-  ["--import", "tsx/esm", "--test", testGlob],
+  [
+    "--import",
+    "tsx/esm",
+    "--test",
+    `--test-concurrency=${TEST_CONCURRENCY}`,
+    testGlob,
+  ],
   {
     cwd: fileURLToPath(new URL("../..", import.meta.url)), // artifacts/api-server
     env: { ...process.env, DATABASE_URL: TEST_URL },

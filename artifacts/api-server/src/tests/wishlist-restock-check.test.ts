@@ -29,7 +29,7 @@ import { checkRestockDemandForProduct } from "../lib/wishlist-demand.js";
 const TEST_PRODUCT_ID = 887701;
 const USER_A = "wishlist-restock-user-a";
 const USER_B = "wishlist-restock-user-b";
-const DEMAND_PRODUCT_ID = 887702;
+const DEMAND_PRODUCT_ID = 887705;
 const DEMAND_USERS = [
   "wishlist-demand-user-a",
   "wishlist-demand-user-b",
