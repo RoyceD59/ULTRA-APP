@@ -46,6 +46,8 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { EventEmitter } from "node:events";
+import https from "node:https";
 import type { AddressInfo } from "node:net";
 
 import {
@@ -55,6 +57,7 @@ import {
   validateWebhookDestination,
 } from "../lib/ssrf-safe-fetch.js";
 import { issueToken } from "../lib/jwt.js";
+import { encryptSecret } from "../lib/secret-crypto.js";
 import { pool } from "@workspace/db";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -114,8 +117,17 @@ let baseUrl = "";
 let appServer: any = null;
 let adminToken = "";
 let memberToken = "";
+let teamAdminToken = "";
+let teamMemberToken = "";
+let savedWcConsumerKey: string | undefined;
+let savedWcConsumerSecret: string | undefined;
 
 before(async () => {
+  savedWcConsumerKey = process.env["WC_CONSUMER_KEY"];
+  savedWcConsumerSecret = process.env["WC_CONSUMER_SECRET"];
+  delete process.env["WC_CONSUMER_KEY"];
+  delete process.env["WC_CONSUMER_SECRET"];
+
   process.env["UC_ADMIN_EMAILS"] = "inventory-admin@test.internal";
   process.env["PROJECTHUB_ADMIN_EMAIL"] = "inventory-admin@test.internal";
   process.env["PROJECTHUB_ADMIN_PASSWORD"] = "test-pw-inv";
@@ -134,6 +146,21 @@ before(async () => {
     email: "member@test.internal",
     src: "woo",
   } as Record<string, unknown>)}`;
+
+  teamAdminToken = `Bearer ${issueToken({
+    id: "inventory-team-admin",
+    email: "inventory-team-admin@test.internal",
+    name: "Inventory Admin",
+    type: "team-session",
+    role: "admin",
+  })}`;
+  teamMemberToken = `Bearer ${issueToken({
+    id: "inventory-team-member",
+    email: "inventory-team-member@test.internal",
+    name: "Inventory Member",
+    type: "team-session",
+    role: "member",
+  })}`;
 
   // Ensure team_settings singleton exists (sync test needs n8n_inventory_webhook_url_enc = null)
   await pool.query(`
@@ -155,6 +182,10 @@ after(async () => {
   await pool.query(
     "UPDATE team_settings SET n8n_inventory_webhook_url_enc = null WHERE id = 'singleton'",
   ).catch(() => undefined);
+  if (savedWcConsumerKey === undefined) delete process.env["WC_CONSUMER_KEY"];
+  else process.env["WC_CONSUMER_KEY"] = savedWcConsumerKey;
+  if (savedWcConsumerSecret === undefined) delete process.env["WC_CONSUMER_SECRET"];
+  else process.env["WC_CONSUMER_SECRET"] = savedWcConsumerSecret;
 });
 
 // ─── Unit: isPrivateIpv4 ─────────────────────────────────────────────────────
@@ -356,6 +387,15 @@ describe("GET /api/uc/admin/inventory", () => {
     const { status } = await get(baseUrl, "/api/uc/admin/inventory", memberToken);
     assert.equal(status, 401);
   });
+
+  it("(c) returns mock inventory when WooCommerce credentials are absent", async () => {
+    const { status, json } = await get(baseUrl, "/api/uc/admin/inventory", adminToken);
+    assert.equal(status, 200);
+    const body = json as { source?: string; products?: unknown[] };
+    assert.equal(body.source, "mock");
+    assert.ok(Array.isArray(body.products));
+    assert.ok(body.products.length > 0);
+  });
 });
 
 // ─── API: PATCH /api/uc/admin/inventory/:productId ───────────────────────────
@@ -423,45 +463,108 @@ describe("POST /api/uc/admin/inventory/sync", () => {
     );
     assert.equal(status, 422, `Expected 422, got ${status}: ${JSON.stringify(json)}`);
   });
+
+  it("(d) returns 502 when the outbound webhook request throws", async () => {
+    const encryptedUrl = encryptSecret("https://1.1.1.1/inventory-sync");
+    await pool.query(
+      "UPDATE team_settings SET n8n_inventory_webhook_url_enc = $1 WHERE id = 'singleton'",
+      [encryptedUrl],
+    );
+
+    const originalRequest = https.request;
+    https.request = ((..._args: unknown[]) => {
+      const request = new EventEmitter() as EventEmitter & {
+        write: () => boolean;
+        end: () => void;
+        destroy: () => void;
+      };
+      request.write = () => true;
+      request.end = () => queueMicrotask(() => request.emit("error", new Error("simulated network failure")));
+      request.destroy = () => request.emit("close");
+      return request;
+    }) as typeof https.request;
+
+    try {
+      const { status, json } = await post(
+        baseUrl,
+        "/api/uc/admin/inventory/sync",
+        {},
+        adminToken,
+      );
+      assert.equal(status, 502, `Expected 502, got ${status}: ${JSON.stringify(json)}`);
+      assert.deepEqual(json, { error: "Failed to reach n8n webhook" });
+    } finally {
+      https.request = originalRequest;
+      await pool.query(
+        "UPDATE team_settings SET n8n_inventory_webhook_url_enc = null WHERE id = 'singleton'",
+      );
+    }
+  });
 });
 
 // ─── API: GET /admin/integrations ────────────────────────────────────────────
 
 describe("GET /api/admin/integrations", () => {
-  it("(a) no token → 401 or 403", async () => {
+  it("(a) no token → 401", async () => {
     const { status } = await get(baseUrl, "/api/admin/integrations");
-    assert.ok(
-      status === 401 || status === 403,
-      `Expected 401 or 403 without token, got ${status}`,
-    );
+    assert.equal(status, 401);
+  });
+
+  it("(b) member team token → 403", async () => {
+    const { status } = await get(baseUrl, "/api/admin/integrations", teamMemberToken);
+    assert.equal(status, 403);
+  });
+
+  it("(c) admin team token can access the endpoint", async () => {
+    const { status } = await get(baseUrl, "/api/admin/integrations", teamAdminToken);
+    assert.equal(status, 200);
   });
 });
 
 // ─── API: PATCH /admin/integrations ──────────────────────────────────────────
 
 describe("PATCH /api/admin/integrations", () => {
-  it("(a) no token → 401 or 403", async () => {
+  it("(a) no token → 401", async () => {
     const { status } = await patch(baseUrl, "/api/admin/integrations", {
       n8nInventoryWebhookUrl: "https://n8n.example.com/webhook/test",
     });
-    assert.ok(
-      status === 401 || status === 403,
-      `Expected 401 or 403 without token, got ${status}`,
-    );
+    assert.equal(status, 401);
   });
 
-  it("(b) http:// scheme → 400", async () => {
+  it("(b) member team token → 403", async () => {
+    const { status } = await patch(
+      baseUrl,
+      "/api/admin/integrations",
+      { n8nInventoryWebhookUrl: "" },
+      teamMemberToken,
+    );
+    assert.equal(status, 403);
+  });
+
+  it("(c) admin team token can update the endpoint", async () => {
+    const { status } = await patch(
+      baseUrl,
+      "/api/admin/integrations",
+      { n8nInventoryWebhookUrl: "" },
+      teamAdminToken,
+    );
+    assert.equal(status, 200);
+  });
+
+  it("(d) http:// scheme → 400", async () => {
     // requireTeamAdmin will reject this with 403 since we're using a woo token.
     // Testing the scheme validation via a team-admin authenticated route requires
     // a team-session token — validate the scheme rejection unit-test-side only.
     // (see validateWebhookDestination tests above)
     //
     // Here we confirm the route is reachable without a crash for bad input.
-    const { status } = await patch(baseUrl, "/api/admin/integrations", {
-      n8nInventoryWebhookUrl: "http://n8n.example.com/webhook",
-    });
-    // Without a valid team-admin token the gate fires first (401/403).
-    assert.ok(status === 400 || status === 401 || status === 403);
+    const { status } = await patch(
+      baseUrl,
+      "/api/admin/integrations",
+      { n8nInventoryWebhookUrl: "http://n8n.example.com/webhook" },
+      teamAdminToken,
+    );
+    assert.equal(status, 400);
   });
 
   it("(c) private IPv4 literal → 400 (save-time SSRF guard, if authenticated)", async () => {
