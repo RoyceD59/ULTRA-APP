@@ -164,6 +164,18 @@ export const ListUcCustomersResponse = zod.object({
 
 
 /**
+ * @summary Export all UC Companion customers matching search and date filters as CSV (admin only)
+ */
+export const ExportUcCustomersQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Search by name, email, or normalized international phone number (case-insensitive)'),
+  "from": zod.date().optional().describe('Registration date range start (inclusive)'),
+  "to": zod.date().optional().describe('Registration date range end (inclusive)')
+})
+
+export const ExportUcCustomersResponse = zod.unknown()
+
+
+/**
  * @summary Get a single UC customer with their orders and tickets (admin only)
  */
 export const GetUcCustomerParams = zod.object({

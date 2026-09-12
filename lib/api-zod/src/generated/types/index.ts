@@ -33,6 +33,7 @@ export * from './contactWithMethods';
 export * from './dashboardSummary';
 export * from './dashboardSummaryStatusBreakdown';
 export * from './disconnectWhatsApp200';
+export * from './exportUcCustomersParams';
 export * from './getDashboardActivityParams';
 export * from './healthStatus';
 export * from './integrationsSettings';

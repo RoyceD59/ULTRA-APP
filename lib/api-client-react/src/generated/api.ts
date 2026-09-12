@@ -45,6 +45,7 @@ import type {
   ContactWithMethods,
   DashboardSummary,
   DisconnectWhatsApp200,
+  ExportUcCustomersParams,
   GetDashboardActivityParams,
   HealthStatus,
   IntegrationsSettings,
@@ -780,6 +781,90 @@ export function useListUcCustomers<TData = Awaited<ReturnType<typeof listUcCusto
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListUcCustomersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportUcCustomersUrl = (params?: ExportUcCustomersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/customers/export?${stringifiedParams}` : `/api/uc/admin/customers/export`
+}
+
+/**
+ * @summary Export all UC Companion customers matching search and date filters as CSV (admin only)
+ */
+export const exportUcCustomers = async (params?: ExportUcCustomersParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportUcCustomersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportUcCustomersQueryKey = (params?: ExportUcCustomersParams,) => {
+    return [
+    `/api/uc/admin/customers/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportUcCustomersQueryOptions = <TData = Awaited<ReturnType<typeof exportUcCustomers>>, TError = ErrorType<void>>(params?: ExportUcCustomersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportUcCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportUcCustomersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportUcCustomers>>> = ({ signal }) => exportUcCustomers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportUcCustomers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportUcCustomersQueryResult = NonNullable<Awaited<ReturnType<typeof exportUcCustomers>>>
+export type ExportUcCustomersQueryError = ErrorType<void>
+
+
+/**
+ * @summary Export all UC Companion customers matching search and date filters as CSV (admin only)
+ */
+
+export function useExportUcCustomers<TData = Awaited<ReturnType<typeof exportUcCustomers>>, TError = ErrorType<void>>(
+ params?: ExportUcCustomersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportUcCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportUcCustomersQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

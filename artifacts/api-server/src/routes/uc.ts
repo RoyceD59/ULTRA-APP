@@ -6759,6 +6759,93 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
   }
 });
 
+// GET /api/uc/admin/customers/export — CSV download of every customer matching
+// the current search and joined-date filters. Protected by the same admin gate
+// as the paginated customer list.
+router.get("/uc/admin/customers/export", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const dateRange = parseDateRange(req, res);
+  if (!dateRange) return;
+
+  const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
+  const conditions: string[] = ["u.deleted_at IS NULL"];
+  const params: unknown[] = [];
+  let pi = 1;
+
+  if (q) {
+    conditions.push(
+      `(u.email ILIKE $${pi} OR u.phone ILIKE $${pi} OR u.first_name ILIKE $${pi} OR u.last_name ILIKE $${pi} OR CONCAT(u.first_name,' ',u.last_name) ILIKE $${pi})`
+    );
+    params.push(`%${q}%`);
+    pi++;
+  }
+  if (dateRange.from) {
+    conditions.push(`u.created_at >= $${pi}::timestamptz`);
+    params.push(dateRange.from);
+    pi++;
+  }
+  if (dateRange.to) {
+    conditions.push(`u.created_at < ($${pi}::date + interval '1 day')::timestamptz`);
+    params.push(dateRange.to);
+  }
+
+  try {
+    const customerRes = await pool.query<{
+      email: string;
+      first_name: string;
+      last_name: string;
+      phone: string;
+      created_at: string;
+      order_count: number;
+    }>(
+      `SELECT
+         u.email,
+         u.first_name,
+         u.last_name,
+         u.phone,
+         u.created_at,
+         COUNT(o.id)::int AS order_count
+       FROM uc_users u
+       LEFT JOIN uc_orders o ON o.user_id = u.id::text
+       WHERE ${conditions.join(" AND ")}
+       GROUP BY u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at
+       ORDER BY u.created_at DESC`,
+      params,
+    );
+
+    const rows = customerRes.rows.map((customer) => csvRow([
+      `${customer.first_name} ${customer.last_name}`.trim(),
+      customer.email,
+      customer.phone,
+      new Date(customer.created_at).toISOString(),
+      customer.order_count,
+    ]));
+    const csv = [
+      csvRow(["name", "email", "phone", "joinedDate", "orderCount"]),
+      ...rows,
+    ].join("\r\n") + "\r\n";
+
+    const filenameParts = [`customers_${new Date().toISOString().slice(0, 10)}`];
+    if (q) {
+      const safeQuery = q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+      filenameParts.push(`search-${safeQuery || "filtered"}`);
+    }
+    if (dateRange.from) filenameParts.push(`from-${dateRange.from}`);
+    if (dateRange.to) filenameParts.push(`to-${dateRange.to}`);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filenameParts.join("_")}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    req.log.error({ err }, "Failed to export customers CSV");
+    res.status(500).json({ error: "Failed to export customers" });
+  }
+});
+
 // ─── UC Companion: registered customer count ──────────────────────────────────
 // Must be registered before /:id so Express doesn't treat "count" as an id.
 // Any logged-in team member (admin or regular) can read this count.

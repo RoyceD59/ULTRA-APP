@@ -262,6 +262,52 @@ paths:
         "403":
           description: Admin access required
 
+  /uc/admin/customers/export:
+    get:
+      operationId: exportUcCustomers
+      tags: [uc-admin]
+      summary: Export all UC Companion customers matching search and date filters as CSV (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by name, email, or normalized international phone number (case-insensitive)
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range start (inclusive)
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range end (inclusive)
+      responses:
+        "200":
+          description: Filtered customer CSV
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Invalid date filter
+        "401":
+          description: Unauthorized
+        "403":
+          description: Admin access required
+
   /uc/admin/customers/{customerId}:
     get:
       operationId: getUcCustomer

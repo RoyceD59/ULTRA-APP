@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Users, Search, ChevronLeft, ChevronRight, X,
   Phone, Mail, Calendar, ShoppingBag, Wrench,
-  Loader2, UserCircle2, Package,
+  Loader2, UserCircle2, Package, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -276,6 +276,8 @@ export default function AdminCustomersPage() {
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const debounceRef = useState<ReturnType<typeof setTimeout> | null>(null);
 
@@ -298,6 +300,40 @@ export default function AdminCustomersPage() {
 
   const hasFilters = debouncedSearch || fromDate || toDate;
   const headers = getAuthHeaders();
+
+  async function exportCustomers() {
+    setIsExporting(true);
+    setExportError("");
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set("q", debouncedSearch);
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+      const query = params.toString();
+      const res = await fetch(`${API}/api/uc/admin/customers/export${query ? `?${query}` : ""}`, {
+        headers: headers ?? {},
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? "Failed to export customers");
+      }
+
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "customers.csv";
+      const url = URL.createObjectURL(await res.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Failed to export customers");
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   const { data, isLoading, error } = useQuery<CustomerListResponse>({
     queryKey: ["uc-customers", debouncedSearch, fromDate, toDate, page],
@@ -332,17 +368,36 @@ export default function AdminCustomersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Users className="w-6 h-6" /> Customers
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          All registered UC Companion app accounts.
-          {total > 0 && !isLoading && (
-            <span className="ml-1 font-medium text-foreground">{total.toLocaleString()} total.</span>
-          )}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Users className="w-6 h-6" /> Customers
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            All registered UC Companion app accounts.
+            {total > 0 && !isLoading && (
+              <span className="ml-1 font-medium text-foreground">{total.toLocaleString()} total.</span>
+            )}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={exportCustomers}
+          disabled={isExporting || isLoading}
+          className="gap-2"
+        >
+          {isExporting
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Download className="w-4 h-4" />}
+          {isExporting ? "Exporting…" : "Export CSV"}
+        </Button>
       </div>
+
+      {exportError && (
+        <div role="alert" className="text-destructive text-sm">
+          {exportError}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">

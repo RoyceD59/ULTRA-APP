@@ -782,6 +782,21 @@ page?: number;
 limit?: number;
 };
 
+export type ExportUcCustomersParams = {
+/**
+ * Search by name, email, or normalized international phone number (case-insensitive)
+ */
+q?: string;
+/**
+ * Registration date range start (inclusive)
+ */
+from?: string;
+/**
+ * Registration date range end (inclusive)
+ */
+to?: string;
+};
+
 export type ListTasksParams = {
 projectId?: number;
 assigneeId?: number;
