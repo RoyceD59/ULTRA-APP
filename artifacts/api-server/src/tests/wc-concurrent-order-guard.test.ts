@@ -30,8 +30,16 @@ import http from "node:http";
 import bcryptjs from "bcryptjs";
 
 import app from "../app.js";
-import { db, ucUsersTable, ucOrdersTable, ucOrderItemsTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import {
+  db,
+  ucUsersTable,
+  ucOrdersTable,
+  ucOrderItemsTable,
+  ucPushTokensTable,
+  ucRewardsLedgerTable,
+  ucRewardsRulesTable,
+} from "@workspace/db";
+import { and, eq, inArray } from "drizzle-orm";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -41,6 +49,7 @@ let base: string;
 
 const PAY_REF = `wc_race_test_${Date.now()}`;
 const WC_ORDER_ID = 990_001;
+const TEST_PUSH_TOKEN = "ExponentPushToken[wc-race-confirmation-test]";
 
 const createdUserIds: number[] = [];
 
@@ -146,10 +155,16 @@ after(async () => {
     .catch(() => [] as { id: number }[]);
   const ids = rows.map((r) => r.id);
   if (ids.length > 0) {
+    await db.delete(ucRewardsLedgerTable)
+      .where(inArray(ucRewardsLedgerTable.refId, ids.map((id) => `qualifying-product:order:${id}`)))
+      .catch(() => {});
     await db.delete(ucOrderItemsTable).where(inArray(ucOrderItemsTable.orderId, ids)).catch(() => {});
     await db.delete(ucOrdersTable).where(inArray(ucOrdersTable.id, ids)).catch(() => {});
   }
   if (createdUserIds.length > 0) {
+    await db.delete(ucPushTokensTable)
+      .where(inArray(ucPushTokensTable.userId, createdUserIds.map(String)))
+      .catch(() => {});
     await db.delete(ucUsersTable).where(inArray(ucUsersTable.id, createdUserIds)).catch(() => {});
   }
 
@@ -160,13 +175,28 @@ after(async () => {
 // ── Suite ─────────────────────────────────────────────────────────────────────
 
 describe("WooCommerce concurrent-order guard — same paymentReference race", () => {
-  it("two racing POSTs both return 200 with the same order ID and create exactly one WC order", { timeout: 30_000 }, async () => {
-    const { jwt } = await createTestUser();
+  it("two racing POSTs create one WC order, one confirmation sequence, and one rewards settlement", { timeout: 30_000 }, async () => {
+    const { id: userId, jwt } = await createTestUser();
+    await db.insert(ucPushTokensTable).values({
+      userId: String(userId),
+      pushToken: TEST_PUSH_TOKEN,
+      platform: "android",
+    });
+    await db.insert(ucRewardsRulesTable).values({
+      eventType: "qualifying-product",
+      label: "Qualifying product purchase",
+      pointsValue: 25,
+      active: true,
+    }).onConflictDoUpdate({
+      target: ucRewardsRulesTable.eventType,
+      set: { pointsValue: 25, active: true },
+    });
 
     // ── Fetch stub state machine ─────────────────────────────────────────────
     let wcPostCount = 0;
     let wcOrder: Record<string, unknown> | null = null;
     const resendCalls: unknown[] = [];
+    const expoPushCalls: Array<Record<string, unknown>> = [];
 
     let postStarted = false;
     let signalPostStarted!: () => void;
@@ -190,6 +220,12 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
       if (u.includes("resend.com") && u.includes("/emails")) {
         resendCalls.push(JSON.parse((init?.body as string) ?? "{}"));
         return new Response(JSON.stringify({ id: "re_wc_race_stub" }), { status: 200 });
+      }
+
+      if (u.includes("exp.host") && u.includes("/push/send")) {
+        const payload = JSON.parse((init?.body as string) ?? "[]") as Array<Record<string, unknown>>;
+        expoPushCalls.push(...payload);
+        return new Response(JSON.stringify({ data: [{ status: "ok", id: "push_wc_race_stub" }] }), { status: 200 });
       }
 
       // WooCommerce REST API.
@@ -308,6 +344,31 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
       assert.equal(
         resendCalls.length, 1,
         `exactly one confirmation email must be sent; got ${resendCalls.length}`,
+      );
+
+      await waitFor(
+        () => expoPushCalls.some((call) => call["title"] === "✅ Order confirmed!"),
+        4000,
+      );
+      await new Promise((r) => setTimeout(r, 300));
+      const confirmationPushes = expoPushCalls.filter(
+        (call) => call["title"] === "✅ Order confirmed!",
+      );
+      assert.equal(
+        confirmationPushes.length, 1,
+        `exactly one order-confirmation push must be sent; got ${confirmationPushes.length}`,
+      );
+
+      const rewardRows = await db
+        .select({ id: ucRewardsLedgerTable.id })
+        .from(ucRewardsLedgerTable)
+        .where(and(
+          eq(ucRewardsLedgerTable.userId, userId),
+          eq(ucRewardsLedgerTable.refId, `qualifying-product:order:${anchors[0]!.id}`),
+        ));
+      assert.equal(
+        rewardRows.length, 1,
+        `exactly one rewards settlement must be queued for the surviving anchor; got ${rewardRows.length}`,
       );
     } finally {
       delete process.env["WC_CONSUMER_KEY"];
