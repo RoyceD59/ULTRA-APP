@@ -292,6 +292,77 @@ describe('computeRegisterCandidate — empty / missing lineItems', () => {
   });
 });
 
+describe('computeRegisterCandidate — products removed from the catalogue', () => {
+  const REMOVED_PRODUCT_ID = 999;
+
+  it('register mode: an order containing only a removed product → null', () => {
+    const result = computeRegisterCandidate({
+      eligibleForRegister: true,
+      eligibleForReplace:  false,
+      activation:          null,
+      orders: [
+        {
+          id:          301,
+          dateCreated: NEWER_DATE,
+          lineItems:   [{ productId: REMOVED_PRODUCT_ID }],
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.equal(result, null,
+      'register mode must not nudge for a product that is no longer in the filter catalogue');
+  });
+
+  it('replace mode: an order containing only a removed product → null', () => {
+    const result = computeRegisterCandidate({
+      eligibleForRegister: false,
+      eligibleForReplace:  true,
+      activation: makeActivation({ sourceOrderId: 100 }),
+      orders: [
+        {
+          id:          302,
+          dateCreated: NEWER_DATE,
+          lineItems:   [{ productId: REMOVED_PRODUCT_ID }],
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.equal(result, null,
+      'replace mode must not nudge for a product that is no longer in the filter catalogue');
+  });
+
+  it('skips an unknown product order and returns the known product order', () => {
+    const KNOWN_ORDER_DATE = '2026-05-01T00:00:00.000Z';
+    const result = computeRegisterCandidate({
+      eligibleForRegister: true,
+      eligibleForReplace:  false,
+      activation:          null,
+      orders: [
+        {
+          id:          303,
+          dateCreated: NEWER_DATE,
+          lineItems:   [{ productId: REMOVED_PRODUCT_ID }],
+        },
+        {
+          id:          304,
+          dateCreated: KNOWN_ORDER_DATE,
+          lineItems:   [{ productId: PRODUCT.id }],
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.notEqual(result, null, 'a removed product must not hide a valid known-product order');
+    assert.equal(result!.orderId, 304, 'the known product order must be selected');
+    assert.equal(result!.product.id, PRODUCT.id, 'the candidate must use the known catalogue product');
+  });
+});
+
 describe('computeRegisterCandidate — replace mode, multiple orders', () => {
 
   // When the list contains both the triggering order and a new order, the new
