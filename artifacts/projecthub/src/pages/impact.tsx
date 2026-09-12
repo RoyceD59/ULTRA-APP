@@ -369,7 +369,7 @@ export default function ImpactPage() {
 
 // ─── ImpactDashboard (authenticated) ─────────────────────────────────────────
 
-function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: string; onSignOut: () => void; isReadOnly?: boolean }) {
+export function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: string; onSignOut: () => void; isReadOnly?: boolean }) {
   const [data,    setData]    = useState<ImpactData | null>(null);
   const [clients, setClients] = useState<OfflineClient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -715,12 +715,12 @@ function ImpactDashboard({ token, onSignOut, isReadOnly = false }: { token: stri
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             {c.phone
-                              ? <span className="text-foreground text-xs font-mono">{c.phone}</span>
+                               ? <a href={`tel:${c.phone}`} className="text-foreground text-xs font-mono hover:underline">{c.phone}</a>
                               : <span className="text-muted-foreground/40">—</span>}
                           </td>
                           <td className="px-4 py-3 max-w-[180px]">
                             {c.email
-                              ? <span className="text-foreground text-xs truncate block">{c.email}</span>
+                               ? <a href={`mailto:${c.email}`} className="text-foreground text-xs truncate block hover:underline">{c.email}</a>
                               : <span className="text-muted-foreground/40">—</span>}
                           </td>
                           <td className="px-4 py-3 max-w-xs">
