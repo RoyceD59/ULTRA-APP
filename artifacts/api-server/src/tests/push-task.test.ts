@@ -8,6 +8,7 @@
  *   4. Not configured — 503 when AI_ORCHESTRATOR_WEBHOOK_URL is unset
  *   5. Task not found — 404 for an unknown taskId
  *   6. Successful dispatch — 200 + ai_push_events row + outbound HMAC signature
+ *   7. Failed dispatch — durable failed row remains visible on the Push Board
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
@@ -279,6 +280,69 @@ describe("POST /api/ai/push-task", () => {
     } finally {
       delete process.env["AI_ORCHESTRATOR_WEBHOOK_URL"];
       delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
+      await new Promise<void>((resolve, reject) =>
+        mockServer.close((e) => (e ? reject(e) : resolve())),
+      );
+    }
+  });
+
+  it("keeps a failed task dispatch visible on the Push Board with the same push id", async () => {
+    const secret = "test-webhook-secret-push-task-failure";
+    process.env["PROJECTHUB_WEBHOOK_SECRET"] = secret;
+
+    const mockServer = http.createServer((_req, res) => {
+      res.writeHead(503, { "Content-Type": "text/plain" });
+      res.end("orchestrator unavailable");
+    });
+    await new Promise<void>((resolve) => mockServer.listen(0, "127.0.0.1", resolve));
+    const { port } = mockServer.address() as { port: number };
+    process.env["AI_ORCHESTRATOR_WEBHOOK_URL"] = `http://127.0.0.1:${port}`;
+
+    let pushId: string | undefined;
+    try {
+      const dispatch = await apiFetch("/api/ai/push-task", {
+        server,
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: teamAuthHeader() },
+        body: JSON.stringify({
+          taskId: testTaskId,
+          agentId: 1,
+          agentName: "Failing Orchestrator",
+        }),
+      });
+
+      assert.equal(
+        dispatch.status,
+        502,
+        `expected failed dispatch response, got ${dispatch.status}: ${JSON.stringify(dispatch.body)}`,
+      );
+      assert.ok(
+        typeof dispatch.body.pushId === "string" && dispatch.body.pushId.length > 0,
+        "failed dispatch response must include its durable push id",
+      );
+      pushId = dispatch.body.pushId as string;
+
+      const pushes = await apiFetch("/api/ai/pushes", {
+        server,
+        method: "GET",
+        headers: { Authorization: teamAuthHeader() },
+      });
+
+      assert.equal(pushes.status, 200);
+      assert.ok(Array.isArray(pushes.body), "Push Board response must be an array");
+      const matchingPush = (pushes.body as unknown as Array<Record<string, unknown>>)
+        .find((push) => push.id === pushId);
+      assert.ok(matchingPush, "failed task dispatch must remain visible on the Push Board");
+      assert.equal(matchingPush.payloadType, "task_dispatch");
+      assert.equal(matchingPush.status, "failed");
+      assert.equal(matchingPush.id, pushId);
+      assert.equal(matchingPush.outboundOk, false);
+    } finally {
+      delete process.env["AI_ORCHESTRATOR_WEBHOOK_URL"];
+      delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
+      if (pushId) {
+        await db.delete(aiPushEventsTable).where(eq(aiPushEventsTable.id, pushId));
+      }
       await new Promise<void>((resolve, reject) =>
         mockServer.close((e) => (e ? reject(e) : resolve())),
       );
