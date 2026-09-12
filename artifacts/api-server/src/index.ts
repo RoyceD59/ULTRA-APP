@@ -356,6 +356,13 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS uc_users_active_count_covering_idx
+      ON uc_users (deleted_at)
+      INCLUDE (created_at)
+      WHERE deleted_at IS NULL;
+  `);
+  logger.info("Startup migration: covering active customer count index ensured");
 
   // Add credential_version for post-password-reset session revocation.
   // Incrementing it on reset invalidates bearer tokens minted before the reset.

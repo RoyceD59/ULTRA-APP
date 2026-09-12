@@ -196,6 +196,12 @@ await pool.query(`
 
 // uc_users.deleted_at
 await pool.query(`ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;`);
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS uc_users_active_count_covering_idx
+    ON uc_users (deleted_at)
+    INCLUDE (created_at)
+    WHERE deleted_at IS NULL;
+`);
 // Password resets bump this version so JWTs minted before a reset are revoked.
 await pool.query(`
   ALTER TABLE uc_users

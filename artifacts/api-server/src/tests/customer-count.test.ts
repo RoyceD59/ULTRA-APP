@@ -6,6 +6,7 @@
  *   2. 401 for UC-user tokens (type !== "team-session")
  *   3. Soft-deleted users (deleted_at IS NOT NULL) are excluded from the count
  *   4. Re-registering (clearing deleted_at) a user increments the count back
+ *   5. The active-customer partial index exists and serves the endpoint query
  *
  * Isolation strategy
  * ------------------
@@ -183,5 +184,56 @@ describe("GET /uc/admin/customers/count — count accuracy", () => {
       typeof (b2 as { count?: unknown }).count === "number",
       `expected a numeric count field, got: ${JSON.stringify(b2)}`
     );
+  });
+});
+
+describe("GET /uc/admin/customers/count — query performance", () => {
+  it("has an idempotent partial index that the count query can use", async () => {
+    // Running the migration statement again proves it remains safe on restart.
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS uc_users_active_count_covering_idx
+        ON uc_users (deleted_at)
+        INCLUDE (created_at)
+        WHERE deleted_at IS NULL
+    `);
+
+    const definition = await pool.query<{ indexdef: string }>(
+      `SELECT indexdef
+         FROM pg_indexes
+        WHERE schemaname = current_schema()
+          AND tablename = 'uc_users'
+          AND indexname = 'uc_users_active_count_covering_idx'`
+    );
+    assert.equal(definition.rowCount, 1, "active-customer count index should exist");
+    assert.match(
+      definition.rows[0]!.indexdef,
+      /\(deleted_at\) INCLUDE \(created_at\) WHERE \(deleted_at IS NULL\)$/
+    );
+
+    // A small test database may rationally prefer a sequential scan. Disabling
+    // sequential scans lets EXPLAIN verify that this query shape is eligible for
+    // the partial index without depending on test data volume or planner costs.
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL enable_seqscan = off");
+      const plan = await client.query<{ "QUERY PLAN": string }>(`
+        EXPLAIN (COSTS OFF)
+        SELECT
+          COUNT(*)::int,
+          COUNT(*) FILTER (WHERE created_at >= date_trunc('week', now()))::int,
+          COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int
+        FROM uc_users
+        WHERE deleted_at IS NULL
+      `);
+      assert.match(
+        plan.rows.map(row => row["QUERY PLAN"]).join("\n"),
+        /Index Only Scan using uc_users_active_count_covering_idx/,
+        "customer count query should use the covering partial index without heap reads"
+      );
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
   });
 });
