@@ -29,6 +29,9 @@ import PersonalImpactSection from '@/components/PersonalImpactSection';
 import {
   clearProfileDraft,
   loadProfileDraft,
+  preserveProfileDraftAfterSaveError,
+  PROFILE_SESSION_EXPIRED_MESSAGE,
+  PROFILE_SIGN_IN_AGAIN_LABEL,
   saveProfileDraft,
   type ProfileDraftFields,
 } from '@/lib/profileDraft';
@@ -55,9 +58,12 @@ interface EditProfileModalProps {
   email:      string;
   onClose:    () => void;
   onSaved:    (updated: EditProfileForm) => void;
+  onSignInAgain: () => void;
 }
 
-function EditProfileModal({ visible, initial, accountId, email, onClose, onSaved }: EditProfileModalProps) {
+function EditProfileModal({
+  visible, initial, accountId, email, onClose, onSaved, onSignInAgain,
+}: EditProfileModalProps) {
   const colors  = useColors();
   const api     = useApi();
   const { updateUser } = useAuth();
@@ -65,25 +71,33 @@ function EditProfileModal({ visible, initial, accountId, email, onClose, onSaved
   const [form,    setForm]    = useState<EditProfileForm>(initial);
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [loadedAccountId, setLoadedAccountId] = useState<number | null>(null);
   const draftReady = useRef(false);
 
   useEffect(() => {
     if (!visible) {
       draftReady.current = false;
+      setLoadedAccountId(null);
       return;
     }
     let active = true;
+    draftReady.current = false;
     setError('');
+    setSessionExpired(false);
+    setLoadedAccountId(null);
     loadProfileDraft(accountId)
       .then(draft => {
         if (!active) return;
         setForm(draft ?? initial);
         draftReady.current = true;
+        setLoadedAccountId(accountId);
       })
       .catch(() => {
         if (!active) return;
         setForm(initial);
         draftReady.current = true;
+        setLoadedAccountId(accountId);
       });
     return () => { active = false; };
   }, [
@@ -101,7 +115,7 @@ function EditProfileModal({ visible, initial, accountId, email, onClose, onSaved
   }, [accountId, form, saving, visible]);
 
   function handleClose() {
-    clearProfileDraft().catch(() => {});
+    if (!sessionExpired) clearProfileDraft().catch(() => {});
     onClose();
   }
 
@@ -147,14 +161,23 @@ function EditProfileModal({ visible, initial, accountId, email, onClose, onSaved
       });
       await clearProfileDraft();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+      if (await preserveProfileDraftAfterSaveError(accountId, form, err)) {
+        setSessionExpired(true);
+        setError(PROFILE_SESSION_EXPIRED_MESSAGE);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+    <Modal
+      visible={visible && loadedAccountId === accountId}
+      animationType="slide"
+      transparent
+      onRequestClose={handleClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -271,6 +294,16 @@ function EditProfileModal({ visible, initial, accountId, email, onClose, onSaved
                 </View>
               )}
 
+              {sessionExpired && (
+                <TouchableOpacity
+                  onPress={onSignInAgain}
+                  style={[editStyles.sessionBtn, { borderColor: colors.primary }]}>
+                  <Text style={[editStyles.sessionBtnText, { color: colors.primary }]}>
+                    {PROFILE_SIGN_IN_AGAIN_LABEL}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* Save button */}
               <TouchableOpacity
                 onPress={handleSave}
@@ -309,6 +342,8 @@ const editStyles = StyleSheet.create({
   errorText:   { flex: 1, fontSize: 13 },
   saveBtn:     { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' as const },
+  sessionBtn: { borderWidth: 1.5, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  sessionBtnText: { fontSize: 15, fontWeight: '700' as const },
 });
 
 // ── Delete Account Confirmation Modal ─────────────────────────────────────────
@@ -466,6 +501,14 @@ function AccountScreenContent() {
       setEditModalVisible(true);
     }
   }, [editProfile, user]);
+
+  async function signInAgainForProfile() {
+    await logout();
+    router.push({
+      pathname: '/auth/login',
+      params: { returnTo: '/account?editProfile=1' },
+    } as never);
+  }
 
   async function handleExportData() {
     if (exporting) return;
@@ -923,6 +966,7 @@ function AccountScreenContent() {
         email={user.email}
         onClose={() => setEditModalVisible(false)}
         onSaved={() => setEditModalVisible(false)}
+        onSignInAgain={signInAgainForProfile}
       />
 
       {/* Delete Account Modal */}

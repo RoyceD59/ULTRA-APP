@@ -10,7 +10,7 @@
  * malicious param can never navigate anywhere unexpected.
  */
 
-const ALLOWED_RETURN_PATHS = ['/ticket/new', '/water-test'] as const;
+const ALLOWED_RETURN_PATHS = ['/ticket/new', '/water-test', '/account?editProfile=1'] as const;
 
 export type AllowedReturnPath = (typeof ALLOWED_RETURN_PATHS)[number];
 

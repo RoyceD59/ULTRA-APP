@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const PROFILE_DRAFT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+export const PROFILE_SESSION_EXPIRED_MESSAGE =
+  'Your session expired. Sign in again to finish saving these changes.';
+export const PROFILE_SIGN_IN_AGAIN_LABEL = 'Sign in again';
 
 const PROFILE_DRAFT_KEY = 'uc_profile_draft';
 let writeQueue: Promise<void> = Promise.resolve();
@@ -16,6 +19,11 @@ export interface ProfileDraftFields {
   lastName: string;
   phone: string;
   address: string;
+}
+
+export interface OwnedProfileDraft {
+  accountId: number;
+  fields: ProfileDraftFields;
 }
 
 interface StoredProfileDraft {
@@ -74,7 +82,6 @@ export async function loadProfileDraft(
 
   if (
     !isStoredProfileDraft(parsed)
-    || parsed.accountId !== accountId
     || parsed.updatedAt > now
     || now - parsed.updatedAt > PROFILE_DRAFT_RETENTION_MS
   ) {
@@ -82,9 +89,51 @@ export async function loadProfileDraft(
     return null;
   }
 
+  if (parsed.accountId !== accountId) return null;
   return parsed.fields;
+}
+
+export async function loadOwnedProfileDraftSafely(accountId: number): Promise<OwnedProfileDraft | null> {
+  try {
+    const fields = await loadProfileDraft(accountId);
+    return fields ? { accountId, fields } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function shouldApplyLoadedProfileDraft(
+  requestedAccountId: number,
+  activeAccountId: number | null,
+): boolean {
+  return requestedAccountId === activeAccountId;
+}
+
+export function profileDraftForAccount(
+  owned: OwnedProfileDraft | null,
+  accountId: number,
+): ProfileDraftFields | null {
+  return owned?.accountId === accountId ? owned.fields : null;
 }
 
 export async function clearProfileDraft(): Promise<void> {
   await enqueueWrite(() => AsyncStorage.removeItem(PROFILE_DRAFT_KEY));
+}
+
+export function isExpiredProfileSession(error: unknown): error is { status: number } {
+  if (!error || typeof error !== 'object' || !('status' in error)) return false;
+  const candidate = error as { status?: unknown; body?: unknown };
+  if (candidate.status === 401) return true;
+  if (candidate.status !== 403 || !candidate.body || typeof candidate.body !== 'object') return false;
+  return (candidate.body as Record<string, unknown>)['code'] === 'SESSION_EXPIRED';
+}
+
+export async function preserveProfileDraftAfterSaveError(
+  accountId: number,
+  fields: ProfileDraftFields,
+  error: unknown,
+): Promise<boolean> {
+  if (!isExpiredProfileSession(error)) return false;
+  await saveProfileDraft(accountId, fields);
+  return true;
 }
