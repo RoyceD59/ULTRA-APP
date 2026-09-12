@@ -194,6 +194,36 @@ describe('replacement reminders for a newly set lifespan', () => {
     assertOffsets(scheduledOffsetsDays(activatedAt), [30, 60, 60, 75]);
   });
 
+  it('Portable Water Filter Pump gains its full reminder schedule when lifespan changes from 0 to 120', async () => {
+    const userId = 8147;
+    const activatedAt = new Date(Date.now() - 10 * DAY).toISOString();
+    _storage.set(`uc_filter_activation_${userId}`, JSON.stringify({
+      productId: 8147,
+      productName: 'Portable Water Filter Pump',
+      activatedAt,
+      lifespanDays: 0,
+      notifIds: [],
+    }));
+
+    const updated = await syncActivationWithCatalogue([
+      { id: 8147, lifespanDays: 120, name: 'Portable Water Filter Pump' },
+    ], userId);
+
+    assert.ok(updated, 'expected the valid catalogue lifespan to reschedule the activation');
+    assert.equal(updated.lifespanDays, 120);
+    assert.equal(updated.activatedAt, activatedAt, 'the original activation date must be preserved');
+    assert.ok(updated.notifIds.length > 0, 'the corrected activation must contain scheduled notification IDs');
+
+    const activationMs = new Date(activatedAt).getTime();
+    const now = Date.now();
+    const replacementOffsets = _requests
+      .filter(request => ['discount_30', 'discount_15'].includes(request.content.data.type))
+      .map(request => (now + request.trigger.seconds * 1000 - activationMs) / DAY)
+      .sort((a, b) => a - b);
+
+    assertOffsets(replacementOffsets, [90, 105]);
+  });
+
   it('lifespan-0 product never reaches the scheduler through the sync path either', async () => {
     _storage.set('uc_filter_activation', JSON.stringify({
       productId: DISPENSER.id, productName: DISPENSER.name,
