@@ -20,6 +20,7 @@
     "hooks/mpesaStatusClassifier.ts",
     "hooks/mpesaRetryGuard.ts",
     "hooks/reminderOptInStorage.ts",
+    "hooks/reminderOptInFlow.ts",
     "context/cartStorage.ts",
     "context/CartContext.tsx",
     "lib/formDrafts.ts",

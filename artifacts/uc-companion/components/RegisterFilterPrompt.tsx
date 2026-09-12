@@ -41,6 +41,7 @@ import {
   markReplacementNudgeDismissed,
 } from '@/hooks/filterNudge';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
+import { resolveReminderOptInActivation } from '@/hooks/reminderOptInFlow';
 
 interface Props {
   /** Called after the user completes registration from the prompt. */
@@ -239,13 +240,14 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
               // unlike the closure-captured `user`, the ref always reflects the
               // currently rendered user — an account switch will have updated it
               // before the setState call runs.
-              if (!isReplace && token && user) {
-                const initiatingUserId = user.id;
-                const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt, initiatingUserId);
-                if (!alreadySeen && currentUserIdRef.current === initiatingUserId) {
-                  setPendingOptIn(a);
-                }
-              }
+              const optInActivation = await resolveReminderOptInActivation({
+                activation: a,
+                isReplacement: !!isReplace,
+                initiatingUserId: token && user ? user.id : null,
+                getCurrentUserId: () => currentUserIdRef.current,
+                wasSeen: wasReminderOptInSeen,
+              });
+              if (optInActivation) setPendingOptIn(optInActivation);
             }}
           />
         </>
