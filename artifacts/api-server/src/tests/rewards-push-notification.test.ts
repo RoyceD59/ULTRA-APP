@@ -323,7 +323,14 @@ describe("Rewards push notification — admin grant endpoint", () => {
 
   it("accepts the exact rewards QR payload rendered by a customer account", async () => {
     await clearPushToken();
-    const appQrPayload = `uc-rewards:${testUserId}:+254700099801`;
+    const rewards = await apiFetch("/api/uc/customer/rewards", {
+      method: "GET",
+      headers: { Authorization: adminAuthHeader() },
+    });
+    assert.equal(rewards.status, 200, `expected rewards QR token: ${JSON.stringify(rewards.body)}`);
+    const qrToken = (rewards.body as { qrToken?: string }).qrToken;
+    assert.ok(qrToken, "customer rewards response must issue a QR token");
+    const appQrPayload = `uc-rewards:v1:${qrToken}`;
 
     const r = await apiFetch("/api/uc/admin/rewards/grant", {
       method: "POST",
