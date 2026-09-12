@@ -110,7 +110,10 @@ after(async () => {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Seed (or replace) the filter-reminder row for the test user. */
-async function seedReminder(activatedAt: Date): Promise<void> {
+async function seedReminder(
+  activatedAt: Date,
+  sentStages: string[] = [],
+): Promise<void> {
   await db
     .insert(ucFilterRemindersTable)
     .values({
@@ -119,7 +122,7 @@ async function seedReminder(activatedAt: Date): Promise<void> {
       productName: "Test Filter",
       lifespanDays: 90,
       activatedAt,
-      sentStages: [],
+      sentStages,
       active: true,
     })
     .onConflictDoUpdate({
@@ -129,7 +132,7 @@ async function seedReminder(activatedAt: Date): Promise<void> {
         productName: "Test Filter",
         lifespanDays: 90,
         activatedAt,
-        sentStages: [],
+        sentStages,
         active: true,
         updatedAt: new Date(),
       },
@@ -184,6 +187,80 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
     );
     assert.equal(s3.stagesSent, 0, "stagesSent must be 0 on the third run");
   });
+
+  for (const {
+    stage,
+    daysSinceActivation,
+    previouslyHandled,
+  } of [
+    {
+      stage: "day30",
+      daysSinceActivation: 31,
+      previouslyHandled: ["activation"],
+    },
+    {
+      stage: "day60",
+      daysSinceActivation: 61,
+      previouslyHandled: ["activation", "day30", "replace30"],
+    },
+    {
+      stage: "replace30",
+      daysSinceActivation: 61,
+      previouslyHandled: ["activation", "day30", "day60"],
+    },
+    {
+      stage: "replace15",
+      daysSinceActivation: 76,
+      previouslyHandled: ["activation", "day30", "day60", "replace30"],
+    },
+  ] as const) {
+    it(`two concurrent runs claim ${stage} exactly once and a third run sends nothing`, async () => {
+      const activatedAt = new Date(Date.now() - daysSinceActivation * 86_400_000);
+      await seedReminder(activatedAt, [...previouslyHandled]);
+      resetCounter();
+
+      const [first, second] = await Promise.all([
+        dispatchFilterReminders(),
+        dispatchFilterReminders(),
+      ]);
+
+      assert.equal(
+        resendCallCount,
+        1,
+        `expected exactly 1 Resend call for ${stage} across both runs, got ${resendCallCount}`,
+      );
+      assert.equal(
+        first.stagesSent + second.stagesSent,
+        1,
+        `combined stagesSent for ${stage} must be 1`,
+      );
+
+      const [row] = await db
+        .select({ sentStages: ucFilterRemindersTable.sentStages })
+        .from(ucFilterRemindersTable)
+        .where(eq(ucFilterRemindersTable.userId, String(testUserId)))
+        .limit(1);
+      const claimedStages = Array.isArray(row?.sentStages) ? row.sentStages : [];
+      assert.equal(
+        claimedStages.filter((claimed) => claimed === stage).length,
+        1,
+        `${stage} must be recorded exactly once`,
+      );
+
+      resetCounter();
+      const third = await dispatchFilterReminders();
+      assert.equal(
+        resendCallCount,
+        0,
+        `third run for ${stage} must send 0 emails`,
+      );
+      assert.equal(
+        third.stagesSent,
+        0,
+        `third run for ${stage} must report 0 stagesSent`,
+      );
+    });
+  }
 
   it("a cycle reset (new activatedAt + cleared sentStages) allows exactly one new send", async () => {
     // Simulate the user replacing their filter: new activatedAt, blank sentStages.
