@@ -33,6 +33,11 @@ const _setExecutionEnvironment: (value: ExecutionEnvironment) => void =
 const _setPlatform: (value: 'ios' | 'android' | 'web') => void =
   (ReactNativeStub as any).__setPlatform;
 const _getPushTokenFetchCount: () => number = (notifStub as any)._getPushTokenFetchCount;
+const _getPermissionRequestCount: () => number = (notifStub as any)._getPermissionRequestCount;
+const _setPermissionStatus: (s: 'granted' | 'denied' | 'undetermined') => void =
+  (notifStub as any)._setPermissionStatus;
+const _setPermissionRequestResult: (s: 'granted' | 'denied' | 'undetermined') => void =
+  (notifStub as any)._setPermissionRequestResult;
 const _scheduled: string[] = (notifStub as any)._scheduled;
 
 import {
@@ -94,6 +99,32 @@ describe('Android Expo Go runtime boundary', () => {
 
     assert.equal(_getPushTokenFetchCount(), 0);
     assert.equal(posts.length, 0);
+  });
+});
+
+describe('standalone Android order-update registration', () => {
+  beforeEach(() => {
+    _setPlatform('android');
+    _setExecutionEnvironment(ExecutionEnvironment.Standalone);
+  });
+
+  it('requests permission, retrieves the Expo token, and registers it exactly once', async () => {
+    _setPermissionStatus('undetermined');
+    _setPermissionRequestResult('granted');
+    _setPushToken('ExponentPushToken[installed-android]');
+
+    const registered = await registerCurrentPushToken(
+      'auth-tok',
+      { allowPrompt: true, force: true },
+    );
+    await syncPushTokenWithServer('auth-tok');
+
+    assert.equal(registered, true);
+    assert.equal(_getPermissionRequestCount(), 1);
+    assert.equal(_getPushTokenFetchCount(), 2);
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0]!.pushToken, 'ExponentPushToken[installed-android]');
+    assert.equal(_storage.get(REGISTERED_KEY), 'ExponentPushToken[installed-android]');
   });
 });
 

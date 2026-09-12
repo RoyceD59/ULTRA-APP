@@ -16,16 +16,24 @@ const _pushState = {
   token: 'ExponentPushToken[test-1]',
   delayMs: 0,
   fetchCount: 0,
+  permissionRequestCount: 0,
 };
 export function _setPushToken(t: string): void { _pushState.token = t; }
 export function _setPushTokenDelay(ms: number): void { _pushState.delayMs = ms; }
 export function _getPushTokenFetchCount(): number { return _pushState.fetchCount; }
+export function _getPermissionRequestCount(): number { return _pushState.permissionRequestCount; }
 
 // Permission state — tests can override to simulate denied/undetermined.
 let _permStatus: 'granted' | 'denied' | 'undetermined' = 'granted';
+let _permissionRequestResult: 'granted' | 'denied' | 'undetermined' | null = null;
 /** Override the permission status returned by getPermissionsAsync/requestPermissionsAsync. */
 export function _setPermissionStatus(s: 'granted' | 'denied' | 'undetermined'): void {
   _permStatus = s;
+}
+export function _setPermissionRequestResult(
+  s: 'granted' | 'denied' | 'undetermined',
+): void {
+  _permissionRequestResult = s;
 }
 
 export function _reset(): void {
@@ -36,7 +44,9 @@ export function _reset(): void {
   _pushState.token = 'ExponentPushToken[test-1]';
   _pushState.delayMs = 0;
   _pushState.fetchCount = 0;
+  _pushState.permissionRequestCount = 0;
   _permStatus = 'granted';
+  _permissionRequestResult = null;
 }
 
 export async function getExpoPushTokenAsync(): Promise<{ data: string }> {
@@ -60,10 +70,13 @@ export async function getPermissionsAsync() {
 }
 
 export async function requestPermissionsAsync() {
+  _pushState.permissionRequestCount++;
+  const status = _permissionRequestResult ?? _permStatus;
+  _permStatus = status;
   return {
-    status: _permStatus,
-    granted: _permStatus === 'granted',
-    canAskAgain: false,
+    status,
+    granted: status === 'granted',
+    canAskAgain: status === 'undetermined',
   };
 }
 
