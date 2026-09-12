@@ -329,8 +329,8 @@ export function useApi() {
     return h;
   }, [token]);
 
-  const get = useCallback(async <T>(path: string): Promise<T> => {
-    const res = await fetch(`${getBase()}${path}`, { headers: authHeaders() });
+  const get = useCallback(async <T>(path: string, signal?: AbortSignal): Promise<T> => {
+    const res = await fetch(`${getBase()}${path}`, { headers: authHeaders(), signal });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as Record<string, unknown>;
       throw new ApiError(String(body['error'] ?? res.status), res.status, body);
@@ -365,11 +365,11 @@ export function useApi() {
   }, [authHeaders]);
 
   return {
-    getProducts: (params?: { category?: string; search?: string }) => {
+    getProducts: (params?: { category?: string; search?: string }, signal?: AbortSignal) => {
       const qs = new URLSearchParams();
       if (params?.category) qs.set('category', params.category);
       if (params?.search) qs.set('search', params.search);
-      return get<UCProduct[]>(`/api/uc/products?${qs}`);
+      return get<UCProduct[]>(`/api/uc/products?${qs}`, signal);
     },
     getProduct: (id: number) => get<UCProduct>(`/api/uc/products/${id}`),
     getCompatibilityProducts: (skus: string) =>

@@ -16,6 +16,7 @@ import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
+import { catalogueQueryKey } from '@/lib/catalogueQuery';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -73,8 +74,8 @@ function HomeScreenContent() {
   const topPad = Platform.OS === 'web' ? 67 : 0;
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products', 'featured'],
-    queryFn: () => api.getProducts(),
+    queryKey: catalogueQueryKey(),
+    queryFn: ({ signal }) => api.getProducts(undefined, signal),
     staleTime: 5 * 60 * 1000,
   });
 

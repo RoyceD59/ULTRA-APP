@@ -19,6 +19,11 @@ import HorizontalCarousel from '@/components/HorizontalCarousel';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORE_CATEGORIES, visibleStoreCategory, type StoreCategory } from '@/lib/storeCategories';
+import {
+  catalogueQueryKey,
+  normalizeCatalogueParams,
+  scheduleCatalogueSearch,
+} from '@/lib/catalogueQuery';
 
 const CATEGORIES = STORE_CATEGORIES;
 
@@ -93,7 +98,13 @@ function ProductsScreenContent() {
   const cartBarInset = useCartBarInset();
 
   const [search, setSearch] = useState('');
+  const [settledSearch, setSettledSearch] = useState('');
   const [category, setCategory] = useState<StoreCategory>('All');
+
+  useEffect(
+    () => scheduleCatalogueSearch(search, setSettledSearch),
+    [search],
+  );
 
   // Products can be reached from a product-category chip or a deep link. Keep
   // the UI state derived from the route so a back navigation never loses the
@@ -188,11 +199,14 @@ function ProductsScreenContent() {
 
   // Main products query
   const { data: products, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['products', category, search],
-    queryFn: () => api.getProducts({
+    queryKey: catalogueQueryKey({
       category: category === 'All' ? undefined : category,
-      search: search || undefined,
+      search: settledSearch,
     }),
+    queryFn: ({ signal }) => api.getProducts(normalizeCatalogueParams({
+      category: category === 'All' ? undefined : category,
+      search: settledSearch,
+    }), signal),
     staleTime: 2 * 60 * 1000,
   });
 

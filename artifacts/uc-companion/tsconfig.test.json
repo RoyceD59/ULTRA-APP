@@ -24,6 +24,7 @@
     "context/CartContext.tsx",
     "lib/formDrafts.ts",
     "lib/passwordReset.ts",
+    "lib/catalogueQuery.ts",
     "components/MediaPicker.tsx",
     "__mocks__/expo-file-system.ts",
     "__mocks__/expo-constants.ts"
