@@ -230,6 +230,12 @@ describe("Paystack webhook — recovery order correctness", () => {
         );
 
         assert.equal(
+          row!.paymentReference,
+          reference,
+          `paymentReference must equal the Paystack reference "${reference}"; got "${row!.paymentReference}"`,
+        );
+
+        assert.equal(
           row!.webhookRecovery,
           true,
           `webhookRecovery must be true on a recovery row; got ${row!.webhookRecovery}`,

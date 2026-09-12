@@ -34,6 +34,7 @@ import {
   ucUsersTable,
   ucFilterRemindersTable,
   ucNotifPrefsTable,
+  ucRewardsLedgerTable,
 } from "@workspace/db";
 import { dispatchFilterReminders } from "../lib/reminder-dispatch.js";
 
@@ -104,6 +105,9 @@ after(async () => {
   await db
     .delete(ucNotifPrefsTable)
     .where(eq(ucNotifPrefsTable.userId, String(testUserId)));
+  await db
+    .delete(ucRewardsLedgerTable)
+    .where(eq(ucRewardsLedgerTable.userId, testUserId));
   await db.delete(ucUsersTable).where(eq(ucUsersTable.id, testUserId));
 });
 
