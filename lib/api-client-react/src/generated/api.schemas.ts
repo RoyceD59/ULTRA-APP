@@ -825,3 +825,4 @@ export type SendWhatsAppQuickMessage400 = {
 export type SendWhatsAppQuickMessage503 = {
   error?: string;
 };
+
