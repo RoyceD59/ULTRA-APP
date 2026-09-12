@@ -1671,7 +1671,7 @@ components:
     AnthropicConversationInput:
       type: object
       properties:
-        title: { type: string }
+        title: { type: string, maxLength: 80 }
       required: [title]
     AnthropicMessageInput:
       type: object

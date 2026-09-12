@@ -253,6 +253,7 @@ export interface AnthropicMessage {
 }
 
 export interface AnthropicConversationInput {
+  /** @maxLength 80 */
   title: string;
 }
 
@@ -824,4 +825,3 @@ export type SendWhatsAppQuickMessage400 = {
 export type SendWhatsAppQuickMessage503 = {
   error?: string;
 };
-

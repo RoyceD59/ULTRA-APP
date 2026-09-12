@@ -7,5 +7,6 @@
  */
 
 export interface AnthropicConversationInput {
+  /** @maxLength 80 */
   title: string;
 }
