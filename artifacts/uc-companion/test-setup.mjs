@@ -29,6 +29,8 @@ const STUBS = {
     path.join(mocks, 'react-jsx-runtime.ts'),
   'react-native':
     path.join(mocks, 'react-native.ts'),
+  '@expo/vector-icons':
+    path.join(mocks, '@expo-vector-icons.ts'),
   'expo-notifications':
     path.join(mocks, 'expo-notifications.ts'),
   'expo-constants':

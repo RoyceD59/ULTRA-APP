@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import BrandLogo from '@/components/BrandLogo';
 import SocialAuthButtons from '@/components/SocialAuthButtons';
+import RegistrationErrorNotice from '@/components/RegistrationErrorNotice';
 import { resolveReturnTo } from '@/lib/authReturn';
 
 // ── Phone helpers ─────────────────────────────────────────────────────────────
@@ -223,22 +224,15 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           {registerError && (
-            <View style={[styles.errorBox, { backgroundColor: colors.card, borderColor: '#EF4444' }]}>
-              <Ionicons name="alert-circle-outline" size={16} color="#EF4444" style={{ marginTop: 1 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.errorMsg}>{registerError.message}</Text>
-                {registerError.hint === 'forgot_password' && (
-                  <TouchableOpacity
-                    onPress={() => router.push(
-                      ({ pathname: '/auth/forgot-password', params: { email: email.trim() } } as never)
-                    )}
-                    style={styles.forgotBtn}
-                  >
-                    <Text style={[styles.forgotBtnText, { color: colors.primary }]}>Forgot password?</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+            <RegistrationErrorNotice
+              message={registerError.message}
+              hint={registerError.hint}
+              primaryColor={colors.primary}
+              cardColor={colors.card}
+              onForgotPassword={() => router.push(
+                ({ pathname: '/auth/forgot-password', params: { email: email.trim() } } as never)
+              )}
+            />
           )}
         </View>
 
@@ -274,10 +268,6 @@ const styles = StyleSheet.create({
   inputInner:     { flex: 1, fontSize: 16 },
   registerBtn:    { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   registerBtnText:{ color: '#fff', fontSize: 16, fontWeight: '700' as const },
-  errorBox:       { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1, borderRadius: 10, padding: 12 },
-  errorMsg:       { fontSize: 13, color: '#EF4444', lineHeight: 18 },
-  forgotBtn:      { marginTop: 6 },
-  forgotBtnText:  { fontSize: 13, fontWeight: '600' as const, textDecorationLine: 'underline' },
   footer:         { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
   footerText:     { fontSize: 14 },
   footerLink:     { fontSize: 14, fontWeight: '600' as const },

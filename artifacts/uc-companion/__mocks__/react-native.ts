@@ -1,6 +1,9 @@
 /** Minimal react-native stub for the Node.js test runner. */
 export const Platform: { OS: 'ios' | 'android' | 'web' } = { OS: 'ios' };
 export const Alert    = { alert: () => {} };
+export const Text = 'Text';
+export const TouchableOpacity = 'TouchableOpacity';
+export const View = 'View';
 
 // ── Controllable AppState mock ────────────────────────────────────────────────
 // Tests drive foreground/background transitions via __setAppState() and can
