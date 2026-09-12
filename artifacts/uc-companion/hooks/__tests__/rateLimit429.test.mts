@@ -62,7 +62,7 @@ describe('isRateLimitError', () => {
   });
 });
 
-// ── Checkout classification (Paystack init / Stripe session / M-Pesa push) ───
+// ── Checkout classification (payment init and Paystack verification) ─────────
 
 describe('classifyPaymentInitError — checkout handlers', () => {
   it('429 → rate_limited with the exact required wording (OK-only alert, no retry buttons)', () => {
@@ -97,6 +97,22 @@ describe('classifyPaymentInitError — checkout handlers', () => {
       const action = classifyPaymentInitError(new ApiError('x', 429, body));
       assert.equal(action.kind, 'rate_limited', `429 with body ${JSON.stringify(body)}`);
     }
+  });
+});
+
+describe('classifyPaymentInitError — Paystack verify path', () => {
+  it('429 keeps verification in the OK-only rate-limit branch instead of decline or retry', () => {
+    const originalReference = 'paystack_verify_ref_123';
+    const action = classifyPaymentInitError(
+      new ApiError(`Verification rate-limited for ${originalReference}`, 429, {}),
+    );
+
+    assert.deepEqual(action, {
+      kind: 'rate_limited',
+      title: RATE_LIMIT_TITLE,
+      message: RATE_LIMIT_MESSAGE,
+    });
+    assert.equal(originalReference, 'paystack_verify_ref_123');
   });
 });
 

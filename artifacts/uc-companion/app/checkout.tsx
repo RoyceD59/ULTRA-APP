@@ -548,9 +548,14 @@ export default function CheckoutScreen() {
       }
     } catch (e) {
       setProcessing(false);
-      // Distinguish a transient server blip (retryable) from a permanent decline.
-      const isRetryable = e instanceof ApiError ? e.retryable : true;
-      if (isRetryable) {
+      // Classify verification failures without discarding `reference`: a later
+      // manual checkout retry can still verify the same payment reference.
+      const action = classifyPaymentInitError(e);
+      if (action.kind === 'rate_limited') {
+        // No buttons array: React Native shows only the default OK action, so
+        // the customer cannot immediately bypass the verification rate limit.
+        Alert.alert(action.title, action.message);
+      } else if (action.kind === 'retry_dialog') {
         Alert.alert(
           'Paystack Unavailable',
           'Paystack could not confirm your payment. Your card has not been charged again. You can try again or place your order with Cash on Delivery.',
