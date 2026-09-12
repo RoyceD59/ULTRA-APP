@@ -159,7 +159,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
     // Grant admin access via env var
     process.env["UC_ADMIN_EMAILS"] = TEST_EMAIL;
 
-    // Order A — pending, no line items
+    // Order A — pending webhook-recovery order, no line items
     const [orderA] = await db
       .insert(ucOrdersTable)
       .values({
@@ -180,7 +180,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
           country: "KE",
           phone: "+254700000001",
         },
-        webhookRecovery: false,
+        webhookRecovery: true,
       })
       .returning({ id: ucOrdersTable.id });
     if (!orderA) throw new Error("Failed to insert order A");
@@ -551,6 +551,30 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
       orderBPresent,
       false,
       "Order B (processing, 2 items) must not appear in a ?status=pending filtered CSV",
+    );
+  });
+
+  it("?webhookRecovery=true contains only webhook-recovery orders", async () => {
+    const { status, text } = await apiFetch(
+      "/api/uc/admin/orders.csv?webhookRecovery=true",
+      { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
+    );
+
+    assert.equal(status, 200);
+    const dataRows = text.split("\r\n").filter(line => line.trim()).slice(1);
+    const fixtureRows = dataRows
+      .map(parseCsvRow)
+      .filter(cells => insertedOrderIds.includes(Number(cells[0])));
+
+    assert.deepEqual(
+      fixtureRows.map(cells => Number(cells[0])),
+      [insertedOrderIds[0]],
+      "Recovery-only CSV must include the recovery fixture and exclude normal orders",
+    );
+    assert.equal(
+      fixtureRows[0]?.[11],
+      "true",
+      "Every row in the recovery-only CSV must be marked as webhook recovery",
     );
   });
 });

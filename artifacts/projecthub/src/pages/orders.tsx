@@ -592,6 +592,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
     try {
       const params = buildParams();
       if (statusFilter) params.set("status", statusFilter);
+      if (recoveryOnly) params.set("webhookRecovery", "true");
       const url = `${BASE}/api/uc/admin/orders.csv${params.size ? `?${params}` : ""}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },

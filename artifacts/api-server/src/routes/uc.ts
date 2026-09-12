@@ -3676,7 +3676,7 @@ function csvTimestamp(): string {
 }
 
 // GET /api/uc/admin/orders.csv — CSV download of all orders with line items expanded.
-// Accepts optional ?status= filter. Protected by admin auth.
+// Accepts optional ?status= and ?webhookRecovery=true filters. Protected by admin auth.
 router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<void> => {
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
@@ -3687,12 +3687,14 @@ router.get("/uc/admin/orders.csv", async (req: Request, res: Response): Promise<
   try {
     const statusFilter = typeof req.query["status"] === "string" && req.query["status"].trim()
       ? req.query["status"].trim() : null;
+    const webhookRecoveryOnly = req.query["webhookRecovery"] === "true";
 
     const orders = await db
       .select()
       .from(ucOrdersTable)
       .where(and(
         statusFilter ? eq(ucOrdersTable.status, statusFilter) : undefined,
+        webhookRecoveryOnly ? eq(ucOrdersTable.webhookRecovery, true) : undefined,
         dateRange.from ? sql`${ucOrdersTable.dateCreated}::date >= ${dateRange.from}::date` : undefined,
         dateRange.to   ? sql`${ucOrdersTable.dateCreated}::date <= ${dateRange.to}::date`   : undefined,
       ))
