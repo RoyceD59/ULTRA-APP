@@ -37,11 +37,15 @@ const _storage: Map<string, string> = (AsyncStorageStub as any)._storage;
 const _resetStorage: () => void     = (AsyncStorageStub as any)._reset;
 
 // ── Module under test ─────────────────────────────────────────────────────────
-import { syncActivationWithCatalogue } from '../useNotifications.js';
+import {
+  getZeroLifespanNotice,
+  syncActivationWithCatalogue,
+} from '../useNotifications.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const FILTER_ACTIVATION_KEY = 'uc_filter_activation';
+const ZERO_LIFESPAN_KEY = 'uc_zero_lifespan_notice';
 
 /** ISO timestamp for N days ago. */
 function daysAgo(n: number): string {
@@ -98,6 +102,42 @@ describe('syncActivationWithCatalogue', () => {
       { id: 1, lifespanDays: 90, name: 'Hydra Flux' },
     ]);
     assert.equal(result, null);
+  });
+
+  it('persists the untrackable notice after a bad sync and clears it after store data is fixed', async () => {
+    seedActivation({ lifespanDays: 90 });
+
+    const badSync = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 0, name: 'Hydra Flux' },
+    ]);
+
+    assert.equal(badSync, null, 'a zero lifespan must not replace the valid activation');
+    assert.equal(
+      _storage.get(ZERO_LIFESPAN_KEY),
+      'true',
+      'the bad sync must persist the notice for a later app session',
+    );
+    assert.equal(
+      await getZeroLifespanNotice(),
+      true,
+      'a fresh notice read after the sync must see the persisted flag',
+    );
+
+    const correctiveSync = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 90, name: 'Hydra Flux' },
+    ]);
+
+    assert.equal(correctiveSync, null, 'matching restored data needs no reschedule');
+    assert.equal(
+      _storage.has(ZERO_LIFESPAN_KEY),
+      false,
+      'the corrective sync must remove the persisted notice flag',
+    );
+    assert.equal(
+      await getZeroLifespanNotice(),
+      false,
+      'a fresh notice read must reflect that the store data is valid again',
+    );
   });
 
   it('reschedules and returns an updated activation when the lifespan has changed', async () => {
