@@ -7,8 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import BrandLogo from '@/components/BrandLogo';
-import { readResetTokenParam } from '@/lib/passwordReset';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { getResetRequestError, readResetTokenParam } from '@/lib/passwordReset';
 
 export default function ForgotPasswordScreen() {
   const colors = useColors();
@@ -47,8 +47,8 @@ export default function ForgotPasswordScreen() {
       if (res.ok) {
         setSent(true);
       } else {
-        const data = await res.json() as { error?: string };
-        setError(data.error ?? 'Something went wrong. Please try again.');
+        const data = await res.json() as { error?: unknown };
+        setError(getResetRequestError(res.status, data));
       }
     } catch {
       setError('Network error. Please check your connection and try again.');
