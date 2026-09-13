@@ -1,7 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LifespanAuditWarning } from "./dashboard";
+import Dashboard, { LifespanAuditWarning } from "./dashboard";
+
+vi.mock("@workspace/api-client-react", () => ({
+  useGetDashboardSummary: () => ({
+    data: {
+      activeProjects: 2,
+      totalProjects: 3,
+      tasksDueThisWeek: 4,
+      overdueTasks: 1,
+      totalTasks: 10,
+      statusBreakdown: { todo: 3, in_progress: 2, in_review: 1, done: 4 },
+    },
+    isLoading: false,
+  }),
+  useGetDashboardActivity: () => ({
+    data: [],
+    isLoading: false,
+  }),
+}));
 
 // ── Silence fetch (the component calls it inside useQuery) ─────────────────
 beforeEach(() => {
@@ -123,6 +141,45 @@ function renderWithLiveFetch() {
   );
   return { ...result, qc };
 }
+
+describe("Dashboard – registered customers", () => {
+  it("shows admin customer totals after a successful count response", async () => {
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/uc/admin/customers/count")) {
+        return new Response(
+          JSON.stringify({ count: 42, newThisWeek: 5, newThisMonth: 18 }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.includes("/api/uc/admin/products/lifespan-audit")) {
+        return new Response(null, { status: 403 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <Dashboard />
+      </QueryClientProvider>,
+    );
+
+    const total = await screen.findByText("42");
+    const card = total.closest(".rounded-xl");
+    expect(card).not.toBeNull();
+
+    const customerCard = within(card as HTMLElement);
+    expect(customerCard.getByText("Registered Customers")).toBeInTheDocument();
+    expect(total).toBeInTheDocument();
+    expect(customerCard.getByText("5")).toBeInTheDocument();
+    expect(customerCard.getByText("this week")).toBeInTheDocument();
+    expect(customerCard.getByText("18")).toBeInTheDocument();
+    expect(customerCard.getByText("this month")).toBeInTheDocument();
+  });
+});
 
 describe("LifespanAuditWarning – hidden on auth or network failure", () => {
   it("renders nothing when the store returns 403 (non-admin member)", async () => {
