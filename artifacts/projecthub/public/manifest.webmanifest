@@ -1,0 +1,26 @@
+{
+  "name": "ProjectHub — Ultra-Clear Operations",
+  "short_name": "ProjectHub",
+  "description": "Ultra-Clear team operations, customers, rewards, impact, orders and tasks.",
+  "id": ".",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#005d8f",
+  "icons": [
+    {
+      "src": "icons/projecthub-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/projecthub-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

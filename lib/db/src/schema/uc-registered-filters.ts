@@ -10,11 +10,12 @@ export const ucRegisteredFiltersTable = pgTable("uc_registered_filters", {
   ratedCapacityLitres: integer("rated_capacity_litres").notNull(),
   activatedAt: timestamp("activated_at", { withTimezone: true }).notNull(),
   sourceOrderId: integer("source_order_id"),
+  source: text("source").notNull().default("legacy"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex("uc_registered_filters_user_order_product_idx")
-    .on(t.userId, t.sourceOrderId, t.productId),
+  uniqueIndex("uc_registered_filters_source_order_product_idx")
+    .on(t.source, t.sourceOrderId, t.productId),
   index("uc_registered_filters_user_active_idx").on(t.userId, t.active),
 ]);
 

@@ -214,6 +214,14 @@ export default function OrderDetailScreen() {
           </Text>
         </View>
         <View style={styles.infoRow}>
+          <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Payment Status</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{order.paymentStatus ?? 'Pending'}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Fulfilment</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{order.fulfillmentStatus ?? order.status}</Text>
+        </View>
+        <View style={styles.infoRow}>
           <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Total</Text>
           <Text style={[styles.infoValue, { color: colors.primary, fontWeight: '700' as const }]}>
             {order.currency} {parseFloat(order.total).toLocaleString('en-KE')}
@@ -250,6 +258,12 @@ export default function OrderDetailScreen() {
           {order.shippingAddress.phone && (
             <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{order.shippingAddress.phone}</Text>
           )}
+          {order.delivery?.method ? (
+            <Text style={[styles.addressText, { color: colors.mutedForeground }]}>Delivery: {order.delivery.method}</Text>
+          ) : null}
+          {order.delivery?.trackingNumber ? (
+            <Text style={[styles.addressText, { color: colors.mutedForeground }]}>Tracking: {order.delivery.trackingNumber}</Text>
+          ) : null}
         </View>
       )}
 

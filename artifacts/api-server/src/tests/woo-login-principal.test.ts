@@ -18,12 +18,22 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { inArray } from "drizzle-orm";
+import { db, ucUsersTable } from "@workspace/db";
 
 // ── Stub WordPress JWT endpoint ──────────────────────────────────────────────
 // Mimics the wp-json/jwt-auth/v1/token response shape; echoes the username
 // back as user_email like the real plugin does.
 let wooStub: http.Server;
 let server: http.Server;
+const suffix = `${Date.now()}-${process.pid}`;
+const wooEmails = {
+  alice: `woo-alice-${suffix}@example.com`,
+  bob: `woo-bob-${suffix}@example.com`,
+  stable: `woo-stable-${suffix}@example.com`,
+  nonadmin: `woo-nonadmin-${suffix}@example.com`,
+  profile: `woo-profile-${suffix}@example.com`,
+};
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-woo-principal-tests";
@@ -61,6 +71,9 @@ before(async () => {
 
 after(async () => {
   delete process.env["WC_BASE_URL"];
+  await db.delete(ucUsersTable).where(inArray(ucUsersTable.email, [
+    ...Object.values(wooEmails),
+  ]));
   await new Promise<void>((resolve, reject) => server.close(e => (e ? reject(e) : resolve())));
   await new Promise<void>((resolve, reject) => wooStub.close(e => (e ? reject(e) : resolve())));
 });
@@ -89,23 +102,22 @@ async function wooLogin(email: string): Promise<{ token: string; user: { id: num
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 describe("WooCommerce login principal identity", () => {
-  it("gives two distinct Woo users distinct principal ids, both >= 1e9", async () => {
-    const a = await wooLogin("woo-alice@example.com");
-    const b = await wooLogin("woo-bob@example.com");
+  it("provisions distinct DB-backed Companion identities for Woo users", async () => {
+    const a = await wooLogin(wooEmails.alice);
+    const b = await wooLogin(wooEmails.bob);
     assert.notEqual(a.user.id, b.user.id, "distinct users must not share a principal id");
-    assert.ok(a.user.id >= 1_000_000_000, "Woo principal id must be >= 1e9 (non-DB range)");
-    assert.ok(b.user.id >= 1_000_000_000, "Woo principal id must be >= 1e9 (non-DB range)");
-    assert.notEqual(a.user.id, 1, "must not be the legacy hardcoded id 1");
+    assert.ok(a.user.id > 0 && a.user.id < 1_000_000_000);
+    assert.ok(b.user.id > 0 && b.user.id < 1_000_000_000);
   });
 
   it("gives the same Woo user the same principal id across logins", async () => {
-    const first = await wooLogin("woo-stable@example.com");
-    const second = await wooLogin("woo-stable@example.com");
+    const first = await wooLogin(wooEmails.stable);
+    const second = await wooLogin(wooEmails.stable);
     assert.equal(first.user.id, second.user.id, "principal id must be stable per email");
   });
 
   it("denies a Woo-authenticated token on /uc/admin/* routes", async () => {
-    const { token } = await wooLogin("woo-nonadmin@example.com");
+    const { token } = await wooLogin(wooEmails.nonadmin);
     const r = await apiFetch("/api/uc/admin/products/1/media", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -118,12 +130,26 @@ describe("WooCommerce login principal identity", () => {
   });
 
   it("never reports isAdmin: true for a Woo-authenticated profile", async () => {
-    const { token } = await wooLogin("woo-profile@example.com");
+    const { token } = await wooLogin(wooEmails.profile);
     const r = await apiFetch("/api/uc/customer/profile", {
       headers: { Authorization: `Bearer ${token}` },
     });
     assert.equal(r.status, 200);
     const profile = r.body as { isAdmin?: boolean };
     assert.notEqual(profile.isAdmin, true, "Woo principal must never resolve as admin");
+  });
+
+  it("lets a provisioned Woo customer load rewards and a QR token", async () => {
+    const { token } = await wooLogin(wooEmails.alice);
+    const first = await apiFetch("/api/uc/customer/rewards", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(first.status, 200);
+    assert.match(String((first.body as { qrToken?: string }).qrToken), /^[A-Za-z0-9_-]{40,64}$/);
+
+    const second = await apiFetch("/api/uc/customer/rewards", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(second.status, 200);
   });
 });

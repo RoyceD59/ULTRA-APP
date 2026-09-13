@@ -5,7 +5,7 @@
  * from the UC Companion app. Includes a "Download CSV" button that respects the
  * active status filter.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +171,7 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
   const [stageResult, setStageResult] = useState("");
   const [stageError, setStageError] = useState("");
   const [deliveryReference, setDeliveryReference] = useState("");
+  const stageIdempotencyRef = useRef<{ stage: CustomerStage; key: string } | null>(null);
 
   // Auto-dismiss the "Saved ✓" confirmation after ~2 seconds
   useEffect(() => {
@@ -208,11 +209,14 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
   async function changeCustomerStage(stage: CustomerStage) {
     if (stageSaving) return;
     setStageSaving(stage); setStageError(""); setStageResult("");
+    if (stageIdempotencyRef.current?.stage !== stage) {
+      stageIdempotencyRef.current = { stage, key: crypto.randomUUID() };
+    }
     try {
       const res = await fetch(`${BASE}/api/uc/admin/water-tests/${test.id}/customer-stage`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ stage, ...(deliveryReference.trim() ? { resultDeliveryReference: deliveryReference.trim() } : {}) }),
+        body: JSON.stringify({ stage, idempotencyKey: stageIdempotencyRef.current.key, ...(deliveryReference.trim() ? { resultDeliveryReference: deliveryReference.trim() } : {}) }),
       });
       const body = await res.json().catch(() => ({})) as { error?: string; notification?: { status?: string; message?: string }; push?: { status?: string; message?: string }; customerStage?: string };
       if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
@@ -283,7 +287,7 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
               disabled={s === test.status || updating}
               onClick={() => changeStatus(s)}
               className={[
-                "text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                "min-h-11 sm:min-h-7 text-xs px-2.5 py-0.5 rounded-full border transition-colors",
                 s === test.status
                   ? `${statusColor(s)} border-transparent cursor-default opacity-70`
                   : "border-border hover:bg-muted disabled:opacity-40 cursor-pointer",
@@ -301,10 +305,10 @@ function WaterTestCard({ test, token, onUpdate }: WaterTestCardProps) {
         <div className="pt-3 mt-3 border-t space-y-2">
           <p className="text-xs font-medium">Customer-facing test update <span className="font-normal text-muted-foreground">— separate from internal booking status</span></p>
           {(!test.hasResult && !deliveryReference) && <div className="max-w-sm"><Label htmlFor={`result-reference-${test.id}`} className="text-xs">Result-delivery reference <span className="text-muted-foreground">(required before Result sent if no result is attached)</span></Label><Input id={`result-reference-${test.id}`} className="h-8 mt-1 text-xs" value={deliveryReference} onChange={event => setDeliveryReference(event.target.value)} placeholder="Result link, file, or delivery note" /></div>}
-          <div className="flex flex-wrap gap-1.5">{CUSTOMER_STAGES.map((stage, index) => {
+          <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap">{CUSTOMER_STAGES.map((stage, index) => {
             const current = test.customerStage ? CUSTOMER_STAGES.indexOf(test.customerStage) : -1;
             const needsReference = stage === "result_sent" && !test.hasResult && !deliveryReference.trim();
-            return <Button key={stage} size="sm" variant={test.customerStage === stage ? "default" : "outline"} className="h-7 text-xs" disabled={stageSaving !== null || index <= current || needsReference} onClick={() => changeCustomerStage(stage)}>{stageSaving === stage ? "Saving…" : customerStageLabel(stage)}</Button>;
+            return <Button key={stage} size="sm" variant={test.customerStage === stage ? "default" : "outline"} className="min-h-11 sm:min-h-7 text-xs px-1 sm:px-3" disabled={stageSaving !== null || index <= current || needsReference} onClick={() => changeCustomerStage(stage)}>{stageSaving === stage ? "Saving…" : customerStageLabel(stage)}</Button>;
           })}</div>
           {stageResult && <p className="text-xs text-emerald-700" role="status">{stageResult}</p>}
           {stageError && <p className="text-xs text-destructive" role="alert">{stageError}</p>}
@@ -413,7 +417,7 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Droplets className="w-6 h-6" />
@@ -423,7 +427,7 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
             Customer water test booking requests from the Companion app.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 sm:w-auto sm:flex sm:items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -434,11 +438,11 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
             <Download className={`w-4 h-4 mr-2 ${exporting ? "animate-pulse" : ""}`} />
             {exporting ? "Downloading…" : "Download CSV"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          <Button className="min-h-11" variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} title="Sign out">
+          <Button className="min-h-11" variant="ghost" size="sm" onClick={onLogout} title="Sign out" aria-label="Sign out">
             <LogOut className="w-4 h-4" />
           </Button>
         </div>
@@ -446,37 +450,37 @@ function WaterTestsList({ token, onLogout }: { token: string; onLogout: () => vo
 
       {/* Filters row: status tabs + date range */}
       <div className="space-y-3">
-        <div className="flex gap-2 flex-wrap">
+        <div className="grid grid-cols-2 sm:flex gap-2">
           {(["all", ...STATUSES] as StatusFilter[]).map(s => (
             <Button
               key={s}
               variant={statusFilter === s ? "default" : "outline"}
-              size="sm"
+              size="sm" className="min-h-11"
               onClick={() => setStatusFilter(s)}
             >
               {s === "all" ? "All" : statusLabel(s)}
             </Button>
           ))}
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 sm:flex sm:items-center gap-3">
+          <div className="grid grid-cols-[auto_1fr] items-center gap-2">
             <Label htmlFor="wt-from" className="text-sm text-muted-foreground whitespace-nowrap">From</Label>
             <Input
               id="wt-from"
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="w-40 h-8 text-sm"
+              className="w-full sm:w-40 min-h-11 sm:min-h-8 text-sm"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-[auto_1fr] items-center gap-2">
             <Label htmlFor="wt-to" className="text-sm text-muted-foreground whitespace-nowrap">To</Label>
             <Input
               id="wt-to"
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="w-40 h-8 text-sm"
+              className="w-full sm:w-40 min-h-11 sm:min-h-8 text-sm"
             />
           </div>
           {(fromDate || toDate) && (

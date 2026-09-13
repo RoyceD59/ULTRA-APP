@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, Alert, ActivityIndicator, KeyboardAvoidingView, ScrollView } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, Alert, ActivityIndicator, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import BrandLogo from '@/components/BrandLogo';
 import SocialAuthButtons from '@/components/SocialAuthButtons';
 import { resolveReturnTo } from '@/lib/authReturn';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -19,6 +20,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
 
   /** After auth, land back on the form that sent us here (draft restores there). */
   function navigateAfterAuth() {
@@ -28,6 +30,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!email || !password) { Alert.alert('Required', 'Enter your email and password.'); return; }
+    Keyboard.dismiss();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     const result = await login(email.trim(), password);
@@ -38,8 +41,8 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView style={[styles.screen, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollViewCompat style={[styles.screen, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
         {/* Brand */}
         <BrandLogo width={104} style={{ marginBottom: 4 }} />
@@ -53,7 +56,8 @@ export default function LoginScreen() {
               <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
               <TextInput value={email} onChangeText={setEmail}
                 placeholder="you@example.com" keyboardType="email-address"
-                autoCapitalize="none" placeholderTextColor={colors.border}
+                 autoCapitalize="none" autoComplete="email" returnKeyType="next"
+                 onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.input, { color: colors.text }]} />
             </View>
           </View>
@@ -62,9 +66,10 @@ export default function LoginScreen() {
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Password</Text>
             <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
               <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
-              <TextInput value={password} onChangeText={setPassword}
+              <TextInput ref={passwordRef} value={password} onChangeText={setPassword}
                 placeholder="••••••••" secureTextEntry={!showPass}
-                placeholderTextColor={colors.border}
+                 autoComplete="current-password" autoCapitalize="none" returnKeyType="done"
+                 onSubmitEditing={handleLogin} placeholderTextColor={colors.border}
                 style={[styles.input, { color: colors.text }]} />
               <TouchableOpacity onPress={() => setShowPass(!showPass)}>
                 <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.mutedForeground} />
@@ -103,7 +108,7 @@ export default function LoginScreen() {
             <Text style={[styles.footerLink, { color: colors.primary }]}>Create account</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </KeyboardAvoidingView>
   );
 }

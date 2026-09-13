@@ -15,13 +15,16 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
-  Platform, ActivityIndicator, TextInput,
+  Platform, ActivityIndicator, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { commitPurchaseBackedRegistration } from '@/lib/filterRegistrationCommit';
 import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
@@ -335,6 +338,8 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
           onActivationChange(a);
           onRegistrationCommitted?.();
           setShowRegisterModal(false);
+          setToastMessage(`${a.productName} registered successfully. Your reminders are ready.`);
+          setToastVisible(true);
           // Invite signed-in users to enable message reminder channels.
           // Only show the prompt once per registration (keyed by productId+activatedAt).
           if (token && user) {
@@ -394,13 +399,12 @@ export function RegisterModal({
 }: ModalProps) {
   const colors = useColors();
   const api = useApi();
-  const [step, setStep]         = useState<1 | 2>(1);
-  const [productId, setProductId]     = useState<number | null>(null);
-  const [dayOffset, setDayOffset]     = useState(0);
+  const queryClient = useQueryClient();
   const [saving, setSaving]     = useState(false);
 
   // ── Receipt-based registration state ──────────────────────────────────────
-  const [mode, setMode]                 = useState<'catalogue' | 'receipt'>('catalogue');
+  // There is deliberately no catalogue mode: all registration side effects
+  // happen only after /filters/register-purchase has committed ownership.
   const [receipt, setReceipt]           = useState('');
   const [phone, setPhone]               = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -414,55 +418,20 @@ export function RegisterModal({
 
   const reset = useCallback(() => {
     lookupSeq.current++;
-    setStep(1); setProductId(null); setDayOffset(0); setSaving(false);
-    setMode('catalogue'); setReceipt(''); setPhone('');
+    setSaving(false); setReceipt(''); setPhone('');
     setLookupLoading(false); setLookupError(''); setPurchase(null);
   }, []);
 
-  // Apply pre-selection each time the modal opens. When a product is supplied
-  // (and exists in the catalogue) the picker step is skipped — the user lands
-  // on the date step with the purchase-date-based offset already selected.
+  // Clear an old lookup each time the sheet opens. Catalogue nudge props are
+  // intentionally ignored; they cannot establish ownership.
   const wasVisible = useRef(false);
   useEffect(() => {
     if (visible && !wasVisible.current) {
-      const preselected = initialProductId != null &&
-        filterProducts.some(p => p.id === initialProductId);
-      setProductId(preselected ? initialProductId : null);
-      setDayOffset(preselected ? closestDayOffset(initialDayOffset) : 0);
-      setStep(preselected ? 2 : 1);
       setSaving(false);
-      setMode('catalogue'); setPurchase(null); setLookupError('');
+      setPurchase(null); setLookupError('');
     }
     wasVisible.current = visible;
   }, [visible, initialProductId, initialDayOffset, filterProducts]);
-
-  const selectedProduct = filterProducts.find(p => p.id === productId);
-
-  async function handleSave() {
-    if (!selectedProduct || savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
-    try {
-      // Ensure permission is granted before scheduling
-      const status = await getNotificationPermissionStatus();
-      if (status !== 'granted') {
-        await requestNotificationPermission();
-      }
-
-      const activatedAt = new Date(Date.now() - dayOffset * 86_400_000).toISOString();
-      const activation = await scheduleAllFilterNotifications({
-        activatedAt,
-        productId:    selectedProduct.id,
-        productName:  selectedProduct.name,
-        lifespanDays: selectedProduct.lifespanDays,
-      }, userId);
-      onSave(activation);
-      reset();
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }
 
   // ── Receipt flow handlers ──────────────────────────────────────────────────
   async function handleLookup() {
@@ -511,22 +480,33 @@ export function RegisterModal({
         await requestNotificationPermission();
       }
       const activatedAt = purchase.dateCreated || new Date().toISOString();
-      // Commit the selected receipt item before storing local reminder state.
-      // This is what makes the filter available to the capacity-enforced impact
-      // ledger; a failed commit deliberately schedules no local reminders.
-      await api.registerFilterPurchase(receipt.trim(), phone.trim(), {
-        productId: item.productId,
-        activatedAt,
-      });
-      const activation = await scheduleAllFilterNotifications({
-        activatedAt,
-        productId:     item.productId,
-        productName:   item.name,
-        lifespanDays:  item.lifespanDays,
-        sourceOrderId: purchase.orderId,
-      }, userId);
-      onSave(activation);
+      await commitPurchaseBackedRegistration(
+        () => api.registerFilterPurchase(receipt.trim(), phone.trim(), {
+          productId: item.productId,
+          activatedAt,
+        }),
+        () => scheduleAllFilterNotifications({
+          activatedAt,
+          productId:     item.productId,
+          productName:   item.name,
+          lifespanDays:  item.lifespanDays,
+          sourceOrderId: purchase.orderId,
+        }, userId),
+        onSave,
+      );
+      // Refresh only after durable registration so the capacity-backed impact
+      // card reflects the newly registered filter.
+      await queryClient.invalidateQueries({ queryKey: ['customer-rewards'] });
       reset();
+    } catch (e) {
+      // Keep the verified purchase selection visible so the customer can retry
+      // rather than re-entering their receipt. The server's unique index makes
+      // a second commit safe from duplicate registrations.
+      setLookupError(
+        e instanceof ApiError
+          ? e.message
+          : 'Registration could not be completed. Please try again.',
+      );
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -537,49 +517,40 @@ export function RegisterModal({
     lookupSeq.current++; // cancel any in-flight lookup
     setLookupError('');
     setLookupLoading(false);
-    if (mode === 'receipt') {
-      if (purchase) setPurchase(null);
-      else setMode('catalogue');
-    } else {
-      setStep(1);
-    }
+    if (purchase) setPurchase(null);
   }
 
   function handleClose() { reset(); onClose(); }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={[styles.sheet, { backgroundColor: colors.background }]}>
           {/* Handle */}
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           {/* Header */}
           <View style={styles.sheetHeader}>
-            {(step === 2 || mode === 'receipt') && (
+            {purchase && (
               <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
                 <Ionicons name="chevron-back" size={22} color={colors.primary} />
               </TouchableOpacity>
             )}
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              {mode === 'receipt'
-                ? purchase ? 'Select Your Filter' : 'Register with Receipt'
-                : step === 1
-                ? existingActivation ? 'New Filter Installed' : 'Register Your Filter'
-                : 'When was it installed?'}
+              {purchase ? 'Select Your Filter' : 'Register with Receipt'}
             </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          {mode === 'receipt' ? (
-            purchase === null ? (
+          {purchase === null ? (
               /* Receipt step A: receipt number + phone */
-              <ScrollView
+              <KeyboardAwareScrollViewCompat
                 style={{ flex: 1 }}
                 contentContainerStyle={styles.sheetBody}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}>
                 <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
                   Enter the receipt (order) number from your purchase and the
@@ -592,6 +563,8 @@ export function RegisterModal({
                   placeholder="Receipt number, e.g. 1024"
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="number-pad"
+                  inputMode="numeric"
+                  returnKeyType="next"
                   autoCorrect={false}
                   style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
                 />
@@ -601,6 +574,9 @@ export function RegisterModal({
                   placeholder="Phone used at purchase, e.g. 07XX XXX XXX"
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
+                  autoComplete="tel"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLookup}
                   autoCorrect={false}
                   style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
                 />
@@ -622,7 +598,7 @@ export function RegisterModal({
                     ? <ActivityIndicator color="#fff" size="small" />
                     : <Text style={styles.saveBtnTxt}>Find My Purchase</Text>}
                 </TouchableOpacity>
-              </ScrollView>
+              </KeyboardAwareScrollViewCompat>
             ) : (
               /* Receipt step B: pick the filter line from the purchase */
               <ScrollView
@@ -674,102 +650,9 @@ export function RegisterModal({
                   <Text style={[styles.errorText, { color: '#EF4444' }]}>{lookupError}</Text>
                 )}
               </ScrollView>
-            )
-          ) : step === 1 ? (
-            /* Step 1: Product picker */
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sheetBody} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
-                Select the filter you installed:
-              </Text>
-              {productsLoading && filterProducts.length === 0 && (
-                <ActivityIndicator style={{ marginVertical: 20 }} color={colors.primary} />
-              )}
-              {filterProducts.map(p => (
-                <TouchableOpacity
-                  key={p.id}
-                  onPress={() => { setProductId(p.id); setStep(2); }}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.productRow,
-                    { backgroundColor: colors.card, borderColor: productId === p.id ? colors.primary : colors.border },
-                  ]}>
-                  <View style={[styles.productIconWrap, { backgroundColor: colors.primaryLight }]}>
-                    <Ionicons name={p.icon as never} size={18} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.productRowName, { color: colors.text }]}>{p.name}</Text>
-                    <Text style={[styles.productRowLife, { color: colors.mutedForeground }]}>
-                      {p.lifespanDays < 90
-                        ? `${p.lifespanDays}-day lifespan`
-                        : p.lifespanDays < 365
-                        ? `${Math.round(p.lifespanDays / 30)}-month lifespan`
-                        : `${Math.round(p.lifespanDays / 365)}-year lifespan`}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              ))}
-
-              {/* Receipt-based entry point */}
-              <TouchableOpacity
-                onPress={() => { setLookupError(''); setMode('receipt'); }}
-                activeOpacity={0.8}
-                style={[styles.receiptLink, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="receipt-outline" size={16} color={colors.primary} />
-                <Text style={[styles.receiptLinkText, { color: colors.primary }]}>
-                  Bought from us? Register with your receipt number
-                </Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-              </TouchableOpacity>
-            </ScrollView>
-          ) : (
-            /* Step 2: Date picker */
-            <View style={[styles.sheetBody, { flex: 1 }]}>
-              <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
-                {selectedProduct?.name} — {selectedProduct?.lifespanDays}-day lifespan
-              </Text>
-              <Text style={[styles.stepHint, { color: colors.mutedForeground, marginTop: 4, marginBottom: 8 }]}>
-                How long ago did you install it?
-              </Text>
-              <View style={{ gap: 10 }}>
-                {DAY_OFFSETS.map(o => (
-                  <TouchableOpacity
-                    key={o.days}
-                    onPress={() => setDayOffset(o.days)}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.offsetRow,
-                      {
-                        backgroundColor: dayOffset === o.days ? colors.primary : colors.card,
-                        borderColor: dayOffset === o.days ? colors.primary : colors.border,
-                      },
-                    ]}>
-                    <Text style={[
-                      styles.offsetLabel,
-                      { color: dayOffset === o.days ? '#fff' : colors.text },
-                    ]}>
-                      {o.label}
-                    </Text>
-                    {dayOffset === o.days && <Ionicons name="checkmark" size={18} color="#fff" />}
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                onPress={handleSave}
-                disabled={saving}
-                activeOpacity={0.85}
-                style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}>
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.saveBtnTxt}>
-                      {existingActivation ? 'Record Replacement' : 'Register & Schedule Reminders'}
-                    </Text>}
-              </TouchableOpacity>
-            </View>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

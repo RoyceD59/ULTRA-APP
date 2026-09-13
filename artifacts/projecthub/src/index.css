@@ -205,6 +205,27 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    min-width: 320px;
+    overflow-x: hidden;
+  }
+
+  button, a, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@media (display-mode: standalone) {
+  .app-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .app-safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
 

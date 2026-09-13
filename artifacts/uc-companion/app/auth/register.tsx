@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Platform,
   Alert, ActivityIndicator, KeyboardAvoidingView, ScrollView,
@@ -14,6 +13,8 @@ import RegistrationErrorNotice from '@/components/RegistrationErrorNotice';
 import { resolveReturnTo } from '@/lib/authReturn';
 
 // ── Phone helpers ─────────────────────────────────────────────────────────────
+import React, { useRef, useState } from 'react';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
 /**
  * Normalise to E.164 for Kenya (+254):
@@ -65,6 +66,11 @@ export default function RegisterScreen() {
   const [showPass,     setShowPass]     = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [registerError, setRegisterError] = useState<{ message: string; hint?: string } | null>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const referralRef = useRef<TextInput>(null);
 
   function handlePhoneChange(text: string) {
     setPhone(liveFormatPhone(text));
@@ -83,6 +89,7 @@ export default function RegisterScreen() {
       Alert.alert('Invalid phone number', 'Enter a valid number, e.g. 0712 345678 or +254 712 345678.');
       return;
     }
+    Keyboard.dismiss();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRegisterError(null);
     setLoading(true);
@@ -110,8 +117,8 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView style={[styles.screen, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollViewCompat style={[styles.screen, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
         <BrandLogo width={84} style={{ marginBottom: 4 }} />
         <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
@@ -125,14 +132,18 @@ export default function RegisterScreen() {
               <TextInput
                 value={firstName} onChangeText={setFirstName}
                 placeholder="Jane" placeholderTextColor={colors.border}
+                autoComplete="given-name" autoCapitalize="words" returnKeyType="next"
+                onSubmitEditing={() => lastNameRef.current?.focus()} blurOnSubmit={false}
                 style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
               />
             </View>
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Last name</Text>
-              <TextInput
+              <TextInput ref={lastNameRef}
                 value={lastName} onChangeText={setLastName}
                 placeholder="Doe" placeholderTextColor={colors.border}
+                autoComplete="family-name" autoCapitalize="words" returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()} blurOnSubmit={false}
                 style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
               />
             </View>
@@ -143,10 +154,11 @@ export default function RegisterScreen() {
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email address *</Text>
             <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
               <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
-              <TextInput
+              <TextInput ref={emailRef}
                 value={email} onChangeText={setEmail}
                 placeholder="you@example.com" keyboardType="email-address"
-                autoCapitalize="none" placeholderTextColor={colors.border}
+                autoCapitalize="none" autoComplete="email" returnKeyType="next"
+                onSubmitEditing={() => phoneRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.inputInner, { color: colors.text }]}
               />
             </View>
@@ -160,10 +172,10 @@ export default function RegisterScreen() {
               { borderColor: phone && !isValidPhone(phone) ? '#EF4444' : colors.border, backgroundColor: colors.card },
             ]}>
               <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
-              <TextInput
+              <TextInput ref={phoneRef}
                 value={phone} onChangeText={handlePhoneChange}
                 placeholder="+254 7XX XXX XXX" keyboardType="phone-pad"
-                placeholderTextColor={colors.border}
+                autoComplete="tel" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.inputInner, { color: colors.text }]}
               />
               {phone && isValidPhone(phone) && (
@@ -180,10 +192,11 @@ export default function RegisterScreen() {
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Password *</Text>
             <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
               <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
-              <TextInput
+              <TextInput ref={passwordRef}
                 value={password} onChangeText={setPassword}
                 placeholder="Min. 6 characters" secureTextEntry={!showPass}
-                placeholderTextColor={colors.border}
+                autoComplete="new-password" autoCapitalize="none" returnKeyType="next"
+                onSubmitEditing={() => referralRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.inputInner, { color: colors.text }]}
               />
               <TouchableOpacity onPress={() => setShowPass(!showPass)}>
@@ -200,10 +213,10 @@ export default function RegisterScreen() {
               { borderColor: referralCode ? '#005d8f' : colors.border, backgroundColor: colors.card },
             ]}>
               <Ionicons name="gift-outline" size={18} color={referralCode ? '#005d8f' : colors.mutedForeground} />
-              <TextInput
+              <TextInput ref={referralRef}
                 value={referralCode} onChangeText={v => setReferralCode(v.toUpperCase())}
                 placeholder="e.g. JAMES-X4B2" autoCapitalize="characters"
-                placeholderTextColor={colors.border}
+                returnKeyType="done" onSubmitEditing={handleRegister} placeholderTextColor={colors.border}
                 style={[styles.inputInner, { color: colors.text }]}
               />
               {!!referralCode && <Ionicons name="checkmark-circle" size={18} color="#005d8f" />}
@@ -248,7 +261,7 @@ export default function RegisterScreen() {
             <Text style={[styles.footerLink, { color: colors.primary }]}>Sign in</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </KeyboardAvoidingView>
   );
 }

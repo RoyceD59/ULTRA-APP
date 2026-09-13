@@ -8,11 +8,10 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
-import { useApi, UCAddress, ApiError, type PaymentsConfig } from '@/hooks/useApi';
+import { useApi, UCAddress, ApiError, type PaymentsConfig, type CheckoutPromotionQuote } from '@/hooks/useApi';
 import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPicker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
-import { type CodeValidationResult } from '@/hooks/useApi';
 import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusClassifier';
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
@@ -189,11 +188,14 @@ export default function CheckoutScreen() {
   const [promoInput, setPromoInput] = useState('');
   const [showPromoField, setShowPromoField] = useState(false);
   const [promoValidating, setPromoValidating] = useState(false);
-  const [appliedCode, setAppliedCode] = useState<CodeValidationResult | null>(null);
+  const [appliedQuote, setAppliedQuote] = useState<CheckoutPromotionQuote | null>(null);
+  const [usingReferralDiscount, setUsingReferralDiscount] = useState(false);
+  // A payment confirmation can retry order persistence; keep its key stable
+  // until it succeeds so an intermittent connection cannot consume a promo twice.
+  const orderIdempotencyKeyRef = useRef<string | null>(null);
 
   const grossTotal = totalPrice + DELIVERY_FEE;
-  const discountAmount = appliedCode?.valid ? Math.round((grossTotal * appliedCode.discountPercent) / 100) : 0;
-  const total = grossTotal - discountAmount;
+  const total = appliedQuote?.total ?? grossTotal;
 
   function validateAddress(): boolean {
     const errors = checkAddress(address, paymentMethod === 'cod');
@@ -668,23 +670,46 @@ export default function CheckoutScreen() {
     if (!promoInput.trim()) return;
     setPromoValidating(true);
     try {
-      const result = await api.validateCode(promoInput.trim(), user?.email);
-      if (result.valid) {
-        setAppliedCode(result);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Alert.alert('Invalid code', result.label);
-        setAppliedCode(null);
-      }
-    } catch {
-      Alert.alert('Error', 'Could not validate code. Please try again.');
+      const quote = await api.quoteCheckoutPromotion({
+        code: promoInput.trim(),
+        lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
+      });
+      setAppliedQuote(quote);
+      setUsingReferralDiscount(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setAppliedQuote(null);
+      Alert.alert('Code not applied', error instanceof Error ? error.message : 'Could not validate this code. Please try again.');
+    } finally {
+      setPromoValidating(false);
+    }
+  }
+
+  async function applyReferralDiscount() {
+    if (!user) {
+      Alert.alert('Sign in required', 'Sign in to use a referral reward.');
+      return;
+    }
+    setPromoValidating(true);
+    try {
+      const quote = await api.quoteReferralDiscount({
+        lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
+      });
+      setAppliedQuote(quote);
+      setUsingReferralDiscount(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setAppliedQuote(null);
+      setUsingReferralDiscount(false);
+      Alert.alert('Referral reward unavailable', error instanceof Error ? error.message : 'No referral discount is available for this order.');
     } finally {
       setPromoValidating(false);
     }
   }
 
   function removePromoCode() {
-    setAppliedCode(null);
+    setAppliedQuote(null);
+    setUsingReferralDiscount(false);
     setPromoInput('');
   }
 
@@ -711,8 +736,9 @@ export default function CheckoutScreen() {
         paymentMethod: method,
         paymentReference: reference,
         shippingAddress: address,
-        promoCode: appliedCode?.valid ? promoInput.trim() : undefined,
-        userEmail: user?.email,
+        promoCode: appliedQuote?.promotion.code,
+        applyReferralDiscount: usingReferralDiscount,
+        idempotencyKey: orderIdempotencyKeyRef.current ?? (orderIdempotencyKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
       });
       clearCart();
       setMpesaWaiting(false);
@@ -730,6 +756,13 @@ export default function CheckoutScreen() {
         setAddressErrors(fields);
         const first = Object.values(fields)[0];
         Alert.alert('Check your delivery details', typeof first === 'string' ? first : 'Please review your name and phone number.');
+        return false;
+      }
+      if (e instanceof ApiError && e.status === 409) {
+        Alert.alert(
+          'Promotion could not be completed',
+          'Your promotion was not durably saved with this order. No payment/order retry was made. Please try again or continue without the code.',
+        );
         return false;
       }
       // Re-throw ApiError so callers (handlePaystack, handleStripeCheckout)
@@ -843,40 +876,49 @@ export default function CheckoutScreen() {
           style={[styles.promoToggle, { borderColor: colors.border }]}>
           <Ionicons name="gift-outline" size={16} color={colors.primary} />
           <Text style={[styles.promoToggleText, { color: colors.primary }]}>
-            {appliedCode?.valid ? `Code applied: ${promoInput.toUpperCase()}` : 'Have a referral or promo code?'}
+            {appliedQuote ? (usingReferralDiscount ? 'Referral reward applied' : `Code applied: ${appliedQuote.promotion.code}`) : 'Have a promo code or referral reward?'}
           </Text>
           <Ionicons name={showPromoField ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} />
         </TouchableOpacity>
 
         {showPromoField && (
           <View style={[styles.promoBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {appliedCode?.valid ? (
+            {appliedQuote ? (
               <View style={styles.promoApplied}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.promoAppliedTitle, { color: '#005d8f' }]}>
-                    🎉 {appliedCode.discountPercent}% off applied!
+                    🎉 {usingReferralDiscount ? 'Your referral reward is applied' : (appliedQuote.promotion.title ?? appliedQuote.promotion.label ?? 'Promotion applied')}
                   </Text>
-                  <Text style={[styles.promoAppliedSub, { color: colors.mutedForeground }]}>{appliedCode.label}</Text>
+                  <Text style={[styles.promoAppliedSub, { color: colors.mutedForeground }]}>Server-calculated discount: KES {appliedQuote.discountAmount.toLocaleString('en-KE')}</Text>
                 </View>
                 <TouchableOpacity onPress={removePromoCode}>
                   <Ionicons name="close-circle" size={22} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.promoRow}>
-                <TextInput
-                  value={promoInput} onChangeText={v => setPromoInput(v.toUpperCase())}
-                  placeholder="Enter code" autoCapitalize="characters"
-                  placeholderTextColor={colors.border}
-                  style={[styles.promoInput, { color: colors.text, borderColor: colors.border }]}
-                />
-                <TouchableOpacity onPress={applyPromoCode} disabled={promoValidating}
-                  style={[styles.promoApplyBtn, { backgroundColor: '#005d8f' }]}>
-                  {promoValidating
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={styles.promoApplyText}>Apply</Text>}
-                </TouchableOpacity>
-              </View>
+              <>
+                {user && (
+                  <TouchableOpacity onPress={applyReferralDiscount} disabled={promoValidating}
+                    style={[styles.referralApplyBtn, { borderColor: colors.primary }]}>
+                    <Ionicons name="gift-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.referralApplyText, { color: colors.primary }]}>Apply my available referral reward</Text>
+                  </TouchableOpacity>
+                )}
+                <View style={styles.promoRow}>
+                  <TextInput
+                    value={promoInput} onChangeText={v => { setPromoInput(v.toUpperCase()); setAppliedQuote(null); setUsingReferralDiscount(false); }}
+                    placeholder="Enter promo code" autoCapitalize="characters"
+                    placeholderTextColor={colors.border}
+                    style={[styles.promoInput, { color: colors.text, borderColor: colors.border }]}
+                  />
+                  <TouchableOpacity onPress={applyPromoCode} disabled={promoValidating}
+                    style={[styles.promoApplyBtn, { backgroundColor: '#005d8f' }]}>
+                    {promoValidating
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={styles.promoApplyText}>Apply</Text>}
+                  </TouchableOpacity>
+                </View>
+              </>
             )}
           </View>
         )}
@@ -894,12 +936,12 @@ export default function CheckoutScreen() {
             <Text style={[styles.sumLabel, { color: colors.mutedForeground }]}>Delivery</Text>
             <Text style={[styles.sumLabel, { color: colors.mutedForeground }]}>KES {DELIVERY_FEE.toLocaleString()}</Text>
           </View>
-          {discountAmount > 0 && (
+          {appliedQuote && (
             <View style={styles.sumRow}>
               <Text style={[styles.sumLabel, { color: '#005d8f' }]}>
-                Discount ({appliedCode?.discountPercent}% – {promoInput.toUpperCase()})
+                Discount ({usingReferralDiscount ? 'Referral reward' : appliedQuote.promotion.code})
               </Text>
-              <Text style={[styles.sumLabel, { color: '#005d8f' }]}>– KES {discountAmount.toLocaleString()}</Text>
+              <Text style={[styles.sumLabel, { color: '#005d8f' }]}>– KES {appliedQuote.discountAmount.toLocaleString('en-KE')}</Text>
             </View>
           )}
           <View style={styles.sumRow}>
@@ -1015,6 +1057,8 @@ const styles = StyleSheet.create({
   },
   promoApplyBtn: { borderRadius: 8, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   promoApplyText: { color: '#fff', fontSize: 14, fontWeight: '700' as const },
+  referralApplyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderRadius: 8, paddingVertical: 10, marginBottom: 10 },
+  referralApplyText: { fontSize: 13, fontWeight: '700' as const },
   promoApplied: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   promoAppliedTitle: { fontSize: 14, fontWeight: '700' as const },
   promoAppliedSub: { fontSize: 12, marginTop: 2 },

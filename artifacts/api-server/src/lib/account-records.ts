@@ -75,7 +75,7 @@ export interface AccountRecord {
   /** When this line was written to the folder. */
   recordedAt: string;
   /** How the record got here. */
-  source: "registration" | "social-registration" | "backfill";
+  source: "registration" | "social-registration" | "woocommerce-login" | "backfill";
   /** False when the DB insert failed and the folder is the only record. */
   dbPersisted: boolean;
   /** Latest reconciliation state, retained for staff visibility. */
@@ -99,9 +99,9 @@ export interface AccountRecordInput {
   lastName: string;
   email: string;
   phone: string;
-  authProvider: "password" | "social";
+  authProvider: "password" | "social" | "woocommerce";
   createdAt?: Date | string | null;
-  source: "registration" | "social-registration";
+  source: "registration" | "social-registration" | "woocommerce-login";
   dbPersisted: boolean;
 }
 

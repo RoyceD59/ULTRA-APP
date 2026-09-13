@@ -11,7 +11,12 @@
  */
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db, ucNotificationLogTable } from "@workspace/db";
+import { createHash } from "node:crypto";
 import { logger } from "./logger.js";
+
+interface SlackMessageOptions {
+  idempotencyKey?: string;
+}
 
 /**
  * Test seam — wraps sendSlackTeamMessage so tests can observe or stub calls
@@ -23,7 +28,7 @@ import { logger } from "./logger.js";
  * @internal — only intended for use by the test suite.
  */
 export const _slackSeams: {
-  sendMessage: ((text: string, template: string) => Promise<boolean>) | null;
+  sendMessage: ((text: string, template: string, options?: SlackMessageOptions) => Promise<boolean>) | null;
 } = {
   sendMessage: null,
 };
@@ -88,16 +93,27 @@ function logSlackAttempt(params: {
 export async function sendSlackTeamMessage(
   text: string,
   template = "TEAM_NOTIFICATION",
+  options?: SlackMessageOptions,
 ): Promise<boolean> {
   // Test seam: allow the test suite to intercept without replacing module bindings.
   if (_slackSeams.sendMessage !== null) {
-    return _slackSeams.sendMessage(text, template);
+    return _slackSeams.sendMessage(text, template, options);
   }
   let recipient = "slack-self-dm";
   try {
-    const userId = await resolveSelfUserId();
-    recipient = userId;
-    await slackCall("/chat.postMessage", { channel: userId, text });
+    const configuredChannel = process.env["SLACK_TEAM_CHANNEL_ID"]?.trim();
+    recipient = configuredChannel || await resolveSelfUserId();
+    const clientMessageId = options?.idempotencyKey
+      ? createHash("sha256").update(options.idempotencyKey).digest("hex").slice(0, 32).replace(
+          /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+          "$1-$2-$3-$4-$5",
+        )
+      : undefined;
+    await slackCall("/chat.postMessage", {
+      channel: recipient,
+      text,
+      ...(clientMessageId ? { client_msg_id: clientMessageId } : {}),
+    });
     logSlackAttempt({ recipient, template, messageBody: text, status: "sent" });
     return true;
   } catch (err) {

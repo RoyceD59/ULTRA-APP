@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import { AppLayout } from "./AppLayout";
 
 // ── Mock team-auth: admin user, full page access ────────────────────────────
@@ -99,5 +99,22 @@ describe("security banner dismissal persistence", () => {
     });
     // Secret is set, so no banner either way
     expect(screen.queryByText(BANNER_TEXT)).toBeNull();
+  });
+});
+
+describe("mobile navigation", () => {
+  it("opens a keyboard-accessible navigation drawer", async () => {
+    mockFetch("env");
+    render(<AppLayout>content</AppLayout>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+
+    const drawer = await screen.findByRole("dialog");
+    expect(screen.getAllByRole("navigation", { name: "Primary navigation" }).length).toBeGreaterThan(0);
+    expect(within(drawer).getByRole("link", { name: "Dashboard" })).toBeTruthy();
+    expect(within(drawer).queryByRole("button", { name: "Dashboard" })).toBeNull();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

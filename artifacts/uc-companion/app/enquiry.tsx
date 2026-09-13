@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Platform, ActivityIndicator, KeyboardAvoidingView,
+  TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
 export default function EnquiryScreen() {
   const { productId, productName } = useLocalSearchParams<{ productId: string; productName: string }>();
@@ -24,6 +25,9 @@ export default function EnquiryScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const [error, setError]           = useState('');
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const messageRef = useRef<TextInput>(null);
 
   const handleSubmit = async () => {
     if (!name.trim() || !email.trim() || !phone.trim() || !message.trim()) {
@@ -34,6 +38,7 @@ export default function EnquiryScreen() {
       setError('Please enter a valid email address.');
       return;
     }
+    Keyboard.dismiss();
     setError('');
     setSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -91,9 +96,10 @@ export default function EnquiryScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}>
 
         {/* Product badge */}
@@ -110,16 +116,16 @@ export default function EnquiryScreen() {
 
         {/* Fields */}
         <View style={styles.fields}>
-          <Field label="Full name" value={name} onChangeText={setName}
-            placeholder="Your name" colors={colors} />
-          <Field label="Email" value={email} onChangeText={setEmail}
+          <Field label="Full name" value={name} onChangeText={setName} inputRef={undefined}
+            placeholder="Your name" autoComplete="name" returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} colors={colors} />
+          <Field label="Email" value={email} onChangeText={setEmail} inputRef={emailRef}
             placeholder="you@example.com" keyboardType="email-address"
-            autoCapitalize="none" colors={colors} />
-          <Field label="Phone number" value={phone} onChangeText={setPhone}
-            placeholder="+254 7XX XXX XXX" keyboardType="phone-pad" colors={colors} />
-          <Field label="Message" value={message} onChangeText={setMessage}
+            autoCapitalize="none" autoComplete="email" returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} colors={colors} />
+          <Field label="Phone number" value={phone} onChangeText={setPhone} inputRef={phoneRef}
+            placeholder="+254 7XX XXX XXX" keyboardType="phone-pad" autoComplete="tel" returnKeyType="next" onSubmitEditing={() => messageRef.current?.focus()} colors={colors} />
+          <Field label="Message" value={message} onChangeText={setMessage} inputRef={messageRef}
             placeholder={`Tell us more about what you need — quantity, size, intended use, or any questions about ${productName ?? 'this product'}.`}
-            multiline numberOfLines={4} colors={colors} />
+            multiline numberOfLines={4} autoCapitalize="sentences" returnKeyType="done" onSubmitEditing={handleSubmit} colors={colors} />
         </View>
 
         {!!error && (
@@ -155,14 +161,14 @@ export default function EnquiryScreen() {
             <Text style={[styles.altText, { color: colors.mutedForeground }]}>0717774049</Text>
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </KeyboardAvoidingView>
   );
 }
 
 function Field({
   label, value, onChangeText, placeholder, keyboardType, autoCapitalize,
-  multiline, numberOfLines, colors,
+  multiline, numberOfLines, autoComplete, returnKeyType, onSubmitEditing, inputRef, colors,
 }: {
   label: string;
   value: string;
@@ -172,20 +178,29 @@ function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words';
   multiline?: boolean;
   numberOfLines?: number;
+  autoComplete?: 'email' | 'name' | 'tel';
+  returnKeyType?: 'next' | 'done';
+  onSubmitEditing?: () => void;
+  inputRef?: React.RefObject<TextInput | null>;
   colors: ReturnType<typeof import('@/hooks/useColors').useColors>;
 }) {
   return (
     <View style={styles.fieldWrap}>
       <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.mutedForeground}
         keyboardType={keyboardType ?? 'default'}
         autoCapitalize={autoCapitalize ?? 'words'}
+        autoComplete={autoComplete}
         multiline={multiline}
         numberOfLines={numberOfLines}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        blurOnSubmit={!multiline}
         textAlignVertical={multiline ? 'top' : 'center'}
         style={[
           styles.input,

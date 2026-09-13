@@ -122,13 +122,18 @@ export interface UCEnquiry {
 
 export interface UCOrder {
   id: number;
+  orderNumber?: number | string;
   status: string;
+  /** Separate payment and fulfilment values stay current after order sync. */
+  paymentStatus?: string;
+  fulfillmentStatus?: string;
   dateCreated: string;
   total: string;
   currency: string;
   lineItems: { productId: number; name: string; quantity: number; total: string }[];
   paymentMethod: string;
   shippingAddress: UCAddress;
+  delivery?: { method: string; trackingNumber: string | null };
 }
 
 export interface UCAddress {
@@ -149,17 +154,21 @@ export interface UCCustomer {
   lastName: string;
   billing: UCAddress;
   shipping: UCAddress;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
 }
 
 export interface MapLocation {
   id: string;
-  type: 'experience_centre' | 'refill_atm';
+  /** Locations are published from the verified locations table. */
+  type: 'experience_centre' | 'refill_atm' | 'vendor';
   name: string;
   address: string;
   lat: number;
   lng: number;
   hours: string;
   phone: string | null;
+  vendorName: string | null;
 }
 
 export interface MaintenanceTicket {
@@ -234,13 +243,25 @@ export interface PaymentVerifyResult {
 
 export interface UCReferralInfo {
   code: string;
-  referredCount: number;
-  conversions: number;
-  creditsEarnedKes: number;
-  usedReferralCode: string | null;
+  successfulReferrals: number;
+  referralLimit: number;
+  pointsEarned: number;
+  /** An attribution exists but has not yet qualified through an eligible purchase. */
+  pendingAttribution: boolean;
+  discounts: {
+    /** Discount earned after a person referred by this account qualifies. */
+    referrer: ReferralDiscountState;
+    /** Discount earned when this account's own attribution qualifies. */
+    referred: ReferralDiscountState;
+  };
   shareMessage: string;
 }
 
+export interface ReferralDiscountState {
+  status: 'not_earned' | 'available' | 'used';
+  discountPercent: number;
+  usedAt: string | null;
+}
 export interface UCPromotion {
   id: string;
   title: string;
@@ -299,6 +320,9 @@ export interface PersonalImpact {
 
 export interface CustomerRewards {
   balance: number;
+  lifetimeRedeemed?: number;
+  /** Single server snapshot used by balance, tier/status labels, and QR badge. */
+  snapshot?: { balance: number; tier: 'starter' | 'silver' | 'gold'; status: 'active' | 'ready'; qrBadge: 'ready' | 'refresh_required' };
   ledger: Array<{ id: number; points: number; reason: string; eventType: string; createdAt: string }>;
   /** Returned only when the API has just assigned/reassigned the opaque token. */
   qrToken: string | null;
@@ -312,6 +336,18 @@ export interface CodeValidationResult {
   label: string;
 }
 
+/** A checkout amount returned by the promotion service. Amounts are server-calculated. */
+export interface CheckoutPromotionQuote {
+  promotion: {
+    code: string;
+    title?: string;
+    label?: string;
+  };
+  subtotal: number;
+  delivery: number;
+  discountAmount: number;
+  total: number;
+}
 /** Server-side notification preferences, including the opt-in flags for
  *  filter-reminder delivery via external channels (email / SMS / WhatsApp). */
 export interface ServerNotifPrefs {
@@ -379,6 +415,8 @@ export function useApi() {
     getCompatibilityProducts: (skus: string) =>
       get<UCProduct[]>(`/api/uc/products/compatibility?skus=${encodeURIComponent(skus)}`),
     getProfile: () => get<UCCustomer>('/api/uc/customer/profile'),
+    requestContactVerification: (channel: 'email' | 'whatsapp') =>
+      post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
     getReturnRequest: (orderId: number) =>
       get<{ request: { id: number; reason: string; details: string; status: string; createdAt: string } | null }>(`/api/uc/orders/${orderId}/return-request`),
@@ -390,8 +428,16 @@ export function useApi() {
       paymentReference: string;
       shippingAddress: UCAddress;
       promoCode?: string;
-      userEmail?: string;
+      /** Applies the caller's own available referral reward; identity comes from auth. */
+      applyReferralDiscount?: boolean;
+      idempotencyKey: string;
     }) => post<UCOrder>('/api/uc/orders', data),
+    /** Validates a checkout code and returns its server-calculated quote. */
+    quoteCheckoutPromotion: (data: { code: string; lineItems: { productId: number; quantity: number }[] }) =>
+      post<CheckoutPromotionQuote>('/api/uc/customer/promotions/checkout/quote', data),
+    /** Quote the authenticated customer's available one-time referral reward. */
+    quoteReferralDiscount: (data: { lineItems: { productId: number; quantity: number }[] }) =>
+      post<CheckoutPromotionQuote>('/api/uc/customer/referrals/discount/quote', data),
     /**
      * Look up a purchase by receipt/order number + the checkout phone number
      * so the buyer can register their filter from the purchase record.
@@ -435,8 +481,8 @@ export function useApi() {
     verifyPayment: (reference: string, method: string) =>
       post<PaymentVerifyResult>('/api/payments/verify', { reference, method }),
     getMyReferral: () => get<UCReferralInfo>('/api/uc/referrals/my-code'),
-    validateCode: (code: string, userEmail?: string) =>
-      post<CodeValidationResult>('/api/uc/referrals/validate', { code, userEmail }),
+    validateCode: (code: string) =>
+      post<CodeValidationResult>('/api/uc/referrals/validate', { code }),
     getPromotions: () => get<UCPromotion[]>('/api/uc/promotions'),
     /** Update the authenticated user's profile details (name / phone / address). */
     updateProfile: (data: { firstName?: string; lastName?: string; phone?: string; address?: string }) =>
@@ -559,12 +605,18 @@ export function useApi() {
     getRewards: () => get<CustomerRewards>('/api/uc/customer/rewards'),
     /** Explicit recovery action; normally the issued token is reused from SecureStore. */
     rotateRewardsQr: () => post<{ qrToken: string }>('/api/uc/customer/rewards/qr/rotate'),
+    /** Acknowledge the push lifecycle for this account; no device token is sent. */
+    acknowledgeRewardsQrRequest: (requestId: number, event: 'delivered' | 'opened') =>
+      post<{ ok: boolean }>('/api/uc/customer/rewards/qr/request-events', { requestId, event }),
     addPersonalImpact: (data: {
       registeredFilterId: number;
       litres: number;
       reason?: string;
       idempotencyKey: string;
     }) => post<{ repeated: boolean; entryId: number; impact: PersonalImpact }>('/api/uc/customer/impact', data),
+    /** Redeem eligible whole point blocks; server validates conversion and promo atomically. */
+    redeemRewards: (data: { points: number; promoCode?: string; idempotencyKey: string }) =>
+      post<RewardsRedemptionResult>('/api/uc/customer/rewards/redeem', data),
 
     /** Submit a thumbs-up or thumbs-down rating for an Alison response. */
     chatFeedback: (
@@ -622,4 +674,11 @@ export function useApi() {
       return res.json() as Promise<{ ok: boolean }>;
     },
   };
+}
+
+export interface RewardsRedemptionResult {
+  balance: number;
+  message?: string;
+  redemptionValue?: number;
+  conversionMode?: 'fixed' | 'percentage';
 }

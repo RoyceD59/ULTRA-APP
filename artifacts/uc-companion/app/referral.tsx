@@ -13,8 +13,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { useApi, type UCPromotion } from '@/hooks/useApi';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { useApi, type ReferralDiscountState } from '@/hooks/useApi';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -24,45 +24,35 @@ function firstPhone(contact: Contacts.ExistingContact): string | null {
   return contact.phoneNumbers?.[0]?.number ?? null;
 }
 
-function buildMessage(
-  senderName: string,
-  referralCode: string,
-  recipientFirstName?: string,
-): string {
-  const greeting = recipientFirstName ? `Hi ${recipientFirstName}! 👋` : 'Hi there! 👋';
+function buildMessage(referralCode: string): string {
   return (
-    `${greeting}\n\n` +
-    `${senderName} thinks you'd love Ultra Clear — Nairobi's trusted water purification brand.\n\n` +
-    `Use their referral code *${referralCode}* for 10% off your first order!\n\n` +
+    `Try Ultra Clear — Nairobi's trusted water purification brand.\n\n` +
+    `Use my referral code *${referralCode}* when you sign up.\n\n` +
+    `Referral rewards are earned only after your first successful eligible purchase.\n\n` +
     `Download the app and get pure, healthy water: ucfilters.com/app\n\n` +
     `Stay hydrated! 💧`
   );
 }
 
-// ─── PromoCard ────────────────────────────────────────────────────────────────
-function PromoCard({ promo }: { promo: UCPromotion }) {
+function DiscountState({ label, discount }: { label: string; discount: ReferralDiscountState }) {
   const colors = useColors();
-  const expiry = new Date(promo.expiresAt).toLocaleDateString('en-KE', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
+  const status = discount.status === 'available'
+    ? `${discount.discountPercent}% off available`
+    : discount.status === 'used'
+      ? `${discount.discountPercent}% off used`
+      : 'Not earned yet';
   return (
-    <View style={[styles.promoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.promoDiscount, { backgroundColor: UC_SKY + '22' }]}>
-        <Text style={[styles.promoDiscountText, { color: UC_DEEP }]}>{promo.discountPercent}%{'\n'}OFF</Text>
+    <View style={[styles.discountRow, { borderColor: colors.border }]}>
+      <View style={[styles.discountIcon, { backgroundColor: discount.status === 'available' ? UC_SKY + '33' : colors.background }]}>
+        <Ionicons name={discount.status === 'used' ? 'checkmark-circle-outline' : 'pricetag-outline'} size={20} color={UC_DEEP} />
       </View>
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[styles.promoTitle, { color: colors.text }]}>{promo.title}</Text>
-        <Text style={[styles.promoDesc, { color: colors.mutedForeground }]} numberOfLines={2}>{promo.description}</Text>
-        <View style={[styles.promoCodePill, { backgroundColor: UC_DEEP + '12' }]}>
-          <Text style={[styles.promoCodeText, { color: UC_DEEP }]}>{promo.code}</Text>
-        </View>
-        <Text style={[styles.promoExpiry, { color: colors.mutedForeground }]}>Expires {expiry}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.discountTitle, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.discountStatus, { color: colors.mutedForeground }]}>{status}</Text>
       </View>
     </View>
   );
 }
-
-// ─── ContactRow ───────────────────────────────────────────────────────────────
 function ContactRow({
   contact, selected, onToggle,
 }: {
@@ -108,11 +98,10 @@ function ContactRow({
 
 // ─── ContactPickerModal ────────────────────────────────────────────────────────
 function ContactPickerModal({
-  visible, onClose, senderName, referralCode,
+  visible, onClose, referralCode,
 }: {
   visible: boolean;
   onClose: () => void;
-  senderName: string;
   referralCode: string;
 }) {
   const colors = useColors();
@@ -169,12 +158,8 @@ function ContactPickerModal({
   const selectedContacts = contacts.filter(c => c.id && selected.has(c.id));
   const selectedPhones   = selectedContacts.map(c => firstPhone(c)!).filter(Boolean);
 
-  // Preview message — personalised if single contact
-  const previewMessage = buildMessage(
-    senderName,
-    referralCode,
-    selectedContacts.length === 1 ? selectedContacts[0].firstName ?? undefined : undefined,
-  );
+  // Share content intentionally excludes both the sender and recipient identity.
+  const previewMessage = buildMessage(referralCode);
 
   async function handleSend() {
     if (selectedPhones.length === 0) {
@@ -186,14 +171,7 @@ function ContactPickerModal({
     try {
       const smsAvailable = await SMS.isAvailableAsync();
       if (smsAvailable) {
-        if (selectedContacts.length === 1) {
-          // Single contact — fully personalized message
-          await SMS.sendSMSAsync(selectedPhones, previewMessage);
-        } else {
-          // Multiple contacts — generic greeting, same message body
-          const genericMsg = buildMessage(senderName, referralCode);
-          await SMS.sendSMSAsync(selectedPhones, genericMsg);
-        }
+        await SMS.sendSMSAsync(selectedPhones, previewMessage);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onClose();
         Alert.alert('Invites sent! 🎉', `Your referral was shared with ${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''}.`);
@@ -329,7 +307,7 @@ function ContactPickerModal({
             <Text style={[styles.previewTitle, { color: colors.text }]}>Message Preview</Text>
             <Text style={[styles.previewMeta, { color: colors.mutedForeground }]}>
               This is what your contact{selected.size > 1 ? 's' : ''} will receive
-              {selected.size > 1 ? ' (personalised per recipient)' : ''}:
+              :
             </Text>
             <View style={[styles.previewBubble, { backgroundColor: UC_DEEP + '10', borderColor: UC_SKY }]}>
               <Text style={[styles.previewText, { color: colors.text }]}>{previewMessage}</Text>
@@ -369,12 +347,6 @@ export default function ReferralScreen() {
     staleTime: 60_000,
   });
 
-  const { data: promotions, isLoading: promoLoading } = useQuery({
-    queryKey: ['promotions'],
-    queryFn: () => api.getPromotions(),
-    staleTime: 2 * 60_000,
-  });
-
   const handleCopy = useCallback(async () => {
     if (!referral?.code) return;
     await Clipboard.setStringAsync(referral.code);
@@ -386,7 +358,7 @@ export default function ReferralScreen() {
     if (!referral) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await Share.share({ message: referral.shareMessage, title: 'Join Ultra Clear!' });
+      await Share.share({ message: buildMessage(referral.code), title: 'Join Ultra Clear!' });
     } catch { /* dismissed */ }
   }, [referral]);
 
@@ -402,8 +374,6 @@ export default function ReferralScreen() {
       </View>
     );
   }
-
-  const senderName = `${user.firstName} ${user.lastName}`.trim();
 
   return (
     <>
@@ -422,8 +392,7 @@ export default function ReferralScreen() {
           </View>
           <Text style={styles.heroTitle}>Refer & Earn</Text>
           <Text style={styles.heroSub}>
-            Share your code — your friend gets 10% off their first order.{'\n'}
-            You earn KES 200 store credit per conversion.
+             Share your code and earn rewards for successful referrals.
           </Text>
         </View>
 
@@ -468,23 +437,32 @@ export default function ReferralScreen() {
             </View>
           ) : null}
 
-          {/* Stats row */}
+          {/* Durable referral progress */}
           {referral && (
             <View style={styles.statsRow}>
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.statNum, { color: UC_DEEP }]}>{referral.referredCount}</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Invited</Text>
-              </View>
-              <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.statNum, { color: UC_DEEP }]}>{referral.conversions}</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Converted</Text>
+                <Text style={[styles.statNum, { color: UC_DEEP }]}>{referral.successfulReferrals}/{referral.referralLimit}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Successful referrals</Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: UC_DEEP, borderColor: UC_DEEP }]}>
                 <Text style={[styles.statNum, { color: '#fff' }]}>
-                  KES {referral.creditsEarnedKes.toLocaleString()}
+                   {referral.pointsEarned.toLocaleString()}
                 </Text>
-                <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.75)' }]}>Credits</Text>
+                <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.75)' }]}>Points earned</Text>
               </View>
+            </View>
+          )}
+
+          {referral && (
+            <View style={[styles.benefitsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Your referral benefits</Text>
+              <DiscountState label="Earned for referring" discount={referral.discounts.referrer} />
+              <DiscountState label="Earned as a referred customer" discount={referral.discounts.referred} />
+              {referral.pendingAttribution && (
+                <Text style={[styles.pendingText, { color: colors.mutedForeground }]}>
+                  Your referral attribution is pending your first successful eligible purchase.
+                </Text>
+              )}
             </View>
           )}
 
@@ -492,10 +470,10 @@ export default function ReferralScreen() {
           <View style={[styles.howCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>How it works</Text>
             {([
-              { icon: 'people-outline', text: 'Pick friends from your contacts or share your code link' },
-              { icon: 'person-add-outline', text: 'They register and enter your code, or enter it at checkout' },
-              { icon: 'pricetag-outline', text: 'They get 10% off their first order automatically' },
-              { icon: 'wallet-outline', text: 'You earn KES 200 store credit when their order is confirmed' },
+               { icon: 'people-outline', text: 'Pick friends from your contacts or share your code link' },
+               { icon: 'person-add-outline', text: 'They sign up and enter your code to be attributed to you' },
+               { icon: 'card-outline', text: 'Installing the app or entering a code alone does not earn a benefit' },
+               { icon: 'checkmark-circle-outline', text: 'Benefits are issued only after their first successful eligible purchase' },
             ] as const).map((step, i) => (
               <View key={i} style={styles.howStep}>
                 <View style={[styles.howIcon, { backgroundColor: UC_SKY + '22' }]}>
@@ -506,19 +484,6 @@ export default function ReferralScreen() {
             ))}
           </View>
 
-          {/* Active Promotions */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Promotions</Text>
-          {promoLoading ? (
-            <ActivityIndicator color={UC_DEEP} />
-          ) : promotions && promotions.length > 0 ? (
-            <View style={{ gap: 10 }}>
-              {promotions.map(p => <PromoCard key={p.id} promo={p} />)}
-            </View>
-          ) : (
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              No active promotions right now. Check back soon!
-            </Text>
-          )}
         </View>
       </ScrollView>
 
@@ -527,7 +492,6 @@ export default function ReferralScreen() {
         <ContactPickerModal
           visible={showContacts}
           onClose={() => setShowContacts(false)}
-          senderName={senderName}
           referralCode={referral.code}
         />
       )}
@@ -580,16 +544,13 @@ const styles = StyleSheet.create({
   howIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   howText: { flex: 1, fontSize: 14, lineHeight: 20 },
 
-  // Promos
-  promoCard: { borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  promoDiscount: { width: 56, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  promoDiscountText: { fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 14 },
-  promoTitle: { fontSize: 15, fontWeight: '700' },
-  promoDesc: { fontSize: 13, lineHeight: 18 },
-  promoCodePill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  promoCodeText: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  promoExpiry: { fontSize: 11 },
-  emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 12 },
+  // Referral benefits
+  benefitsCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
+  discountRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  discountIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  discountTitle: { fontSize: 14, fontWeight: '700' },
+  discountStatus: { fontSize: 13, marginTop: 2 },
+  pendingText: { fontSize: 12, lineHeight: 17 },
 
   // Contact picker modal
   modalContainer: { flex: 1 },

@@ -95,7 +95,7 @@ router.post(
           // already ours), so two concurrent exchanges can't cross-link.
           [dbUser] = await db
             .update(ucUsersTable)
-            .set({ clerkUserId })
+            .set({ clerkUserId, emailVerified: true })
             .where(
               and(
                 eq(ucUsersTable.id, byEmail.id),
@@ -127,6 +127,7 @@ router.post(
           lastName,
           clerkUserId,
           authProvider: "social",
+          emailVerified: true,
         };
 
         try {
@@ -205,6 +206,8 @@ router.post(
         firstName: dbUser.firstName,
         lastName: dbUser.lastName,
         credentialVersion: dbUser.credentialVersion,
+        emailVerified: dbUser.emailVerified,
+        phoneVerified: dbUser.phoneVerified,
       };
       res.json({ token: issueToken(user), user });
       const subject = createdSocialAccount

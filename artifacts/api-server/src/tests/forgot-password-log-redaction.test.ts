@@ -40,8 +40,8 @@ before(async () => {
   const suffix = Date.now();
   userEmail = `log-redact-${suffix}@example.com`;
   const row = await pool.query<{ id: number }>(
-    `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone)
-     VALUES ($1, 'x', 'Redact', 'Test', '') RETURNING id`,
+    `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone, email_verified)
+     VALUES ($1, 'x', 'Redact', 'Test', '', true) RETURNING id`,
     [userEmail],
   );
   userId = row.rows[0]!.id;

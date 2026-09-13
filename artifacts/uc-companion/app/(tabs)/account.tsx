@@ -24,7 +24,6 @@ import SwipeTabs from '@/components/SwipeTabs';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { buildRewardsQrPayload } from '@/lib/rewardsQr';
-import { readStoredRewardsQrToken, storeRewardsQrToken } from '@/lib/rewardsQrStorage';
 import PersonalImpactSection from '@/components/PersonalImpactSection';
 import {
   clearProfileDraft,
@@ -36,11 +35,14 @@ import {
   type ProfileDraftFields,
 } from '@/lib/profileDraft';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
+import ImpactShareModal from '@/components/ImpactShareModal';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
 const MENU_ITEMS = [
   { label: 'My Orders',                icon: 'bag-outline'           as const, route: '/account' },
+  { label: 'My Rewards',               icon: 'star-outline'          as const, route: '/rewards' },
   { label: 'Refer & Earn',             icon: 'gift-outline'          as const, route: '/referral' },
   { label: 'Maintenance Tickets',      icon: 'construct-outline'     as const, route: '/ticket/new' },
   { label: 'Water Test History',       icon: 'flask-outline'         as const, route: '/water-test' },
@@ -466,8 +468,75 @@ const delStyles = StyleSheet.create({
   errorText:    { flex: 1, fontSize: 13 },
 });
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+function RedeemRewardsModal({ visible, balance, onClose, onRedeemed }: {
+  visible: boolean;
+  balance: number;
+  onClose: () => void;
+  onRedeemed: () => Promise<void>;
+}) {
+  const colors = useColors();
+  const api = useApi();
+  const [points, setPoints] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const attemptKey = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (!visible) return;
+    setPoints('');
+    setPromoCode('');
+    setError('');
+    attemptKey.current = null;
+  }, [visible]);
+
+  async function submit() {
+    const amount = Number(points);
+    if (!Number.isInteger(amount) || amount <= 0 || amount % 1000 !== 0) {
+      setError('Redeem a positive whole block of 1,000 points.');
+      return;
+    }
+    if (amount > balance) {
+      setError('That exceeds your current points balance.');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      const result = await api.redeemRewards({
+        points: amount,
+        promoCode: promoCode.trim() || undefined,
+        idempotencyKey: attemptKey.current ?? (attemptKey.current = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
+      });
+      await onRedeemed();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Points redeemed', result.message ?? `${amount.toLocaleString()} points were redeemed.`);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to redeem points. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
+      <View style={redeemStyles.overlay}>
+        <View style={[redeemStyles.sheet, { backgroundColor: colors.background }]}>
+          <View style={[redeemStyles.handle, { backgroundColor: colors.border }]} />
+          <View style={redeemStyles.header}>
+            <View><Text style={[redeemStyles.title, { color: colors.text }]}>Redeem rewards</Text><Text style={[redeemStyles.sub, { color: colors.mutedForeground }]}>{balance.toLocaleString()} points available</Text></View>
+            <TouchableOpacity onPress={onClose} disabled={saving}><Ionicons name="close" size={22} color={colors.mutedForeground} /></TouchableOpacity>
+          </View>
+          <Text style={[redeemStyles.help, { color: colors.mutedForeground }]}>Enter positive whole blocks of 1,000 points. The server calculates and confirms the redemption value.</Text>
+          <TextInput testID="rewards-redeem-points" value={points} onChangeText={value => { setPoints(value.replace(/[^0-9]/g, '')); setError(''); attemptKey.current = null; }} keyboardType="number-pad" placeholder="Points, e.g. 1000" placeholderTextColor={colors.mutedForeground} editable={!saving} style={[redeemStyles.input, { color: colors.text, borderColor: colors.border }]} />
+          <TextInput testID="rewards-redeem-promo" value={promoCode} onChangeText={value => { setPromoCode(value.toUpperCase()); setError(''); attemptKey.current = null; }} autoCapitalize="characters" placeholder="Promo code (optional)" placeholderTextColor={colors.mutedForeground} editable={!saving} style={[redeemStyles.input, { color: colors.text, borderColor: colors.border }]} />
+          {error ? <Text style={[redeemStyles.error, { color: colors.destructive }]}>{error}</Text> : null}
+          <TouchableOpacity testID="rewards-redeem-confirm" onPress={submit} disabled={saving} style={[redeemStyles.confirm, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={redeemStyles.confirmText}>Redeem points</Text>}</TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 export default function AccountScreen() {
   return (
     <SwipeTabs tab="account">
@@ -492,8 +561,8 @@ function AccountScreenContent() {
   const [exporting,          setExporting]          = useState(false);
   const [exportError,        setExportError]        = useState('');
   const [ownerDetailsOpen,   setOwnerDetailsOpen]    = useState(false);
-  const [rewardsQrToken,     setRewardsQrToken]       = useState<string | null>(null);
-  const qrRecoveryForUser = useRef<number | null>(null);
+  const [redeemVisible,      setRedeemVisible]         = useState(false);
+  const [impactShareVisible, setImpactShareVisible]    = useState(false);
 
   // Auto-open the Edit Profile modal when navigated here with ?editProfile=1
   // (e.g. from the ticket form's "add phone number" link).
@@ -591,44 +660,20 @@ function AccountScreenContent() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // A token returned by rewards is only present at server assignment time.
-  // Persist it securely; if the API has no token and this device has none,
-  // recover once with the dedicated rotation endpoint.
-  useEffect(() => {
-    if (!user || !rewards) return;
-    let active = true;
-    (async () => {
-      const local = await readStoredRewardsQrToken(user.id);
-      if (!active) return;
-      if (local) { setRewardsQrToken(local); return; }
-      if (rewards.qrToken) {
-        await storeRewardsQrToken(user.id, rewards.qrToken);
-        if (active) setRewardsQrToken(rewards.qrToken);
-        return;
-      }
-      if (qrRecoveryForUser.current === user.id) return;
-      qrRecoveryForUser.current = user.id;
-      const replacement = await api.rotateRewardsQr();
-      await storeRewardsQrToken(user.id, replacement.qrToken);
-      if (active) setRewardsQrToken(replacement.qrToken);
-    })().catch(() => {
-      // Keep the QR unavailable rather than falling back to an identifying value.
-      if (active) setRewardsQrToken(null);
-    });
-    return () => { active = false; };
-  }, [api, rewards, user]);
-
-  async function shareImpact() {
-    if (!rewards) return;
-    await Share.share({
-      message: `I’ve refilled ${rewards.impact.totalLitres} litres with Ultra-Clear and reached ${rewards.impact.starLevel} stars. Cleaner water, less waste — proud to be part of the Ultra-Clear green-living community!`,
-    });
-  }
+  const {
+    token: rewardsQrToken,
+    loading: qrLoading,
+    error: qrError,
+    retry: retryQr
+  } = useRewardsQrToken(user?.id, rewards);
 
   async function shareCompanionApp() {
     await Share.share({
-      // Referral service owns the public app URL and attribution wording.
-      message: referral?.shareMessage ?? 'Join me on the Ultra-Clear Companion app for filter care and cleaner-water living.',
+      // Keep share content deliberately public: no account, QR, payment, or
+      // contact identifier is copied into another app.
+      message: referral?.code
+        ? `Join Ultra-Clear Companion for filter care and cleaner-water living. Use referral code ${referral.code} when you sign up.`
+        : 'Join Ultra-Clear Companion for filter care and cleaner-water living.',
     });
   }
 
@@ -809,7 +854,18 @@ function AccountScreenContent() {
           {/* ── Rewards card ─────────────────────────────────────────── */}
           {user && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>My Rewards</Text>
+              <View style={styles.sectionRow}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>My Rewards</Text>
+                <TouchableOpacity
+                  testID="view-all-rewards"
+                  onPress={() => router.push('/rewards' as never)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.viewAllLink}
+                >
+                  <Text style={[styles.viewAllText, { color: colors.primary }]}>View all</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
               <View style={[rewardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 {/* Balance */}
                 <View style={[rewardStyles.balanceRow, { borderBottomColor: colors.border }]}>
@@ -822,19 +878,34 @@ function AccountScreenContent() {
                       {rewards?.balance ?? 0} <Text style={[rewardStyles.balancePts, { color: colors.mutedForeground }]}>pts</Text>
                     </Text>
                   </View>
+                   <TouchableOpacity testID="open-rewards-redemption" onPress={() => setRedeemVisible(true)} style={[rewardStyles.redeemBtn, { backgroundColor: colors.primaryLight }]}>
+                     <Text style={[rewardStyles.redeemBtnText, { color: colors.primary }]}>Redeem</Text>
+                   </TouchableOpacity>
                 </View>
 
                 {/* QR code */}
                 <View style={[rewardStyles.qrSection, { borderBottomColor: colors.border }]}>
                   <Text style={[rewardStyles.qrLabel, { color: colors.mutedForeground }]}>Your Rewards QR Code</Text>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
-                    {rewardsQrToken ? <QRCode
-                      testID="account-rewards-qr"
-                      value={buildRewardsQrPayload(rewardsQrToken)}
-                      size={120}
-                      color="#1a1a1a"
-                      backgroundColor="#ffffff"
-                    /> : <ActivityIndicator testID="account-rewards-qr-loading" color={colors.primary} size="large" />}
+                    {qrLoading ? (
+                      <ActivityIndicator testID="account-rewards-qr-loading" color={colors.primary} size="large" />
+                    ) : qrError || !rewardsQrToken ? (
+                      <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="alert-circle-outline" size={32} color={colors.destructive} />
+                        <Text style={{ fontSize: 12, color: colors.destructive, marginTop: 4, textAlign: 'center' }}>Failed to load QR</Text>
+                        <TouchableOpacity onPress={retryQr} style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primaryLight, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Retry</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <QRCode
+                        testID="account-rewards-qr"
+                        value={buildRewardsQrPayload(rewardsQrToken)}
+                        size={120}
+                        color="#1a1a1a"
+                        backgroundColor="#ffffff"
+                      />
+                    )}
                   </View>
                   {rewards?.impact.hasRefilled ? <View style={[rewardStyles.refilledBadge, { backgroundColor: colors.primaryLight }]}><Ionicons name="water" size={13} color={colors.primary} /><Text style={[rewardStyles.refilledText, { color: colors.primary }]}>I refilled</Text></View> : null}
                   {rewards ? <Text style={[rewardStyles.impactSummary, { color: colors.mutedForeground }]}>{rewards.impact.totalLitres} L refilled · {rewards.impact.starLevel} ★ private level</Text> : null}
@@ -875,7 +946,7 @@ function AccountScreenContent() {
           {rewards ? <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Share Ultra-Clear</Text>
             <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <TouchableOpacity testID="share-impact" onPress={shareImpact} style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: colors.border }]}><View style={[styles.menuIcon, { backgroundColor: colors.primaryLight }]}><Ionicons name="leaf-outline" size={18} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={[styles.menuLabel, { color: colors.text }]}>Share my impact</Text><Text style={[styles.shareSub, { color: colors.mutedForeground }]}>Celebrate your green-living contribution</Text></View><Ionicons name="share-outline" size={18} color={colors.primary} /></TouchableOpacity>
+              <TouchableOpacity testID="share-impact" onPress={() => setImpactShareVisible(true)} style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: colors.border }]}><View style={[styles.menuIcon, { backgroundColor: colors.primaryLight }]}><Ionicons name="leaf-outline" size={18} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={[styles.menuLabel, { color: colors.text }]}>Share my impact</Text><Text style={[styles.shareSub, { color: colors.mutedForeground }]}>Celebrate your green-living contribution</Text></View><Ionicons name="share-outline" size={18} color={colors.primary} /></TouchableOpacity>
               <TouchableOpacity testID="share-companion-app" onPress={shareCompanionApp} style={styles.menuItem}><View style={[styles.menuIcon, { backgroundColor: colors.primaryLight }]}><Ionicons name="people-outline" size={18} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={[styles.menuLabel, { color: colors.text }]}>Share Ultra-Clear app</Text><Text style={[styles.shareSub, { color: colors.mutedForeground }]}>Invite a friend to Companion</Text></View><Ionicons name="share-outline" size={18} color={colors.primary} /></TouchableOpacity>
             </View>
           </View> : null}
@@ -981,6 +1052,19 @@ function AccountScreenContent() {
           queryClient.clear();
         }}
       />
+      <RedeemRewardsModal
+        visible={redeemVisible}
+        balance={rewards?.balance ?? 0}
+        onClose={() => setRedeemVisible(false)}
+        onRedeemed={() => queryClient.invalidateQueries({ queryKey: ['customer-rewards'] })}
+      />
+      {rewards && (
+        <ImpactShareModal
+          visible={impactShareVisible}
+          impact={rewards.impact}
+          onClose={() => setImpactShareVisible(false)}
+        />
+      )}
     </>
   );
 }
@@ -1009,6 +1093,8 @@ const styles = StyleSheet.create({
   section:          { gap: 12 },
   sectionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailActions:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  viewAllLink:      { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 4 },
+  viewAllText:      { fontSize: 13, fontWeight: '600' as const },
   sectionTitle:     { fontSize: 17, fontWeight: '700' as const },
   editBtn:          { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   editBtnText:      { fontSize: 13, fontWeight: '600' as const },
@@ -1046,6 +1132,8 @@ const styles = StyleSheet.create({
 const rewardStyles = StyleSheet.create({
   card:           { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
   balanceRow:     { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderBottomWidth: 1 },
+  redeemBtn:      { borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8 },
+  redeemBtnText:  { fontSize: 13, fontWeight: '700' as const },
   balanceIcon:    { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   balanceLabel:   { fontSize: 12, fontWeight: '500' as const, marginBottom: 2 },
   balanceValue:   { fontSize: 26, fontWeight: '800' as const },
@@ -1063,4 +1151,8 @@ const rewardStyles = StyleSheet.create({
   historyReason:  { fontSize: 13, fontWeight: '500' as const },
   historyDate:    { fontSize: 11, marginTop: 1 },
   historyPoints:  { fontSize: 14, fontWeight: '700' as const, minWidth: 60, textAlign: 'right' as const },
+});
+
+const redeemStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }, sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 13 }, handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center' }, header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, title: { fontSize: 18, fontWeight: '700' }, sub: { fontSize: 12, marginTop: 2 }, help: { fontSize: 13, lineHeight: 19 }, input: { borderWidth: 1, borderRadius: 10, padding: 13, fontSize: 16 }, error: { fontSize: 13 }, confirm: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', minHeight: 48, justifyContent: 'center' }, confirmText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

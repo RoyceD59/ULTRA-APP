@@ -11,14 +11,17 @@ export const ucUsersTable = pgTable("uc_users", {
   email:        text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   phone:        text("phone").notNull().default(""),
+  /** Explicit channel-verification state used for account recovery delivery. */
+  emailVerified: boolean("email_verified").notNull().default(false),
+  phoneVerified: boolean("phone_verified").notNull().default(false),
   firstName:    text("first_name").notNull(),
   lastName:     text("last_name").notNull().default(""),
   isAdmin:      boolean("is_admin").notNull().default(false),
   /** Clerk user id when the account was created/linked via social sign-in
    *  (Google / Apple). Null for password-only accounts. */
   clerkUserId:  text("clerk_user_id").unique(),
-  /** "password" (default) or "social". Social-only accounts hold a sentinel
-   *  in passwordHash that can never match a bcrypt comparison. */
+  /** "password" (default), "social", or "woocommerce". Externally authenticated
+   *  accounts hold a random sentinel in passwordHash that can never be used. */
   authProvider: text("auth_provider").notNull().default("password"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   /** Delivery address as entered by the customer (free-form text). */

@@ -11,6 +11,8 @@ export interface UCUser {
   firstName: string;
   lastName: string;
   address?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   token: string;
 }
 

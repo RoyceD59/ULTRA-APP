@@ -18,6 +18,7 @@ import { isAdminRequest } from "../lib/adminAuth.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { remoteImageProxyPath } from "./product-images.js";
 import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
+import { sendWhatsAppMessage } from "../lib/whatsapp.js";
 import {
   sendSms,
   orderConfirmationSms,
@@ -45,7 +46,8 @@ import {
   ucReviewsTable, ucProductMediaTable, ucNotificationLogTable, mpesaStkInitiationsTable,
   ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable, ucWishlistTable,
   ucRestockDemandAlertsTable, ucRegisteredFiltersTable, ucWaterImpactLedgerTable,
-  ucRewardConversionTable,
+  ucRewardConversionTable, ucLocationsTable, teamUsersTable, ucPasswordResetAuditTable,
+  ucContactVerificationTokensTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
@@ -66,6 +68,8 @@ import {
   getRestockDemandThreshold,
   projectHubInventoryUrl,
 } from "../lib/wishlist-demand.js";
+import { quotePromotion, consumePromotionOnClient, type PromotionQuote } from "../lib/reward-promotions.js";
+import { appPurchaseOwnedBy, storePurchaseOwnedBy } from "../lib/purchase-ownership.js";
 
 const router = Router();
 
@@ -78,7 +82,7 @@ const CAT_SHOWER    = { id: 3, name: "Shower & Skin" };
 const CAT_ACCESS    = { id: 4, name: "Accessories" };
 const CAT_SOLUTIONS = { id: 5, name: "Solutions" };
 
-const MOCK_PRODUCTS: Record<string, unknown>[] = [
+export const MOCK_PRODUCTS: Record<string, unknown>[] = [
   // ── Segment 01 · Bottles & Portable Filters ──────────────────────────────
   {
     id: 1, name: "Hydra Flux", sku: "UC-BTL-HFX-001",
@@ -431,6 +435,21 @@ const MOCK_PRODUCTS: Record<string, unknown>[] = [
   },
 ];
 
+/** Single authoritative fallback-catalog pricing implementation for checkout
+ * quotes and order creation. Unknown products are rejected rather than priced
+ * at zero. */
+export function serverPricedLines(lineItems: { productId: number; quantity: number }[], allowEmpty = false) {
+  if (!Array.isArray(lineItems) || (!lineItems.length && !allowEmpty)) return null;
+  const lines = lineItems.map((item) => {
+    const productId = Number(item.productId), quantity = Number(item.quantity);
+    const product = MOCK_PRODUCTS.find((candidate) => candidate["id"] === productId);
+    if (!product || !Number.isInteger(quantity) || quantity <= 0) return null;
+    const price = Number(product["price"]);
+    if (!Number.isFinite(price) || price < 0) return null;
+    return { productId, name: String(product["name"]), quantity, subtotal: price * quantity };
+  });
+  return lines.some((line) => !line) ? null : lines as { productId: number; name: string; quantity: number; subtotal: number }[];
+}
 const MOCK_LOCATIONS = [
   { id: "loc1", type: "experience_centre", name: "UC Experience Centre Westlands", address: "Woodvale Groove, Westlands, Nairobi", lat: -1.2633, lng: 36.8072, hours: "Mon–Sat 8am–6pm, Sun 10am–4pm", phone: "+254 700 123456" },
   { id: "loc2", type: "experience_centre", name: "UC Service Centre Karen", address: "Karen Hardy Estate, Karen, Nairobi", lat: -1.3319, lng: 36.7097, hours: "Mon–Fri 8am–5pm", phone: "+254 700 654321" },
@@ -593,12 +612,27 @@ function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
     : [];
   return {
     id: o["id"],
+    orderNumber: o["number"] ?? o["id"],
     status: o["status"],
+    fulfillmentStatus: o["status"],
+    paymentStatus: o["date_paid"] || o["status"] === "completed" || o["status"] === "processing"
+      ? "paid"
+      : o["status"] === "cancelled" || o["status"] === "failed" || o["status"] === "refunded"
+        ? o["status"]
+        : "pending",
     dateCreated: o["date_created"],
     total: o["total"],
     currency: o["currency"],
     paymentMethod: o["payment_method"],
     shippingAddress: o["shipping"],
+    delivery: {
+      method: Array.isArray(o["shipping_lines"])
+        ? (o["shipping_lines"] as Record<string, unknown>[]).map(line => line["method_title"]).filter(Boolean).join(", ")
+        : "",
+      trackingNumber: Array.isArray(o["meta_data"])
+        ? (o["meta_data"] as Record<string, unknown>[]).find(meta => meta["key"] === "_tracking_number")?.["value"] ?? null
+        : null,
+    },
     lineItems: li,
   };
 }
@@ -1611,6 +1645,8 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
           lastName: dbUser.lastName,
           address: dbUser.address ?? "",
           credentialVersion: dbUser.credentialVersion,
+          emailVerified: dbUser.emailVerified,
+          phoneVerified: dbUser.phoneVerified,
         };
         res.json({ token: issueToken(user), user });
         return;
@@ -1682,6 +1718,8 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
         email: normalizedEmail,
         passwordHash,
         phone: cleanPhone,
+        emailVerified: false,
+        phoneVerified: false,
         firstName: firstName.trim(),
         lastName: lastName?.trim() ?? "",
       }).returning();
@@ -1710,6 +1748,8 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       lastName: dbUser!.lastName,
       address: dbUser!.address ?? "",
       credentialVersion: dbUser!.credentialVersion,
+      emailVerified: dbUser!.emailVerified,
+      phoneVerified: dbUser!.phoneVerified,
     };
     // Durable folder record of the new account (sanitized — never password material).
     recordAccountRegistration({
@@ -1774,6 +1814,157 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
 
 // ─── Password reset ───────────────────────────────────────────────────────────
 
+function hashContact(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * POST /uc/customer/contact-verification/request
+ * Sends a credential only to the contact already stored on the authenticated
+ * account. The secret is hashed at rest and never returned by this endpoint.
+ */
+router.post("/uc/customer/contact-verification/request", authLimiter, async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  const userId = Number(claims?.id);
+  const channel = req.body?.channel as unknown;
+  if (!claims || !Number.isInteger(userId) || userId <= 0) {
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  if (!["email", "whatsapp"].includes(String(channel))) {
+    res.status(400).json({ error: "channel must be email or whatsapp." });
+    return;
+  }
+  const [user] = await db.select().from(ucUsersTable)
+    .where(and(eq(ucUsersTable.id, userId), isNull(ucUsersTable.deletedAt))).limit(1);
+  if (!user) {
+    res.status(202).json({ ok: true });
+    return;
+  }
+  const selectedChannel = channel as RecoveryChannel;
+  const destination = selectedChannel === "email"
+    ? normalizeEmail(user.email)
+    : normalizePhone(user.phone);
+  if (!destination) {
+    res.status(202).json({ ok: true });
+    return;
+  }
+
+  let baseUrl: string;
+  try {
+    baseUrl = ucApiBaseUrl();
+  } catch {
+    logger.error({ event: "contact_verification_request", channel: selectedChannel, result: "delivery_failed" }, "Contact verification unavailable");
+    res.status(202).json({ ok: true });
+    return;
+  }
+  const rawToken = randomUUID();
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const credential = await db.transaction(async (tx) => {
+    await tx.update(ucContactVerificationTokensTable)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(ucContactVerificationTokensTable.userId, String(user.id)),
+        eq(ucContactVerificationTokensTable.channel, selectedChannel),
+        isNull(ucContactVerificationTokensTable.usedAt),
+      ));
+    return tx.insert(ucContactVerificationTokensTable).values({
+      userId: String(user.id),
+      channel: selectedChannel,
+      contactHash: hashContact(destination),
+      tokenHash: hashResetToken(rawToken),
+      expiresAt,
+    }).returning({ id: ucContactVerificationTokensTable.id });
+  });
+  const verificationUrl = `${baseUrl}/uc/auth/verify-contact?token=${encodeURIComponent(rawToken)}`;
+  let sent = false;
+  if (selectedChannel === "email") {
+    sent = await sendViaResend({
+      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to: destination,
+      subject: "Verify your Ultra-Clear email",
+      text: `Verify this email for account recovery (valid for 30 minutes):\n${verificationUrl}`,
+      html: `<p>Verify this email for account recovery (valid for 30 minutes):</p><p><a href="${verificationUrl}">Verify email</a></p>`,
+      meta: { template: "uc-contact-verification" },
+      logBody: "Contact verification email dispatched (credential redacted)",
+    });
+  } else {
+    try {
+      await sendWhatsAppMessage(destination, `Verify this WhatsApp number for Ultra-Clear account recovery (valid for 30 minutes): ${verificationUrl}`);
+      sent = true;
+    } catch {
+      sent = false;
+    }
+  }
+  if (!sent && credential[0]) {
+    await db.update(ucContactVerificationTokensTable).set({ usedAt: new Date() })
+      .where(eq(ucContactVerificationTokensTable.id, credential[0].id));
+  }
+  logger[sent ? "info" : "warn"](
+    { event: "contact_verification_request", channel: selectedChannel, result: sent ? "issued" : "delivery_failed" },
+    "Contact verification request processed",
+  );
+  res.status(202).json({ ok: true });
+});
+
+async function consumeContactVerification(rawToken: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const claimed = await client.query<{ user_id: string; channel: RecoveryChannel; contact_hash: string }>(
+      `UPDATE uc_contact_verification_tokens
+          SET used_at = now()
+        WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+      RETURNING user_id, channel, contact_hash`,
+      [hashResetToken(rawToken)],
+    );
+    if ((claimed.rowCount ?? 0) !== 1) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    const credential = claimed.rows[0]!;
+    const account = await client.query<{ email: string; phone: string }>(
+      "SELECT email, phone FROM uc_users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+      [Number(credential.user_id)],
+    );
+    const user = account.rows[0];
+    const destination = credential.channel === "email"
+      ? user && normalizeEmail(user.email)
+      : user && normalizePhone(user.phone);
+    if (!destination || hashContact(destination) !== credential.contact_hash) {
+      // Contact changed since issuance: consume the stale credential but do not
+      // verify the replacement contact.
+      await client.query("COMMIT");
+      return false;
+    }
+    const column = credential.channel === "email" ? "email_verified" : "phone_verified";
+    await client.query(`UPDATE uc_users SET ${column} = true WHERE id = $1`, [Number(credential.user_id)]);
+    await client.query(
+      "UPDATE uc_contact_verification_tokens SET verified_at = now() WHERE token_hash = $1",
+      [hashResetToken(rawToken)],
+    );
+    await client.query("COMMIT");
+    logger.info({ event: "contact_verification_completed", channel: credential.channel, result: "completed" }, "Contact verified");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Browser-friendly verification link. Invalid/expired/used tokens share one response. */
+router.get("/uc/auth/verify-contact", authLimiter, async (req: Request, res: Response): Promise<void> => {
+  const token = typeof req.query["token"] === "string" ? req.query["token"] : "";
+  const verified = token ? await consumeContactVerification(token) : false;
+  res.status(verified ? 200 : 400).type("html").send(
+    verified
+      ? "<!doctype html><html><body><h1>Contact verified</h1><p>You can return to the Ultra-Clear app.</p></body></html>"
+      : "<!doctype html><html><body><h1>Link unavailable</h1><p>This verification link is invalid, expired, or already used.</p></body></html>",
+  );
+});
+
 /**
  * SHA-256 hash of a reset token for at-rest storage.
  * Only the hash is persisted; the raw token travels over email/HTTPS only.
@@ -1784,80 +1975,173 @@ function hashResetToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-/** POST /uc/auth/forgot-password — always 200 to prevent account enumeration */
-router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
-  const { email } = req.body ?? {};
-  if (!email || typeof email !== "string") {
-    res.status(400).json({ error: "email is required." });
-    return;
-  }
-  const normalised = email.toLowerCase().trim();
-  const user = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.email, normalised) });
-  // Always 200 — do not reveal whether the email is registered.
-  if (!user) { res.json({ ok: true }); return; }
+type RecoveryChannel = "email" | "whatsapp";
 
-  // Do not email a localhost link in production. Returning the same generic
-  // success response preserves anti-enumeration if reset URL configuration is
-  // missing, while the server log remains actionable for operators. Validate
-  // before persisting a token so bad deployment config creates no orphan token.
+const genericRecoveryResponse = { ok: true };
+
+async function recordPasswordResetAudit(input: {
+  actorType: "self" | "team";
+  actorId?: string;
+  targetUserId?: string;
+  channel?: RecoveryChannel;
+  result: "issued" | "completed" | "delivery_failed" | "rejected";
+}): Promise<void> {
+  // Audits must not become an availability dependency for authentication.
+  await db.insert(ucPasswordResetAuditTable).values({
+    actorType: input.actorType,
+    actorId: input.actorId,
+    targetUserId: input.targetUserId,
+    channel: input.channel,
+    result: input.result,
+  }).catch((err) => logger.warn({ err, event: "password_reset_audit_write_failed" }, "Operational event failed"));
+}
+
+function preferredRecoveryChannel(
+  user: { emailVerified: boolean; phoneVerified: boolean; phone: string },
+  requested: unknown,
+): RecoveryChannel | null {
+  if (requested === "email") return user.emailVerified ? "email" : null;
+  if (requested === "whatsapp") return user.phoneVerified && Boolean(normalizePhone(user.phone)) ? "whatsapp" : null;
+  if (user.emailVerified) return "email";
+  return user.phoneVerified && normalizePhone(user.phone) ? "whatsapp" : null;
+}
+
+async function issueCompanionReset(
+  user: { id: number; email: string; phone: string; firstName: string; emailVerified: boolean; phoneVerified: boolean },
+  channel: RecoveryChannel,
+  actor: { type: "self" | "team"; id?: string },
+): Promise<boolean> {
   let resetBaseUrl: string;
   try {
     resetBaseUrl = ucApiBaseUrl();
-  } catch (err) {
-    logger.error({ err, email: user.email }, "UC password-reset URL configuration invalid");
-    res.json({ ok: true });
-    return;
+  } catch {
+    await recordPasswordResetAudit({ actorType: actor.type, actorId: actor.id, targetUserId: String(user.id), channel, result: "delivery_failed" });
+    logger.error({ event: "password_reset_request", result: "delivery_failed", channel }, "Companion password reset delivery unavailable");
+    return false;
   }
-
-  // Generate a high-entropy raw token; store only its SHA-256 hash so that
-  // DB/backup access cannot be used to claim the link on a customer's behalf.
   const rawToken = randomUUID();
   const tokenHash = hashResetToken(rawToken);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  await db.insert(passwordResetTokensTable).values({
-    userId: String(user.id),
-    token:  tokenHash,
-    expiresAt,
+  // A newly-issued reset supersedes every previous outstanding link.
+  await db.transaction(async (tx) => {
+    await tx.update(passwordResetTokensTable)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokensTable.userId, String(user.id)), isNull(passwordResetTokensTable.usedAt)));
+    await tx.insert(passwordResetTokensTable).values({ userId: String(user.id), token: tokenHash, expiresAt });
   });
 
-  // The raw token is sent exactly once via email; it never touches the DB.
   const webResetUrl = `${resetBaseUrl}/uc/auth/reset-password?token=${rawToken}`;
-  const companionResetBase = (process.env["UC_COMPANION_RESET_URL"] ?? "uc-companion://auth/forgot-password").replace(/\/$/, "");
-  const companionResetUrl = `${companionResetBase}?resetToken=${encodeURIComponent(rawToken)}`;
-  logger.info({ email: user.email }, "UC password reset token generated");
-
-  const firstName = user.firstName ?? "there";
-  const sent = await sendViaResend({
-    from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
-    to: user.email,
-    subject: "Reset your Ultra-Clear password",
-    text:
-      `Hi ${firstName},\n\n` +
-      `We received a request to reset the password for your Ultra-Clear account (${user.email}).\n\n` +
-      `Click the link below to choose a new password. The link expires in 24 hours.\n\n` +
-      `${companionResetUrl}\n\n` +
-      `If the app does not open, use the web reset page:\n${webResetUrl}\n\n` +
-      `If you didn't request this, you can safely ignore this email — your password hasn't changed.\n\n` +
-      `— The Ultra-Clear team`,
-    html:
-      `<p>Hi ${firstName},</p>` +
-      `<p>We received a request to reset the password for your Ultra-Clear account (<strong>${user.email}</strong>).</p>` +
-      `<p><a href="${companionResetUrl}" style="background:#005d8f;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:bold">Reset in the Ultra-Clear app</a></p>` +
-      `<p>If the app is not installed, <a href="${webResetUrl}">reset your password on the web</a>.</p>` +
-      `<p><em>This link expires in 24 hours. If you didn't request a reset, you can safely ignore this email.</em></p>` +
-      `<p>— The Ultra-Clear team</p>`,
-    meta: { template: "uc-password-reset" },
-    // Never persist the reset URL (which contains a live token) in the
-    // notification log — store only delivery metadata so the log cannot be
-    // used to hijack a customer's account.
-    logBody: `Password reset email dispatched for ${user.email} (URL redacted)`,
-  });
-
-  if (!sent) {
-    logger.error({ email: user.email }, "UC password reset email delivery failed");
+  const companionBase = (process.env["UC_COMPANION_RESET_URL"] ?? "uc-companion://auth/forgot-password").replace(/\/$/, "");
+  const companionResetUrl = `${companionBase}?resetToken=${encodeURIComponent(rawToken)}`;
+  let sent = false;
+  if (channel === "email") {
+    sent = await sendViaResend({
+      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to: user.email,
+      subject: "Reset your Ultra-Clear password",
+      text: `Use this one-time link to choose a new password (valid for 24 hours):\n${companionResetUrl}\n\nWeb alternative:\n${webResetUrl}`,
+      html: `<p>Use this one-time link to choose a new password (valid for 24 hours).</p><p><a href="${companionResetUrl}">Reset in the Ultra-Clear app</a></p><p><a href="${webResetUrl}">Reset on the web</a></p>`,
+      meta: { template: "uc-password-reset" },
+      logBody: "Password reset email dispatched (reset URL redacted)",
+    });
+  } else {
+    const phone = normalizePhone(user.phone);
+    if (phone) {
+      try {
+        await sendWhatsAppMessage(phone, `Ultra-Clear password reset (valid for 24 hours): ${companionResetUrl}`);
+        sent = true;
+      } catch {
+        sent = false;
+      }
+    }
   }
+  await recordPasswordResetAudit({
+    actorType: actor.type, actorId: actor.id, targetUserId: String(user.id), channel,
+    result: sent ? "issued" : "delivery_failed",
+  });
+  logger[sent ? "info" : "warn"](
+    { event: "password_reset_request", result: sent ? "issued" : "delivery_failed", channel },
+    "Companion password reset request processed",
+  );
+  return sent;
+}
 
-  res.json({ ok: true });
+/** POST /uc/auth/forgot-password — always 200 to prevent account enumeration */
+router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+  const { email, phone, identifier, channel } = req.body ?? {};
+  const supplied = typeof identifier === "string" ? identifier : typeof email === "string" ? email : phone;
+  if (!supplied || typeof supplied !== "string") {
+    res.status(400).json({ error: "email or phone is required." });
+    return;
+  }
+  try {
+    const normalizedPhone = normalizePhone(supplied);
+    const normalizedEmail = normalizeEmail(supplied);
+    const user = await db.query.ucUsersTable.findFirst({
+      where: and(
+        isNull(ucUsersTable.deletedAt),
+        normalizedPhone
+          ? or(eq(ucUsersTable.phone, normalizedPhone), eq(ucUsersTable.email, normalizedEmail))
+          : eq(ucUsersTable.email, normalizedEmail),
+      ),
+    });
+    // The response and event deliberately do not distinguish missing accounts,
+    // unavailable channels, or delivery configuration.
+    const selectedChannel = user && preferredRecoveryChannel(user, channel);
+    if (user && selectedChannel) await issueCompanionReset(user, selectedChannel, { type: "self" });
+    else await recordPasswordResetAudit({ actorType: "self", result: "rejected" });
+  } catch (err) {
+    logger.error({ err, event: "password_reset_request", result: "failed" }, "Companion password reset request failed");
+  }
+  res.json(genericRecoveryResponse);
+});
+
+/**
+ * POST /uc/admin/users/:id/reset-password
+ *
+ * ProjectHub staff must authenticate with a durable, active team_users row;
+ * the role embedded in a stale JWT is never sufficient. The response contains
+ * delivery metadata only — never a credential, URL, password, or contact.
+ */
+router.post("/uc/admin/users/:id/reset-password", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims || claims.type !== "team-session") {
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  const [actor] = await db.select().from(teamUsersTable).where(eq(teamUsersTable.id, String(claims.id))).limit(1);
+  const permissions = (actor?.permissions ?? {}) as Record<string, string>;
+  const canReset = actor?.isActive && (
+    actor.role === "admin"
+    || ["admin", "manage", "write"].includes(permissions["companionUsers"] ?? "")
+    || ["admin", "manage", "write"].includes(permissions["customers"] ?? "")
+  );
+  if (!canReset) {
+    res.status(403).json({ error: "Permission to reset Companion passwords is required." });
+    return;
+  }
+  const targetId = Number(req.params["id"]);
+  const requestedChannel = req.body?.channel;
+  if (!Number.isInteger(targetId) || targetId <= 0 || !["email", "whatsapp"].includes(requestedChannel)) {
+    res.status(400).json({ error: "A valid user id and delivery channel are required." });
+    return;
+  }
+  const [target] = await db.select().from(ucUsersTable)
+    .where(and(eq(ucUsersTable.id, targetId), isNull(ucUsersTable.deletedAt))).limit(1);
+  if (!target) {
+    await recordPasswordResetAudit({ actorType: "team", actorId: actor!.id, result: "rejected" });
+    res.status(202).json({ ok: true });
+    return;
+  }
+  const channel = preferredRecoveryChannel(target, requestedChannel);
+  if (!channel) {
+    await recordPasswordResetAudit({ actorType: "team", actorId: actor!.id, targetUserId: String(target.id), result: "rejected" });
+    res.status(202).json({ ok: true });
+    return;
+  }
+  await issueCompanionReset(target, channel, { type: "team", id: actor!.id });
+  // Do not reveal a destination/contact or raw credential to Back Office.
+  res.status(202).json({ ok: true });
 });
 
 /** GET /uc/auth/reset-password — serve a simple HTML form the email link points to */
@@ -2043,9 +2327,16 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
         WHERE id = $2`,
       [passwordHash, userId],
     );
+    // A successful reset also invalidates any other still-active recovery link.
+    await client.query(
+      `UPDATE password_reset_tokens SET used_at = now()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [String(userId)],
+    );
 
     await client.query("COMMIT");
-    logger.info({ userId }, "UC user password reset successfully — credential version incremented");
+    await recordPasswordResetAudit({ actorType: "self", targetUserId: String(userId), result: "completed" });
+    logger.info({ event: "password_reset_completed", result: "completed" }, "Companion password reset completed");
     res.json({ ok: true });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
@@ -2083,6 +2374,8 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
           lastName: dbUser.lastName,
           address: dbUser.address ?? "",
           isAdmin: dbUser.isAdmin || adminEmailList().includes(dbUser.email.toLowerCase()),
+          emailVerified: dbUser.emailVerified,
+          phoneVerified: dbUser.phoneVerified,
           billing:  { firstName: dbUser.firstName, lastName: dbUser.lastName, city: "Nairobi", country: "KE", phone: dbUser.phone },
           shipping: { firstName: dbUser.firstName, lastName: dbUser.lastName, city: "Nairobi", country: "KE", phone: dbUser.phone },
         });
@@ -2142,11 +2435,16 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
 
   if (await guardDeletedAccount(numericId, res)) return;
 
-  const updates: Record<string, string> = {};
+  const updates: Record<string, string | boolean> = {};
   if (firstName !== undefined) updates["firstName"] = firstName.trim();
   if (lastName  !== undefined) updates["lastName"]  = lastName.trim();
   const normalizedPhone = phone === undefined || phone === "" ? phone : normalizePhone(phone);
-  if (phone     !== undefined) updates["phone"]     = normalizedPhone ?? "";
+  if (phone     !== undefined) {
+    updates["phone"] = normalizedPhone ?? "";
+    // Even replacing with the same value requires re-verification; no profile
+    // edit may accidentally carry verification proof to a different number.
+    updates["phoneVerified"] = false;
+  }
   if (address   !== undefined) updates["address"]   = address.trim();
 
   if (Object.keys(updates).length === 0) {
@@ -2194,6 +2492,8 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
       firstName: updated.firstName,
       lastName:  updated.lastName,
       address:   updated.address ?? "",
+      emailVerified: updated.emailVerified,
+      phoneVerified: updated.phoneVerified,
     });
   } catch (err) {
     logger.error({ err, userId: numericId }, "[profile patch] error");
@@ -2851,6 +3151,12 @@ async function verifyPaymentOnServer(
 router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
   const claims = verifyToken(req.headers["authorization"]);
   const userId = userIdFromBearer(req.headers["authorization"]);
+  if (!claims || !Number.isInteger(Number(claims.id)) || Number(claims.id) <= 0) {
+    // Preserve the endpoint's non-enumerating contract: an anonymous caller
+    // receives no account data rather than an authentication oracle.
+    res.json([]);
+    return;
+  }
   try {
     if (hasWCCredentials()) {
       // Woo is store-wide — orders MUST be scoped to the authenticated user's
@@ -2862,18 +3168,57 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
         res.json([]);
         return;
       }
-      const orders = await wcFetchArray("/orders", {
-        search: emailLc, per_page: "20", orderby: "date", order: "desc",
-      });
-      if (orders) {
+      // Woo's search endpoint is fuzzy and a single page silently hid older
+      // purchases. Fetch every bounded page, then apply the exact account
+      // boundary locally before returning it.
+      const PER_PAGE = 100;
+      const MAX_PAGES = 200; // 20,000 orders is a deliberate safety ceiling
+      const orders: Record<string, unknown>[] = [];
+      let complete = false;
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const fetched = await wcFetchArray("/orders", {
+          search: emailLc, per_page: String(PER_PAGE), page: String(page), orderby: "date", order: "desc",
+        });
+        if (!fetched) break;
+        orders.push(...fetched);
+        if (fetched.length < PER_PAGE) { complete = true; break; }
+      }
+      if (complete) {
+        // The local cash ledger wins over a stale Woo mirror once staff has
+        // confirmed collection. This only overlays COD payment truth; all
+        // other Woo order data remains authoritative.
+        const localOrders = await db.select({
+          wcOrderId: ucOrdersTable.wcOrderId,
+          status: ucOrdersTable.status,
+          codCollectionStatus: ucOrdersTable.codCollectionStatus,
+        }).from(ucOrdersTable).where(eq(ucOrdersTable.userId, userId));
+        const collectedByWcId = new Map(localOrders
+          .filter(local => local.codCollectionStatus === "collected" && local.wcOrderId != null)
+          .map(local => [local.wcOrderId!, local]));
         res.json(orders
           .filter(o => {
             const billing = o["billing"] as Record<string, unknown> | undefined;
             return String(billing?.["email"] ?? "").toLowerCase() === emailLc;
           })
-          .map(normalizeOrder));
+          .sort((a, b) => String(b["date_created"] ?? "").localeCompare(String(a["date_created"] ?? "")))
+          .map(order => {
+            const normalized = normalizeOrder(order);
+            const local = collectedByWcId.get(Number(order["id"]));
+            return local
+              ? { ...normalized, status: local.status, paymentStatus: "paid", codCollectionStatus: "collected" }
+              : normalized;
+          }));
         return;
       }
+      // The local mirror may not include historic store purchases. Never claim
+      // it is a complete history when the authoritative fetch failed or hit
+      // its safety bound.
+      logger.warn({ userId, reason: "authoritative_history_incomplete" }, "[orders] Woo history unavailable");
+      res.status(502).json({
+        error: "Order history is temporarily unavailable. Please try again shortly.",
+        retryable: true,
+      });
+      return;
     }
     // DB path: fetch this user's orders with their line items
     const orders = await db.select().from(ucOrdersTable)
@@ -2892,16 +3237,23 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
     }, {});
     res.json(orders.map(o => ({
       id:              o.id,
+      orderNumber:     o.wcOrderId ?? o.id,
       status:          o.status,
+      fulfillmentStatus: o.status,
+      paymentStatus:   o.status === "completed" || o.status === "processing"
+        ? "paid"
+        : ["cancelled", "failed", "refunded"].includes(o.status) ? o.status : "pending",
       dateCreated:     o.dateCreated,
       total:           o.total,
       currency:        o.currency,
       paymentMethod:   o.paymentMethod,
       shippingAddress: o.shippingAddress ?? {},
+      delivery:        { method: "", trackingNumber: null },
       discountPercent: o.discountPercent,
       discountAmount:  o.discountAmount,
       promoCode:       o.promoCode ?? "",
       webhookRecovery: o.webhookRecovery ?? false,
+      codCollectionStatus: o.codCollectionStatus ?? null,
       lineItems:       (itemsByOrder[o.id] ?? []).map(i => ({
         productId: i.productId,
         name:      i.name,
@@ -3152,6 +3504,13 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
       // True only for orders inserted by the webhook recovery path —
       // persisted at insert time, never derived from userId heuristics.
       webhookRecovery:  o.webhookRecovery ?? false,
+      codCollectionStatus: o.codCollectionStatus ?? null,
+      codCollectedBy: o.codCollectedBy ?? null,
+      codCollectedAt: o.codCollectedAt ?? null,
+      codWcSyncStatus: o.codWcSyncStatus ?? null,
+      codWcSyncError: o.codWcSyncError ?? null,
+      codWcSyncAttemptedAt: o.codWcSyncAttemptedAt ?? null,
+      codWcSyncAttemptCount: o.codWcSyncAttemptCount ?? 0,
       customerStage:    o.customerStage ?? null,
       customerStageUpdatedAt: o.customerStageUpdatedAt ?? null,
       lineItems: (itemsByOrder[o.id] ?? []).map(i => ({
@@ -3202,6 +3561,136 @@ router.patch("/uc/admin/orders/:id/status", async (req: Request, res: Response):
   } catch (err) {
     logger.error({ err, orderId: id }, "Failed to update order status");
     res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
+type CodWcSync = { status: string; error: string | null; attemptedAt: string | null; attemptCount: number } | null;
+
+/**
+ * Mirror already-committed cash collection to WooCommerce. A mirror failure is
+ * recorded for staff reconciliation but can never undo the local cash ledger.
+ */
+async function syncCodCollectionToWoo(orderId: number): Promise<CodWcSync> {
+  const found = await pool.query(
+    "SELECT wc_order_id, cod_wc_sync_status, cod_wc_sync_error, cod_wc_sync_attempted_at, cod_wc_sync_attempt_count FROM uc_orders WHERE id=$1",
+    [orderId],
+  );
+  const order = found.rows[0];
+  if (!order?.wc_order_id) return null;
+  if (!hasWCCredentials()) {
+    await pool.query(
+      `UPDATE uc_orders SET cod_wc_sync_status='failed',
+        cod_wc_sync_error='WooCommerce credentials are not configured',
+        cod_wc_sync_attempted_at=now(), cod_wc_sync_attempt_count=cod_wc_sync_attempt_count + 1 WHERE id=$1`,
+      [orderId],
+    );
+    return {
+      status: "failed",
+      error: "WooCommerce credentials are not configured",
+      attemptedAt: new Date().toISOString(),
+      attemptCount: Number(order.cod_wc_sync_attempt_count ?? 0) + 1,
+    };
+  }
+  await pool.query(
+    `UPDATE uc_orders SET cod_wc_sync_status='pending', cod_wc_sync_error=NULL,
+      cod_wc_sync_attempted_at=now(), cod_wc_sync_attempt_count=cod_wc_sync_attempt_count + 1 WHERE id=$1`,
+    [orderId],
+  );
+  try {
+    const response = await fetch(wcUrl(`/orders/${Number(order.wc_order_id)}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "processing", set_paid: true }),
+    });
+    const remote = await response.json().catch(() => null) as Record<string, unknown> | null;
+    const normalized = remote ? normalizeOrder(remote) : null;
+    if (!response.ok || Number(remote?.["id"]) !== Number(order.wc_order_id) || normalized?.["paymentStatus"] !== "paid") {
+      throw new Error(`WooCommerce did not confirm paid processing status (HTTP ${response.status})`);
+    }
+    await pool.query("UPDATE uc_orders SET cod_wc_sync_status='succeeded', cod_wc_sync_error=NULL WHERE id=$1", [orderId]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "WooCommerce status update failed";
+    await pool.query("UPDATE uc_orders SET cod_wc_sync_status='failed', cod_wc_sync_error=$2 WHERE id=$1", [orderId, message.slice(0, 1000)])
+      .catch((writeErr) => logger.error({ err: writeErr, orderId }, "Failed to persist COD Woo sync failure"));
+  }
+  const result = await pool.query(
+    "SELECT cod_wc_sync_status, cod_wc_sync_error, cod_wc_sync_attempted_at, cod_wc_sync_attempt_count FROM uc_orders WHERE id=$1",
+    [orderId],
+  );
+  const current = result.rows[0];
+  return current ? {
+    status: String(current.cod_wc_sync_status ?? "failed"),
+    error: current.cod_wc_sync_error ? String(current.cod_wc_sync_error) : null,
+    attemptedAt: current.cod_wc_sync_attempted_at ? new Date(current.cod_wc_sync_attempted_at).toISOString() : null,
+    attemptCount: Number(current.cod_wc_sync_attempt_count ?? 0),
+  } : null;
+}
+
+// POST /api/uc/admin/orders/:id/cod-collection — confirm that staff collected
+// cash for a COD order. This is intentionally not a generic status change.
+router.post("/uc/admin/orders/:id/cod-collection", async (req: Request, res: Response): Promise<void> => {
+  const admin = await isAdminRequest(req.headers["authorization"]);
+  if (!admin) { res.status(403).json({ error: "Admin access required" }); return; }
+  const id = Number(req.params["id"]);
+  const idempotencyKey = typeof req.body?.idempotencyKey === "string"
+    ? req.body.idempotencyKey.trim().slice(0, 200) : "";
+  if (!Number.isInteger(id) || id <= 0 || !idempotencyKey) {
+    res.status(400).json({ error: "A valid order id and idempotencyKey are required" }); return;
+  }
+
+  const actor = String(verifyToken(req.headers["authorization"])?.email ?? "admin");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Serialise confirmations per order and retain an immutable audit event.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`cod-collection:${id}`]);
+    const prior = await client.query(
+      "SELECT actor, collected_at FROM uc_cod_collection_events WHERE order_id=$1 AND idempotency_key=$2 LIMIT 1",
+      [id, idempotencyKey],
+    );
+    if (prior.rows[0]) {
+      await client.query("COMMIT");
+      const event = prior.rows[0];
+      const wcSync = await syncCodCollectionToWoo(id).catch((err) => {
+        logger.error({ err, orderId: id }, "COD Woo sync lookup failed after committed collection");
+        return null;
+      });
+      res.json({ ok: true, id, status: "paid", codCollectionStatus: "collected", codCollectedBy: event.actor, codCollectedAt: event.collected_at, repeated: true, wcSync });
+      return;
+    }
+    const orderResult = await client.query(
+      "SELECT payment_method, cod_collection_status FROM uc_orders WHERE id=$1 FOR UPDATE", [id],
+    );
+    const order = orderResult.rows[0];
+    if (!order) { await client.query("ROLLBACK"); res.status(404).json({ error: "Order not found" }); return; }
+    if (order.payment_method !== "cod") {
+      await client.query("ROLLBACK"); res.status(409).json({ error: "Only COD orders can be confirmed as cash collected" }); return;
+    }
+    if (order.cod_collection_status === "collected") {
+      await client.query("ROLLBACK"); res.status(409).json({ error: "COD collection has already been confirmed" }); return;
+    }
+    const inserted = await client.query(
+      "INSERT INTO uc_cod_collection_events (order_id, idempotency_key, actor) VALUES ($1,$2,$3) RETURNING actor, collected_at",
+      [id, idempotencyKey, actor],
+    );
+    const event = inserted.rows[0];
+    await client.query(
+      "UPDATE uc_orders SET status='paid', cod_collection_status='collected', cod_collected_by=$2, cod_collected_at=$3 WHERE id=$1",
+      [id, event.actor, event.collected_at],
+    );
+    await client.query("COMMIT");
+    logger.info({ orderId: id, actor, collectedAt: event.collected_at }, "COD cash collection confirmed");
+    const wcSync = await syncCodCollectionToWoo(id).catch((err) => {
+      logger.error({ err, orderId: id }, "COD Woo sync lookup failed after committed collection");
+      return null;
+    });
+    res.json({ ok: true, id, status: "paid", codCollectionStatus: "collected", codCollectedBy: event.actor, codCollectedAt: event.collected_at, repeated: false, wcSync });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    logger.error({ err, orderId: id }, "Failed to confirm COD collection");
+    res.status(500).json({ error: "Failed to confirm COD collection" });
+  } finally {
+    client.release();
   }
 });
 
@@ -4353,7 +4842,11 @@ export function sendOrderConfirmationEmail(
       }).then(ok => {
         if (!ok) {
           logger.warn(`[resend] order confirmation not delivered to ${contact.email}; trying legacy email provider`);
-          sendEmail({ to: contact.email, ...receipt, template: "order_receipt", orderId: order.orderId });
+          sendSlackTeamMessage(
+            `⚠️ *Order confirmation email failed*\nResend could not deliver the receipt for order *#${order.orderId}* to ${contact.email}.\nThe legacy email provider is being attempted.`,
+            "ORDER_CONFIRMATION_RESEND_FAILURE",
+          ).catch(() => {});
+          sendEmail({ to: contact.email, ...receipt, template: "order_receipt", orderId: order.orderId }).catch(() => {});
         }
       });
     }
@@ -4400,7 +4893,7 @@ router.post(
       res.status(401).json({ error: "Authentication required" });
       return;
     }
-    const [account] = await db.select({ id: ucUsersTable.id })
+    const [account] = await db.select({ id: ucUsersTable.id, email: ucUsersTable.email })
       .from(ucUsersTable)
       .where(and(eq(ucUsersTable.id, accountId), isNull(ucUsersTable.deletedAt)))
       .limit(1);
@@ -4418,6 +4911,7 @@ router.post(
     const receiptDigits = String(receipt ?? "").trim().replace(/^#/, "");
     const phoneDigits = String(phone ?? "").replace(/\D/g, "");
     if (!/^\d{1,10}$/.test(receiptDigits) || phoneDigits.length < 9) {
+      logger.warn({ accountId, reason: "invalid_required_fields" }, "[register-purchase] rejected");
       res.status(400).json({
         error: "Enter your receipt number and the phone number used at purchase.",
       });
@@ -4466,6 +4960,7 @@ router.post(
         const item = items.find((candidate) => candidate.productId === productId);
         const activatedAt = new Date(String(commitActivatedAt ?? dateCreated ?? ""));
         if (!item || item.lifespanDays <= 0) {
+          logger.warn({ accountId, orderId, reason: "ineligible_product" }, "[register-purchase] rejected");
           res.status(400).json({ error: "Select an eligible filter from this purchase." });
           return;
         }
@@ -4474,6 +4969,7 @@ router.post(
           return;
         }
         if (Number.isNaN(activatedAt.getTime()) || activatedAt.getTime() > Date.now() + 60 * 60 * 1000) {
+          logger.warn({ accountId, orderId, reason: "invalid_activation_date" }, "[register-purchase] rejected");
           res.status(400).json({ error: "Invalid activation date." });
           return;
         }
@@ -4485,10 +4981,12 @@ router.post(
             ratedCapacityLitres: item.capacityLitres,
             activatedAt,
             sourceOrderId: orderId,
-          })
+            source,
+          } as typeof ucRegisteredFiltersTable.$inferInsert)
           .onConflictDoNothing()
           .returning();
         if (inserted.length === 0) {
+          logger.warn({ accountId, orderId, productId, source, reason: "duplicate_registration" }, "[register-purchase] rejected");
           res.status(409).json({ error: "This filter from this receipt is already registered to your account." });
           return;
         }
@@ -4508,7 +5006,7 @@ router.post(
         .limit(1);
       if (row) {
         const addr = (row.shippingAddress ?? {}) as Record<string, string>;
-        if (phonesMatch(addr["phone"], phone)) {
+        if (appPurchaseOwnedBy(accountId, row.userId, addr["phone"], phone, phonesMatch)) {
           const items = await db
             .select()
             .from(ucOrderItemsTable)
@@ -4534,7 +5032,9 @@ router.post(
       if (o && Number(o["id"]) === orderId) {
         const billing = (o["billing"] ?? {}) as Record<string, unknown>;
         const shipping = (o["shipping"] ?? {}) as Record<string, unknown>;
-        if (phonesMatch(billing["phone"], phone) || phonesMatch(shipping["phone"], phone)) {
+        // Store purchases require both the receipt phone and the authenticated
+        // account email; phone possession alone must never establish ownership.
+        if (storePurchaseOwnedBy(account.email, billing["email"], billing["phone"], shipping["phone"], phone, normalizeEmail, phonesMatch)) {
           const rawItems = Array.isArray(o["line_items"])
             ? (o["line_items"] as Record<string, unknown>[]).map((i) => ({
                 productId: Number(i["product_id"]),
@@ -4568,7 +5068,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const orderNumericId = Number(orderUserId);
   if (await guardDeletedAccount(orderNumericId, res)) return;
 
-  const { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, userEmail } =
+  const { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, userEmail, idempotencyKey } =
     req.body as {
       lineItems: { productId: number; quantity: number }[];
       paymentMethod: string;
@@ -4576,6 +5076,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       shippingAddress?: Record<string, string>;
       promoCode?: string;            // referral or promotion code
       userEmail?: string;            // used to gate referral first-order discount
+      idempotencyKey?: string;
     };
   if (!lineItems || !paymentMethod) {
     res.status(400).json({ error: "Missing required fields" });
@@ -4760,21 +5261,91 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const isPaid = paymentMethod !== "cod";
 
   // Compute order total after discount (500 KES delivery already included by client)
-  const productLines = lineItems.map((i) => {
-    const p = MOCK_PRODUCTS.find((m) => m["id"] === i.productId);
-    const price = parseFloat((p?.["price"] as string | undefined) ?? "0");
-    return {
-      productId: i.productId,
-      name: (p?.["name"] as string | undefined) ?? "Product",
-      quantity: i.quantity,
-      subtotal: price * i.quantity,
-    };
-  });
+  const productLines = serverPricedLines(lineItems, true);
+  if (!productLines) { res.status(400).json({ error: "lineItems must contain known products with positive whole quantities" }); return; }
   const subtotal = productLines.reduce((s, i) => s + i.subtotal, 0);
   const delivery = 500;
   const gross = subtotal + delivery;
-  const discountAmount = Math.round((gross * discountPercent) / 100);
+  let discountAmount = Math.round((gross * discountPercent) / 100);
+  // The durable promotion engine supersedes legacy in-memory promotions. A
+  // checkout discount is quoted against server-priced eligible product lines;
+  // the submitted client total is never considered.
+  let durableCheckoutPromotion: PromotionQuote | null = null;
+  if (promoCode?.trim() && Number.isInteger(orderNumericId) && orderNumericId > 0) {
+    const engineQuote = await quotePromotion(promoCode, "checkout", productLines.map((line) => line.productId), subtotal, productLines);
+    if (engineQuote) {
+      if (!idempotencyKey?.trim()) { res.status(400).json({ error: "idempotencyKey is required when using a durable promotion" }); return; }
+      durableCheckoutPromotion = engineQuote;
+      discountType = "promotion";
+      discountPercent = engineQuote.effectMode === "percentage" ? engineQuote.effectValue : 0;
+      discountAmount = Math.round(engineQuote.benefit);
+    }
+  }
   const netTotal = gross - discountAmount;
+  // Durable promoted WC checkout uses a local claim before its single remote
+  // attempt.  A retry observes that claim and never posts another discount.
+  if (durableCheckoutPromotion && hasWCCredentials()) {
+    const key = idempotencyKey!.trim();
+    const prior = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 LIMIT 1", [orderUserId, key]);
+    if (prior.rows[0]) {
+      const row = prior.rows[0];
+      if (row.wc_order_id) {
+        const storedItems = await pool.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [row.id]);
+        res.json({ id: row.wc_order_id, status: row.status, dateCreated: row.date_created, total: row.total,
+          currency: row.currency, paymentMethod: row.payment_method, shippingAddress: row.shipping_address ?? {},
+          discountPercent: row.discount_percent, discountAmount: row.discount_amount, promoCode: row.promo_code ?? "",
+          lineItems: storedItems.rows.map((item) => ({ productId: item.product_id, name: item.name, quantity: item.quantity, total: item.total })) });
+        return;
+      }
+      const candidates = await wcFetchArray("/orders", { per_page: "100", status: "any", orderby: "date", order: "desc" });
+      const matched = candidates?.find((candidate) => Array.isArray(candidate["meta_data"]) &&
+        (candidate["meta_data"] as Record<string, unknown>[]).some((meta) => meta["key"] === "uc_checkout_claim_id" && meta["value"] === row.checkout_claim_id));
+      if (matched?.["id"]) {
+        await pool.query("UPDATE uc_orders SET wc_order_id=$2,status='processing',checkout_state='remote_confirmed' WHERE id=$1", [row.id, Number(matched["id"])]);
+        res.json(normalizeOrder(matched)); return;
+      }
+      // Unknown/attempted claims are deliberately reconciliation-only: never
+      // make another remote POST after an ambiguous first attempt.
+      res.status(202).json({ id: row.id, checkoutState: row.checkout_state ?? "remote_unknown", reconciliationRequired: true });
+      return;
+    }
+    const claimId = randomUUID();
+    const client = await pool.connect();
+    let anchor: any;
+    try {
+      await client.query("BEGIN");
+      const inserted = await client.query(`INSERT INTO uc_orders (user_id,status,total,currency,payment_method,payment_reference,promo_code,discount_percent,discount_amount,shipping_address,checkout_idempotency_key,checkout_claim_id,checkout_state,cod_collection_status)
+        VALUES ($1,'pending-wc',$2,'KES',$3,$4,$5,$6,$7,$8,$9,$10,'remote_pending',$11) RETURNING *`,
+        [orderUserId, String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), key, claimId, paymentMethod === "cod" ? "awaiting_collection" : null]);
+      anchor = inserted.rows[0];
+      for (const line of productLines) await client.query("INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,$2,$3,$4,$5)", [anchor.id,line.productId,line.name,line.quantity,String(line.subtotal)]);
+      const use = await consumePromotionOnClient(client, { quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout", actor: `customer:${orderNumericId}`, idempotencyKey: key, operationRef: `${claimId}:${anchor.id}` });
+      await client.query("UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2", [`${claimId}:${anchor.id}`, use.use.id]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined); client.release();
+      const priorRace = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 LIMIT 1", [orderUserId,key]);
+      if (priorRace.rows[0]) { res.status(202).json({ id: priorRace.rows[0].id, reconciliationRequired: true }); return; }
+      res.status(409).json({ error: (error as Error).message }); return;
+    }
+    client.release();
+    await pool.query("UPDATE uc_orders SET checkout_state='remote_attempted',remote_attempted_at=now() WHERE id=$1", [anchor.id]);
+    const payload = { payment_method: paymentMethod, set_paid: isPaid, shipping: shippingAddress,
+      line_items: productLines.map((line) => ({ product_id: line.productId, quantity: line.quantity })),
+      fee_lines: [{ name: `Promotion ${durableCheckoutPromotion.code}`, total: String(-Math.round(durableCheckoutPromotion.benefit)), taxable: false }],
+      meta_data: [{ key: "uc_checkout_claim_id", value: claimId }, { key: "uc_checkout_key", value: key }, { key: "uc_account_id", value: orderUserId }] };
+    try {
+      const remote = await fetch(wcUrl("/orders"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (!remote.ok) throw new Error(`WC order creation failed with ${remote.status}`);
+      const order = await remote.json() as Record<string, unknown>;
+      if (!order || !order["id"]) throw new Error("WC did not return an order");
+      await pool.query("UPDATE uc_orders SET wc_order_id=$2,status='processing',checkout_state='remote_confirmed' WHERE id=$1", [anchor.id, Number(order["id"])]);
+      res.json(normalizeOrder(order)); return;
+    } catch {
+      await pool.query("UPDATE uc_orders SET checkout_state='remote_unknown' WHERE id=$1", [anchor.id]);
+      res.status(202).json({ id: anchor.id, checkoutState: "remote_unknown", reconciliationRequired: true }); return;
+    }
+  }
 
   // ── WC order reconciliation helper ─────────────────────────────────────────
   // Paginates through recent WC orders (newest first) to find one carrying an
@@ -4977,6 +5548,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               discountPercent,
               discountAmount,
               shippingAddress:  shippingAddress ?? {},
+               codCollectionStatus: paymentMethod === "cod" ? "awaiting_collection" : null,
             }).returning();
             const anchorId = anchor!.id;
             if (productLines.length > 0) {
@@ -5230,9 +5802,99 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
   // Persist order to DB
   try {
-    const [dbOrder] = await db.insert(ucOrdersTable).values({
+    let dbOrder: any;
+    if (durableCheckoutPromotion) {
+      // Local-order path: one transaction owns the order, lines and promotion
+      // use.  A cap/validation failure rolls all three back.
+      // Claiming the key on the order itself (rather than on promotion use)
+      // makes COD and concurrent retries idempotent even when no payment
+      // reference exists.
+      const priorCheckout = await pool.query(
+        "SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 LIMIT 1",
+        [orderUserId, idempotencyKey!.trim()],
+      );
+      if (priorCheckout.rows[0]) {
+        const row = priorCheckout.rows[0];
+        const priorItems = await pool.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [row.id]);
+        res.json({ id: row.id, status: row.status, dateCreated: row.date_created, total: row.total,
+          currency: row.currency, paymentMethod: row.payment_method, shippingAddress: row.shipping_address ?? {},
+          discountPercent: row.discount_percent, discountAmount: row.discount_amount, promoCode: row.promo_code ?? "",
+          lineItems: priorItems.rows.map((item) => ({ productId: item.product_id, name: item.name, quantity: item.quantity, total: item.total })) });
+        return;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const inserted = await client.query(
+          `INSERT INTO uc_orders (user_id,status,total,currency,payment_method,payment_reference,promo_code,discount_percent,discount_amount,shipping_address,checkout_idempotency_key,cod_collection_status)
+           VALUES ($1,$2,$3,'KES',$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+          [orderUserId, paymentMethod === "cod" ? "pending" : "processing", String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), idempotencyKey!.trim(), paymentMethod === "cod" ? "awaiting_collection" : null],
+        );
+        dbOrder = inserted.rows[0];
+        const promotionUse = await consumePromotionOnClient(client, {
+          quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout",
+          actor: `customer:${orderNumericId}`, idempotencyKey: idempotencyKey!.trim(),
+        });
+        if (promotionUse.repeated) {
+          const priorOrderId = Number(promotionUse.use.operation_ref);
+          const prior = Number.isInteger(priorOrderId)
+            ? await client.query("SELECT * FROM uc_orders WHERE id=$1 AND user_id=$2 LIMIT 1", [priorOrderId, orderUserId])
+            : { rows: [] };
+          if (!prior.rows[0]) {
+            throw Object.assign(new Error("The previous checkout could not be recovered"), { code: "INVALID_PROMOTION_RETRY" });
+          }
+          const priorItems = await client.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [priorOrderId]);
+          await client.query("COMMIT");
+          const row = prior.rows[0];
+          res.json({
+            id: row.id, status: row.status, dateCreated: row.date_created,
+            total: row.total, currency: row.currency, paymentMethod: row.payment_method,
+            shippingAddress: row.shipping_address ?? {}, discountPercent: row.discount_percent,
+            discountAmount: row.discount_amount, promoCode: row.promo_code ?? "",
+            lineItems: priorItems.rows.map((item) => ({
+              productId: item.product_id, name: item.name, quantity: item.quantity, total: item.total,
+            })),
+          });
+          return;
+        }
+        for (const line of productLines) await client.query(
+          `INSERT INTO uc_order_items (order_id,product_id,name,quantity,total) VALUES ($1,$2,$3,$4,$5)`,
+          [dbOrder.id, line.productId, line.name, line.quantity, String(line.subtotal)],
+        );
+        await client.query(
+          "UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2",
+          [String(dbOrder.id), promotionUse.use.id],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        const typed = error as Error & { code?: string };
+        // A concurrent request may have committed the order-key claim while
+        // this request was waiting on the unique index.  Return that durable
+        // result rather than treating the retry as a failed promotion.
+        if (typed.code === "23505") {
+          const prior = await client.query(
+            "SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 LIMIT 1",
+            [orderUserId, idempotencyKey!.trim()],
+          );
+          if (prior.rows[0]) {
+            const row = prior.rows[0];
+            const items = await client.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [row.id]);
+            res.json({ id: row.id, status: row.status, dateCreated: row.date_created, total: row.total,
+              currency: row.currency, paymentMethod: row.payment_method, shippingAddress: row.shipping_address ?? {},
+              discountPercent: row.discount_percent, discountAmount: row.discount_amount, promoCode: row.promo_code ?? "",
+              lineItems: items.rows.map((item) => ({ productId: item.product_id, name: item.name, quantity: item.quantity, total: item.total })) });
+            return;
+          }
+        }
+        res.status(typed.code === "PROMOTION_EXHAUSTED" ? 409 : 422).json({ error: typed.message || "Could not apply promotion" });
+        return;
+      } finally { client.release(); }
+    } else {
+      [dbOrder] = await db.insert(ucOrdersTable).values({
       userId:           orderUserId,
       status:           paymentMethod === "cod" ? "pending" : "processing",
+       codCollectionStatus: paymentMethod === "cod" ? "awaiting_collection" : null,
       total:            String(netTotal),
       currency:         "KES",
       paymentMethod,
@@ -5242,8 +5904,11 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       discountAmount,
       shippingAddress:  shippingAddress ?? {},
     }).returning();
+    }
 
-    if (dbOrder && productLines.length > 0) {
+    // The durable-promotion branch inserted its item rows inside the same
+    // transaction as the order and promotion use. Do not duplicate them here.
+    if (dbOrder && productLines.length > 0 && !durableCheckoutPromotion) {
       await db.insert(ucOrderItemsTable).values(
         productLines.map(({ productId, name, quantity, subtotal: t }) => ({
           orderId:   dbOrder.id,
@@ -5279,6 +5944,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           dbOrder!.total,
       currency:        dbOrder!.currency,
       paymentMethod:   dbOrder!.paymentMethod,
+      codCollectionStatus: dbOrder!.codCollectionStatus ?? null,
       shippingAddress: dbOrder!.shippingAddress ?? {},
       discountPercent,
       discountAmount,
@@ -5860,6 +6526,10 @@ export async function notifyOffice(subject: string, lines: string[], meta?: { te
   });
   if (sent) return;
   console.error(`[office-notify] Resend unavailable for "${subject}" — falling back to SendGrid/SMTP`);
+  sendSlackTeamMessage(
+    `⚠️ *Office email delivery failed*\nResend could not deliver: *${subject}*\nThe legacy email provider is being attempted.`,
+    "OFFICE_NOTIFICATION_RESEND_FAILURE",
+  ).catch(() => {});
   try {
     await sendEmail({
       to: OFFICE_EMAIL,
@@ -5976,8 +6646,137 @@ router.post("/uc/enquiries", async (req: Request, res: Response): Promise<void> 
 });
 
 // ─── Locations ────────────────────────────────────────────────────────────────
-router.get("/uc/locations", (_req: Request, res: Response): void => {
-  res.json(MOCK_LOCATIONS);
+// Location discovery is intentionally sourced only from the managed table.  A
+// location is not public until a staff member has explicitly verified it.
+const LOCATION_TYPES = new Set(["experience_centre", "refill_atm", "vendor"]);
+type LocationInput = {
+  type: string; name: string; address: string; latitude: number; longitude: number;
+  hours: string; phone: string | null; vendorName: string | null;
+};
+
+function locationInput(body: unknown, partial = false): LocationInput | null {
+  const source = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const text = (field: string, required = false): string | null => {
+    const value = source[field];
+    if (value === undefined && partial) return null;
+    if (typeof value !== "string") return required ? null : "";
+    const result = value.trim().slice(0, 500);
+    return required && !result ? null : result;
+  };
+  const type = text("type", !partial);
+  const name = text("name", !partial);
+  const address = text("address", !partial);
+  const hours = text("hours", !partial);
+  const latRaw = source["latitude"] ?? source["lat"];
+  const lngRaw = source["longitude"] ?? source["lng"];
+  const latitude = latRaw === undefined && partial ? NaN : Number(latRaw);
+  const longitude = lngRaw === undefined && partial ? NaN : Number(lngRaw);
+  const phoneValue = text("phone");
+  const vendorValue = text("vendorName");
+  if ((type !== null && !LOCATION_TYPES.has(type)) || name === null || address === null ||
+      hours === null || (!partial && (!Number.isFinite(latitude) || !Number.isFinite(longitude))) ||
+      (Number.isFinite(latitude) && (latitude < -90 || latitude > 90)) ||
+      (Number.isFinite(longitude) && (longitude < -180 || longitude > 180))) return null;
+  return {
+    type: type ?? "", name: name ?? "", address: address ?? "", latitude, longitude, hours: hours ?? "",
+    phone: phoneValue === null || phoneValue === "" ? null : phoneValue,
+    vendorName: vendorValue === null || vendorValue === "" ? null : vendorValue,
+  };
+}
+
+function publicLocation(row: typeof ucLocationsTable.$inferSelect) {
+  return {
+    id: row.id, type: row.type, name: row.name, address: row.address,
+    lat: Number(row.latitude), lng: Number(row.longitude), hours: row.hours,
+    phone: row.phone, vendorName: row.vendorName,
+  };
+}
+
+async function locationActor(req: Request): Promise<string> {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims) return "admin:unknown";
+  if (claims.type === "team-session" && typeof claims.id === "string") {
+    const [team] = await db.select({ email: teamUsersTable.email }).from(teamUsersTable)
+      .where(eq(teamUsersTable.id, claims.id)).limit(1);
+    if (team) return team.email.toLowerCase();
+  }
+  const id = Number(claims.id);
+  if (Number.isInteger(id) && id > 0 && id < 1_000_000_000) {
+    const [user] = await db.select({ email: ucUsersTable.email }).from(ucUsersTable)
+      .where(eq(ucUsersTable.id, id)).limit(1);
+    if (user) return user.email.toLowerCase();
+  }
+  return "admin:unknown";
+}
+
+router.get("/uc/locations", async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const locations = await db.select().from(ucLocationsTable)
+      .where(and(eq(ucLocationsTable.active, true), eq(ucLocationsTable.verified, true)))
+      .orderBy(asc(ucLocationsTable.name));
+    res.json(locations.map(publicLocation));
+  } catch (err) {
+    logger.error({ err }, "Unable to list public locations");
+    res.status(503).json({ error: "Locations are temporarily unavailable" });
+  }
+});
+
+router.get("/uc/admin/locations", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const locations = await db.select().from(ucLocationsTable).orderBy(asc(ucLocationsTable.name));
+  res.json({ locations });
+});
+
+router.post("/uc/admin/locations", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const input = locationInput(req.body);
+  if (!input) { res.status(400).json({ error: "Valid type, name, address, latitude, longitude, and hours are required" }); return; }
+  const actor = await locationActor(req);
+  const [location] = await db.insert(ucLocationsTable).values({
+    id: randomUUID(), ...input, latitude: String(input.latitude), longitude: String(input.longitude),
+    active: true, verified: false, createdBy: actor,
+  }).returning();
+  res.status(201).json({ location });
+});
+
+router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const locationId = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
+  if (!locationId) { res.status(400).json({ error: "Invalid location id" }); return; }
+  const existing = await db.select().from(ucLocationsTable).where(eq(ucLocationsTable.id, locationId)).limit(1);
+  if (!existing[0]) { res.status(404).json({ error: "Location not found" }); return; }
+  const input = locationInput(req.body, true);
+  if (!input) { res.status(400).json({ error: "Invalid location fields" }); return; }
+  const source = req.body as Record<string, unknown>;
+  const identityChanged = ["type", "name", "address", "latitude", "lat", "longitude", "lng", "vendorName"]
+    .some((key) => source[key] !== undefined);
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (source["type"] !== undefined) updates["type"] = input.type;
+  if (source["name"] !== undefined) updates["name"] = input.name;
+  if (source["address"] !== undefined) updates["address"] = input.address;
+  if (source["hours"] !== undefined) updates["hours"] = input.hours;
+  if (source["phone"] !== undefined) updates["phone"] = input.phone;
+  if (source["vendorName"] !== undefined) updates["vendorName"] = input.vendorName;
+  if (source["latitude"] !== undefined || source["lat"] !== undefined) updates["latitude"] = String(input.latitude);
+  if (source["longitude"] !== undefined || source["lng"] !== undefined) updates["longitude"] = String(input.longitude);
+  if (source["active"] !== undefined) {
+    if (typeof source["active"] !== "boolean") { res.status(400).json({ error: "active must be a boolean" }); return; }
+    updates["active"] = source["active"];
+  }
+  if (identityChanged) Object.assign(updates, { verified: false, verifiedBy: null, verifiedAt: null });
+  const [location] = await db.update(ucLocationsTable).set(updates).where(eq(ucLocationsTable.id, existing[0].id)).returning();
+  res.json({ location, verificationReset: identityChanged });
+});
+
+router.post("/uc/admin/locations/:id/verify", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const locationId = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
+  if (!locationId) { res.status(400).json({ error: "Invalid location id" }); return; }
+  const [location] = await db.update(ucLocationsTable).set({
+    verified: true, verifiedBy: await locationActor(req), verifiedAt: new Date(), updatedAt: new Date(),
+  }).where(eq(ucLocationsTable.id, locationId)).returning();
+  if (!location) { res.status(404).json({ error: "Location not found" }); return; }
+  res.json({ location });
 });
 
 // ─── Tickets ──────────────────────────────────────────────────────────────────

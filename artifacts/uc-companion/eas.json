@@ -13,6 +13,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com"
+      },
       "ios": {
         "resourceClass": "m-medium"
       },
@@ -22,6 +25,9 @@
       "channel": "preview"
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com"
+      },
       "ios": {
         "resourceClass": "m-medium"
       },

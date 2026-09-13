@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, integer, boolean, timestamp, json, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, integer, boolean, timestamp, json, uniqueIndex, index, bigserial, bigint } from "drizzle-orm/pg-core";
 
 /**
  * One row per referral-code owner.
@@ -52,3 +52,53 @@ export const ucReferralUsersTable = pgTable("uc_referral_users", {
 ]);
 
 export type UcReferralUser = typeof ucReferralUsersTable.$inferSelect;
+
+/** Immutable account-level attribution.  The legacy email tables above remain
+ * only for backwards-compatible reads; all new programme decisions use these
+ * account ids. */
+export const ucReferralAttributionsTable = pgTable("uc_referral_attributions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  referrerUserId: integer("referrer_user_id").notNull(),
+  referredUserId: integer("referred_user_id").notNull(),
+  referralCode: varchar("referral_code", { length: 40 }).notNull(),
+  attributedAt: timestamp("attributed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uc_referral_attributions_referred_unique").on(t.referredUserId),
+  index("uc_referral_attributions_referrer_idx").on(t.referrerUserId),
+]);
+
+/** Append-only conversion record; a refunded conversion is retained and marked
+ * reversed rather than deleted. */
+export const ucReferralConversionsTable = pgTable("uc_referral_conversions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  attributionId: bigint("attribution_id", { mode: "number" }).notNull(),
+  qualifyingOrderId: integer("qualifying_order_id").notNull(),
+  pointsSnapshot: integer("points_snapshot").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("confirmed"),
+  reversedAt: timestamp("reversed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uc_referral_conversions_order_unique").on(t.qualifyingOrderId),
+  uniqueIndex("uc_referral_conversions_attribution_unique").on(t.attributionId),
+]);
+
+/** Paired, non-transferable benefits.  The unique conversion/user/kind index
+ * makes issuance and compensating reversal replay-safe. */
+export const ucReferralBenefitsTable = pgTable("uc_referral_benefits", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  conversionId: bigint("conversion_id", { mode: "number" }).notNull(),
+  userId: integer("user_id").notNull(),
+  kind: varchar("kind", { length: 20 }).notNull(),
+  points: integer("points").notNull().default(0),
+  discountPercent: integer("discount_percent").notNull().default(0),
+  /** Whether this account earned this benefit for inviting or being invited. */
+  recipientRole: varchar("recipient_role", { length: 20 }).notNull().default("referred"),
+  status: varchar("status", { length: 20 }).notNull().default("available"),
+  usedOrderId: integer("used_order_id"),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  reversedAt: timestamp("reversed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uc_referral_benefits_conversion_user_kind_unique").on(t.conversionId, t.userId, t.kind),
+  index("uc_referral_benefits_user_status_idx").on(t.userId, t.status),
+]);

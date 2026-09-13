@@ -31,6 +31,7 @@ import bcryptjs from "bcryptjs";
 import app from "../app.js";
 import { db, ucUsersTable, ucOrdersTable, ucOrderItemsTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
+import { _slackSeams } from "../lib/slack.js";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -133,6 +134,7 @@ before(
 );
 
 after(async () => {
+  _slackSeams.sendMessage = null;
   if (createdOrderIds.length > 0) {
     await db.delete(ucOrderItemsTable)
       .where(inArray(ucOrderItemsTable.orderId, createdOrderIds))
@@ -159,6 +161,48 @@ after(async () => {
 
   await new Promise<void>(resolve => server.close(() => resolve()));
   globalThis.fetch = realFetch;
+});
+
+describe("createOrder — Resend failure Slack alert", () => {
+  it("attempts Slack when an order receipt gets a non-2xx Resend response", async () => {
+    const { id: userId } = await createTestUser("slack-fallback");
+    const slackCalls: Array<{ text: string; template: string }> = [];
+    _slackSeams.sendMessage = async (text, template) => {
+      slackCalls.push({ text, template });
+      return true;
+    };
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url.includes("api.resend.com")) {
+        return new Response(JSON.stringify({ error: "service unavailable" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return realFetch(input, init);
+    };
+
+    try {
+      const { sendOrderConfirmationEmail } = await import("../routes/uc.js");
+      sendOrderConfirmationEmail(String(userId), {
+        orderId: "SLACK-ORDER-1",
+        lineItems: [{ name: "Sweet Home", quantity: 1, total: "12500" }],
+        total: "12500",
+        currency: "KES",
+        paymentMethod: "cod",
+      });
+
+      assert.ok(
+        await waitFor(() => slackCalls.length > 0),
+        "Slack fallback must be attempted after Resend returns non-2xx",
+      );
+      assert.equal(slackCalls[0]?.template, "ORDER_CONFIRMATION_RESEND_FAILURE");
+      assert.match(slackCalls[0]?.text ?? "", /SLACK-ORDER-1/);
+    } finally {
+      _slackSeams.sendMessage = null;
+      globalThis.fetch = realFetch;
+    }
+  });
 });
 
 // ── Path A — WooCommerce path ─────────────────────────────────────────────────

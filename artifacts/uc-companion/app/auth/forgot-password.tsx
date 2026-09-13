@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Platform,
-  ActivityIndicator, KeyboardAvoidingView, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import BrandLogo from '@/components/BrandLogo';
 import { readResetTokenParam } from '@/lib/passwordReset';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
 export default function ForgotPasswordScreen() {
   const colors = useColors();
@@ -15,12 +16,14 @@ export default function ForgotPasswordScreen() {
   const { email: prefillEmail, resetToken: resetTokenParam } = useLocalSearchParams<{ email?: string; resetToken?: string }>();
   const resetToken = readResetTokenParam(resetTokenParam);
   const [email, setEmail] = useState(prefillEmail ?? '');
+  const [channel, setChannel] = useState<'email' | 'whatsapp'>('email');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [reset, setReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
 
   const getBase = () =>
     process.env.EXPO_PUBLIC_DOMAIN
@@ -29,16 +32,17 @@ export default function ForgotPasswordScreen() {
 
   async function handleSubmit() {
     if (!email.trim()) {
-      setError('Please enter your email address.');
+      setError('Please enter your email address or phone number.');
       return;
     }
+    Keyboard.dismiss();
     setError(null);
     setLoading(true);
     try {
       const res = await fetch(`${getBase()}/api/uc/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ identifier: email.trim(), channel }),
       });
       if (res.ok) {
         setSent(true);
@@ -62,6 +66,7 @@ export default function ForgotPasswordScreen() {
       setError('Passwords do not match.');
       return;
     }
+    Keyboard.dismiss();
     setError(null);
     setLoading(true);
     try {
@@ -85,10 +90,11 @@ export default function ForgotPasswordScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         style={[styles.screen, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <BrandLogo width={84} style={{ marginBottom: 4 }} />
         <Text style={[styles.title, { color: colors.text }]}>
@@ -97,7 +103,7 @@ export default function ForgotPasswordScreen() {
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
           {resetToken
             ? 'Choose a new password for your Ultra-Clear account.'
-            : "Enter the email on your account and we'll send you a reset link."}
+            : "Enter the email address or phone number on your account. We'll send recovery instructions if a verified channel is available."}
         </Text>
 
         {reset ? (
@@ -117,10 +123,10 @@ export default function ForgotPasswordScreen() {
         ) : sent ? (
           <View style={styles.sentBox}>
             <Ionicons name="checkmark-circle" size={48} color="#22C55E" style={{ marginBottom: 12 }} />
-            <Text style={[styles.sentTitle, { color: colors.text }]}>Check your inbox</Text>
+            <Text style={[styles.sentTitle, { color: colors.text }]}>Check your messages</Text>
             <Text style={[styles.sentBody, { color: colors.mutedForeground }]}>
-              If an account matches that address, you'll receive a password-reset link shortly.
-              Check your spam folder too.
+              If an account matches those details, recovery instructions will arrive shortly.
+              Check your email spam folder or WhatsApp.
             </Text>
             <TouchableOpacity
               onPress={() => router.replace('/auth/login' as never)}
@@ -143,7 +149,8 @@ export default function ForgotPasswordScreen() {
                       onChangeText={v => { setNewPassword(v); setError(null); }}
                       placeholder="At least 6 characters"
                       secureTextEntry
-                      autoCapitalize="none"
+                       autoCapitalize="none" autoComplete="new-password" returnKeyType="next"
+                       onSubmitEditing={() => confirmPasswordRef.current?.focus()} blurOnSubmit={false}
                       placeholderTextColor={colors.border}
                       style={[styles.input, { color: colors.text }]}
                     />
@@ -153,13 +160,14 @@ export default function ForgotPasswordScreen() {
                   <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Confirm password</Text>
                   <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
                     <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
-                    <TextInput
+                     <TextInput ref={confirmPasswordRef}
                       testID="reset-confirm-password"
                       value={confirmPassword}
                       onChangeText={v => { setConfirmPassword(v); setError(null); }}
                       placeholder="Repeat your password"
                       secureTextEntry
-                      autoCapitalize="none"
+                       autoCapitalize="none" autoComplete="new-password" returnKeyType="done"
+                       onSubmitEditing={handleReset}
                       placeholderTextColor={colors.border}
                       style={[styles.input, { color: colors.text }]}
                     />
@@ -167,25 +175,54 @@ export default function ForgotPasswordScreen() {
                 </View>
               </>
             ) : (
-              <View style={styles.field}>
-                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email address</Text>
-                <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
-                  <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
-                  <TextInput
-                    testID="reset-email"
-                    value={email}
-                    onChangeText={v => { setEmail(v); setError(null); }}
-                    placeholder="you@example.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    placeholderTextColor={colors.border}
-                    style={[styles.input, { color: colors.text }]}
-                  />
+              <>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email address or phone number</Text>
+                  <View style={[styles.inputWrap, { borderColor: error ? '#EF4444' : colors.border, backgroundColor: colors.card }]}>
+                    <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      testID="reset-email"
+                      value={email}
+                      onChangeText={v => { setEmail(v); setError(null); }}
+                      placeholder="you@example.com or +254..."
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSubmit}
+                      placeholderTextColor={colors.border}
+                      style={[styles.input, { color: colors.text }]}
+                    />
+                  </View>
+                  {error && <Text accessibilityLiveRegion="polite" style={styles.errorText}>{error}</Text>}
                 </View>
-                {error && <Text style={styles.errorText}>{error}</Text>}
-              </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Send instructions by</Text>
+                  <View style={styles.channelRow}>
+                    {(['email', 'whatsapp'] as const).map(option => (
+                      <TouchableOpacity
+                        key={option}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: channel === option }}
+                        onPress={() => setChannel(option)}
+                        style={[styles.channelButton, {
+                          backgroundColor: channel === option ? colors.primary : colors.card,
+                          borderColor: channel === option ? colors.primary : colors.border,
+                        }]}
+                      >
+                        <Text style={{ color: channel === option ? '#fff' : colors.text, fontWeight: '600' }}>
+                          {option === 'email' ? 'Email' : 'WhatsApp'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={[styles.channelHint, { color: colors.mutedForeground }]}>
+                    Instructions are sent only if the selected channel is verified on an account.
+                  </Text>
+                </View>
+              </>
             )}
-            {resetToken && error && <Text style={styles.errorText}>{error}</Text>}
+            {Boolean(resetToken && error) && <Text accessibilityLiveRegion="polite" style={styles.errorText}>{error}</Text>}
 
             <TouchableOpacity
               testID="reset-submit"
@@ -207,7 +244,7 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </KeyboardAvoidingView>
   );
 }
@@ -222,6 +259,9 @@ const styles = StyleSheet.create({
   fieldLabel:    { fontSize: 13, fontWeight: '500' as const },
   inputWrap:     { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13 },
   input:         { flex: 1, fontSize: 16 },
+  channelRow:    { flexDirection: 'row', gap: 8 },
+  channelButton: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  channelHint:   { fontSize: 12, lineHeight: 17 },
   errorText:     { fontSize: 12, color: '#EF4444', marginTop: 2 },
   submitBtn:     { borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' as const },

@@ -7,20 +7,24 @@ import { useColors } from '@/hooks/useColors';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import { directionsUrls } from '@/lib/locationMap';
 
-const FILTER_TABS = ['All', 'Centres', 'ATMs'];
+const FILTER_TABS = ['All', 'Centres', 'ATMs', 'Vendors'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
-function LocationCard({ loc, colors }: { loc: MapLocation; colors: ReturnType<typeof useColors> }) {
+function LocationCard({ loc, colors, onDirections }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onDirections: (location: MapLocation) => void }) {
   const isCentre = loc.type === 'experience_centre';
+  const isVendor = loc.type === 'vendor';
+  const accent = isCentre ? colors.primary : isVendor ? '#2E7D32' : '#00B4D8';
+  const typeLabel = isCentre ? 'Centre' : isVendor ? 'Verified vendor' : 'ATM';
   return (
     <TouchableOpacity
       activeOpacity={0.8}
-      onPress={() => Linking.openURL(`https://maps.google.com/?q=${loc.lat},${loc.lng}`)}
+      onPress={() => onDirections(loc)}
       style={[styles.locCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.locIcon, { backgroundColor: isCentre ? colors.primaryLight : '#E0F7FA' }]}>
-        <Ionicons name={isCentre ? 'business-outline' : 'water-outline'} size={20}
-          color={isCentre ? colors.primary : '#00B4D8'} />
+      <View style={[styles.locIcon, { backgroundColor: isCentre ? colors.primaryLight : isVendor ? '#E8F5E9' : '#E0F7FA' }]}>
+        <Ionicons name={isCentre || isVendor ? 'business-outline' : 'water-outline'} size={20}
+          color={accent} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.locName, { color: colors.text }]} numberOfLines={1}>{loc.name}</Text>
@@ -30,9 +34,9 @@ function LocationCard({ loc, colors }: { loc: MapLocation; colors: ReturnType<ty
           <Text style={[styles.locHours, { color: colors.mutedForeground }]}>{loc.hours}</Text>
         </View>
       </View>
-      <View style={[styles.typeBadge, { backgroundColor: isCentre ? colors.primaryLight : '#E0F7FA' }]}>
-        <Text style={[styles.typeText, { color: isCentre ? colors.primary : '#007B9E' }]}>
-          {isCentre ? 'Centre' : 'ATM'}
+      <View style={[styles.typeBadge, { backgroundColor: isCentre ? colors.primaryLight : isVendor ? '#E8F5E9' : '#E0F7FA' }]}>
+        <Text style={[styles.typeText, { color: accent }]}>
+          {typeLabel}
         </Text>
       </View>
     </TouchableOpacity>
@@ -43,17 +47,39 @@ export default function MapScreen() {
   const colors = useColors();
   const api = useApi();
   const [filter, setFilter] = useState('All');
+  const [directionsError, setDirectionsError] = useState('');
   const cartBarInset = useCartBarInset();
 
-  const { data: locations = [], isLoading, refetch, isRefetching } = useQuery({
+  const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn: () => api.getLocations(),
     staleTime: 10 * 60 * 1000,
   });
 
-  const visible = locations.filter(l =>
-    filter === 'All' ? true : filter === 'Centres' ? l.type === 'experience_centre' : l.type === 'refill_atm'
-  );
+  const visible = locations.filter(l => {
+    if (filter === 'All') return true;
+    if (filter === 'Centres') return l.type === 'experience_centre';
+    if (filter === 'ATMs') return l.type === 'refill_atm';
+    return l.type === 'vendor';
+  });
+
+  async function openDirections(location: MapLocation) {
+    setDirectionsError('');
+    const urls = directionsUrls(location, 'web');
+    try {
+      if (await Linking.canOpenURL(urls.primary)) {
+        await Linking.openURL(urls.primary);
+        return;
+      }
+    } catch {
+      // Fall through to the browser URL, which also works when canOpenURL rejects.
+    }
+    try {
+      await Linking.openURL(urls.fallback);
+    } catch {
+      setDirectionsError('Google Maps could not be opened. Please try again.');
+    }
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -73,8 +99,15 @@ export default function MapScreen() {
         <Text style={[styles.mapHintText, { color: colors.primary }]}>Tap any location to open in Google Maps</Text>
       </View>
 
-      {isLoading ? (
-        <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>
+       {isLoading ? (
+         <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading verified locations…</Text></View>
+       ) : isError ? (
+         <View style={styles.loading}>
+           <Ionicons name="alert-circle-outline" size={32} color={colors.primary} />
+           <Text style={[styles.stateTitle, { color: colors.text }]}>Locations are unavailable</Text>
+           <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Please check your connection and try again.</Text>
+           <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text style={styles.retryText}>{isRefetching ? 'Retrying…' : 'Try again'}</Text></TouchableOpacity>
+         </View>
       ) : (
         <FlatList
           data={visible}
@@ -83,10 +116,12 @@ export default function MapScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No locations for this filter</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{locations.length ? 'No locations match this filter.' : 'No verified locations are available yet.'}</Text>
+              <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text style={styles.retryText}>{isRefetching ? 'Refreshing…' : 'Refresh'}</Text></TouchableOpacity>
             </View>
           }
-          renderItem={({ item }) => <LocationCard loc={item} colors={colors} />}
+          ListHeaderComponent={directionsError ? <Text style={[styles.directionsError, { color: colors.mutedForeground }]}>{directionsError}</Text> : null}
+          renderItem={({ item }) => <LocationCard loc={item} colors={colors} onDirections={openDirections} />}
         />
       )}
     </View>
@@ -99,7 +134,11 @@ const styles = StyleSheet.create({
   filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   mapHint: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   mapHintText: { fontSize: 13, fontWeight: '500' as const },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 28 },
+  stateTitle: { fontSize: 17, fontWeight: '700' as const },
+  stateText: { fontSize: 14, textAlign: 'center' },
+  retryBtn: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 11, marginTop: 4 },
+  retryText: { color: '#fff', fontSize: 14, fontWeight: '600' as const },
   list: { padding: 16, gap: 12, paddingBottom: Platform.OS === 'web' ? 34 : 80 },
   locCard: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 12, borderWidth: 1, padding: 14, gap: 12 },
   locIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -109,6 +148,7 @@ const styles = StyleSheet.create({
   locHours: { fontSize: 11 },
   typeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   typeText: { fontSize: 11, fontWeight: '600' as const },
-  empty: { alignItems: 'center', paddingTop: 40 },
+  empty: { alignItems: 'center', paddingTop: 40, gap: 14 },
   emptyText: { fontSize: 14 },
+  directionsError: { textAlign: 'center', fontSize: 13, marginBottom: 12 },
 });

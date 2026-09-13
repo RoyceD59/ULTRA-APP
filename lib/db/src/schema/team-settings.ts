@@ -23,6 +23,11 @@ export const teamSettingsTable = pgTable("team_settings", {
    */
   teamAlertEmail: text("team_alert_email"),
   /**
+   * Failed referral settlement attempts required before the team is alerted.
+   * Falls back to REFERRAL_FAILURE_ALERT_THRESHOLD (default 3) when null.
+   */
+  referralFailureAlertThreshold: integer("referral_failure_alert_threshold"),
+  /**
    * How many days to keep successful notification log entries before the nightly pruning job
    * removes them. Falls back to UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS env var (default 30).
    */

@@ -5,6 +5,7 @@ import { pool } from "@workspace/db";
 import { sendViaResend } from "./lib/resend.js";
 import { migrateAndGuardSessionDir } from "./lib/whatsapp";
 import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/account-records.js";
+import { processPendingReferralSettlements } from "./routes/referrals.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -264,6 +265,18 @@ async function applyStartupMigrations(): Promise<void> {
     );
   `);
   logger.info("Startup migration: password_reset_tokens table ensured");
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_password_reset_audit (
+      id text PRIMARY KEY,
+      actor_type text NOT NULL,
+      actor_id text,
+      target_user_id text,
+      channel text,
+      result text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  logger.info("Startup migration: uc_password_reset_audit table ensured");
 
   // Low-stock alert threshold column — admin-configurable from Inventory settings.
   await pool.query(`
@@ -420,6 +433,51 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS credential_version integer NOT NULL DEFAULT 0;
   `);
   logger.info("Startup migration: uc_users.credential_version column ensured");
+  await pool.query(`
+    ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false;
+    ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS phone_verified boolean NOT NULL DEFAULT false;
+    ALTER TABLE uc_users ALTER COLUMN email_verified SET DEFAULT false;
+    ALTER TABLE uc_users ALTER COLUMN phone_verified SET DEFAULT false;
+  `);
+  logger.info("Startup migration: uc_users recovery-channel verification columns ensured");
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_contact_verification_tokens (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      channel text NOT NULL CHECK (channel IN ('email', 'whatsapp')),
+      contact_hash text NOT NULL,
+      token_hash text NOT NULL UNIQUE,
+      expires_at timestamptz NOT NULL,
+      used_at timestamptz,
+      verified_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS uc_contact_verification_user_channel_idx
+      ON uc_contact_verification_tokens (user_id, channel, created_at DESC);
+    ALTER TABLE uc_contact_verification_tokens ADD COLUMN IF NOT EXISTS contact_hash text;
+    ALTER TABLE uc_contact_verification_tokens ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+  `);
+  // Repair the brief legacy state where registered local emails defaulted to
+  // verified without evidence. A successfully completed credential (or Clerk
+  // social provenance) is the only state retained as verified.
+  await pool.query(`
+    UPDATE uc_users u
+       SET email_verified = false
+     WHERE u.auth_provider <> 'social'
+       AND u.email_verified = true
+       AND NOT EXISTS (
+         SELECT 1 FROM uc_contact_verification_tokens v
+          WHERE v.user_id = u.id::text AND v.channel = 'email' AND v.verified_at IS NOT NULL
+       );
+    UPDATE uc_users u
+       SET phone_verified = false
+     WHERE u.phone_verified = true
+       AND NOT EXISTS (
+         SELECT 1 FROM uc_contact_verification_tokens v
+          WHERE v.user_id = u.id::text AND v.channel = 'whatsapp' AND v.verified_at IS NOT NULL
+       );
+  `);
+  logger.info("Startup migration: uc_contact_verification_tokens table ensured");
 
   // Add address column to uc_users so customers can store their delivery address.
   await pool.query(`
@@ -561,6 +619,26 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_orders
       ADD COLUMN IF NOT EXISTS customer_stage text,
       ADD COLUMN IF NOT EXISTS customer_stage_updated_at timestamptz;
+    ALTER TABLE uc_orders
+      ADD COLUMN IF NOT EXISTS cod_collection_status text,
+      ADD COLUMN IF NOT EXISTS cod_collected_by text,
+      ADD COLUMN IF NOT EXISTS cod_collected_at timestamptz,
+      ADD COLUMN IF NOT EXISTS cod_wc_sync_status text,
+      ADD COLUMN IF NOT EXISTS cod_wc_sync_error text,
+      ADD COLUMN IF NOT EXISTS cod_wc_sync_attempted_at timestamptz,
+      ADD COLUMN IF NOT EXISTS cod_wc_sync_attempt_count integer NOT NULL DEFAULT 0;
+    UPDATE uc_orders
+      SET cod_collection_status = 'awaiting_collection'
+      WHERE payment_method = 'cod' AND cod_collection_status IS NULL;
+    CREATE TABLE IF NOT EXISTS uc_cod_collection_events (
+      id serial PRIMARY KEY,
+      order_id integer NOT NULL REFERENCES uc_orders(id) ON DELETE CASCADE,
+      idempotency_key text NOT NULL,
+      actor text NOT NULL,
+      collected_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT uc_cod_collection_events_order_unique UNIQUE (order_id),
+      CONSTRAINT uc_cod_collection_events_order_idempotency_unique UNIQUE (order_id, idempotency_key)
+    );
     ALTER TABLE uc_water_tests
       ADD COLUMN IF NOT EXISTS customer_stage text,
       ADD COLUMN IF NOT EXISTS customer_stage_updated_at timestamptz,
@@ -623,7 +701,96 @@ async function applyStartupMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS conversion_mode text,
       ADD COLUMN IF NOT EXISTS conversion_value numeric(12,2);
   `);
-  logger.info("Startup migration: rewards, registered filters, impact ledger, and customer-stage columns ensured");
+  logger.info("Startup migration: rewards, registered filters, impact ledger, customer-stage, and COD collection columns ensured");
+  await pool.query(`
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'legacy';
+    DROP INDEX IF EXISTS uc_registered_filters_user_order_product_idx;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_source_order_product_idx
+      ON uc_registered_filters (source, source_order_id, product_id)
+      WHERE source_order_id IS NOT NULL;
+  `);
+  logger.info("Startup migration: registered filter purchase source ownership ensured");
+
+  // DB-backed service locations replace the former process-local static list.
+  // Legacy locations are seeded once and marked verified because these are the
+  // previously published locations; future identity/coordinate edits reset that
+  // verification and require an explicit staff verification.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_locations (
+      id text PRIMARY KEY,
+      type text NOT NULL,
+      name text NOT NULL,
+      address text NOT NULL,
+      latitude numeric(9,6) NOT NULL,
+      longitude numeric(9,6) NOT NULL,
+      hours text NOT NULL DEFAULT '',
+      phone text,
+      vendor_name text,
+      active boolean NOT NULL DEFAULT true,
+      verified boolean NOT NULL DEFAULT false,
+      verified_by text,
+      verified_at timestamptz,
+      created_by text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS uc_locations_public_idx ON uc_locations (active, verified);
+  `);
+  const legacyLocations = [
+    ["loc1", "experience_centre", "UC Experience Centre Westlands", "Woodvale Groove, Westlands, Nairobi", -1.2633, 36.8072, "Mon–Sat 8am–6pm, Sun 10am–4pm", "+254 700 123456"],
+    ["loc2", "experience_centre", "UC Service Centre Karen", "Karen Hardy Estate, Karen, Nairobi", -1.3319, 36.7097, "Mon–Fri 8am–5pm", "+254 700 654321"],
+    ["loc3", "refill_atm", "Water ATM – Village Market", "Village Market Mall, Limuru Rd, Gigiri", -1.2194, 36.8083, "24/7", null],
+    ["loc4", "refill_atm", "Water ATM – Sarit Centre", "Sarit Centre, Karuna Rd, Westlands", -1.2592, 36.8027, "6am–11pm daily", null],
+    ["loc5", "refill_atm", "Water ATM – Two Rivers Mall", "Two Rivers Mall, Rhapta Rd, Westlands", -1.2178, 36.7985, "7am–10pm daily", null],
+    ["loc6", "refill_atm", "Water ATM – Garden City", "Garden City Mall, Thika Superhighway", -1.2241, 36.8801, "6am–10pm daily", null],
+    ["loc7", "refill_atm", "Water ATM – Junction Mall", "Junction Mall, Ngong Rd, Nairobi", -1.3003, 36.7773, "7am–9pm daily", null],
+  ];
+  for (const location of legacyLocations) {
+    await pool.query(
+      `INSERT INTO uc_locations
+       (id, type, name, address, latitude, longitude, hours, phone, active, verified, verified_by, verified_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,true,'migration:legacy',now(),'migration:legacy')
+       ON CONFLICT (id) DO NOTHING`,
+      location,
+    );
+  }
+  logger.info("Startup migration: managed UC locations ensured and legacy locations seeded");
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_promotions (
+      id serial PRIMARY KEY, code text NOT NULL, type text NOT NULL, effect_mode text NOT NULL,
+      effect_value numeric(12,2) NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz,
+      active boolean NOT NULL DEFAULT true, global_use_limit integer, per_user_use_limit integer,
+      created_by text NOT NULL, updated_by text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      CHECK (type IN ('bonus_points','redemption_boost','checkout_discount')),
+      CHECK (effect_mode IN ('fixed','percentage')), CHECK (effect_value > 0)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_promotions_code_lower_idx ON uc_promotions (lower(code));
+    CREATE TABLE IF NOT EXISTS uc_promotion_products (
+      promotion_id integer NOT NULL REFERENCES uc_promotions(id) ON DELETE CASCADE,
+      product_id integer NOT NULL, UNIQUE(promotion_id, product_id)
+    );
+    CREATE TABLE IF NOT EXISTS uc_promotion_uses (
+      id serial PRIMARY KEY, promotion_id integer NOT NULL REFERENCES uc_promotions(id),
+      user_id integer NOT NULL REFERENCES uc_users(id), operation text NOT NULL, operation_ref text,
+      actor text NOT NULL, idempotency_key text NOT NULL, effect_snapshot text NOT NULL,
+      benefit_amount numeric(12,2) NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(user_id, idempotency_key)
+    );
+    CREATE INDEX IF NOT EXISTS uc_promotion_uses_promotion_user_idx ON uc_promotion_uses (promotion_id,user_id);
+  `);
+  logger.info("Startup migration: durable rewards promotions ensured");
+  await pool.query(`
+    ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_idempotency_key text NOT NULL DEFAULT '';
+    ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_claim_id text;
+    ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_state text;
+    ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS remote_attempted_at timestamptz;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_orders_user_checkout_idempotency_unique
+      ON uc_orders (user_id, checkout_idempotency_key)
+      WHERE checkout_idempotency_key != '';
+  `);
+  logger.info("Startup migration: durable local checkout idempotency ensured");
 
   // Opt-in channel flags for filter replacement reminders (email / SMS / WhatsApp).
   // All default false — customers explicitly enable each channel.
@@ -641,7 +808,9 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(`
     ALTER TABLE uc_users
       ADD COLUMN IF NOT EXISTS clerk_user_id text,
-      ADD COLUMN IF NOT EXISTS auth_provider  text NOT NULL DEFAULT 'password';
+      ADD COLUMN IF NOT EXISTS auth_provider  text NOT NULL DEFAULT 'password',
+      ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS phone_verified boolean NOT NULL DEFAULT false;
   `);
   // The unique constraint must carry the drizzle-generated name
   // (uc_users_clerk_user_id_unique). An inline "text UNIQUE" would create it
@@ -664,7 +833,7 @@ async function applyStartupMigrations(): Promise<void> {
       END IF;
     END $$;
   `);
-  logger.info("Startup migration: uc_users clerk_user_id / auth_provider columns ensured");
+  logger.info("Startup migration: uc_users identity and verification columns ensured");
 
   // Identity ownership is enforced by canonical values, active-account checks,
   // and transaction-scoped advisory locks in customer-facing routes. Do not
@@ -817,6 +986,66 @@ async function applyStartupMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS uc_referral_users_referred_by_code_idx
       ON uc_referral_users (referred_by_code);
   `);
+  // Account-id referral attribution and immutable benefit audit.  A refund
+  // reverses records in place and adds compensating ledger rows; no history is
+  // deleted. Kept here as well as the shared migration for deployed instances
+  // which use startup idempotent DDL.
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_referral_attributions (
+    id bigserial PRIMARY KEY, referrer_user_id integer NOT NULL REFERENCES uc_users(id),
+    referred_user_id integer NOT NULL REFERENCES uc_users(id), referral_code varchar(40) NOT NULL,
+    attributed_at timestamptz NOT NULL DEFAULT now(), CHECK (referrer_user_id <> referred_user_id),
+    UNIQUE(referred_user_id))`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS uc_referral_attributions_referrer_idx ON uc_referral_attributions(referrer_user_id)`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_referral_conversions (
+    id bigserial PRIMARY KEY, attribution_id bigint NOT NULL REFERENCES uc_referral_attributions(id),
+    qualifying_order_id integer NOT NULL REFERENCES uc_orders(id), points_snapshot integer NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','reversed')), reversed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(attribution_id), UNIQUE(qualifying_order_id))`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_referral_benefits (
+    id bigserial PRIMARY KEY, conversion_id bigint NOT NULL REFERENCES uc_referral_conversions(id),
+    user_id integer NOT NULL REFERENCES uc_users(id), kind varchar(20) NOT NULL CHECK (kind IN ('points','discount')), points integer NOT NULL DEFAULT 0,
+    discount_percent integer NOT NULL DEFAULT 0, recipient_role varchar(20) NOT NULL DEFAULT 'referred' CHECK (recipient_role IN ('referrer','referred')), status varchar(20) NOT NULL DEFAULT 'available' CHECK (status IN ('available','used','reversed')),
+    used_order_id integer REFERENCES uc_orders(id), used_at timestamptz, reversed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(conversion_id,user_id,kind))`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS uc_referral_benefits_user_status_idx ON uc_referral_benefits(user_id,status)`);
+  await pool.query(`ALTER TABLE uc_referral_benefits ADD COLUMN IF NOT EXISTS recipient_role varchar(20) NOT NULL DEFAULT 'referred';
+    ALTER TABLE uc_referral_benefits ADD COLUMN IF NOT EXISTS used_at timestamptz;
+    ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS referral_benefit_id bigint REFERENCES uc_referral_benefits(id);
+    ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS payment_confirmed_at timestamptz`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uc_orders_referral_benefit_unique ON uc_orders(referral_benefit_id) WHERE referral_benefit_id IS NOT NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS uc_orders_paid_confirmation_idx ON uc_orders(user_id,payment_confirmed_at,id)`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_referral_settlements (
+    order_id integer PRIMARY KEY REFERENCES uc_orders(id) ON DELETE CASCADE,
+    status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','completed')),
+    attempts integer NOT NULL DEFAULT 0, last_error text,
+    next_attempt_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz,
+    alert_claimed_at timestamptz, alerted_at timestamptz,
+    alert_attempts integer NOT NULL DEFAULT 0, alert_last_error text,
+    alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    slack_alert_claimed_at timestamptz, slack_alerted_at timestamptz,
+    slack_alert_attempts integer NOT NULL DEFAULT 0, slack_alert_last_error text,
+    slack_alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now())`);
+  await pool.query(`ALTER TABLE uc_referral_settlements
+    ADD COLUMN IF NOT EXISTS alert_claimed_at timestamptz,
+    ADD COLUMN IF NOT EXISTS alerted_at timestamptz,
+    ADD COLUMN IF NOT EXISTS alert_attempts integer NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS alert_last_error text,
+    ADD COLUMN IF NOT EXISTS alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    ADD COLUMN IF NOT EXISTS slack_alert_claimed_at timestamptz,
+    ADD COLUMN IF NOT EXISTS slack_alerted_at timestamptz,
+    ADD COLUMN IF NOT EXISTS slack_alert_attempts integer NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS slack_alert_last_error text,
+    ADD COLUMN IF NOT EXISTS slack_alert_next_attempt_at timestamptz NOT NULL DEFAULT now()`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS uc_referral_settlements_due_idx ON uc_referral_settlements(status,next_attempt_at)`);
+  await pool.query(`ALTER TABLE team_settings
+    ADD COLUMN IF NOT EXISTS referral_failure_alert_threshold integer`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS uc_referral_settlements_alert_due_idx
+    ON uc_referral_settlements(attempts,alert_next_attempt_at) WHERE alerted_at IS NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS uc_referral_settlements_slack_alert_due_idx
+    ON uc_referral_settlements(attempts,slack_alert_next_attempt_at) WHERE slack_alerted_at IS NULL`);
+  await pool.query(`INSERT INTO uc_rewards_rules (event_type,label,points_value,active)
+    VALUES ('referral-successful-payment','Successful referral',200,true) ON CONFLICT (event_type) DO NOTHING`);
   logger.info("Startup migration: uc_referral_codes and uc_referral_users tables ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
@@ -920,6 +1149,11 @@ applyStartupMigrations()
 
       logger.info({ port }, "Server listening");
       startScheduler();
+      processPendingReferralSettlements().catch((err) => logger.error({ err }, "Referral settlement startup pass failed"));
+      const referralTimer = setInterval(() => {
+        processPendingReferralSettlements().catch((err) => logger.error({ err }, "Referral settlement pass failed"));
+      }, 60_000);
+      referralTimer.unref();
     });
 
     process.on("SIGTERM", () => shutdown(server, "SIGTERM"));

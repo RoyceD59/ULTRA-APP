@@ -96,6 +96,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/product-media" options={{ title: 'Product Media' }} />
       <Stack.Screen name="admin/product-edit" options={{ title: 'Edit Product' }} />
       <Stack.Screen name="water-test" options={{ title: 'Water Test Request' }} />
+      <Stack.Screen name="rewards" options={{ title: 'My Rewards' }} />
       <Stack.Screen name="auth/login" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/register" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/forgot-password" options={{ title: '', headerTransparent: true }} />

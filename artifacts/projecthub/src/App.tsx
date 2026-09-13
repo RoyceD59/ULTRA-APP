@@ -38,8 +38,22 @@ import AdminRewardsPage from '@/pages/admin/rewards';
 import AdminCustomersPage from '@/pages/admin/customers';
 import AdminUnsyncedRegistrationsPage from '@/pages/admin/unsynced-registrations';
 import AdminReferralsPage from '@/pages/admin/referrals';
+import AdminPromotionsPage from '@/pages/admin/promotions';
+import AdminLocationsPage from '@/pages/admin/locations';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      networkMode: 'online',
+      refetchOnReconnect: 'always',
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
+    mutations: {
+      networkMode: 'online',
+    },
+  },
+});
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -107,6 +121,8 @@ function Router() {
               <Route path="/admin/customers"><AdminGuard><AdminCustomersPage /></AdminGuard></Route>
               <Route path="/admin/unsynced-registrations"><AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard></Route>
               <Route path="/admin/referrals"><AdminGuard><AdminReferralsPage /></AdminGuard></Route>
+              <Route path="/admin/promotions"><AdminGuard><AdminPromotionsPage /></AdminGuard></Route>
+              <Route path="/admin/locations"><AdminGuard><AdminLocationsPage /></AdminGuard></Route>
               <Route component={NotFound} />
             </Switch>
           </AppLayout>
@@ -117,6 +133,14 @@ function Router() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const refreshAfterReconnect = () => {
+      void queryClient.invalidateQueries();
+    };
+    window.addEventListener('online', refreshAfterReconnect);
+    return () => window.removeEventListener('online', refreshAfterReconnect);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

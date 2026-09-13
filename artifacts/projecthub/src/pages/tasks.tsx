@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CheckSquare, Plus, Filter, Calendar, Radio, MoreHorizontal, Trash2 } from "lucide-react";
+import { CheckSquare, ChevronDown, Plus, Filter, Calendar, Radio, MoreHorizontal, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -332,6 +332,7 @@ export default function Tasks() {
   // Push-to-agent state
   const [pushDialogTask, setPushDialogTask] = useState<Task | null>(null);
   const [recentlyPushed, setRecentlyPushed] = useState<Set<number>>(new Set());
+  const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(() => new Set(["done"]));
 
   const deleteTask = useDeleteTask({
     mutation: {
@@ -370,6 +371,20 @@ export default function Tasks() {
   const handleStatusChange = (id: number, status: any) => {
     updateTaskStatus.mutate({ id, data: { status } });
   };
+  const toggleStatus = (status: string) => {
+    setCollapsedStatuses(current => {
+      const next = new Set(current);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  };
+  const taskSections = [
+    { status: "in_progress", label: "In Progress" },
+    { status: "in_review", label: "In Review" },
+    { status: "todo", label: "To Do" },
+    { status: "done", label: "Done" },
+  ].map(section => ({ ...section, tasks: tasks?.filter(task => task.status === section.status) ?? [] }));
 
   if (isLoading && !tasks) {
     return <div className="p-8"><div className="h-8 w-48 bg-muted rounded animate-pulse mb-8" /></div>;
@@ -379,15 +394,15 @@ export default function Tasks() {
     <div className="space-y-6 animate-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
             <CheckSquare className="w-8 h-8 text-primary" />
             All Tasks
           </h1>
           <p className="text-muted-foreground mt-1">Cross-project task list.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3">
           <Select value={filterProject} onValueChange={setFilterProject}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Filter by Project" />
             </SelectTrigger>
@@ -400,7 +415,7 @@ export default function Tasks() {
           </Select>
           
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-full sm:w-[150px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -412,7 +427,7 @@ export default function Tasks() {
             </SelectContent>
           </Select>
 
-          <Button onClick={handleNew} className="gap-2 shadow-sm">
+          <Button onClick={handleNew} className="col-span-2 sm:col-span-1 gap-2 shadow-sm min-h-11">
             <Plus className="w-4 h-4" /> New Task
           </Button>
         </div>
@@ -437,20 +452,35 @@ export default function Tasks() {
         />
       )}
 
-      <Card className="shadow-sm border-border/50">
-        <div className="divide-y">
-          {!tasks?.length ? (
-            <div className="p-12 text-center text-muted-foreground flex flex-col items-center">
-              <CheckSquare className="w-12 h-12 mb-4 text-muted/50" />
-              <p>No tasks found matching your filters.</p>
-            </div>
-          ) : (
-            tasks.map((task, i) => {
+      {!tasks?.length ? (
+        <Card className="shadow-sm border-border/50">
+          <div className="p-12 text-center text-muted-foreground flex flex-col items-center">
+            <CheckSquare className="w-12 h-12 mb-4 text-muted/50" />
+            <p>No tasks found matching your filters.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {taskSections.filter(section => section.tasks.length > 0).map(section => {
+            const collapsed = collapsedStatuses.has(section.status);
+            return <Card key={section.status} className="shadow-sm border-border/50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleStatus(section.status)}
+                aria-expanded={!collapsed}
+                className="w-full min-h-12 flex items-center gap-3 px-4 py-3 text-left bg-muted/30 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "-rotate-90" : ""}`} />
+                <TaskStatusBadge status={section.status as Task["status"]} />
+                <span className="ml-auto rounded-full bg-background border px-2 py-0.5 text-xs font-semibold">{section.tasks.length}</span>
+              </button>
+              {!collapsed && <div className="divide-y">
+                {section.tasks.map((task, i) => {
               const project = projects?.find(p => p.id === task.projectId);
               const assignee = members?.find(m => m.id === task.assigneeId);
               
               return (
-                <div key={task.id} className={`p-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-muted/20 transition-colors stagger-${(i % 5) + 1}`}>
+                <div key={task.id} className={`p-4 flex flex-col lg:flex-row lg:items-center gap-4 hover:bg-muted/20 transition-colors stagger-${(i % 5) + 1}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <TaskPriorityBadge priority={task.priority} />
@@ -463,7 +493,7 @@ export default function Tasks() {
                     </h3>
                   </div>
 
-                  <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-4 flex-shrink-0">
                     {task.dueDate && (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Calendar className="w-3.5 h-3.5" />
@@ -471,7 +501,7 @@ export default function Tasks() {
                       </div>
                     )}
                     
-                    <div className="flex items-center gap-2 w-32">
+                    <div className="flex items-center gap-2 min-w-0 sm:w-32">
                       <Avatar className="w-6 h-6 border">
                         <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
                           {assignee ? getInitials(assignee.name) : '?'}
@@ -484,7 +514,7 @@ export default function Tasks() {
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-[130px] justify-between text-left h-8 px-2 py-1">
+                        <Button variant="outline" className="w-full sm:w-[130px] justify-between text-left min-h-10 px-2 py-1">
                           <TaskStatusBadge status={task.status} />
                         </Button>
                       </DropdownMenuTrigger>
@@ -534,10 +564,12 @@ export default function Tasks() {
                   </div>
                 </div>
               );
-            })
-          )}
+                })}
+              </div>}
+            </Card>;
+          })}
         </div>
-      </Card>
+      )}
     </div>
   );
 }

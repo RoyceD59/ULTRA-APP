@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import {
-  Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets,
+  Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets, MapPin, Tag,
   FolderKanban, Gauge, Gift, LayoutDashboard, Leaf, Link2, LogOut,
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
   AlertTriangle, BellRing, X,
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 const NAVIGATION = [
   ["Dashboard", "/", "dashboard", LayoutDashboard],
@@ -44,6 +45,8 @@ const ADMIN_NAVIGATION = [
   ["Integrations", "/admin/integrations", Link2],
   ["Rewards", "/admin/rewards", Gift],
   ["Referral Support", "/admin/referrals", BellRing],
+  ["Promotions", "/admin/promotions", Tag],
+  ["Locations", "/admin/locations", MapPin],
   ["Customers", "/admin/customers", Users],
   ["Unsynced Registrations", "/admin/unsynced-registrations", AlertTriangle],
 ] as const;
@@ -139,6 +142,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [mpesaSecretMissing, setMpesaSecretMissing] = useState(false);
   const [securityStatusKnown, setSecurityStatusKnown] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const recoveryCount = useCount("/api/uc/admin/orders/recovery-count", (body) => body.count ?? 0);
   const reminderGapCount = useCount("/api/uc/admin/orders/reminder-gaps", (body) => body.orders?.length ?? 0);
 
@@ -175,35 +180,66 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   };
   const allowedNavigation = NAVIGATION.filter(([, , slug]) => canView(slug));
   const showWarning = admin && mpesaSecretMissing && !securityBannerDismissed;
+  useEffect(() => setMobileNavigationOpen(false), [location]);
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  const navigationContent = (
+    <>
+      <nav aria-label="Primary navigation" className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+        {allowedNavigation.map(([name, href, slug, Icon]) => {
+          const active = href === "/" ? location === "/" : location.startsWith(href);
+          const badge = slug === "orders" ? recoveryCount + reminderGapCount : 0;
+          return <Link key={href} href={href} className={cn("min-h-11 w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground")}><Icon className="w-4 h-4 shrink-0" /><span className="flex-1 text-left">{name}</span>{badge > 0 && <span className="rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5">{badge}</span>}</Link>;
+        })}
+        {admin && <><div className="pt-4 pb-1 px-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Admin</p></div>{ADMIN_NAVIGATION.map(([name, href, Icon]) => <Link key={href} href={href} className={cn("min-h-11 w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", location.startsWith(href) ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground")}><Icon className="w-4 h-4 shrink-0" />{name}</Link>)}</>}
+      </nav>
+      <div className="border-t p-3">
+        <p className="px-3 text-xs font-medium truncate">{user?.name ?? user?.email ?? "Team"}</p>
+        <Button variant="ghost" onClick={() => setChangePasswordOpen(true)} className="mt-1 min-h-11 w-full justify-start text-muted-foreground"><KeyRound className="w-4 h-4 mr-2" />Change password</Button>
+        <Button variant="ghost" onClick={signOut} className="mt-1 min-h-11 w-full justify-start text-muted-foreground"><LogOut className="w-4 h-4 mr-2" />Sign out</Button>
+      </div>
+    </>
+  );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <aside className="w-64 shrink-0 border-r bg-sidebar flex flex-col">
+    <div className="projecthub-shell flex min-h-dvh h-dvh overflow-hidden bg-background">
+      <aside className="hidden md:flex w-64 shrink-0 border-r bg-sidebar flex-col">
         <div className="h-16 flex items-center px-6 border-b shrink-0">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"><span className="text-primary-foreground font-mono text-sm font-bold">P</span></div>
           <span className="ml-3 font-semibold text-sm tracking-tight">ProjectHub</span>
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-          {allowedNavigation.map(([name, href, slug, Icon]) => {
-            const active = href === "/" ? location === "/" : location.startsWith(href);
-            const badge = slug === "orders" ? recoveryCount + reminderGapCount : 0;
-            return <Link key={href} href={href}><button className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors", active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground")}><Icon className="w-4 h-4 shrink-0" /><span className="flex-1 text-left">{name}</span>{badge > 0 && <span className="rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5">{badge}</span>}</button></Link>;
-          })}
-          {admin && <><div className="pt-4 pb-1 px-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Admin</p></div>{ADMIN_NAVIGATION.map(([name, href, Icon]) => <Link key={href} href={href}><button className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors", location.startsWith(href) ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground")}><Icon className="w-4 h-4 shrink-0" />{name}</button></Link>)}</>}
-        </nav>
-        <div className="border-t p-3">
-          <p className="px-3 text-xs font-medium truncate">{user?.name ?? user?.email ?? "Team"}</p>
-          <Button variant="ghost" size="sm" onClick={() => setChangePasswordOpen(true)} className="mt-1 w-full justify-start text-muted-foreground"><KeyRound className="w-4 h-4 mr-2" />Change password</Button>
-          <Button variant="ghost" size="sm" onClick={signOut} className="mt-1 w-full justify-start text-muted-foreground"><LogOut className="w-4 h-4 mr-2" />Sign out</Button>
-        </div>
+        {navigationContent}
       </aside>
+      <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
+        <SheetContent side="left" className="w-[min(20rem,88vw)] p-0 flex flex-col bg-sidebar">
+          <div className="h-16 flex items-center px-5 border-b shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"><span className="text-primary-foreground font-mono text-sm font-bold">P</span></div>
+            <SheetTitle className="ml-3 text-sm">ProjectHub</SheetTitle>
+          </div>
+          {navigationContent}
+        </SheetContent>
+      </Sheet>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {showWarning && <SecurityBanner onDismiss={() => {
           writeSecurityBannerDismissal(true);
           setSecurityBannerDismissed(true);
         }} />}
-        <header className="h-16 border-b bg-background/80 flex items-center justify-end px-8 shrink-0">{admin && <Badge variant="secondary">Admin</Badge>}</header>
-        <main className="flex-1 overflow-y-auto p-8"><div className="max-w-6xl mx-auto">{children}</div></main>
+        {!online && <div role="status" className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-xs font-semibold text-white"><WifiOff className="h-4 w-4" />Offline — viewing the app shell. Changes and new records refresh when connectivity returns.</div>}
+        <header className="app-safe-top min-h-16 border-b bg-background/80 flex items-center justify-between md:justify-end px-4 sm:px-6 md:px-8 shrink-0">
+          <Button variant="ghost" size="icon" className="md:hidden min-h-11 min-w-11" onClick={() => setMobileNavigationOpen(true)} aria-label="Open navigation"><Menu className="w-5 h-5" /></Button>
+          <span className="md:hidden font-semibold text-sm">ProjectHub</span>
+          {admin && <Badge variant="secondary">Admin</Badge>}
+        </header>
+        <main className="app-safe-bottom flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8"><div className="max-w-6xl mx-auto min-w-0">{children}</div></main>
       </div>
       <ChangePasswordDialog open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
     </div>

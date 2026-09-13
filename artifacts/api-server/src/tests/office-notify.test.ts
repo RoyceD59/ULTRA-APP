@@ -16,6 +16,7 @@ import http from "node:http";
 process.env["SESSION_SECRET"] ??= "test-secret-for-office-notify-tests";
 
 const { notifyOffice } = await import("../routes/uc.js");
+const { _slackSeams } = await import("../lib/slack.js");
 
 // ── Stub Resend server ───────────────────────────────────────────────────────
 let resendStub: http.Server;
@@ -40,6 +41,7 @@ before(async () => {
 });
 
 after(async () => {
+  _slackSeams.sendMessage = null;
   await new Promise<void>((r) => resendStub.close(() => r()));
   delete process.env["RESEND_BASE_URL"];
   delete process.env["RESEND_API_KEY"];
@@ -60,7 +62,10 @@ const PII_LINES = [
 ];
 
 describe("notifyOffice", () => {
-  beforeEach(() => { resendHits = []; });
+  beforeEach(() => {
+    resendHits = [];
+    _slackSeams.sendMessage = null;
+  });
 
   it("delivers via Resend on 2xx and does not fall back", async () => {
     process.env["RESEND_API_KEY"] = "test-key";
@@ -86,6 +91,24 @@ describe("notifyOffice", () => {
     assert.ok(cap.logs.some((l) => l.includes("falling back")), "fallback logged");
     // sendEmail chain reached (no provider configured in tests → skip log)
     assert.ok(cap.logs.some((l) => l.includes("sales@ucfilters.com")), "sendEmail fallback attempted");
+  });
+
+  it("attempts Slack for a ticket alert when Resend returns non-2xx", async () => {
+    process.env["RESEND_API_KEY"] = "test-key";
+    resendStatus = 500;
+    const slackCalls: Array<{ text: string; template: string }> = [];
+    _slackSeams.sendMessage = async (text, template) => {
+      slackCalls.push({ text, template });
+      return true;
+    };
+
+    const subject = "New Service Request TKT-SLACK-1: Sweet Home";
+    await notifyOffice(subject, PII_LINES, { ticketId: "TKT-SLACK-1" });
+
+    assert.equal(resendHits.length, 1, "Resend was attempted");
+    assert.equal(slackCalls.length, 1, "Slack fallback was attempted");
+    assert.equal(slackCalls[0]?.template, "OFFICE_NOTIFICATION_RESEND_FAILURE");
+    assert.match(slackCalls[0]?.text ?? "", /TKT-SLACK-1/);
   });
 
   it("never logs the customer form payload (PII)", async () => {

@@ -7,7 +7,7 @@
  * Highlights webhook recovery orders with an amber "Webhook recovery" badge
  * so the team knows to enrich and fulfil them manually.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,13 @@ interface AdminOrder {
   currency: string;
   paymentMethod: string;
   paymentReference: string;
+  codCollectionStatus?: "awaiting_collection" | "collected" | null;
+  codCollectedBy?: string | null;
+  codCollectedAt?: string | null;
+  codWcSyncStatus?: "pending" | "succeeded" | "failed" | null;
+  codWcSyncError?: string | null;
+  codWcSyncAttemptedAt?: string | null;
+  codWcSyncAttemptCount?: number;
   webhookRecovery: boolean;
   customerStage?: "accepted" | "shipped" | "delivered" | null;
   customerStageUpdatedAt?: string | null;
@@ -170,6 +177,7 @@ function statusColor(status: string) {
 }
 
 function paymentMethodLabel(method: string) {
+  if (method === "cod")      return "Cash on delivery";
   if (method === "paystack") return "Paystack";
   if (method === "mpesa")    return "M-Pesa";
   if (method === "stripe")   return "Stripe";
@@ -219,6 +227,8 @@ function OrderActions({
 
   const isRefunded = order.status === "refunded";
   const isPaystack = order.paymentMethod === "paystack" && !!order.paymentReference;
+  const isCodAwaitingCollection = order.paymentMethod === "cod" && order.codCollectionStatus === "awaiting_collection";
+  const collectionIdempotencyRef = useRef<string | null>(null);
 
   async function call(method: string, path: string, body?: unknown): Promise<boolean> {
     setError("");
@@ -262,15 +272,22 @@ function OrderActions({
     setBusy(null);
   }
 
+  async function confirmCashCollection() {
+    setBusy("cod-collection");
+    collectionIdempotencyRef.current ??= crypto.randomUUID();
+    await call("POST", "/cod-collection", { idempotencyKey: collectionIdempotencyRef.current });
+    setBusy(null);
+  }
+
   return (
     <div className="mt-3 pt-3 border-t space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
         {!isRefunded && order.status !== "paid" && (
           <Button
             variant="outline" size="sm"
             onClick={() => setStatus("paid")}
             disabled={busy !== null}
-            className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+            className="min-h-11 sm:min-h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
           >
             <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
             {busy === "paid" ? "Saving…" : "Mark paid"}
@@ -281,11 +298,37 @@ function OrderActions({
             variant="outline" size="sm"
             onClick={() => setStatus("declined")}
             disabled={busy !== null}
-            className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
+            className="min-h-11 sm:min-h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
           >
             <XCircle className="w-3.5 h-3.5 mr-1" />
             {busy === "declined" ? "Saving…" : "Mark declined"}
           </Button>
+        )}
+
+        {isCodAwaitingCollection && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline" size="sm" disabled={busy !== null}
+                className="min-h-11 sm:min-h-7 text-xs text-amber-800 border-amber-300 hover:bg-amber-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                {busy === "cod-collection" ? "Confirming…" : "Confirm cash collected"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm cash collection for order #{order.id}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Confirm only after cash has been received. This records your account and the collection time.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmCashCollection}>Confirm collection</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
 
         {/* Refund — real Paystack refund for card payments; confirmation required */}
@@ -295,7 +338,7 @@ function OrderActions({
               <Button
                 variant="outline" size="sm"
                 disabled={busy !== null}
-                className="h-7 text-xs text-violet-700 border-violet-300 hover:bg-violet-50"
+                className="min-h-11 sm:min-h-7 text-xs text-violet-700 border-violet-300 hover:bg-violet-50"
               >
                 <Undo2 className="w-3.5 h-3.5 mr-1" />
                 {busy === "refund" ? "Refunding…" : "Refund"}
@@ -338,7 +381,7 @@ function OrderActions({
             <Button
               variant="ghost" size="sm"
               disabled={busy !== null}
-              className="h-7 text-xs text-muted-foreground hover:text-destructive ml-auto"
+              className="min-h-11 sm:min-h-7 text-xs text-muted-foreground hover:text-destructive sm:ml-auto"
             >
               <Trash2 className="w-3.5 h-3.5 mr-1" />
               {busy === "delete" ? "Deleting…" : "Delete"}
@@ -381,13 +424,19 @@ function CustomerStageActions({ order, token, onChanged }: { order: AdminOrder; 
   const [pending, setPending] = useState<CustomerStage | null>(null);
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
+  // Keep the key for a retry of this exact stage action; a different stage is
+  // a separate customer notification and must receive a new key.
+  const idempotencyRef = useRef<{ stage: CustomerStage; key: string } | null>(null);
   const currentIndex = order.customerStage ? CUSTOMER_STAGES.indexOf(order.customerStage) : -1;
   async function advance(stage: CustomerStage) {
     setPending(stage); setError(""); setResult("");
+    if (idempotencyRef.current?.stage !== stage) {
+      idempotencyRef.current = { stage, key: crypto.randomUUID() };
+    }
     try {
       const response = await fetch(`${BASE}/api/uc/admin/orders/${order.id}/customer-stage`, {
         method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ stage }),
+        body: JSON.stringify({ stage, idempotencyKey: idempotencyRef.current.key }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string; notification?: { status?: string; message?: string }; push?: { status?: string; message?: string }; customerStage?: string };
       if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
@@ -399,7 +448,7 @@ function CustomerStageActions({ order, token, onChanged }: { order: AdminOrder; 
   }
   return <div className="mt-3 pt-3 border-t space-y-2">
     <p className="text-xs font-medium">Customer-facing delivery update <span className="font-normal text-muted-foreground">— separate from internal order status</span></p>
-    <div className="flex flex-wrap gap-1.5">{CUSTOMER_STAGES.map((stage, index) => <Button key={stage} size="sm" variant={order.customerStage === stage ? "default" : "outline"} className="h-7 text-xs" disabled={pending !== null || index <= currentIndex} onClick={() => advance(stage)}>{pending === stage ? "Saving…" : customerStageLabel(stage)}</Button>)}</div>
+    <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap">{CUSTOMER_STAGES.map((stage, index) => <Button key={stage} size="sm" variant={order.customerStage === stage ? "default" : "outline"} className="min-h-11 sm:min-h-7 text-xs" disabled={pending !== null || index <= currentIndex} onClick={() => advance(stage)}>{pending === stage ? "Saving…" : customerStageLabel(stage)}</Button>)}</div>
     {result && <p className="text-xs text-emerald-700" role="status">{result}</p>}
     {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
   </div>;
@@ -448,7 +497,7 @@ function OrderCard({
 
   return (
     <Card className={isRecovery ? "border-amber-400" : ""}>
-      <CardHeader className="pb-2 pt-4 px-5">
+      <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-semibold">Order #{order.id}</span>
@@ -473,6 +522,13 @@ function OrderCard({
             <Badge className={`text-xs font-medium capitalize ${statusColor(order.status)}`}>
               {order.status}
             </Badge>
+            {order.paymentMethod === "cod" && (
+              <Badge className={order.codCollectionStatus === "collected"
+                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                : "bg-amber-100 text-amber-800 hover:bg-amber-100"}>
+                {order.codCollectionStatus === "collected" ? "Cash collected" : "Awaiting cash collection"}
+              </Badge>
+            )}
           </div>
           <span className="text-muted-foreground text-xs">
             {formatRelativeDate(order.dateCreated)}
@@ -482,7 +538,7 @@ function OrderCard({
         {/* Customer row */}
         <p className="text-xs text-muted-foreground mt-1">
           {customerIsEmail ? "Customer email" : "Customer"}:{" "}
-          <span className="font-mono">{order.userId}</span>
+          <span className="font-mono break-all">{order.userId}</span>
           {" · "}{paymentMethodLabel(order.paymentMethod)}
         </p>
 
@@ -494,7 +550,7 @@ function OrderCard({
             <span className="text-xs text-muted-foreground">
               {paymentMethodLabel(order.paymentMethod)} ref:
             </span>
-            <span className="font-mono text-xs font-medium">{order.paymentReference}</span>
+            <span className="font-mono text-xs font-medium break-all">{order.paymentReference}</span>
             <CopyButton value={order.paymentReference} label="reference" />
             {order.paymentMethod === "paystack" && (
               <a
@@ -509,9 +565,23 @@ function OrderCard({
             )}
           </div>
         )}
+        {order.paymentMethod === "cod" && order.codCollectionStatus === "collected" && (
+          <div className="mt-1.5 space-y-1">
+            <p className="text-xs text-emerald-700">
+              Cash collected by <span className="font-medium">{order.codCollectedBy ?? "Unknown"}</span>
+              {order.codCollectedAt ? ` on ${new Date(order.codCollectedAt).toLocaleString()}` : ""}.
+            </p>
+            {order.codWcSyncStatus === "failed" && (
+              <p className="text-xs text-amber-800" role="alert">
+                WooCommerce still needs payment-status sync (attempt {order.codWcSyncAttemptCount ?? 0}).
+                {order.codWcSyncError ? ` ${order.codWcSyncError}` : ""}
+              </p>
+            )}
+          </div>
+        )}
       </CardHeader>
 
-      <CardContent className="px-5 pb-4">
+      <CardContent className="px-4 sm:px-5 pb-4">
         {order.lineItems.length === 0 ? (
           <p className="text-muted-foreground text-sm italic flex items-center gap-1.5">
             <Package className="w-4 h-4" />
@@ -524,7 +594,7 @@ function OrderCard({
                 ? gapItems?.find(g => g.productId === item.productId)
                 : undefined;
               return (
-                <li key={i} className="text-sm flex justify-between gap-2">
+                <li key={i} className="text-sm flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-2">
                   <span className="flex items-center gap-1.5 flex-wrap">
                     {item.name} × {item.quantity}
                     {itemGap && (
@@ -683,7 +753,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ShoppingBag className="w-6 h-6" />
@@ -698,13 +768,13 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
             All app orders — review webhook recovery orders before dispatch.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 sm:w-auto sm:flex sm:items-center gap-2">
           {/* Recovery-only filter toggle */}
           <Button
             variant={recoveryOnly ? "default" : "outline"}
             size="sm"
             onClick={() => setRecoveryOnly(v => !v)}
-            className={recoveryOnly ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500" : ""}
+            className={recoveryOnly ? "min-h-11 bg-amber-500 hover:bg-amber-600 text-white border-amber-500" : "min-h-11"}
             title={recoveryOnly ? "Showing recovery orders only — click to show all" : "Filter to recovery orders only"}
           >
             {recoveryOnly
@@ -726,36 +796,36 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
             <Download className={`w-4 h-4 mr-2 ${exporting ? "animate-pulse" : ""}`} />
             {exporting ? "Downloading…" : "Download CSV"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          <Button className="min-h-11" variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} title="Sign out">
+          <Button className="min-h-11" variant="ghost" size="sm" onClick={onLogout} title="Sign out" aria-label="Sign out">
             <LogOut className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
       {/* Date range picker */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
+      <div className="grid grid-cols-1 sm:flex sm:items-center gap-3">
+        <div className="grid grid-cols-[auto_1fr] items-center gap-2">
           <Label htmlFor="orders-from" className="text-sm text-muted-foreground whitespace-nowrap">From</Label>
           <Input
             id="orders-from"
             type="date"
             value={fromDate}
             onChange={e => setFromDate(e.target.value)}
-            className="w-40 h-8 text-sm"
+            className="w-full sm:w-40 min-h-11 sm:min-h-8 text-sm"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-[auto_1fr] items-center gap-2">
           <Label htmlFor="orders-to" className="text-sm text-muted-foreground whitespace-nowrap">To</Label>
           <Input
             id="orders-to"
             type="date"
             value={toDate}
             onChange={e => setToDate(e.target.value)}
-            className="w-40 h-8 text-sm"
+            className="w-full sm:w-40 min-h-11 sm:min-h-8 text-sm"
           />
         </div>
         {(fromDate || toDate) && (
@@ -819,7 +889,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
               Add a <span className="font-mono text-xs">filter_lifespan_days</span> value in WooCommerce to fix.
             </p>
           </div>
-          <span className="text-xs text-orange-600 font-medium whitespace-nowrap">View only →</span>
+          <span className="hidden sm:inline text-xs text-orange-600 font-medium whitespace-nowrap">View only →</span>
         </div>
       )}
       {gapsOnly && (
@@ -852,7 +922,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
               to confirm items and address before dispatch.
             </p>
           </div>
-          <span className="text-xs text-amber-600 font-medium whitespace-nowrap">View only →</span>
+          <span className="hidden sm:inline text-xs text-amber-600 font-medium whitespace-nowrap">View only →</span>
         </div>
       )}
 

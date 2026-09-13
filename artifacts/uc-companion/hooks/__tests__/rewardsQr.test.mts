@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRewardsQrPayload } from "../../lib/rewardsQr";
+import { buildRewardsQrPayload } from "../../lib/rewardsQr.ts";
 
 test("rewards QR payload contains only the opaque server token", () => {
   const token = "vYcEoZCdkj-Qr_Token";

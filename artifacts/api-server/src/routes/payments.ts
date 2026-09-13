@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { createHmac, randomUUID } from "node:crypto";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { ucOrdersTable, mpesaStkInitiationsTable, teamSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { decryptSecret } from "../lib/secret-crypto.js";
@@ -9,6 +9,18 @@ import { sendViaResend } from "../lib/resend.js";
 import { sendSms } from "../lib/sms.js";
 import { buildOrderReceiptEmail } from "../lib/email.js";
 import { paymentLimiter } from "../lib/rate-limiters.js";
+import { enqueueReferralSettlement } from "./referrals.js";
+
+async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
+  // Provider recovery rows carry an email/phone placeholder until /uc/orders
+  // validates account ownership and catalogue lines. Avoid an extra callback
+  // query (and any lock wait); finalized app orders always use numeric account
+  // IDs, while the maintenance scan independently verifies their item rows.
+  const accountId = Number(order.userId);
+  if (!order.webhookRecovery && Number.isInteger(accountId) && accountId > 0) {
+    await enqueueReferralSettlement(order.id);
+  }
+}
 
 /**
  * Send a recovery-order alert to the team via email (primary) and SMS (fallback).
@@ -716,9 +728,15 @@ router.post(
             .update(ucOrdersTable)
             .set({ status: "processing" })
             .where(eq(ucOrdersTable.id, order.id));
+          await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [order.id]);
           console.info(
             `[Paystack webhook] Order ${order.id} (ref ${reference}) advanced to processing`
           );
+          // The verified webhook is a paid-order boundary.  Qualification is
+          // idempotent and refuses recovery/unqualified orders without items.
+          await enqueueReferralSettlementIfReady(order);
+        } else if (["processing", "completed", "paid"].includes(order.status)) {
+          await enqueueReferralSettlementIfReady(order);
         } else {
           // Already processed — safe no-op (duplicate event)
           console.info(
@@ -750,6 +768,7 @@ router.post(
           webhookRecovery:  true,
         })
         .returning();
+      await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [recovered!.id]);
 
       console.info(
         `[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`
@@ -1179,10 +1198,42 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         .returning();
 
       if (advanced.length > 0) {
+        await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [order.id]);
         // We won the race — app closed during the wait, polling stopped.
         console.info(
           `[M-Pesa callback] Order ${order.id} (ref ${paymentReference}) advanced to processing`
         );
+        await enqueueReferralSettlementIfReady(order);
+        const customerEmail = order.userId?.includes("@") ? order.userId : null;
+        if (customerEmail) {
+          const shippingAddr = (order.shippingAddress ?? {}) as Record<string, string>;
+          const receipt = buildOrderReceiptEmail({
+            orderId: String(order.id),
+            firstName: shippingAddr["firstName"] ?? "Customer",
+            email: customerEmail,
+            lineItems: [{ name: "M-Pesa Payment", quantity: 1, total: String(order.total) }],
+            total: String(order.total),
+            currency: order.currency,
+            paymentMethod: "mpesa",
+            shippingAddress: shippingAddr,
+            discountAmount: order.discountAmount,
+            promoCode: order.promoCode ?? undefined,
+            dateCreated: order.dateCreated,
+            paymentReference: receiptNum || paymentReference,
+          });
+          sendViaResend({
+            from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+            to: customerEmail, subject: receipt.subject, html: receipt.html, text: receipt.text,
+            meta: { template: "order_receipt", orderId: order.id },
+          }).catch(() => {});
+        }
+        // Acknowledge immediately after the durable status/outbox boundary.
+        // Customer communications are handled by the normal order finalization
+        // path and must never hold a provider callback open.
+        ack({ orderId: order.id });
+        return;
+      } else if (["processing", "completed", "paid"].includes(order.status)) {
+        await enqueueReferralSettlementIfReady(order);
 
         // Send customer confirmation email when we have an email address.
         // userId is set to the customer's email when the app creates the order.
@@ -1277,6 +1328,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
         webhookRecovery:  true,
       })
       .returning();
+    await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [recovered!.id]);
 
     console.info(
       `[M-Pesa callback] Recovery order ${recovered!.id} created — ref=${paymentReference} receipt=${receiptNum} amount=KES ${recoveryAmount} phone=${recoveryPhone}`

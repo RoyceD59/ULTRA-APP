@@ -19,11 +19,13 @@ CREATE TABLE IF NOT EXISTS uc_registered_filters (
   rated_capacity_litres integer NOT NULL,
   activated_at timestamptz NOT NULL,
   source_order_id integer,
+  source text NOT NULL DEFAULT 'legacy',
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_user_order_product_idx
-  ON uc_registered_filters (user_id, source_order_id, product_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_source_order_product_idx
+  ON uc_registered_filters (source, source_order_id, product_id)
+  WHERE source_order_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS uc_registered_filters_user_active_idx
   ON uc_registered_filters (user_id, active);
 

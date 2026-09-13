@@ -355,3 +355,53 @@ describe("echo signature enforcement", () => {
     }
   });
 });
+
+describe("task dispatch echo lifecycle", () => {
+  it("advances a task_dispatch push through received → processing → completed", async () => {
+    const [seeded] = await db
+      .insert(aiPushEventsTable)
+      .values({
+        payloadType: "task_dispatch",
+        trigger: "manual",
+        target: "http://example.com/orchestrator",
+        outboundOk: true,
+        status: "sent",
+        targetAgent: "Test Agent",
+        taskTitle: "Verify task dispatch echo lifecycle",
+      })
+      .returning({ id: aiPushEventsTable.id });
+
+    let previousEchoAt: Date | null = null;
+
+    for (const status of ["received", "processing", "completed"] as const) {
+      const body = JSON.stringify({
+        pushId: seeded.id,
+        status,
+        message: `Task dispatch ${status}`,
+      });
+      const res = await postEcho(body, sign(body));
+      assert.equal(res.status, 200);
+
+      const [row] = await db
+        .select()
+        .from(aiPushEventsTable)
+        .where(eq(aiPushEventsTable.id, seeded.id));
+      assert.equal(row.payloadType, "task_dispatch");
+      assert.equal(row.status, status);
+      assert.equal(row.statusDetail, `Task dispatch ${status}`);
+      assert.ok(row.lastEchoAt, `lastEchoAt must be set when status becomes ${status}`);
+      assert.equal(
+        row.lastEchoAt.getTime(),
+        row.statusUpdatedAt.getTime(),
+        "lastEchoAt and statusUpdatedAt must reflect the same echo",
+      );
+      if (previousEchoAt) {
+        assert.ok(
+          row.lastEchoAt.getTime() >= previousEchoAt.getTime(),
+          `lastEchoAt must not move backwards when status becomes ${status}`,
+        );
+      }
+      previousEchoAt = row.lastEchoAt;
+    }
+  });
+});

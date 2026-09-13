@@ -81,6 +81,8 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@e965/xlsx": "^0.20.3"
+    "@e965/xlsx": "^0.20.3",
+    "jsqr": "^1.4.0",
+    "qr-scanner": "^1.4.2"
   }
 }

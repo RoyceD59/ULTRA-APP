@@ -154,4 +154,46 @@ describe("GET /uc/orders — WooCommerce orders are scoped to the bearer's email
       if (savedBase   !== undefined) process.env["WC_BASE_URL"]        = savedBase;   else delete process.env["WC_BASE_URL"];
     }
   });
+
+  it("returns more than twenty account orders newest-first with complete detail fields", async () => {
+    const alice = await createTestUser("history");
+    const savedKey = process.env["WC_CONSUMER_KEY"];
+    const savedSecret = process.env["WC_CONSUMER_SECRET"];
+    const savedBase = process.env["WC_BASE_URL"];
+    try {
+      process.env["WC_CONSUMER_KEY"] = "test_wc_key";
+      process.env["WC_CONSUMER_SECRET"] = "test_wc_secret";
+      process.env["WC_BASE_URL"] = "https://wc.test";
+      const own = Array.from({ length: 25 }, (_, index) => ({
+        ...wooOrder(9200 + index, alice.email, `2026-09-${String(index + 1).padStart(2, "0")}T10:00:00`, 8574, "History Filter"),
+        number: `WC-${9200 + index}`,
+        date_paid: "2026-09-01T10:05:00",
+        shipping_lines: [{ method_title: "Courier" }],
+        meta_data: [{ key: "_tracking_number", value: "TRACK-25" }],
+      }));
+      globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+        if (String(url).includes("wc.test") && String(url).includes("/orders") && (!init?.method || init.method === "GET")) {
+          return new Response(JSON.stringify([...own, wooOrder(9999, "other@example.test", "2026-10-01T10:00:00", 1, "Private")]), {
+            status: 200, headers: { "Content-Type": "application/json" },
+          });
+        }
+        return realFetch(url as string, init);
+      };
+      const result = await getOrders(alice.jwt);
+      assert.equal(result.status, 200);
+      assert.equal(result.body.length, 25, "the former 20-order cap must not truncate history");
+      const first = result.body[0] as Record<string, unknown>;
+      assert.equal(first.id, 9224, "history must be newest first");
+      assert.equal(first.orderNumber, "WC-9224");
+      assert.equal(first.paymentStatus, "paid");
+      assert.equal(first.fulfillmentStatus, "completed");
+      assert.deepEqual(first.delivery, { method: "Courier", trackingNumber: "TRACK-25" });
+      assert.deepEqual(first.lineItems, [{ productId: 8574, name: "History Filter", quantity: 1, total: "4999" }]);
+    } finally {
+      globalThis.fetch = realFetch;
+      if (savedKey !== undefined) process.env["WC_CONSUMER_KEY"] = savedKey; else delete process.env["WC_CONSUMER_KEY"];
+      if (savedSecret !== undefined) process.env["WC_CONSUMER_SECRET"] = savedSecret; else delete process.env["WC_CONSUMER_SECRET"];
+      if (savedBase !== undefined) process.env["WC_BASE_URL"] = savedBase; else delete process.env["WC_BASE_URL"];
+    }
+  });
 });

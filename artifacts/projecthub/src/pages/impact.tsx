@@ -21,8 +21,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useQuery } from "@tanstack/react-query";
+import {
   Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
-  PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut, Search,
+  PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut, Search, Loader2, ChevronLeft,
 } from 'lucide-react';
 import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit, refreshTeamUser } from '@/lib/team-auth';
 
@@ -601,7 +609,7 @@ export function ImpactDashboard({
     <div className="space-y-8 animate-in-up">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Leaf className="w-7 h-7 text-green-500" />
@@ -611,7 +619,7 @@ export function ImpactDashboard({
             Auto-calculated from app orders, plus offline client entries you log here.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
           <Button variant="outline" size="sm" onClick={refresh} disabled={loading} className="gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -674,9 +682,15 @@ export function ImpactDashboard({
         </>
       ) : null}
 
-      {/* ── Offline Clients Section ─────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      {/* ── Tabs for Offline & App Users ─────────────────────────────────────────── */}
+      <Tabs defaultValue="offline" className="space-y-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:w-auto">
+          <TabsTrigger value="offline">Offline Client Sales</TabsTrigger>
+          <TabsTrigger value="app">Companion App Users</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="offline" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-foreground">Offline Client Sales</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -735,8 +749,8 @@ export function ImpactDashboard({
             )}
 
             <Card className="overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto overscroll-x-contain" role="region" aria-label="Offline client sales table" tabIndex={0}>
+                <table className="w-full min-w-[860px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
@@ -815,7 +829,6 @@ export function ImpactDashboard({
             </Card>
           </>
         )}
-      </div>
 
       {/* ── Legacy Bulk Offset ───────────────────────────────────────────────── */}
       <Card className="border-dashed">
@@ -882,7 +895,7 @@ export function ImpactDashboard({
           <div className="text-sm text-muted-foreground space-y-2">
             <p>For each completed app order and each offline client entry:</p>
             <p className="font-mono text-xs bg-muted rounded px-3 py-2">litres += quantity × product_capacity</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+          <div className="grid grid-cols-1 min-[390px]:grid-cols-2 md:grid-cols-4 gap-2 mt-3">
               {[
                 ['Bottle filters', '150 L'], ['Survivor Straw', '400 L'],
                 ['EcoSmart Elite', '400 L'], ['Electric Pitcher', '400 L'],
@@ -977,6 +990,260 @@ export function ImpactDashboard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="app">
+          <CompanionUsersImpact token={token} />
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+interface AppImpactResponse {
+  overallTotalLitres: number;
+  page: number;
+  pageSize: number;
+  totalCustomers: number;
+  customers: {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    total_litres: number;
+    entry_count: number;
+  }[];
+}
+
+export function CompanionUsersImpact({ token }: { token: string }) {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+
+  const { data, isLoading, isError } = useQuery<AppImpactResponse>({
+    queryKey: ["admin-impact-app", page, search],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/rewards/impact?page=${page}&search=${encodeURIComponent(search)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch app impact data");
+      return res.json();
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">App Users Impact</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Registered Companion app users who have contributed to the impact metrics.
+            {data && (
+              <span className="ml-1 font-medium text-blue-600 dark:text-blue-400">
+                {data.totalCustomers.toLocaleString()} users · {(data.overallTotalLitres).toLocaleString()} L total
+              </span>
+            )}
+          </p>
+        </div>
+        <form onSubmit={handleSearch} className="relative max-w-sm w-full sm:w-auto flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by name or email…"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+          <Button type="submit" size="sm" variant="secondary" className="h-9">Search</Button>
+        </form>
+      </div>
+
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer</TableHead>
+              <TableHead>Total Litres</TableHead>
+              <TableHead>Entries</TableHead>
+              <TableHead className="w-16"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && !data ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-destructive">
+                  Failed to load app users.
+                </TableCell>
+              </TableRow>
+            ) : data?.customers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  No users found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              data?.customers.map(c => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <p className="font-medium">{c.first_name} {c.last_name}</p>
+                    <p className="text-xs text-muted-foreground">{c.email}</p>
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                      <Droplets className="w-3.5 h-3.5" />
+                      {c.total_litres.toLocaleString()} L
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{c.entry_count}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(c.id)}>
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        {data && data.totalCustomers > data.pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+            <span className="text-sm text-muted-foreground">
+              Page {data.page} of {Math.ceil(data.totalCustomers / data.pageSize)}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={data.page <= 1}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+              </Button>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setPage(p => p + 1)}
+                disabled={data.page >= Math.ceil(data.totalCustomers / data.pageSize)}
+              >
+                Next <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <UserImpactDrawer
+        userId={selectedUserId}
+        token={token}
+        onClose={() => setSelectedUserId(null)}
+      />
+    </div>
+  );
+}
+
+function UserImpactDrawer({ userId, token, onClose }: { userId: number | null; token: string; onClose: () => void }) {
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["admin-impact-user", userId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/rewards/impact/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load user impact");
+      return res.json();
+    },
+    enabled: !!userId,
+  });
+
+  return (
+    <Sheet open={!!userId} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-full max-w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>App User Impact Details</SheetTitle>
+          <SheetDescription>
+            Detailed view of this user's contributions and history.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6">
+          {isLoading ? (
+            <div className="py-12 flex justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : data ? (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 border-b pb-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-lg font-bold text-primary">
+                    {(data.customer.firstName?.[0] || "") + (data.customer.lastName?.[0] || "")}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">{data.customer.firstName} {data.customer.lastName}</h3>
+                  <p className="text-sm text-muted-foreground">{data.customer.email}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border p-4 bg-muted/10">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Litres</p>
+                  <p className="text-2xl font-bold text-emerald-600">{data.impact.totalLitres.toLocaleString()} L</p>
+                </div>
+                <div className="rounded-lg border p-4 bg-muted/10">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Star Level</p>
+                  <p className="text-2xl font-bold text-amber-500">Level {data.impact.starLevel}</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wider mb-3">Impact History</h4>
+                {data.impact.history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic bg-muted/30 p-4 rounded-md text-center">No impact history entries.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {data.impact.history.map((h: any) => (
+                      <div key={h.id} className="flex gap-3 text-sm p-3 rounded-md border border-border/50 bg-card">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Droplets className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 space-y-0.5">
+                          <div className="flex justify-between items-start">
+                            <span className="font-medium text-foreground">
+                              {h.litres > 0 ? "+" : ""}{h.litres.toLocaleString()} Litres
+                            </span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(h.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground">{h.reason}</p>
+                          <div className="flex items-center justify-between text-xs mt-1 pt-1 border-t border-border/40">
+                            <span className="text-muted-foreground/80">{h.productName}</span>
+                            <span className="text-muted-foreground/80">by {h.actor}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-destructive">Failed to load details.</p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
