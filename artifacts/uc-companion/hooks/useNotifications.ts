@@ -14,7 +14,7 @@ import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { handleDeletedAccountResponse } from './deletedAccountResponse';
+import { handleRejectedSessionResponse } from './deletedAccountResponse';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
 if (Platform.OS !== 'web') {
@@ -365,7 +365,7 @@ export async function registerCurrentPushToken(
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        await handleDeletedAccountResponse(res.status, body);
+        await handleRejectedSessionResponse(res.status, authToken);
         return false;
       }
       await AsyncStorage.setItem(REGISTERED_PUSH_TOKEN_KEY, current);
@@ -399,7 +399,7 @@ export async function unregisterPushToken(authToken: string): Promise<void> {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        await handleDeletedAccountResponse(res.status, body);
+        await handleRejectedSessionResponse(res.status, authToken);
       }
     } catch { /* non-critical — silently ignore */ }
   });
@@ -505,7 +505,7 @@ export async function syncReminderToServer(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      await handleDeletedAccountResponse(res.status, body);
+      await handleRejectedSessionResponse(res.status, token);
     }
   } catch {
     /* non-critical — the next sync (register / clear / prefs visit) retries */

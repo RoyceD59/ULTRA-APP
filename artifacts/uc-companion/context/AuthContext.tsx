@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerCurrentPushToken, unregisterPushToken } from '@/hooks/useNotifications';
 import { authErrorMessage } from '@/hooks/rateLimitAlert';
-import { setDeletedAccountHandler } from '@/hooks/deletedAccountResponse';
+import { setRejectedSessionHandler } from '@/hooks/deletedAccountResponse';
 
 export interface UCUser {
   id: number;
@@ -25,8 +25,8 @@ interface AuthContextValue {
   /** Exchange a verified Clerk session token (Google/Apple sign-in) for the app's own session. */
   socialLogin: (clerkToken: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-  /** Clear a session rejected because its backing account was deleted. */
-  handleDeletedAccount: () => Promise<void>;
+  /** Clear the current app session when the API rejects its exact token. */
+  handleRejectedSession: (rejectedToken?: string) => Promise<void>;
   /** Persist updated user fields locally so the UI reflects profile changes immediately. */
   updateUser: (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone' | 'address'>>) => Promise<void>;
 }
@@ -48,7 +48,7 @@ const AuthContext = createContext<AuthContextValue>({
   register: async () => ({ success: false }),
   socialLogin: async () => ({ success: false }),
   logout: async () => {},
-  handleDeletedAccount: async () => {},
+  handleRejectedSession: async () => {},
   updateUser: async () => {},
 });
 
@@ -78,7 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<UCUser | null>(null);
   const [token, setToken]     = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const deletedAccountCleanup = useRef<Promise<void> | null>(null);
+  const rejectedSessionCleanup = useRef<Promise<void> | null>(null);
+  const tokenRef = useRef<string | null>(token);
+  tokenRef.current = token;
 
   useEffect(() => {
     (async () => {
@@ -111,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = data.user!;
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(u));
-      deletedAccountCleanup.current = null;
+      rejectedSessionCleanup.current = null;
       setToken(data.token!);
       setUser(u);
       // Register push token after successful login (fire-and-forget)
@@ -134,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (registerErr) return { success: false, error: registerErr, hint: data.hint };
       await AsyncStorage.setItem(TOKEN_KEY, data.token!);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user!));
-      deletedAccountCleanup.current = null;
+      rejectedSessionCleanup.current = null;
       setToken(data.token!);
       setUser(data.user!);
       // Register push token after successful registration (fire-and-forget)
@@ -158,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
-      deletedAccountCleanup.current = null;
+      rejectedSessionCleanup.current = null;
       setToken(data.token);
       setUser(data.user);
       // Register push token after successful sign-in (fire-and-forget)
@@ -179,24 +181,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const handleDeletedAccount = useCallback(async () => {
-    if (deletedAccountCleanup.current) {
-      return deletedAccountCleanup.current;
+  const handleRejectedSession = useCallback(async (rejectedToken?: string) => {
+    // A slow response from an old request must not clear a newer login.
+    if (rejectedToken && tokenRef.current !== rejectedToken) {
+      return;
+    }
+    if (rejectedSessionCleanup.current) {
+      return rejectedSessionCleanup.current;
     }
 
     // Drop memory state first so mounted queries stop issuing authenticated
     // requests while durable credentials are being removed.
     setToken(null);
     setUser(null);
-    deletedAccountCleanup.current = AsyncStorage
+    rejectedSessionCleanup.current = AsyncStorage
       .multiRemove([TOKEN_KEY, USER_KEY])
       .catch(() => {});
-    return deletedAccountCleanup.current;
+    return rejectedSessionCleanup.current;
   }, []);
 
   useEffect(
-    () => setDeletedAccountHandler(handleDeletedAccount),
-    [handleDeletedAccount],
+    () => setRejectedSessionHandler(handleRejectedSession),
+    [handleRejectedSession],
   );
 
   const updateUser = async (updates: Partial<Pick<UCUser, 'firstName' | 'lastName' | 'phone' | 'address'>>) => {
@@ -207,7 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, socialLogin, logout, handleDeletedAccount, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, socialLogin, logout, handleRejectedSession, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

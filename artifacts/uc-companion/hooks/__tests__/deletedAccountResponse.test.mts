@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   DELETED_ACCOUNT_ERROR,
   handleDeletedAccountResponse,
+  handleRejectedSessionResponse,
   isDeletedAccountResponse,
+  isRejectedSessionResponse,
   setDeletedAccountHandler,
 } from '../deletedAccountResponse.js';
 
@@ -41,5 +43,25 @@ describe('deleted account API response detection', () => {
     await handleDeletedAccountResponse(401, { error: DELETED_ACCOUNT_ERROR });
 
     assert.equal(calls, 1);
+  });
+
+  it('matches any 401 only when the request carried a customer token', () => {
+    assert.equal(isRejectedSessionResponse(401, 'app-token'), true);
+    assert.equal(isRejectedSessionResponse(401, null), false);
+    assert.equal(isRejectedSessionResponse(403, 'app-token'), false);
+  });
+
+  it('passes the exact rejected token to the auth handler', async () => {
+    const rejectedTokens: string[] = [];
+    const unregister = setDeletedAccountHandler(async (rejectedToken) => {
+      rejectedTokens.push(rejectedToken);
+    });
+
+    await handleRejectedSessionResponse(401, null);
+    await handleRejectedSessionResponse(500, 'current-token');
+    await handleRejectedSessionResponse(401, 'current-token');
+    unregister();
+
+    assert.deepEqual(rejectedTokens, ['current-token']);
   });
 });

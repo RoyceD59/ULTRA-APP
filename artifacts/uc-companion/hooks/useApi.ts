@@ -10,7 +10,7 @@ const getBase = () =>
 // ApiError lives in its own dependency-free module so the rate-limit tests can
 // exercise it under node:test; re-exported here so app imports keep working.
 import { ApiError } from './apiError';
-import { handleDeletedAccountResponse } from './deletedAccountResponse';
+import { handleRejectedSessionResponse } from './deletedAccountResponse';
 export { ApiError };
 
 /**
@@ -368,9 +368,9 @@ export function useApi() {
 
   const throwResponseError = useCallback(async (res: Response): Promise<never> => {
     const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-    await handleDeletedAccountResponse(res.status, body);
+    await handleRejectedSessionResponse(res.status, token);
     throw new ApiError(String(body['error'] ?? res.status), res.status, body);
-  }, []);
+  }, [token]);
 
   const get = useCallback(async <T>(path: string, signal?: AbortSignal): Promise<T> => {
     const res = await fetch(`${getBase()}${path}`, { headers: authHeaders(), signal });
