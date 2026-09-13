@@ -19,6 +19,7 @@ import {
   ucUsersTable,
 } from "@workspace/db";
 import socialAuthRouter from "../routes/uc-social-auth.js";
+import { verifyToken } from "../lib/jwt.js";
 
 type ClerkUserFixture = {
   id: string;
@@ -48,6 +49,7 @@ const originalResendBaseUrl = process.env["RESEND_BASE_URL"];
 const originalResendApiKey = process.env["RESEND_API_KEY"];
 
 let currentClerkUser: ClerkUserFixture;
+let clerkUsers = new Map<string, ClerkUserFixture>();
 let resendMode: ResendMode = "success";
 let capturedEmails: EmailPayload[] = [];
 let releaseDeferredResend: (() => void) | undefined;
@@ -55,13 +57,15 @@ let releaseDeferredResend: (() => void) | undefined;
 const app = express();
 app.use(express.json());
 app.use((req, _res, next) => {
+  const requestedClerkUserId = req.header("x-test-clerk-user-id");
+  const clerkUserId = requestedClerkUserId ?? currentClerkUser.id;
   const authHandler = Object.assign(
     () => ({
       tokenType: "session_token",
       sessionClaims: {},
       sessionId: "test-session",
       sessionStatus: "active",
-      userId: currentClerkUser.id,
+      userId: clerkUserId,
       actor: null,
       orgId: null,
       orgRole: null,
@@ -83,8 +87,10 @@ app.use(socialAuthRouter);
 const clerkLookupMock = mock.method(
   clerkClient.users,
   "getUser",
-  async () =>
-    currentClerkUser as Awaited<ReturnType<typeof clerkClient.users.getUser>>,
+  async (userId: string) =>
+    (clerkUsers.get(userId) ?? currentClerkUser) as Awaited<
+      ReturnType<typeof clerkClient.users.getUser>
+    >,
 );
 
 function fixture(
@@ -103,6 +109,12 @@ function fixture(
     firstName: provider === "google" ? "Amina" : "Brian",
     lastName: "Social",
   };
+}
+
+function registerClerkUser(user: ClerkUserFixture): ClerkUserFixture {
+  clerkUsers.set(user.id, user);
+  currentClerkUser = user;
+  return user;
 }
 
 function installResendStub(): void {
@@ -192,18 +204,24 @@ afterEach(async () => {
   releaseDeferredResend = undefined;
   capturedEmails = [];
   resendMode = "success";
-  if (currentClerkUser) {
-    const email = currentClerkUser.emailAddresses[0]!.emailAddress.toLowerCase();
+  const usersToClean = clerkUsers.size > 0
+    ? [...clerkUsers.values()]
+    : currentClerkUser
+      ? [currentClerkUser]
+      : [];
+  for (const user of usersToClean) {
+    const email = user.emailAddresses[0]!.emailAddress.toLowerCase();
     await db.delete(ucNotificationLogTable)
       .where(eq(ucNotificationLogTable.recipient, email));
     await db.delete(ucUsersTable)
       .where(eq(ucUsersTable.email, email));
   }
+  clerkUsers = new Map();
 });
 
 describe("social sign-in email delivery", () => {
   it("creates a Google account, sends the welcome template, and audits the accepted send", async () => {
-    currentClerkUser = fixture("google", `social-welcome-${Date.now()}@test.internal`);
+    currentClerkUser = registerClerkUser(fixture("google", `social-welcome-${Date.now()}@test.internal`));
     resendMode = "defer";
 
     const responsePromise = supertest(app)
@@ -231,7 +249,7 @@ describe("social sign-in email delivery", () => {
   });
 
   it("sends the sign-in notification template for a later Apple login", async () => {
-    currentClerkUser = fixture("apple", `social-login-${Date.now()}@test.internal`);
+    currentClerkUser = registerClerkUser(fixture("apple", `social-login-${Date.now()}@test.internal`));
     await insertSocialUser(currentClerkUser);
 
     const response = await supertest(app)
@@ -254,7 +272,7 @@ describe("social sign-in email delivery", () => {
   });
 
   it("returns the app JWT and user when Resend rejects the welcome email", async () => {
-    currentClerkUser = fixture("google", `social-reject-${Date.now()}@test.internal`);
+    currentClerkUser = registerClerkUser(fixture("google", `social-reject-${Date.now()}@test.internal`));
     resendMode = "reject";
 
     const response = await supertest(app)
@@ -275,7 +293,7 @@ describe("social sign-in email delivery", () => {
   });
 
   it("returns the app JWT and user when Resend throws during a later Apple login", async () => {
-    currentClerkUser = fixture("apple", `social-exception-${Date.now()}@test.internal`);
+    currentClerkUser = registerClerkUser(fixture("apple", `social-exception-${Date.now()}@test.internal`));
     await insertSocialUser(currentClerkUser);
     resendMode = "throw";
 
@@ -294,5 +312,63 @@ describe("social sign-in email delivery", () => {
     );
     assert.equal(log.status, "failed");
     assert.match(log.errorMessage ?? "", /Network error: Resend network outage/);
+  });
+
+  it("keeps concurrent first-time Google and Apple welcome emails and audits matched to each account", async () => {
+    const nonce = Date.now();
+    const googleUser = registerClerkUser(
+      fixture("google", `social-race-google-${nonce}@test.internal`),
+    );
+    const appleUser = registerClerkUser(
+      fixture("apple", `social-race-apple-${nonce}@test.internal`),
+    );
+
+    const [googleResponse, appleResponse] = await Promise.all([
+      supertest(app)
+        .post("/uc/auth/social")
+        .set("x-test-clerk-user-id", googleUser.id)
+        .send({}),
+      supertest(app)
+        .post("/uc/auth/social")
+        .set("x-test-clerk-user-id", appleUser.id)
+        .send({}),
+    ]);
+
+    assert.equal(googleResponse.status, 200);
+    assert.equal(appleResponse.status, 200);
+    assert.equal(googleResponse.body.user.email, googleUser.emailAddresses[0]!.emailAddress);
+    assert.equal(appleResponse.body.user.email, appleUser.emailAddresses[0]!.emailAddress);
+    assert.notEqual(googleResponse.body.user.id, appleResponse.body.user.id);
+    assert.equal(typeof googleResponse.body.token, "string");
+    assert.equal(typeof appleResponse.body.token, "string");
+    assert.notEqual(googleResponse.body.token, appleResponse.body.token);
+    const googleClaims = verifyToken(`Bearer ${googleResponse.body.token}`);
+    const appleClaims = verifyToken(`Bearer ${appleResponse.body.token}`);
+    assert.equal(googleClaims?.id, googleResponse.body.user.id);
+    assert.equal(googleClaims?.email, googleUser.emailAddresses[0]!.emailAddress);
+    assert.equal(appleClaims?.id, appleResponse.body.user.id);
+    assert.equal(appleClaims?.email, appleUser.emailAddresses[0]!.emailAddress);
+
+    assert.equal(capturedEmails.length, 2);
+    for (const user of [googleUser, appleUser]) {
+      const recipient = user.emailAddresses[0]!.emailAddress;
+      const matchingEmails = capturedEmails.filter((email) => email.to === recipient);
+      assert.equal(matchingEmails.length, 1, `${recipient} should receive exactly one email`);
+      assert.equal(matchingEmails[0]!.subject, "Welcome to Ultra-Clear");
+      assert.match(matchingEmails[0]!.text, new RegExp(`^Hi ${user.firstName},`));
+      assert.match(matchingEmails[0]!.text, /Welcome to Ultra-Clear/);
+
+      await waitForLog(recipient, "uc-social-welcome");
+      const logs = await db.select()
+        .from(ucNotificationLogTable)
+        .where(and(
+          eq(ucNotificationLogTable.recipient, recipient),
+          eq(ucNotificationLogTable.template, "uc-social-welcome"),
+        ));
+      assert.equal(logs.length, 1, `${recipient} should have exactly one welcome audit row`);
+      assert.equal(logs[0]!.status, "sent");
+      assert.equal(logs[0]!.messageBody, matchingEmails[0]!.text);
+    }
+    assertNoCredentialsOrResetTokens(capturedEmails);
   });
 });
