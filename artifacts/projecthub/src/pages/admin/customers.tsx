@@ -1,21 +1,31 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users, Search, ChevronLeft, ChevronRight, X,
   Phone, Mail, Calendar, ShoppingBag, Wrench,
-  Loader2, UserCircle2, Package, Download,
+  Loader2, UserCircle2, Package, Download, KeyRound, Copy, Check,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { getAuthHeaders } from "@/lib/team-auth";
 import { isTeamAdmin } from "@/lib/team-auth";
+import {
+  issueUcTemporaryPassword,
+  type UcTemporaryPasswordInputChannel,
+  type UcTemporaryPasswordResult,
+} from "@workspace/api-client-react";
 
 const API = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const PAGE_LIMIT = 50;
@@ -113,6 +123,211 @@ function ticketStatusVariant(status: string): "default" | "secondary" | "destruc
   }
 }
 
+// ─── Temporary password dialog ─────────────────────────────────────────────────
+
+function TemporaryPasswordDialog({
+  customer,
+  open,
+  onClose,
+}: {
+  customer: CustomerDetail["customer"];
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [channel, setChannel] = useState<UcTemporaryPasswordInputChannel>("email");
+  const [result, setResult] = useState<UcTemporaryPasswordResult | null>(null);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [isIssuing, setIsIssuing] = useState(false);
+  const requestId = useRef(0);
+
+  function openDialog() {
+    setChannel("email");
+    setResult(null);
+    setError("");
+    setCopied(false);
+  }
+
+  function handleClose() {
+    // Invalidate an in-flight response before removing its plaintext from state.
+    // This prevents a late response from repopulating a closed dialog.
+    requestId.current += 1;
+    setIsIssuing(false);
+    setResult(null);
+    setError("");
+    setCopied(false);
+    onClose();
+  }
+
+  async function generatePassword() {
+    const currentRequest = ++requestId.current;
+    setIsIssuing(true);
+    setError("");
+    setResult(null);
+    setCopied(false);
+
+    try {
+      const issued = await issueUcTemporaryPassword(customer.id, { channel });
+      if (currentRequest !== requestId.current) return;
+      if (!issued?.temporaryPassword) {
+        setError("A temporary password could not be issued for this account.");
+        return;
+      }
+      setResult(issued);
+    } catch (err) {
+      if (currentRequest === requestId.current) {
+        setError(err instanceof Error ? err.message : "A temporary password could not be issued.");
+      }
+    } finally {
+      if (currentRequest === requestId.current) setIsIssuing(false);
+    }
+  }
+
+  async function copyPassword() {
+    if (!result?.temporaryPassword) return;
+    try {
+      await navigator.clipboard.writeText(result.temporaryPassword);
+      setCopied(true);
+    } catch {
+      setError("Unable to copy the temporary password. Select it and copy it manually.");
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) openDialog();
+        else handleClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-primary" />
+            Generate temporary password
+          </DialogTitle>
+          <DialogDescription>
+            Issue a 24-hour password for {customer.name || customer.email}. The plaintext is shown once and is not retained after this dialog closes.
+          </DialogDescription>
+        </DialogHeader>
+
+        {result ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="temporary-password-value">Temporary password (shown once)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="temporary-password-value"
+                  value={result.temporaryPassword}
+                  readOnly
+                  autoComplete="off"
+                  className="font-mono"
+                  aria-describedby="temporary-password-help"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  onClick={copyPassword}
+                  aria-label="Copy temporary password"
+                  title="Copy temporary password"
+                >
+                  {copied
+                    ? <Check className="w-4 h-4 text-green-600" />
+                    : <Copy className="w-4 h-4" />}
+                </Button>
+              </div>
+              <p id="temporary-password-help" className="text-xs text-muted-foreground">
+                Copy it now. It will not be available after this dialog is closed.
+              </p>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-2 text-sm" aria-live="polite">
+              <p className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                <span>
+                  Delivery {result.delivery.delivered ? "confirmed" : "not confirmed"} via{" "}
+                  <strong className="capitalize">{result.delivery.channel}</strong>.
+                </span>
+              </p>
+              <p className="text-muted-foreground">
+                Expires {fmtDateTime(result.expiresAt)}. The customer must choose a permanent password before using Companion.
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" onClick={handleClose}>Done</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Delivery channel</legend>
+              <p className="text-xs text-muted-foreground">
+                Choose a verified contact method. The server will not issue a password for an unverified channel.
+              </p>
+              <div className="space-y-2">
+                <label
+                  htmlFor="temporary-password-email"
+                  className="flex items-start gap-3 rounded-md border p-3 cursor-pointer has-[:checked]:border-primary"
+                >
+                  <input
+                    id="temporary-password-email"
+                    type="radio"
+                    name="temporary-password-channel"
+                    value="email"
+                    checked={channel === "email"}
+                    onChange={() => setChannel("email")}
+                    disabled={isIssuing}
+                    className="mt-1 accent-primary"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">Email</span>
+                    <span className="block text-xs text-muted-foreground break-all">{customer.email}</span>
+                  </span>
+                </label>
+                <label
+                  htmlFor="temporary-password-whatsapp"
+                  className={`flex items-start gap-3 rounded-md border p-3 ${customer.phone ? "cursor-pointer has-[:checked]:border-primary" : "opacity-60"}`}
+                >
+                  <input
+                    id="temporary-password-whatsapp"
+                    type="radio"
+                    name="temporary-password-channel"
+                    value="whatsapp"
+                    checked={channel === "whatsapp"}
+                    onChange={() => setChannel("whatsapp")}
+                    disabled={!customer.phone || isIssuing}
+                    className="mt-1 accent-primary"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">WhatsApp</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {customer.phone || "No phone number on this account"}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={handleClose} disabled={isIssuing}>Cancel</Button>
+              <Button type="button" onClick={generatePassword} disabled={isIssuing || !customer.email}>
+                {isIssuing
+                  ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</>
+                  : "Generate temporary password"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 
 function CustomerDetailPanel({
@@ -125,6 +340,7 @@ function CustomerDetailPanel({
   onClose: () => void;
 }) {
   const headers = getAuthHeaders();
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery<CustomerDetail>({
     queryKey: ["uc-customer-detail", customerId],
@@ -195,6 +411,21 @@ function CustomerDetailPanel({
                   <span className="capitalize">{data.customer.authProvider} account</span>
                 </div>
               </div>
+              {data.customer.authProvider === "password" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2 mt-3"
+                  onClick={() => setPasswordDialogOpen(true)}
+                >
+                  <KeyRound className="w-4 h-4" />
+                  Generate temporary password
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Temporary passwords are available only for password-authenticated Companion accounts.
+                </p>
+              )}
             </section>
 
             {/* Orders */}
@@ -263,6 +494,13 @@ function CustomerDetailPanel({
           </>
         )}
       </SheetContent>
+      {data?.customer && (
+        <TemporaryPasswordDialog
+          customer={data.customer}
+          open={passwordDialogOpen}
+          onClose={() => setPasswordDialogOpen(false)}
+        />
+      )}
     </Sheet>
   );
 }

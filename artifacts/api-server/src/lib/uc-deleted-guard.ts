@@ -92,6 +92,21 @@ export async function rejectDeletedUcAccounts(
         return;
       }
     }
+    // A current temporary admin-issued credential is deliberately a
+    // single-purpose session. Check credential version first so a temporary
+    // token invalidated by the completed password change returns the normal
+    // expired-session 401 instead of remaining a PASSWORD_CHANGE_REQUIRED 403.
+    if (
+      claims.mustChangePassword === true
+      && req.path !== "/uc/auth/change-password"
+      && req.path !== "/uc/auth/complete-password-change"
+    ) {
+      res.status(403).json({
+        error: "A permanent password is required before accessing Companion.",
+        code: "PASSWORD_CHANGE_REQUIRED",
+      });
+      return;
+    }
     next();
   } catch {
     // DB unavailable — fail closed so an erased identity can never be

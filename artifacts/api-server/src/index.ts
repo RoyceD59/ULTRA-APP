@@ -455,6 +455,12 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: uc_users.credential_version column ensured");
   await pool.query(`
+    ALTER TABLE uc_users
+      ADD COLUMN IF NOT EXISTS temporary_password_expires_at timestamptz,
+      ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+  `);
+  logger.info("Startup migration: uc_users temporary-password columns ensured");
+  await pool.query(`
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false;
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS phone_verified boolean NOT NULL DEFAULT false;
     ALTER TABLE uc_users ALTER COLUMN email_verified SET DEFAULT false;

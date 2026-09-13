@@ -227,6 +227,80 @@ export const GetUcCustomersCountResponse = zod.object({
 
 
 /**
+ * Authorized ProjectHub staff may issue a temporary password only for an
+ * active password-authenticated Companion account. The plaintext is
+ * returned once to the operator and delivered through the selected
+ * verified channel. Only a hash is retained; the resulting customer
+ * session must complete a permanent password change before accessing
+ * Companion features.
+ * @summary Issue a verified-channel, 24-hour temporary Companion password
+ */
+export const IssueUcTemporaryPasswordParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const IssueUcTemporaryPasswordBody = zod.object({
+  "channel": zod.enum(['email', 'whatsapp'])
+})
+
+export const IssueUcTemporaryPasswordResponse = zod.object({
+  "ok": zod.boolean(),
+  "temporaryPassword": zod.string().describe('Plaintext credential shown only in this issuance response'),
+  "expiresAt": zod.coerce.date(),
+  "delivery": zod.object({
+  "channel": zod.enum(['email', 'whatsapp']),
+  "delivered": zod.boolean()
+})
+})
+
+
+/**
+ * @summary Replace a temporary Companion password with a permanent password
+ */
+export const completeUcTemporaryPasswordChangeBodyNewPasswordMin = 8;
+
+
+
+export const CompleteUcTemporaryPasswordChangeBody = zod.object({
+  "newPassword": zod.string().min(completeUcTemporaryPasswordChangeBodyNewPasswordMin),
+  "currentPassword": zod.string().optional()
+})
+
+export const CompleteUcTemporaryPasswordChangeResponse = zod.object({
+  "ok": zod.boolean(),
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "mustChangePassword": zod.boolean()
+})
+})
+
+
+/**
+ * @summary Alias for completing a temporary Companion password change
+ */
+export const completeUcTemporaryPasswordChangeAliasBodyNewPasswordMin = 8;
+
+
+
+export const CompleteUcTemporaryPasswordChangeAliasBody = zod.object({
+  "newPassword": zod.string().min(completeUcTemporaryPasswordChangeAliasBodyNewPasswordMin),
+  "currentPassword": zod.string().optional()
+})
+
+export const CompleteUcTemporaryPasswordChangeAliasResponse = zod.object({
+  "ok": zod.boolean(),
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "mustChangePassword": zod.boolean()
+})
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

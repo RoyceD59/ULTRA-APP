@@ -15,7 +15,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { returnTo: returnToParam } = useLocalSearchParams<{ returnTo?: string }>();
   const returnTo = resolveReturnTo(returnToParam);
-  const { login } = useAuth();
+  const { login, mustChangePassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -35,7 +35,12 @@ export default function LoginScreen() {
     setLoading(true);
     const result = await login(email.trim(), password);
     setLoading(false);
-    if (result.success) { navigateAfterAuth(); }
+    if (result.success) {
+      // AuthProvider has already persisted the temporary session. Route it
+      // directly into the guarded password replacement flow.
+      if (result.requiresPasswordChange || mustChangePassword) router.replace('/auth/change-password' as never);
+      else navigateAfterAuth();
+    }
     else { Alert.alert('Login failed', result.error ?? 'Please check your credentials.'); }
   }
 

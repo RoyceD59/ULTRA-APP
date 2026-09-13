@@ -15,7 +15,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { Platform } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { setBaseUrl } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { usePushTokenSync } from '@/hooks/useNotifications';
@@ -42,7 +42,7 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, isLoading: authLoading, mustChangePassword } = useAuth();
   const client = useQueryClient();
   const previousToken = useRef<string | null>(token);
 
@@ -58,6 +58,12 @@ function RootLayoutNav() {
       router.replace('/auth/login' as never);
     }
   }, [client, router, token]);
+
+  useEffect(() => {
+    if (token && mustChangePassword) {
+      router.replace('/auth/change-password' as never);
+    }
+  }, [mustChangePassword, router, token]);
 
   // Handle notification taps: route user to the relevant screen
   useEffect(() => {
@@ -83,6 +89,28 @@ function RootLayoutNav() {
     return () => sub.remove();
   }, [router]);
 
+  // Do not mount protected tabs or their React Query observers until the
+  // combined Companion session record has been hydrated. This avoids a
+  // guest navigation flash and unauthenticated requests during cold start.
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#0054A6" />
+      </View>
+    );
+  }
+
+  // Temporary sessions are deliberately unable to mount customer routes (and
+  // therefore cannot create authenticated query observers) until the new
+  // bearer returned by /change-password has been atomically activated.
+  if (token && mustChangePassword) {
+    return (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="auth/change-password" />
+      </Stack>
+    );
+  }
+
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerTintColor: '#0054A6' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -100,6 +128,7 @@ function RootLayoutNav() {
       <Stack.Screen name="auth/login" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/register" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/forgot-password" options={{ title: '', headerTransparent: true }} />
+      <Stack.Screen name="auth/change-password" options={{ title: '', headerTransparent: true }} />
     </Stack>
   );
 }

@@ -28,7 +28,7 @@ export default function ForgotPasswordScreen() {
   const getBase = () =>
     process.env.EXPO_PUBLIC_DOMAIN
       ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-      : 'http://localhost:8080';
+      : '';
 
   async function handleSubmit() {
     if (!email.trim()) {

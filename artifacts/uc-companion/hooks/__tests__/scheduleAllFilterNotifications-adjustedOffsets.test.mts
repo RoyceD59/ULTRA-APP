@@ -141,8 +141,11 @@ describe('scheduleAllFilterNotifications — adjustedOffsets', () => {
       return { ok: true };
     };
 
-    // Seed auth token so syncReminderToServer doesn't short-circuit.
-    _storage.set('uc_auth_token', 'test-token');
+    // Seed the consolidated session so syncReminderToServer doesn't short-circuit.
+    _storage.set('uc_auth_session', JSON.stringify({
+      token: 'test-token',
+      user: { id: 1, email: 'test@example.com', firstName: 'Test', lastName: 'User' },
+    }));
 
     const activatedAt = new Date(Date.now() - 10 * DAY).toISOString();
     await scheduleAllFilterNotifications({
@@ -154,6 +157,9 @@ describe('scheduleAllFilterNotifications — adjustedOffsets', () => {
       lastWaterSource: 'borehole',
       // adjustedOffsets is intentionally absent — good check-in cleared it
     });
+    // Server sync is deliberately fire-and-forget so local scheduling never
+    // waits on the network. Allow the consolidated-session read to complete.
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     assert.ok(syncedBodies.length > 0, 'syncReminderToServer must fire at least one fetch');
 

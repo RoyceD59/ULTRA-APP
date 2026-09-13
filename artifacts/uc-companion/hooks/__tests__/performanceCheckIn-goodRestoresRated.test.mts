@@ -57,8 +57,11 @@ describe('recordPerformanceCheckIn — good check-in restores rated schedule', (
     _resetNotifs();
     _resetStorage();
     syncedBodies.length = 0;
-    // Seed auth token so syncReminderToServer fires
-    _storage.set('uc_auth_token', 'test-token');
+    // Seed the consolidated authenticated session so syncReminderToServer fires.
+    _storage.set('uc_auth_session', JSON.stringify({
+      token: 'test-token',
+      user: { id: 1, email: 'test@example.com', firstName: 'Test', lastName: 'User' },
+    }));
     (globalThis as any).fetch = async (_url: string, opts?: { body?: string }) => {
       if (opts?.body) syncedBodies.push(opts.body);
       return { ok: true };
@@ -141,6 +144,9 @@ describe('recordPerformanceCheckIn — good check-in restores rated schedule', (
       waterSource:    'tap',
       recommendation: 'good',
     });
+    // Server sync is deliberately fire-and-forget so local filter scheduling
+    // remains available offline. Allow its storage read/fetch microtasks to run.
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     assert.ok(syncedBodies.length > 0, 'syncReminderToServer must fire at least one fetch');
 

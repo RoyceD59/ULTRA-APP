@@ -15,6 +15,8 @@ export const customerQueryKeys = {
     ['customer', customerId, 'reviews', productId] as const,
   tickets: (customerId: CustomerId) =>
     ['customer', customerId, 'tickets'] as const,
+  waterTests: (customerId: CustomerId) =>
+    ['customer', customerId, 'water-tests'] as const,
   returnRequest: (customerId: CustomerId, orderId: string | number | undefined) =>
     ['customer', customerId, 'return-request', orderId] as const,
   adminProductMedia: (customerId: CustomerId, productId: string | number | undefined) =>

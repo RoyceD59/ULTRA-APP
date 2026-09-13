@@ -85,6 +85,10 @@ import type {
   UcCustomerList,
   UcCustomersCount,
   UcOrderCustomerStageInput,
+  UcPasswordChangeResult,
+  UcPermanentPasswordInput,
+  UcTemporaryPasswordInput,
+  UcTemporaryPasswordResult,
   UcWaterTestCustomerStageInput,
   WebhookIngestResult,
   WebhookPayload,
@@ -1030,6 +1034,226 @@ export function useGetUcCustomersCount<TData = Awaited<ReturnType<typeof getUcCu
 
 
 
+
+export const getIssueUcTemporaryPasswordUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/users/${id}/temporary-password`
+}
+
+/**
+ * Authorized ProjectHub staff may issue a temporary password only for an
+ * active password-authenticated Companion account. The plaintext is
+ * returned once to the operator and delivered through the selected
+ * verified channel. Only a hash is retained; the resulting customer
+ * session must complete a permanent password change before accessing
+ * Companion features.
+ * @summary Issue a verified-channel, 24-hour temporary Companion password
+ */
+export const issueUcTemporaryPassword = async (id: number,
+    ucTemporaryPasswordInput: UcTemporaryPasswordInput, options?: RequestInit): Promise<UcTemporaryPasswordResult | void> => {
+
+  return customFetch<UcTemporaryPasswordResult | void>(getIssueUcTemporaryPasswordUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucTemporaryPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getIssueUcTemporaryPasswordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, TError,{id: number;data: BodyType<UcTemporaryPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, TError,{id: number;data: BodyType<UcTemporaryPasswordInput>}, TContext> => {
+
+const mutationKey = ['issueUcTemporaryPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, {id: number;data: BodyType<UcTemporaryPasswordInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  issueUcTemporaryPassword(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type IssueUcTemporaryPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof issueUcTemporaryPassword>>>
+    export type IssueUcTemporaryPasswordMutationBody = BodyType<UcTemporaryPasswordInput>
+    export type IssueUcTemporaryPasswordMutationError = ErrorType<void>
+
+    /**
+ * @summary Issue a verified-channel, 24-hour temporary Companion password
+ */
+export const useIssueUcTemporaryPassword = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, TError,{id: number;data: BodyType<UcTemporaryPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof issueUcTemporaryPassword>>,
+        TError,
+        {id: number;data: BodyType<UcTemporaryPasswordInput>},
+        TContext
+      > => {
+      return useMutation(getIssueUcTemporaryPasswordMutationOptions(options));
+    }
+
+export const getCompleteUcTemporaryPasswordChangeUrl = () => {
+
+
+
+
+  return `/api/uc/auth/change-password`
+}
+
+/**
+ * @summary Replace a temporary Companion password with a permanent password
+ */
+export const completeUcTemporaryPasswordChange = async (ucPermanentPasswordInput: UcPermanentPasswordInput, options?: RequestInit): Promise<UcPasswordChangeResult> => {
+
+  return customFetch<UcPasswordChangeResult>(getCompleteUcTemporaryPasswordChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucPermanentPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getCompleteUcTemporaryPasswordChangeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeUcTemporaryPasswordChange>>, TError,{data: BodyType<UcPermanentPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeUcTemporaryPasswordChange>>, TError,{data: BodyType<UcPermanentPasswordInput>}, TContext> => {
+
+const mutationKey = ['completeUcTemporaryPasswordChange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeUcTemporaryPasswordChange>>, {data: BodyType<UcPermanentPasswordInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeUcTemporaryPasswordChange(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteUcTemporaryPasswordChangeMutationResult = NonNullable<Awaited<ReturnType<typeof completeUcTemporaryPasswordChange>>>
+    export type CompleteUcTemporaryPasswordChangeMutationBody = BodyType<UcPermanentPasswordInput>
+    export type CompleteUcTemporaryPasswordChangeMutationError = ErrorType<void>
+
+    /**
+ * @summary Replace a temporary Companion password with a permanent password
+ */
+export const useCompleteUcTemporaryPasswordChange = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeUcTemporaryPasswordChange>>, TError,{data: BodyType<UcPermanentPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeUcTemporaryPasswordChange>>,
+        TError,
+        {data: BodyType<UcPermanentPasswordInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteUcTemporaryPasswordChangeMutationOptions(options));
+    }
+
+export const getCompleteUcTemporaryPasswordChangeAliasUrl = () => {
+
+
+
+
+  return `/api/uc/auth/complete-password-change`
+}
+
+/**
+ * @summary Alias for completing a temporary Companion password change
+ */
+export const completeUcTemporaryPasswordChangeAlias = async (ucPermanentPasswordInput: UcPermanentPasswordInput, options?: RequestInit): Promise<UcPasswordChangeResult> => {
+
+  return customFetch<UcPasswordChangeResult>(getCompleteUcTemporaryPasswordChangeAliasUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucPermanentPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getCompleteUcTemporaryPasswordChangeAliasMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeUcTemporaryPasswordChangeAlias>>, TError,{data: BodyType<UcPermanentPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeUcTemporaryPasswordChangeAlias>>, TError,{data: BodyType<UcPermanentPasswordInput>}, TContext> => {
+
+const mutationKey = ['completeUcTemporaryPasswordChangeAlias'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeUcTemporaryPasswordChangeAlias>>, {data: BodyType<UcPermanentPasswordInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeUcTemporaryPasswordChangeAlias(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteUcTemporaryPasswordChangeAliasMutationResult = NonNullable<Awaited<ReturnType<typeof completeUcTemporaryPasswordChangeAlias>>>
+    export type CompleteUcTemporaryPasswordChangeAliasMutationBody = BodyType<UcPermanentPasswordInput>
+    export type CompleteUcTemporaryPasswordChangeAliasMutationError = ErrorType<void>
+
+    /**
+ * @summary Alias for completing a temporary Companion password change
+ */
+export const useCompleteUcTemporaryPasswordChangeAlias = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeUcTemporaryPasswordChangeAlias>>, TError,{data: BodyType<UcPermanentPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeUcTemporaryPasswordChangeAlias>>,
+        TError,
+        {data: BodyType<UcPermanentPasswordInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteUcTemporaryPasswordChangeAliasMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 

@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 const getBase = () =>
   process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : 'http://localhost:8080';
+    : '';
 
 // ApiError lives in its own dependency-free module so the rate-limit tests can
 // exercise it under node:test; re-exported here so app imports keep working.
@@ -498,6 +498,32 @@ export function useApi() {
         return throwResponseError(res);
       }
       return res.text();
+    },
+
+    /**
+     * The customer data-export API is the existing authenticated source for
+     * water-test records. Keep parsing here so the account screen receives a
+     * typed, minimal history instead of duplicating a fetch layer.
+     */
+    getWaterTestHistory: async (): Promise<WaterTestRequest[]> => {
+      const raw = await (async () => {
+        const res = await fetch(`${getBase()}/api/uc/customer/data-export`, {
+          headers: authHeaders(),
+        });
+        if (!res.ok) return throwResponseError(res);
+        return res.text();
+      })();
+      let payload: unknown;
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        throw new ApiError('Water-test history is unavailable.', 502, {});
+      }
+      const records = (payload as { waterTests?: unknown } | null)?.waterTests;
+      if (!Array.isArray(records)) {
+        throw new ApiError('Water-test history is unavailable.', 502, {});
+      }
+      return records as WaterTestRequest[];
     },
 
     /** Permanently anonymise the authenticated user's account and personal data. */

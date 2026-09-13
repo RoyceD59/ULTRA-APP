@@ -645,12 +645,29 @@ function AccountScreenContent() {
     enabled: !!user,
   });
 
-  const { data: rewards } = useQuery({
+  const {
+    data: rewards,
+    isLoading: rewardsLoading,
+    isError: rewardsError,
+    refetch: refetchRewards,
+  } = useQuery({
     queryKey: customerQueryKeys.rewards(user?.id),
     queryFn: () => api.getRewards(),
     enabled: !!user,
     staleTime: 0,
     refetchOnMount: 'always',
+  });
+
+  const {
+    data: waterTests,
+    isLoading: waterTestsLoading,
+    isError: waterTestsError,
+    refetch: refetchWaterTests,
+  } = useQuery({
+    queryKey: customerQueryKeys.waterTests(user?.id),
+    queryFn: () => api.getWaterTestHistory(),
+    enabled: !!user,
+    staleTime: 60 * 1000,
   });
 
   const { data: referral } = useQuery({
@@ -705,6 +722,8 @@ function AccountScreenContent() {
 
   const initials     = `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() || '?';
   const recentOrders = orders?.slice(0, 3) ?? [];
+  const rewardsQrBadge = rewards?.snapshot?.qrBadge
+    ?? (qrError ? 'refresh_required' : rewardsQrToken ? 'ready' : undefined);
 
   const editInitial: EditProfileForm = {
     firstName: user.firstName,
@@ -867,6 +886,21 @@ function AccountScreenContent() {
                 </TouchableOpacity>
               </View>
               <View style={[rewardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {rewardsLoading ? (
+                  <View style={styles.historyState}>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Loading your rewards…</Text>
+                  </View>
+                ) : rewardsError || !rewards ? (
+                  <View style={styles.historyState}>
+                    <Ionicons name="cloud-offline-outline" size={24} color={colors.mutedForeground} />
+                    <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Rewards are unavailable.</Text>
+                    <TouchableOpacity onPress={() => refetchRewards()} style={[styles.historyRetry, { borderColor: colors.primary }]}>
+                      <Text style={[styles.historyRetryText, { color: colors.primary }]}>Try Again</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                <>
                 {/* Balance */}
                 <View style={[rewardStyles.balanceRow, { borderBottomColor: colors.border }]}>
                   <View style={[rewardStyles.balanceIcon, { backgroundColor: colors.primaryLight }]}>
@@ -885,7 +919,24 @@ function AccountScreenContent() {
 
                 {/* QR code */}
                 <View style={[rewardStyles.qrSection, { borderBottomColor: colors.border }]}>
-                  <Text style={[rewardStyles.qrLabel, { color: colors.mutedForeground }]}>Your Rewards QR Code</Text>
+                  <View style={rewardStyles.qrHeading}>
+                    <Text style={[rewardStyles.qrLabel, { color: colors.mutedForeground }]}>Your Rewards QR Code</Text>
+                    {rewardsQrBadge && (
+                      <View style={[
+                        rewardStyles.qrBadge,
+                        { backgroundColor: rewardsQrBadge === 'ready' ? colors.successLight : colors.warningLight },
+                      ]}>
+                        <Ionicons
+                          name={rewardsQrBadge === 'ready' ? 'shield-checkmark-outline' : 'refresh-outline'}
+                          size={12}
+                          color={rewardsQrBadge === 'ready' ? colors.success : colors.warning}
+                        />
+                        <Text style={[rewardStyles.qrBadgeText, { color: rewardsQrBadge === 'ready' ? colors.success : colors.warning }]}>
+                          {rewardsQrBadge === 'ready' ? 'Ready' : 'Refresh needed'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
                     {qrLoading ? (
                       <ActivityIndicator testID="account-rewards-qr-loading" color={colors.primary} size="large" />
@@ -935,6 +986,8 @@ function AccountScreenContent() {
                     ))}
                   </View>
                 )}
+                </>
+                )}
               </View>
             </View>
           )}
@@ -960,6 +1013,63 @@ function AccountScreenContent() {
             }}
             onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
           />
+
+          {/* Water-test history is intentionally inline so a signed-in
+              customer can see every request without starting a new request. */}
+          <View style={styles.section}>
+            <View style={styles.sectionRow}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Water Test Requests</Text>
+              <TouchableOpacity
+                testID="water-test-history-retry"
+                onPress={() => refetchWaterTests()}
+                disabled={waterTestsLoading}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={[styles.viewAllText, { color: colors.primary }]}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+            <View testID="water-test-history" style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {waterTestsLoading ? (
+                <View style={styles.historyState}>
+                  <ActivityIndicator color={colors.primary} />
+                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Loading your requests…</Text>
+                </View>
+              ) : waterTestsError ? (
+                <View style={styles.historyState}>
+                  <Ionicons name="cloud-offline-outline" size={24} color={colors.mutedForeground} />
+                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Request history is unavailable.</Text>
+                  <TouchableOpacity onPress={() => refetchWaterTests()} style={[styles.historyRetry, { borderColor: colors.primary }]}>
+                    <Text style={[styles.historyRetryText, { color: colors.primary }]}>Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : !waterTests?.length ? (
+                <View style={styles.historyState}>
+                  <Ionicons name="flask-outline" size={24} color={colors.mutedForeground} />
+                  <Text style={[styles.historyTitle, { color: colors.text }]}>No water tests yet</Text>
+                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Your submitted requests will appear here.</Text>
+                </View>
+              ) : (
+                waterTests.slice(0, 5).map((request, index) => (
+                  <View
+                    key={request.id}
+                    testID={`water-test-history-${request.id}`}
+                    style={[styles.historyRow, index < Math.min(waterTests.length, 5) - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+                    <View style={[styles.historyIcon, { backgroundColor: colors.primaryLight }]}>
+                      <Ionicons name="flask-outline" size={16} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.historyTitle, { color: colors.text }]}>{request.waterSource || 'Water quality test'}</Text>
+                      <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>
+                        {new Date(request.createdAt).toLocaleDateString()} · Ref {request.id}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.statusPillText, { color: colors.primary }]}>{request.status}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
 
           {/* Recent orders */}
           {recentOrders.length > 0 && (
@@ -1119,6 +1229,16 @@ const styles = StyleSheet.create({
   exportError:         { fontSize: 12, textAlign: 'center' as const, marginTop: -10 },
   deleteAccountBtn:    { alignItems: 'center', paddingVertical: 8 },
   deleteAccountText:   { fontSize: 13, textDecorationLine: 'underline' as const },
+  historyCard:         { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+  historyState:        { alignItems: 'center', gap: 7, padding: 22 },
+  historyStateText:    { fontSize: 12, textAlign: 'center' as const },
+  historyRetry:        { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, marginTop: 2 },
+  historyRetryText:    { fontSize: 12, fontWeight: '700' as const },
+  historyRow:          { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13 },
+  historyIcon:         { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  historyTitle:        { fontSize: 13, fontWeight: '700' as const },
+  statusPill:          { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  statusPillText:      { fontSize: 10, fontWeight: '700' as const, textTransform: 'capitalize' as const },
 
   notifCard:        { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14, marginTop: topPad + 12, marginHorizontal: 16 },
   notifIconWrap:    { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
@@ -1139,7 +1259,10 @@ const rewardStyles = StyleSheet.create({
   balanceValue:   { fontSize: 26, fontWeight: '800' as const },
   balancePts:     { fontSize: 14, fontWeight: '500' as const },
   qrSection:      { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 16, gap: 12, borderBottomWidth: 1 },
+  qrHeading:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qrLabel:        { fontSize: 12, fontWeight: '600' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  qrBadge:        { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3 },
+  qrBadgeText:    { fontSize: 10, fontWeight: '700' as const },
   qrWrap:         { padding: 12, borderRadius: 12, borderWidth: 1 },
   qrHint:         { fontSize: 11, textAlign: 'center' as const, maxWidth: 240 },
   refilledBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10 },

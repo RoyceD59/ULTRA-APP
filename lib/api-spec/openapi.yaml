@@ -352,6 +352,99 @@ paths:
         "401":
           description: Unauthorized
 
+  /uc/admin/users/{id}/temporary-password:
+    post:
+      operationId: issueUcTemporaryPassword
+      tags: [uc-admin]
+      summary: Issue a verified-channel, 24-hour temporary Companion password
+      description: |
+        Authorized ProjectHub staff may issue a temporary password only for an
+        active password-authenticated Companion account. The plaintext is
+        returned once to the operator and delivered through the selected
+        verified channel. Only a hash is retained; the resulting customer
+        session must complete a permanent password change before accessing
+        Companion features.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcTemporaryPasswordInput"
+      responses:
+        "200":
+          description: Temporary password issued and delivered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcTemporaryPasswordResult"
+        "202":
+          description: Rejected without disclosing account or verification state
+        "400":
+          description: Invalid customer id or delivery channel
+        "401":
+          description: Authentication required
+        "403":
+          description: Companion password issuance permission required
+        "502":
+          description: Delivery failed and no temporary credential remains active
+
+  /uc/auth/change-password:
+    post:
+      operationId: completeUcTemporaryPasswordChange
+      tags: [uc-admin]
+      summary: Replace a temporary Companion password with a permanent password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcPermanentPasswordInput"
+      responses:
+        "200":
+          description: Permanent password saved and a fresh session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcPasswordChangeResult"
+        "400":
+          description: Invalid permanent password
+        "401":
+          description: Temporary session missing or expired
+
+  /uc/auth/complete-password-change:
+    post:
+      operationId: completeUcTemporaryPasswordChangeAlias
+      tags: [uc-admin]
+      summary: Alias for completing a temporary Companion password change
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcPermanentPasswordInput"
+      responses:
+        "200":
+          description: Permanent password saved and a fresh session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcPasswordChangeResult"
+        "400":
+          description: Invalid permanent password
+        "401":
+          description: Temporary session missing or expired
+
   /healthz:
     get:
       operationId: healthCheck
@@ -2316,3 +2409,62 @@ components:
         newThisMonth:
           type: integer
           description: Customers who registered since the start of the current calendar month
+
+    UcTemporaryPasswordInput:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          type: string
+          enum: [email, whatsapp]
+
+    UcTemporaryPasswordResult:
+      type: object
+      required: [ok, temporaryPassword, expiresAt, delivery]
+      properties:
+        ok:
+          type: boolean
+        temporaryPassword:
+          type: string
+          description: Plaintext credential shown only in this issuance response
+        expiresAt:
+          type: string
+          format: date-time
+        delivery:
+          type: object
+          required: [channel, delivered]
+          properties:
+            channel:
+              type: string
+              enum: [email, whatsapp]
+            delivered:
+              type: boolean
+
+    UcPermanentPasswordInput:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword:
+          type: string
+          minLength: 8
+        currentPassword:
+          type: string
+
+    UcPasswordChangeResult:
+      type: object
+      required: [ok, token, user]
+      properties:
+        ok:
+          type: boolean
+        token:
+          type: string
+        user:
+          type: object
+          required: [id, email, mustChangePassword]
+          properties:
+            id:
+              type: integer
+            email:
+              type: string
+            mustChangePassword:
+              type: boolean

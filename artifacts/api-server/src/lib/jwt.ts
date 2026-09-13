@@ -53,6 +53,9 @@ export interface JwtClaims {
    *  by the UC deleted-account guard. Absent on WooCommerce, mock, and
    *  ProjectHub team-session tokens. */
   credentialVersion?: number;
+  /** Temporary admin-issued credential sessions may only complete the
+   * permanent-password change flow. */
+  mustChangePassword?: boolean;
 }
 
 /**

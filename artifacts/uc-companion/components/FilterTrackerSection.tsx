@@ -218,6 +218,26 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                 </Text>
               </View>
 
+              <View testID="filter-life-summary" style={[styles.lifeSummary, { backgroundColor: colors.surface }]}>
+                <View style={styles.lifeSummaryItem}>
+                  <Ionicons name="time-outline" size={15} color={barColor} />
+                  <Text style={[styles.lifeSummaryValue, { color: colors.text }]}>
+                    {daysLeft !== null && daysLeft > 0 ? `${daysLeft} days` : 'Due now'}
+                  </Text>
+                  <Text style={[styles.lifeSummaryLabel, { color: colors.mutedForeground }]}>life remaining</Text>
+                </View>
+                <View style={[styles.lifeSummaryDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.lifeSummaryItem}>
+                  <Ionicons name="construct-outline" size={15} color={colors.primary} />
+                  <Text style={[styles.lifeSummaryValue, { color: colors.text }]}>
+                    {activation.cleanCount ?? 0}
+                  </Text>
+                  <Text style={[styles.lifeSummaryLabel, { color: colors.mutedForeground }]}>
+                    cleaning {(activation.cleanCount ?? 0) === 1 ? 'count' : 'counts'}
+                  </Text>
+                </View>
+              </View>
+
               {/* Effective lifespan warning banner */}
               {showEffWarning && (
                 <View style={[styles.effWarning, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
@@ -673,6 +693,11 @@ const styles = StyleSheet.create({
   progressFill:    { height: 6, borderRadius: 3 },
   progressLabels:  { flexDirection: 'row', justifyContent: 'space-between' },
   progressLabel:   { fontSize: 11 },
+  lifeSummary:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderRadius: 9, paddingVertical: 9 },
+  lifeSummaryItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lifeSummaryValue:{ fontSize: 12, fontWeight: '700' as const },
+  lifeSummaryLabel:{ fontSize: 11 },
+  lifeSummaryDivider: { width: 1, height: 20 },
   divider:         { height: 1 },
   notifNote:       { fontSize: 12, marginLeft: 4 },
   registerRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },

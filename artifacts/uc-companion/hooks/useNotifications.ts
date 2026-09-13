@@ -15,6 +15,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
+import { loadPersistedSession } from '@/lib/sessionPersistence';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
 if (Platform.OS !== 'web') {
@@ -309,7 +310,7 @@ export async function getExpoPushToken(): Promise<string | null> {
 const getApiBase = () =>
   process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : 'http://localhost:8080';
+    : '';
 
 // All server registrations run through a single promise chain so a login-time
 // registration and a foreground sync can never interleave. Each queued step
@@ -447,8 +448,6 @@ export function usePushTokenSync(authToken: string | null): void {
 // WhatsApp for users who opted in. Fire-and-forget: local scheduling never
 // depends on it, guests (no auth token) are skipped silently.
 
-const AUTH_TOKEN_KEY = 'uc_auth_token';
-
 export async function syncReminderToServer(
   activation: Pick<
     FilterActivation,
@@ -465,7 +464,7 @@ export async function syncReminderToServer(
   > | null
 ): Promise<void> {
   try {
-    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    const token = (await loadPersistedSession()).session?.token;
     if (!token) return;
 
     // Derive the performance-adjusted lifespan only when adjustedOffsets are also set.

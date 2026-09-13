@@ -9,12 +9,15 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import { useColors } from '@/hooks/useColors';
+import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
+import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 
 type LedgerEntry = CustomerRewards['ledger'][number];
 
@@ -89,6 +92,10 @@ export default function RewardsScreen() {
     staleTime: 0,
     refetchOnMount: 'always',
   });
+  const { token: qrToken, loading: qrLoading, error: qrError, retry: retryQr } =
+    useRewardsQrToken(user?.id, rewards);
+  const qrBadge = rewards?.snapshot?.qrBadge
+    ?? (qrError ? 'refresh_required' : qrToken ? 'ready' : undefined);
 
   const webBottomInset = Platform.OS === 'web' ? 34 : 0;
 
@@ -180,6 +187,39 @@ export default function RewardsScreen() {
                  {rewards.snapshot.tier.toUpperCase()} tier · {rewards.snapshot.status}
                </Text>
              )}
+          </View>
+          <View style={[styles.qrCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.qrHeading}>
+              <View>
+                <Text style={[styles.qrTitle, { color: colors.text }]}>Your rewards identity</Text>
+                <Text style={[styles.qrCopy, { color: colors.mutedForeground }]}>Show this QR code to earn points</Text>
+              </View>
+              {qrBadge && (
+                <View style={[styles.qrBadge, { backgroundColor: qrBadge === 'ready' ? colors.successLight : colors.warningLight }]}>
+                  <Ionicons
+                    name={qrBadge === 'ready' ? 'shield-checkmark-outline' : 'refresh-outline'}
+                    size={12}
+                    color={qrBadge === 'ready' ? colors.success : colors.warning}
+                  />
+                  <Text style={[styles.qrBadgeText, { color: qrBadge === 'ready' ? colors.success : colors.warning }]}>
+                    {qrBadge === 'ready' ? 'Ready' : 'Refresh needed'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={[styles.qrWrap, { borderColor: colors.border }]}>
+              {qrLoading ? <ActivityIndicator testID="rewards-qr-loading" color={colors.primary} /> : qrError || !qrToken ? (
+                <View style={styles.qrFallback}>
+                  <Ionicons name="alert-circle-outline" size={24} color={colors.destructive} />
+                  <Text style={[styles.qrError, { color: colors.destructive }]}>QR unavailable</Text>
+                  <TouchableOpacity testID="retry-rewards-qr" onPress={retryQr}>
+                    <Text style={[styles.retryText, { color: colors.primary }]}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <QRCode testID="rewards-qr" value={buildRewardsQrPayload(qrToken)} size={150} color="#1a1a1a" backgroundColor="#fff" />
+              )}
+            </View>
           </View>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent activity</Text>
         </>
@@ -293,6 +333,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     opacity: 0.8,
+  },
+  qrCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 24,
+    gap: 14,
+  },
+  qrHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  qrTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  qrCopy: {
+    fontSize: 12,
+    marginTop: 3,
+  },
+  qrBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  qrBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  qrWrap: {
+    minHeight: 182,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+  },
+  qrFallback: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  qrError: {
+    fontSize: 12,
   },
   snapshotLabel: {
     fontSize: 12,

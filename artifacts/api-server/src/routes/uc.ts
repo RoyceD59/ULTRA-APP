@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { appendFile, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -1709,6 +1709,14 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
         res.status(401).json({ error: "Invalid credentials" });
         return;
       }
+      if (
+        dbUser.mustChangePassword
+        && (!dbUser.temporaryPasswordExpiresAt
+          || dbUser.temporaryPasswordExpiresAt.getTime() <= Date.now())
+      ) {
+        res.status(401).json({ error: "This temporary password has expired. Request a new one." });
+        return;
+      }
       const user = {
         id: dbUser.id,
         email: dbUser.email,
@@ -1717,6 +1725,10 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
         lastName: dbUser.lastName,
         address: dbUser.address ?? "",
         credentialVersion: dbUser.credentialVersion,
+        mustChangePassword: dbUser.mustChangePassword,
+        temporaryPasswordExpiresAt: dbUser.mustChangePassword
+          ? dbUser.temporaryPasswordExpiresAt
+          : undefined,
         emailVerified: dbUser.emailVerified,
         phoneVerified: dbUser.phoneVerified,
       };
@@ -2152,6 +2164,124 @@ function preferredRecoveryChannel(
   return user.phoneVerified && normalizePhone(user.phone) ? "whatsapp" : null;
 }
 
+/** Generate a credential with enough entropy to be used as a one-time,
+ * operator-issued password. It is intentionally never persisted or logged. */
+function generateTemporaryPassword(): string {
+  return randomBytes(24).toString("base64url");
+}
+
+type TemporaryPasswordTarget = {
+  id: number;
+  email: string;
+  phone: string;
+  firstName: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  authProvider: string;
+};
+
+async function deliverTemporaryPassword(
+  user: TemporaryPasswordTarget,
+  channel: RecoveryChannel,
+  temporaryPassword: string,
+  expiresAt: Date,
+): Promise<boolean> {
+  const expiry = expiresAt.toISOString();
+  if (channel === "email") {
+    return sendViaResend({
+      from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+      to: user.email,
+      subject: "Your temporary Ultra-Clear password",
+      text: [
+        `Hello ${user.firstName},`,
+        "",
+        "An authorized Ultra-Clear team member issued a temporary password for your Companion account.",
+        `Temporary password: ${temporaryPassword}`,
+        "Sign in within 24 hours and choose a permanent password before using Companion.",
+        `This credential expires at ${expiry}.`,
+      ].join("\n"),
+      html: `<p>Hello ${user.firstName},</p><p>An authorized Ultra-Clear team member issued a temporary password for your Companion account.</p><p><strong>Temporary password:</strong> ${temporaryPassword}</p><p>Sign in within 24 hours and choose a permanent password before using Companion.</p><p>This credential expires at ${expiry}.</p>`,
+      meta: { template: "uc-temporary-password", auditMode: "metadata-only" },
+      logBody: "Temporary password email dispatched (credential redacted)",
+    });
+  }
+  const phone = normalizePhone(user.phone);
+  if (!phone) return false;
+  try {
+    await sendWhatsAppMessage(
+      phone,
+      `Ultra-Clear temporary password: ${temporaryPassword}. Sign in within 24 hours and choose a permanent password before using Companion.`,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function issueTemporaryPassword(
+  user: TemporaryPasswordTarget,
+  channel: RecoveryChannel,
+  actorId: string,
+): Promise<{ password: string; expiresAt: Date } | null> {
+  if (user.authProvider !== "password") return null;
+  const password = generateTemporaryPassword();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const passwordHash = await bcryptjs.hash(password, 12);
+  const [previous] = await db.select({ passwordHash: ucUsersTable.passwordHash })
+    .from(ucUsersTable)
+    .where(and(eq(ucUsersTable.id, user.id), isNull(ucUsersTable.deletedAt)))
+    .limit(1);
+  if (!previous) return null;
+  await db.transaction(async (tx) => {
+    await tx.update(ucUsersTable)
+      .set({
+        passwordHash,
+        credentialVersion: sql`${ucUsersTable.credentialVersion} + 1`,
+        temporaryPasswordExpiresAt: expiresAt,
+        mustChangePassword: true,
+      })
+      .where(and(eq(ucUsersTable.id, user.id), isNull(ucUsersTable.deletedAt)));
+    // A temporary credential supersedes self-service recovery links.
+    await tx.update(passwordResetTokensTable)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokensTable.userId, String(user.id)), isNull(passwordResetTokensTable.usedAt)));
+  });
+
+  let sent = false;
+  try {
+    sent = await deliverTemporaryPassword(user, channel, password, expiresAt);
+  } catch {
+    logger.warn({ event: "temporary_password_delivery_failed", channel }, "Temporary password delivery failed");
+  }
+  await recordPasswordResetAudit({
+    actorType: "team",
+    actorId,
+    targetUserId: String(user.id),
+    channel,
+    result: sent ? "issued" : "delivery_failed",
+  });
+  if (!sent) {
+    // Do not leave an undistributed operator credential active. The guarded
+    // update also avoids clearing a newer issuance made during delivery.
+    await db.update(ucUsersTable)
+      .set({
+        // Delivery failed: put the prior password back rather than leaving an
+        // undistributed credential usable as a normal password.
+        passwordHash: previous.passwordHash,
+        credentialVersion: sql`${ucUsersTable.credentialVersion} + 1`,
+        temporaryPasswordExpiresAt: null,
+        mustChangePassword: false,
+      })
+      .where(and(
+        eq(ucUsersTable.id, user.id),
+        eq(ucUsersTable.temporaryPasswordExpiresAt, expiresAt),
+        eq(ucUsersTable.mustChangePassword, true),
+      ));
+    return null;
+  }
+  return { password, expiresAt };
+}
+
 async function issueCompanionReset(
   user: { id: number; email: string; phone: string; firstName: string; emailVerified: boolean; phoneVerified: boolean },
   channel: RecoveryChannel,
@@ -2233,7 +2363,9 @@ router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: R
     });
     // The response and event deliberately do not distinguish missing accounts,
     // unavailable channels, or delivery configuration.
-    const selectedChannel = user && preferredRecoveryChannel(user, channel);
+    const selectedChannel = user && user.authProvider === "password"
+      ? preferredRecoveryChannel(user, channel)
+      : null;
     if (user && selectedChannel) await issueCompanionReset(user, selectedChannel, { type: "self" });
     else await recordPasswordResetAudit({ actorType: "self", result: "rejected" });
   } catch (err) {
@@ -2279,7 +2411,9 @@ router.post("/uc/admin/users/:id/reset-password", async (req: Request, res: Resp
     res.status(202).json({ ok: true });
     return;
   }
-  const channel = preferredRecoveryChannel(target, requestedChannel);
+  const channel = target.authProvider === "password"
+    ? preferredRecoveryChannel(target, requestedChannel)
+    : null;
   if (!channel) {
     await recordPasswordResetAudit({ actorType: "team", actorId: actor!.id, targetUserId: String(target.id), result: "rejected" });
     res.status(202).json({ ok: true });
@@ -2288,6 +2422,80 @@ router.post("/uc/admin/users/:id/reset-password", async (req: Request, res: Resp
   await issueCompanionReset(target, channel, { type: "team", id: actor!.id });
   // Do not reveal a destination/contact or raw credential to Back Office.
   res.status(202).json({ ok: true });
+});
+
+/**
+ * POST /uc/admin/users/:id/temporary-password
+ *
+ * This is intentionally separate from the self-service reset-link endpoint:
+ * the operator receives the generated plaintext exactly once, while only its
+ * bcrypt hash and expiry are retained. Password/social/WooCommerce identities
+ * cannot be converted into Companion password accounts through this route.
+ */
+router.post("/uc/admin/users/:id/temporary-password", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  if (!claims || claims.type !== "team-session") {
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  const [actor] = await db.select().from(teamUsersTable)
+    .where(eq(teamUsersTable.id, String(claims.id))).limit(1);
+  const permissions = (actor?.permissions ?? {}) as Record<string, string>;
+  const canReset = actor?.isActive && (
+    actor.role === "admin"
+    || ["admin", "manage", "write"].includes(permissions["companionUsers"] ?? "")
+    || ["admin", "manage", "write"].includes(permissions["customers"] ?? "")
+  );
+  if (!canReset) {
+    res.status(403).json({ error: "Permission to issue Companion temporary passwords is required." });
+    return;
+  }
+
+  const targetId = Number(req.params["id"]);
+  const requestedChannel = req.body?.channel;
+  if (!Number.isInteger(targetId) || targetId <= 0 || !["email", "whatsapp"].includes(requestedChannel)) {
+    await recordPasswordResetAudit({ actorType: "team", actorId: actor!.id, result: "rejected" });
+    res.status(400).json({ error: "A valid user id and delivery channel are required." });
+    return;
+  }
+  const [target] = await db.select({
+    id: ucUsersTable.id,
+    email: ucUsersTable.email,
+    phone: ucUsersTable.phone,
+    firstName: ucUsersTable.firstName,
+    emailVerified: ucUsersTable.emailVerified,
+    phoneVerified: ucUsersTable.phoneVerified,
+    authProvider: ucUsersTable.authProvider,
+  }).from(ucUsersTable).where(and(
+    eq(ucUsersTable.id, targetId),
+    isNull(ucUsersTable.deletedAt),
+  )).limit(1);
+  const channel = target && preferredRecoveryChannel(target, requestedChannel);
+  if (!target || target.authProvider !== "password" || !channel) {
+    await recordPasswordResetAudit({
+      actorType: "team",
+      actorId: actor!.id,
+      targetUserId: target ? String(target.id) : undefined,
+      channel: channel ?? undefined,
+      result: "rejected",
+    });
+    // Avoid disclosing whether the target exists, its provider, or which
+    // channels have been verified.
+    res.status(202).json({ ok: true });
+    return;
+  }
+
+  const issued = await issueTemporaryPassword(target, channel, actor!.id);
+  if (!issued) {
+    res.status(502).json({ error: "Temporary password delivery failed. No active temporary credential was retained." });
+    return;
+  }
+  res.status(200).json({
+    ok: true,
+    temporaryPassword: issued.password,
+    expiresAt: issued.expiresAt,
+    delivery: { channel, delivered: true },
+  });
 });
 
 /** GET /uc/auth/reset-password — serve a simple HTML form the email link points to */
@@ -2466,13 +2674,20 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
 
     // Update password and bump credential_version in the same transaction so
     // a crash between these two statements never leaves a partially-reset state.
-    await client.query(
+    const updated = await client.query(
       `UPDATE uc_users
           SET password_hash = $1,
-              credential_version = credential_version + 1
-        WHERE id = $2`,
+              credential_version = credential_version + 1,
+              must_change_password = false,
+              temporary_password_expires_at = NULL
+        WHERE id = $2 AND auth_provider = 'password' AND deleted_at IS NULL`,
       [passwordHash, userId],
     );
+    if ((updated.rowCount ?? 0) !== 1) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: "This account cannot use Companion password recovery." });
+      return;
+    }
     // A successful reset also invalidates any other still-active recovery link.
     await client.query(
       `UPDATE password_reset_tokens SET used_at = now()
@@ -2491,6 +2706,102 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
     client.release();
   }
 });
+
+/**
+ * Complete an operator-issued temporary-password session. The temporary
+ * bearer is intentionally accepted only here; uc-deleted-guard rejects it
+ * from every customer route until this transaction succeeds.
+ */
+async function completeTemporaryPasswordChange(req: Request, res: Response): Promise<void> {
+  const claims = verifyToken(req.headers["authorization"]);
+  const userId = Number(claims?.id);
+  if (!claims || claims.mustChangePassword !== true || !Number.isInteger(userId) || userId <= 0) {
+    res.status(401).json({ error: "A temporary Companion password session is required." });
+    return;
+  }
+  const newPassword = req.body?.newPassword ?? req.body?.password;
+  const currentPassword = req.body?.currentPassword;
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    res.status(400).json({ error: "newPassword must be at least 8 characters." });
+    return;
+  }
+  if (currentPassword !== undefined && typeof currentPassword !== "string") {
+    res.status(400).json({ error: "currentPassword must be a string when supplied." });
+    return;
+  }
+
+  const [account] = await db.select().from(ucUsersTable).where(and(
+    eq(ucUsersTable.id, userId),
+    isNull(ucUsersTable.deletedAt),
+  )).limit(1);
+  if (
+    !account
+    || account.authProvider !== "password"
+    || !account.mustChangePassword
+    || !account.temporaryPasswordExpiresAt
+    || account.temporaryPasswordExpiresAt.getTime() <= Date.now()
+  ) {
+    res.status(401).json({ error: "Temporary password expired. Request a new one." });
+    return;
+  }
+  if (typeof currentPassword === "string" && !(await bcryptjs.compare(currentPassword, account.passwordHash))) {
+    res.status(401).json({ error: "Temporary password is incorrect." });
+    return;
+  }
+  const passwordHash = await bcryptjs.hash(newPassword, 12);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const updated = await client.query<{
+      id: number; email: string; phone: string; first_name: string;
+      last_name: string; address: string; credential_version: number;
+    }>(
+      `UPDATE uc_users
+          SET password_hash = $1,
+              credential_version = credential_version + 1,
+              must_change_password = false,
+              temporary_password_expires_at = NULL
+        WHERE id = $2
+          AND deleted_at IS NULL
+          AND auth_provider = 'password'
+          AND must_change_password = true
+          AND temporary_password_expires_at > now()
+        RETURNING id,email,phone,first_name,last_name,address,credential_version`,
+      [passwordHash, userId],
+    );
+    if ((updated.rowCount ?? 0) !== 1) {
+      await client.query("ROLLBACK");
+      res.status(401).json({ error: "Temporary password expired. Request a new one." });
+      return;
+    }
+    await client.query("COMMIT");
+    const saved = updated.rows[0]!;
+    await recordPasswordResetAudit({
+      actorType: "self",
+      targetUserId: String(userId),
+      result: "completed",
+    });
+    const user = {
+      id: saved.id,
+      email: saved.email,
+      phone: saved.phone,
+      firstName: saved.first_name,
+      lastName: saved.last_name,
+      address: saved.address ?? "",
+      credentialVersion: saved.credential_version,
+      mustChangePassword: false,
+    };
+    res.json({ ok: true, token: issueToken(user), user });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+router.post("/uc/auth/change-password", authLimiter, completeTemporaryPasswordChange);
+router.post("/uc/auth/complete-password-change", authLimiter, completeTemporaryPasswordChange);
 
 // ─── Customer ─────────────────────────────────────────────────────────────────
 router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<void> => {

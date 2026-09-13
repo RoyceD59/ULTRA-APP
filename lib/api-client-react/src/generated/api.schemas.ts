@@ -763,6 +763,57 @@ export interface UcCustomersCount {
   newThisMonth: number;
 }
 
+export type UcTemporaryPasswordInputChannel = typeof UcTemporaryPasswordInputChannel[keyof typeof UcTemporaryPasswordInputChannel];
+
+
+export const UcTemporaryPasswordInputChannel = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export interface UcTemporaryPasswordInput {
+  channel: UcTemporaryPasswordInputChannel;
+}
+
+export type UcTemporaryPasswordResultDeliveryChannel = typeof UcTemporaryPasswordResultDeliveryChannel[keyof typeof UcTemporaryPasswordResultDeliveryChannel];
+
+
+export const UcTemporaryPasswordResultDeliveryChannel = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export type UcTemporaryPasswordResultDelivery = {
+  channel: UcTemporaryPasswordResultDeliveryChannel;
+  delivered: boolean;
+};
+
+export interface UcTemporaryPasswordResult {
+  ok: boolean;
+  /** Plaintext credential shown only in this issuance response */
+  temporaryPassword: string;
+  expiresAt: string;
+  delivery: UcTemporaryPasswordResultDelivery;
+}
+
+export interface UcPermanentPasswordInput {
+  /** @minLength 8 */
+  newPassword: string;
+  currentPassword?: string;
+}
+
+export type UcPasswordChangeResultUser = {
+  id: number;
+  email: string;
+  mustChangePassword: boolean;
+};
+
+export interface UcPasswordChangeResult {
+  ok: boolean;
+  token: string;
+  user: UcPasswordChangeResultUser;
+}
+
 export type ListUcCustomersParams = {
 /**
  * Search by name, email, or normalized international phone number (case-insensitive)

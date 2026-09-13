@@ -34,6 +34,10 @@ export const ucUsersTable = pgTable("uc_users", {
    *  token minted before the reset is rejected by the guard, invalidating all
    *  active sessions immediately after a successful password change. */
   credentialVersion:  integer("credential_version").notNull().default(0),
+  /** Set while an operator-issued temporary password is the only credential
+   * accepted. The timestamp is cleared atomically with the permanent change. */
+  temporaryPasswordExpiresAt: timestamp("temporary_password_expires_at", { withTimezone: true }),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   /** SHA-256 of the permanent, opaque Rewards QR token. */
   rewardsQrHash:     text("rewards_qr_hash"),
   rewardsQrRevokedAt: timestamp("rewards_qr_revoked_at", { withTimezone: true }),
