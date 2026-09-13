@@ -6652,7 +6652,9 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
+    const q = typeof req.query["q"] === "string"
+      ? req.query["q"].trim().replace(/\s+/g, " ")
+      : "";
     const from = typeof req.query["from"] === "string" ? req.query["from"].trim() : "";
     const to = typeof req.query["to"] === "string" ? req.query["to"].trim() : "";
     const page = Math.max(1, parseInt(String(req.query["page"] ?? "1"), 10) || 1);
@@ -6666,7 +6668,16 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
 
     if (q) {
       conditions.push(
-        `(u.email ILIKE $${pi} OR u.phone ILIKE $${pi} OR u.first_name ILIKE $${pi} OR u.last_name ILIKE $${pi} OR CONCAT(u.first_name,' ',u.last_name) ILIKE $${pi})`
+        `(u.email ILIKE $${pi}
+          OR u.phone ILIKE $${pi}
+          OR u.first_name ILIKE $${pi}
+          OR u.last_name ILIKE $${pi}
+          OR REGEXP_REPLACE(
+               CONCAT_WS(' ', NULLIF(BTRIM(u.first_name), ''), NULLIF(BTRIM(u.last_name), '')),
+               '\\s+',
+               ' ',
+               'g'
+             ) ILIKE $${pi})`
       );
       params.push(`%${q}%`);
       pi++;
