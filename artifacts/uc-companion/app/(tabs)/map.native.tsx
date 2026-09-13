@@ -159,7 +159,7 @@ export default function MapScreen() {
     <View style={s.screen}>
       <MapView
         ref={mapRef}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         initialRegion={NAIROBI}
         showsUserLocation
         showsMyLocationButton={false}

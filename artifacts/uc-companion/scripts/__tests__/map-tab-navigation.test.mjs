@@ -34,7 +34,7 @@ describe('Map tab-bar navigation contract', () => {
   test('NativeTabLayout gives Map a visible selected state', () => {
     assert.match(
       layoutSource,
-      /<NativeTabs\.Trigger\s+name=["']map["']>[\s\S]*?<Icon\s+sf=\{\{\s*default:\s*["']map["'],\s*selected:\s*["']map\.fill["']\s*\}\}\s*\/>[\s\S]*?<Label>Map<\/Label>[\s\S]*?<\/NativeTabs\.Trigger>/,
+      /<NativeTabs\.Trigger\s+name=["']map["']>[\s\S]*?<NativeTabs\.Trigger\.Icon\s+sf=\{\{\s*default:\s*["']map["'],\s*selected:\s*["']map\.fill["']\s*\}\}\s*\/>[\s\S]*?<NativeTabs\.Trigger\.Label>Map<\/NativeTabs\.Trigger\.Label>[\s\S]*?<\/NativeTabs\.Trigger>/,
       'Map must retain its selected icon and label in the Liquid Glass tab bar',
     );
   });

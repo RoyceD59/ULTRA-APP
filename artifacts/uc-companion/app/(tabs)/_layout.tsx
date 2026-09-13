@@ -5,7 +5,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs, useRouter } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useCart } from '@/context/CartContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -97,24 +97,24 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'house', selected: 'house.fill' }} />
-        <Label>Home</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="products">
-        <Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
-        <Label>Products</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
+        <NativeTabs.Trigger.Label>Products</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="support">
-        <Icon sf={{ default: 'questionmark.circle', selected: 'questionmark.circle.fill' }} />
-        <Label>Support</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'questionmark.circle', selected: 'questionmark.circle.fill' }} />
+        <NativeTabs.Trigger.Label>Support</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="map">
-        <Icon sf={{ default: 'map', selected: 'map.fill' }} />
-        <Label>Map</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} />
+        <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} />
-        <Label>Account</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} />
+        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
