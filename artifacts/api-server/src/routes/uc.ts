@@ -1692,6 +1692,42 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
     return;
   }
 
+  const normalizedEmail = normalizeEmail(email);
+
+  // Prefer an existing Companion account. A same-email WooCommerce account
+  // must never bypass the Companion password or silently replace its identity.
+  try {
+    const dbUser = await db.query.ucUsersTable.findFirst({
+      where: and(
+        eq(ucUsersTable.email, normalizedEmail),
+        isNull(ucUsersTable.deletedAt),
+      ),
+    });
+    if (dbUser && dbUser.authProvider !== "woocommerce") {
+      const match = await bcryptjs.compare(password, dbUser.passwordHash);
+      if (!match) {
+        res.status(401).json({ error: "Invalid credentials" });
+        return;
+      }
+      const user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        phone: dbUser.phone,
+        firstName: dbUser.firstName,
+        lastName: dbUser.lastName,
+        address: dbUser.address ?? "",
+        credentialVersion: dbUser.credentialVersion,
+        emailVerified: dbUser.emailVerified,
+        phoneVerified: dbUser.phoneVerified,
+      };
+      res.json({ token: issueToken(user), user });
+      return;
+    }
+  } catch {
+    // Keep WooCommerce login available when the Companion database is
+    // temporarily unavailable; provisioning below remains fail-closed.
+  }
+
   try {
     const wcBase = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
     const jwtRes = await fetch(`${wcBase}/wp-json/jwt-auth/v1/token`, {
@@ -1708,77 +1744,76 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
     ) {
       const d = jwtData as Record<string, unknown>;
       const displayName = (d["user_display_name"] as string | undefined) ?? "";
-      const wcEmail = String(d["user_email"] ?? email).toLowerCase().trim();
-      // Re-issue our own signed JWT so it can be verified server-side.
-      // The original WC token (signed with the WC secret) is discarded.
-      //
-      // Principal id: the JWT plugin response carries no numeric user id, so
-      // derive a stable per-user id from the (lowercased) email. Offset by 1e9
-      // so it can NEVER collide with a uc_users serial id — DB-anchored logic
-      // (admin checks, profile lookups) treats ids >= 1e9 as non-DB principals.
-      // This also avoids linking Woo logins to same-email app accounts, which
-      // would be an account-takeover vector if a Woo email were unverified.
-      const wooPrincipalId =
-        1_000_000_000 +
-        parseInt(createHash("sha256").update(wcEmail).digest("hex").slice(0, 13), 16);
-      const wcUser = {
-        id: wooPrincipalId,
-        email:     wcEmail,
-        firstName: displayName.split(" ")[0] ?? "Customer",
-        lastName:  displayName.split(" ").slice(1).join(" "),
-      };
-      // src: "woo" marks provenance — this email was verified by WooCommerce.
-      // The admin gate may check it against UC_ADMIN_EMAILS. Dev-fallback
-      // tokens (also >= 1e9 ids) never carry this claim, so they can never
-      // reach admin via a forged email.
-      res.json({ token: issueToken({ ...wcUser, src: "woo" }), user: wcUser });
-      return;
-    }
-  } catch { /* fall through to mock */ }
+      const wcEmail = normalizeEmail(String(d["user_email"] ?? email));
+      const firstName = displayName.split(" ")[0] || "Customer";
+      const lastName = displayName.split(" ").slice(1).join(" ");
 
-  // WooCommerce auth failed or credentials absent — try our own DB
-  if (email && password) {
-    try {
-      const dbUser = await db.query.ucUsersTable.findFirst({
-        where: eq(ucUsersTable.email, email.toLowerCase().trim()),
-      });
-      if (dbUser) {
-        const match = await bcryptjs.compare(password, dbUser.passwordHash);
-        if (!match) {
-          res.status(401).json({ error: "Invalid credentials" });
-          return;
+      const provisioned = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + wcEmail}))`,
+        );
+        const [existing] = await tx
+          .select()
+          .from(ucUsersTable)
+          .where(and(eq(ucUsersTable.email, wcEmail), isNull(ucUsersTable.deletedAt)))
+          .limit(1);
+        if (existing) {
+          // A password/social account appearing during this login race must
+          // not be claimed through WooCommerce.
+          return existing.authProvider === "woocommerce" ? existing : null;
         }
-        const user = {
-          id: dbUser.id,
-          email: dbUser.email,
-          phone: dbUser.phone,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          address: dbUser.address ?? "",
-          credentialVersion: dbUser.credentialVersion,
-          emailVerified: dbUser.emailVerified,
-          phoneVerified: dbUser.phoneVerified,
-        };
-        res.json({ token: issueToken(user), user });
+
+        const passwordHash = await bcryptjs.hash(randomUUID(), 10);
+        const [created] = await tx
+          .insert(ucUsersTable)
+          .values({
+            email: wcEmail,
+            passwordHash,
+            firstName,
+            lastName,
+            authProvider: "woocommerce",
+            emailVerified: true,
+          })
+          .returning();
+        return created ?? null;
+      });
+
+      if (!provisioned) {
+        res.status(409).json({
+          error: "A Companion account already uses this email. Sign in with its Companion password.",
+        });
         return;
       }
-    } catch { /* DB unavailable — fall through to ephemeral session */ }
 
-    // No DB record. Development only: allow an ephemeral demo session so the
-    // app can be tried before WooCommerce credentials exist. Never in
-    // production — it would let anyone mint a token for an arbitrary email.
-    if (process.env["NODE_ENV"] !== "production" && password.length >= 6) {
-      const name = email.split("@")[0] ?? "customer";
-      const mockUser = {
-        id:        Date.now(),
-        email,
-        phone:     "",
-        firstName: name.charAt(0).toUpperCase() + name.slice(1),
-        lastName:  "Customer",
+      const user = {
+        id: provisioned.id,
+        email: provisioned.email,
+        phone: provisioned.phone,
+        firstName: provisioned.firstName,
+        lastName: provisioned.lastName,
+        address: provisioned.address ?? "",
+        credentialVersion: provisioned.credentialVersion,
+        emailVerified: provisioned.emailVerified,
+        phoneVerified: provisioned.phoneVerified,
       };
-      res.json({ token: issueToken(mockUser), user: mockUser });
+      res.json({ token: issueToken({ ...user, src: "woo" }), user });
       return;
     }
+  } catch { /* fall through to development-only demo session */ }
+
+  // No database or WooCommerce account. Development only: allow an ephemeral
+  // demo session so the app can be tried before external credentials exist.
+  if (process.env["NODE_ENV"] !== "production" && password.length >= 6) {
+    const name = email.split("@")[0] ?? "customer";
+    const mockUser = {
+      id:        Date.now(),
+      email,
+      phone:     "",
+      firstName: name.charAt(0).toUpperCase() + name.slice(1),
+      lastName:  "Customer",
+    };
+    res.json({ token: issueToken(mockUser), user: mockUser });
+    return;
   }
   res.status(401).json({ error: "Invalid credentials" });
 });
