@@ -51,6 +51,8 @@ export const teamSettingsTable = pgTable("team_settings", {
    * restock-demand alert. Defaults to 5 when null.
    */
   restockDemandThreshold: integer("restock_demand_threshold"),
+  /** Failed referral settlement attempts required before the team is alerted. */
+  referralFailureAlertThreshold: integer("referral_failure_alert_threshold"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

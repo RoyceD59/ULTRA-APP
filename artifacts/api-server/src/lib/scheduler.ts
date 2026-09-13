@@ -29,6 +29,10 @@ import {
   getRestockDemandThreshold,
   projectHubInventoryUrl,
 } from "./wishlist-demand.js";
+import {
+  processReferralSettlementAlerts,
+  retryReferralSettlements,
+} from "../routes/referrals.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -246,6 +250,15 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      await retryReferralSettlements();
+      await processReferralSettlementAlerts();
+    } catch (err) {
+      logger.error({ err }, "Scheduler: referral settlement retry/alert run failed");
+    }
+  });
+  logger.info("Scheduler: referral settlement retry/alert job registered (every 5 minutes)");
   // Every 4 hours: check wishlisted out-of-stock products for restocks.
   cron.schedule("0 */4 * * *", async () => {
     logger.info("Scheduler: running wishlist restock check");

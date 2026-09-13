@@ -119,17 +119,15 @@ async function getMyActiveCount(): Promise<number> {
 
 describe("GET /uc/admin/customers/count — auth gate", () => {
   it("returns 401 with no Authorization header", async () => {
-      const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
-        headers: { authorization: teamHeader },
-      });
+    const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count");
     assert.equal(status, 401, `expected 401, got ${status}: ${JSON.stringify(body)}`);
   });
 
   it("returns 401 for a UC-user token (type is not 'team-session')", async () => {
     const ucHeader = `Bearer ${issueToken({ id: 9999, email: "uc-user@test.internal" })}`;
-      const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
-        headers: { authorization: teamHeader },
-      });
+    const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
+      headers: { authorization: ucHeader },
+    });
     assert.equal(status, 401, `expected 401, got ${status}: ${JSON.stringify(body)}`);
   });
 });

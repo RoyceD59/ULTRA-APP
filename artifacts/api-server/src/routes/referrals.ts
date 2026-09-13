@@ -1,12 +1,54 @@
 import { Router, type Request, type Response } from "express";
 import {
   db,
+  pool,
   ucReferralCodesTable,
   ucReferralUsersTable,
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
+import { requireAdmin } from "../lib/adminAuth.js";
+import { verifyToken } from "../lib/jwt.js";
+import { sendViaResend } from "../lib/resend.js";
 
 const router = Router();
+const DEFAULT_REFERRAL_FAILURE_ALERT_THRESHOLD = 3;
+
+function configuredFailureThreshold(databaseValue: unknown): number {
+  const value = Number(
+    databaseValue ??
+      process.env["REFERRAL_FAILURE_ALERT_THRESHOLD"] ??
+      DEFAULT_REFERRAL_FAILURE_ALERT_THRESHOLD,
+  );
+  return Number.isInteger(value) && value >= 1 && value <= 100
+    ? value
+    : DEFAULT_REFERRAL_FAILURE_ALERT_THRESHOLD;
+}
+
+async function authenticatedTeamAdmin(
+  req: Request,
+  res: Response,
+): Promise<{ id: string; name: string; email: string } | null> {
+  if (!(await requireAdmin(req, res))) return null;
+  const claims = verifyToken(req.headers["authorization"]);
+  if (claims?.type !== "team-session" || typeof claims.id !== "string") {
+    res.status(403).json({ error: "A ProjectHub team admin account is required" });
+    return null;
+  }
+  const result = await pool.query<{
+    id: string;
+    name: string;
+    email: string;
+  }>(
+    `SELECT id,name,email FROM team_users
+     WHERE id=$1 AND role='admin' AND is_active=true LIMIT 1`,
+    [claims.id],
+  );
+  if (!result.rows[0]) {
+    res.status(401).json({ error: "Admin authentication required" });
+    return null;
+  }
+  return result.rows[0];
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface UCPromotion {
@@ -196,47 +238,182 @@ export async function validateCodeForDiscount(
  * Call after a successful order when a referral code was applied.
  * Marks the referred user's first order as done and credits the referrer.
  */
-export async function recordReferralConversion(
+async function persistReferralConversion(
   code: string,
   userEmail: string,
-  referrerCreditKes = 200
+  referrerCreditKes = 200,
 ): Promise<void> {
   const upper = code.trim().toUpperCase();
   const email = userEmail.toLowerCase();
-
-  // Upsert user row — mark first order as done
-  await db
-    .insert(ucReferralUsersTable)
-    .values({ email, firstOrderDone: true, referredByCode: upper })
-    .onConflictDoUpdate({
-      target: ucReferralUsersTable.email,
-      set: {
-        firstOrderDone: true,
-        updatedAt: new Date(),
-      },
-    });
-
-  // Credit the referrer and add the user to referred_emails if not already there
-  const [ref] = await db
-    .select()
-    .from(ucReferralCodesTable)
-    .where(eq(ucReferralCodesTable.code, upper))
-    .limit(1);
-
-  if (ref) {
-    const emails: string[] = Array.isArray(ref.referredEmails) ? ref.referredEmails : [];
-    const alreadyRecorded = emails.includes(email);
-    const newEmails = alreadyRecorded ? emails : [...emails, email];
-    await db
-      .update(ucReferralCodesTable)
-      .set({
-        referredEmails:   newEmails,
-        conversions:      sql`${ucReferralCodesTable.conversions} + 1`,
-        creditsEarnedKes: sql`${ucReferralCodesTable.creditsEarnedKes} + ${referrerCreditKes}`,
-        updatedAt:        new Date(),
-      })
-      .where(eq(ucReferralCodesTable.code, upper));
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO uc_referral_users(email,first_order_done,referred_by_code,updated_at)
+       VALUES($1,true,$2,now())
+       ON CONFLICT(email) DO UPDATE SET first_order_done=true,updated_at=now()`,
+      [email, upper],
+    );
+    const result = await client.query(
+      `SELECT referred_emails FROM uc_referral_codes WHERE code=$1 FOR UPDATE`,
+      [upper],
+    );
+    if (result.rows[0]) {
+      const emails: string[] = Array.isArray(result.rows[0].referred_emails)
+        ? result.rows[0].referred_emails
+        : [];
+      if (!emails.includes(email)) {
+        await client.query(
+          `UPDATE uc_referral_codes SET referred_emails=$2::json,
+           conversions=conversions+1,credits_earned_kes=credits_earned_kes+$3,updated_at=now()
+           WHERE code=$1`,
+          [upper, JSON.stringify([...emails, email]), referrerCreditKes],
+        );
+      }
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
+}
+
+export async function recordReferralConversion(
+  code: string,
+  userEmail: string,
+  referrerCreditKes = 200,
+  orderId?: number,
+): Promise<void> {
+  try {
+    await persistReferralConversion(code, userEmail, referrerCreditKes);
+  } catch (error) {
+    if (Number.isSafeInteger(orderId) && orderId! > 0) {
+      await pool.query(
+        `INSERT INTO uc_referral_settlements(
+           order_id,referral_code,user_email,status,attempts,last_error,next_attempt_at,updated_at
+         ) VALUES($1,$2,$3,'pending',1,$4,now(),now())
+         ON CONFLICT(order_id) DO UPDATE SET
+           referral_code=EXCLUDED.referral_code,
+           user_email=EXCLUDED.user_email,
+           status='pending',
+           claim_token=NULL,
+           claim_expires_at=NULL,
+           attempts=uc_referral_settlements.attempts+1,
+           last_error=EXCLUDED.last_error,
+           next_attempt_at=now(),
+           updated_at=now()`,
+        [orderId, code.trim().toUpperCase(), userEmail.toLowerCase(), String(error).slice(0, 2000)],
+      );
+    }
+    throw error;
+  }
+}
+
+export async function retryReferralSettlements(deps: {
+  afterClaim?: (rows: Array<{ id: number; claimToken: string }>) => Promise<void>;
+} = {}): Promise<number> {
+  const claimClient = await pool.connect();
+  let due;
+  try {
+    await claimClient.query("BEGIN");
+    due = await claimClient.query(
+      `UPDATE uc_referral_settlements SET status='processing',
+         claim_token=md5(random()::text||clock_timestamp()::text||id::text),
+         claim_expires_at=now()+interval '5 minutes',updated_at=now()
+       WHERE id IN (
+         SELECT id FROM uc_referral_settlements
+         WHERE (status='pending' AND next_attempt_at <= now())
+            OR (status='processing' AND claim_expires_at < now())
+         ORDER BY next_attempt_at FOR UPDATE SKIP LOCKED LIMIT 25
+       )
+       RETURNING id,referral_code,user_email,claim_token`,
+    );
+    await claimClient.query("COMMIT");
+  } catch (error) {
+    await claimClient.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    claimClient.release();
+  }
+  await deps.afterClaim?.(
+    due.rows.map((row) => ({ id: Number(row.id), claimToken: String(row.claim_token) })),
+  );
+  let completed = 0;
+  for (const row of due.rows) {
+    try {
+      await persistReferralConversion(String(row.referral_code), String(row.user_email));
+      const result = await pool.query(
+        `UPDATE uc_referral_settlements
+         SET status='completed',claim_token=NULL,claim_expires_at=NULL,last_error=NULL,updated_at=now()
+         WHERE id=$1 AND status='processing' AND claim_token=$2`,
+        [row.id, row.claim_token],
+      );
+      if (result.rowCount === 1) completed += 1;
+    } catch (error) {
+      await pool.query(
+        `UPDATE uc_referral_settlements SET status='pending',claim_expires_at=NULL,
+         claim_token=NULL,attempts=attempts+1,last_error=$3,
+         next_attempt_at=now()+LEAST(interval '1 hour',interval '15 seconds'*power(2,LEAST(attempts,8))),
+         updated_at=now() WHERE id=$1 AND status='processing' AND claim_token=$2`,
+        [row.id, row.claim_token, String(error).slice(0, 2000)],
+      );
+    }
+  }
+  return completed;
+}
+
+export async function processReferralSettlementAlerts(
+  sendEmail: typeof sendViaResend = sendViaResend,
+): Promise<number> {
+  const settings = await pool.query(
+    `SELECT referral_failure_alert_threshold,team_alert_email
+     FROM team_settings WHERE id='singleton' LIMIT 1`,
+  );
+  const threshold = configuredFailureThreshold(
+    settings.rows[0]?.referral_failure_alert_threshold,
+  );
+  const recipient = String(
+    settings.rows[0]?.team_alert_email ??
+      process.env["TEAM_ALERT_EMAIL"] ??
+      "info@ucfilters.com",
+  ).trim();
+  const eligible = await pool.query(
+    `UPDATE uc_referral_settlements SET alert_claimed_at=now(),updated_at=now()
+     WHERE id IN (
+       SELECT id FROM uc_referral_settlements
+       WHERE status='pending' AND attempts >= $1 AND alerted_at IS NULL
+         AND (alert_claimed_at IS NULL OR alert_claimed_at < now()-interval '5 minutes')
+       ORDER BY attempts DESC,updated_at FOR UPDATE SKIP LOCKED LIMIT 25
+     )
+     RETURNING id,order_id,attempts,last_error`,
+    [threshold],
+  );
+  let sent = 0;
+  for (const row of eligible.rows) {
+    const accepted = await sendEmail({
+      from: "Ultra Clear <notifications@contacts.ucfilters.com>",
+      to: recipient,
+      subject: `Referral reward stuck for order #${row.order_id}`,
+      text: `Referral reward settlement for order #${row.order_id} has failed ${row.attempts} times.\n\nLast error: ${row.last_error ?? "Unknown error"}`,
+      idempotencyKey: `referral-settlement-alert-${row.order_id}`,
+      meta: { template: "referral_settlement_failure", orderId: String(row.order_id) },
+    });
+    if (accepted) {
+      await pool.query(
+        "UPDATE uc_referral_settlements SET alerted_at=now(),alert_claimed_at=NULL,updated_at=now() WHERE id=$1 AND alerted_at IS NULL",
+        [row.id],
+      );
+      sent += 1;
+    } else {
+      await pool.query(
+        "UPDATE uc_referral_settlements SET alert_claimed_at=NULL,updated_at=now() WHERE id=$1 AND alerted_at IS NULL",
+        [row.id],
+      );
+    }
+  }
+  return sent;
 }
 
 /**
@@ -323,6 +500,107 @@ export async function getReferralExportData(userEmail: string): Promise<{
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+
+router.get("/uc/admin/referrals", async (req, res): Promise<void> => {
+  const actor = await authenticatedTeamAdmin(req, res);
+  if (!actor) return;
+
+  const [settings, latestChange] = await Promise.all([
+    pool.query(
+      `SELECT referral_failure_alert_threshold
+       FROM team_settings WHERE id='singleton' LIMIT 1`,
+    ),
+    pool.query(
+      `SELECT actor_team_user_id,actor_name,actor_email,previous_value,new_value,changed_at
+       FROM referral_alert_threshold_changes
+       ORDER BY changed_at DESC,id DESC LIMIT 1`,
+    ),
+  ]);
+
+  const referrals = await pool.query(
+    `SELECT c.id,c.code,c.owner_email,c.owner_name,
+       jsonb_array_length(c.referred_emails::jsonb)::int AS referred_count,
+       c.conversions,c.credits_earned_kes,c.created_at,c.updated_at
+     FROM uc_referral_codes c ORDER BY c.updated_at DESC LIMIT 200`,
+  );
+  const failures = await pool.query(
+    `SELECT order_id,attempts,last_error,next_attempt_at,alerted_at,updated_at,
+       count(*) OVER()::int AS total_count
+     FROM uc_referral_settlements
+     WHERE status='pending' AND attempts >= $1
+     ORDER BY attempts DESC,updated_at DESC LIMIT 200`,
+    [configuredFailureThreshold(settings.rows[0]?.referral_failure_alert_threshold)],
+  );
+  res.json({
+    referrals: referrals.rows,
+    settlementFailures: failures.rows,
+    settlementFailureCount: Number(failures.rows[0]?.total_count ?? 0),
+    settlementFailureThreshold: configuredFailureThreshold(
+      settings.rows[0]?.referral_failure_alert_threshold,
+    ),
+    latestThresholdChange: latestChange.rows[0] ?? null,
+  });
+});
+
+router.patch("/uc/admin/referrals/settings", async (req, res): Promise<void> => {
+  const actor = await authenticatedTeamAdmin(req, res);
+  if (!actor) return;
+
+  const threshold = req.body?.failureAlertThreshold;
+  if (
+    typeof threshold !== "number" ||
+    !Number.isInteger(threshold) ||
+    threshold < 1 ||
+    threshold > 100
+  ) {
+    res.status(400).json({
+      error: "failureAlertThreshold must be a whole number from 1 to 100",
+    });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // The singleton row may not exist on the first update, so a row lock alone
+    // cannot serialize writers. This transaction-scoped lock gives every audit
+    // row a definitive predecessor, including concurrent first writes.
+    await client.query("SELECT pg_advisory_xact_lock(617, 1)");
+    const current = await client.query(
+      `SELECT referral_failure_alert_threshold
+       FROM team_settings WHERE id='singleton' FOR UPDATE`,
+    );
+    const previousValue = configuredFailureThreshold(
+      current.rows[0]?.referral_failure_alert_threshold,
+    );
+    await client.query(
+      `INSERT INTO team_settings(id,referral_failure_alert_threshold,updated_at)
+       VALUES('singleton',$1,now())
+       ON CONFLICT(id) DO UPDATE SET
+         referral_failure_alert_threshold=EXCLUDED.referral_failure_alert_threshold,
+         updated_at=now()`,
+      [threshold],
+    );
+    const changed = await client.query(
+      `INSERT INTO referral_alert_threshold_changes(
+         actor_team_user_id,actor_name,actor_email,previous_value,new_value
+       ) VALUES($1,$2,$3,$4,$5)
+       RETURNING actor_team_user_id,actor_name,actor_email,previous_value,new_value,changed_at`,
+      [actor.id, actor.name, actor.email, previousValue, threshold],
+    );
+    await client.query("COMMIT");
+    res.json({
+      failureAlertThreshold: threshold,
+      latestThresholdChange: changed.rows[0],
+    });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[referrals] threshold update failed:", error);
+    res.status(500).json({ error: "Could not save the referral alert threshold" });
+  } finally {
+    client.release();
+  }
+});
 
 /** GET /api/uc/referrals/my-code — authenticated user's code + stats */
 router.get("/uc/referrals/my-code", async (req: Request, res: Response): Promise<void> => {

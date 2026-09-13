@@ -59,6 +59,7 @@ import {
 import { issueToken } from "../lib/jwt.js";
 import { encryptSecret } from "../lib/secret-crypto.js";
 import { pool } from "@workspace/db";
+import { _inventorySyncSeams } from "../routes/uc.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -465,11 +466,7 @@ describe("POST /api/uc/admin/inventory/sync", () => {
   });
 
   it("(d) returns 502 when the outbound webhook request throws", async () => {
-    const encryptedUrl = encryptSecret("https://1.1.1.1/inventory-sync");
-    await pool.query(
-      "UPDATE team_settings SET n8n_inventory_webhook_url_enc = $1 WHERE id = 'singleton'",
-      [encryptedUrl],
-    );
+    _inventorySyncSeams.getWebhookUrl = async () => "https://1.1.1.1/inventory-sync";
 
     const originalRequest = https.request;
     https.request = ((..._args: unknown[]) => {
@@ -494,10 +491,8 @@ describe("POST /api/uc/admin/inventory/sync", () => {
       assert.equal(status, 502, `Expected 502, got ${status}: ${JSON.stringify(json)}`);
       assert.deepEqual(json, { error: "Failed to reach n8n webhook" });
     } finally {
+      _inventorySyncSeams.getWebhookUrl = null;
       https.request = originalRequest;
-      await pool.query(
-        "UPDATE team_settings SET n8n_inventory_webhook_url_enc = null WHERE id = 'singleton'",
-      );
     }
   });
 });

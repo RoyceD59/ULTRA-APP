@@ -5103,7 +5103,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcPreFlight.order["id"]));
             if (iConfirmed) {
               if (discountType === "referral" && promoCode && userEmail) {
-                await recordReferralConversion(promoCode, userEmail).catch((err) => {
+                await recordReferralConversion(promoCode, userEmail, 200, wcAnchorId ?? Number(wcPreFlight.order["id"])).catch((err) => {
                   logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
                 });
               }
@@ -5195,7 +5195,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcOrder["id"]));
           if (iConfirmed) {
             if (discountType === "referral" && promoCode && userEmail) {
-              await recordReferralConversion(promoCode, userEmail).catch((err) => {
+              await recordReferralConversion(promoCode, userEmail, 200, wcAnchorId ?? Number(wcOrder["id"])).catch((err) => {
                 logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
               });
             }
@@ -5214,7 +5214,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           // the confirmation unconditionally whenever WC accepts the order.
           // COD orders are not paid at time of placement — no rewards credit.
           if (discountType === "referral" && promoCode && userEmail) {
-            await recordReferralConversion(promoCode, userEmail).catch((err) => {
+            await recordReferralConversion(promoCode, userEmail, 200, Number(wcOrder["id"])).catch((err) => {
               logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
             });
           }
@@ -5267,7 +5267,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
     // Record referral conversion so the referrer earns credit
     if (discountType === "referral" && promoCode && userEmail) {
-      await recordReferralConversion(promoCode, userEmail).catch((err) => {
+      await recordReferralConversion(promoCode, userEmail, 200, dbOrder!.id).catch((err) => {
         logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
       });
     }
@@ -5386,7 +5386,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     };
     orderStoreFallback.push(fallbackOrder);
     if (discountType === "referral" && promoCode && userEmail) {
-      await recordReferralConversion(promoCode, userEmail).catch((err) => {
+      await recordReferralConversion(promoCode, userEmail, 200, fallbackOrder.id).catch((err) => {
         logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
       });
     }
@@ -6569,6 +6569,10 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
 });
 
 // ─── Inventory: trigger the n8n inventory-sync webhook ───────────────────────
+export const _inventorySyncSeams: {
+  getWebhookUrl: (() => Promise<string | null>) | null;
+} = { getWebhookUrl: null };
+
 router.post("/uc/admin/inventory/sync", async (req, res): Promise<void> => {
   if (!(await isAdminRequest(req.headers["authorization"]))) {
     res.status(401).json({ error: "Unauthorized" });
@@ -6578,11 +6582,15 @@ router.post("/uc/admin/inventory/sync", async (req, res): Promise<void> => {
   // Read and decrypt the configured n8n webhook URL
   let webhookUrl: string | null = null;
   try {
-    const { rows } = await pool.query<{ n8n_inventory_webhook_url_enc: string | null }>(
-      "SELECT n8n_inventory_webhook_url_enc FROM team_settings WHERE id = 'singleton' LIMIT 1",
-    );
-    const enc = rows[0]?.n8n_inventory_webhook_url_enc ?? null;
-    webhookUrl = enc ? decryptSecret(enc) : null;
+    if (_inventorySyncSeams.getWebhookUrl) {
+      webhookUrl = await _inventorySyncSeams.getWebhookUrl();
+    } else {
+      const { rows } = await pool.query<{ n8n_inventory_webhook_url_enc: string | null }>(
+        "SELECT n8n_inventory_webhook_url_enc FROM team_settings WHERE id = 'singleton' LIMIT 1",
+      );
+      const enc = rows[0]?.n8n_inventory_webhook_url_enc ?? null;
+      webhookUrl = enc ? decryptSecret(enc) : null;
+    }
   } catch (err) {
     logger.error({ err }, "[inventory/sync] Failed to read n8n webhook URL from DB");
     res.status(500).json({ error: "Internal server error" });

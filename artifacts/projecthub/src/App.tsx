@@ -37,6 +37,7 @@ import AdminIntegrationsPage from '@/pages/admin/integrations';
 import AdminRewardsPage from '@/pages/admin/rewards';
 import AdminCustomersPage from '@/pages/admin/customers';
 import AdminUnsyncedRegistrationsPage from '@/pages/admin/unsynced-registrations';
+import AdminReferralsPage from '@/pages/admin/referrals';
 
 const queryClient = new QueryClient();
 
@@ -105,6 +106,7 @@ function Router() {
               <Route path="/admin/rewards"><AdminGuard><AdminRewardsPage /></AdminGuard></Route>
               <Route path="/admin/customers"><AdminGuard><AdminCustomersPage /></AdminGuard></Route>
               <Route path="/admin/unsynced-registrations"><AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard></Route>
+              <Route path="/admin/referrals"><AdminGuard><AdminReferralsPage /></AdminGuard></Route>
               <Route component={NotFound} />
             </Switch>
           </AppLayout>
