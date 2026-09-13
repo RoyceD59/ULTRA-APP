@@ -12,6 +12,7 @@
  *   (h) alertTeamRecoveryOrder() still calls AT SMS when Resend is down
  *   (i) alertTeamRecoveryOrder() uses the DB phone number when set in team_settings
  *   (k) runStaleRecoveryOrderDigest() logs a thrown AT network error without rethrowing
+ *   (l) running the stale digest twice only alerts once per order per day
  *   (e2)/(e3) runStaleRecoveryOrderDigest() still attempts the email and logs
  *             status=failed when AT returns 401 / 500
  *
@@ -676,6 +677,50 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
 
     // Invalidate again so the cached DB phone doesn't leak into later tests
     invalidateTeamAlertPhoneCache();
+  });
+
+  it("(k) running twice in quick succession alerts only once per order per day", async () => {
+    delete process.env["TEAM_ALERT_PHONE"];
+
+    const createdAt = new Date(Date.now() - 30 * 60 * 60 * 1000);
+    selectStub = [
+      {
+        id: 254001,
+        paymentMethod: "mpesa",
+        total: "3500",
+        status: "processing",
+        paymentReference: "LGR254001",
+        dateCreated: createdAt,
+        webhookRecovery: true,
+        userId: "anon",
+        currency: "KES",
+        promoCode: "",
+        discountPercent: 0,
+        discountAmount: 0,
+        shippingAddress: {},
+        teamAlertPhone: "+254711254001",
+      },
+    ];
+
+    let emailCalls = 0;
+    let smsCalls = 0;
+    const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+    const deps = {
+      sendEmail: async () => {
+        emailCalls += 1;
+        return true;
+      },
+      sendSmsAwaitable: async () => {
+        smsCalls += 1;
+        return true;
+      },
+    };
+
+    await runStaleRecoveryOrderDigest(deps);
+    await runStaleRecoveryOrderDigest(deps);
+
+    assert.equal(emailCalls, 1, "digest email should only be sent once");
+    assert.equal(smsCalls, 1, "Africa's Talking should only be called once");
   });
 
   /**

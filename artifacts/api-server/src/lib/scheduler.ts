@@ -1073,6 +1073,7 @@ export async function runAiPushEventsPruning(): Promise<{ deleted: number }> {
   }
 }
 
+const staleRecoveryDigestClaims = new Set<string>();
 /** @internal */
 export async function runStaleRecoveryOrderDigest(
   deps: {
@@ -1087,7 +1088,7 @@ export async function runStaleRecoveryOrderDigest(
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const stale = await db
+    const staleCandidates = await db
       .select()
       .from(ucOrdersTable)
       .where(
@@ -1101,8 +1102,14 @@ export async function runStaleRecoveryOrderDigest(
         )
       );
 
+    const { claimedIds, claimKeys } = claimStaleRecoveryDigestOrders(
+      staleCandidates,
+      new Date(),
+    );
+    const stale = staleCandidates.filter((order) => claimedIds.has(order.id));
+
     if (stale.length === 0) {
-      logger.info("Scheduler: no stale recovery orders found");
+      logger.info("Scheduler: no unalerted stale recovery orders found");
       return;
     }
 
@@ -1170,6 +1177,8 @@ export async function runStaleRecoveryOrderDigest(
     // to uc_notification_log so the failure is visible in the ProjectHub admin
     // Notification Log page and can be investigated / retried.
     if (!emailOk && !smsOk) {
+      for (const key of claimKeys) staleRecoveryDigestClaims.delete(key);
+
       logger.error(
         { count: stale.length },
         "Scheduler: stale recovery order digest — BOTH email and SMS channels failed; recording durable failure",
@@ -1238,4 +1247,27 @@ async function notifySyncFailure(params: {
     { sent, total: members.length },
     "Scheduler: sync-failure alert emails dispatched",
   );
+}
+
+function claimStaleRecoveryDigestOrders(
+  orders: Array<{ id: number }>,
+  now: Date,
+): { claimedIds: Set<number>; claimKeys: string[] } {
+  const day = now.toISOString().slice(0, 10);
+
+  for (const key of staleRecoveryDigestClaims) {
+    if (!key.startsWith(`${day}:`)) staleRecoveryDigestClaims.delete(key);
+  }
+
+  const claimedIds = new Set<number>();
+  const claimKeys: string[] = [];
+  for (const order of orders) {
+    const key = `${day}:${order.id}`;
+    if (staleRecoveryDigestClaims.has(key)) continue;
+    staleRecoveryDigestClaims.add(key);
+    claimedIds.add(order.id);
+    claimKeys.push(key);
+  }
+
+  return { claimedIds, claimKeys };
 }
