@@ -246,3 +246,85 @@ describe("ChatPanel race conditions", () => {
     expect(screen.getByText("This is B content")).toBeInTheDocument();
   });
 });
+
+// ── Conversation picker tests ───────────────────────────────────────────────
+
+describe("ChatPanel conversation picker", () => {
+  it("loads and renders an older conversation from a long history list", async () => {
+    const { useListAnthropicConversations } = await import("@workspace/api-client-react");
+    const conversations = Array.from({ length: 40 }, (_, index) => ({
+      id: index + 1,
+      title: index === 0 ? "Oldest retained conversation" : `Recent conversation ${index + 1}`,
+      createdAt: new Date(Date.UTC(2026, 7, index + 1, 10)).toISOString(),
+    }));
+    vi.mocked(useListAnthropicConversations).mockReturnValue({
+      data: conversations,
+      isLoading: false,
+    } as ReturnType<typeof useListAnthropicConversations>);
+    vi.mocked(global.fetch).mockResolvedValueOnce(jsonResponse(200, {
+      id: 1,
+      title: "Oldest retained conversation",
+      messages: [
+        { id: 101, role: "user", content: "Show me the original blockers" },
+        { id: 102, role: "assistant", content: "The original blocker was approval." },
+      ],
+    }));
+
+    renderChatPanel();
+    fireEvent.click(screen.getByRole("button", { name: /history/i }));
+    fireEvent.click(screen.getByRole("button", { name: /oldest retained conversation/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/anthropic\/conversations\/1$/),
+      );
+    });
+    expect(await screen.findByText("Show me the original blockers")).toBeInTheDocument();
+    expect(screen.getByText("The original blocker was approval.")).toBeInTheDocument();
+    expect(localStorage.getItem(CONV_KEY)).toBe("1");
+  });
+
+  it("clears the active conversation and restores the greeting when New chat is clicked", async () => {
+    localStorage.setItem(CONV_KEY, "7");
+    vi.mocked(global.fetch).mockResolvedValueOnce(jsonResponse(200, {
+      id: 7,
+      title: "Existing conversation",
+      messages: [
+        { id: 201, role: "user", content: "Message from the existing chat" },
+      ],
+    }));
+
+    renderChatPanel();
+    expect(await screen.findByText("Message from the existing chat")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /new chat/i }));
+
+    expect(localStorage.getItem(CONV_KEY)).toBeNull();
+    expect(screen.queryByText("Message from the existing chat")).not.toBeInTheDocument();
+    expect(screen.getByText(/i'm the projecthub ai monitor/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/ask about tasks/i)).not.toBeDisabled();
+  });
+
+  it("closes the picker on an outside click without switching conversations", async () => {
+    const { useListAnthropicConversations } = await import("@workspace/api-client-react");
+    vi.mocked(useListAnthropicConversations).mockReturnValue({
+      data: [
+        { id: 3, title: "Conversation to leave untouched", createdAt: "2026-08-17T10:00:00Z" },
+      ],
+      isLoading: false,
+    } as ReturnType<typeof useListAnthropicConversations>);
+
+    renderChatPanel();
+    fireEvent.click(screen.getByRole("button", { name: /history/i }));
+    expect(screen.getByText("Past conversations")).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Past conversations")).not.toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(localStorage.getItem(CONV_KEY)).toBeNull();
+    expect(screen.getByText(/i'm the projecthub ai monitor/i)).toBeInTheDocument();
+  });
+});
