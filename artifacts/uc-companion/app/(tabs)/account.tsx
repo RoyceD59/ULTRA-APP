@@ -35,6 +35,7 @@ import {
   saveProfileDraft,
   type ProfileDraftFields,
 } from '@/lib/profileDraft';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -570,13 +571,13 @@ function AccountScreenContent() {
   }
 
   const { data: orders } = useQuery({
-    queryKey: ['orders'],
+    queryKey: customerQueryKeys.orders(user?.id),
     queryFn: () => api.getOrders(),
     enabled: !!user,
   });
 
   const { data: rewards } = useQuery({
-    queryKey: ['customer-rewards'],
+    queryKey: customerQueryKeys.rewards(user?.id),
     queryFn: () => api.getRewards(),
     enabled: !!user,
     staleTime: 0,
@@ -584,7 +585,7 @@ function AccountScreenContent() {
   });
 
   const { data: referral } = useQuery({
-    queryKey: ['my-referral'],
+    queryKey: customerQueryKeys.referral(user?.id),
     queryFn: () => api.getMyReferral(),
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
@@ -868,7 +869,7 @@ function AccountScreenContent() {
           )}
 
           {rewards ? <PersonalImpactSection impact={rewards.impact} onUpdated={impact => {
-            queryClient.setQueryData<CustomerRewards>(['customer-rewards'], current => current ? { ...current, impact } : current);
+            queryClient.setQueryData<CustomerRewards>(customerQueryKeys.rewards(user.id), current => current ? { ...current, impact } : current);
           }} /> : null}
 
           {rewards ? <View style={styles.section}>
@@ -886,7 +887,7 @@ function AccountScreenContent() {
               setFilterActivation(a);
               refreshNotifStatus();
             }}
-            onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: ['customer-rewards'] })}
+            onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
           />
 
           {/* Recent orders */}

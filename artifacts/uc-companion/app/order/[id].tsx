@@ -9,6 +9,7 @@ import { useColors } from '@/hooks/useColors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 /**
  * Gentle nudge shown to guests after checkout: creating a free account lets
@@ -96,6 +97,7 @@ export default function OrderDetailScreen() {
   const api = useApi();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<ReturnReason | ''>('');
@@ -106,8 +108,9 @@ export default function OrderDetailScreen() {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
   const { data: orders, isLoading } = useQuery({
-    queryKey: ['orders'],
+    queryKey: customerQueryKeys.orders(user?.id),
     queryFn: () => api.getOrders(),
+    enabled: !!user,
   });
 
   const order = orders?.find(o => String(o.id) === id);
@@ -117,9 +120,9 @@ export default function OrderDetailScreen() {
   const age = order ? daysSinceOrder(order.dateCreated) : 999;
 
   const { data: returnData } = useQuery({
-    queryKey: ['returnRequest', id],
+    queryKey: customerQueryKeys.returnRequest(user?.id, id),
     queryFn: () => api.getReturnRequest(Number(id)),
-    enabled: !!order && isReturnEligibleStatus,
+    enabled: !!user && !!order && isReturnEligibleStatus,
   });
 
   const existingRequest = returnData?.request ?? null;
@@ -129,9 +132,10 @@ export default function OrderDetailScreen() {
   );
 
   const returnMutation = useMutation({
-    mutationFn: () => api.requestReturn(Number(id), { reason: selectedReason, details }),
-    onSuccess: data => {
-      queryClient.invalidateQueries({ queryKey: ['returnRequest', id] });
+    mutationFn: ({ customerId: _customerId }: { customerId: number }) =>
+      api.requestReturn(Number(id), { reason: selectedReason, details }),
+    onSuccess: (data, { customerId }) => {
+      queryClient.invalidateQueries({ queryKey: customerQueryKeys.returnRequest(customerId, id) });
       setModalVisible(false);
       setSelectedReason('');
       setDetails('');
@@ -387,7 +391,9 @@ export default function OrderDetailScreen() {
             />
 
             <TouchableOpacity
-              onPress={() => returnMutation.mutate()}
+              onPress={() => {
+                if (user) returnMutation.mutate({ customerId: user.id });
+              }}
               disabled={!selectedReason || returnMutation.isPending}
               style={[styles.submitBtn, { backgroundColor: selectedReason ? colors.primary : colors.border }]}>
               {returnMutation.isPending

@@ -42,6 +42,7 @@ import {
 } from '@/hooks/filterNudge';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
 import { resolveReminderOptInActivation } from '@/hooks/reminderOptInFlow';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 interface Props {
   /** Called after the user completes registration from the prompt. */
@@ -114,7 +115,7 @@ export default function RegisterFilterPrompt({ onRegistered }: Props) {
   const ordersEnabled = eligibleForRegister || eligibleForReplace;
 
   const { data: orders } = useQuery({
-    queryKey: ['orders', 'register-prompt', user?.id],
+    queryKey: customerQueryKeys.orders(user?.id),
     queryFn: () => api.getOrders(),
     enabled: ordersEnabled,
     staleTime: 5 * 60 * 1000,

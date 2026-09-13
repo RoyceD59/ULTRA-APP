@@ -11,6 +11,8 @@ import { useColors } from '@/hooks/useColors';
 import { useApi, resolveMediaUrl } from '@/hooks/useApi';
 import MediaPicker, { type MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
+import { useAuth } from '@/context/AuthContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 /**
  * Team-only screen: add or remove extra product photos and a product video.
@@ -21,6 +23,7 @@ export default function ProductMediaAdminScreen() {
   const colors = useColors();
   const api = useApi();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const pid = parseInt(productId ?? '');
 
@@ -35,9 +38,9 @@ export default function ProductMediaAdminScreen() {
   });
 
   const { data: rows, isLoading, isError, refetch } = useQuery({
-    queryKey: ['admin-product-media', pid],
+    queryKey: customerQueryKeys.adminProductMedia(user?.id, pid),
     queryFn: () => api.getProductMediaAdmin(pid),
-    enabled: !isNaN(pid),
+    enabled: !!user && !isNaN(pid),
   });
 
   // Base images = catalogue entries the team cannot delete from the app.
@@ -61,7 +64,7 @@ export default function ProductMediaAdminScreen() {
       }
       setStaged([]);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['admin-product-media', pid] }),
+        queryClient.invalidateQueries({ queryKey: customerQueryKeys.adminProductMedia(user?.id, pid) }),
         queryClient.invalidateQueries({ queryKey: ['product', String(pid)] }),
         queryClient.invalidateQueries({ queryKey: ['products'] }),
       ]);
@@ -85,7 +88,7 @@ export default function ProductMediaAdminScreen() {
           try {
             await api.deleteProductMediaAdmin(mediaId);
             await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ['admin-product-media', pid] }),
+              queryClient.invalidateQueries({ queryKey: customerQueryKeys.adminProductMedia(user?.id, pid) }),
               queryClient.invalidateQueries({ queryKey: ['product', String(pid)] }),
               queryClient.invalidateQueries({ queryKey: ['products'] }),
             ]);

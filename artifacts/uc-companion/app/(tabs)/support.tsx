@@ -17,6 +17,7 @@ import {
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 const TABS = ['Guides', 'My Tickets', 'Water Test'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
@@ -120,9 +121,9 @@ function SupportScreenContent() {
   const cartBarInset = useCartBarInset();
 
   const { data: tickets, isLoading: loadingTickets } = useQuery({
-    queryKey: ['tickets'],
+    queryKey: customerQueryKeys.tickets(user?.id),
     queryFn:  () => api.getTickets(),
-    enabled:  tab === 1,
+    enabled:  tab === 1 && !!user,
   });
 
   // Build grouped sections for SectionList (or flat list when searching)

@@ -18,6 +18,7 @@ import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
 import * as Haptics from 'expo-haptics';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -38,7 +39,7 @@ export default function ProductDetailScreen() {
   const router = useRouter();
   const api = useApi();
   const { addItem, totalItems, cartHydrated } = useCart();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { width } = useWindowDimensions();
 
   const pid = parseInt(id ?? '');
@@ -47,6 +48,8 @@ export default function ProductDetailScreen() {
   const [viewerItem, setViewerItem] = useState<UCReviewMedia | null>(null);
   // Optimistic wishlist toggle state: null = use server data
   const [wishlistPending, setWishlistPending] = useState<boolean | null>(null);
+  const currentCustomerId = useRef<number | null>(user?.id ?? null);
+  currentCustomerId.current = user?.id ?? null;
   const galleryRef = useRef<ScrollView>(null);
   const thumbStripRef = useRef<ScrollView>(null);
 
@@ -66,32 +69,37 @@ export default function ProductDetailScreen() {
   });
 
   const { data: reviewData } = useQuery({
-    queryKey: ['reviews', pid],
+    queryKey: customerQueryKeys.reviews(user?.id, pid),
     queryFn: () => api.getReviews(pid),
     enabled: !isNaN(pid),
   });
 
   // Admin flag (drives the "Manage media" row).
   const { data: profile } = useQuery({
-    queryKey: ['profile'],
+    queryKey: customerQueryKeys.profile(user?.id),
     queryFn: () => api.getProfile(),
-    enabled: !!token,
+    enabled: !!token && !!user,
   });
   const isAdmin = profile?.isAdmin === true;
 
   // Wishlist — only fetched when logged in; used to detect if this product is already saved.
   const { data: wishlist } = useQuery({
-    queryKey: ['wishlist'],
+    queryKey: customerQueryKeys.wishlist(user?.id),
     queryFn: () => api.getWishlist(),
-    enabled: !!token,
+    enabled: !!token && !!user,
     staleTime: 60_000,
   });
   const serverWishlisted = wishlist?.some((w) => w.productId === pid) ?? false;
   // Optimistic override: null = fall back to server data.
   const isWishlisted = wishlistPending ?? serverWishlisted;
 
+  useEffect(() => {
+    setWishlistPending(null);
+  }, [user?.id]);
+
   const toggleWishlist = useCallback(async () => {
-    if (!token || !product) return;
+    if (!token || !user || !product) return;
+    const initiatingCustomerId = user.id;
     const next = !isWishlisted;
     setWishlistPending(next);
     try {
@@ -100,13 +108,13 @@ export default function ProductDetailScreen() {
       } else {
         await api.removeFromWishlist(pid);
       }
-      await queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.wishlist(initiatingCustomerId) });
     } catch {
-      setWishlistPending(null); // revert on error
+      if (currentCustomerId.current === initiatingCustomerId) setWishlistPending(null);
     } finally {
-      setWishlistPending(null);
+      if (currentCustomerId.current === initiatingCustomerId) setWishlistPending(null);
     }
-  }, [token, product, isWishlisted, pid, api, queryClient]);
+  }, [token, user, product, isWishlisted, pid, api, queryClient]);
 
   // Strike video player — muted, looping, auto-plays.
   const player = useVideoPlayer(null as unknown as string, (p) => {

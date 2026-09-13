@@ -14,15 +14,21 @@ import { useAuth } from '@/context/AuthContext';
 import StarRating from '@/components/StarRating';
 import MediaPicker, { type MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 
 export default function NewReviewScreen() {
+  const { user } = useAuth();
+  return <NewReviewScreenContent key={user?.id ?? 'guest'} />;
+}
+
+function NewReviewScreenContent() {
   const { productId, productName } = useLocalSearchParams<{ productId: string; productName?: string }>();
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const queryClient = useQueryClient();
 
   const pid = parseInt(productId ?? '');
@@ -54,7 +60,7 @@ export default function NewReviewScreen() {
 
   // Prefill when editing an existing review.
   const { data: existing } = useQuery({
-    queryKey: ['reviews', pid],
+    queryKey: customerQueryKeys.reviews(user?.id, pid),
     queryFn: () => api.getReviews(pid),
     enabled: !!token && !isNaN(pid),
   });
@@ -148,7 +154,7 @@ export default function NewReviewScreen() {
         ? await uploadMediaItems(media, api.requestUploadUrl, (done, total) => setProgress({ done, total }))
         : [];
       await api.submitReview(pid, { rating, body: body.trim(), media: uploaded });
-      await queryClient.invalidateQueries({ queryKey: ['reviews', pid] });
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.reviews(user?.id, pid) });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         isEditing ? 'Review updated' : 'Asante!',

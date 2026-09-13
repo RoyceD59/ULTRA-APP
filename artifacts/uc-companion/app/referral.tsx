@@ -14,6 +14,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useApi, type UCPromotion } from '@/hooks/useApi';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -362,7 +363,7 @@ export default function ReferralScreen() {
   const [showContacts, setShowContacts] = useState(false);
 
   const { data: referral, isLoading: refLoading } = useQuery({
-    queryKey: ['referral-code'],
+    queryKey: customerQueryKeys.referral(user?.id),
     queryFn: () => api.getMyReferral(),
     enabled: !!user,
     staleTime: 60_000,

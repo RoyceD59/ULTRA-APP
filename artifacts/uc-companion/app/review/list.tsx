@@ -11,19 +11,20 @@ import { useAuth } from '@/context/AuthContext';
 import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 export default function ReviewListScreen() {
   const { productId, productName } = useLocalSearchParams<{ productId: string; productName?: string }>();
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [viewerItem, setViewerItem] = useState<UCReviewMedia | null>(null);
 
   const pid = parseInt(productId ?? '');
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['reviews', pid],
+    queryKey: customerQueryKeys.reviews(user?.id, pid),
     queryFn: () => api.getReviews(pid),
     enabled: !isNaN(pid),
   });
