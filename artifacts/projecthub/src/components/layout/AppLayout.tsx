@@ -3,7 +3,7 @@ import {
   Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets, MapPin, Tag,
   FolderKanban, Gauge, Gift, LayoutDashboard, Leaf, Link2, LogOut,
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
-  AlertTriangle, BellRing, X,
+  AlertTriangle, BellRing, Menu, WifiOff, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";

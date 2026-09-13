@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Platform,
-  Alert, ActivityIndicator, KeyboardAvoidingView, ScrollView,
+  Alert, ActivityIndicator, Keyboard, KeyboardAvoidingView, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';

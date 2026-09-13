@@ -22,12 +22,7 @@ export const UpdateUcOrderCustomerStageBody = zod.object({
 
 export const UpdateUcOrderCustomerStageResponse = zod.unknown()
 
-/**
- * @summary Confirm staff collection of cash for a COD order with an immutable audit event
- */
-export const ConfirmUcOrderCodCollectionParams = zod.object({
-  "id": zod.coerce.number()
-})
+
 /**
  * @summary Advance a water-test customer stage and send one audited push
  */
@@ -87,6 +82,7 @@ export const UpdateUcInventoryItemParams = zod.object({
 export const updateUcInventoryItemBodyStockQuantityMin = 0;
 
 
+
 export const UpdateUcInventoryItemBody = zod.object({
   "stockQuantity": zod.number().min(updateUcInventoryItemBodyStockQuantityMin)
 })
@@ -138,6 +134,7 @@ export const UpdateAdminIntegrationsResponse = zod.object({
 export const listUcCustomersQueryPageDefault = 1;
 export const listUcCustomersQueryLimitDefault = 50;
 export const listUcCustomersQueryLimitMax = 100;
+
 
 
 export const ListUcCustomersQueryParams = zod.object({
@@ -256,6 +253,9 @@ export const ListMembersResponse = zod.array(ListMembersResponseItem)
  */
 
 
+
+
+
 export const CreateMemberBody = zod.object({
   "name": zod.string().min(1),
   "email": zod.string().min(1),
@@ -293,6 +293,10 @@ export const GetMemberResponse = zod.object({
 export const UpdateMemberParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
+
 
 
 export const UpdateMemberBody = zod.object({
@@ -343,6 +347,7 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
  */
 
 
+
 export const CreateProjectBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string(),
@@ -383,6 +388,8 @@ export const GetProjectResponse = zod.object({
 export const UpdateProjectParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateProjectBody = zod.object({
@@ -465,6 +472,7 @@ export const ListTasksResponse = zod.array(ListTasksResponseItem)
  */
 
 
+
 export const CreateTaskBody = zod.object({
   "projectId": zod.number(),
   "title": zod.string().min(1),
@@ -532,6 +540,8 @@ export const GetTaskResponse = zod.object({
 export const UpdateTaskParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateTaskBody = zod.object({
@@ -629,6 +639,7 @@ export const ListAnthropicConversationsResponse = zod.array(ListAnthropicConvers
 export const createAnthropicConversationBodyTitleMax = 80;
 
 
+
 export const CreateAnthropicConversationBody = zod.object({
   "title": zod.string().max(createAnthropicConversationBodyTitleMax)
 })
@@ -707,6 +718,7 @@ export const SendAnthropicMessageResponse = zod.unknown()
  */
 
 
+
 export const AiQueryBody = zod.object({
   "question": zod.string().min(1),
   "source": zod.string().optional().describe('Identifier of the calling agent (e.g. \"orchestrator\", \"analytics-agent\")')
@@ -779,6 +791,7 @@ export const ListAiPushEventsResponse = zod.array(ListAiPushEventsResponseItem)
  */
 
 
+
 export const AiPushEchoBody = zod.object({
   "pushId": zod.string().min(1),
   "status": zod.enum(['received', 'processing', 'completed', 'failed']),
@@ -809,6 +822,7 @@ export const ListContactsResponse = zod.array(ListContactsResponseItem)
 /**
  * @summary Create a new contact
  */
+
 
 
 export const CreateContactBody = zod.object({
@@ -860,6 +874,8 @@ export const GetContactResponse = zod.object({
 export const UpdateContactParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateContactBody = zod.object({
@@ -915,6 +931,9 @@ export const AddContactMethodParams = zod.object({
 })
 
 
+
+
+
 export const AddContactMethodBody = zod.object({
   "channelType": zod.string().min(1),
   "channelValue": zod.string().min(1),
@@ -938,6 +957,9 @@ export const UpdateContactMethodParams = zod.object({
   "id": zod.coerce.number(),
   "methodId": zod.coerce.number()
 })
+
+
+
 
 
 export const UpdateContactMethodBody = zod.object({
@@ -1023,6 +1045,7 @@ export const ListSystemStatusResponse = zod.array(ListSystemStatusResponseItem)
 /**
  * @summary Register a new platform to monitor
  */
+
 
 
 export const CreateSystemStatusBody = zod.object({
@@ -1139,6 +1162,7 @@ export const DispatchNotificationResponse = zod.object({
 export const changePasscodeBodyNewPasscodeMin = 8;
 
 
+
 export const ChangePasscodeBody = zod.object({
   "currentPasscode": zod.string().min(1).describe('The current team passcode (used to verify identity)'),
   "newPasscode": zod.string().min(changePasscodeBodyNewPasscodeMin).describe('The new passcode (minimum 8 characters)')
@@ -1156,6 +1180,7 @@ export const ChangePasscodeResponse = zod.object({
  * configured on the server.
  * @summary Exchange the team passcode for a signed team-session JWT
  */
+
 
 
 export const IssueTeamTokenBody = zod.object({
@@ -1199,6 +1224,8 @@ export const DisconnectWhatsAppResponse = zod.object({
  */
 
 
+
+
 export const SendWhatsAppQuickMessageBody = zod.object({
   "to": zod.string().min(1).describe('Recipient phone number (e.g. +254712345678)'),
   "message": zod.string().min(1).describe('Plain-text message body')
@@ -1236,296 +1263,4 @@ export const IngestWebhookResponse = zod.object({
   "taskId": zod.number().nullable(),
   "message": zod.string(),
   "validationErrors": zod.array(zod.string()).optional()
-})
-
-
-/**
- * @summary Redeem customer rewards using authenticated account identity
- */
-export const redeemCustomerRewardsBodyPointsMin = 1000;
-
-export const createUcLocationBodyLatitudeMin = -90;
-
-export const createUcLocationBodyLatitudeMax = 90;
-
-export const createUcLocationBodyLongitudeMin = -180;
-
-export const createUcLocationBodyLongitudeMax = 180;
-
-export const CreateUcLocationBody = zod.object({
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
-  "name": zod.string().min(1),
-  "address": zod.string().min(1),
-  "latitude": zod.number().min(createUcLocationBodyLatitudeMin).max(createUcLocationBodyLatitudeMax),
-  "longitude": zod.number().min(createUcLocationBodyLongitudeMin).max(createUcLocationBodyLongitudeMax),
-  "hours": zod.string(),
-  "phone": zod.string().nullish(),
-  "vendorName": zod.string().nullish()
-})
-
-/**
- * @summary List all managed service locations
- */
-export const ListAdminUcLocationsResponse = zod.unknown()
-
-
-export const RedeemCustomerRewardsResponse = zod.object({
-  "newBalance": zod.number().describe('Current spendable points balance after the redemption'),
-  "lifetimeRedeemed": zod.number().describe('All-time redeemed points after the redemption'),
-  "repeated": zod.boolean().describe('Whether this response is for an idempotent retry'),
-  "entry": zod.record(zod.string(), zod.unknown()).optional()
-})
-
-export const QuoteUcPromotionResponse = zod.unknown()
-
-export const UpdateUcLocationResponse = zod.unknown()
-
-export const updateUcPromotionBodyEffectValueExclusiveMin = 0;
-
-/**
- * @summary List public active and verified service locations
- */
-export const ListUcLocationsResponse = zod.unknown()
-
-export const updateUcLocationBodyLongitudeMax = 180;
-
-export const SetUcPromotionActiveResponse = zod.unknown()
-
-export const VerifyUcLocationResponse = zod.unknown()
-
-export const SetUcPromotionActiveParams = zod.object({
-  "id": zod.coerce.number(),
-  "state": zod.enum(['activate', 'deactivate'])
-})
-
-export const UpdateUcPromotionBody = zod.object({
-  "code": zod.string(),
-  "type": zod.enum(['bonus_points', 'redemption_boost', 'checkout_discount']),
-  "effectMode": zod.enum(['fixed', 'percentage']),
-  "effectValue": zod.number().gt(updateUcPromotionBodyEffectValueExclusiveMin),
-  "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date().nullish(),
-  "eligibleProductIds": zod.array(zod.number()).optional(),
-  "globalUseLimit": zod.number().min(1).nullish(),
-  "perUserUseLimit": zod.number().min(1).nullish()
-})
-
-export const ListUcPromotionsResponse = zod.unknown()
-
-export const updateUcLocationBodyLongitudeMin = -180;
-
-export const redeemCustomerRewardsBodyPointsMultipleOf = 1000;
-
-export const RedeemCustomerRewardsBody = zod.object({
-  "points": zod.number().min(redeemCustomerRewardsBodyPointsMin).multipleOf(redeemCustomerRewardsBodyPointsMultipleOf),
-  "promoCode": zod.string().optional(),
-  "idempotencyKey": zod.string()
-})
-
-export const quoteUcPromotionBodySubtotalMin = 0;
-
-export const GetUcPromotionUsageResponse = zod.unknown()
-
-export const updateUcLocationBodyLatitudeMin = -90;
-
-export const GetUcPromotionUsageParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const QuoteUcPromotionParams = zod.object({
-  "operation": zod.enum(['checkout', 'redemption', 'award'])
-})
-
-export const updateUcLocationBodyLatitudeMax = 90;
-
-
-export const CreateUcLocationResponse = zod.void()
-
-export const createUcPromotionBodyEffectValueExclusiveMin = 0;
-
-export const UpdateUcLocationBody = zod.object({
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']).optional(),
-  "name": zod.string().min(1).optional(),
-  "address": zod.string().min(1).optional(),
-  "latitude": zod.number().min(updateUcLocationBodyLatitudeMin).max(updateUcLocationBodyLatitudeMax).optional(),
-  "longitude": zod.number().min(updateUcLocationBodyLongitudeMin).max(updateUcLocationBodyLongitudeMax).optional(),
-  "hours": zod.string().optional(),
-  "phone": zod.string().nullish(),
-  "vendorName": zod.string().nullish(),
-  "active": zod.boolean().optional()
-})
-
-export const CreateUcPromotionBody = zod.object({
-  "code": zod.string(),
-  "type": zod.enum(['bonus_points', 'redemption_boost', 'checkout_discount']),
-  "effectMode": zod.enum(['fixed', 'percentage']),
-  "effectValue": zod.number().gt(createUcPromotionBodyEffectValueExclusiveMin),
-  "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date().nullish(),
-  "eligibleProductIds": zod.array(zod.number()).optional(),
-  "globalUseLimit": zod.number().min(1).nullish(),
-  "perUserUseLimit": zod.number().min(1).nullish()
-})
-
-export const UpdateUcPromotionResponse = zod.unknown()
-
-
-/**
- * @summary Verify a managed service location using the server-derived admin actor
- */
-export const VerifyUcLocationParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const CreateUcPromotionResponse = zod.void()
-
-/**
- * @summary Edit a service location; identity and coordinate edits reset verification
- */
-export const UpdateUcLocationParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const UpdateUcPromotionParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const QuoteUcPromotionBody = zod.object({
-  "code": zod.string(),
-  "productIds": zod.array(zod.number()).optional(),
-  "lineItems": zod.array(zod.object({
-  "productId": zod.number(),
-  "quantity": zod.number().min(1)
-})).optional(),
-  "subtotal": zod.number().min(quoteUcPromotionBodySubtotalMin).optional(),
-  "idempotencyKey": zod.string().optional(),
-  "operationRef": zod.string().optional()
-})
-
-/**
- * @summary Get authenticated customer's spendable balance and lifetime redeemed points
- */
-export const GetCustomerRewardsResponse = zod.object({
-  "balance": zod.number().describe('Current spendable points balance'),
-  "lifetimeRedeemed": zod.number().describe('Sum of negative redemption ledger points'),
-  "ledger": zod.array(zod.record(zod.string(), zod.unknown())),
-  "snapshot": zod.object({
-  "balance": zod.number(),
-  "tier": zod.enum(['starter', 'silver', 'gold']),
-  "status": zod.enum(['active', 'ready']),
-  "qrBadge": zod.enum(['ready', 'refresh_required'])
-}).describe('Authoritative rewards and persisted QR status snapshot')
-})
-
-/**
- * @summary Acknowledge delivery or opening of an opaque QR display request
- */
-export const AcknowledgeCustomerRewardsQrRequestBody = zod.object({
-  "requestId": zod.number().describe('Opaque request id; never a device token'),
-  "event": zod.enum(['delivered', 'opened'])
-})
-
-export const ListAdminRewardBalancesResponse = zod.object({
-  "lifetimeRedeemed": zod.number().describe('Organization-wide sum of negative redemption ledger points'),
-  "customers": zod.array(zod.object({
-  "userId": zod.number(),
-  "email": zod.string().optional(),
-  "firstName": zod.string().optional(),
-  "lastName": zod.string().optional(),
-  "phone": zod.string().optional(),
-  "balance": zod.number().describe('Current spendable points balance'),
-  "lifetimeRedeemed": zod.number().describe('Customer\'s all-time redeemed points')
-}))
-})
-
-/**
- * @summary List customer spendable balances and redemption reporting totals
- */
-export const ListAdminRewardBalancesQueryParams = zod.object({
-  "search": zod.coerce.string().optional()
-})
-
-/**
- * @summary Send a one-time verification credential to the authenticated user's stored contact
- */
-export const RequestCompanionContactVerificationBody = zod.object({
-  "channel": zod.enum(['email', 'whatsapp'])
-})
-
-/**
- * @summary Send a single-use Companion reset credential through a verified channel
- */
-export const AdminResetCompanionPasswordParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const VerifyCompanionContactResponse = zod.unknown()
-
-export const ConfirmUcOrderCodCollectionBody = zod.object({
-  "idempotencyKey": zod.string()
-})
-
-export const AdminResetCompanionPasswordResponse = zod.object({
-  "ok": zod.boolean()
-})
-
-export const AdminResetCompanionPasswordBody = zod.object({
-  "channel": zod.enum(['email', 'whatsapp'])
-})
-
-/**
- * @summary Request that a customer open Companion and display their rewards QR
- */
-export const RequestAdminRewardsQrDisplayBody = zod.object({
-  "userId": zod.number()
-})
-
-/**
- * @summary Request a Companion password reset without revealing account existence
- */
-export const RequestCompanionPasswordResetBody = zod.object({
-  "identifier": zod.string().describe('Registered email address or normalized phone number'),
-  "channel": zod.enum(['email', 'whatsapp']).optional().describe('Optional verified delivery channel preference')
-})
-
-export const ConfirmUcOrderCodCollectionResponse = zod.object({
-  "ok": zod.boolean(),
-  "id": zod.number(),
-  "status": zod.enum(['paid']),
-  "codCollectionStatus": zod.enum(['collected']),
-  "codCollectedBy": zod.string(),
-  "codCollectedAt": zod.coerce.date(),
-  "repeated": zod.boolean(),
-  "wcSync": zod.object({
-  "status": zod.enum(['pending', 'succeeded', 'failed']),
-  "error": zod.string().nullable(),
-  "attemptedAt": zod.coerce.date().nullable(),
-  "attemptCount": zod.number()
-}).nullish()
-})
-
-/**
- * @summary Consume an emailed or WhatsApp contact-verification credential
- */
-export const VerifyCompanionContactQueryParams = zod.object({
-  "token": zod.coerce.string()
-})
-
-export const RequestCompanionContactVerificationResponse = zod.object({
-  "ok": zod.boolean()
-})
-
-export const RequestAdminRewardsQrDisplayResponse = zod.object({
-  "requestId": zod.number(),
-  "status": zod.enum(['sent'])
-})
-
-export const AcknowledgeCustomerRewardsQrRequestResponse = zod.object({
-  "ok": zod.boolean(),
-  "event": zod.enum(['sent', 'delivered', 'opened', 'failed']),
-  "status": zod.enum(['sent', 'failed'])
-})
-
-export const RequestCompanionPasswordResetResponse = zod.object({
-  "ok": zod.boolean()
 })

@@ -450,6 +450,117 @@ export function serverPricedLines(lineItems: { productId: number; quantity: numb
   });
   return lines.some((line) => !line) ? null : lines as { productId: number; name: string; quantity: number; subtotal: number }[];
 }
+
+/** Attach a verified provider recovery payment to its authenticated account
+ * and server-priced catalogue lines. A recovery row is only eligible for
+ * referral settlement after this transaction has completed. */
+export async function finalizeRecoveryOrder(params: {
+  orderId: number;
+  accountId: number;
+  lineItems: { productId: number; quantity: number }[];
+  shippingAddress?: Record<string, string>;
+  applyReferralDiscount?: boolean;
+}): Promise<void> {
+  if (params.applyReferralDiscount) {
+    throw Object.assign(
+      new Error("A referral discount cannot be added after payment"),
+      { code: "RECOVERY_DISCOUNT_REJECTED" },
+    );
+  }
+  const lines = serverPricedLines(params.lineItems);
+  if (!lines || lines.reduce((sum, line) => sum + line.subtotal, 0) <= 0) {
+    throw Object.assign(
+      new Error("Recovery requires known products with positive quantities"),
+      { code: "INVALID_RECOVERY_LINES" },
+    );
+  }
+  const expectedTotal =
+    lines.reduce((sum, line) => sum + line.subtotal, 0) + 500;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const orderResult = await client.query(
+      "SELECT * FROM uc_orders WHERE id=$1 FOR UPDATE",
+      [params.orderId],
+    );
+    const order = orderResult.rows[0];
+    if (!order) {
+      throw Object.assign(new Error("Recovery order not found"), {
+        code: "RECOVERY_NOT_FOUND",
+      });
+    }
+    const account = await client.query(
+      `SELECT id FROM uc_users
+       WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+      [params.accountId],
+    );
+    if (!account.rows[0]) {
+      throw Object.assign(new Error("Authenticated active account required"), {
+        code: "RECOVERY_ACCOUNT_REQUIRED",
+      });
+    }
+    // Idempotent duplicate recovery finalization: once the provider row has
+    // been claimed, do not replace its authenticated account or line items.
+    if (!order.webhook_recovery) {
+      await client.query("COMMIT");
+      return;
+    }
+    if (Number(order.total) !== expectedTotal) {
+      throw Object.assign(
+        new Error("Submitted products do not match the settled payment total"),
+        { code: "RECOVERY_TOTAL_MISMATCH" },
+      );
+    }
+    await client.query(
+      "DELETE FROM uc_order_items WHERE order_id=$1",
+      [params.orderId],
+    );
+    for (const line of lines) {
+      await client.query(
+        `INSERT INTO uc_order_items
+           (order_id,product_id,name,quantity,total)
+         VALUES($1,$2,$3,$4,$5)`,
+        [
+          params.orderId,
+          line.productId,
+          line.name,
+          line.quantity,
+          String(line.subtotal),
+        ],
+      );
+    }
+    await client.query(
+      `UPDATE uc_orders SET user_id=$2,shipping_address=$3,
+         webhook_recovery=false,
+         payment_confirmed_at=COALESCE(payment_confirmed_at,now())
+       WHERE id=$1`,
+      [
+        params.orderId,
+        String(params.accountId),
+        JSON.stringify(params.shippingAddress ?? {}),
+      ],
+    );
+    await client.query(
+      `INSERT INTO uc_referral_settlements
+         (order_id,referral_code,user_email,status,next_attempt_at)
+       SELECT $1,COALESCE(a.referral_code,''),u.email,'pending',now()
+       FROM uc_users u
+       LEFT JOIN uc_referral_attributions a ON a.referred_user_id=u.id
+       WHERE u.id=$2
+       ON CONFLICT(order_id) DO UPDATE SET
+         status='pending',completed_at=NULL,last_error=NULL,
+         next_attempt_at=now(),updated_at=now()`,
+      [params.orderId, params.accountId],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 const MOCK_LOCATIONS = [
   { id: "loc1", type: "experience_centre", name: "UC Experience Centre Westlands", address: "Woodvale Groove, Westlands, Nairobi", lat: -1.2633, lng: 36.8072, hours: "Mon–Sat 8am–6pm, Sun 10am–4pm", phone: "+254 700 123456" },
   { id: "loc2", type: "experience_centre", name: "UC Service Centre Karen", address: "Karen Hardy Estate, Karen, Nairobi", lat: -1.3319, lng: 36.7097, hours: "Mon–Fri 8am–5pm", phone: "+254 700 654321" },

@@ -209,8 +209,8 @@ async function applyStartupMigrations(): Promise<void> {
     CREATE TABLE IF NOT EXISTS uc_referral_settlements (
       id              bigserial PRIMARY KEY,
       order_id        bigint NOT NULL UNIQUE,
-      referral_code   text NOT NULL,
-      user_email      text NOT NULL,
+      referral_code   text,
+      user_email      text,
       status          text NOT NULL DEFAULT 'pending',
       attempts        integer NOT NULL DEFAULT 1,
       last_error      text,
@@ -219,15 +219,36 @@ async function applyStartupMigrations(): Promise<void> {
       claim_expires_at timestamptz,
       alert_claimed_at timestamptz,
       alerted_at      timestamptz,
+      alert_attempts integer NOT NULL DEFAULT 0,
+      alert_last_error text,
+      alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+      slack_alert_claimed_at timestamptz,
+      slack_alerted_at timestamptz,
+      slack_alert_attempts integer NOT NULL DEFAULT 0,
+      slack_alert_last_error text,
+      slack_alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+      completed_at timestamptz,
       created_at      timestamptz NOT NULL DEFAULT now(),
       updated_at      timestamptz NOT NULL DEFAULT now()
     );
   `);
   await pool.query(`
     ALTER TABLE uc_referral_settlements
+      ALTER COLUMN referral_code DROP NOT NULL,
+      ALTER COLUMN user_email DROP NOT NULL,
       ADD COLUMN IF NOT EXISTS claim_token text,
       ADD COLUMN IF NOT EXISTS claim_expires_at timestamptz,
-      ADD COLUMN IF NOT EXISTS alert_claimed_at timestamptz;
+      ADD COLUMN IF NOT EXISTS alert_claimed_at timestamptz,
+      ADD COLUMN IF NOT EXISTS alerted_at timestamptz,
+      ADD COLUMN IF NOT EXISTS alert_attempts integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS alert_last_error text,
+      ADD COLUMN IF NOT EXISTS alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS slack_alert_claimed_at timestamptz,
+      ADD COLUMN IF NOT EXISTS slack_alerted_at timestamptz,
+      ADD COLUMN IF NOT EXISTS slack_alert_attempts integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS slack_alert_last_error text,
+      ADD COLUMN IF NOT EXISTS slack_alert_next_attempt_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS completed_at timestamptz;
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS uc_referral_settlements_due_idx
