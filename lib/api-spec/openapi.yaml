@@ -34,7 +34,318 @@ tags:
     description: External webhook ingestion
   - name: whatsapp
     description: WhatsApp session management and messaging
+  - name: instant-water-check
+    description: Instant water assessment and physical-test lead flow
 paths:
+  /water-check/assessments:
+    post:
+      operationId: createPublicInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Create a public instant water assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicInstantWaterAssessmentInput"
+      responses:
+        "201":
+          description: Assessment and redacted result token created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessmentCreated"
+        "400": { description: Invalid controlled answer or consent }
+        "409": { description: Idempotency key was reused with another payload }
+        "429": { description: Rate limit exceeded }
+
+  /uc/water-check/assessments:
+    post:
+      operationId: createAuthenticatedInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Create an instant water assessment for the authenticated customer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticatedInstantWaterAssessmentInput"
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedInstantWaterAssessmentCreated"
+        "400": { description: Invalid controlled answer }
+        "401": { description: Authentication required }
+        "409": { description: Idempotency key was reused with another payload }
+
+  /water-check/results/{token}:
+    get:
+      operationId: getPublicInstantWaterAssessmentResult
+      tags: [instant-water-check]
+      summary: Fetch a redacted instant water result by its public token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 256 }
+      responses:
+        "200":
+          description: Redacted result (contains no contact or ownership data)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicInstantWaterAssessmentResult"
+        "404":
+          description: "Result token is unknown, expired, or revoked"
+        "429": { description: Rate limit exceeded }
+
+  /water-check/assessments/{assessmentId}/verification/request:
+    post:
+      operationId: requestInstantWaterAssessmentVerification
+      tags: [instant-water-check]
+      summary: Request a phone verification code for one assessment
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterVerificationRequestInput"
+      responses:
+        "202":
+          description: Verification request accepted without account-existence disclosure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterVerificationRequested"
+        "400": { description: Invalid channel or explicit SMS consent missing }
+        "404": { description: Assessment not found }
+        "429": { description: Rate limit exceeded }
+        "409": { description: Delivery is already in progress for this idempotent request }
+        "503": { description: Verification provider delivery failed; retry the same idempotency key }
+
+  /water-check/assessments/{assessmentId}/verification/confirm:
+    post:
+      operationId: confirmInstantWaterAssessmentVerification
+      tags: [instant-water-check]
+      summary: Confirm the short-lived phone verification code
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterVerificationConfirmInput"
+      responses:
+        "200":
+          description: Verification accepted and scoped action token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterVerificationConfirmed"
+        "400": { description: Invalid or expired code }
+        "404": { description: Assessment not found }
+        "429": { description: Too many attempts }
+
+  /water-check/handoff/consume:
+    post:
+      operationId: consumeInstantWaterAssessmentHandoff
+      tags: [instant-water-check]
+      summary: Securely attach a verified unmatched assessment to the signed-in customer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterAssessmentHandoffConsumeInput"
+      responses:
+        "200":
+          description: Assessment attached to the authenticated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessment"
+        "400": { description: Invalid handoff token input }
+        "401": { description: Authentication required }
+        "403": { description: "Invalid, expired, revoked, consumed, mismatched, or already attached handoff" }
+
+  /uc/water-check/assessments/{assessmentId}/attach:
+    post:
+      operationId: attachInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Attach one verified public assessment to the signed-in customer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterAssessmentAttachInput"
+      responses:
+        "200":
+          description: Assessment attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessment"
+        "401": { description: Authentication required }
+        "403": { description: Verification or ownership proof required }
+        "404": { description: Assessment not found }
+        "409": { description: Assessment has an ambiguous or newer account state }
+
+  /uc/water-check/assessments/{assessmentId}/physical-test:
+    post:
+      operationId: requestInstantWaterPhysicalTest
+      tags: [instant-water-check]
+      summary: Request the physical-test stage on the existing assessment ticket
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterPhysicalTestRequestInput"
+      responses:
+        "200":
+          description: Existing assessment and ticket transitioned atomically
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterPhysicalTestResponse"
+        "400": { description: Invalid service details or media reference }
+        "401": { description: Authentication or assessment action token required }
+        "404": { description: Assessment not found }
+        "409": { description: Stale transition or market unavailable }
+
+  /uc/me/water-check/assessments:
+    get:
+      operationId: listAuthenticatedInstantWaterAssessments
+      tags: [instant-water-check]
+      summary: List assessments owned by the authenticated customer
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer-owned assessment history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessmentHistory"
+        "401": { description: Authentication required }
+
+  /uc/me/water-check/latest:
+    get:
+      operationId: getAuthenticatedLatestInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Get the latest owned assessment summary for Companion chat context
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Latest customer-owned assessment summary, if present
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterLatestSummary"
+        "401": { description: Authentication required }
+
+  /uc/admin/water-checks:
+    get:
+      operationId: listProjectHubInstantWaterAssessments
+      tags: [instant-water-check]
+      summary: List instant water assessments for ProjectHub
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: customerId
+          in: query
+          description: Filter to assessments attached to this customer account.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Water-check queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectHubInstantWaterList"
+        "401": { description: Authentication required }
+        "403": { description: water_tests permission required }
+
+  /uc/admin/water-checks/{assessmentId}:
+    get:
+      operationId: getProjectHubInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: View one instant water assessment and its ticket in ProjectHub
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectHubInstantWaterDetail"
+        "403": { description: water_tests permission required }
+        "404": { description: Assessment not found }
+    patch:
+      operationId: updateProjectHubInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Update an authorized operational water-test state
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectHubInstantWaterUpdateInput"
+      responses:
+        "200":
+          description: Assessment state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectHubInstantWaterDetail"
+        "403": { description: Permission or administrator access required }
+        "404": { description: Assessment not found }
+        "409": { description: Stale transition }
+
   /uc/admin/orders/{id}/customer-stage:
     patch:
       operationId: updateUcOrderCustomerStage
@@ -1719,6 +2030,305 @@ components:
         type: integer
 
   schemas:
+    InstantWaterSource:
+      type: string
+      enum: [municipal, borehole, shallow, vendor, bottled, rain]
+
+    InstantWaterConcern:
+      type: string
+      enum: [scale, taste, cloudy, skin, safety, cost]
+
+    InstantWaterSetting:
+      type: string
+      enum: [home, rental, salon, office, hospitality, school, resell]
+
+    InstantWaterAssessmentAnswers:
+      type: object
+      additionalProperties: false
+      required: [country, area, source, concern, setting]
+      properties:
+        country: { type: string, minLength: 2, maxLength: 80 }
+        area: { type: string, minLength: 1, maxLength: 160 }
+        source: { $ref: "#/components/schemas/InstantWaterSource" }
+        concern: { $ref: "#/components/schemas/InstantWaterConcern" }
+        symptom:
+          type: string
+          enum: [none, scale, taste, cloudy, skin, safety]
+        useContext:
+          type: string
+          enum: [drinking, cooking, bathing, mixed]
+        setting: { $ref: "#/components/schemas/InstantWaterSetting" }
+
+    PublicInstantWaterAssessmentInput:
+      type: object
+      additionalProperties: false
+      required: [firstName, phone, consent, idempotencyKey, answers]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 80 }
+        phone: { type: string, minLength: 7, maxLength: 40 }
+        consent: { type: boolean, const: true }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        consentVersion: { type: string, maxLength: 40, default: instant-water-check-v1 }
+        sourceAttribution:
+          type: object
+          additionalProperties: false
+          properties:
+            src: { type: string, maxLength: 80 }
+            utmSource: { type: string, maxLength: 80 }
+            utmMedium: { type: string, maxLength: 80 }
+            utmCampaign: { type: string, maxLength: 80 }
+            utmContent: { type: string, maxLength: 80 }
+        answers:
+          $ref: "#/components/schemas/InstantWaterAssessmentAnswers"
+
+    AuthenticatedInstantWaterAssessmentInput:
+      type: object
+      additionalProperties: false
+      required: [answers, idempotencyKey]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        answers:
+          $ref: "#/components/schemas/InstantWaterAssessmentAnswers"
+        firstName: { type: string, maxLength: 80 }
+        phone: { type: string, maxLength: 40 }
+
+    InstantWaterBands:
+      type: object
+      required: [hardness, taste, sediment, microbial]
+      properties:
+        hardness: { type: string, enum: [Low, Moderate, High] }
+        taste: { type: string, enum: [Low, Moderate, High] }
+        sediment: { type: string, enum: [Low, Moderate, High] }
+        microbial: { type: string, enum: [Low, Moderate, High] }
+
+    InstantWaterAssessmentCreated:
+      type: object
+      required: [assessmentId, reference, result, resultToken, resultTokenExpiresAt]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string, pattern: "^WT-[A-Za-z0-9-]+$" }
+        resultToken: { type: string, writeOnly: true }
+        resultTokenExpiresAt: { type: string, format: date-time }
+        result:
+          $ref: "#/components/schemas/PublicInstantWaterAssessmentResult"
+
+    AuthenticatedInstantWaterAssessmentCreated:
+      type: object
+      required: [assessmentId, reference, result]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string, pattern: "^WT-[A-Za-z0-9-]+$" }
+        result:
+          $ref: "#/components/schemas/PublicInstantWaterAssessmentResult"
+
+    PublicInstantWaterAssessmentResult:
+      type: object
+      required:
+        [reference, rulesVersion, bands, summary, recommendation, disclaimer, serviceAvailable]
+      properties:
+        reference: { type: string }
+        rulesVersion: { type: string, enum: [instant-water-check-v1] }
+        bands: { $ref: "#/components/schemas/InstantWaterBands" }
+        summary: { type: string }
+        areaFlag:
+          type: string
+          enum: [none, hard_groundwater, rift_valley_fluoride]
+        recommendation:
+          type: object
+          required: [name, explanation]
+          properties:
+            name: { type: string }
+            explanation: { type: string }
+        disclaimer: { type: string }
+        serviceAvailable: { type: boolean }
+        physicalTestStatus: { type: string }
+
+    InstantWaterVerificationRequestInput:
+      type: object
+      additionalProperties: false
+      required: [channel, idempotencyKey]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        channel: { type: string, enum: [whatsapp, sms] }
+        smsConsent: { type: boolean, description: Required when channel is sms }
+
+    InstantWaterVerificationRequested:
+      type: object
+      required: [accepted, channel]
+      properties:
+        accepted: { type: boolean }
+        channel: { type: string, enum: [whatsapp, sms] }
+        retryAfterSeconds: { type: integer, minimum: 0 }
+
+    InstantWaterVerificationConfirmInput:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { type: string, pattern: "^[0-9]{6}$" }
+
+    InstantWaterVerificationConfirmed:
+      type: object
+      required: [verified, actionToken, actionTokenExpiresAt]
+      properties:
+        verified: { type: boolean }
+        actionToken: { type: string, writeOnly: true }
+        actionTokenExpiresAt: { type: string, format: date-time }
+        accountLinkState:
+          type: string
+          enum: [verified_unmatched, attached, ambiguous_match]
+        handoffToken:
+          type: string
+          writeOnly: true
+          description: One-time short-lived account handoff credential, returned only for verified_unmatched.
+
+    InstantWaterAssessmentHandoffConsumeInput:
+      type: object
+      additionalProperties: false
+      required: [handoffToken]
+      properties:
+        handoffToken: { type: string, minLength: 32, maxLength: 200 }
+
+    InstantWaterAssessmentAttachInput:
+      type: object
+      additionalProperties: false
+      properties:
+        actionToken: { type: string, writeOnly: true }
+        resultToken:
+          type: string
+          writeOnly: true
+          description: Public token may be combined with a signed-in account's already verified matching phone; it cannot authorize attachment alone.
+
+    InstantWaterPhysicalTestRequestInput:
+      type: object
+      additionalProperties: false
+      required: [serviceAddress, preferredContactTime, acknowledgement, idempotencyKey]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        actionToken: { type: string, writeOnly: true }
+        serviceAddress: { type: string, minLength: 5, maxLength: 300 }
+        preferredContactTime: { type: string, minLength: 1, maxLength: 120 }
+        acknowledgement: { type: boolean, const: true }
+        mediaReferences:
+          type: array
+          maxItems: 7
+          items:
+            type: object
+            required: [reference, mediaType]
+            properties:
+              reference: { type: string, maxLength: 300 }
+              mediaType: { type: string, enum: [jpg, png, webp, mp4, mov, webm] }
+
+    InstantWaterPhysicalTestResponse:
+      type: object
+      required: [assessmentId, reference, serviceState]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string }
+        serviceState:
+          type: string
+          enum: [instant_result_ready, follow_up_requested, physical_test_requested, scheduled, completed, closed]
+        ticketId: { type: string }
+
+    InstantWaterAssessment:
+      type: object
+      required: [assessmentId, reference, bands, accountLinkState, serviceState, createdAt]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string }
+        bands: { $ref: "#/components/schemas/InstantWaterBands" }
+        accountLinkState: { type: string }
+        serviceState: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    InstantWaterAssessmentHistory:
+      type: object
+      required: [assessments]
+      properties:
+        assessments:
+          type: array
+          items: { $ref: "#/components/schemas/InstantWaterAssessment" }
+
+    InstantWaterLatestSummary:
+      type: object
+      required: [assessment]
+      properties:
+        assessment:
+          oneOf:
+            - $ref: "#/components/schemas/InstantWaterAssessment"
+            - type: "null"
+
+    ProjectHubInstantWaterList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectHubInstantWaterSummary" }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    ProjectHubInstantWaterSummary:
+      type: object
+      required: [assessmentId, reference, bands, area, serviceState, accountLinkState, updatedAt]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string }
+        firstName: { type: string }
+        maskedPhone: { type: string }
+        country: { type: string }
+        area: { type: string }
+        source: { $ref: "#/components/schemas/InstantWaterSource" }
+        concern: { $ref: "#/components/schemas/InstantWaterConcern" }
+        bands: { $ref: "#/components/schemas/InstantWaterBands" }
+        serviceState: { type: string }
+        accountLinkState: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProjectHubInstantWaterDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProjectHubInstantWaterSummary"
+        - type: object
+          properties:
+            phone: { type: string }
+            consentVersion: { type: string }
+            sourceAttribution: { type: object, additionalProperties: true }
+            serviceAddress: { type: string }
+            preferredContactTime: { type: string }
+            mediaReferences:
+              type: array
+              items: { $ref: "#/components/schemas/ProjectHubInstantWaterMediaReference" }
+
+    ProjectHubInstantWaterMediaReference:
+      type: object
+      additionalProperties: false
+      required: [reference, mediaType, downloadUrl]
+      properties:
+        reference:
+          type: string
+          description: Opaque private evidence reference; never a public object URL.
+        mediaType:
+          type: string
+          enum: [jpg, png, webp, mp4, mov, webm]
+        downloadUrl:
+          type: string
+          format: uri-reference
+          readOnly: true
+          description: Authorized private download route; not a public storage URL.
+
+    ProjectHubInstantWaterUpdateInput:
+      type: object
+      additionalProperties: false
+      required: [serviceState, expectedUpdatedAt]
+      properties:
+        serviceState:
+          type: string
+          enum: [instant_result_ready, follow_up_requested, physical_test_requested, scheduled, completed, closed]
+        expectedUpdatedAt: { type: string, format: date-time }
+        internalNote: { type: string, maxLength: 2000 }
+
     UcOrderCustomerStageInput:
       type: object
       required: [stage, idempotencyKey]

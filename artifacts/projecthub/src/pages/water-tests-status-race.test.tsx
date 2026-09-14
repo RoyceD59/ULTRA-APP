@@ -1,17 +1,3 @@
-/**
- * Regression tests: a background refetch must not overwrite a just-saved
- * water-test status after the PATCH succeeds.
- *
- * The fix in handleTestUpdate calls:
- *   1. queryClient.cancelQueries({ queryKey })   ← aborts any in-flight refetch
- *   2. queryClient.setQueryData(queryKey, …)     ← writes the PATCH result
- *
- * Without step 1, a refetch that started before the PATCH committed could
- * resolve *after* setQueryData and restore the stale "pending" status.
- *
- * Assertions use within() scoped to the "Move to:" status-control row so
- * they don't clash with identically-labelled filter-tab buttons.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -40,29 +26,43 @@ function jsonOk(body: unknown): Response {
   return {
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     json: async () => body,
-  } as Response;
+    text: async () => JSON.stringify(body),
+    blob: async () => new Blob([JSON.stringify(body)]),
+  } as unknown as Response;
 }
 
-function makeWaterTest(status: string) {
+function makeWaterTestSummary(status: string) {
   return {
-    id: "wt-1",
-    userId: "user-abc-123",
-    name: "Jane Doe",
-    address: "123 Main St",
-    phone: "+254700000001",
-    waterSource: "Borehole",
-    concerns: "Taste and odour",
-    photos: [],
-    videos: [],
-    status,
+    assessmentId: "wt-1",
+    reference: "WT-12345",
+    firstName: "Jane Doe",
+    area: "123 Main St",
+    country: "Kenya",
+    maskedPhone: "+254700***001",
+    source: "borehole",
+    concern: "taste",
+    bands: { hardness: "Low", taste: "High", sediment: "Low", microbial: "Moderate" },
+    serviceState: status,
+    accountLinkState: "attached",
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function makeWaterTestDetail(status: string) {
+  return {
+    ...makeWaterTestSummary(status),
+    phone: "+254700000001",
+    serviceAddress: "123 Main St",
+    preferredContactTime: "Morning",
   };
 }
 
 function renderPage() {
   const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
   return render(
     <QueryClientProvider client={qc}>
@@ -71,90 +71,81 @@ function renderPage() {
   );
 }
 
-/**
- * Returns the "Move to:" controls container so button assertions are scoped to
- * the card's status-control row and don't match the filter-tab buttons above.
- */
 function getStatusControls() {
-  const moveToLabel = screen.getByText(/move to:/i);
+  const moveToLabel = screen.getByText(/update status/i);
   return moveToLabel.parentElement!;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  global.fetch = vi.fn();
+  global.fetch = vi.fn().mockImplementation((input: any, init: any) => {
+    console.log("Mock fetch called with:", input);
+    return Promise.resolve(jsonOk({ items: [], total: 0 }));
+  });
   sessionStorage.clear();
 });
 
 describe("Water Tests – status PATCH wins over concurrent refetch", () => {
   it("keeps the PATCH status when a background refetch resolves with stale data", async () => {
-    // ── Phase 1: initial load → status = "pending" ─────────────────────────
     const refetchDeferred = deferred<Response>();
 
     vi.mocked(global.fetch)
-      // First call: initial GET /admin/water-tests
-      .mockResolvedValueOnce(jsonOk([makeWaterTest("pending")]))
-      // Second call: GET triggered by Refresh button (kept pending)
+      // List
+      .mockResolvedValueOnce(jsonOk({ items: [makeWaterTestSummary("instant_result_ready")], total: 1, page: 1, limit: 50 }))
+      // Detail
+      .mockResolvedValueOnce(jsonOk(makeWaterTestDetail("instant_result_ready")))
+      // List refetch
       .mockReturnValueOnce(refetchDeferred.promise)
-      // Third call: PATCH → returns updated water test with "scheduled"
-      .mockResolvedValueOnce(jsonOk(makeWaterTest("scheduled")));
+      // PATCH update
+      .mockResolvedValueOnce(jsonOk(makeWaterTestDetail("scheduled")));
 
     renderPage();
 
-    // Wait for initial data and verify "Pending" is the current status
+    await screen.findByText("WT-12345");
+    fireEvent.click(screen.getByText("WT-12345"));
+
     await waitFor(() => {
       const controls = getStatusControls();
-      expect(within(controls).getByRole("button", { name: /pending/i })).toBeDisabled();
+      expect(within(controls).getByRole("button", { name: /scheduled/i })).not.toBeDisabled();
     });
 
-    // ── Phase 2: user clicks Refresh → refetch is now in flight ────────────
-    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+    fireEvent.click(screen.getByText("Refresh").closest("button")!);
 
-    // ── Phase 3: while refetch is pending, change status to "Scheduled" ────
     const controls = getStatusControls();
     fireEvent.click(within(controls).getByRole("button", { name: /scheduled/i }));
 
-    // PATCH completes; the "Scheduled" move-to button becomes disabled and
-    // "Pending" becomes an available option.
     await waitFor(() => {
       const c = getStatusControls();
       expect(within(c).getByRole("button", { name: /scheduled/i })).toBeDisabled();
-      expect(within(c).getByRole("button", { name: /pending/i })).not.toBeDisabled();
+      expect(within(c).getByRole("button", { name: /follow-up requested/i })).not.toBeDisabled();
     });
 
-    // ── Phase 4: stale refetch resolves with the OLD "pending" payload ──────
-    refetchDeferred.resolve(jsonOk([makeWaterTest("pending")]));
-
-    // Give React time to process any would-be cache update
+    refetchDeferred.resolve(jsonOk({ items: [makeWaterTestSummary("instant_result_ready")], total: 1, page: 1, limit: 50 }));
     await new Promise(r => setTimeout(r, 80));
 
-    // The PATCH result must survive — "Scheduled" is still current (disabled)
-    // and "Pending" is still available as a move-to option.
     const finalControls = getStatusControls();
     expect(within(finalControls).getByRole("button", { name: /scheduled/i })).toBeDisabled();
-    expect(within(finalControls).getByRole("button", { name: /pending/i })).not.toBeDisabled();
+    expect(within(finalControls).getByRole("button", { name: /follow-up requested/i })).not.toBeDisabled();
   });
 
   it("keeps the PATCH status after the user clicks Refresh post-save", async () => {
-    // User saves, then manually clicks Refresh. The Refresh must not revert
-    // the just-saved status back to what was on the server before the PATCH.
     vi.mocked(global.fetch)
-      // Initial load
-      .mockResolvedValueOnce(jsonOk([makeWaterTest("pending")]))
-      // PATCH → scheduled
-      .mockResolvedValueOnce(jsonOk(makeWaterTest("scheduled")))
-      // Manual Refresh → server also returns scheduled (PATCH already committed)
-      .mockResolvedValueOnce(jsonOk([makeWaterTest("scheduled")]));
+      .mockResolvedValueOnce(jsonOk({ items: [makeWaterTestSummary("instant_result_ready")], total: 1, page: 1, limit: 50 }))
+      .mockResolvedValueOnce(jsonOk(makeWaterTestDetail("instant_result_ready")))
+      .mockResolvedValueOnce(jsonOk(makeWaterTestDetail("scheduled")))
+      .mockResolvedValueOnce(jsonOk({ items: [makeWaterTestSummary("scheduled")], total: 1, page: 1, limit: 50 }));
 
     renderPage();
 
+    await screen.findByText("WT-12345");
+    fireEvent.click(screen.getByText("WT-12345"));
+
     await waitFor(() => {
       const controls = getStatusControls();
-      expect(within(controls).getByRole("button", { name: /pending/i })).toBeDisabled();
+      expect(within(controls).getByRole("button", { name: /scheduled/i })).not.toBeDisabled();
     });
 
-    // Change status to "Scheduled"
     const controls = getStatusControls();
     fireEvent.click(within(controls).getByRole("button", { name: /scheduled/i }));
 
@@ -163,36 +154,36 @@ describe("Water Tests – status PATCH wins over concurrent refetch", () => {
       expect(within(c).getByRole("button", { name: /scheduled/i })).toBeDisabled();
     });
 
-    // Manual Refresh — server returns in_progress (already committed)
-    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+    fireEvent.click(screen.getByText("Refresh").closest("button")!);
 
     await waitFor(() => {
       const c = getStatusControls();
       expect(within(c).getByRole("button", { name: /scheduled/i })).toBeDisabled();
-      expect(within(c).getByRole("button", { name: /pending/i })).not.toBeDisabled();
+      expect(within(c).getByRole("button", { name: /follow-up requested/i })).not.toBeDisabled();
     });
   });
 
   it("keeps the PATCH status when moving from scheduled to completed", async () => {
-    // Covers the second PATCH path (scheduled → completed).
     const refetchDeferred = deferred<Response>();
 
     vi.mocked(global.fetch)
-      .mockResolvedValueOnce(jsonOk([makeWaterTest("scheduled")]))
+      .mockResolvedValueOnce(jsonOk({ items: [makeWaterTestSummary("scheduled")], total: 1, page: 1, limit: 50 }))
+      .mockResolvedValueOnce(jsonOk(makeWaterTestDetail("scheduled")))
       .mockReturnValueOnce(refetchDeferred.promise)
-      .mockResolvedValueOnce(jsonOk(makeWaterTest("completed")));
+      .mockResolvedValueOnce(jsonOk(makeWaterTestDetail("completed")));
 
     renderPage();
+
+    await screen.findByText("WT-12345");
+    fireEvent.click(screen.getByText("WT-12345"));
 
     await waitFor(() => {
       const controls = getStatusControls();
       expect(within(controls).getByRole("button", { name: /scheduled/i })).toBeDisabled();
     });
 
-    // Trigger in-flight refetch
-    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+    fireEvent.click(screen.getByText("Refresh").closest("button")!);
 
-    // Change status to "Completed" while refetch is in flight
     const controls = getStatusControls();
     fireEvent.click(within(controls).getByRole("button", { name: /completed/i }));
 
@@ -202,12 +193,9 @@ describe("Water Tests – status PATCH wins over concurrent refetch", () => {
       expect(within(c).getByRole("button", { name: /scheduled/i })).not.toBeDisabled();
     });
 
-    // Stale refetch resolves with "scheduled"
-    refetchDeferred.resolve(jsonOk([makeWaterTest("scheduled")]));
-
+    refetchDeferred.resolve(jsonOk({ items: [makeWaterTestSummary("scheduled")], total: 1, page: 1, limit: 50 }));
     await new Promise(r => setTimeout(r, 80));
 
-    // "Completed" must still be the current status
     const finalControls = getStatusControls();
     expect(within(finalControls).getByRole("button", { name: /completed/i })).toBeDisabled();
     expect(within(finalControls).getByRole("button", { name: /scheduled/i })).not.toBeDisabled();

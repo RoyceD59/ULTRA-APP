@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -14,6 +14,8 @@ interface Props {
 export default function PersonalImpactSection({ impact, onUpdated }: Props) {
   const colors = useColors();
   const api = useApi();
+
+  const [expanded, setExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [co2eOpen, setCo2eOpen] = useState(false);
 
@@ -32,8 +34,8 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
     : (refillableFilters[0]?.id ?? null);
   const selectedFilter = refillableFilters.find(f => f.id === currentFilterId);
 
-  const submissionKey = useRef<string | null>(null);
-  const submitting = useRef(false);
+  const submissionKey = React.useRef<string | null>(null);
+  const submitting = React.useRef(false);
 
   // Shower-only check
   const isShowerOnly = impact.filters.length > 0 && impact.filters.every(f => f.ratedCapacityLitres === 0);
@@ -99,135 +101,169 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>YOUR ULTRA CLEAR IMPACT</Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={expanded ? "Collapse personal impact details" : "Expand personal impact details"}
+        onPress={() => {
+          Haptics.selectionAsync().catch(() => {});
+          setExpanded(!expanded);
+        }}
+        activeOpacity={0.8}
+        style={[
+          styles.headerButton,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            borderBottomWidth: expanded ? 0 : 1,
+            borderBottomLeftRadius: expanded ? 0 : 16,
+            borderBottomRightRadius: expanded ? 0 : 16,
+          }
+        ]}
+      >
+        <View style={styles.headerTextWrap}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginBottom: 4 }]}>YOUR ULTRA CLEAR IMPACT</Text>
+          <View style={styles.headerLitresRow}>
+            {isShowerOnly ? (
+               <Text style={[styles.headerLitres, { color: colors.text }]}>{formatNum(showerDays)} <Text style={[styles.headerLitresLabel, { color: colors.mutedForeground }]}>days</Text></Text>
+            ) : (
+               <Text style={[styles.headerLitres, { color: colors.text }]}>{formatNum(impact.totalLitres)} <Text style={[styles.headerLitresLabel, { color: colors.mutedForeground }]}>litres</Text></Text>
+            )}
+          </View>
+        </View>
+        <View style={[styles.chevronWrap, { backgroundColor: colors.surface }]}>
+           <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.text} />
+        </View>
+      </TouchableOpacity>
 
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {expanded && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderTopWidth: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }]}>
+          {/* ADD LITRES ROW */}
+          {!isShowerOnly && (
+            <View style={styles.addLitresSection}>
+              <Text style={[styles.label, { color: colors.text }]}>Add litres consumed</Text>
+              <View style={styles.inputRow}>
+                <View style={[styles.inputWrapper, { borderColor: colors.border }]}>
+                  <TextInput
+                    testID="impact-litres-input"
+                    value={litres}
+                    onChangeText={v => { submissionKey.current = null; setLitres(v.replace(/[^0-9]/g, '')); setError(''); setSuccessMsg(''); }}
+                    keyboardType="number-pad"
+                    placeholder="20 litres"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.input, { color: colors.text }]}
+                    editable={!saving && refillableFilters.length > 0}
+                  />
+                </View>
+                <TouchableOpacity
+                  testID="impact-confirm"
+                  onPress={submit}
+                  disabled={saving || !litres || refillableFilters.length === 0}
+                  style={[
+                    styles.addButton,
+                    { backgroundColor: (litres && refillableFilters.length > 0) ? colors.primary : colors.mutedForeground }
+                  ]}
+                >
+                  {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addButtonText}>Add</Text>}
+                </TouchableOpacity>
+              </View>
+              {refillableFilters.length > 1 && selectedFilter ? (
+                <Text style={[styles.feedbackText, { color: colors.mutedForeground, marginTop: 2 }]}>
+                  Adding to: {selectedFilter.productName} (Change in Details)
+                </Text>
+              ) : null}
+              {error ? <Text style={[styles.feedbackText, { color: colors.destructive }]}>{error}</Text> : null}
+              {successMsg ? <Text style={[styles.feedbackText, { color: colors.primary }]}>{successMsg}</Text> : null}
 
-        {/* ADD LITRES ROW */}
-        {!isShowerOnly && (
-          <View style={styles.addLitresSection}>
-            <Text style={[styles.label, { color: colors.text }]}>Add litres consumed</Text>
-            <View style={styles.inputRow}>
-              <View style={[styles.inputWrapper, { borderColor: colors.border }]}>
-                <TextInput
-                  testID="impact-litres-input"
-                  value={litres}
-                  onChangeText={v => { submissionKey.current = null; setLitres(v.replace(/[^0-9]/g, '')); setError(''); setSuccessMsg(''); }}
-                  keyboardType="number-pad"
-                  placeholder="20 litres"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[styles.input, { color: colors.text }]}
-                  editable={!saving && refillableFilters.length > 0}
-                />
+              {refillableFilters.length === 0 && impact.filters.length > 0 ? (
+                <Text style={[styles.feedbackText, { color: colors.destructive, marginTop: 4 }]}>All registered filters have reached their rated capacity.</Text>
+              ) : null}
+              {impact.filters.length === 0 ? (
+                <Text style={[styles.feedbackText, { color: colors.mutedForeground, marginTop: 4 }]}>Register a filter to record refilled litres.</Text>
+              ) : null}
+            </View>
+          )}
+
+          {/* CUMULATIVE LITRES OR SHOWER DAYS */}
+          <View style={styles.bigStatContainer}>
+            {isShowerOnly ? (
+              <>
+                <Text style={[styles.bigStat, { color: colors.text }]}>{formatNum(showerDays)}</Text>
+                <Text style={[styles.bigStatSub, { color: colors.mutedForeground }]}>days used</Text>
+                <Text style={[styles.bigStatSub, { color: colors.mutedForeground }]}>for a healthy skin</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.bigStat, { color: colors.text }]}>{formatNum(impact.totalLitres)}</Text>
+                <Text style={[styles.bigStatSub, { color: colors.mutedForeground }]}>litres filtered</Text>
+              </>
+            )}
+          </View>
+
+          {/* EQUIVALENTS ROW */}
+          {!isShowerOnly && (
+            <View style={styles.twoColRow}>
+              <View style={[styles.miniCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.miniCardNumber, { color: colors.text }]}>{formatNum(stats.bottleEquivalent)}</Text>
+                <Text style={[styles.miniCardText, { color: colors.mutedForeground }]}>500ml plastic{'\n'}bottles avoided</Text>
               </View>
               <TouchableOpacity
-                testID="impact-confirm"
-                onPress={submit}
-                disabled={saving || !litres || refillableFilters.length === 0}
-                style={[
-                  styles.addButton,
-                  { backgroundColor: (litres && refillableFilters.length > 0) ? colors.primary : colors.mutedForeground }
-                ]}
+                activeOpacity={0.7}
+                onPress={() => setCo2eOpen(true)}
+                style={[styles.miniCard, { backgroundColor: colors.background, borderColor: colors.border }]}
               >
-                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addButtonText}>Add</Text>}
+                <Text style={[styles.miniCardNumber, { color: colors.text }]}>≈{Math.round(stats.co2eAvoidedKg)} kg</Text>
+                <Text style={[styles.miniCardText, { color: colors.mutedForeground }]}>CO₂e{'\n'}avoided*</Text>
               </TouchableOpacity>
             </View>
-            {refillableFilters.length > 1 && selectedFilter ? (
-              <Text style={[styles.feedbackText, { color: colors.mutedForeground, marginTop: 2 }]}>
-                Adding to: {selectedFilter.productName} (Change in Details)
-              </Text>
-            ) : null}
-            {error ? <Text style={[styles.feedbackText, { color: colors.destructive }]}>{error}</Text> : null}
-            {successMsg ? <Text style={[styles.feedbackText, { color: colors.primary }]}>{successMsg}</Text> : null}
-
-            {refillableFilters.length === 0 && impact.filters.length > 0 ? (
-              <Text style={[styles.feedbackText, { color: colors.destructive, marginTop: 4 }]}>All registered filters have reached their rated capacity.</Text>
-            ) : null}
-            {impact.filters.length === 0 ? (
-              <Text style={[styles.feedbackText, { color: colors.mutedForeground, marginTop: 4 }]}>Register a filter to record refilled litres.</Text>
-            ) : null}
-          </View>
-        )}
-
-        {/* CUMULATIVE LITRES OR SHOWER DAYS */}
-        <View style={styles.bigStatContainer}>
-          {isShowerOnly ? (
-            <>
-              <Text style={[styles.bigStat, { color: colors.text }]}>{formatNum(showerDays)}</Text>
-              <Text style={[styles.bigStatSub, { color: colors.mutedForeground }]}>days used</Text>
-              <Text style={[styles.bigStatSub, { color: colors.mutedForeground }]}>for a healthy skin</Text>
-            </>
-          ) : (
-            <>
-              <Text style={[styles.bigStat, { color: colors.text }]}>{formatNum(impact.totalLitres)}</Text>
-              <Text style={[styles.bigStatSub, { color: colors.mutedForeground }]}>litres filtered</Text>
-            </>
           )}
-        </View>
 
-        {/* EQUIVALENTS ROW */}
-        {!isShowerOnly && (
-          <View style={styles.twoColRow}>
-            <View style={[styles.miniCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.miniCardNumber, { color: colors.text }]}>{formatNum(stats.bottleEquivalent)}</Text>
-              <Text style={[styles.miniCardText, { color: colors.mutedForeground }]}>500ml plastic{'\n'}bottles avoided</Text>
+          {/* SAVINGS */}
+          {!isShowerOnly && (
+            <View style={styles.savingsContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Estimated annual saving</Text>
+              <Text style={[styles.savingsValue, { color: colors.text }]}>KSh {formatNum(stats.estimatedAnnualSavingKes)}</Text>
+              <Text style={[styles.savingsSub, { color: colors.mutedForeground }]}>Based on KSh 150 per 20L refill</Text>
             </View>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setCo2eOpen(true)}
-              style={[styles.miniCard, { backgroundColor: colors.background, borderColor: colors.border }]}
-            >
-              <Text style={[styles.miniCardNumber, { color: colors.text }]}>≈{Math.round(stats.co2eAvoidedKg)} kg</Text>
-              <Text style={[styles.miniCardText, { color: colors.mutedForeground }]}>CO₂e{'\n'}avoided*</Text>
+          )}
+
+          {/* TRUST & MILESTONE */}
+          <View style={styles.trustContainer}>
+            <Text style={[styles.trustText, { color: colors.text }]}>✓ I filter with Ultra Clear</Text>
+          </View>
+
+          {!isShowerOnly && (
+            <View style={styles.milestoneContainer}>
+              <View style={styles.milestoneHeader}>
+                <Text style={[styles.milestoneLabel, { color: colors.text }]}>★ {milestone.label} Impact Level</Text>
+                <Text style={[styles.milestonePercent, { color: colors.text }]}>{milestone.progressPercent}%</Text>
+              </View>
+              <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
+                <View style={[styles.progressBarFill, { backgroundColor: colors.primary, width: `${milestone.progressPercent}%` }]} />
+              </View>
+              <Text style={[styles.milestoneRemaining, { color: colors.mutedForeground }]}>{formatNum(milestone.remaining)} litres to the next milestone</Text>
+            </View>
+          )}
+
+          {/* HYDRATE THE FUTURE */}
+          <View style={styles.hydrateContainer}>
+            <Text style={[styles.hydrateText, { color: colors.mutedForeground }]}>
+              3% of Ultra Clear revenue supports clean-water access through Hydrate the Future™
+            </Text>
+          </View>
+
+          {/* ACTIONS */}
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.actionBtn}>
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>Share impact</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setDetailsOpen(true)}>
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>View details</Text>
             </TouchableOpacity>
           </View>
-        )}
 
-        {/* SAVINGS */}
-        {!isShowerOnly && (
-          <View style={styles.savingsContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Estimated annual saving</Text>
-            <Text style={[styles.savingsValue, { color: colors.text }]}>KSh {formatNum(stats.estimatedAnnualSavingKes)}</Text>
-            <Text style={[styles.savingsSub, { color: colors.mutedForeground }]}>Based on KSh 150 per 20L refill</Text>
-          </View>
-        )}
-
-        {/* TRUST & MILESTONE */}
-        <View style={styles.trustContainer}>
-          <Text style={[styles.trustText, { color: colors.text }]}>✓ I filter with Ultra Clear</Text>
         </View>
-
-        {!isShowerOnly && (
-          <View style={styles.milestoneContainer}>
-            <View style={styles.milestoneHeader}>
-              <Text style={[styles.milestoneLabel, { color: colors.text }]}>★ {milestone.label} Impact Level</Text>
-              <Text style={[styles.milestonePercent, { color: colors.text }]}>{milestone.progressPercent}%</Text>
-            </View>
-            <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
-              <View style={[styles.progressBarFill, { backgroundColor: colors.primary, width: `${milestone.progressPercent}%` }]} />
-            </View>
-            <Text style={[styles.milestoneRemaining, { color: colors.mutedForeground }]}>{formatNum(milestone.remaining)} litres to the next milestone</Text>
-          </View>
-        )}
-
-        {/* HYDRATE THE FUTURE */}
-        <View style={styles.hydrateContainer}>
-          <Text style={[styles.hydrateText, { color: colors.mutedForeground }]}>
-            3% of Ultra Clear revenue supports clean-water access through Hydrate the Future™
-          </Text>
-        </View>
-
-        {/* ACTIONS */}
-        <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.actionBtn}>
-            <Text style={[styles.actionBtnText, { color: colors.primary }]}>Share impact</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setDetailsOpen(true)}>
-            <Text style={[styles.actionBtnText, { color: colors.primary }]}>View details</Text>
-          </TouchableOpacity>
-        </View>
-
-      </View>
+      )}
 
       {/* CO2e Disclaimer Modal */}
       <Modal visible={co2eOpen} transparent animationType="fade" onRequestClose={() => setCo2eOpen(false)}>
@@ -259,7 +295,6 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
               <TouchableOpacity onPress={() => setDetailsOpen(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetScroll}>
-
               <Text style={[styles.sheetSectionTitle, { color: colors.text }]}>Active Filters</Text>
               {impact.filters.length === 0 ? (
                 <Text style={[styles.sheetEmptyText, { color: colors.mutedForeground }]}>No filters registered.</Text>
@@ -313,9 +348,52 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 8, marginBottom: 24 },
+  container: { marginBottom: 24 },
+
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderWidth: 1,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerLitresRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  headerLitres: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  headerLitresLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  chevronWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 12 },
+
+  card: {
+    borderWidth: 1,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    padding: 16,
+    paddingTop: 8,
+    gap: 12
+  },
 
   addLitresSection: { gap: 8 },
   label: { fontSize: 13, fontWeight: '600' },

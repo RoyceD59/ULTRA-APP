@@ -1,421 +1,911 @@
-/**
- * Water Test Request screen
- *
- * Changes:
- *  - Email field added — receipt sent directly to submitted address even for guests
- *  - Receipt reference displayed prominently on success screen
- *  - WhatsApp copy button retained on success
- *  - Account-gated: guests see a sign-in/register prompt; their in-progress
- *    form is saved as a device-local draft and restored after authentication
- *  - Name, email AND phone pre-fill from the signed-in account
- */
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, Platform, ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
-import { useApi, ApiError } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
+import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { openWhatsApp } from '@/lib/whatsapp';
 import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
-import { openWhatsApp } from '@/lib/whatsapp';
-import { saveDraft, loadDraft, clearDraft, persistMediaForDraft, validateMediaItems, enqueueDraftSave, drainDraftSaveQueue } from '@/lib/formDrafts';
+import { useApi } from '@/hooks/useApi';
+import { saveDraft, loadDraft, clearDraft, enqueueDraftSave } from '@/lib/formDrafts';
+import {
+  useCreatePublicInstantWaterAssessment,
+  useCreateAuthenticatedInstantWaterAssessment,
+  useRequestInstantWaterAssessmentVerification,
+  useConfirmInstantWaterAssessmentVerification,
+  useAttachInstantWaterAssessment,
+  useRequestInstantWaterPhysicalTest,
+  useListAuthenticatedInstantWaterAssessments,
+  useConsumeInstantWaterAssessmentHandoff,
+  InstantWaterSource,
+  InstantWaterConcern,
+  InstantWaterSetting,
+  InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType
+} from '@workspace/api-client-react';
+import type {
+  InstantWaterAssessmentCreated,
+  AuthenticatedInstantWaterAssessmentCreated,
+  InstantWaterAssessment,
+  PublicInstantWaterAssessmentResult
+} from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { HANDOFF_STORAGE_KEY, useConsumeHandoff } from '@/hooks/useWaterTestHandoff';
+import { ApiError } from '@/hooks/apiError';
 
-const WATER_SOURCES = [
-  'Municipal/Tap', 'Borehole', 'Well', 'Rainwater', 'River/Lake', 'Tanker delivery',
+type ViewState = 'form' | 'result' | 'history' | 'booking';
+
+const COUNTRIES = ['Kenya', 'Tanzania', 'Rwanda', 'Ghana', 'Other'];
+const SOURCES = [
+  { label: 'Piped / municipal tap', value: InstantWaterSource.municipal },
+  { label: 'Borehole or deep well', value: InstantWaterSource.borehole },
+  { label: 'Shallow well, river or spring', value: InstantWaterSource.shallow },
+  { label: 'Water vendor, bowser or tanker', value: InstantWaterSource.vendor },
+  { label: 'Bottled or sachet water', value: InstantWaterSource.bottled },
+  { label: 'Rainwater harvesting', value: InstantWaterSource.rain },
 ];
 const CONCERNS = [
-  'Bad taste or odor', 'Discolouration', 'Hardness / scale buildup',
-  'Skin irritation', 'Gastrointestinal issues', 'General safety check',
+  { label: 'White scale in the kettle, appliances dying early', value: InstantWaterConcern.scale },
+  { label: 'Taste or smell — chlorine, metallic, earthy', value: InstantWaterConcern.taste },
+  { label: 'Cloudy water, sediment or staining', value: InstantWaterConcern.cloudy },
+  { label: 'Dry skin, itchy scalp, hair feels rough after showering', value: InstantWaterConcern.skin },
+  { label: 'Not sure it is safe to drink', value: InstantWaterConcern.safety },
+  { label: 'Cost of buying bottled water every week', value: InstantWaterConcern.cost },
+];
+const SETTINGS = [
+  { label: 'My home', value: InstantWaterSetting.home },
+  { label: 'A rented place', value: InstantWaterSetting.rental },
+  { label: 'A salon, spa or barber', value: InstantWaterSetting.salon },
+  { label: 'An office or co-working space', value: InstantWaterSetting.office },
+  { label: 'A hotel, lodge, restaurant or gym', value: InstantWaterSetting.hospitality },
+  { label: 'A school, clinic or NGO', value: InstantWaterSetting.school },
+  { label: 'I want to resell or distribute', value: InstantWaterSetting.resell },
 ];
 
-/** Everything the customer can type/pick on this form — persisted as a draft. */
-interface WaterTestDraft {
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  waterSource: string;
-  selectedConcerns: string[];
-  extraConcerns: string;
-  media: MediaItem[];
+export default function WaterTestScreen() {
+  const colors = useColors();
+  const { user, token } = useAuth();
+  const api = useApi();
+  const router = useRouter();
+
+  const [view, setView] = useState<ViewState>('form');
+  const [assessment, setAssessment] = useState<InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated | null>(null);
+  const [actionToken, setActionToken] = useState<string>('');
+
+  const attachMut = useAttachInstantWaterAssessment();
+
+  const { handoffPending, handoffSuccess } = useConsumeHandoff((res) => {
+    setView('history');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  });
+
+  // On mount or login, check if there's a pending public test to attach
+  useEffect(() => {
+    if (token) {
+      AsyncStorage.getItem('pending_water_test_attach').then(val => {
+        if (val) {
+          try {
+            const parsed = JSON.parse(val);
+            // Handle both legacy (just assessment) and new format
+            const pending = parsed.assessment || parsed;
+            const actionToken = parsed.actionToken;
+
+            if (pending && pending.assessmentId) {
+              const attachData: any = {};
+              if (pending.resultToken) attachData.resultToken = pending.resultToken;
+
+              attachMut.mutateAsync({
+                assessmentId: pending.assessmentId,
+                data: attachData
+              }).then(() => {
+                AsyncStorage.removeItem('pending_water_test_attach');
+                setAssessment(pending);
+                setView('history');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              }).catch((err) => {
+                console.warn('Failed to attach pending test on login:', err);
+              });
+            }
+          } catch (e) {}
+        }
+      });
+    }
+  }, [token]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {view === 'form' && (
+        <FormView
+          colors={colors} user={user} token={token} router={router}
+          handoffPending={handoffPending} handoffSuccess={handoffSuccess}
+          onResult={(ass) => { setAssessment(ass); setView('result'); }}
+          onHistory={() => setView('history')}
+        />
+      )}
+      {view === 'result' && assessment && (
+        <ResultView
+          colors={colors} token={token} assessment={assessment}
+          actionToken={actionToken} setActionToken={setActionToken}
+          onBook={() => setView('booking')} onBack={() => setView('form')}
+          onHistory={() => setView('history')} router={router}
+        />
+      )}
+      {view === 'history' && (
+        <HistoryView colors={colors} onBack={() => setView('form')} token={token} />
+      )}
+      {view === 'booking' && assessment && (
+        <BookingView
+          colors={colors} api={api} assessment={assessment} actionToken={actionToken}
+          onBack={() => setView('result')}
+          onComplete={() => {
+            Alert.alert("Request Submitted", "We will contact you shortly to confirm your booking.");
+            setView('history');
+          }}
+        />
+      )}
+    </View>
+  );
 }
 
-export default function WaterTestScreen() {
-  const colors  = useColors();
-  const router  = useRouter();
-  const api     = useApi();
-  const { user, token } = useAuth();
+// ----------------------------------------------------------------------------
+// FORM VIEW
+// ----------------------------------------------------------------------------
+interface Draft {
+  firstName: string;
+  phone: string;
+  country: string;
+  area: string;
+  source: InstantWaterSource | '';
+  concern: InstantWaterConcern | '';
+  setting: InstantWaterSetting | '';
+  consent: boolean;
+}
 
-  // Name, email AND phone pre-fill from the signed-in account (all editable).
-  const [name,             setName]             = useState(user ? `${user.firstName} ${user.lastName}`.trim() : '');
-  const [address,          setAddress]          = useState('');
-  const [phone,            setPhone]            = useState(user?.phone ?? '');
-  const [email,            setEmail]            = useState(user?.email ?? '');
-  const [waterSource,      setWaterSource]      = useState('');
-  const [selectedConcerns, setSelectedConcerns] = useState<string[]>([]);
-  const [extraConcerns,    setExtraConcerns]    = useState('');
-  const [media,            setMedia]            = useState<MediaItem[]>([]);
-  const [submitting,         setSubmitting]         = useState(false);
-  const [submitted,          setSubmitted]          = useState(false);
-  const [receiptRef,         setReceiptRef]         = useState('');
-  const [whatsAppSummary,    setWhatsAppSummary]    = useState('');
-  const [error,              setError]              = useState('');
-  const [droppedAttachments, setDroppedAttachments] = useState(0);
+interface FormViewProps {
+  colors: any;
+  user: any;
+  token: string | null;
+  onResult: (ass: InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated) => void;
+  onHistory: () => void;
+  router: any;
+  handoffPending?: boolean;
+  handoffSuccess?: boolean;
+}
 
-  // ── Draft persistence ──────────────────────────────────────────────────────
-  // Restore any in-progress draft on mount (e.g. after a mid-flow sign-in),
-  // then keep it saved as the user types so nothing is ever lost. Draft values
-  // only overwrite a field when the draft actually holds something, so account
-  // pre-fill survives for fields the guest never touched.
+function FormView({ colors, user, token, handoffPending, handoffSuccess, onResult, onHistory, router }: FormViewProps) {
+  const [draft, setDraft] = useState<Draft>({
+    firstName: user?.firstName || '',
+    phone: user?.phone || '',
+    country: '', area: '', source: '', concern: '', setting: '', consent: false
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const draftReady = useRef(false);
-  // Set to true before clearDraft so any in-flight auto-save IIFE that
-  // completes after submission cannot write the draft back.
-  const draftSaveCancelled = useRef(false);
+
+  const publicMut = useCreatePublicInstantWaterAssessment();
+  const authMut = useCreateAuthenticatedInstantWaterAssessment();
+
+  const idempKeyRef = useRef(Crypto.randomUUID());
+
   useEffect(() => {
-    (async () => {
-      const d = await loadDraft<WaterTestDraft>('water-test');
-      if (d) {
-        if (typeof d.name === 'string' && d.name.trim()) setName(d.name);
-        if (typeof d.address === 'string' && d.address.trim()) setAddress(d.address);
-        if (typeof d.phone === 'string' && d.phone.trim()) setPhone(d.phone);
-        if (typeof d.email === 'string' && d.email.trim()) setEmail(d.email);
-        if (typeof d.waterSource === 'string' && d.waterSource) setWaterSource(d.waterSource);
-        if (Array.isArray(d.selectedConcerns)) setSelectedConcerns(d.selectedConcerns);
-        if (typeof d.extraConcerns === 'string' && d.extraConcerns) setExtraConcerns(d.extraConcerns);
-        if (Array.isArray(d.media)) {
-          const { valid, dropped } = await validateMediaItems(d.media);
-          setMedia(valid);
-          if (dropped > 0) setDroppedAttachments(dropped);
-        }
-      }
+    loadDraft<Draft>('water-test').then(d => {
+      if (d) setDraft(prev => ({ ...prev, ...d }));
       draftReady.current = true;
-    })();
+    });
   }, []);
 
   useEffect(() => {
-    if (!draftReady.current || submitted || draftSaveCancelled.current) return;
-    // Serialised through the per-key queue so a fast second edit never
-    // lets an earlier stalled save overwrite the newer state.
-    enqueueDraftSave('water-test', async () => {
-      if (draftSaveCancelled.current) return;
-      const persistedMedia = await persistMediaForDraft(media, 'water-test');
-      if (draftSaveCancelled.current) return;
-      await saveDraft<WaterTestDraft>('water-test', {
-        name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media: persistedMedia,
-      });
-    });
-  }, [name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media, submitted]);
+    if (!draftReady.current) return;
+    enqueueDraftSave('water-test', () => saveDraft('water-test', draft));
+  }, [draft]);
 
-  // Refresh the account pre-fill after a mid-flow sign-in: fill only the
-  // fields the user left blank — never overwrite what they typed.
-  useEffect(() => {
-    if (!user) return;
-    setName(prev => prev.trim() ? prev : `${user.firstName} ${user.lastName}`.trim());
-    setEmail(prev => prev.trim() ? prev : (user.email ?? ''));
-    setPhone(prev => prev.trim() ? prev : (user.phone ?? ''));
-  }, [user]);
-
-  /** Save the draft, then take the guest to sign-in / registration.
-   *  `returnTo` brings them straight back here with the draft restored. */
-  async function goToAuth(mode: 'login' | 'register') {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Enqueue the save so it is ordered relative to any in-flight auto-save,
-    // then await completion before navigating away.
-    await enqueueDraftSave('water-test', async () => {
-      const persistedMedia = await persistMediaForDraft(media, 'water-test');
-      await saveDraft<WaterTestDraft>('water-test', {
-        name, address, phone, email, waterSource, selectedConcerns, extraConcerns, media: persistedMedia,
-      });
-    });
-    router.push({
-      pathname: mode === 'login' ? '/auth/login' : '/auth/register',
-      params: { returnTo: '/water-test' },
-    } as never);
-  }
-
-  const toggleConcern = (c: string) => {
-    setSelectedConcerns(prev =>
-      prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c],
-    );
+  const setField = (k: keyof Draft, v: string | boolean) => {
+    setDraft(prev => ({ ...prev, [k]: v }));
+    setError('');
   };
 
-  async function submit() {
-    if (!name.trim() || !address.trim() || !phone.trim() || !waterSource) {
-      setError('Please fill in your name, address, phone number, and select a water source.');
+  const submit = async () => {
+    if (!draft.firstName.trim() || !draft.phone.trim() || !draft.country || !draft.area.trim() || !draft.source || !draft.concern || !draft.setting) {
+      setError('Please fill in all required fields.');
       return;
     }
-    if (!token) {
-      // Account-gated: never let a guest hit the server's 401 — save their
-      // work and route them into sign-in, which returns them to this form.
-      setError('');
-      await goToAuth('login');
+    if (!token && !draft.consent) {
+      setError('Please agree to receive your result.');
       return;
     }
-    setError('');
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSubmitting(true);
+    setError('');
+
     try {
-      const uploaded = media.length ? await uploadMediaItems(media, api.requestUploadUrl) : [];
-      const concernsText = [...selectedConcerns, extraConcerns].filter(Boolean).join(', ');
-      const wt = await api.createWaterTest({
-        name, address, phone, email: email.trim() || undefined, waterSource,
-        concerns: concernsText,
-        photos: uploaded.filter(m => m.type === 'photo').map(m => m.url),
-        videos: uploaded.filter(m => m.type === 'video').map(m => m.url),
-      });
-      const summary = [
-        'ULTRA CLEAR — WATER TEST REQUEST',
-        `Ref: ${wt.id}`,
-        `Name: ${name}`,
-        `Phone: ${phone}`,
-        `Address: ${address}`,
-        `Water source: ${waterSource}`,
-        ...(concernsText ? [`Concerns: ${concernsText}`] : []),
-      ].join('\n');
-      // Signal cancellation, drain any queued save that started before the
-      // signal, then clean up the draft (including durable media copies).
-      draftSaveCancelled.current = true;
-      await drainDraftSaveQueue('water-test');
-      await clearDraft('water-test');
-      setReceiptRef(wt.id);
-      setWhatsAppSummary(summary);
-      setSubmitted(true);
-    } catch (e) {
-      // Session expired / invalid — send the customer to sign-in with their
-      // draft saved instead of leaving them stuck on a raw error message.
-      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-        setError('Your session has expired. Please sign in again — your form is saved.');
-        await goToAuth('login');
-        return;
+      const idempotencyKey = idempKeyRef.current;
+      let res;
+      if (token) {
+        res = await authMut.mutateAsync({
+          data: {
+            idempotencyKey,
+            firstName: draft.firstName.trim(),
+            phone: draft.phone.trim(),
+            answers: {
+              country: draft.country,
+              area: draft.area.trim(),
+              source: draft.source,
+              concern: draft.concern,
+              setting: draft.setting
+            }
+          }
+        });
+      } else {
+        res = await publicMut.mutateAsync({
+          data: {
+            idempotencyKey,
+            firstName: draft.firstName.trim(),
+            phone: draft.phone.trim(),
+            consent: true,
+            answers: {
+              country: draft.country,
+              area: draft.area.trim(),
+              source: draft.source,
+              concern: draft.concern,
+              setting: draft.setting
+            }
+          }
+        });
       }
-      setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
+      await clearDraft('water-test');
+      idempKeyRef.current = Crypto.randomUUID(); // reset on success
+      onResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (submitted) {
-    return (
-      <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }]}>
-        <View style={[styles.successIcon, { backgroundColor: colors.successLight }]}>
-          <Ionicons name="checkmark-circle" size={52} color={colors.success} />
-        </View>
-        <Text style={[styles.successTitle, { color: colors.text }]}>Request Submitted!</Text>
-
-        {/* Prominent receipt reference */}
-        <View style={[styles.refBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
-          <Text style={[styles.refLabel, { color: colors.mutedForeground }]}>Your receipt reference</Text>
-          <Text style={[styles.refNumber, { color: colors.primary }]}>{receiptRef}</Text>
-          <Text style={[styles.refHint, { color: colors.mutedForeground }]}>
-            {email.trim()
-              ? `A receipt has been sent to ${email.trim()}.`
-              : 'Save this number for your records.'}
-          </Text>
-        </View>
-
-        <Text style={[styles.successDesc, { color: colors.mutedForeground }]}>
-          Our certified technician will contact you within 24 hours to schedule a convenient time for your free water quality test.
-        </Text>
-        <TouchableOpacity
-          onPress={() => openWhatsApp(whatsAppSummary)}
-          style={[styles.doneBtn, { backgroundColor: '#25D366', flexDirection: 'row', alignItems: 'center', gap: 8 }]}
-        >
-          <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-          <Text style={styles.doneBtnText}>Send a copy on WhatsApp</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.back()}
-          style={[styles.doneBtn, { backgroundColor: colors.primary }]}>
-          <Text style={styles.doneBtnText}>Done</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  };
 
   return (
-    <ScrollView
-      style={[styles.screen, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 34 : 40 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={[styles.header, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
-        <Ionicons name="flask" size={28} color={colors.primary} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Free Water Quality Test</Text>
-          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Certified technician visits you at no charge</Text>
-        </View>
-      </View>
-
-      {/* Guest gate — water test appointments require an account */}
-      {!token && (
-        <View style={[styles.gateBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
-          <View style={styles.gateHeader}>
-            <Ionicons name="lock-closed" size={18} color={colors.primary} />
-            <Text style={[styles.gateTitle, { color: colors.text }]}>Account required</Text>
-          </View>
-          <Text style={[styles.gateText, { color: colors.mutedForeground }]}>
-            Water test appointments are linked to your Ultra-Clear account so our technician can follow up with your results.
-            You can fill in the form now — everything you enter is saved and will be right here after you sign in.
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      {handoffPending && !token && (
+        <View style={{ backgroundColor: '#FEF3C7', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ flex: 1, color: '#92400E', fontSize: 14 }}>
+            Please sign in or create an account to view your water check.
           </Text>
-          <View style={styles.gateBtnRow}>
-            <TouchableOpacity onPress={() => goToAuth('login')}
-              style={[styles.gateBtn, { backgroundColor: colors.primary }]}>
-              <Text style={styles.gateBtnText}>Sign In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => goToAuth('register')}
-              style={[styles.gateBtn, styles.gateBtnAlt, { borderColor: colors.primary }]}>
-              <Text style={[styles.gateBtnText, { color: colors.primary }]}>Create Account</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => router.push({ pathname: '/auth/login', params: { returnTo: '/water-test' } })} style={{ backgroundColor: '#D97706', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, marginLeft: 12 }}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {handoffSuccess && (
+        <View style={{ backgroundColor: '#D1FAE5', padding: 12, alignItems: 'center' }}>
+          <Text style={{ color: '#065F46', fontSize: 14, fontWeight: '500' }}>Assessment saved to your account!</Text>
         </View>
       )}
 
-      {/* Contact details */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Details</Text>
-        {[
-          { label: 'Full Name *',        value: name,    onChange: setName,    placeholder: 'Jane Doe' },
-          { label: 'Address / Location *', value: address, onChange: setAddress, placeholder: 'Westlands, Nairobi' },
-          { label: 'Phone Number *',     value: phone,   onChange: setPhone,   placeholder: '+254700000000', keyboard: 'phone-pad' as const },
-          { label: 'Email (for receipt)', value: email,  onChange: setEmail,   placeholder: 'jane@example.com', keyboard: 'email-address' as const },
-        ].map(f => (
-          <View key={f.label} style={styles.field}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{f.label}</Text>
+      <View style={[styles.hero, { backgroundColor: colors.primary }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+           <Text style={styles.eyebrow}>FREE · 60 SECONDS · NO LAB NEEDED</Text>
+           {token && (
+             <TouchableOpacity onPress={onHistory} style={[styles.historyBtn, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                <Ionicons name="time-outline" size={16} color="#fff" />
+                <Text style={styles.historyBtnText}>History</Text>
+             </TouchableOpacity>
+           )}
+        </View>
+        <Text style={styles.heroTitle}>What is actually in your water?</Text>
+        <Text style={styles.heroLede}>
+          Six questions. You get an indicative read on hardness, taste, sediment and microbial risk for your area and your water source — on this screen, straight away.
+        </Text>
+      </View>
+
+      <View style={styles.formContainer}>
+        {/* Contact details */}
+        <View style={styles.row}>
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>First name *</Text>
             <TextInput
-              value={f.value}
-              onChangeText={f.onChange}
-              placeholder={f.placeholder}
-              placeholderTextColor={colors.border}
-              keyboardType={f.keyboard}
-              autoCapitalize={f.keyboard === 'email-address' ? 'none' : 'words'}
+              value={draft.firstName} onChangeText={v => setField('firstName', v)}
+              placeholder="Amara" placeholderTextColor={colors.border}
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
             />
           </View>
-        ))}
-      </View>
-
-      {/* Water source */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Water Source *</Text>
-        <View style={styles.chips}>
-          {WATER_SOURCES.map(s => (
-            <TouchableOpacity key={s} onPress={() => setWaterSource(s)} activeOpacity={0.8}
-              style={[styles.chip, {
-                backgroundColor: waterSource === s ? colors.primary : colors.surface,
-                borderColor:     waterSource === s ? colors.primary : colors.border,
-              }]}>
-              <Text style={{ fontSize: 13, color: waterSource === s ? '#fff' : colors.mutedForeground, fontWeight: '500' as const }}>
-                {s}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>WhatsApp *</Text>
+            <TextInput
+              value={draft.phone} onChangeText={v => setField('phone', v)}
+              placeholder="+254 700 000000" placeholderTextColor={colors.border} keyboardType="phone-pad"
+              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Concerns */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Concerns (select all that apply)</Text>
-        <View style={styles.chips}>
-          {CONCERNS.map(c => (
-            <TouchableOpacity key={c} onPress={() => toggleConcern(c)} activeOpacity={0.8}
-              style={[styles.chip, {
-                backgroundColor: selectedConcerns.includes(c) ? colors.accent + '20' : colors.surface,
-                borderColor:     selectedConcerns.includes(c) ? colors.accent : colors.border,
-              }]}>
-              <Text style={{ fontSize: 12, color: selectedConcerns.includes(c) ? colors.accent : colors.mutedForeground, fontWeight: '500' as const }}>
-                {c}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.row}>
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Country *</Text>
+            <View style={styles.chipsWrap}>
+              {COUNTRIES.map(c => (
+                <TouchableOpacity key={c} onPress={() => setField('country', c)}
+                  style={[styles.chip, { backgroundColor: draft.country === c ? colors.primary : colors.surface, borderColor: draft.country === c ? colors.primary : colors.border }]}>
+                  <Text style={{ fontSize: 13, fontWeight: '500', color: draft.country === c ? '#fff' : colors.text }}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
-        <TextInput
-          value={extraConcerns}
-          onChangeText={setExtraConcerns}
-          placeholder="Any other concerns..."
-          placeholderTextColor={colors.border}
-          multiline
-          numberOfLines={3}
-          style={[styles.textarea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
-        />
-      </View>
 
-      {/* Media attachments */}
-      <View style={styles.section}>
-        <MediaPicker items={media} onChange={setMedia} maxItems={4} label="Attach Photos & Videos  (optional)" />
-        <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-          Photos or short videos of your water sample or source help our technician prepare.
-        </Text>
-        {droppedAttachments > 0 && (
-          <View style={[styles.errorBox, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
-            <Ionicons name="warning-outline" size={16} color="#D97706" />
-            <Text style={[styles.errorText, { color: '#92400E' }]}>
-              {droppedAttachments === 1
-                ? '1 attachment from your saved draft could not be found — please re-add it.'
-                : `${droppedAttachments} attachments from your saved draft could not be found — please re-add them.`}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Town / area *</Text>
+          <TextInput
+            value={draft.area} onChangeText={v => setField('area', v)}
+            placeholder="Nairobi – Westlands" placeholderTextColor={colors.border}
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Where does your water come from? *</Text>
+          <View style={styles.colChips}>
+            {SOURCES.map(s => (
+              <TouchableOpacity key={s.value} onPress={() => setField('source', s.value)}
+                style={[styles.fullChip, { backgroundColor: draft.source === s.value ? colors.primary : colors.surface, borderColor: draft.source === s.value ? colors.primary : colors.border }]}>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: draft.source === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>What bothers you most? *</Text>
+          <View style={styles.colChips}>
+            {CONCERNS.map(s => (
+              <TouchableOpacity key={s.value} onPress={() => setField('concern', s.value)}
+                style={[styles.fullChip, { backgroundColor: draft.concern === s.value ? colors.primary : colors.surface, borderColor: draft.concern === s.value ? colors.primary : colors.border }]}>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: draft.concern === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>This is for *</Text>
+          <View style={styles.chipsWrap}>
+            {SETTINGS.map(s => (
+              <TouchableOpacity key={s.value} onPress={() => setField('setting', s.value)}
+                style={[styles.chip, { backgroundColor: draft.setting === s.value ? colors.primary : colors.surface, borderColor: draft.setting === s.value ? colors.primary : colors.border }]}>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: draft.setting === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {!token && (
+          <TouchableOpacity activeOpacity={0.8} onPress={() => setField('consent', !draft.consent)} style={styles.consentRow}>
+            <View style={[styles.checkbox, { backgroundColor: draft.consent ? colors.primary : colors.surface, borderColor: draft.consent ? colors.primary : colors.border }]}>
+              {draft.consent && <Ionicons name="checkmark" size={16} color="#fff" />}
+            </View>
+            <Text style={[styles.consentText, { color: colors.mutedForeground }]}>
+              Send my result and let an Ultra Clear specialist follow up on WhatsApp. I can opt out any time.
             </Text>
+          </TouchableOpacity>
+        )}
+
+        {!!error && (
+          <View style={[styles.errorBox, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '30' }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.destructive} />
+            <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
           </View>
         )}
+
+        <TouchableOpacity onPress={submit} disabled={submitting} style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}>
+          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Show my water reading</Text>}
+        </TouchableOpacity>
       </View>
-
-      {/* Inline error */}
-      {!!error && (
-        <View style={[styles.errorBox, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}>
-          <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
-          <Text style={[styles.errorText, { color: '#DC2626' }]}>{error}</Text>
-        </View>
-      )}
-
-      {/* Submit — guests are routed to sign-in (with the draft saved) instead */}
-      <TouchableOpacity onPress={submit} disabled={submitting}
-        style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}>
-        {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
-          <>
-            <Ionicons name={token ? 'calendar-outline' : 'lock-closed-outline'} size={18} color="#fff" />
-            <Text style={styles.submitBtnText}>{token ? 'Book Water Test' : 'Sign In to Book'}</Text>
-          </>
-        )}
-      </TouchableOpacity>
     </ScrollView>
   );
 }
 
+
+// ----------------------------------------------------------------------------
+// RESULT VIEW
+// ----------------------------------------------------------------------------
+interface ResultViewProps {
+  colors: any;
+  token: string | null;
+  assessment: InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated;
+  actionToken: string;
+  setActionToken: (tk: string) => void;
+  onBook: () => void;
+  onBack: () => void;
+  onHistory: () => void;
+  router: any;
+}
+
+function ResultView({ colors, token, assessment, actionToken, setActionToken, onBook, onBack, onHistory, router }: ResultViewProps) {
+  const result = assessment.result;
+  const isPublic = !token && 'resultToken' in assessment && assessment.resultToken;
+  const [verifyVisible, setVerifyVisible] = useState(false);
+
+  const handleWhatsApp = () => {
+    const text = `Hello Ultra Clear, here is my water check result.\nReference: ${assessment.reference}\nResult: Hardness ${result.bands.hardness}, Taste ${result.bands.taste}, Sediment ${result.bands.sediment}, Microbial ${result.bands.microbial}\nRecommendation: ${result.recommendation.name}`;
+    openWhatsApp(text);
+  };
+
+  const handleBookClick = () => {
+    if (isPublic && !actionToken) {
+      setVerifyVisible(true);
+    } else {
+      onBook();
+    }
+  };
+
+  const handleSaveToAccount = async () => {
+    if (isPublic) {
+      await AsyncStorage.setItem('pending_water_test_attach', JSON.stringify({ assessment, actionToken }));
+      router.push({ pathname: '/auth/login', params: { returnTo: '/water-test' } });
+    } else {
+      onHistory();
+    }
+  };
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+      <TouchableOpacity onPress={onBack} style={{ marginBottom: 16 }}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
+      </TouchableOpacity>
+
+      <View style={styles.resultHeader}>
+        <Text style={[styles.eyebrow, { color: colors.primary }]}>YOUR INDICATIVE READING</Text>
+        <Text style={[styles.rTitle, { color: colors.text }]}>Water profile</Text>
+        <Text style={[styles.rSub, { color: colors.mutedForeground }]}>Ref: {assessment.reference}</Text>
+      </View>
+
+      <View style={styles.bands}>
+        <BandBar name="Hardness & scale" level={result.bands.hardness} colors={colors} />
+        <BandBar name="Taste & odour" level={result.bands.taste} colors={colors} />
+        <BandBar name="Sediment & clarity" level={result.bands.sediment} colors={colors} />
+        <BandBar name="Microbial risk" level={result.bands.microbial} colors={colors} />
+      </View>
+
+      <View style={[styles.recBox, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
+        <Text style={[styles.eyebrow, { color: colors.primary }]}>BEST MATCH</Text>
+        <Text style={[styles.recName, { color: colors.text }]}>{result.recommendation.name}</Text>
+        <Text style={[styles.recWhy, { color: colors.mutedForeground }]}>{result.recommendation.explanation}</Text>
+      </View>
+
+      {result.areaFlag === 'rift_valley_fluoride' && (
+        <View style={[styles.flagBox, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
+          <Text style={[styles.flagText, { color: '#92400E' }]}>
+            <Text style={{ fontWeight: '700' }}>Rift Valley Flag: </Text>
+            Groundwater across the Rift Valley commonly carries elevated fluoride. That needs a laboratory test, not a field kit. We flag it for the technician so it is measured properly.
+          </Text>
+        </View>
+      )}
+
+      <View style={[styles.nextBox, { borderTopColor: colors.border }]}>
+        <Text style={[styles.nextTitle, { color: colors.text }]}>Next steps</Text>
+        <Text style={[styles.nextBody, { color: colors.mutedForeground }]}>
+          {result.serviceAvailable
+            ? 'A technician can test your actual water on-site and leave you the numbers whether or not you buy anything.'
+            : 'A specialist can send the right options for this profile on WhatsApp.'}
+        </Text>
+
+        {result.serviceAvailable && (
+          <TouchableOpacity onPress={handleBookClick} style={[styles.actionBtn, { backgroundColor: colors.primary }]}>
+             <Text style={styles.actionBtnText}>Book a physical water test</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity onPress={handleWhatsApp} style={[styles.actionBtn, { backgroundColor: '#25D366' }]}>
+           <Text style={styles.actionBtnText}>Send result on WhatsApp</Text>
+        </TouchableOpacity>
+
+        {isPublic && (
+          <TouchableOpacity onPress={handleSaveToAccount} style={[styles.ghostBtn, { borderColor: colors.primary }]}>
+             <Text style={[styles.ghostBtnText, { color: colors.primary }]}>Sign in to save to my account</Text>
+          </TouchableOpacity>
+        )}
+        {token && (
+          <TouchableOpacity onPress={onHistory} style={[styles.ghostBtn, { borderColor: colors.primary }]}>
+             <Text style={[styles.ghostBtnText, { color: colors.primary }]}>View in my account</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
+        {result.disclaimer || 'This is an indicative profile built from your answers and known conditions. It is not a laboratory analysis and is not a health assessment.'}
+      </Text>
+
+      <VerificationModal
+        visible={verifyVisible} assessmentId={assessment.assessmentId} colors={colors}
+        onClose={() => setVerifyVisible(false)}
+        onSuccess={(tk: string) => { setActionToken(tk); setVerifyVisible(false); onBook(); }}
+      />
+    </ScrollView>
+  );
+}
+
+function BandBar({ name, level, colors }: { name: string, level: string, colors: any }) {
+  const levels: Record<string, number> = { Low: 1, Moderate: 2, High: 3 };
+  const val = levels[level] || 1;
+  const pct = (val / 3) * 100;
+  const color = level === 'High' ? colors.destructive : level === 'Moderate' ? '#F59E0B' : colors.success;
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{name}</Text>
+        <Text style={{ fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color }}>{level}</Text>
+      </View>
+      <View style={{ height: 8, backgroundColor: colors.border, borderRadius: 4, overflow: 'hidden' }}>
+        <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 4 }} />
+      </View>
+    </View>
+  );
+}
+
+
+// ----------------------------------------------------------------------------
+// HISTORY VIEW
+// ----------------------------------------------------------------------------
+interface HistoryViewProps {
+  colors: any;
+  onBack: () => void;
+  token: string | null;
+}
+
+function HistoryView({ colors, onBack, token }: HistoryViewProps) {
+  const { data, isLoading, error } = useListAuthenticatedInstantWaterAssessments();
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={[styles.historyHeader, { backgroundColor: colors.primary }]}>
+        <TouchableOpacity onPress={onBack} style={{ padding: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.historyTitle}>Water Test History</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {!token ? (
+         <View style={{ padding: 24, alignItems: 'center' }}>
+            <Text style={{ color: colors.mutedForeground, textAlign: 'center' }}>You must be signed in to view history.</Text>
+         </View>
+      ) : isLoading ? (
+         <View style={{ padding: 40, alignItems: 'center' }}><ActivityIndicator color={colors.primary} /></View>
+      ) : error ? (
+         <View style={{ padding: 24 }}><Text style={{ color: colors.destructive }}>Failed to load history.</Text></View>
+      ) : data?.assessments.length === 0 ? (
+         <View style={{ padding: 40, alignItems: 'center' }}>
+            <Ionicons name="flask-outline" size={48} color={colors.border} />
+            <Text style={{ color: colors.mutedForeground, marginTop: 12 }}>No tests found.</Text>
+         </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          {data?.assessments.map((item: InstantWaterAssessment) => (
+            <View key={item.assessmentId} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{item.reference}</Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                  {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
+                </Text>
+              </View>
+              <View style={styles.historyBandsRow}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Hardness: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.hardness}</Text></Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Taste: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.taste}</Text></Text>
+              </View>
+              <View style={styles.historyBandsRow}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Sediment: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.sediment}</Text></Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Microbial: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.microbial}</Text></Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: colors.surface, marginTop: 10 }]}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.mutedForeground, textTransform: 'uppercase' }}>
+                  {item.serviceState.replace(/_/g, ' ')}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+
+// ----------------------------------------------------------------------------
+// BOOKING VIEW
+// ----------------------------------------------------------------------------
+interface BookingViewProps {
+  colors: any;
+  api: any;
+  assessment: InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated;
+  actionToken: string;
+  onBack: () => void;
+  onComplete: () => void;
+}
+
+function BookingView({ colors, api, assessment, actionToken, onBack, onComplete }: BookingViewProps) {
+  const [address, setAddress] = useState('');
+  const [time, setTime] = useState('');
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const bookMut = useRequestInstantWaterPhysicalTest();
+  const idempKeyRef = useRef(Crypto.randomUUID());
+
+  const submit = async () => {
+    if (!address.trim() || !time.trim()) {
+      setError("Please provide address and preferred time.");
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const uploaded = media.length
+        ? await uploadMediaItems(
+            media,
+            (meta) =>
+              api.requestUploadUrl({
+                ...meta,
+                assessmentId: assessment.assessmentId,
+                actionToken: actionToken || undefined,
+              })
+          )
+        : [];
+      const mediaReferences = uploaded.map(m => ({
+        reference: m.url,
+        mediaType: m.type === 'photo'
+          ? InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType.jpg
+          : InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType.mp4
+      }));
+
+      await bookMut.mutateAsync({
+        assessmentId: assessment.assessmentId,
+        data: {
+          idempotencyKey: idempKeyRef.current,
+          actionToken: actionToken || undefined,
+          serviceAddress: address.trim(),
+          preferredContactTime: time.trim(),
+          acknowledgement: true,
+          mediaReferences
+        }
+      });
+      idempKeyRef.current = Crypto.randomUUID(); // reset on success
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Booking failed.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <TouchableOpacity onPress={onBack} style={{ marginBottom: 16 }}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
+      </TouchableOpacity>
+
+      <Text style={[styles.rTitle, { color: colors.text, marginBottom: 8 }]}>Book Physical Test</Text>
+      <Text style={{ fontSize: 14, color: colors.mutedForeground, marginBottom: 24, lineHeight: 20 }}>
+        A certified technician will visit your location to perform precise measurements.
+      </Text>
+
+      <View style={styles.formContainer}>
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Service Address *</Text>
+          <TextInput
+            value={address} onChangeText={setAddress}
+            placeholder="House/Apt, Street, Estate" placeholderTextColor={colors.border}
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Preferred Contact Time *</Text>
+          <TextInput
+            value={time} onChangeText={setTime}
+            placeholder="e.g. Tomorrow morning, Weekdays after 4PM" placeholderTextColor={colors.border}
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
+          />
+        </View>
+
+        <View style={styles.field}>
+          <MediaPicker items={media} onChange={setMedia} maxItems={4} label="Attach Photos & Videos (optional)" />
+        </View>
+
+        {!!error && (
+          <View style={[styles.errorBox, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '30' }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.destructive} />
+            <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
+          </View>
+        )}
+
+        <TouchableOpacity onPress={submit} disabled={submitting} style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary, marginTop: 12 }]}>
+          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Confirm Booking</Text>}
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
+
+// ----------------------------------------------------------------------------
+// VERIFICATION MODAL
+// ----------------------------------------------------------------------------
+interface VerificationModalProps {
+  visible: boolean;
+  assessmentId: string;
+  onClose: () => void;
+  onSuccess: (tk: string) => void;
+  colors: any;
+}
+
+function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }: VerificationModalProps) {
+  const [step, setStep] = useState<'request' | 'confirm'>('request');
+  const [channel, setChannel] = useState<'whatsapp' | 'sms'>('whatsapp');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const reqMut = useRequestInstantWaterAssessmentVerification();
+  const confMut = useConfirmInstantWaterAssessmentVerification();
+  const idempKeyRef = useRef(Crypto.randomUUID());
+
+  useEffect(() => {
+    if (visible) { setStep('request'); setCode(''); setError(''); setChannel('whatsapp'); idempKeyRef.current = Crypto.randomUUID(); }
+  }, [visible]);
+
+  const handleRequest = async () => {
+    setBusy(true); setError('');
+    try {
+      await reqMut.mutateAsync({
+        assessmentId,
+        data: {
+          idempotencyKey: idempKeyRef.current,
+          channel,
+          smsConsent: channel === 'sms' ? true : undefined
+        }
+      });
+      setStep('confirm');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification request failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!code.trim()) { setError("Enter code"); return; }
+    setBusy(true); setError('');
+    try {
+      const res = await confMut.mutateAsync({ assessmentId, data: { code: code.trim() } });
+      if (res.verified) {
+        onSuccess(res.actionToken);
+      } else {
+        setError('Invalid code');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+          <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Verify your phone</Text>
+          <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
+            To authorize this physical test or attach it to your account, we need to quickly verify your number.
+          </Text>
+
+          {step === 'request' ? (
+             <View style={{ gap: 16 }}>
+               <View style={styles.colChips}>
+                 <TouchableOpacity onPress={() => setChannel('whatsapp')} style={[styles.fullChip, { backgroundColor: channel === 'whatsapp' ? colors.primary : colors.surface, borderColor: channel === 'whatsapp' ? colors.primary : colors.border }]}>
+                   <Ionicons name="logo-whatsapp" size={18} color={channel === 'whatsapp' ? '#fff' : colors.text} />
+                   <Text style={{ fontSize: 14, fontWeight: '600', color: channel === 'whatsapp' ? '#fff' : colors.text, marginLeft: 8 }}>Send via WhatsApp</Text>
+                 </TouchableOpacity>
+                 <TouchableOpacity onPress={() => setChannel('sms')} style={[styles.fullChip, { backgroundColor: channel === 'sms' ? colors.primary : colors.surface, borderColor: channel === 'sms' ? colors.primary : colors.border }]}>
+                   <Ionicons name="chatbubble-outline" size={18} color={channel === 'sms' ? '#fff' : colors.text} />
+                   <Text style={{ fontSize: 14, fontWeight: '600', color: channel === 'sms' ? '#fff' : colors.text, marginLeft: 8 }}>Send via SMS</Text>
+                 </TouchableOpacity>
+               </View>
+               {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
+               <TouchableOpacity onPress={handleRequest} disabled={busy} style={[styles.submitBtn, { backgroundColor: busy ? colors.muted : colors.primary }]}>
+                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Get Code</Text>}
+               </TouchableOpacity>
+             </View>
+          ) : (
+             <View style={{ gap: 16 }}>
+               <TextInput
+                 value={code} onChangeText={setCode} placeholder="6-digit code"
+                 keyboardType="number-pad" placeholderTextColor={colors.border}
+                 style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card, fontSize: 24, textAlign: 'center', letterSpacing: 4 }]}
+               />
+               {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
+               <TouchableOpacity onPress={handleConfirm} disabled={busy} style={[styles.submitBtn, { backgroundColor: busy ? colors.muted : colors.primary }]}>
+                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Confirm</Text>}
+               </TouchableOpacity>
+             </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+
+// ----------------------------------------------------------------------------
+// STYLES
+// ----------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  screen:       { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14 },
-  headerTitle:  { fontSize: 15, fontWeight: '700' as const },
-  headerSub:    { fontSize: 12, marginTop: 2 },
-  section:      { gap: 10 },
-  sectionTitle: { fontSize: 15, fontWeight: '600' as const },
-  field:        { gap: 4 },
-  fieldLabel:   { fontSize: 12, fontWeight: '500' as const },
-  input:        { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 },
-  chips:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip:         { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  textarea:     { borderWidth: 1, borderRadius: 10, padding: 14, fontSize: 14, lineHeight: 20, minHeight: 80, textAlignVertical: 'top' },
-  hint:         { fontSize: 12, lineHeight: 18 },
-  submitBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderRadius: 14, paddingVertical: 16 },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' as const },
-  errorBox:     { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderWidth: 1, borderRadius: 10, padding: 12 },
-  errorText:    { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
-  successIcon:  { width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center' },
-  successTitle: { fontSize: 24, fontWeight: '700' as const },
-  successDesc:  { fontSize: 15, lineHeight: 24, textAlign: 'center' },
-  refBox:       { width: '100%', borderWidth: 1, borderRadius: 12, padding: 16, alignItems: 'center', gap: 4 },
-  refLabel:     { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.5, textTransform: 'uppercase' },
-  refNumber:    { fontSize: 26, fontWeight: '800' as const, letterSpacing: 1 },
-  refHint:      { fontSize: 11, textAlign: 'center', marginTop: 2 },
-  doneBtn:      { width: '100%', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 48, justifyContent: 'center', alignItems: 'center', marginTop: 4 },
-  doneBtnText:  { color: '#fff', fontSize: 16, fontWeight: '700' as const },
-  gateBox:      { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 },
-  gateHeader:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  gateTitle:    { fontSize: 15, fontWeight: '700' as const },
-  gateText:     { fontSize: 13, lineHeight: 19 },
-  gateBtnRow:   { flexDirection: 'row', gap: 10 },
-  gateBtn:      { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
-  gateBtnAlt:   { backgroundColor: 'transparent', borderWidth: 1.5 },
-  gateBtnText:  { color: '#fff', fontSize: 14, fontWeight: '700' as const },
+  hero: { padding: 24, paddingTop: 40, paddingBottom: 32 },
+  eyebrow: { fontSize: 10, fontWeight: '800', color: '#00E5FF', letterSpacing: 1, marginBottom: 12 },
+  heroTitle: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 12, lineHeight: 34 },
+  heroLede: { fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 22 },
+  historyBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, gap: 6 },
+  historyBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+
+  formContainer: { padding: 20, gap: 20 },
+  row: { flexDirection: 'row', gap: 12 },
+  field: { flex: 1, gap: 6 },
+  label: { fontSize: 13, fontWeight: '600' },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  colChips: { gap: 8 },
+  fullChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
+
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 8 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  consentText: { flex: 1, fontSize: 13, lineHeight: 20 },
+
+  errorBox: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
+  errorText: { flex: 1, fontSize: 13 },
+
+  submitBtn: { paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  resultHeader: { alignItems: 'center', marginBottom: 32 },
+  rTitle: { fontSize: 24, fontWeight: '800', marginVertical: 4 },
+  rSub: { fontSize: 13 },
+  bands: { marginBottom: 24 },
+
+  recBox: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
+  recName: { fontSize: 18, fontWeight: '700', marginBottom: 6, marginTop: 4 },
+  recWhy: { fontSize: 14, lineHeight: 22 },
+
+  flagBox: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
+  flagText: { fontSize: 13, lineHeight: 20 },
+
+  nextBox: { paddingTop: 24, borderTopWidth: 1, gap: 12, marginTop: 8 },
+  nextTitle: { fontSize: 18, fontWeight: '700' },
+  nextBody: { fontSize: 14, lineHeight: 22, marginBottom: 8 },
+
+  actionBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  ghostBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
+  ghostBtnText: { fontSize: 15, fontWeight: '600' },
+
+  disclaimer: { fontSize: 11, lineHeight: 18, marginTop: 32, textAlign: 'center' },
+
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  historyTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  historyCard: { padding: 16, borderRadius: 12, borderWidth: 1 },
+  historyBandsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  statusPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20, minHeight: 300 },
+  modalClose: { position: 'absolute', top: 16, right: 16, zIndex: 10, padding: 8 },
+  modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
+  modalBody: { fontSize: 14, lineHeight: 20, marginBottom: 24 },
 });

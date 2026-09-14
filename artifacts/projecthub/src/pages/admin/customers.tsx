@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users, Search, ChevronLeft, ChevronRight, X,
-  Phone, Mail, Calendar, ShoppingBag, Wrench,
+  Phone, Mail, Calendar, ShoppingBag, Wrench, Droplets,
   Loader2, UserCircle2, Package, Download, KeyRound, Copy, Check,
   CheckCircle2,
 } from "lucide-react";
@@ -21,8 +21,11 @@ import {
 } from "@/components/ui/dialog";
 import { getAuthHeaders } from "@/lib/team-auth";
 import { isTeamAdmin } from "@/lib/team-auth";
+import { Link } from "wouter";
 import {
   issueUcTemporaryPassword,
+  useListProjectHubInstantWaterAssessments,
+  getListProjectHubInstantWaterAssessmentsQueryKey,
   type UcTemporaryPasswordInputChannel,
   type UcTemporaryPasswordResult,
   type UcCustomerDetail,
@@ -355,6 +358,12 @@ function CustomerDetailPanel({
     },
   });
 
+  const params = { customerId: customerId ?? undefined, limit: 5 };
+  const { data: waterTestsData, isLoading: isLoadingWaterTests, error: waterTestsError } = useListProjectHubInstantWaterAssessments(
+    params,
+    { query: { enabled: open && customerId !== null, queryKey: getListProjectHubInstantWaterAssessmentsQueryKey(params) } }
+  );
+
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -424,6 +433,59 @@ function CustomerDetailPanel({
                 <p className="text-xs text-muted-foreground mt-3">
                   Temporary passwords are available only for password-authenticated Companion accounts.
                 </p>
+              )}
+            </section>
+
+            {/* Instant Water Tests */}
+            <section className="pt-4 pb-5 border-b space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Droplets className="w-3.5 h-3.5" /> Instant Water Checks
+              </h3>
+              {isLoadingWaterTests ? (
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading...
+                </div>
+              ) : waterTestsError ? (
+                <p className="text-sm text-destructive">Failed to load water checks.</p>
+              ) : !waterTestsData || waterTestsData.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No instant water assessments linked to this account yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {waterTestsData.items.map((t) => (
+                    <div key={t.assessmentId} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <Link href="/water-tests" className="font-medium text-sm hover:underline text-primary line-clamp-1 block">
+                            {t.reference}
+                          </Link>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {t.createdAt ? fmtDate(t.createdAt) : ""} · {t.area}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge variant="outline" className="text-[10px] capitalize bg-muted/50 border-0">
+                            {t.serviceState.replace(/_/g, " ")}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground capitalize">
+                            {t.accountLinkState.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1 text-[11px] bg-muted/30 p-2 rounded-lg border">
+                        <div>Hardness: <span className="font-medium text-foreground">{t.bands.hardness}</span></div>
+                        <div>Taste: <span className="font-medium text-foreground">{t.bands.taste}</span></div>
+                        <div>Sediment: <span className="font-medium text-foreground">{t.bands.sediment}</span></div>
+                        <div>Microbial: <span className="font-medium text-foreground">{t.bands.microbial}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-xs mt-2 text-right">
+                    <Link href="/water-tests" className="text-muted-foreground hover:text-primary hover:underline">
+                      View all in queue →
+                    </Link>
+                  </div>
+                </div>
               )}
             </section>
 

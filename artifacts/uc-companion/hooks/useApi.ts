@@ -569,7 +569,7 @@ export function useApi() {
       media?: UCReviewMedia[];
     }) => post<UCReview>(`/api/uc/products/${productId}/reviews`, data),
     /** Step 1 of media upload: get a presigned PUT URL (requires sign-in). */
-    requestUploadUrl: (meta: { name: string; size: number; contentType: string }) =>
+    requestUploadUrl: (meta: { name: string; size: number; contentType: string; assessmentId?: string; actionToken?: string }) =>
       post<UploadUrlResponse>('/api/uc/uploads/request-url', meta),
 
     /** Admin: list team-uploaded media for a product. */

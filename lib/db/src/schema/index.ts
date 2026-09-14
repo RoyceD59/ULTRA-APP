@@ -68,3 +68,4 @@ export * from "./uc-water-impact";
 export * from "./uc-reward-conversion";
 export * from "./uc-locations";
 export * from "./uc-promotions";
+export * from "./instant-water-assessments";

@@ -5,6 +5,444 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type InstantWaterSource = typeof InstantWaterSource[keyof typeof InstantWaterSource];
+
+
+export const InstantWaterSource = {
+  municipal: 'municipal',
+  borehole: 'borehole',
+  shallow: 'shallow',
+  vendor: 'vendor',
+  bottled: 'bottled',
+  rain: 'rain',
+} as const;
+
+export type InstantWaterConcern = typeof InstantWaterConcern[keyof typeof InstantWaterConcern];
+
+
+export const InstantWaterConcern = {
+  scale: 'scale',
+  taste: 'taste',
+  cloudy: 'cloudy',
+  skin: 'skin',
+  safety: 'safety',
+  cost: 'cost',
+} as const;
+
+export type InstantWaterSetting = typeof InstantWaterSetting[keyof typeof InstantWaterSetting];
+
+
+export const InstantWaterSetting = {
+  home: 'home',
+  rental: 'rental',
+  salon: 'salon',
+  office: 'office',
+  hospitality: 'hospitality',
+  school: 'school',
+  resell: 'resell',
+} as const;
+
+export type InstantWaterAssessmentAnswersSymptom = typeof InstantWaterAssessmentAnswersSymptom[keyof typeof InstantWaterAssessmentAnswersSymptom];
+
+
+export const InstantWaterAssessmentAnswersSymptom = {
+  none: 'none',
+  scale: 'scale',
+  taste: 'taste',
+  cloudy: 'cloudy',
+  skin: 'skin',
+  safety: 'safety',
+} as const;
+
+export type InstantWaterAssessmentAnswersUseContext = typeof InstantWaterAssessmentAnswersUseContext[keyof typeof InstantWaterAssessmentAnswersUseContext];
+
+
+export const InstantWaterAssessmentAnswersUseContext = {
+  drinking: 'drinking',
+  cooking: 'cooking',
+  bathing: 'bathing',
+  mixed: 'mixed',
+} as const;
+
+export interface InstantWaterAssessmentAnswers {
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  country: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  area: string;
+  source: InstantWaterSource;
+  concern: InstantWaterConcern;
+  symptom?: InstantWaterAssessmentAnswersSymptom;
+  useContext?: InstantWaterAssessmentAnswersUseContext;
+  setting: InstantWaterSetting;
+}
+
+export type PublicInstantWaterAssessmentInputSourceAttribution = {
+  /** @maxLength 80 */
+  src?: string;
+  /** @maxLength 80 */
+  utmSource?: string;
+  /** @maxLength 80 */
+  utmMedium?: string;
+  /** @maxLength 80 */
+  utmCampaign?: string;
+  /** @maxLength 80 */
+  utmContent?: string;
+};
+
+export interface PublicInstantWaterAssessmentInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  firstName: string;
+  /**
+     * @minLength 7
+     * @maxLength 40
+     */
+  phone: string;
+  consent: true;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+  /** @maxLength 40 */
+  consentVersion?: string;
+  sourceAttribution?: PublicInstantWaterAssessmentInputSourceAttribution;
+  answers: InstantWaterAssessmentAnswers;
+}
+
+export interface AuthenticatedInstantWaterAssessmentInput {
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+  answers: InstantWaterAssessmentAnswers;
+  /** @maxLength 80 */
+  firstName?: string;
+  /** @maxLength 40 */
+  phone?: string;
+}
+
+export type InstantWaterBandsHardness = typeof InstantWaterBandsHardness[keyof typeof InstantWaterBandsHardness];
+
+
+export const InstantWaterBandsHardness = {
+  Low: 'Low',
+  Moderate: 'Moderate',
+  High: 'High',
+} as const;
+
+export type InstantWaterBandsTaste = typeof InstantWaterBandsTaste[keyof typeof InstantWaterBandsTaste];
+
+
+export const InstantWaterBandsTaste = {
+  Low: 'Low',
+  Moderate: 'Moderate',
+  High: 'High',
+} as const;
+
+export type InstantWaterBandsSediment = typeof InstantWaterBandsSediment[keyof typeof InstantWaterBandsSediment];
+
+
+export const InstantWaterBandsSediment = {
+  Low: 'Low',
+  Moderate: 'Moderate',
+  High: 'High',
+} as const;
+
+export type InstantWaterBandsMicrobial = typeof InstantWaterBandsMicrobial[keyof typeof InstantWaterBandsMicrobial];
+
+
+export const InstantWaterBandsMicrobial = {
+  Low: 'Low',
+  Moderate: 'Moderate',
+  High: 'High',
+} as const;
+
+export interface InstantWaterBands {
+  hardness: InstantWaterBandsHardness;
+  taste: InstantWaterBandsTaste;
+  sediment: InstantWaterBandsSediment;
+  microbial: InstantWaterBandsMicrobial;
+}
+
+export type PublicInstantWaterAssessmentResultRulesVersion = typeof PublicInstantWaterAssessmentResultRulesVersion[keyof typeof PublicInstantWaterAssessmentResultRulesVersion];
+
+
+export const PublicInstantWaterAssessmentResultRulesVersion = {
+  'instant-water-check-v1': 'instant-water-check-v1',
+} as const;
+
+export type PublicInstantWaterAssessmentResultAreaFlag = typeof PublicInstantWaterAssessmentResultAreaFlag[keyof typeof PublicInstantWaterAssessmentResultAreaFlag];
+
+
+export const PublicInstantWaterAssessmentResultAreaFlag = {
+  none: 'none',
+  hard_groundwater: 'hard_groundwater',
+  rift_valley_fluoride: 'rift_valley_fluoride',
+} as const;
+
+export type PublicInstantWaterAssessmentResultRecommendation = {
+  name: string;
+  explanation: string;
+};
+
+export interface PublicInstantWaterAssessmentResult {
+  reference: string;
+  rulesVersion: PublicInstantWaterAssessmentResultRulesVersion;
+  bands: InstantWaterBands;
+  summary: string;
+  areaFlag?: PublicInstantWaterAssessmentResultAreaFlag;
+  recommendation: PublicInstantWaterAssessmentResultRecommendation;
+  disclaimer: string;
+  serviceAvailable: boolean;
+  physicalTestStatus?: string;
+}
+
+export interface InstantWaterAssessmentCreated {
+  assessmentId: string;
+  /** @pattern ^WT-[A-Za-z0-9-]+$ */
+  reference: string;
+  resultToken: string;
+  resultTokenExpiresAt: string;
+  result: PublicInstantWaterAssessmentResult;
+}
+
+export interface AuthenticatedInstantWaterAssessmentCreated {
+  assessmentId: string;
+  /** @pattern ^WT-[A-Za-z0-9-]+$ */
+  reference: string;
+  result: PublicInstantWaterAssessmentResult;
+}
+
+export type InstantWaterVerificationRequestInputChannel = typeof InstantWaterVerificationRequestInputChannel[keyof typeof InstantWaterVerificationRequestInputChannel];
+
+
+export const InstantWaterVerificationRequestInputChannel = {
+  whatsapp: 'whatsapp',
+  sms: 'sms',
+} as const;
+
+export interface InstantWaterVerificationRequestInput {
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+  channel: InstantWaterVerificationRequestInputChannel;
+  /** Required when channel is sms */
+  smsConsent?: boolean;
+}
+
+export type InstantWaterVerificationRequestedChannel = typeof InstantWaterVerificationRequestedChannel[keyof typeof InstantWaterVerificationRequestedChannel];
+
+
+export const InstantWaterVerificationRequestedChannel = {
+  whatsapp: 'whatsapp',
+  sms: 'sms',
+} as const;
+
+export interface InstantWaterVerificationRequested {
+  accepted: boolean;
+  channel: InstantWaterVerificationRequestedChannel;
+  /** @minimum 0 */
+  retryAfterSeconds?: number;
+}
+
+export interface InstantWaterVerificationConfirmInput {
+  /** @pattern ^[0-9]{6}$ */
+  code: string;
+}
+
+export type InstantWaterVerificationConfirmedAccountLinkState = typeof InstantWaterVerificationConfirmedAccountLinkState[keyof typeof InstantWaterVerificationConfirmedAccountLinkState];
+
+
+export const InstantWaterVerificationConfirmedAccountLinkState = {
+  verified_unmatched: 'verified_unmatched',
+  attached: 'attached',
+  ambiguous_match: 'ambiguous_match',
+} as const;
+
+export interface InstantWaterVerificationConfirmed {
+  verified: boolean;
+  actionToken: string;
+  actionTokenExpiresAt: string;
+  accountLinkState?: InstantWaterVerificationConfirmedAccountLinkState;
+  /** One-time short-lived account handoff credential, returned only for verified_unmatched. */
+  handoffToken?: string;
+}
+
+export interface InstantWaterAssessmentHandoffConsumeInput {
+  /**
+     * @minLength 32
+     * @maxLength 200
+     */
+  handoffToken: string;
+}
+
+export interface InstantWaterAssessmentAttachInput {
+  actionToken?: string;
+  /** Public token may be combined with a signed-in account's already verified matching phone; it cannot authorize attachment alone. */
+  resultToken?: string;
+}
+
+export type InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType = typeof InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType[keyof typeof InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType];
+
+
+export const InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType = {
+  jpg: 'jpg',
+  png: 'png',
+  webp: 'webp',
+  mp4: 'mp4',
+  mov: 'mov',
+  webm: 'webm',
+} as const;
+
+export type InstantWaterPhysicalTestRequestInputMediaReferencesItem = {
+  /** @maxLength 300 */
+  reference: string;
+  mediaType: InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType;
+};
+
+export interface InstantWaterPhysicalTestRequestInput {
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+  actionToken?: string;
+  /**
+     * @minLength 5
+     * @maxLength 300
+     */
+  serviceAddress: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  preferredContactTime: string;
+  acknowledgement: true;
+  /** @maxItems 7 */
+  mediaReferences?: InstantWaterPhysicalTestRequestInputMediaReferencesItem[];
+}
+
+export type InstantWaterPhysicalTestResponseServiceState = typeof InstantWaterPhysicalTestResponseServiceState[keyof typeof InstantWaterPhysicalTestResponseServiceState];
+
+
+export const InstantWaterPhysicalTestResponseServiceState = {
+  instant_result_ready: 'instant_result_ready',
+  follow_up_requested: 'follow_up_requested',
+  physical_test_requested: 'physical_test_requested',
+  scheduled: 'scheduled',
+  completed: 'completed',
+  closed: 'closed',
+} as const;
+
+export interface InstantWaterPhysicalTestResponse {
+  assessmentId: string;
+  reference: string;
+  serviceState: InstantWaterPhysicalTestResponseServiceState;
+  ticketId?: string;
+}
+
+export interface InstantWaterAssessment {
+  assessmentId: string;
+  reference: string;
+  bands: InstantWaterBands;
+  accountLinkState: string;
+  serviceState: string;
+  createdAt: string;
+}
+
+export interface InstantWaterAssessmentHistory {
+  assessments: InstantWaterAssessment[];
+}
+
+export interface InstantWaterLatestSummary {
+  assessment: InstantWaterAssessment | null;
+}
+
+export interface ProjectHubInstantWaterSummary {
+  assessmentId: string;
+  reference: string;
+  firstName?: string;
+  maskedPhone?: string;
+  country?: string;
+  area: string;
+  source?: InstantWaterSource;
+  concern?: InstantWaterConcern;
+  bands: InstantWaterBands;
+  serviceState: string;
+  accountLinkState: string;
+  createdAt?: string;
+  updatedAt: string;
+}
+
+export interface ProjectHubInstantWaterList {
+  items: ProjectHubInstantWaterSummary[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export type ProjectHubInstantWaterDetailSourceAttribution = { [key: string]: unknown };
+
+export type ProjectHubInstantWaterMediaReferenceMediaType = typeof ProjectHubInstantWaterMediaReferenceMediaType[keyof typeof ProjectHubInstantWaterMediaReferenceMediaType];
+
+
+export const ProjectHubInstantWaterMediaReferenceMediaType = {
+  jpg: 'jpg',
+  png: 'png',
+  webp: 'webp',
+  mp4: 'mp4',
+  mov: 'mov',
+  webm: 'webm',
+} as const;
+
+export interface ProjectHubInstantWaterMediaReference {
+  /** Opaque private evidence reference; never a public object URL. */
+  reference: string;
+  mediaType: ProjectHubInstantWaterMediaReferenceMediaType;
+  /** Authorized private download route; not a public storage URL. */
+  readonly downloadUrl: string;
+}
+
+export type ProjectHubInstantWaterDetail = ProjectHubInstantWaterSummary & {
+  phone?: string;
+  consentVersion?: string;
+  sourceAttribution?: ProjectHubInstantWaterDetailSourceAttribution;
+  serviceAddress?: string;
+  preferredContactTime?: string;
+  mediaReferences?: ProjectHubInstantWaterMediaReference[];
+};
+
+export type ProjectHubInstantWaterUpdateInputServiceState = typeof ProjectHubInstantWaterUpdateInputServiceState[keyof typeof ProjectHubInstantWaterUpdateInputServiceState];
+
+
+export const ProjectHubInstantWaterUpdateInputServiceState = {
+  instant_result_ready: 'instant_result_ready',
+  follow_up_requested: 'follow_up_requested',
+  physical_test_requested: 'physical_test_requested',
+  scheduled: 'scheduled',
+  completed: 'completed',
+  closed: 'closed',
+} as const;
+
+export interface ProjectHubInstantWaterUpdateInput {
+  serviceState: ProjectHubInstantWaterUpdateInputServiceState;
+  expectedUpdatedAt: string;
+  /** @maxLength 2000 */
+  internalNote?: string;
+}
+
 export type UcOrderCustomerStageInputStage = typeof UcOrderCustomerStageInputStage[keyof typeof UcOrderCustomerStageInputStage];
 
 
@@ -1134,6 +1572,24 @@ export interface UcOfflineClient {
 export interface UcOfflineClientResponse {
   client: UcOfflineClient;
 }
+
+export type ListProjectHubInstantWaterAssessmentsParams = {
+status?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * Filter to assessments attached to this customer account.
+ * @minimum 1
+ */
+customerId?: number;
+};
 
 export type ListUcCustomersParams = {
 /**

@@ -11,6 +11,7 @@ import LoginPage from '@/pages/login';
 import RegisterPage from '@/pages/register';
 import ForgotPasswordPage from '@/pages/forgot-password';
 import ResetPasswordPage from '@/pages/reset-password';
+import WaterCheckPage from '@/pages/water-check';
 import Dashboard from '@/pages/dashboard';
 import Projects from '@/pages/projects';
 import ProjectDetail from '@/pages/project-detail';
@@ -90,6 +91,7 @@ function Router() {
       <Route path="/register" component={RegisterPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/water-check" component={WaterCheckPage} />
       <Route>
         <AuthGuard>
           <AppLayout>

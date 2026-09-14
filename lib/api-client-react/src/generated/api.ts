@@ -34,6 +34,8 @@ import type {
   AnthropicError,
   AnthropicMessage,
   AnthropicMessageInput,
+  AuthenticatedInstantWaterAssessmentCreated,
+  AuthenticatedInstantWaterAssessmentInput,
   ChangePasscodeInput,
   ChangePasscodeResult,
   ClearResolvedRegistrations200,
@@ -51,6 +53,18 @@ import type {
   ExportUcCustomersParams,
   GetDashboardActivityParams,
   HealthStatus,
+  InstantWaterAssessment,
+  InstantWaterAssessmentAttachInput,
+  InstantWaterAssessmentCreated,
+  InstantWaterAssessmentHandoffConsumeInput,
+  InstantWaterAssessmentHistory,
+  InstantWaterLatestSummary,
+  InstantWaterPhysicalTestRequestInput,
+  InstantWaterPhysicalTestResponse,
+  InstantWaterVerificationConfirmInput,
+  InstantWaterVerificationConfirmed,
+  InstantWaterVerificationRequestInput,
+  InstantWaterVerificationRequested,
   IntegrationsSettings,
   IntegrationsSettingsInput,
   InventoryList,
@@ -58,6 +72,7 @@ import type {
   InventoryUpdateResult,
   InventoryWishlistDemand,
   ListNotificationLogsParams,
+  ListProjectHubInstantWaterAssessmentsParams,
   ListTasksParams,
   ListUcAdminLocations200,
   ListUcCustomersParams,
@@ -72,11 +87,16 @@ import type {
   NotificationLog,
   OkResponse,
   Project,
+  ProjectHubInstantWaterDetail,
+  ProjectHubInstantWaterList,
+  ProjectHubInstantWaterUpdateInput,
   ProjectInput,
   ProjectSummary,
   ProjectUpdate,
   ProjectWithProgress,
   PublicActionableError,
+  PublicInstantWaterAssessmentInput,
+  PublicInstantWaterAssessmentResult,
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
@@ -139,6 +159,971 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getCreatePublicInstantWaterAssessmentUrl = () => {
+
+
+
+
+  return `/api/water-check/assessments`
+}
+
+/**
+ * @summary Create a public instant water assessment
+ */
+export const createPublicInstantWaterAssessment = async (publicInstantWaterAssessmentInput: PublicInstantWaterAssessmentInput, options?: RequestInit): Promise<InstantWaterAssessmentCreated> => {
+
+  return customFetch<InstantWaterAssessmentCreated>(getCreatePublicInstantWaterAssessmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicInstantWaterAssessmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePublicInstantWaterAssessmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPublicInstantWaterAssessment>>, TError,{data: BodyType<PublicInstantWaterAssessmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPublicInstantWaterAssessment>>, TError,{data: BodyType<PublicInstantWaterAssessmentInput>}, TContext> => {
+
+const mutationKey = ['createPublicInstantWaterAssessment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPublicInstantWaterAssessment>>, {data: BodyType<PublicInstantWaterAssessmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPublicInstantWaterAssessment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePublicInstantWaterAssessmentMutationResult = NonNullable<Awaited<ReturnType<typeof createPublicInstantWaterAssessment>>>
+    export type CreatePublicInstantWaterAssessmentMutationBody = BodyType<PublicInstantWaterAssessmentInput>
+    export type CreatePublicInstantWaterAssessmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a public instant water assessment
+ */
+export const useCreatePublicInstantWaterAssessment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPublicInstantWaterAssessment>>, TError,{data: BodyType<PublicInstantWaterAssessmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPublicInstantWaterAssessment>>,
+        TError,
+        {data: BodyType<PublicInstantWaterAssessmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePublicInstantWaterAssessmentMutationOptions(options));
+    }
+
+export const getCreateAuthenticatedInstantWaterAssessmentUrl = () => {
+
+
+
+
+  return `/api/uc/water-check/assessments`
+}
+
+/**
+ * @summary Create an instant water assessment for the authenticated customer
+ */
+export const createAuthenticatedInstantWaterAssessment = async (authenticatedInstantWaterAssessmentInput: AuthenticatedInstantWaterAssessmentInput, options?: RequestInit): Promise<AuthenticatedInstantWaterAssessmentCreated> => {
+
+  return customFetch<AuthenticatedInstantWaterAssessmentCreated>(getCreateAuthenticatedInstantWaterAssessmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authenticatedInstantWaterAssessmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAuthenticatedInstantWaterAssessmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAuthenticatedInstantWaterAssessment>>, TError,{data: BodyType<AuthenticatedInstantWaterAssessmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAuthenticatedInstantWaterAssessment>>, TError,{data: BodyType<AuthenticatedInstantWaterAssessmentInput>}, TContext> => {
+
+const mutationKey = ['createAuthenticatedInstantWaterAssessment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAuthenticatedInstantWaterAssessment>>, {data: BodyType<AuthenticatedInstantWaterAssessmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAuthenticatedInstantWaterAssessment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAuthenticatedInstantWaterAssessmentMutationResult = NonNullable<Awaited<ReturnType<typeof createAuthenticatedInstantWaterAssessment>>>
+    export type CreateAuthenticatedInstantWaterAssessmentMutationBody = BodyType<AuthenticatedInstantWaterAssessmentInput>
+    export type CreateAuthenticatedInstantWaterAssessmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an instant water assessment for the authenticated customer
+ */
+export const useCreateAuthenticatedInstantWaterAssessment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAuthenticatedInstantWaterAssessment>>, TError,{data: BodyType<AuthenticatedInstantWaterAssessmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAuthenticatedInstantWaterAssessment>>,
+        TError,
+        {data: BodyType<AuthenticatedInstantWaterAssessmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAuthenticatedInstantWaterAssessmentMutationOptions(options));
+    }
+
+export const getGetPublicInstantWaterAssessmentResultUrl = (token: string,) => {
+
+
+
+
+  return `/api/water-check/results/${token}`
+}
+
+/**
+ * @summary Fetch a redacted instant water result by its public token
+ */
+export const getPublicInstantWaterAssessmentResult = async (token: string, options?: RequestInit): Promise<PublicInstantWaterAssessmentResult> => {
+
+  return customFetch<PublicInstantWaterAssessmentResult>(getGetPublicInstantWaterAssessmentResultUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicInstantWaterAssessmentResultQueryKey = (token: string,) => {
+    return [
+    `/api/water-check/results/${token}`
+    ] as const;
+    }
+
+
+export const getGetPublicInstantWaterAssessmentResultQueryOptions = <TData = Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>, TError = ErrorType<void>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicInstantWaterAssessmentResultQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>> = ({ signal }) => getPublicInstantWaterAssessmentResult(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicInstantWaterAssessmentResultQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>>
+export type GetPublicInstantWaterAssessmentResultQueryError = ErrorType<void>
+
+
+/**
+ * @summary Fetch a redacted instant water result by its public token
+ */
+
+export function useGetPublicInstantWaterAssessmentResult<TData = Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>, TError = ErrorType<void>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicInstantWaterAssessmentResult>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicInstantWaterAssessmentResultQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestInstantWaterAssessmentVerificationUrl = (assessmentId: string,) => {
+
+
+
+
+  return `/api/water-check/assessments/${assessmentId}/verification/request`
+}
+
+/**
+ * @summary Request a phone verification code for one assessment
+ */
+export const requestInstantWaterAssessmentVerification = async (assessmentId: string,
+    instantWaterVerificationRequestInput: InstantWaterVerificationRequestInput, options?: RequestInit): Promise<InstantWaterVerificationRequested> => {
+
+  return customFetch<InstantWaterVerificationRequested>(getRequestInstantWaterAssessmentVerificationUrl(assessmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(instantWaterVerificationRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestInstantWaterAssessmentVerificationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestInstantWaterAssessmentVerification>>, TError,{assessmentId: string;data: BodyType<InstantWaterVerificationRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestInstantWaterAssessmentVerification>>, TError,{assessmentId: string;data: BodyType<InstantWaterVerificationRequestInput>}, TContext> => {
+
+const mutationKey = ['requestInstantWaterAssessmentVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestInstantWaterAssessmentVerification>>, {assessmentId: string;data: BodyType<InstantWaterVerificationRequestInput>}> = (props) => {
+          const {assessmentId,data} = props ?? {};
+
+          return  requestInstantWaterAssessmentVerification(assessmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestInstantWaterAssessmentVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof requestInstantWaterAssessmentVerification>>>
+    export type RequestInstantWaterAssessmentVerificationMutationBody = BodyType<InstantWaterVerificationRequestInput>
+    export type RequestInstantWaterAssessmentVerificationMutationError = ErrorType<void>
+
+    /**
+ * @summary Request a phone verification code for one assessment
+ */
+export const useRequestInstantWaterAssessmentVerification = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestInstantWaterAssessmentVerification>>, TError,{assessmentId: string;data: BodyType<InstantWaterVerificationRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestInstantWaterAssessmentVerification>>,
+        TError,
+        {assessmentId: string;data: BodyType<InstantWaterVerificationRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestInstantWaterAssessmentVerificationMutationOptions(options));
+    }
+
+export const getConfirmInstantWaterAssessmentVerificationUrl = (assessmentId: string,) => {
+
+
+
+
+  return `/api/water-check/assessments/${assessmentId}/verification/confirm`
+}
+
+/**
+ * @summary Confirm the short-lived phone verification code
+ */
+export const confirmInstantWaterAssessmentVerification = async (assessmentId: string,
+    instantWaterVerificationConfirmInput: InstantWaterVerificationConfirmInput, options?: RequestInit): Promise<InstantWaterVerificationConfirmed> => {
+
+  return customFetch<InstantWaterVerificationConfirmed>(getConfirmInstantWaterAssessmentVerificationUrl(assessmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(instantWaterVerificationConfirmInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmInstantWaterAssessmentVerificationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmInstantWaterAssessmentVerification>>, TError,{assessmentId: string;data: BodyType<InstantWaterVerificationConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmInstantWaterAssessmentVerification>>, TError,{assessmentId: string;data: BodyType<InstantWaterVerificationConfirmInput>}, TContext> => {
+
+const mutationKey = ['confirmInstantWaterAssessmentVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmInstantWaterAssessmentVerification>>, {assessmentId: string;data: BodyType<InstantWaterVerificationConfirmInput>}> = (props) => {
+          const {assessmentId,data} = props ?? {};
+
+          return  confirmInstantWaterAssessmentVerification(assessmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmInstantWaterAssessmentVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof confirmInstantWaterAssessmentVerification>>>
+    export type ConfirmInstantWaterAssessmentVerificationMutationBody = BodyType<InstantWaterVerificationConfirmInput>
+    export type ConfirmInstantWaterAssessmentVerificationMutationError = ErrorType<void>
+
+    /**
+ * @summary Confirm the short-lived phone verification code
+ */
+export const useConfirmInstantWaterAssessmentVerification = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmInstantWaterAssessmentVerification>>, TError,{assessmentId: string;data: BodyType<InstantWaterVerificationConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmInstantWaterAssessmentVerification>>,
+        TError,
+        {assessmentId: string;data: BodyType<InstantWaterVerificationConfirmInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmInstantWaterAssessmentVerificationMutationOptions(options));
+    }
+
+export const getConsumeInstantWaterAssessmentHandoffUrl = () => {
+
+
+
+
+  return `/api/water-check/handoff/consume`
+}
+
+/**
+ * @summary Securely attach a verified unmatched assessment to the signed-in customer
+ */
+export const consumeInstantWaterAssessmentHandoff = async (instantWaterAssessmentHandoffConsumeInput: InstantWaterAssessmentHandoffConsumeInput, options?: RequestInit): Promise<InstantWaterAssessment> => {
+
+  return customFetch<InstantWaterAssessment>(getConsumeInstantWaterAssessmentHandoffUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(instantWaterAssessmentHandoffConsumeInput)
+  }
+);}
+
+
+
+
+
+export const getConsumeInstantWaterAssessmentHandoffMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof consumeInstantWaterAssessmentHandoff>>, TError,{data: BodyType<InstantWaterAssessmentHandoffConsumeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof consumeInstantWaterAssessmentHandoff>>, TError,{data: BodyType<InstantWaterAssessmentHandoffConsumeInput>}, TContext> => {
+
+const mutationKey = ['consumeInstantWaterAssessmentHandoff'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof consumeInstantWaterAssessmentHandoff>>, {data: BodyType<InstantWaterAssessmentHandoffConsumeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  consumeInstantWaterAssessmentHandoff(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConsumeInstantWaterAssessmentHandoffMutationResult = NonNullable<Awaited<ReturnType<typeof consumeInstantWaterAssessmentHandoff>>>
+    export type ConsumeInstantWaterAssessmentHandoffMutationBody = BodyType<InstantWaterAssessmentHandoffConsumeInput>
+    export type ConsumeInstantWaterAssessmentHandoffMutationError = ErrorType<void>
+
+    /**
+ * @summary Securely attach a verified unmatched assessment to the signed-in customer
+ */
+export const useConsumeInstantWaterAssessmentHandoff = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof consumeInstantWaterAssessmentHandoff>>, TError,{data: BodyType<InstantWaterAssessmentHandoffConsumeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof consumeInstantWaterAssessmentHandoff>>,
+        TError,
+        {data: BodyType<InstantWaterAssessmentHandoffConsumeInput>},
+        TContext
+      > => {
+      return useMutation(getConsumeInstantWaterAssessmentHandoffMutationOptions(options));
+    }
+
+export const getAttachInstantWaterAssessmentUrl = (assessmentId: string,) => {
+
+
+
+
+  return `/api/uc/water-check/assessments/${assessmentId}/attach`
+}
+
+/**
+ * @summary Attach one verified public assessment to the signed-in customer
+ */
+export const attachInstantWaterAssessment = async (assessmentId: string,
+    instantWaterAssessmentAttachInput: InstantWaterAssessmentAttachInput, options?: RequestInit): Promise<InstantWaterAssessment> => {
+
+  return customFetch<InstantWaterAssessment>(getAttachInstantWaterAssessmentUrl(assessmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(instantWaterAssessmentAttachInput)
+  }
+);}
+
+
+
+
+
+export const getAttachInstantWaterAssessmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachInstantWaterAssessment>>, TError,{assessmentId: string;data: BodyType<InstantWaterAssessmentAttachInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof attachInstantWaterAssessment>>, TError,{assessmentId: string;data: BodyType<InstantWaterAssessmentAttachInput>}, TContext> => {
+
+const mutationKey = ['attachInstantWaterAssessment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof attachInstantWaterAssessment>>, {assessmentId: string;data: BodyType<InstantWaterAssessmentAttachInput>}> = (props) => {
+          const {assessmentId,data} = props ?? {};
+
+          return  attachInstantWaterAssessment(assessmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AttachInstantWaterAssessmentMutationResult = NonNullable<Awaited<ReturnType<typeof attachInstantWaterAssessment>>>
+    export type AttachInstantWaterAssessmentMutationBody = BodyType<InstantWaterAssessmentAttachInput>
+    export type AttachInstantWaterAssessmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Attach one verified public assessment to the signed-in customer
+ */
+export const useAttachInstantWaterAssessment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachInstantWaterAssessment>>, TError,{assessmentId: string;data: BodyType<InstantWaterAssessmentAttachInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof attachInstantWaterAssessment>>,
+        TError,
+        {assessmentId: string;data: BodyType<InstantWaterAssessmentAttachInput>},
+        TContext
+      > => {
+      return useMutation(getAttachInstantWaterAssessmentMutationOptions(options));
+    }
+
+export const getRequestInstantWaterPhysicalTestUrl = (assessmentId: string,) => {
+
+
+
+
+  return `/api/uc/water-check/assessments/${assessmentId}/physical-test`
+}
+
+/**
+ * @summary Request the physical-test stage on the existing assessment ticket
+ */
+export const requestInstantWaterPhysicalTest = async (assessmentId: string,
+    instantWaterPhysicalTestRequestInput: InstantWaterPhysicalTestRequestInput, options?: RequestInit): Promise<InstantWaterPhysicalTestResponse> => {
+
+  return customFetch<InstantWaterPhysicalTestResponse>(getRequestInstantWaterPhysicalTestUrl(assessmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(instantWaterPhysicalTestRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestInstantWaterPhysicalTestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestInstantWaterPhysicalTest>>, TError,{assessmentId: string;data: BodyType<InstantWaterPhysicalTestRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestInstantWaterPhysicalTest>>, TError,{assessmentId: string;data: BodyType<InstantWaterPhysicalTestRequestInput>}, TContext> => {
+
+const mutationKey = ['requestInstantWaterPhysicalTest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestInstantWaterPhysicalTest>>, {assessmentId: string;data: BodyType<InstantWaterPhysicalTestRequestInput>}> = (props) => {
+          const {assessmentId,data} = props ?? {};
+
+          return  requestInstantWaterPhysicalTest(assessmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestInstantWaterPhysicalTestMutationResult = NonNullable<Awaited<ReturnType<typeof requestInstantWaterPhysicalTest>>>
+    export type RequestInstantWaterPhysicalTestMutationBody = BodyType<InstantWaterPhysicalTestRequestInput>
+    export type RequestInstantWaterPhysicalTestMutationError = ErrorType<void>
+
+    /**
+ * @summary Request the physical-test stage on the existing assessment ticket
+ */
+export const useRequestInstantWaterPhysicalTest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestInstantWaterPhysicalTest>>, TError,{assessmentId: string;data: BodyType<InstantWaterPhysicalTestRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestInstantWaterPhysicalTest>>,
+        TError,
+        {assessmentId: string;data: BodyType<InstantWaterPhysicalTestRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestInstantWaterPhysicalTestMutationOptions(options));
+    }
+
+export const getListAuthenticatedInstantWaterAssessmentsUrl = () => {
+
+
+
+
+  return `/api/uc/me/water-check/assessments`
+}
+
+/**
+ * @summary List assessments owned by the authenticated customer
+ */
+export const listAuthenticatedInstantWaterAssessments = async ( options?: RequestInit): Promise<InstantWaterAssessmentHistory> => {
+
+  return customFetch<InstantWaterAssessmentHistory>(getListAuthenticatedInstantWaterAssessmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAuthenticatedInstantWaterAssessmentsQueryKey = () => {
+    return [
+    `/api/uc/me/water-check/assessments`
+    ] as const;
+    }
+
+
+export const getListAuthenticatedInstantWaterAssessmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuthenticatedInstantWaterAssessmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>> = ({ signal }) => listAuthenticatedInstantWaterAssessments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAuthenticatedInstantWaterAssessmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>>
+export type ListAuthenticatedInstantWaterAssessmentsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List assessments owned by the authenticated customer
+ */
+
+export function useListAuthenticatedInstantWaterAssessments<TData = Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAuthenticatedInstantWaterAssessments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAuthenticatedInstantWaterAssessmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAuthenticatedLatestInstantWaterAssessmentUrl = () => {
+
+
+
+
+  return `/api/uc/me/water-check/latest`
+}
+
+/**
+ * @summary Get the latest owned assessment summary for Companion chat context
+ */
+export const getAuthenticatedLatestInstantWaterAssessment = async ( options?: RequestInit): Promise<InstantWaterLatestSummary> => {
+
+  return customFetch<InstantWaterLatestSummary>(getGetAuthenticatedLatestInstantWaterAssessmentUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthenticatedLatestInstantWaterAssessmentQueryKey = () => {
+    return [
+    `/api/uc/me/water-check/latest`
+    ] as const;
+    }
+
+
+export const getGetAuthenticatedLatestInstantWaterAssessmentQueryOptions = <TData = Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthenticatedLatestInstantWaterAssessmentQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>> = ({ signal }) => getAuthenticatedLatestInstantWaterAssessment({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthenticatedLatestInstantWaterAssessmentQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>>
+export type GetAuthenticatedLatestInstantWaterAssessmentQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the latest owned assessment summary for Companion chat context
+ */
+
+export function useGetAuthenticatedLatestInstantWaterAssessment<TData = Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthenticatedLatestInstantWaterAssessment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthenticatedLatestInstantWaterAssessmentQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListProjectHubInstantWaterAssessmentsUrl = (params?: ListProjectHubInstantWaterAssessmentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/water-checks?${stringifiedParams}` : `/api/uc/admin/water-checks`
+}
+
+/**
+ * @summary List instant water assessments for ProjectHub
+ */
+export const listProjectHubInstantWaterAssessments = async (params?: ListProjectHubInstantWaterAssessmentsParams, options?: RequestInit): Promise<ProjectHubInstantWaterList> => {
+
+  return customFetch<ProjectHubInstantWaterList>(getListProjectHubInstantWaterAssessmentsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProjectHubInstantWaterAssessmentsQueryKey = (params?: ListProjectHubInstantWaterAssessmentsParams,) => {
+    return [
+    `/api/uc/admin/water-checks`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProjectHubInstantWaterAssessmentsQueryOptions = <TData = Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>, TError = ErrorType<void>>(params?: ListProjectHubInstantWaterAssessmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProjectHubInstantWaterAssessmentsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>> = ({ signal }) => listProjectHubInstantWaterAssessments(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProjectHubInstantWaterAssessmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>>
+export type ListProjectHubInstantWaterAssessmentsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List instant water assessments for ProjectHub
+ */
+
+export function useListProjectHubInstantWaterAssessments<TData = Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>, TError = ErrorType<void>>(
+ params?: ListProjectHubInstantWaterAssessmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProjectHubInstantWaterAssessments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProjectHubInstantWaterAssessmentsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProjectHubInstantWaterAssessmentUrl = (assessmentId: string,) => {
+
+
+
+
+  return `/api/uc/admin/water-checks/${assessmentId}`
+}
+
+/**
+ * @summary View one instant water assessment and its ticket in ProjectHub
+ */
+export const getProjectHubInstantWaterAssessment = async (assessmentId: string, options?: RequestInit): Promise<ProjectHubInstantWaterDetail> => {
+
+  return customFetch<ProjectHubInstantWaterDetail>(getGetProjectHubInstantWaterAssessmentUrl(assessmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProjectHubInstantWaterAssessmentQueryKey = (assessmentId: string,) => {
+    return [
+    `/api/uc/admin/water-checks/${assessmentId}`
+    ] as const;
+    }
+
+
+export const getGetProjectHubInstantWaterAssessmentQueryOptions = <TData = Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>, TError = ErrorType<void>>(assessmentId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProjectHubInstantWaterAssessmentQueryKey(assessmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>> = ({ signal }) => getProjectHubInstantWaterAssessment(assessmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: assessmentId !== null && assessmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProjectHubInstantWaterAssessmentQueryResult = NonNullable<Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>>
+export type GetProjectHubInstantWaterAssessmentQueryError = ErrorType<void>
+
+
+/**
+ * @summary View one instant water assessment and its ticket in ProjectHub
+ */
+
+export function useGetProjectHubInstantWaterAssessment<TData = Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>, TError = ErrorType<void>>(
+ assessmentId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProjectHubInstantWaterAssessment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProjectHubInstantWaterAssessmentQueryOptions(assessmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateProjectHubInstantWaterAssessmentUrl = (assessmentId: string,) => {
+
+
+
+
+  return `/api/uc/admin/water-checks/${assessmentId}`
+}
+
+/**
+ * @summary Update an authorized operational water-test state
+ */
+export const updateProjectHubInstantWaterAssessment = async (assessmentId: string,
+    projectHubInstantWaterUpdateInput: ProjectHubInstantWaterUpdateInput, options?: RequestInit): Promise<ProjectHubInstantWaterDetail> => {
+
+  return customFetch<ProjectHubInstantWaterDetail>(getUpdateProjectHubInstantWaterAssessmentUrl(assessmentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(projectHubInstantWaterUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProjectHubInstantWaterAssessmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProjectHubInstantWaterAssessment>>, TError,{assessmentId: string;data: BodyType<ProjectHubInstantWaterUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProjectHubInstantWaterAssessment>>, TError,{assessmentId: string;data: BodyType<ProjectHubInstantWaterUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateProjectHubInstantWaterAssessment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProjectHubInstantWaterAssessment>>, {assessmentId: string;data: BodyType<ProjectHubInstantWaterUpdateInput>}> = (props) => {
+          const {assessmentId,data} = props ?? {};
+
+          return  updateProjectHubInstantWaterAssessment(assessmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProjectHubInstantWaterAssessmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateProjectHubInstantWaterAssessment>>>
+    export type UpdateProjectHubInstantWaterAssessmentMutationBody = BodyType<ProjectHubInstantWaterUpdateInput>
+    export type UpdateProjectHubInstantWaterAssessmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Update an authorized operational water-test state
+ */
+export const useUpdateProjectHubInstantWaterAssessment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProjectHubInstantWaterAssessment>>, TError,{assessmentId: string;data: BodyType<ProjectHubInstantWaterUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProjectHubInstantWaterAssessment>>,
+        TError,
+        {assessmentId: string;data: BodyType<ProjectHubInstantWaterUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateProjectHubInstantWaterAssessmentMutationOptions(options));
+    }
 
 export const getUpdateUcOrderCustomerStageUrl = (id: number,) => {
 

@@ -33,6 +33,7 @@ import adminIntegrationsRouter from "./admin-integrations.js";
 import adminInventorySettingsRouter from "./admin-inventory-settings.js";
 import ucRewardsRouter from "./uc-rewards.js";
 import adminUnsyncedRegistrationsRouter from "./admin-unsynced-registrations.js";
+import instantWaterCheckRouter from "./instant-water-check.js";
 
 const router: IRouter = Router();
 
@@ -73,6 +74,7 @@ router.use(anthropicRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);
+router.use(instantWaterCheckRouter);
 router.use(ucWaterChatRouter);
 router.use(ucImpactRouter);
 router.use(ucRemindersRouter);

@@ -118,6 +118,10 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityUploadURL(): Promise<string> {
+    return this.getPrivateUploadURL("uploads");
+  }
+
+  async getPrivateUploadURL(namespace: string): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -127,7 +131,10 @@ export class ObjectStorageService {
     }
 
     const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+    if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(namespace)) {
+      throw new Error("Invalid private object namespace");
+    }
+    const fullPath = `${privateObjectDir}/${namespace}/${objectId}`;
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 

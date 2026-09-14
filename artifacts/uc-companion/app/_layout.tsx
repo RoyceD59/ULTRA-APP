@@ -16,9 +16,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { ActivityIndicator, Platform, View } from 'react-native';
-import { setBaseUrl } from '@workspace/api-client-react';
+import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { usePushTokenSync } from '@/hooks/useNotifications';
+import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
 import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
 
@@ -52,9 +53,15 @@ function RootLayoutNav() {
   // Expo has rotated the token since the last registration.
   usePushTokenSync(token);
 
+  useWaterTestHandoffCapture();
+
   useEffect(() => {
     const wasSignedIn = previousToken.current !== null;
     previousToken.current = token;
+
+    // Update API client auth token for this session
+    setAuthTokenGetter(token ? () => Promise.resolve(token) : null);
+
     if (wasSignedIn && token === null) {
       client.clear();
       router.replace('/auth/login' as never);

@@ -40,6 +40,34 @@ export function adminEmailList(): string[] {
     .filter(Boolean);
 }
 
+export type WaterTestsAccess = {
+  teamUserId: string;
+  role: string;
+  level: "view" | "edit" | "admin";
+};
+
+/** Revalidates a ProjectHub principal and the live water_tests page permission. */
+export async function getLiveWaterTestsAccess(authHeader: string | undefined): Promise<WaterTestsAccess | null> {
+  const claims = verifyToken(authHeader);
+  if (!claims || claims.type !== "team-session" || typeof claims.id !== "string") return null;
+  try {
+    const [row] = await db
+      .select({ id: teamUsersTable.id, role: teamUsersTable.role, isActive: teamUsersTable.isActive, permissions: teamUsersTable.permissions })
+      .from(teamUsersTable)
+      .where(eq(teamUsersTable.id, claims.id))
+      .limit(1);
+    if (!row?.isActive) return null;
+    if (row.role === "admin") return { teamUserId: row.id, role: row.role, level: "admin" };
+    const permission = (row.permissions as Record<string, unknown> | null)?.water_tests;
+    if (permission === "admin") return { teamUserId: row.id, role: row.role, level: "admin" };
+    if (permission === "edit") return { teamUserId: row.id, role: row.role, level: "edit" };
+    if (permission === true || permission === "view") return { teamUserId: row.id, role: row.role, level: "view" };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function isAdminRequest(authHeader: string | undefined): Promise<boolean> {
   const claims = verifyToken(authHeader);
   if (!claims) return false;

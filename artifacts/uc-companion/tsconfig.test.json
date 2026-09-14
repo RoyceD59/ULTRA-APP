@@ -9,6 +9,7 @@
       "@expo/vector-icons":                        ["./__mocks__/@expo-vector-icons.ts"],
       "expo-constants":                            ["./__mocks__/expo-constants.ts"],
       "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
+      "expo-linking":                              ["./__mocks__/expo-linking.ts"],
       "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"],
       "expo-file-system":                          ["./__mocks__/expo-file-system.ts"]
     },
@@ -18,6 +19,7 @@
     "hooks/__tests__/**/*.mts",
     "lib/__tests__/**/*.test.mts",
     "hooks/useNotifications.ts",
+    "hooks/useWaterTestHandoff.ts",
     "hooks/mpesaStatusClassifier.ts",
     "hooks/mpesaRetryGuard.ts",
     "hooks/reminderOptInStorage.ts",

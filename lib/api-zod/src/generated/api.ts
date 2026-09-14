@@ -9,6 +9,506 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Create a public instant water assessment
+ */
+export const createPublicInstantWaterAssessmentBodyFirstNameMax = 80;
+
+export const createPublicInstantWaterAssessmentBodyPhoneMin = 7;
+export const createPublicInstantWaterAssessmentBodyPhoneMax = 40;
+
+export const createPublicInstantWaterAssessmentBodyIdempotencyKeyMin = 8;
+export const createPublicInstantWaterAssessmentBodyIdempotencyKeyMax = 200;
+
+export const createPublicInstantWaterAssessmentBodyConsentVersionDefault = `instant-water-check-v1`;
+export const createPublicInstantWaterAssessmentBodyConsentVersionMax = 40;
+
+export const createPublicInstantWaterAssessmentBodySourceAttributionSrcMax = 80;
+
+export const createPublicInstantWaterAssessmentBodySourceAttributionUtmSourceMax = 80;
+
+export const createPublicInstantWaterAssessmentBodySourceAttributionUtmMediumMax = 80;
+
+export const createPublicInstantWaterAssessmentBodySourceAttributionUtmCampaignMax = 80;
+
+export const createPublicInstantWaterAssessmentBodySourceAttributionUtmContentMax = 80;
+
+export const createPublicInstantWaterAssessmentBodyAnswersCountryMin = 2;
+export const createPublicInstantWaterAssessmentBodyAnswersCountryMax = 80;
+
+export const createPublicInstantWaterAssessmentBodyAnswersAreaMax = 160;
+
+
+
+export const CreatePublicInstantWaterAssessmentBody = zod.object({
+  "firstName": zod.string().min(1).max(createPublicInstantWaterAssessmentBodyFirstNameMax),
+  "phone": zod.string().min(createPublicInstantWaterAssessmentBodyPhoneMin).max(createPublicInstantWaterAssessmentBodyPhoneMax),
+  "consent": zod.boolean(),
+  "idempotencyKey": zod.string().min(createPublicInstantWaterAssessmentBodyIdempotencyKeyMin).max(createPublicInstantWaterAssessmentBodyIdempotencyKeyMax),
+  "consentVersion": zod.string().max(createPublicInstantWaterAssessmentBodyConsentVersionMax).default(createPublicInstantWaterAssessmentBodyConsentVersionDefault),
+  "sourceAttribution": zod.object({
+  "src": zod.string().max(createPublicInstantWaterAssessmentBodySourceAttributionSrcMax).optional(),
+  "utmSource": zod.string().max(createPublicInstantWaterAssessmentBodySourceAttributionUtmSourceMax).optional(),
+  "utmMedium": zod.string().max(createPublicInstantWaterAssessmentBodySourceAttributionUtmMediumMax).optional(),
+  "utmCampaign": zod.string().max(createPublicInstantWaterAssessmentBodySourceAttributionUtmCampaignMax).optional(),
+  "utmContent": zod.string().max(createPublicInstantWaterAssessmentBodySourceAttributionUtmContentMax).optional()
+}).optional(),
+  "answers": zod.object({
+  "country": zod.string().min(createPublicInstantWaterAssessmentBodyAnswersCountryMin).max(createPublicInstantWaterAssessmentBodyAnswersCountryMax),
+  "area": zod.string().min(1).max(createPublicInstantWaterAssessmentBodyAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
+})
+})
+
+export const createPublicInstantWaterAssessmentResponseReferenceRegExp = new RegExp('^WT-[A-Za-z0-9-]+$');
+
+
+export const CreatePublicInstantWaterAssessmentResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string().regex(createPublicInstantWaterAssessmentResponseReferenceRegExp),
+  "resultToken": zod.string(),
+  "resultTokenExpiresAt": zod.coerce.date(),
+  "result": zod.object({
+  "reference": zod.string(),
+  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "summary": zod.string(),
+  "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
+  "recommendation": zod.object({
+  "name": zod.string(),
+  "explanation": zod.string()
+}),
+  "disclaimer": zod.string(),
+  "serviceAvailable": zod.boolean(),
+  "physicalTestStatus": zod.string().optional()
+})
+})
+
+
+/**
+ * @summary Create an instant water assessment for the authenticated customer
+ */
+export const createAuthenticatedInstantWaterAssessmentBodyIdempotencyKeyMin = 8;
+export const createAuthenticatedInstantWaterAssessmentBodyIdempotencyKeyMax = 200;
+
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMin = 2;
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax = 80;
+
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax = 160;
+
+export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMax = 80;
+
+export const createAuthenticatedInstantWaterAssessmentBodyPhoneMax = 40;
+
+
+
+export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
+  "idempotencyKey": zod.string().min(createAuthenticatedInstantWaterAssessmentBodyIdempotencyKeyMin).max(createAuthenticatedInstantWaterAssessmentBodyIdempotencyKeyMax),
+  "answers": zod.object({
+  "country": zod.string().min(createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMin).max(createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax),
+  "area": zod.string().min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
+}),
+  "firstName": zod.string().max(createAuthenticatedInstantWaterAssessmentBodyFirstNameMax).optional(),
+  "phone": zod.string().max(createAuthenticatedInstantWaterAssessmentBodyPhoneMax).optional()
+})
+
+export const createAuthenticatedInstantWaterAssessmentResponseReferenceRegExp = new RegExp('^WT-[A-Za-z0-9-]+$');
+
+
+export const CreateAuthenticatedInstantWaterAssessmentResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string().regex(createAuthenticatedInstantWaterAssessmentResponseReferenceRegExp),
+  "result": zod.object({
+  "reference": zod.string(),
+  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "summary": zod.string(),
+  "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
+  "recommendation": zod.object({
+  "name": zod.string(),
+  "explanation": zod.string()
+}),
+  "disclaimer": zod.string(),
+  "serviceAvailable": zod.boolean(),
+  "physicalTestStatus": zod.string().optional()
+})
+})
+
+
+/**
+ * @summary Fetch a redacted instant water result by its public token
+ */
+export const getPublicInstantWaterAssessmentResultPathTokenMin = 32;
+export const getPublicInstantWaterAssessmentResultPathTokenMax = 256;
+
+
+
+export const GetPublicInstantWaterAssessmentResultParams = zod.object({
+  "token": zod.coerce.string().min(getPublicInstantWaterAssessmentResultPathTokenMin).max(getPublicInstantWaterAssessmentResultPathTokenMax)
+})
+
+export const GetPublicInstantWaterAssessmentResultResponse = zod.object({
+  "reference": zod.string(),
+  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "summary": zod.string(),
+  "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
+  "recommendation": zod.object({
+  "name": zod.string(),
+  "explanation": zod.string()
+}),
+  "disclaimer": zod.string(),
+  "serviceAvailable": zod.boolean(),
+  "physicalTestStatus": zod.string().optional()
+})
+
+
+/**
+ * @summary Request a phone verification code for one assessment
+ */
+export const RequestInstantWaterAssessmentVerificationParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMin = 8;
+export const requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMax = 200;
+
+
+
+export const RequestInstantWaterAssessmentVerificationBody = zod.object({
+  "idempotencyKey": zod.string().min(requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMin).max(requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMax),
+  "channel": zod.enum(['whatsapp', 'sms']),
+  "smsConsent": zod.boolean().optional().describe('Required when channel is sms')
+})
+
+export const requestInstantWaterAssessmentVerificationResponseRetryAfterSecondsMin = 0;
+
+
+
+export const RequestInstantWaterAssessmentVerificationResponse = zod.object({
+  "accepted": zod.boolean(),
+  "channel": zod.enum(['whatsapp', 'sms']),
+  "retryAfterSeconds": zod.number().min(requestInstantWaterAssessmentVerificationResponseRetryAfterSecondsMin).optional()
+})
+
+
+/**
+ * @summary Confirm the short-lived phone verification code
+ */
+export const ConfirmInstantWaterAssessmentVerificationParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const confirmInstantWaterAssessmentVerificationBodyCodeRegExp = new RegExp('^[0-9]{6}$');
+
+
+export const ConfirmInstantWaterAssessmentVerificationBody = zod.object({
+  "code": zod.string().regex(confirmInstantWaterAssessmentVerificationBodyCodeRegExp)
+})
+
+export const ConfirmInstantWaterAssessmentVerificationResponse = zod.object({
+  "verified": zod.boolean(),
+  "actionToken": zod.string(),
+  "actionTokenExpiresAt": zod.coerce.date(),
+  "accountLinkState": zod.enum(['verified_unmatched', 'attached', 'ambiguous_match']).optional(),
+  "handoffToken": zod.string().optional().describe('One-time short-lived account handoff credential, returned only for verified_unmatched.')
+})
+
+
+/**
+ * @summary Securely attach a verified unmatched assessment to the signed-in customer
+ */
+export const consumeInstantWaterAssessmentHandoffBodyHandoffTokenMin = 32;
+export const consumeInstantWaterAssessmentHandoffBodyHandoffTokenMax = 200;
+
+
+
+export const ConsumeInstantWaterAssessmentHandoffBody = zod.object({
+  "handoffToken": zod.string().min(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMin).max(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMax)
+})
+
+export const ConsumeInstantWaterAssessmentHandoffResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "accountLinkState": zod.string(),
+  "serviceState": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Attach one verified public assessment to the signed-in customer
+ */
+export const AttachInstantWaterAssessmentParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const AttachInstantWaterAssessmentBody = zod.object({
+  "actionToken": zod.string().optional(),
+  "resultToken": zod.string().optional().describe('Public token may be combined with a signed-in account\'s already verified matching phone; it cannot authorize attachment alone.')
+})
+
+export const AttachInstantWaterAssessmentResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "accountLinkState": zod.string(),
+  "serviceState": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Request the physical-test stage on the existing assessment ticket
+ */
+export const RequestInstantWaterPhysicalTestParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const requestInstantWaterPhysicalTestBodyIdempotencyKeyMin = 8;
+export const requestInstantWaterPhysicalTestBodyIdempotencyKeyMax = 200;
+
+export const requestInstantWaterPhysicalTestBodyServiceAddressMin = 5;
+export const requestInstantWaterPhysicalTestBodyServiceAddressMax = 300;
+
+export const requestInstantWaterPhysicalTestBodyPreferredContactTimeMax = 120;
+
+export const requestInstantWaterPhysicalTestBodyMediaReferencesItemReferenceMax = 300;
+
+export const requestInstantWaterPhysicalTestBodyMediaReferencesMax = 7;
+
+
+
+export const RequestInstantWaterPhysicalTestBody = zod.object({
+  "idempotencyKey": zod.string().min(requestInstantWaterPhysicalTestBodyIdempotencyKeyMin).max(requestInstantWaterPhysicalTestBodyIdempotencyKeyMax),
+  "actionToken": zod.string().optional(),
+  "serviceAddress": zod.string().min(requestInstantWaterPhysicalTestBodyServiceAddressMin).max(requestInstantWaterPhysicalTestBodyServiceAddressMax),
+  "preferredContactTime": zod.string().min(1).max(requestInstantWaterPhysicalTestBodyPreferredContactTimeMax),
+  "acknowledgement": zod.boolean(),
+  "mediaReferences": zod.array(zod.object({
+  "reference": zod.string().max(requestInstantWaterPhysicalTestBodyMediaReferencesItemReferenceMax),
+  "mediaType": zod.enum(['jpg', 'png', 'webp', 'mp4', 'mov', 'webm'])
+})).max(requestInstantWaterPhysicalTestBodyMediaReferencesMax).optional()
+})
+
+export const RequestInstantWaterPhysicalTestResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "serviceState": zod.enum(['instant_result_ready', 'follow_up_requested', 'physical_test_requested', 'scheduled', 'completed', 'closed']),
+  "ticketId": zod.string().optional()
+})
+
+
+/**
+ * @summary List assessments owned by the authenticated customer
+ */
+export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
+  "assessments": zod.array(zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "accountLinkState": zod.string(),
+  "serviceState": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Get the latest owned assessment summary for Companion chat context
+ */
+export const GetAuthenticatedLatestInstantWaterAssessmentResponse = zod.object({
+  "assessment": zod.union([zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "accountLinkState": zod.string(),
+  "serviceState": zod.string(),
+  "createdAt": zod.coerce.date()
+}),zod.null()])
+})
+
+
+/**
+ * @summary List instant water assessments for ProjectHub
+ */
+export const listProjectHubInstantWaterAssessmentsQueryPageDefault = 1;
+
+export const listProjectHubInstantWaterAssessmentsQueryLimitDefault = 50;
+export const listProjectHubInstantWaterAssessmentsQueryLimitMax = 100;
+
+
+
+
+export const ListProjectHubInstantWaterAssessmentsQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "page": zod.coerce.number().min(1).default(listProjectHubInstantWaterAssessmentsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listProjectHubInstantWaterAssessmentsQueryLimitMax).default(listProjectHubInstantWaterAssessmentsQueryLimitDefault),
+  "customerId": zod.coerce.number().min(1).optional().describe('Filter to assessments attached to this customer account.')
+})
+
+export const ListProjectHubInstantWaterAssessmentsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "firstName": zod.string().optional(),
+  "maskedPhone": zod.string().optional(),
+  "country": zod.string().optional(),
+  "area": zod.string(),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "serviceState": zod.string(),
+  "accountLinkState": zod.string(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date()
+})),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary View one instant water assessment and its ticket in ProjectHub
+ */
+export const GetProjectHubInstantWaterAssessmentParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "firstName": zod.string().optional(),
+  "maskedPhone": zod.string().optional(),
+  "country": zod.string().optional(),
+  "area": zod.string(),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "serviceState": zod.string(),
+  "accountLinkState": zod.string(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "phone": zod.string().optional(),
+  "consentVersion": zod.string().optional(),
+  "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
+  "serviceAddress": zod.string().optional(),
+  "preferredContactTime": zod.string().optional(),
+  "mediaReferences": zod.array(zod.object({
+  "reference": zod.string().describe('Opaque private evidence reference; never a public object URL.'),
+  "mediaType": zod.enum(['jpg', 'png', 'webp', 'mp4', 'mov', 'webm']),
+  "downloadUrl": zod.string().describe('Authorized private download route; not a public storage URL.')
+})).optional()
+}))
+
+
+/**
+ * @summary Update an authorized operational water-test state
+ */
+export const UpdateProjectHubInstantWaterAssessmentParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const updateProjectHubInstantWaterAssessmentBodyInternalNoteMax = 2000;
+
+
+
+export const UpdateProjectHubInstantWaterAssessmentBody = zod.object({
+  "serviceState": zod.enum(['instant_result_ready', 'follow_up_requested', 'physical_test_requested', 'scheduled', 'completed', 'closed']),
+  "expectedUpdatedAt": zod.coerce.date(),
+  "internalNote": zod.string().max(updateProjectHubInstantWaterAssessmentBodyInternalNoteMax).optional()
+})
+
+export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
+  "assessmentId": zod.string(),
+  "reference": zod.string(),
+  "firstName": zod.string().optional(),
+  "maskedPhone": zod.string().optional(),
+  "country": zod.string().optional(),
+  "area": zod.string(),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "bands": zod.object({
+  "hardness": zod.enum(['Low', 'Moderate', 'High']),
+  "taste": zod.enum(['Low', 'Moderate', 'High']),
+  "sediment": zod.enum(['Low', 'Moderate', 'High']),
+  "microbial": zod.enum(['Low', 'Moderate', 'High'])
+}),
+  "serviceState": zod.string(),
+  "accountLinkState": zod.string(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "phone": zod.string().optional(),
+  "consentVersion": zod.string().optional(),
+  "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
+  "serviceAddress": zod.string().optional(),
+  "preferredContactTime": zod.string().optional(),
+  "mediaReferences": zod.array(zod.object({
+  "reference": zod.string().describe('Opaque private evidence reference; never a public object URL.'),
+  "mediaType": zod.enum(['jpg', 'png', 'webp', 'mp4', 'mov', 'webm']),
+  "downloadUrl": zod.string().describe('Authorized private download route; not a public storage URL.')
+})).optional()
+}))
+
+
+/**
  * @summary Advance an order's customer-visible status and send one audited push
  */
 export const UpdateUcOrderCustomerStageParams = zod.object({

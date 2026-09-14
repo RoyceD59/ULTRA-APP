@@ -6,6 +6,8 @@ import { issueUcTemporaryPassword } from "@workspace/api-client-react";
 
 vi.mock("@workspace/api-client-react", () => ({
   issueUcTemporaryPassword: vi.fn(),
+  useListProjectHubInstantWaterAssessments: vi.fn(() => ({ data: { items: [], total: 0 }, isLoading: false, error: null })),
+  getListProjectHubInstantWaterAssessmentsQueryKey: vi.fn(() => ["mock-query-key"]),
 }));
 
 vi.mock("@/lib/team-auth", () => ({
