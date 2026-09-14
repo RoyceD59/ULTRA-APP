@@ -67,8 +67,24 @@ export interface TeamUser {
   permissions: Record<string, PagePermission>;
 }
 
-function setStoredUser(user: TeamUser): void {
-  try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch { /* no-op */ }
+type TeamUserPayload = Omit<TeamUser, "permissions"> & {
+  permissions?: Record<string, PagePermission> | null;
+};
+
+function normalizeTeamUser(user: TeamUserPayload): TeamUser {
+  const permissions =
+    user.permissions &&
+    typeof user.permissions === "object" &&
+    !Array.isArray(user.permissions)
+      ? user.permissions
+      : {};
+  return { ...user, permissions };
+}
+
+function setStoredUser(user: TeamUserPayload): TeamUser {
+  const normalized = normalizeTeamUser(user);
+  try { localStorage.setItem(USER_KEY, JSON.stringify(normalized)); } catch { /* no-op */ }
+  return normalized;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -93,8 +109,8 @@ export function getTeamUser(): TeamUser | null {
   try {
     const stored = localStorage.getItem(USER_KEY);
     if (stored) {
-      const u = JSON.parse(stored) as TeamUser;
-      if (u.id && u.email) return u;
+      const u = JSON.parse(stored) as TeamUserPayload;
+      if (u.id && u.email) return normalizeTeamUser(u);
     }
   } catch { /* fall through to JWT decode */ }
   // Fallback: decode JWT (no permissions available)
@@ -131,7 +147,7 @@ export function canView(page: PageSlug | string): boolean {
   const user = getTeamUser();
   if (!user) return false;
   if (user.role === "admin") return true;
-  const level = (user.permissions[page] ?? "none") as PagePermission;
+  const level = (user.permissions?.[page] ?? "none") as PagePermission;
   return level === "view" || level === "edit";
 }
 
@@ -140,14 +156,13 @@ export function canEdit(page: PageSlug | string): boolean {
   const user = getTeamUser();
   if (!user) return false;
   if (user.role === "admin") return true;
-  return (user.permissions[page] ?? "none") === "edit";
+  return (user.permissions?.[page] ?? "none") === "edit";
 }
 
 /** Refreshes the stored user profile and its live page permissions. */
 export async function refreshTeamUser(): Promise<TeamUser> {
-  const user = await apiFetch<TeamUser>("/auth/me");
-  setStoredUser(user);
-  return user;
+  const user = await apiFetch<TeamUserPayload>("/auth/me");
+  return setStoredUser(user);
 }
 
 // ─── Auth state helpers ───────────────────────────────────────────────────────
@@ -189,24 +204,22 @@ async function apiFetch<T = unknown>(
 // ─── Public auth flows ────────────────────────────────────────────────────────
 
 export async function loginWithEmail(email: string, password: string): Promise<TeamUser> {
-  const data = await apiFetch<{ token: string; user: TeamUser }>("/auth/login", {
+  const data = await apiFetch<{ token: string; user: TeamUserPayload }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
   setTeamToken(data.token);
-  setStoredUser(data.user);
-  return data.user;
+  return setStoredUser(data.user);
 }
 
 /** Register via an invite link token */
 export async function register(inviteToken: string, name: string, password: string): Promise<TeamUser> {
-  const data = await apiFetch<{ token: string; user: TeamUser }>("/auth/register", {
+  const data = await apiFetch<{ token: string; user: TeamUserPayload }>("/auth/register", {
     method: "POST",
     body: JSON.stringify({ token: inviteToken, name, password }),
   });
   setTeamToken(data.token);
-  setStoredUser(data.user);
-  return data.user;
+  return setStoredUser(data.user);
 }
 
 /** Sends a password reset email. Always resolves (server hides whether email exists). */
