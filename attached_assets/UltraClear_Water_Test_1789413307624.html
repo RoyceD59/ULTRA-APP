@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Free Water Check — Ultra Clear</title>
+<meta name="description" content="Answer six questions and get an indicative read on your water in under a minute — hardness, taste, sediment and more. Free, no lab required.">
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --void:#010810; --abyss:#030F1E; --royal:#051C36;
+    --sapphire:#0D4FA8; --glacier:#00B8D9; --crystal:#00E5FF;
+    --spring:#4DD0E1; --mist:#80DEEA;
+    --white:#FFFFFF; --w60:rgba(255,255,255,.60); --w35:rgba(255,255,255,.35);
+    --w12:rgba(255,255,255,.12);
+    --low:#10B981; --med:#F59E0B; --high:#EF4444;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--void); color:var(--white);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.5;
+  }
+  .wrap{max-width:540px;margin:0 auto;padding:22px 16px 36px}
+
+  .eyebrow{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--crystal);font-weight:700}
+  h1{font-size:25px;line-height:1.2;margin:8px 0 8px;font-weight:700;letter-spacing:-.02em}
+  h1 em{font-style:normal;background:linear-gradient(135deg,var(--crystal),var(--glacier));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .lede{font-size:14px;color:var(--w60);margin:0 0 22px}
+  .trust{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--w35);margin:0 0 24px}
+  .trust b{color:var(--mist);font-weight:600}
+
+  .f{margin-bottom:14px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  @media(max-width:430px){.row{grid-template-columns:1fr}}
+  label.lb{display:block;font-size:12.5px;font-weight:600;color:var(--mist);margin-bottom:6px}
+  label.lb i{font-style:normal;color:#FF8A8A;margin-left:2px}
+  input,select{
+    width:100%;padding:13px 12px;font-size:16px;font-family:inherit;color:var(--white);
+    background:rgba(255,255,255,.05);border:1px solid rgba(0,229,255,.16);border-radius:9px;
+    -webkit-appearance:none;appearance:none;
+  }
+  select{background-image:linear-gradient(45deg,transparent 50%,var(--glacier) 50%),
+    linear-gradient(135deg,var(--glacier) 50%,transparent 50%);
+    background-position:calc(100% - 18px) calc(50% + 1px),calc(100% - 13px) calc(50% + 1px);
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px}
+  option,optgroup{background:#041426;color:#fff}
+  input::placeholder{color:rgba(255,255,255,.26)}
+  input:focus,select:focus{outline:none;border-color:var(--crystal);
+    background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(0,229,255,.10)}
+  .bad{border-color:rgba(239,68,68,.75)!important}
+
+  .check{display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--w60);
+    line-height:1.5;padding:12px;border:1px solid var(--w12);border-radius:9px;
+    background:rgba(255,255,255,.03);margin:4px 0 14px;cursor:pointer}
+  .check input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:#00B8D9}
+
+  button.go{width:100%;padding:17px;font-size:16px;font-weight:700;letter-spacing:.03em;
+    color:#02121F;border:none;border-radius:11px;cursor:pointer;
+    background:linear-gradient(135deg,var(--crystal),var(--glacier));
+    box-shadow:0 8px 26px rgba(0,184,217,.26)}
+  button.go:disabled{opacity:.55}
+  .micro{font-size:11px;color:var(--w35);text-align:center;margin-top:10px;line-height:1.6}
+
+  .note{padding:11px 13px;border-radius:9px;font-size:12.5px;line-height:1.5;margin:0 0 14px;
+    background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);color:#FFD08A}
+  .note[hidden]{display:none!important}
+  .note a{color:var(--spring);font-weight:600}
+
+  /* ── result ── */
+  #result{display:none}
+  #result.show{display:block}
+  .rhead{text-align:center;padding:20px 16px 6px}
+  .rhead .eyebrow{color:var(--spring)}
+  .rhead h2{font-size:22px;margin:8px 0 6px;font-weight:700}
+  .rhead p{font-size:13px;color:var(--w60);margin:0}
+
+  .bars{margin:20px 0 6px}
+  .bar{margin-bottom:14px}
+  .bar .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .bar .nm{font-size:13px;font-weight:600}
+  .bar .vl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .bar .track{height:7px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+  .bar .fill{height:100%;border-radius:99px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+  .bar .why{font-size:11.5px;color:var(--w35);margin-top:6px;line-height:1.5}
+  .v-low .vl,.v-low .why b{color:var(--low)}   .v-low .fill{background:var(--low)}
+  .v-med .vl,.v-med .why b{color:var(--med)}   .v-med .fill{background:var(--med)}
+  .v-high .vl,.v-high .why b{color:var(--high)}.v-high .fill{background:var(--high)}
+
+  .rec{margin:18px 0;padding:16px;border-radius:12px;
+    background:rgba(0,184,217,.08);border:1px solid rgba(0,229,255,.28)}
+  .rec .eyebrow{color:var(--crystal)}
+  .rec h3{margin:8px 0 6px;font-size:17px}
+  .rec p{margin:0;font-size:13px;color:var(--w60);line-height:1.6}
+
+  .flag{margin:14px 0;padding:14px;border-radius:12px;
+    background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.32);
+    font-size:12.5px;line-height:1.6;color:#FFD08A}
+  .flag[hidden]{display:none!important}
+  .flag b{color:#FFE0A8}
+
+  .next{margin-top:18px;padding-top:18px;border-top:1px solid var(--w12)}
+  .next h3{font-size:15px;margin:0 0 8px}
+  .next p{font-size:13px;color:var(--w60);margin:0 0 14px;line-height:1.6}
+  .wa{display:block;text-align:center;padding:15px;border-radius:11px;text-decoration:none;
+    font-weight:700;font-size:15px;color:#02121F;background:linear-gradient(135deg,#4DD0E1,#00B8D9)}
+  .ghost{display:block;text-align:center;margin-top:10px;padding:13px;border-radius:10px;
+    text-decoration:none;font-size:13.5px;font-weight:600;color:var(--crystal);
+    border:1px solid rgba(0,229,255,.32)}
+
+  .disclaimer{margin-top:22px;font-size:10.5px;color:rgba(255,255,255,.28);line-height:1.7}
+  footer{margin-top:22px;padding-top:16px;border-top:1px solid var(--w12);
+    font-size:10.5px;color:rgba(255,255,255,.28);line-height:1.7;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ══ FORM ══ -->
+<div id="formArea">
+  <p class="eyebrow">Free · 60 seconds · No lab needed</p>
+  <h1>What is actually in <em>your water?</em></h1>
+  <p class="lede">Six questions. You get an indicative read on hardness, taste, sediment and
+     microbial risk for your area and your water source — on this screen, straight away.</p>
+
+  <div class="trust">
+    <span><b>SGS</b> tested filters</span>
+    <span><b>TÜV SÜD</b> RoHS certified</span>
+    <span><b>No</b> spam calls</span>
+  </div>
+
+  <p class="note" id="note" hidden></p>
+
+  <form id="wt" novalidate>
+    <div class="row">
+      <div class="f">
+        <label class="lb" for="fname">First name<i>*</i></label>
+        <input id="fname" type="text" placeholder="Amara" autocomplete="given-name">
+      </div>
+      <div class="f">
+        <label class="lb" for="phone">WhatsApp<i>*</i></label>
+        <input id="phone" type="tel" inputmode="tel" placeholder="0722 123 456" autocomplete="tel">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="f">
+        <label class="lb" for="country">Country<i>*</i></label>
+        <select id="country"><option value="">Select</option></select>
+      </div>
+      <div class="f">
+        <label class="lb" for="area">Town / area<i>*</i></label>
+        <input id="area" type="text" placeholder="Nairobi – Westlands" list="areas" autocomplete="off">
+        <datalist id="areas"></datalist>
+      </div>
+    </div>
+
+    <div class="f">
+      <label class="lb" for="source">Where does your water come from?<i>*</i></label>
+      <select id="source">
+        <option value="">Select</option>
+        <option value="municipal">Piped / municipal tap</option>
+        <option value="borehole">Borehole or deep well</option>
+        <option value="shallow">Shallow well, river or spring</option>
+        <option value="vendor">Water vendor, bowser or tanker</option>
+        <option value="bottled">Bottled or sachet water</option>
+        <option value="rain">Rainwater harvesting</option>
+      </select>
+    </div>
+
+    <div class="f">
+      <label class="lb" for="concern">What bothers you most?<i>*</i></label>
+      <select id="concern">
+        <option value="">Select</option>
+        <option value="scale">White scale in the kettle, appliances dying early</option>
+        <option value="taste">Taste or smell — chlorine, metallic, earthy</option>
+        <option value="cloudy">Cloudy water, sediment or staining</option>
+        <option value="skin">Dry skin, itchy scalp, hair feels rough after showering</option>
+        <option value="safety">Not sure it is safe to drink</option>
+        <option value="cost">Cost of buying bottled water every week</option>
+      </select>
+    </div>
+
+    <div class="f">
+      <label class="lb" for="setting">This is for<i>*</i></label>
+      <select id="setting">
+        <option value="">Select</option>
+        <option value="home">My home</option>
+        <option value="rental">A rented place</option>
+        <option value="salon">A salon, spa or barber</option>
+        <option value="office">An office or co-working space</option>
+        <option value="hospitality">A hotel, lodge, restaurant or gym</option>
+        <option value="school">A school, clinic or NGO</option>
+        <option value="resell">I want to resell or distribute</option>
+      </select>
+    </div>
+
+    <label class="check" for="consent">
+      <input type="checkbox" id="consent">
+      <span>Send my result and let an Ultra Clear specialist follow up on WhatsApp.
+      I can opt out any time.</span>
+    </label>
+
+    <button type="submit" class="go" id="go">Show my water reading</button>
+    <p class="micro">No payment. No account. We never sell your number.</p>
+  </form>
+</div>
+
+<!-- ══ RESULT ══ -->
+<div id="result">
+  <div class="rhead">
+    <p class="eyebrow">Your indicative reading</p>
+    <h2 id="rTitle">Water profile</h2>
+    <p id="rSub"></p>
+  </div>
+
+  <div class="bars" id="bars"></div>
+
+  <div class="rec">
+    <p class="eyebrow">Best match</p>
+    <h3 id="recName"></h3>
+    <p id="recWhy"></p>
+  </div>
+
+  <div class="flag" id="labFlag" hidden></div>
+
+  <div class="next">
+    <h3 id="nextTitle"></h3>
+    <p id="nextBody"></p>
+    <a class="wa" id="waBtn" href="#" target="_blank" rel="noopener">Continue on WhatsApp</a>
+    <a class="ghost" id="againBtn" href="#">Check another water source</a>
+  </div>
+
+  <p class="disclaimer">
+    This is an indicative profile built from your answers and known conditions in your area.
+    It is not a laboratory analysis and is not a health assessment. Where a lab test is the
+    right next step, we say so above rather than guessing.
+  </p>
+</div>
+
+<footer>
+  Ultra Clear Filtration Technologies · Engineering Wellness, Drop by Drop<br>
+  www.ucfilters.com · info@ucfilters.com · Kenya +254 717 774 049
+</footer>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   ULTRA CLEAR — FREE WATER CHECK          formType = "watertest"
+   Top-of-funnel lead magnet for blog, social and website embeds.
+
+   ─── EDIT THIS BLOCK ONLY ────────────────────────────────────────────────
+   UC_LEADS_URL   the deployed Apps Script /exec URL (same one as the
+                  catalogue, quiz and rep form — one deployment serves all).
+   UC_MARKETS     where a PHYSICAL test can be serviced today. Adding a
+                  country is one line: set live:true and list its areas.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const UC_LEADS_URL = 'https://script.google.com/macros/s/AKfycby-MFRcEDl4cZRF3QlwK36TzJLcJlD3hKsPpcS4aWjhl0PfQpFUloG36irYshwtCFtW/exec';
+const UC_WHATSAPP  = '254717774049';
+
+const UC_MARKETS = [
+  { name: 'Kenya',    live: true,  dial: '+254',
+    areas: ['Nairobi – Westlands','Nairobi – Kilimani','Nairobi – Karen','Nairobi – Eastlands',
+            'Kiambu','Ruiru','Thika','Athi River / Mavoko','Kitengela','Ngong','Rongai',
+            'Machakos','Nakuru','Naivasha','Eldoret','Kisumu','Mombasa','Nyeri','Meru'] },
+  { name: 'Tanzania', live: false, dial: '+255', areas: ['Dar es Salaam','Arusha','Dodoma','Mwanza'] },
+  { name: 'Rwanda',   live: false, dial: '+250', areas: ['Kigali','Musanze','Huye'] },
+  { name: 'Ghana',    live: false, dial: '+233', areas: ['Accra','Kumasi','Takoradi'] },
+  { name: 'Other',    live: false, dial: '',     areas: [] }
+];
+
+/* Areas where groundwater is commonly hard, and Rift Valley areas where
+   elevated fluoride is a known geological feature. Neither is a measurement —
+   both only raise or lower an indicative band, and the fluoride note sends
+   the person to a laboratory rather than to a product claim. */
+const HARD_AREAS = ['athi','kitengela','machakos','kajiado','makueni','kitui','ngong',
+                    'rongai','mavoko','isiolo','garissa','wajir','mandera','thika','ruiru'];
+const RIFT_AREAS = ['nakuru','naivasha','baringo','kajiado','eldoret','nyahururu','elementaita',
+                    'magadi','suswa','longonot'];
+
+/* ─── nothing below here needs editing ─────────────────────────────────── */
+
+const $ = function (id) { return document.getElementById(id); };
+const v = function (id) { return String($(id).value || '').trim(); };
+
+/* ── attribution: ?src= names the article or post; utm_* is kept too ── */
+const PARAMS = new URLSearchParams(location.search);
+const SRC = (PARAMS.get('src') || PARAMS.get('utm_campaign') || 'direct').slice(0, 80);
+const UTM = ['utm_source','utm_medium','utm_campaign','utm_content']
+  .map(function (k) { return PARAMS.get(k) ? k + '=' + PARAMS.get(k) : ''; })
+  .filter(Boolean).join(' ');
+
+/* ── markets ── */
+(function () {
+  const sel = $('country');
+  UC_MARKETS.forEach(function (m) {
+    const o = document.createElement('option');
+    o.value = m.name; o.textContent = m.name + (m.live ? '' : ' — testing coming soon');
+    sel.appendChild(o);
+  });
+  sel.value = UC_MARKETS[0].name;
+  paintAreas();
+})();
+function market() {
+  return UC_MARKETS.filter(function (m) { return m.name === v('country'); })[0] || UC_MARKETS[0];
+}
+function paintAreas() {
+  const dl = $('areas'); dl.innerHTML = '';
+  market().areas.forEach(function (a) {
+    const o = document.createElement('option'); o.value = a; dl.appendChild(o);
+  });
+}
+$('country').addEventListener('change', function () { paintAreas(); noteMarket(); });
+function noteMarket() {
+  const m = market(), n = $('note');
+  if (!m.live) {
+    n.innerHTML = '<strong>' + m.name + ':</strong> you will still get your reading now, and we '
+      + 'will send product options on WhatsApp. On-site testing is not running there yet — '
+      + 'we will tell you the moment it is.';
+    n.hidden = false;
+  } else { n.hidden = true; }
+}
+
+/* ══ THE READING ══════════════════════════════════════════════════════════
+   Deterministic and explainable: a baseline per water source, adjusted by the
+   stated concern and by known conditions in the area. Every band shown to the
+   visitor carries the reason it was given. */
+const BASE = {
+  municipal: { hardness:2, taste:3, sediment:2, microbial:1 },
+  borehole:  { hardness:3, taste:2, sediment:2, microbial:2 },
+  shallow:   { hardness:2, taste:2, sediment:3, microbial:3 },
+  vendor:    { hardness:2, taste:2, sediment:3, microbial:3 },
+  bottled:   { hardness:1, taste:1, sediment:1, microbial:1 },
+  rain:      { hardness:1, taste:2, sediment:3, microbial:2 }
+};
+const SOURCE_LABEL = {
+  municipal:'piped municipal supply', borehole:'a borehole', shallow:'a shallow well or surface source',
+  vendor:'a vendor or bowser', bottled:'bottled or sachet water', rain:'harvested rainwater'
+};
+const CONCERN_BUMP = {
+  scale:{hardness:1}, taste:{taste:1}, cloudy:{sediment:1},
+  skin:{hardness:1}, safety:{microbial:1}, cost:{}
+};
+const BAND = ['', 'Low', 'Moderate', 'High'];
+const CLS  = ['', 'v-low', 'v-med', 'v-high'];
+
+const WHY = {
+  hardness: {
+    1:'Little sign of scale from what you have described.',
+    2:'Some scale is likely over time — kettles and shower heads show it first.',
+    3:'<b>Hard water is the headline here.</b> It is what kills kettles, irons and shower heads early, and what leaves skin feeling tight after a wash.'
+  },
+  taste: {
+    1:'Taste and odour are unlikely to be your main problem.',
+    2:'Mild taste or smell is common on this kind of supply.',
+    3:'<b>Chlorine or an earthy taste is the usual complaint</b> on this supply. It is also the easiest thing to fix.'
+  },
+  sediment: {
+    1:'Clear water expected.',
+    2:'Occasional cloudiness or fine grit, usually after supply interruptions.',
+    3:'<b>Visible sediment or staining is likely.</b> It clogs filters faster, so cartridge life matters more for you.'
+  },
+  microbial: {
+    1:'Low risk on this supply type.',
+    2:'Worth treating as a precaution, especially for children and older family members.',
+    3:'<b>This is the band to take seriously.</b> Untreated surface, vendor and shallow-well water is the highest-risk category we see.'
+  }
+};
+
+function reading() {
+  const src = v('source'), con = v('concern'), area = v('area').toLowerCase();
+  const r = Object.assign({}, BASE[src] || BASE.municipal);
+  const bump = CONCERN_BUMP[con] || {};
+  Object.keys(bump).forEach(function (k) { r[k] = Math.min(3, r[k] + bump[k]); });
+
+  const hard = HARD_AREAS.some(function (a) { return area.indexOf(a) !== -1; });
+  if (hard && (src === 'borehole' || src === 'municipal')) r.hardness = 3;
+
+  const rift = RIFT_AREAS.some(function (a) { return area.indexOf(a) !== -1; });
+  return { r: r, hardArea: hard, riftArea: rift && src === 'borehole' };
+}
+
+/* Product match — category level, never a specific claim. */
+function recommend(r, con, setting) {
+  if (setting === 'resell')  return ['Distribution partnership', 'You are buying to supply others, so the conversation is margin, volume and territory rather than a single unit.'];
+  if (setting === 'salon')   return ['Shower & skin filtration', 'Salons feel hard water before anyone else — in how hair takes colour and how clients’ scalps react after a wash.'];
+  if (setting === 'office' || setting === 'hospitality' || setting === 'school')
+                             return ['Dispenser & commercial systems', 'Shared premises need throughput and a predictable cartridge schedule, not a household unit.'];
+  if (con === 'skin')        return ['Shower & skin filtration', 'Your concern is contact with water rather than drinking it, so the shower is where to start.'];
+  if (con === 'cost')        return ['Filter bottles & portable filtration', 'A refillable filtered bottle replaces the weekly bottled-water spend rather than adding to it.'];
+  if (r.microbial >= 3)      return ['Survivor-grade portable filtration', 'Where the microbial band is high, the priority is point-of-use treatment you can rely on daily.'];
+  if (r.hardness >= 3)       return ['Home & kitchen filtration', 'Hard water is a whole-household problem. Treating it at the kitchen point-of-use is the usual first step.'];
+  if (r.taste >= 3)          return ['Sweet Home faucet filtration', 'Taste and odour respond quickly to point-of-use filtration at the tap you actually drink from.'];
+  return ['Home & kitchen filtration', 'A general-purpose point-of-use setup is the sensible starting point for your profile.'];
+}
+
+function render(out) {
+  const r = out.r, con = v('concern'), setting = v('setting');
+  const names = { hardness:'Hardness & scale', taste:'Taste & odour',
+                  sediment:'Sediment & clarity', microbial:'Microbial risk' };
+
+  $('rTitle').textContent = 'Your water profile, ' + v('fname');
+  $('rSub').textContent = 'Based on ' + (SOURCE_LABEL[v('source')] || 'your supply')
+    + ' in ' + v('area') + (out.hardArea ? ' — an area known for hard groundwater.' : '.');
+
+  $('bars').innerHTML = ['hardness','taste','sediment','microbial'].map(function (k) {
+    const lvl = r[k];
+    return '<div class="bar ' + CLS[lvl] + '">'
+      + '<div class="top"><span class="nm">' + names[k] + '</span>'
+      + '<span class="vl">' + BAND[lvl] + '</span></div>'
+      + '<div class="track"><div class="fill" style="width:' + (lvl / 3 * 100) + '%"></div></div>'
+      + '<p class="why">' + WHY[k][lvl] + '</p></div>';
+  }).join('');
+
+  const rec = recommend(r, con, setting);
+  $('recName').textContent = rec[0];
+  $('recWhy').textContent  = rec[1];
+
+  if (out.riftArea) {
+    $('labFlag').innerHTML = '<b>One thing a strip cannot tell you.</b> Groundwater across the '
+      + 'Rift Valley commonly carries elevated fluoride. That needs a laboratory test, not a '
+      + 'field kit, and no filter should be sold to you on the strength of a guess. We will '
+      + 'flag it for the technician so it is measured properly before anything is recommended.';
+    $('labFlag').hidden = false;
+  } else { $('labFlag').hidden = true; }
+
+  const m = market();
+  if (m.live) {
+    $('nextTitle').textContent = 'Book the free on-site check';
+    $('nextBody').textContent = 'A technician tests your actual water in ' + v('area')
+      + ' — hardness, TDS and clarity — and leaves you the numbers whether or not you buy anything.';
+  } else {
+    $('nextTitle').textContent = 'Get your options on WhatsApp';
+    $('nextBody').textContent = 'On-site testing has not reached ' + m.name + ' yet. A specialist '
+      + 'will send the right options for this profile, with pricing, and tell you when testing arrives.';
+  }
+
+  const msg = ['Hello Ultra Clear, here is my water check result.',
+    'Name: ' + v('fname'), 'Area: ' + v('area') + ', ' + v('country'),
+    'Source: ' + (SOURCE_LABEL[v('source')] || ''),
+    'Main concern: ' + ($('concern').selectedOptions[0] || {}).text,
+    'Reading — hardness ' + BAND[r.hardness] + ', taste ' + BAND[r.taste]
+      + ', sediment ' + BAND[r.sediment] + ', microbial ' + BAND[r.microbial],
+    'Suggested: ' + rec[0],
+    m.live ? 'I would like to book the free on-site check.' : 'Please send me options.'
+  ].join('\n');
+  $('waBtn').href = 'https://wa.me/' + UC_WHATSAPP + '?text=' + encodeURIComponent(msg);
+
+  $('formArea').style.display = 'none';
+  $('result').classList.add('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  postHeight();
+}
+
+/* ── transport: JSONP GET, identical to the rep form ── */
+function ucSend(url, data, cb, opts) {
+  opts = opts || {};
+  if (!url || url === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
+    return cb({ status: 'error', reason: 'unconfigured' });
+  }
+  var name = 'ucCb' + Date.now() + Math.floor(Math.random() * 1000);
+  var tag = document.createElement('script');
+  var done = false, settleTimer = null;
+
+  function cleanup() {
+    clearTimeout(timer); clearTimeout(settleTimer);
+    window.removeEventListener('error', onWinError, true);
+    try { delete window[name]; } catch (e) { window[name] = undefined; }
+    if (tag.parentNode) tag.parentNode.removeChild(tag);
+  }
+  function finish(res) { if (done) return; done = true; cleanup(); cb(res); }
+  function settle(reason) {
+    if (done || settleTimer) return;
+    settleTimer = setTimeout(function () { finish({ status: 'error', reason: reason }); }, 300);
+  }
+  function onWinError(e) {
+    if (done) return;
+    var f = (e && e.filename) || '';
+    if (f.indexOf('script.google') !== -1 || f.indexOf('googleusercontent') !== -1) settle('stale');
+  }
+  window.addEventListener('error', onWinError, true);
+  window[name] = function (res) { finish(res || {}); };
+  tag.onload  = function () { settle('stale'); };
+  tag.onerror = function () { finish({ status: 'error', reason: 'network' }); };
+
+  var qs = Object.keys(data).map(function (k) {
+    var val = data[k] == null ? '' : String(data[k]);
+    if (opts.maxField && val.length > opts.maxField) val = val.slice(0, opts.maxField);
+    return encodeURIComponent(k) + '=' + encodeURIComponent(val);
+  }).join('&');
+  var timer = setTimeout(function () { finish({ status: 'error', reason: 'timeout' }); },
+                         opts.timeout || 20000);
+  tag.src = url + '?callback=' + name + '&' + qs;
+  document.head.appendChild(tag);
+}
+
+/* ── iframe auto-height for blog embeds ── */
+function postHeight() {
+  if (window.parent === window) return;
+  try {
+    window.parent.postMessage({ ucWaterTest: true,
+      height: document.documentElement.scrollHeight }, '*');
+  } catch (e) {}
+}
+window.addEventListener('load', postHeight);
+window.addEventListener('resize', postHeight);
+
+/* ── submit ── */
+const REQUIRED = ['fname','phone','country','area','source','concern','setting'];
+const LABELS = { fname:'First name', phone:'WhatsApp number', country:'Country',
+                 area:'Town / area', source:'Where your water comes from',
+                 concern:'What bothers you most', setting:'What this is for' };
+
+$('wt').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+
+  var missing = REQUIRED.filter(function (id) { return !v(id); });
+  REQUIRED.forEach(function (id) { $(id).classList.toggle('bad', missing.indexOf(id) !== -1); });
+  if (!$('consent').checked) missing.push('consent');
+
+  if (missing.length) {
+    var first = missing[0];
+    $('note').innerHTML = first === 'consent'
+      ? 'Please tick the box so we can send your result.'
+      : 'Please fill in <strong>' + (LABELS[first] || 'the highlighted field') + '</strong>.';
+    $('note').hidden = false;
+    try { $(first).focus(); } catch (e) {}
+    postHeight();
+    return;
+  }
+  $('note').hidden = true;
+
+  var out = reading();
+  var r = out.r;
+  var m = market();
+  var rec = recommend(r, v('concern'), v('setting'));
+
+  var payload = {
+    formType:     'watertest',
+    budgetScale:  'purchase',
+    firstName:    v('fname'),
+    lastName:     '',
+    name:         v('fname'),
+    phone:        v('phone'),
+    email:        '',
+    country:      v('country'),
+    city:         v('area'),
+    productInt:   rec[0],
+    useCase:      ($('concern').selectedOptions[0] || {}).text || '',
+    setting:      v('setting'),
+    waterSource:  SOURCE_LABEL[v('source')] || v('source'),
+    timeframe:    m.live ? 'This month' : 'Later / no timeline',
+    decisionRole: (v('setting') === 'rental') ? 'I recommend, someone else approves'
+                                             : 'I am the buyer / approver',
+    source:       SRC,
+    utm:          UTM,
+    reading:      'hardness ' + BAND[r.hardness] + ' | taste ' + BAND[r.taste]
+                  + ' | sediment ' + BAND[r.sediment] + ' | microbial ' + BAND[r.microbial]
+                  + (out.riftArea ? ' | RIFT-FLUORIDE: lab test flagged' : ''),
+    serviceable:  m.live ? 'Yes' : 'No',
+    consent:      $('consent').checked ? 'Yes' : 'No',
+    pageUrl:      location.href.slice(0, 200),
+    submissionId: 'wt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+    timestamp:    new Date().toISOString()
+  };
+
+  /* Local backup first, then show the reading immediately — the visitor's
+     reward must never wait on the network. */
+  try { localStorage.setItem('ucWaterTest_' + payload.submissionId, JSON.stringify(payload)); } catch (e) {}
+
+  $('go').disabled = true; $('go').textContent = 'Reading your water…';
+  render(out);
+
+  ucSend(UC_LEADS_URL, payload, function (res) {
+    if (res && res.status === 'ok') return;
+
+    /* A failure here means the visitor got their reading but the LEAD was not
+       recorded — the worst possible silent failure, because the page looks
+       like it worked. Say so on screen. Every one of these is a lost lead, so
+       a visible warning beats a quiet console message nobody reads. */
+    var reason = (res && res.reason) || 'unknown';
+    console.warn('[Ultra Clear] water-test lead NOT recorded — reason:', reason,
+      reason === 'stale'
+        ? 'Endpoint answered but not as JSONP — the deployed Apps Script is out of date.'
+        : (reason === 'unconfigured'
+            ? 'UC_LEADS_URL is still the placeholder — paste the /exec URL into the constant.'
+            : ''));
+
+    var n = document.createElement('p');
+    n.className = 'flag';
+    n.style.marginTop = '16px';
+    n.innerHTML = (reason === 'unconfigured')
+      ? '<b>Setup incomplete.</b> Your reading is correct and saved on this device, but it was '
+        + 'not sent to Ultra Clear — this page has no endpoint configured yet. '
+        + 'Please send your details on WhatsApp using the button above so nothing is lost.'
+      : '<b>Your reading is saved on this device</b>, but we could not reach our system just '
+        + 'now. Tap the WhatsApp button above so a specialist still gets your details.';
+    var next = document.querySelector('.next');
+    if (next && !document.querySelector('#result .flag[data-send]')) {
+      n.setAttribute('data-send', '1');
+      next.parentNode.insertBefore(n, next);
+      postHeight();
+    }
+  }, { maxField: 300, timeout: 20000 });
+});
+
+$('againBtn').addEventListener('click', function (e) {
+  e.preventDefault();
+  $('result').classList.remove('show');
+  $('formArea').style.display = '';
+  $('go').disabled = false; $('go').textContent = 'Show my water reading';
+  ['fname','phone','area'].forEach(function (id) { $(id).value = ''; });
+  ['source','concern','setting'].forEach(function (id) { $(id).value = ''; });
+  $('consent').checked = false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  postHeight();
+});
+
+noteMarket();
+</script>
+</body>
+</html>
