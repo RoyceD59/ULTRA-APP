@@ -528,6 +528,20 @@ function updateBundleUrls(timestamp, baseUrl) {
       },
     );
 
+    // SDK 57 also emits direct module exports for fonts and images using
+    // /assets/?unstable_path=... URLs. They are separate from the asset
+    // metadata above, so rewrite them to the files copied into static-build.
+    bundle = bundle.replace(
+      /(["'])\/assets\/\?unstable_path=([^"'\\]+)\1/g,
+      (_match, quote, encodedPath) => {
+        const decodedPath = decodeURIComponent(encodedPath);
+        const assetUrl = new URL(
+          `${baseUrl}${basePath}/${timestamp}/_expo/static/js/${decodedPath}`,
+        ).toString();
+        return `${quote}${assetUrl}${quote}`;
+      },
+    );
+
     fs.writeFileSync(bundlePath, bundle);
   };
 

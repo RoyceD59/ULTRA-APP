@@ -25,11 +25,17 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const CLERK_FAPI = 'https://frontend-api.clerk.dev';
 export const CLERK_PROXY_PATH = '/api/__clerk';
+const ROUTED_PUBLIC_HOSTS = new Set([
+  'app.ucfilters.com',
+  'hub.ucfilters.com',
+  'api.ucfilters.com',
+]);
 
 /**
  * Returns the first effective public hostname for the given request,
- * preferring x-forwarded-host over the Host header so callers behind a
- * proxy see the original client-facing host.
+ * preferring the allowlisted Cloudflare router handoff, then
+ * x-forwarded-host, then Host so callers behind a proxy see the original
+ * client-facing host.
  *
  * x-forwarded-host can take three shapes:
  *   - undefined (no proxy involved)
@@ -46,6 +52,15 @@ export const CLERK_PROXY_PATH = '/api/__clerk';
 export function getClerkProxyHost(req: {
   headers: IncomingHttpHeaders;
 }): string | undefined {
+  const routedHeader = req.headers['x-uc-public-host'];
+  const routedRaw = Array.isArray(routedHeader)
+    ? routedHeader[0]
+    : routedHeader;
+  const routedHost = routedRaw?.split(',')[0]?.trim().toLowerCase();
+  if (routedHost && ROUTED_PUBLIC_HOSTS.has(routedHost)) {
+    return routedHost;
+  }
+
   const forwarded = req.headers['x-forwarded-host'];
   const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const firstHop = raw?.split(',')[0]?.trim();

@@ -37,3 +37,4 @@
 - [Lease-based alert rearming](lease-based-alert-rearming.md) — rearming must preserve live claims; provider calls must abort before lease expiry so an expired claim cannot still be sending.
 - [Drizzle post-merge false success](drizzle-post-merge-false-success.md) — push-force may print a non-TTY prompt error yet exit 0; detect the text and align constraint/index declarations instead of forcing truncation.
 - [Woo customer identity](woo-customer-identity.md) — successful Woo login must provision a DB-backed Companion user; non-DB principals cannot use rewards, QR, or other customer-owned data.
+- [Expo static production routing](expo-static-production-routing.md) — SDK 57 direct asset URLs need rewriting; web root must be full-height flex; preserve the public host through Replit proxies.

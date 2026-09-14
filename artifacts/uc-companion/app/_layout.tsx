@@ -152,7 +152,7 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1 }}>
       <ErrorBoundary>
         {/* ClerkProvider loads in the background; the app itself never waits
             on Clerk. Social sign-in buttons gate themselves on ClerkLoaded, so
@@ -165,7 +165,7 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
               <CartProvider>
-                <GestureHandlerRootView>
+                <GestureHandlerRootView style={{ flex: 1 }}>
                   <KeyboardProvider>
                     <RootLayoutNav />
                   </KeyboardProvider>

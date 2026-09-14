@@ -195,6 +195,16 @@ describe('serve.js production server', () => {
     const src = extractScriptSrc(html);
     assert.ok(src !== null, 'HTML should contain a <script src="…"> tag');
     assert.match(src, /bundle\.js$/, '<script src> should end with bundle.js');
+    assert.match(
+      html,
+      /html,\s*body,\s*#root\s*\{[^}]*height:\s*100%/s,
+      'web document should give the React root a full viewport height',
+    );
+    assert.match(
+      html,
+      /#root\s*\{[^}]*display:\s*flex/s,
+      'web document should make the React root a flex container',
+    );
   });
 
   // ── 2. The src extracted from root HTML fetches a real JS file ───────────
