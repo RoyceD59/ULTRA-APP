@@ -20,14 +20,16 @@ import { setBaseUrl } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { usePushTokenSync } from '@/hooks/useNotifications';
 import { CartProvider } from '@/context/CartContext';
+import { getApiBase } from '@/lib/apiBase';
 
 // Import the notification hook — this also runs setNotificationHandler at
 // module level so it's registered before any notification can arrive.
 import * as Notifications from 'expo-notifications';
 
 // Set API base URL before any component renders
-if (process.env.EXPO_PUBLIC_DOMAIN) {
-  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+const apiBase = getApiBase();
+if (apiBase) {
+  setBaseUrl(apiBase);
 }
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.

@@ -26,8 +26,9 @@ import {
   type UcTemporaryPasswordInputChannel,
   type UcTemporaryPasswordResult,
 } from "@workspace/api-client-react";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const API = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const API = API_ORIGIN;
 const PAGE_LIMIT = 50;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

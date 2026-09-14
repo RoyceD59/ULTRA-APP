@@ -445,6 +445,97 @@ paths:
         "401":
           description: Temporary session missing or expired
 
+  /uc/offline-clients:
+    get:
+      operationId: listUcOfflineClients
+      tags: [uc-admin]
+      summary: List offline sales and Companion account setup states
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Offline sales
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clients]
+                properties:
+                  clients:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcOfflineClient" }
+        "401": { description: Impact view access required }
+    post:
+      operationId: createUcOfflineClient
+      tags: [uc-admin]
+      summary: Record an offline sale and provision or link a Companion account
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcOfflineClientInput" }
+      responses:
+        "201":
+          description: Sale recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcOfflineClientResponse" }
+        "200":
+          description: Idempotent repeat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcOfflineClientResponse" }
+        "400": { description: Invalid sale or missing login identifier }
+        "409": { description: Account identity conflict }
+
+  /uc/offline-clients/{id}:
+    put:
+      operationId: updateUcOfflineClient
+      tags: [uc-admin]
+      summary: Update an offline sale
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcOfflineClientUpdateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcOfflineClientResponse" }
+        "400": { description: Invalid input }
+        "404": { description: Entry not found }
+
+  /uc/offline-clients/{id}/delivery-retry:
+    post:
+      operationId: retryUcOfflineClientDelivery
+      tags: [uc-admin]
+      summary: Issue a fresh credential and retry failed offline-sale delivery
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Delivery retry result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client: { $ref: "#/components/schemas/UcOfflineClient" }
+        "404": { description: Entry not found }
+        "409": { description: Sale is not eligible for retry }
+
   /healthz:
     get:
       operationId: healthCheck
@@ -2468,3 +2559,78 @@ components:
               type: string
             mustChangePassword:
               type: boolean
+
+    UcOfflineProduct:
+      type: object
+      required: [productName, quantity]
+      properties:
+        productId: { type: integer }
+        productName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        litresPerUnit: { type: number, minimum: 0 }
+
+    UcOfflineClientInput:
+      type: object
+      required: [products, saleDate, idempotencyKey]
+      properties:
+        clientRef: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        phone: { type: string, description: International phone number }
+        email: { type: string, description: Case-insensitive email address }
+        products:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/UcOfflineProduct" }
+        saleDate: { type: string, format: date }
+        notes: { type: string }
+        idempotencyKey: { type: string, minLength: 8 }
+
+    UcOfflineClientUpdateInput:
+      type: object
+      required: [products, saleDate]
+      properties:
+        clientRef: { type: string }
+        phone: { type: string, description: International phone number }
+        email: { type: string, description: Case-insensitive email address }
+        products:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/UcOfflineProduct" }
+        saleDate: { type: string, format: date }
+        notes: { type: string }
+
+    UcOfflineClient:
+      type: object
+      required: [id, clientRef, products, saleDate, accountSetupStatus, deliveryStatus]
+      properties:
+        id: { type: integer }
+        clientRef: { type: string }
+        phone: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/UcOfflineProduct" }
+        saleDate: { type: string, format: date }
+        notes: { type: string }
+        companionUserId: { type: [integer, "null"] }
+        accountSetupStatus:
+          type: string
+          enum: [pending, created, linked-existing, conflict, failed]
+        deliveryChannel:
+          type: [string, "null"]
+          enum: [email, whatsapp, null]
+        deliveryStatus:
+          type: string
+          enum: [pending, sending, sent, failed, not_applicable]
+        deliveryMetadata: { type: object, additionalProperties: true }
+        conflictReason: { type: [string, "null"] }
+        deliveryAttempts: { type: integer }
+        deliveryLastAttemptAt: { type: [string, "null"], format: date-time }
+        deliveryError: { type: [string, "null"] }
+
+    UcOfflineClientResponse:
+      type: object
+      required: [client]
+      properties:
+        client: { $ref: "#/components/schemas/UcOfflineClient" }

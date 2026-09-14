@@ -20,6 +20,10 @@ export const RATE_LIMIT_TITLE = 'Too Many Attempts';
 export const RATE_LIMIT_MESSAGE =
   'Too many attempts. Please wait a minute before trying again.';
 
+/** A login failure must not reveal whether an email or phone has an account. */
+export const COMPANION_LOGIN_ERROR =
+  'Unable to sign in. Check your details and try again.';
+
 /** Minimal structural shape of ApiError needed to detect a rate limit. */
 export interface RateLimitCheckable {
   status?: unknown;
@@ -77,4 +81,17 @@ export function authErrorMessage(
   if (status === 429) return serverError || RATE_LIMIT_MESSAGE;
   if (!ok || serverError) return serverError || fallback;
   return null;
+}
+
+/**
+ * Companion password-login errors are deliberately neutral for all failures
+ * except rate limiting, where the existing safe retry guidance is useful.
+ */
+export function companionLoginError(
+  status: number,
+  ok: boolean,
+  serverError: string | undefined,
+): string | null {
+  if (status === 429) return authErrorMessage(status, ok, serverError, 'Login failed');
+  return ok ? null : COMPANION_LOGIN_ERROR;
 }

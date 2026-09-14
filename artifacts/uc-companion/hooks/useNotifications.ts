@@ -15,6 +15,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
+import { getApiBase } from '@/lib/apiBase';
 import { loadPersistedSession } from '@/lib/sessionPersistence';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
@@ -306,11 +307,6 @@ export async function getExpoPushToken(): Promise<string | null> {
 }
 
 // ── Server push-token registration & foreground sync ─────────────────────────
-
-const getApiBase = () =>
-  process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : '';
 
 // All server registrations run through a single promise chain so a login-time
 // registration and a foreground sync can never interleave. Each queued step

@@ -814,6 +814,108 @@ export interface UcPasswordChangeResult {
   user: UcPasswordChangeResultUser;
 }
 
+export interface UcOfflineProduct {
+  productId?: number;
+  productName: string;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  litresPerUnit?: number;
+}
+
+export interface UcOfflineClientInput {
+  clientRef?: string;
+  firstName?: string;
+  lastName?: string;
+  /** International phone number */
+  phone?: string;
+  /** Case-insensitive email address */
+  email?: string;
+  /** @minItems 1 */
+  products: UcOfflineProduct[];
+  saleDate: string;
+  notes?: string;
+  /** @minLength 8 */
+  idempotencyKey: string;
+}
+
+export interface UcOfflineClientUpdateInput {
+  clientRef?: string;
+  /** International phone number */
+  phone?: string;
+  /** Case-insensitive email address */
+  email?: string;
+  /** @minItems 1 */
+  products: UcOfflineProduct[];
+  saleDate: string;
+  notes?: string;
+}
+
+export type UcOfflineClientAccountSetupStatus = typeof UcOfflineClientAccountSetupStatus[keyof typeof UcOfflineClientAccountSetupStatus];
+
+
+export const UcOfflineClientAccountSetupStatus = {
+  pending: 'pending',
+  created: 'created',
+  'linked-existing': 'linked-existing',
+  conflict: 'conflict',
+  failed: 'failed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type UcOfflineClientDeliveryChannel = typeof UcOfflineClientDeliveryChannel[keyof typeof UcOfflineClientDeliveryChannel] | null;
+
+
+export const UcOfflineClientDeliveryChannel = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export type UcOfflineClientDeliveryStatus = typeof UcOfflineClientDeliveryStatus[keyof typeof UcOfflineClientDeliveryStatus];
+
+
+export const UcOfflineClientDeliveryStatus = {
+  pending: 'pending',
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  not_applicable: 'not_applicable',
+} as const;
+
+export type UcOfflineClientDeliveryMetadata = { [key: string]: unknown };
+
+export interface UcOfflineClient {
+  id: number;
+  clientRef: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  products: UcOfflineProduct[];
+  saleDate: string;
+  notes?: string;
+  /** @nullable */
+  companionUserId?: number | null;
+  accountSetupStatus: UcOfflineClientAccountSetupStatus;
+  /** @nullable */
+  deliveryChannel?: UcOfflineClientDeliveryChannel;
+  deliveryStatus: UcOfflineClientDeliveryStatus;
+  deliveryMetadata?: UcOfflineClientDeliveryMetadata;
+  /** @nullable */
+  conflictReason?: string | null;
+  deliveryAttempts?: number;
+  /** @nullable */
+  deliveryLastAttemptAt?: string | null;
+  /** @nullable */
+  deliveryError?: string | null;
+}
+
+export interface UcOfflineClientResponse {
+  client: UcOfflineClient;
+}
+
 export type ListUcCustomersParams = {
 /**
  * Search by name, email, or normalized international phone number (case-insensitive)
@@ -847,6 +949,14 @@ from?: string;
  * Registration date range end (inclusive)
  */
 to?: string;
+};
+
+export type ListUcOfflineClients200 = {
+  clients: UcOfflineClient[];
+};
+
+export type RetryUcOfflineClientDelivery200 = {
+  client?: UcOfflineClient;
 };
 
 export type ListTasksParams = {

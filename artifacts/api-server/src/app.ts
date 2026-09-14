@@ -77,10 +77,8 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// The Expo web preview runs on a different origin (https://$REPLIT_EXPO_DEV_DOMAIN)
-// than the API server, so its browser fetches need CORS headers. We only allow
-// the Replit dev-domain origins, and only outside production — native builds
-// don't enforce CORS, and the production web apps are served same-origin.
+// Expo web and the separately hosted production web apps call the API from
+// different origins. Native builds do not enforce CORS.
 // Origin list is built by buildCorsOrigins() so the same logic can be tested
 // without duplicating it.
 app.use(cors({ origin: buildCorsOrigins(process.env) }));

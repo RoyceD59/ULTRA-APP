@@ -57,6 +57,7 @@ import type {
   ListNotificationLogsParams,
   ListTasksParams,
   ListUcCustomersParams,
+  ListUcOfflineClients200,
   Member,
   MemberInput,
   MemberUpdate,
@@ -70,6 +71,7 @@ import type {
   ProjectSummary,
   ProjectUpdate,
   ProjectWithProgress,
+  RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
   SyncTriggered,
@@ -84,6 +86,9 @@ import type {
   UcCustomerDetail,
   UcCustomerList,
   UcCustomersCount,
+  UcOfflineClientInput,
+  UcOfflineClientResponse,
+  UcOfflineClientUpdateInput,
   UcOrderCustomerStageInput,
   UcPasswordChangeResult,
   UcPermanentPasswordInput,
@@ -1253,6 +1258,297 @@ export const useCompleteUcTemporaryPasswordChangeAlias = <TError = ErrorType<voi
         TContext
       > => {
       return useMutation(getCompleteUcTemporaryPasswordChangeAliasMutationOptions(options));
+    }
+
+export const getListUcOfflineClientsUrl = () => {
+
+
+
+
+  return `/api/uc/offline-clients`
+}
+
+/**
+ * @summary List offline sales and Companion account setup states
+ */
+export const listUcOfflineClients = async ( options?: RequestInit): Promise<ListUcOfflineClients200> => {
+
+  return customFetch<ListUcOfflineClients200>(getListUcOfflineClientsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcOfflineClientsQueryKey = () => {
+    return [
+    `/api/uc/offline-clients`
+    ] as const;
+    }
+
+
+export const getListUcOfflineClientsQueryOptions = <TData = Awaited<ReturnType<typeof listUcOfflineClients>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcOfflineClients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcOfflineClientsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcOfflineClients>>> = ({ signal }) => listUcOfflineClients({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcOfflineClients>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcOfflineClientsQueryResult = NonNullable<Awaited<ReturnType<typeof listUcOfflineClients>>>
+export type ListUcOfflineClientsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List offline sales and Companion account setup states
+ */
+
+export function useListUcOfflineClients<TData = Awaited<ReturnType<typeof listUcOfflineClients>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcOfflineClients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcOfflineClientsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateUcOfflineClientUrl = () => {
+
+
+
+
+  return `/api/uc/offline-clients`
+}
+
+/**
+ * @summary Record an offline sale and provision or link a Companion account
+ */
+export const createUcOfflineClient = async (ucOfflineClientInput: UcOfflineClientInput, options?: RequestInit): Promise<UcOfflineClientResponse> => {
+
+  return customFetch<UcOfflineClientResponse>(getCreateUcOfflineClientUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucOfflineClientInput)
+  }
+);}
+
+
+
+
+
+export const getCreateUcOfflineClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcOfflineClient>>, TError,{data: BodyType<UcOfflineClientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUcOfflineClient>>, TError,{data: BodyType<UcOfflineClientInput>}, TContext> => {
+
+const mutationKey = ['createUcOfflineClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUcOfflineClient>>, {data: BodyType<UcOfflineClientInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUcOfflineClient(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUcOfflineClientMutationResult = NonNullable<Awaited<ReturnType<typeof createUcOfflineClient>>>
+    export type CreateUcOfflineClientMutationBody = BodyType<UcOfflineClientInput>
+    export type CreateUcOfflineClientMutationError = ErrorType<void>
+
+    /**
+ * @summary Record an offline sale and provision or link a Companion account
+ */
+export const useCreateUcOfflineClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcOfflineClient>>, TError,{data: BodyType<UcOfflineClientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUcOfflineClient>>,
+        TError,
+        {data: BodyType<UcOfflineClientInput>},
+        TContext
+      > => {
+      return useMutation(getCreateUcOfflineClientMutationOptions(options));
+    }
+
+export const getUpdateUcOfflineClientUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/offline-clients/${id}`
+}
+
+/**
+ * @summary Update an offline sale
+ */
+export const updateUcOfflineClient = async (id: number,
+    ucOfflineClientUpdateInput: UcOfflineClientUpdateInput, options?: RequestInit): Promise<UcOfflineClientResponse> => {
+
+  return customFetch<UcOfflineClientResponse>(getUpdateUcOfflineClientUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucOfflineClientUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcOfflineClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOfflineClient>>, TError,{id: number;data: BodyType<UcOfflineClientUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcOfflineClient>>, TError,{id: number;data: BodyType<UcOfflineClientUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateUcOfflineClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcOfflineClient>>, {id: number;data: BodyType<UcOfflineClientUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcOfflineClient(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcOfflineClientMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcOfflineClient>>>
+    export type UpdateUcOfflineClientMutationBody = BodyType<UcOfflineClientUpdateInput>
+    export type UpdateUcOfflineClientMutationError = ErrorType<void>
+
+    /**
+ * @summary Update an offline sale
+ */
+export const useUpdateUcOfflineClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOfflineClient>>, TError,{id: number;data: BodyType<UcOfflineClientUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcOfflineClient>>,
+        TError,
+        {id: number;data: BodyType<UcOfflineClientUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcOfflineClientMutationOptions(options));
+    }
+
+export const getRetryUcOfflineClientDeliveryUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/offline-clients/${id}/delivery-retry`
+}
+
+/**
+ * @summary Issue a fresh credential and retry failed offline-sale delivery
+ */
+export const retryUcOfflineClientDelivery = async (id: number, options?: RequestInit): Promise<RetryUcOfflineClientDelivery200> => {
+
+  return customFetch<RetryUcOfflineClientDelivery200>(getRetryUcOfflineClientDeliveryUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryUcOfflineClientDeliveryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryUcOfflineClientDelivery>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryUcOfflineClientDelivery>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryUcOfflineClientDelivery'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryUcOfflineClientDelivery>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryUcOfflineClientDelivery(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryUcOfflineClientDeliveryMutationResult = NonNullable<Awaited<ReturnType<typeof retryUcOfflineClientDelivery>>>
+
+    export type RetryUcOfflineClientDeliveryMutationError = ErrorType<void>
+
+    /**
+ * @summary Issue a fresh credential and retry failed offline-sale delivery
+ */
+export const useRetryUcOfflineClientDelivery = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryUcOfflineClientDelivery>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryUcOfflineClientDelivery>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryUcOfflineClientDeliveryMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {

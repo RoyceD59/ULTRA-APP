@@ -8,13 +8,15 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "localhost:8080"
+        "EXPO_PUBLIC_DOMAIN": "localhost:8080",
+        "EXPO_PUBLIC_API_DOMAIN": "localhost:8080"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com"
+        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com",
+        "EXPO_PUBLIC_API_DOMAIN": "api.ucfilters.com"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -26,7 +28,8 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com"
+        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com",
+        "EXPO_PUBLIC_API_DOMAIN": "api.ucfilters.com"
       },
       "ios": {
         "resourceClass": "m-medium"

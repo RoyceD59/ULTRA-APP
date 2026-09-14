@@ -33,8 +33,9 @@ import {
   PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut, Search, Loader2, ChevronLeft,
 } from 'lucide-react';
 import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit, refreshTeamUser } from '@/lib/team-auth';
+import { API_ORIGIN } from '@/lib/api-base';
 
-const BASE      = import.meta.env.BASE_URL.replace(/\/$/, '');
+const BASE      = API_ORIGIN;
 const TOKEN_KEY = 'uc_impact_admin_token';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,6 +56,13 @@ interface OfflineClient {
   saleDate:  string;
   notes:     string;
   createdAt: string;
+  companionUserId?: number | null;
+  accountSetupStatus?: 'pending' | 'created' | 'linked-existing' | 'conflict' | 'failed';
+  deliveryChannel?: 'email' | 'whatsapp' | null;
+  deliveryStatus?: 'pending' | 'sending' | 'sent' | 'failed' | 'not_applicable';
+  deliveryMetadata?: Record<string, unknown>;
+  deliveryError?: string | null;
+  conflictReason?: string | null;
 }
 
 interface ImpactData {
@@ -125,6 +133,96 @@ function productSummary(products: OfflineProduct[]): string {
 
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `offline-sale-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * A reference is only treated as a person's name when it is exactly two
+ * alphabetic words. References such as "WS-001", email addresses, and
+ * multi-part names are deliberately left to the server/customer record.
+ */
+function inferNameFromClientRef(clientRef: string): { firstName: string; lastName: string } | null {
+  const words = clientRef.trim().split(/\s+/);
+  const nameWord = /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿ]+)*$/;
+  if (words.length !== 2 || !words.every(word => nameWord.test(word))) return null;
+  return { firstName: words[0], lastName: words[1] };
+}
+
+function accountSetupLabel(status: OfflineClient['accountSetupStatus']): string {
+  switch (status) {
+    case 'created': return 'Account created';
+    case 'linked-existing': return 'Linked existing';
+    case 'conflict': return 'Account conflict';
+    case 'failed': return 'Setup failed';
+    case 'pending': return 'Setup pending';
+    default: return 'Not available';
+  }
+}
+
+function deliveryLabel(status: OfflineClient['deliveryStatus']): string {
+  switch (status) {
+    case 'sent': return 'Sent';
+    case 'failed': return 'Delivery failed';
+    case 'pending': return 'Delivery pending';
+    case 'sending': return 'Sending';
+    case 'not_applicable': return 'Not applicable';
+    default: return 'Not available';
+  }
+}
+
+function deliveryTone(status: OfflineClient['deliveryStatus']): string {
+  switch (status) {
+    case 'sent': return 'text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/30';
+    case 'failed': return 'text-destructive border-destructive/40 bg-destructive/10';
+    case 'pending': return 'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30';
+    case 'sending': return 'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30';
+    default: return 'text-muted-foreground';
+  }
+}
+
+function safeDeliveryFailureReason(client: OfflineClient): string | null {
+  if (client.deliveryStatus !== 'failed' && client.deliveryStatus !== 'pending') return null;
+  const metadata = client.deliveryMetadata;
+  const value = client.deliveryError ?? metadata?.failureReason ?? metadata?.errorMessage ?? metadata?.error ?? metadata?.reason;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  // Delivery metadata is server-redacted, but keep credential-like values out
+  // of the UI even if an older server sends an overly detailed error.
+  if (/password|credential|secret|token/i.test(value)) {
+    return 'Delivery failed. Credential details are hidden for safety.';
+  }
+  return value.trim();
+}
+
+function withUpdatedOfflineClient(clients: OfflineClient[], updated: OfflineClient): OfflineClient[] {
+  const existing = clients.some(client => client.id === updated.id);
+  return existing
+    ? clients.map(client => client.id === updated.id ? updated : client)
+    : [updated, ...clients];
+}
+
+function accountSetupTone(status: OfflineClient['accountSetupStatus']): string {
+  switch (status) {
+    case 'created':
+    case 'linked-existing':
+      return 'text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/30';
+    case 'conflict':
+    case 'failed':
+      return 'text-destructive border-destructive/40 bg-destructive/10';
+    case 'pending':
+      return 'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30';
+    default:
+      return 'text-muted-foreground';
+  }
+}
+
+function StatusBadge({ label, className }: { label: string; className?: string }) {
+  return <Badge variant="outline" className={`text-xs whitespace-nowrap ${className ?? ''}`}>{label}</Badge>;
 }
 
 // ─── Login Gate ───────────────────────────────────────────────────────────────
@@ -408,7 +506,7 @@ export function ImpactDashboard({
   const teamToken = useMemo(() => getTeamToken(), []);
   useEffect(() => {
     if (!teamToken) return;
-    const base = import.meta.env.BASE_URL?.replace(/\/$/, '') ?? '';
+    const base = API_ORIGIN;
     fetch(`${base}/api/uc/admin/customers/count`, {
       headers: { Authorization: `Bearer ${teamToken}` },
     })
@@ -436,9 +534,14 @@ export function ImpactDashboard({
   const [formProducts,  setFormProducts]  = useState<OfflineProduct[]>([]);
   const [formSaving,    setFormSaving]    = useState(false);
   const [formError,     setFormError]     = useState('');
+  // Generated once when Add opens and retained across failed submissions so a
+  // double-click or a retry cannot create another sale/account.
+  const [addIdempotencyKey, setAddIdempotencyKey] = useState<string | null>(null);
 
   // Delete confirm
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [retryingDeliveryId, setRetryingDeliveryId] = useState<number | null>(null);
+  const [deliveryActionError, setDeliveryActionError] = useState('');
 
   // Search / filter
   const [clientSearch, setClientSearch] = useState('');
@@ -526,7 +629,7 @@ export function ImpactDashboard({
     setFormRef(''); setFormPhone(''); setFormEmail('');
     setFormDate(new Date().toISOString().slice(0, 10));
     setFormNotes(''); setFormProducts([{ productName: '', quantity: 1 }]);
-    setFormError(''); setDialogOpen(true);
+    setFormError(''); setAddIdempotencyKey(newIdempotencyKey()); setDialogOpen(true);
   }
 
   function openEdit(c: OfflineClient) {
@@ -535,7 +638,7 @@ export function ImpactDashboard({
     setFormDate(c.saleDate);
     setFormNotes(c.notes);
     setFormProducts(c.products.length > 0 ? [...c.products] : [{ productName: '', quantity: 1 }]);
-    setFormError(''); setDialogOpen(true);
+    setFormError(''); setAddIdempotencyKey(null); setDialogOpen(true);
   }
 
   function addProductRow()                                       { setFormProducts(prev => [...prev, { productName: '', quantity: 1 }]); }
@@ -543,16 +646,37 @@ export function ImpactDashboard({
   function removeProductRow(i: number)                          { setFormProducts(prev => prev.filter((_, j) => j !== i)); }
 
   async function saveClient() {
+    if (!editingClient && !formPhone.trim() && !formEmail.trim()) {
+      setFormError('Enter at least an email address or phone number so the Companion account can be linked or created.');
+      return;
+    }
     const validProducts = formProducts.filter(p => p.productName.trim() !== '' && p.quantity >= 1);
     if (validProducts.length === 0) { setFormError('Add at least one product with a name and quantity.'); return; }
     if (!formDate)                  { setFormError('Please enter the sale date.'); return; }
     setFormError(''); setFormSaving(true);
     try {
       const url  = editingClient ? `${BASE}/api/uc/offline-clients/${editingClient.id}` : `${BASE}/api/uc/offline-clients`;
+      const payload: Record<string, unknown> = {
+        clientRef: formRef.trim(),
+        phone: formPhone.trim() || null,
+        email: formEmail.trim() || null,
+        products: validProducts,
+        saleDate: formDate,
+        notes: formNotes.trim(),
+      };
+      if (!editingClient) {
+        // The server owns identity matching. Names are sent only for the
+        // conservative two-word case; references are not guessed as names.
+        const inferredName = inferNameFromClientRef(formRef);
+        if (inferredName) Object.assign(payload, inferredName);
+        const idempotencyKey = addIdempotencyKey ?? newIdempotencyKey();
+        if (!addIdempotencyKey) setAddIdempotencyKey(idempotencyKey);
+        payload.idempotencyKey = idempotencyKey;
+      }
       const res  = await fetch(url, {
         method:  editingClient ? 'PUT' : 'POST',
         headers: authHeaders(token),
-        body:    JSON.stringify({ clientRef: formRef.trim(), phone: formPhone.trim() || null, email: formEmail.trim() || null, products: validProducts, saleDate: formDate, notes: formNotes.trim() }),
+        body:    JSON.stringify(payload),
       });
       const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
       if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
@@ -564,12 +688,50 @@ export function ImpactDashboard({
         const err = await res.json().catch(() => ({} as Record<string, unknown>)) as { error?: string };
         throw new Error(err.error ?? String(res.status));
       }
+      const result = await res.json().catch(() => null) as { client?: OfflineClient } | null;
+      // Use the returned provisioning state immediately; the follow-up load
+      // keeps the list fresh but should never be the first place it appears.
+      if (result?.client) {
+        setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+      }
       setDialogOpen(false);
       await refresh();
+      // Do not let a briefly stale list response clobber the provisioning
+      // status returned by the mutation.
+      if (result?.client) setClients(prev => withUpdatedOfflineClient(prev, result.client!));
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setFormSaving(false);
+    }
+  }
+
+  async function retryDelivery(client: OfflineClient) {
+    if (isReadOnly) return;
+    setRetryingDeliveryId(client.id);
+    setDeliveryActionError('');
+    try {
+      const res = await fetch(`${BASE}/api/uc/offline-clients/${client.id}/delivery-retry`, {
+        method: 'POST',
+        headers: authHeaders(token),
+      });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string; error?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
+      if (res.status === 401) { onSignOut(); return; }
+      if (!res.ok) throw new Error(responseError.error ?? `Retry failed (${res.status})`);
+      const result = await res.json().catch(() => null) as { client?: OfflineClient } | null;
+      if (result?.client) {
+        setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+      }
+      await refresh();
+      if (result?.client) setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+    } catch (e) {
+      setDeliveryActionError(e instanceof Error ? e.message : 'Could not retry delivery.');
+    } finally {
+      setRetryingDeliveryId(null);
     }
   }
 
@@ -643,6 +805,13 @@ export function ImpactDashboard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           {permissionMessage}
+        </div>
+      )}
+
+      {deliveryActionError && (
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          {deliveryActionError}
         </div>
       )}
 
@@ -750,7 +919,7 @@ export function ImpactDashboard({
 
             <Card className="overflow-hidden">
               <div className="overflow-x-auto overscroll-x-contain" role="region" aria-label="Offline client sales table" tabIndex={0}>
-                <table className="w-full min-w-[860px] text-sm">
+                <table className="w-full min-w-[1160px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
@@ -760,13 +929,15 @@ export function ImpactDashboard({
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Products</th>
                       <th className="text-right px-4 py-3 font-medium text-muted-foreground">Litres</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Notes</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Companion account</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Credential delivery</th>
                       {!isReadOnly && <th className="px-4 py-3" />}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredClients.length === 0 ? (
                       <tr>
-                        <td colSpan={isReadOnly ? 7 : 8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={isReadOnly ? 9 : 10} className="px-4 py-8 text-center text-sm text-muted-foreground">
                           No entries match "{clientSearch}".
                         </td>
                       </tr>
@@ -801,12 +972,53 @@ export function ImpactDashboard({
                               ? <span className="text-muted-foreground text-xs">{c.notes}</span>
                               : <span className="text-muted-foreground/40">—</span>}
                           </td>
+                           <td className="px-4 py-3 align-top">
+                             <StatusBadge
+                               label={accountSetupLabel(c.accountSetupStatus)}
+                               className={accountSetupTone(c.accountSetupStatus)}
+                             />
+                             {c.conflictReason && (
+                               <p className="mt-1 max-w-[220px] text-xs text-destructive">{c.conflictReason}</p>
+                             )}
+                           </td>
+                           <td className="px-4 py-3 align-top">
+                             <div className="flex flex-wrap items-center gap-1.5">
+                               <StatusBadge
+                                 label={deliveryLabel(c.deliveryStatus)}
+                                 className={deliveryTone(c.deliveryStatus)}
+                               />
+                               {c.deliveryChannel && (
+                                 <span className="text-xs text-muted-foreground">
+                                   via {c.deliveryChannel === 'whatsapp' ? 'WhatsApp' : 'email'}
+                                 </span>
+                               )}
+                             </div>
+                             {c.deliveryStatus === 'failed' && (
+                               <p className="mt-1 max-w-[220px] text-xs text-destructive">
+                                 {safeDeliveryFailureReason(c) ?? 'Delivery failed. Retry to issue a fresh one-time credential.'}
+                               </p>
+                             )}
+                           </td>
                           {!isReadOnly && (
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1 justify-end">
                                 <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="h-7 w-7 p-0">
                                   <Pencil className="w-3.5 h-3.5" />
                                 </Button>
+                                {/* Pending/sending jobs are already in flight; the API authorizes a fresh
+                                    credential retry only after a terminal failure. */}
+                                {c.deliveryStatus === 'failed' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => retryDelivery(c)}
+                                    disabled={retryingDeliveryId === c.id}
+                                    className="h-7 gap-1 px-2 text-xs"
+                                  >
+                                    <RefreshCw className={`w-3 h-3 ${retryingDeliveryId === c.id ? 'animate-spin' : ''}`} />
+                                    {retryingDeliveryId === c.id ? 'Retrying…' : 'Retry delivery'}
+                                  </Button>
+                                )}
                                 {deletingId === c.id ? (
                                   <div className="flex items-center gap-1">
                                     <Button variant="destructive" size="sm" onClick={() => deleteClient(c.id)} className="h-7 text-xs px-2">Confirm</Button>
@@ -924,6 +1136,19 @@ export function ImpactDashboard({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {!editingClient && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-200">
+                <p className="font-medium">Companion account setup</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  We will match this sale by email or phone and safely link an existing Companion
+                  account, or create one when there is no match. New accounts receive a one-time
+                  credential by email (or WhatsApp for phone-only customers), valid for 14 days,
+                  and must choose a permanent password on first sign-in. Existing passwords are
+                  never replaced, and the temporary password is not shown in ProjectHub.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="clientRef">Client name / reference <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Input id="clientRef" placeholder="e.g. Jane Kamau, WS-001"
@@ -932,16 +1157,22 @@ export function ImpactDashboard({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="formPhone">Phone number <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Label htmlFor="formPhone">Phone number {!editingClient && <span className="text-muted-foreground font-normal">(email or phone required)</span>}</Label>
                 <Input id="formPhone" type="tel" placeholder="e.g. +254 712 345 678"
                   value={formPhone} onChange={e => setFormPhone(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="formEmail">Email address <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Label htmlFor="formEmail">Email address {!editingClient && <span className="text-muted-foreground font-normal">(email or phone required)</span>}</Label>
                 <Input id="formEmail" type="email" placeholder="e.g. jane@example.com"
                   value={formEmail} onChange={e => setFormEmail(e.target.value)} />
               </div>
             </div>
+            {!editingClient && (
+              <p className="-mt-2 text-xs text-muted-foreground">
+                At least one contact is required. Email is used for delivery when supplied;
+                phone-only customers receive the credential through WhatsApp.
+              </p>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="saleDate">Sale date <span className="text-destructive">*</span></Label>

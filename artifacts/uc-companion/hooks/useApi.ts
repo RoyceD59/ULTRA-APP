@@ -1,11 +1,7 @@
 import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
-
-const getBase = () =>
-  process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : '';
+import { getApiBase } from '@/lib/apiBase';
 
 // ApiError lives in its own dependency-free module so the rate-limit tests can
 // exercise it under node:test; re-exported here so app imports keep working.
@@ -21,7 +17,7 @@ export { ApiError };
 export const resolveMediaUrl = (src?: string | null): string => {
   if (!src) return '';
   if (/^(https?:|file:|blob:|data:|content:)/.test(src)) return src;
-  return `${getBase()}${src}`;
+  return `${getApiBase()}${src}`;
 };
 
 /**
@@ -373,7 +369,7 @@ export function useApi() {
   }, [token]);
 
   const get = useCallback(async <T>(path: string, signal?: AbortSignal): Promise<T> => {
-    const res = await fetch(`${getBase()}${path}`, { headers: authHeaders(), signal });
+    const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders(), signal });
     if (!res.ok) {
       return throwResponseError(res);
     }
@@ -381,7 +377,7 @@ export function useApi() {
   }, [authHeaders, throwResponseError]);
 
   const post = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(`${getBase()}${path}`, {
+    const res = await fetch(`${getApiBase()}${path}`, {
       method: 'POST',
       headers: authHeaders(),
       body: body ? JSON.stringify(body) : undefined,
@@ -393,7 +389,7 @@ export function useApi() {
   }, [authHeaders, throwResponseError]);
 
   const patch = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(`${getBase()}${path}`, {
+    const res = await fetch(`${getApiBase()}${path}`, {
       method: 'PATCH',
       headers: authHeaders(),
       body: body ? JSON.stringify(body) : undefined,
@@ -491,7 +487,7 @@ export function useApi() {
     /** Download a machine-readable JSON copy of the authenticated user's data
      *  (GDPR Art. 20 / PDPA data portability). Returns the raw JSON text. */
     exportData: async (): Promise<string> => {
-      const res = await fetch(`${getBase()}/api/uc/customer/data-export`, {
+      const res = await fetch(`${getApiBase()}/api/uc/customer/data-export`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -507,7 +503,7 @@ export function useApi() {
      */
     getWaterTestHistory: async (): Promise<WaterTestRequest[]> => {
       const raw = await (async () => {
-        const res = await fetch(`${getBase()}/api/uc/customer/data-export`, {
+        const res = await fetch(`${getApiBase()}/api/uc/customer/data-export`, {
           headers: authHeaders(),
         });
         if (!res.ok) return throwResponseError(res);
@@ -528,7 +524,7 @@ export function useApi() {
 
     /** Permanently anonymise the authenticated user's account and personal data. */
     deleteAccount: async (): Promise<{ ok: boolean }> => {
-      const res = await fetch(`${getBase()}/api/uc/customer`, {
+      const res = await fetch(`${getApiBase()}/api/uc/customer`, {
         method: 'DELETE',
         headers: authHeaders(),
       });
@@ -585,7 +581,7 @@ export function useApi() {
     }) => post<UCProductMediaRow>(`/api/uc/admin/products/${productId}/media`, data),
     /** Admin: remove a team-uploaded media row. */
     deleteProductMediaAdmin: async (mediaId: number): Promise<{ ok: boolean }> => {
-      const res = await fetch(`${getBase()}/api/uc/admin/media/${mediaId}`, {
+      const res = await fetch(`${getApiBase()}/api/uc/admin/media/${mediaId}`, {
         method: 'DELETE',
         headers: authHeaders(),
       });
@@ -690,7 +686,7 @@ export function useApi() {
 
     /** Remove a product from the wishlist. */
     removeFromWishlist: async (productId: number): Promise<{ ok: boolean }> => {
-      const res = await fetch(`${getBase()}/api/uc/wishlist/${productId}`, {
+      const res = await fetch(`${getApiBase()}/api/uc/wishlist/${productId}`, {
         method: 'DELETE',
         headers: authHeaders(),
       });

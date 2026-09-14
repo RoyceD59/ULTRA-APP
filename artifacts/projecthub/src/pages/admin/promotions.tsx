@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthHeaders } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const base = () => import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const base = () => API_ORIGIN;
 type PromotionType = "bonus_points" | "redemption_boost" | "checkout_discount";
 type ValueMode = "fixed" | "percentage";
 interface Promotion {

@@ -373,15 +373,22 @@ export function getWhatsAppStatus(): { state: WaState; qr: string | null } {
  */
 export async function sendWhatsAppMessage(
   to: string,
-  text: string
+  text: string,
+  signal?: AbortSignal,
 ): Promise<string> {
+  if (signal?.aborted) throw new Error("WhatsApp delivery aborted");
   if (!sock || connectionState !== "connected") {
     throw new Error("WhatsApp session is not connected");
   }
   // Normalise number → JID: +254712345678 → 254712345678@s.whatsapp.net
   const digits = to.replace(/^\+/, "").replace(/\D/g, "");
   const jid = `${digits}@s.whatsapp.net`;
-  const result = await sock.sendMessage(jid, { text });
+  const result = await Promise.race([
+    sock.sendMessage(jid, { text }),
+    new Promise<never>((_, reject) => {
+      signal?.addEventListener("abort", () => reject(new Error("WhatsApp delivery aborted")), { once: true });
+    }),
+  ]);
   // result?.key?.id is the unique message ID Baileys assigns
   return result?.key?.id ?? "";
 }

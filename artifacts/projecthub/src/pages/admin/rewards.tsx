@@ -22,8 +22,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getAuthHeaders, getTeamUser, isTeamAdmin } from "@/lib/team-auth";
 import { createQrScannerAdapter } from "@/lib/qr-scanner-adapter";
 import { QrScannerController, type QrScannerFailure } from "@/lib/qr-scanner-controller";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const base = () => import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const base = () => API_ORIGIN;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

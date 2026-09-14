@@ -7,8 +7,9 @@ import { TaskStatusBadge, formatRelativeDate } from "@/components/shared/badges"
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { getAuthHeaders } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_ORIGIN;
 
 interface LifespanAuditProduct {
   id: number;

@@ -18,8 +18,9 @@ import { MessageCircle, RefreshCw, Wifi, WifiOff, LogOut, Loader2, KeyRound } fr
 import { useToast } from "@/hooks/use-toast";
 import { TeamAuthDialog } from "@/components/team-auth-dialog";
 import { getAuthHeaders, isTeamAuthenticated, clearTeamToken } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_ORIGIN;
 
 type WaState = "disconnected" | "connecting" | "qr" | "connected";
 interface WaStatus { state: WaState; qr: string | null }

@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthHeaders } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const base = () => import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const base = () => API_ORIGIN;
 type LocationType = "experience_centre" | "refill_atm" | "vendor";
 interface Location { id: string; name: string; type: LocationType; address: string; hours: string; phone: string | null; vendorName?: string | null; latitude: number | string; longitude: number | string; verified: boolean; active: boolean; verifiedBy?: string | null; verifiedAt?: string | null; }
 interface Form { name: string; type: LocationType; address: string; hours: string; phone: string; vendorName: string; latitude: string; longitude: string; }

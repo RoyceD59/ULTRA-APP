@@ -16,7 +16,7 @@ export default function LoginScreen() {
   const { returnTo: returnToParam } = useLocalSearchParams<{ returnTo?: string }>();
   const returnTo = resolveReturnTo(returnToParam);
   const { login, mustChangePassword } = useAuth();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -29,11 +29,14 @@ export default function LoginScreen() {
   }
 
   async function handleLogin() {
-    if (!email || !password) { Alert.alert('Required', 'Enter your email and password.'); return; }
+    if (!identifier.trim() || !password) {
+      Alert.alert('Required', 'Enter your email or phone number and password.');
+      return;
+    }
     Keyboard.dismiss();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
-    const result = await login(email.trim(), password);
+    const result = await login(identifier.trim(), password);
     setLoading(false);
     if (result.success) {
       // AuthProvider has already persisted the temporary session. Route it
@@ -56,12 +59,12 @@ export default function LoginScreen() {
         {/* Form */}
         <View style={styles.form}>
           <View style={styles.field}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email</Text>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Email or phone number</Text>
             <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
-              <TextInput value={email} onChangeText={setEmail}
-                placeholder="you@example.com" keyboardType="email-address"
-                 autoCapitalize="none" autoComplete="email" returnKeyType="next"
+              <Ionicons name="person-outline" size={18} color={colors.mutedForeground} />
+              <TextInput testID="login-identifier" value={identifier} onChangeText={setIdentifier}
+                placeholder="you@example.com or +254 700 000 000" keyboardType="email-address"
+                 autoCapitalize="none" autoComplete="username" returnKeyType="next"
                  onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.input, { color: colors.text }]} />
             </View>
@@ -91,8 +94,8 @@ export default function LoginScreen() {
           <TouchableOpacity
             testID="forgot-password-link"
             onPress={() => router.push(
-              email.trim()
-                ? ({ pathname: '/auth/forgot-password', params: { email: email.trim() } } as never)
+              identifier.trim()
+                ? ({ pathname: '/auth/forgot-password', params: { email: identifier.trim() } } as never)
                 : ('/auth/forgot-password' as never),
             )}
             style={styles.forgotPasswordBtn}

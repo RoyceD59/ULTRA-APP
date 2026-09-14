@@ -21,8 +21,9 @@ import {
 import { formatRelativeDate } from "@/components/shared/badges";
 import { useToast } from "@/hooks/use-toast";
 import { getTeamToken } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const BASE      = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE      = API_ORIGIN;
 const TOKEN_KEY = "uc_notif_admin_token";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

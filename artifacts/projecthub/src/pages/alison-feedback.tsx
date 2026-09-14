@@ -28,8 +28,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getTeamToken, clearTeamAuth, handleUnauthorizedResponse } from '@/lib/team-auth';
+import { API_ORIGIN } from '@/lib/api-base';
 
-const BASE             = import.meta.env.BASE_URL.replace(/\/$/, '');
+const BASE             = API_ORIGIN;
 const AUTO_REFRESH_MS  = 60_000;
 
 // ── TopicBreakdown component ──────────────────────────────────────────────────

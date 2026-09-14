@@ -8,8 +8,9 @@ import {
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { API_ORIGIN } from '@/lib/api-base';
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const BASE = API_ORIGIN;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ChatMsg {

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { registerCurrentPushToken, unregisterPushToken } from '@/hooks/useNotifications';
-import { authErrorMessage } from '@/hooks/rateLimitAlert';
+import { authErrorMessage, companionLoginError } from '@/hooks/rateLimitAlert';
 import { setRejectedSessionHandler } from '@/hooks/deletedAccountResponse';
 import {
   clearPersistedSession,
@@ -8,6 +8,7 @@ import {
   persistSession,
   type PersistedSession,
 } from '@/lib/sessionPersistence';
+import { getApiBase } from '@/lib/apiBase';
 import { completeUcTemporaryPasswordChange } from '@workspace/api-client-react';
 
 export interface UCUser {
@@ -32,7 +33,7 @@ interface AuthContextValue {
   /** Expiry timestamp supplied by the Companion login contract. */
   temporaryPasswordExpiresAt: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresPasswordChange?: boolean }>;
+  login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string; requiresPasswordChange?: boolean }>;
   /** Replace a temporary password and atomically activate the permanent session. */
   changePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string; hint?: string }>;
@@ -68,11 +69,6 @@ const AuthContext = createContext<AuthContextValue>({
   handleRejectedSession: async () => {},
   updateUser: async () => {},
 });
-
-const getBase = () =>
-  process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : '';
 
 function temporaryPasswordExpired(user: Pick<UCUser, 'mustChangePassword' | 'temporaryPasswordExpiresAt'>): boolean {
   if (!user.mustChangePassword) return false;
@@ -160,16 +156,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, [enqueueDurableWrite]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (identifier: string, password: string) => {
     const operation = ++sessionVersion.current;
     try {
-      const res = await fetch(`${getBase()}/api/uc/auth/login`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        // The endpoint accepts either an email address or a phone number and
+        // performs canonical phone lookup server-side. Keeping the identifier
+        // opaque here also preserves local-number input for server normalization.
+        body: JSON.stringify({ identifier, password }),
       });
       const data = await res.json() as { token?: string; user?: UCUser; error?: string };
-      const loginErr = authErrorMessage(res.status, res.ok, data.error, 'Login failed');
+      // Do not disclose whether an email/phone exists. Keep the rate-limit
+      // response actionable, but use one neutral message for other failures.
+      const loginErr = companionLoginError(res.status, res.ok, data.error);
       if (loginErr) return { success: false, error: loginErr };
       if (!data.token || !data.user) return { success: false, error: 'Login failed' };
       if (temporaryPasswordExpired(data.user)) {
@@ -239,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (d: RegisterData) => {
     const operation = ++sessionVersion.current;
     try {
-      const res = await fetch(`${getBase()}/api/uc/auth/register`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(d),
@@ -259,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const socialLogin = async (clerkToken: string) => {
     const operation = ++sessionVersion.current;
     try {
-      const res = await fetch(`${getBase()}/api/uc/auth/social`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clerkToken}` },
       });

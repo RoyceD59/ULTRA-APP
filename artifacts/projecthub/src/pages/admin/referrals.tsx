@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAuthHeaders } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const base = () => import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const base = () => API_ORIGIN;
 
 interface ThresholdChange {
   actorTeamUserId: string;

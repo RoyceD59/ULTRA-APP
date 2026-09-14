@@ -1685,24 +1685,44 @@ router.delete("/uc/admin/media/:mediaId", async (req: Request, res: Response): P
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+function publicCompanionEmail(email: string): string {
+  // Phone-only offline accounts use an opaque database-compatible address.
+  // It is an implementation detail, never the customer's login identity.
+  return email.endsWith("@accounts.ucfilters.invalid") ? "" : email;
+}
+
 router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): Promise<void> => {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) {
-    res.status(400).json({ error: "Email and password required" });
+  res.set("Cache-Control", "no-store");
+  const { email, identifier, phone, password } = req.body as {
+    email?: string; identifier?: string; phone?: string; password?: string;
+  };
+  const loginIdentifier = identifier ?? email ?? phone;
+  if (!loginIdentifier || !password) {
+    res.status(400).json({ error: "Email or phone and password required" });
     return;
   }
 
-  const normalizedEmail = normalizeEmail(email);
+  const normalizedEmail = loginIdentifier.includes("@") ? normalizeEmail(loginIdentifier) : null;
+  const normalizedPhone = normalizedEmail ? null : normalizePhone(loginIdentifier);
+  if (!normalizedEmail && !normalizedPhone) {
+    res.status(400).json({ error: phoneValidationMessage() });
+    return;
+  }
 
   // Prefer an existing Companion account. A same-email WooCommerce account
   // must never bypass the Companion password or silently replace its identity.
   try {
-    const dbUser = await db.query.ucUsersTable.findFirst({
-      where: and(
-        eq(ucUsersTable.email, normalizedEmail),
-        isNull(ucUsersTable.deletedAt),
-      ),
-    });
+    const dbUsers = await db.select().from(ucUsersTable).where(and(
+      normalizedEmail ? eq(ucUsersTable.email, normalizedEmail) : eq(ucUsersTable.phone, normalizedPhone!),
+      isNull(ucUsersTable.deletedAt),
+    )).limit(2);
+    // A legacy duplicate phone must fail closed rather than selecting an
+    // arbitrary customer's password.
+    if (dbUsers.length > 1) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+    const dbUser = dbUsers[0];
     if (dbUser && dbUser.authProvider !== "woocommerce") {
       const match = await bcryptjs.compare(password, dbUser.passwordHash);
       if (!match) {
@@ -1719,7 +1739,7 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
       }
       const user = {
         id: dbUser.id,
-        email: dbUser.email,
+        email: publicCompanionEmail(dbUser.email),
         phone: dbUser.phone,
         firstName: dbUser.firstName,
         lastName: dbUser.lastName,
@@ -1742,10 +1762,14 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
 
   try {
     const wcBase = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
+    if (!normalizedEmail) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
     const jwtRes = await fetch(`${wcBase}/wp-json/jwt-auth/v1/token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: email, password }),
+      body: JSON.stringify({ username: normalizedEmail, password }),
     });
     const jwtData: unknown = await jwtRes.json();
     if (
@@ -1816,10 +1840,10 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
   // No database or WooCommerce account. Development only: allow an ephemeral
   // demo session so the app can be tried before external credentials exist.
   if (process.env["NODE_ENV"] !== "production" && password.length >= 6) {
-    const name = email.split("@")[0] ?? "customer";
+    const name = loginIdentifier.split("@")[0] ?? "customer";
     const mockUser = {
       id:        Date.now(),
-      email,
+      email: loginIdentifier,
       phone:     "",
       firstName: name.charAt(0).toUpperCase() + name.slice(1),
       lastName:  "Customer",
@@ -2713,6 +2737,7 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
  * from every customer route until this transaction succeeds.
  */
 async function completeTemporaryPasswordChange(req: Request, res: Response): Promise<void> {
+  res.set("Cache-Control", "no-store");
   const claims = verifyToken(req.headers["authorization"]);
   const userId = Number(claims?.id);
   if (!claims || claims.mustChangePassword !== true || !Number.isInteger(userId) || userId <= 0) {
@@ -2783,7 +2808,7 @@ async function completeTemporaryPasswordChange(req: Request, res: Response): Pro
     });
     const user = {
       id: saved.id,
-      email: saved.email,
+      email: publicCompanionEmail(saved.email),
       phone: saved.phone,
       firstName: saved.first_name,
       lastName: saved.last_name,
@@ -2825,7 +2850,7 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
         }
         res.json({
           id: dbUser.id,
-          email: dbUser.email,
+          email: publicCompanionEmail(dbUser.email),
           phone: dbUser.phone,
           firstName: dbUser.firstName,
           lastName: dbUser.lastName,

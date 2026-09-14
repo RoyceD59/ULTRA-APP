@@ -35,6 +35,9 @@ const clients = [
     saleDate: '2026-09-12',
     notes: '',
     createdAt: '2026-09-12T00:00:00.000Z',
+    accountSetupStatus: 'created',
+    deliveryChannel: 'email',
+    deliveryStatus: 'sent',
   },
   {
     id: 2,
@@ -45,6 +48,10 @@ const clients = [
     saleDate: '2026-09-12',
     notes: '',
     createdAt: '2026-09-12T00:00:00.000Z',
+    accountSetupStatus: 'conflict',
+    deliveryChannel: null,
+    deliveryStatus: 'pending',
+    conflictReason: 'Email and phone identify different accounts',
   },
 ];
 
@@ -77,5 +84,15 @@ describe('ImpactDashboard offline client contact actions', () => {
     expect(within(missingContactRow!).getAllByText('—')).toHaveLength(3);
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows Companion account and credential delivery status for each sale', async () => {
+    render(<ImpactDashboard token="test-token" onSignOut={vi.fn()} />);
+
+    expect(await screen.findByText('Account created')).toBeInTheDocument();
+    expect(screen.getByText('Sent')).toBeInTheDocument();
+    expect(screen.getByText('via email')).toBeInTheDocument();
+    expect(screen.getByText('Account conflict')).toBeInTheDocument();
+    expect(screen.getByText('Email and phone identify different accounts')).toBeInTheDocument();
   });
 });

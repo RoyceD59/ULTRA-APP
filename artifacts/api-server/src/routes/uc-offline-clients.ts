@@ -17,8 +17,14 @@ import { eq, desc } from "drizzle-orm";
 import { isAdminRequest, requireImpactEditAccess } from "../lib/adminAuth.js";
 import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
+import { normalizeEmail, normalizePhone } from "../lib/customer-identity.js";
+import { provisionOfflineSale, retryOfflineSaleDelivery, toPublicOfflineSale } from "../lib/offline-provisioning.js";
 
 const router: IRouter = Router();
+router.use("/uc/offline-clients", (_req: Request, res: Response, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
 
@@ -72,11 +78,7 @@ function validatePhone(v: unknown): string | null | undefined {
   if (typeof v !== "string") return null; // invalid type → reject
   const cleaned = v.trim();
   if (cleaned === "") return undefined;
-  // Allow +, digits, spaces, hyphens, parentheses — at least 7 digits present
-  if (!/^\+?[\d\s\-().]{7,32}$/.test(cleaned)) return null;
-  const digits = cleaned.replace(/\D/g, "");
-  if (digits.length < 7 || digits.length > 20) return null;
-  return cleaned;
+  return normalizePhone(cleaned);
 }
 
 /** Permissive RFC 5322 surface check — rejects obvious non-emails */
@@ -151,9 +153,9 @@ router.get("/uc/offline-clients", async (req: Request, res: Response): Promise<v
       .select()
       .from(ucOfflineClientsTable)
       .orderBy(desc(ucOfflineClientsTable.createdAt));
-    res.json({ clients: rows });
+    res.json({ clients: rows.map(toPublicOfflineSale) });
   } catch (err) {
-    console.error("[uc/offline-clients] list error:", err);
+    logger.error({ err }, "[uc/offline-clients] list error");
     res.status(500).json({ error: "Failed to fetch offline clients" });
   }
 });
@@ -163,7 +165,7 @@ router.get("/uc/offline-clients", async (req: Request, res: Response): Promise<v
 router.post("/uc/offline-clients", async (req: Request, res: Response): Promise<void> => {
   if (!(await requireImpactEditAccess(req, res))) return;
 
-  const { clientRef, products, saleDate, notes, phone, email } = req.body as Record<string, unknown>;
+  const { clientRef, products, saleDate, notes, phone, email, idempotencyKey, firstName, lastName } = req.body as Record<string, unknown>;
 
   const parsedProducts = parseProducts(products);
   const parsedDate     = validateDate(saleDate);
@@ -186,23 +188,55 @@ router.post("/uc/offline-clients", async (req: Request, res: Response): Promise<
     res.status(400).json({ error: "email must be a valid email address" });
     return;
   }
+  if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 8 || idempotencyKey.length > 200) {
+    res.status(400).json({ error: "idempotencyKey is required and must be 8–200 characters" });
+    return;
+  }
+  if (parsedPhone === undefined && parsedEmail === undefined) {
+    res.status(400).json({ error: "At least one valid email address or international phone number is required" });
+    return;
+  }
 
   try {
-    const [row] = await db
-      .insert(ucOfflineClientsTable)
-      .values({
-        clientRef: typeof clientRef === "string" ? clientRef.trim() : "",
-        phone:     parsedPhone ?? null,
-        email:     parsedEmail ?? null,
-        products:  parsedProducts,
-        saleDate:  parsedDate,
-        notes:     typeof notes === "string" ? notes.trim() : "",
-      })
-      .returning();
-    res.status(201).json({ client: row });
+    const result = await provisionOfflineSale({
+      idempotencyKey: idempotencyKey.trim(),
+      clientRef: typeof clientRef === "string" ? clientRef.trim() : "",
+      phone: parsedPhone ?? null,
+      email: parsedEmail ?? null,
+      products: parsedProducts,
+      saleDate: parsedDate,
+      notes: typeof notes === "string" ? notes.trim() : "",
+      firstName: typeof firstName === "string" ? firstName : undefined,
+      lastName: typeof lastName === "string" ? lastName : undefined,
+    });
+    res.status(result.created ? 201 : 200).json({ client: result.row });
   } catch (err) {
-    console.error("[uc/offline-clients] create error:", err);
+    logger.error({ err }, "[uc/offline-clients] create error");
     res.status(500).json({ error: "Failed to create offline client entry" });
+  }
+});
+
+router.post("/uc/offline-clients/:id/delivery-retry", async (req: Request, res: Response): Promise<void> => {
+  if (!(await requireImpactEditAccess(req, res))) return;
+  const id = parseId(req.params["id"]);
+  if (id === null) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  try {
+    const row = await retryOfflineSaleDelivery(id);
+    if (!row) {
+      res.status(404).json({ error: "Entry not found" });
+      return;
+    }
+    if (row.deliveryStatus !== "failed" && row.deliveryStatus !== "sent") {
+      res.status(409).json({ error: "This sale is not eligible for credential delivery retry" });
+      return;
+    }
+    res.json({ client: row });
+  } catch (err) {
+    logger.error({ err, id }, "[uc/offline-clients] delivery retry error");
+    res.status(500).json({ error: "Failed to retry credential delivery" });
   }
 });
 
@@ -253,9 +287,9 @@ router.put("/uc/offline-clients/:id", async (req: Request, res: Response): Promi
       .returning();
 
     if (!row) { res.status(404).json({ error: "Entry not found" }); return; }
-    res.json({ client: row });
+    res.json({ client: toPublicOfflineSale(row) });
   } catch (err) {
-    console.error("[uc/offline-clients] update error:", err);
+    logger.error({ err }, "[uc/offline-clients] update error");
     res.status(500).json({ error: "Failed to update offline client entry" });
   }
 });
@@ -277,7 +311,7 @@ router.delete("/uc/offline-clients/:id", async (req: Request, res: Response): Pr
     if (!row) { res.status(404).json({ error: "Entry not found" }); return; }
     res.json({ ok: true });
   } catch (err) {
-    console.error("[uc/offline-clients] delete error:", err);
+    logger.error({ err }, "[uc/offline-clients] delete error");
     res.status(500).json({ error: "Failed to delete offline client entry" });
   }
 });

@@ -6,7 +6,7 @@
  * without duplicating the logic.
  *
  * Rules:
- *   – In production, CORS is disabled entirely (returns false).
+ *   – In production, only the two public Ultra-Clear web apps are allowed.
  *   – Outside production, the Replit Expo and generic dev-domain origins
  *     are allowed when the corresponding env vars are present.
  *   – Returns false (not an empty array) when no origins resolve, so the
@@ -15,7 +15,12 @@
 export function buildCorsOrigins(
   env: Record<string, string | undefined>,
 ): string[] | false {
-  if (env["NODE_ENV"] === "production") return false;
+  if (env["NODE_ENV"] === "production") {
+    return [
+      "https://app.ucfilters.com",
+      "https://hub.ucfilters.com",
+    ];
+  }
 
   const origins: string[] = [];
   for (const domain of [env["REPLIT_EXPO_DEV_DOMAIN"], env["REPLIT_DEV_DOMAIN"]]) {

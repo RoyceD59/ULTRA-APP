@@ -54,18 +54,24 @@ function buildApp(env: Record<string, string | undefined>): express.Express {
 // ── Layer 1: buildCorsOrigins unit tests ─────────────────────────────────────
 
 describe("buildCorsOrigins — unit tests", () => {
-  it("returns false in production regardless of env vars", () => {
+  it("returns only the approved Ultra-Clear web origins in production", () => {
     const result = buildCorsOrigins({
       NODE_ENV: "production",
       REPLIT_EXPO_DEV_DOMAIN: EXPO_DOMAIN,
       REPLIT_DEV_DOMAIN: DEV_DOMAIN,
     });
-    assert.equal(result, false, "production must return false");
+    assert.deepEqual(result, [
+      "https://app.ucfilters.com",
+      "https://hub.ucfilters.com",
+    ]);
   });
 
-  it("returns false when NODE_ENV=production and no domain vars are set", () => {
+  it("does not depend on development domain variables in production", () => {
     const result = buildCorsOrigins({ NODE_ENV: "production" });
-    assert.equal(result, false);
+    assert.deepEqual(result, [
+      "https://app.ucfilters.com",
+      "https://hub.ucfilters.com",
+    ]);
   });
 
   it("returns false when no domain vars are set outside production", () => {
@@ -176,10 +182,10 @@ describe("CORS middleware — REPLIT_DEV_DOMAIN origin allowed (supertest)", () 
   });
 });
 
-// ── Layer 2c: supertest — production mode disables CORS ───────────────────────
+// ── Layer 2c: supertest — production allowlist ────────────────────────────────
 
-describe("CORS middleware — production mode fully disabled (supertest)", () => {
-  // Both domain env vars provided to confirm they are ignored in production.
+describe("CORS middleware — production allowlist (supertest)", () => {
+  // Development domain variables must not alter the fixed production list.
   const agent = supertest(
     buildApp({
       NODE_ENV: "production",
@@ -198,17 +204,27 @@ describe("CORS middleware — production mode fully disabled (supertest)", () =>
     );
   });
 
-  it("OPTIONS preflight from Expo dev-domain origin receives no CORS headers in production", async () => {
+  it("OPTIONS preflight from the Companion origin is allowed in production", async () => {
     const res = await agent
       .options("/api/healthz")
-      .set("Origin", EXPO_ORIGIN)
+      .set("Origin", "https://app.ucfilters.com")
       .set("Access-Control-Request-Method", "GET");
 
     const acao = res.headers["access-control-allow-origin"];
     assert.equal(
       acao,
-      undefined,
-      `production preflight must emit no ACAO header; got: ${String(acao)}`,
+      "https://app.ucfilters.com",
+      `production preflight must allow Companion; got: ${String(acao)}`,
+    );
+  });
+
+  it("GET from the ProjectHub origin is allowed in production", async () => {
+    const res = await agent
+      .get("/api/healthz")
+      .set("Origin", "https://hub.ucfilters.com");
+    assert.equal(
+      res.headers["access-control-allow-origin"],
+      "https://hub.ucfilters.com",
     );
   });
 });

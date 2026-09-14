@@ -81,6 +81,17 @@ function getDeploymentDomain() {
   process.exit(1);
 }
 
+function getApiDomain() {
+  if (process.env.EXPO_PUBLIC_API_DOMAIN) {
+    return stripProtocol(process.env.EXPO_PUBLIC_API_DOMAIN);
+  }
+
+  console.error(
+    'ERROR: No API domain found. Set EXPO_PUBLIC_API_DOMAIN for the production build',
+  );
+  process.exit(1);
+}
+
 function prepareDirectories(timestamp) {
   console.log('Preparing build directories...');
 
@@ -144,12 +155,13 @@ function getExpoPublicReplId() {
   return process.env.REPL_ID || process.env.EXPO_PUBLIC_REPL_ID;
 }
 
-async function startMetro(expoPublicDomain, expoPublicReplId) {
+async function startMetro(expoPublicDomain, expoPublicApiDomain, expoPublicReplId) {
   metroPort = await findMetroPort();
 
   console.log('Starting Metro...');
   console.log(`Metro port: ${metroPort}`);
   console.log(`Setting EXPO_PUBLIC_DOMAIN=${expoPublicDomain}`);
+  console.log(`Setting EXPO_PUBLIC_API_DOMAIN=${expoPublicApiDomain}`);
   // Clerk (social sign-in): forward the publishable key and construct the
   // production proxy URL from the deployment domain.
   const clerkProxyUrl = process.env.CLERK_PROXY_URL
@@ -159,6 +171,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   const env = {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
+    EXPO_PUBLIC_API_DOMAIN: expoPublicApiDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
     EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || '',
     EXPO_PUBLIC_CLERK_PROXY_URL: clerkProxyUrl,
@@ -572,6 +585,7 @@ async function main() {
   setupSignalHandlers();
 
   const domain = getDeploymentDomain();
+  const apiDomain = getApiDomain();
   const expoPublicReplId = getExpoPublicReplId();
   const baseUrl = `https://${domain}`;
   const timestamp = `${Date.now()}-${process.pid}`;
@@ -579,7 +593,7 @@ async function main() {
   prepareDirectories(timestamp);
   clearMetroCache();
 
-  await startMetro(domain, expoPublicReplId);
+  await startMetro(domain, apiDomain, expoPublicReplId);
 
   const downloadTimeout = 600000;
   const downloadPromise = downloadBundlesAndManifests(timestamp);

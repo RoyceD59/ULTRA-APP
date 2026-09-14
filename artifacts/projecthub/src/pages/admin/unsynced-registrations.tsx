@@ -25,12 +25,11 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getTeamToken } from "@/lib/team-auth";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { apiUrl } from "@/lib/api-base";
 
 function authFetch(path: string, init?: RequestInit) {
   const token = getTeamToken();
-  return fetch(`${BASE}${path}`, {
+  return fetch(apiUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",

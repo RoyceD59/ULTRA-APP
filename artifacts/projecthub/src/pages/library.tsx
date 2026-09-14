@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { getTeamToken, isTeamAdmin } from "@/lib/team-auth";
+import { apiUrl } from "@/lib/api-base";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,7 @@ function mimeLabel(mime: string): string {
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const token = getTeamToken();
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...opts,
     headers: {
       ...(opts.headers ?? {}),

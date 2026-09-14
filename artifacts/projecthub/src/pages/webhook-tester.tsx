@@ -12,8 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Webhook, Terminal, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getAuthHeaders } from "@/lib/team-auth";
+import { API_BASE_URL } from "@/lib/api-base";
 
-const API = "/api";
+const API = API_BASE_URL;
 
 const webhookSchema = z.object({
   event: z.string().min(1, "Event name is required"),

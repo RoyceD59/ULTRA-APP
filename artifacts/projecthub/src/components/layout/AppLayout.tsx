@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { apiUrl } from "@/lib/api-base";
 
 const NAVIGATION = [
   ["Dashboard", "/", "dashboard", LayoutDashboard],
@@ -76,8 +77,7 @@ function useCount(path: string, select: (body: any) => number) {
     const token = getTeamToken();
     if (!token) return;
     let active = true;
-    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-    fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl(path), { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.ok ? res.json() : null)
       .then((body) => { if (active && body) setCount(select(body)); })
       .catch(() => undefined);
@@ -149,9 +149,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!admin) return;
-    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
     const checkSecurityWarning = () => {
-      fetch(`${base}/api/admin/payment-settings`, { headers: { Authorization: `Bearer ${getTeamToken() ?? ""}` } })
+      fetch(apiUrl("/admin/payment-settings"), { headers: { Authorization: `Bearer ${getTeamToken() ?? ""}` } })
         .then((res) => res.ok ? res.json() : null)
         .then((body) => {
           if (!body) return;

@@ -8,9 +8,10 @@
  * Members have a per-page permission: "none" | "view" | "edit".
  */
 
+import { apiUrl } from "./api-base";
+
 const TOKEN_KEY = "projecthub:token";
 const USER_KEY  = "projecthub:user";
-const API = "/api";
 
 // ─── Page permission types ────────────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ async function apiFetch<T = unknown>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API}${path}`, { ...opts, headers });
+  const res = await fetch(apiUrl(path), { ...opts, headers });
   if (!res.ok) {
     if (res.status === 401) handleUnauthorizedResponse();
     const data = await res.json().catch(() => ({})) as { error?: string };

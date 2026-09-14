@@ -13,8 +13,9 @@ import { Radio, Loader2, Bot, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getAuthHeaders } from "@/lib/team-auth";
 import { Task } from "@workspace/api-client-react";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_ORIGIN;
 
 interface Agent {
   id: number;

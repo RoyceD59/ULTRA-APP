@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getAuthHeaders } from "@/lib/team-auth";
+import { apiUrl } from "@/lib/api-base";
 import {
   Dialog,
   DialogContent,
@@ -132,7 +133,7 @@ export function ConnectSheetDialog({
   // Load Google OAuth status
   const loadGoogleStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/contacts/sync/google/status", {
+      const res = await fetch(apiUrl("/contacts/sync/google/status"), {
         headers: getAuthHeaders() ?? {},
       });
       if (res.ok) {
@@ -192,7 +193,7 @@ export function ConnectSheetDialog({
   async function handleConnectGoogle() {
     setOauthBusy(true);
     try {
-      const res = await fetch("/api/contacts/sync/google/auth", {
+      const res = await fetch(apiUrl("/contacts/sync/google/auth"), {
         headers: teamHeaders(),
       });
       if (!res.ok) {
@@ -245,7 +246,7 @@ export function ConnectSheetDialog({
   async function handleDisconnectGoogle() {
     setOauthBusy(true);
     try {
-      const res = await fetch("/api/contacts/sync/google", {
+      const res = await fetch(apiUrl("/contacts/sync/google"), {
         method: "DELETE",
         headers: teamHeaders(),
       });
@@ -281,7 +282,7 @@ export function ConnectSheetDialog({
       const params = new URLSearchParams({ url: trimmed });
       if (gid) params.set("gid", gid);
 
-      const res = await fetch(`/api/contacts/sync/sheets/preview?${params.toString()}`, {
+      const res = await fetch(apiUrl(`/contacts/sync/sheets/preview?${params.toString()}`), {
         headers: getAuthHeaders() ?? {},
       });
       if (!res.ok) {
@@ -308,7 +309,7 @@ export function ConnectSheetDialog({
   async function handleConnect() {
     setBusy(true);
     try {
-      const res = await fetch("/api/contacts/sync/sheets", {
+      const res = await fetch(apiUrl("/contacts/sync/sheets"), {
         method: "POST",
         headers: teamHeaders(),
         body: JSON.stringify({
@@ -344,7 +345,7 @@ export function ConnectSheetDialog({
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch("/api/contacts/sync/sheets/run", {
+      const res = await fetch(apiUrl("/contacts/sync/sheets/run"), {
         method: "POST",
         headers: teamHeaders(),
       });

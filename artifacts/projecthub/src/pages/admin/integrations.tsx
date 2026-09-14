@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { isTeamAdmin, getAuthHeaders } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = API_ORIGIN;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

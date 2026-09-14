@@ -26,8 +26,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
+import { API_ORIGIN } from "@/lib/api-base";
 
-const BASE      = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE      = API_ORIGIN;
 const TOKEN_KEY = "uc_orders_admin_token";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

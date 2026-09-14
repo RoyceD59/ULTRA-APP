@@ -301,6 +301,199 @@ export const CompleteUcTemporaryPasswordChangeAliasResponse = zod.object({
 
 
 /**
+ * @summary List offline sales and Companion account setup states
+ */
+
+export const listUcOfflineClientsResponseClientsItemProductsItemLitresPerUnitMin = 0;
+
+
+
+export const ListUcOfflineClientsResponse = zod.object({
+  "clients": zod.array(zod.object({
+  "id": zod.number(),
+  "clientRef": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "products": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "litresPerUnit": zod.number().min(listUcOfflineClientsResponseClientsItemProductsItemLitresPerUnitMin).optional()
+})),
+  "saleDate": zod.coerce.date(),
+  "notes": zod.string().optional(),
+  "companionUserId": zod.number().nullish(),
+  "accountSetupStatus": zod.enum(['pending', 'created', 'linked-existing', 'conflict', 'failed']),
+  "deliveryChannel": zod.union([zod.literal('email'),zod.literal('whatsapp'),zod.literal(null)]).nullish(),
+  "deliveryStatus": zod.enum(['pending', 'sending', 'sent', 'failed', 'not_applicable']),
+  "deliveryMetadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "conflictReason": zod.string().nullish(),
+  "deliveryAttempts": zod.number().optional(),
+  "deliveryLastAttemptAt": zod.coerce.date().nullish(),
+  "deliveryError": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary Record an offline sale and provision or link a Companion account
+ */
+
+export const createUcOfflineClientBodyProductsItemLitresPerUnitMin = 0;
+
+
+export const createUcOfflineClientBodyIdempotencyKeyMin = 8;
+
+
+
+export const CreateUcOfflineClientBody = zod.object({
+  "clientRef": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().optional().describe('International phone number'),
+  "email": zod.string().optional().describe('Case-insensitive email address'),
+  "products": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "litresPerUnit": zod.number().min(createUcOfflineClientBodyProductsItemLitresPerUnitMin).optional()
+})).min(1),
+  "saleDate": zod.coerce.date(),
+  "notes": zod.string().optional(),
+  "idempotencyKey": zod.string().min(createUcOfflineClientBodyIdempotencyKeyMin)
+})
+
+
+export const createUcOfflineClientResponseClientProductsItemLitresPerUnitMin = 0;
+
+
+
+export const CreateUcOfflineClientResponse = zod.object({
+  "client": zod.object({
+  "id": zod.number(),
+  "clientRef": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "products": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "litresPerUnit": zod.number().min(createUcOfflineClientResponseClientProductsItemLitresPerUnitMin).optional()
+})),
+  "saleDate": zod.coerce.date(),
+  "notes": zod.string().optional(),
+  "companionUserId": zod.number().nullish(),
+  "accountSetupStatus": zod.enum(['pending', 'created', 'linked-existing', 'conflict', 'failed']),
+  "deliveryChannel": zod.union([zod.literal('email'),zod.literal('whatsapp'),zod.literal(null)]).nullish(),
+  "deliveryStatus": zod.enum(['pending', 'sending', 'sent', 'failed', 'not_applicable']),
+  "deliveryMetadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "conflictReason": zod.string().nullish(),
+  "deliveryAttempts": zod.number().optional(),
+  "deliveryLastAttemptAt": zod.coerce.date().nullish(),
+  "deliveryError": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Update an offline sale
+ */
+export const UpdateUcOfflineClientParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateUcOfflineClientBodyProductsItemLitresPerUnitMin = 0;
+
+
+
+
+export const UpdateUcOfflineClientBody = zod.object({
+  "clientRef": zod.string().optional(),
+  "phone": zod.string().optional().describe('International phone number'),
+  "email": zod.string().optional().describe('Case-insensitive email address'),
+  "products": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "litresPerUnit": zod.number().min(updateUcOfflineClientBodyProductsItemLitresPerUnitMin).optional()
+})).min(1),
+  "saleDate": zod.coerce.date(),
+  "notes": zod.string().optional()
+})
+
+
+export const updateUcOfflineClientResponseClientProductsItemLitresPerUnitMin = 0;
+
+
+
+export const UpdateUcOfflineClientResponse = zod.object({
+  "client": zod.object({
+  "id": zod.number(),
+  "clientRef": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "products": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "litresPerUnit": zod.number().min(updateUcOfflineClientResponseClientProductsItemLitresPerUnitMin).optional()
+})),
+  "saleDate": zod.coerce.date(),
+  "notes": zod.string().optional(),
+  "companionUserId": zod.number().nullish(),
+  "accountSetupStatus": zod.enum(['pending', 'created', 'linked-existing', 'conflict', 'failed']),
+  "deliveryChannel": zod.union([zod.literal('email'),zod.literal('whatsapp'),zod.literal(null)]).nullish(),
+  "deliveryStatus": zod.enum(['pending', 'sending', 'sent', 'failed', 'not_applicable']),
+  "deliveryMetadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "conflictReason": zod.string().nullish(),
+  "deliveryAttempts": zod.number().optional(),
+  "deliveryLastAttemptAt": zod.coerce.date().nullish(),
+  "deliveryError": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Issue a fresh credential and retry failed offline-sale delivery
+ */
+export const RetryUcOfflineClientDeliveryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const retryUcOfflineClientDeliveryResponseClientProductsItemLitresPerUnitMin = 0;
+
+
+
+export const RetryUcOfflineClientDeliveryResponse = zod.object({
+  "client": zod.object({
+  "id": zod.number(),
+  "clientRef": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "products": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "litresPerUnit": zod.number().min(retryUcOfflineClientDeliveryResponseClientProductsItemLitresPerUnitMin).optional()
+})),
+  "saleDate": zod.coerce.date(),
+  "notes": zod.string().optional(),
+  "companionUserId": zod.number().nullish(),
+  "accountSetupStatus": zod.enum(['pending', 'created', 'linked-existing', 'conflict', 'failed']),
+  "deliveryChannel": zod.union([zod.literal('email'),zod.literal('whatsapp'),zod.literal(null)]).nullish(),
+  "deliveryStatus": zod.enum(['pending', 'sending', 'sent', 'failed', 'not_applicable']),
+  "deliveryMetadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "conflictReason": zod.string().nullish(),
+  "deliveryAttempts": zod.number().optional(),
+  "deliveryLastAttemptAt": zod.coerce.date().nullish(),
+  "deliveryError": zod.string().nullish()
+}).optional()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

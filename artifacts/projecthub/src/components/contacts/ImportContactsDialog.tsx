@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { getListContactsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/api-base";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -203,7 +204,7 @@ export function ImportContactsDialog({
       // The server handles:
       //  - deduplication against existing contact methods (emails) and record IDs
       //  - atomic contact + method creation (DB transaction per row)
-      const response = await fetch("/api/contacts/import", {
+      const response = await fetch(apiUrl("/contacts/import"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: mappedRows }),

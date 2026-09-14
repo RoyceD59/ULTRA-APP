@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { isTeamAdmin, getAuthHeaders } from "@/lib/team-auth";
+import { API_BASE_URL } from "@/lib/api-base";
 
-const API = "/api";
+const API = API_BASE_URL;
 
 interface PaymentSettingsData {
   mpesaWebhookSecret: {

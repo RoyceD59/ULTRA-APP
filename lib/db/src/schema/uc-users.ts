@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, text, timestamp, boolean, integer, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, integer, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 /**
  * Stores registered Ultra-Clear Companion user accounts.
@@ -45,6 +45,7 @@ export const ucUsersTable = pgTable("uc_users", {
   uniqueIndex("uc_users_rewards_qr_hash_idx")
     .on(table.rewardsQrHash)
     .where(sql`${table.rewardsQrHash} IS NOT NULL`),
+  index("uc_users_phone_lookup_idx").on(table.phone),
 ]);
 
 export type UcUser = typeof ucUsersTable.$inferSelect;

@@ -27,6 +27,7 @@ import { Contact as ContactIcon, Plus, MoreVertical, Mail, Phone, MessageCircle,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials, formatDate } from "@/components/shared/badges";
+import { apiUrl } from "@/lib/api-base";
 import type { Contact, ContactMethod } from "@workspace/api-client-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -81,7 +82,7 @@ function useSheetSyncStatus() {
 
   async function refresh() {
     try {
-      const res = await fetch("/api/contacts/sync/sheets");
+      const res = await fetch(apiUrl("/contacts/sync/sheets"));
       if (res.ok) {
         const data = await res.json() as SheetStatus;
         setStatus(data);
@@ -164,7 +165,7 @@ export default function Contacts() {
   async function handleSyncNow() {
     setSyncing(true);
     try {
-      const res = await fetch("/api/contacts/sync/sheets/run", {
+      const res = await fetch(apiUrl("/contacts/sync/sheets/run"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

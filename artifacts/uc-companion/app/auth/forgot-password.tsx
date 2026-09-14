@@ -8,6 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import BrandLogo from '@/components/BrandLogo';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { getApiBase } from '@/lib/apiBase';
 import { getResetRequestError, readResetTokenParam } from '@/lib/passwordReset';
 
 export default function ForgotPasswordScreen() {
@@ -25,11 +26,6 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
-  const getBase = () =>
-    process.env.EXPO_PUBLIC_DOMAIN
-      ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-      : '';
-
   async function handleSubmit() {
     if (!email.trim()) {
       setError('Please enter your email address or phone number.');
@@ -39,7 +35,7 @@ export default function ForgotPasswordScreen() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${getBase()}/api/uc/auth/forgot-password`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: email.trim(), channel }),
@@ -70,7 +66,7 @@ export default function ForgotPasswordScreen() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${getBase()}/api/uc/auth/reset-password`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: resetToken, newPassword }),
