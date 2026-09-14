@@ -20,3 +20,9 @@ When Cloudflare Workers route custom hostnames to a shared Replit deployment, th
 **Why:** Clerk rejects production requests when the browser origin is the custom hostname but the proxy identifies itself with the generated Replit hostname.
 
 **How to apply:** Keep the edge and API allowlists identical, never accept arbitrary values, and verify Clerk environment/client calls from the custom production origin.
+
+Public Expo domains and the Clerk proxy path must be declared in the artifact's production build environment, and an explicit public domain must take precedence over Replit's injected internal hostname. Run production Metro with a cleared transform cache.
+
+**Why:** Publish builds do not inherit development-only variables. Metro can also reuse a transform where an `EXPO_PUBLIC_*` value was previously absent, leaving that compiled constant `undefined` even after the build environment supplies it.
+
+**How to apply:** Keep public build variables in the validated artifact configuration, use Metro's cache-clear option for production builds, and inspect the compiled root-layout constant—not just build logs—when changing Clerk proxy settings.
