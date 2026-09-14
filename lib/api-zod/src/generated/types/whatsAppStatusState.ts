@@ -14,4 +14,5 @@ export const WhatsAppStatusState = {
   connecting: 'connecting',
   qr: 'qr',
   connected: 'connected',
+  error: 'error',
 } as const;

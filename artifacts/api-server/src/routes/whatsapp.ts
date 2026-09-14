@@ -34,7 +34,8 @@ const router: IRouter = Router();
  * the socket is waiting to be paired.
  *
  * Response:
- *   { state: "disconnected" | "connecting" | "qr" | "connected", qr?: string }
+ *   { state: "disconnected" | "connecting" | "qr" | "connected" | "error",
+ *     qr?: string, error?: { code: string, message: string } }
  */
 router.get("/whatsapp/status", requireTeamAuth, (_req, res): void => {
   res.json(getWhatsAppStatus());
@@ -45,8 +46,19 @@ router.get("/whatsapp/status", requireTeamAuth, (_req, res): void => {
  * Triggers the pairing flow.  Idempotent — safe to call if already connected.
  */
 router.post("/whatsapp/connect", requireTeamAuth, async (_req, res): Promise<void> => {
-  await initWhatsApp();
-  res.json(getWhatsAppStatus());
+  try {
+    await initWhatsApp();
+    res.json(getWhatsAppStatus());
+  } catch {
+    // Keep provider/runtime details out of the public response. The status
+    // endpoint will expose the recoverable state when initialization failed.
+    res.status(503).json({
+      error: {
+        code: "WHATSAPP_INIT_FAILED",
+        message: "WhatsApp could not start. Check the server configuration and retry.",
+      },
+    });
+  }
 });
 
 /**

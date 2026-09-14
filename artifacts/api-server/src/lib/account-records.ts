@@ -79,11 +79,15 @@ export interface AccountRecord {
   /** False when the DB insert failed and the folder is the only record. */
   dbPersisted: boolean;
   /** Latest reconciliation state, retained for staff visibility. */
-  recoveryStatus?: "pending" | "blocked";
+  recoveryStatus?: "pending" | "blocked" | "resolved" | "retryable";
   /** Why staff intervention is required, if a recovery is blocked. */
   recoveryReason?: "email_conflict" | "phone_conflict" | "invalid_phone";
   recoveryAttempts?: number;
   lastRecoveryAttemptAt?: string;
+  /** Database account selected by an administrator during recovery. */
+  targetAccountId?: number;
+  /** Administrator (or the boot reconciler) that completed recovery. */
+  resolvedBy?: string;
   /** Staff follow-up state for folder-only registrations. */
   followUpStatus?: "resolved";
   /** When a team member marked the registration as contacted/resolved. */
@@ -252,6 +256,14 @@ async function writeRecordsAtomically(records: AccountRecord[]): Promise<void> {
 export async function retryUnsyncedRegistration(
   email: string,
   recordedAt: string,
+  options: {
+    originalPhone?: string;
+    correctedEmail?: string;
+    correctedPhone?: string;
+    targetAccountId?: number;
+    createAccount?: boolean;
+    resolvedBy?: string;
+  } = {},
 ): Promise<{
   inserted: boolean;
   alreadyExists: boolean;
@@ -262,9 +274,48 @@ export async function retryUnsyncedRegistration(
 }> {
   return withWriteLock(() => db.transaction(async (tx) => {
     const normalizedEmail = normalizeEmail(email);
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + normalizedEmail}))`);
+    const hasOriginalPhone = options.originalPhone !== undefined;
+    const normalizedOriginalPhone = hasOriginalPhone ? normalizePhone(options.originalPhone ?? "") : null;
+    if (!normalizedEmail && !normalizedOriginalPhone) {
+      throw new Error("An original ledger email or phone is required");
+    }
+    const normalizedCorrectedEmail = normalizeEmail(options.correctedEmail ?? email);
+    const normalizedCorrectedPhone = options.correctedPhone === undefined
+      ? null
+      : normalizePhone(options.correctedPhone);
+    const hasCorrectedPhone = options.correctedPhone !== undefined;
+    const createAccount = options.createAccount === true;
+    if (hasOriginalPhone && !normalizedOriginalPhone) {
+      throw new Error("A valid original phone is required");
+    }
+    if ((hasCorrectedPhone && !normalizedCorrectedPhone)) {
+      throw new Error("A valid corrected phone is required");
+    }
+    if (createAccount && !normalizedCorrectedPhone) {
+      throw new Error("A valid corrected phone is required when creating an account");
+    }
+    if (options.targetAccountId !== undefined && (!Number.isInteger(options.targetAccountId) || options.targetAccountId <= 0)) {
+      throw new Error("A valid target account is required");
+    }
+    if (normalizedEmail) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + normalizedEmail}))`);
+    }
+    if (normalizedCorrectedEmail) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + normalizedCorrectedEmail}))`);
+    }
+    if (normalizedOriginalPhone) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + normalizedOriginalPhone}))`);
+    }
+    if (normalizedCorrectedPhone) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + normalizedCorrectedPhone}))`);
+    }
+    if (options.targetAccountId !== undefined) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-account:" + options.targetAccountId}))`);
+    }
     const target = (await readAllRecords()).find((record) =>
-      normalizeEmail(record.email) === normalizedEmail && record.recordedAt === recordedAt
+      (!normalizedEmail || normalizeEmail(record.email) === normalizedEmail) &&
+      (!normalizedOriginalPhone || normalizePhone(record.phone) === normalizedOriginalPhone) &&
+      record.recordedAt === recordedAt
     );
     if (!target) throw new Error(`No folder record found for email=${email} recordedAt=${recordedAt}`);
 
@@ -274,7 +325,9 @@ export async function retryUnsyncedRegistration(
       patch: Partial<AccountRecord>,
     ): Promise<void> => {
       const updated = (await readAllRecords()).map((record) =>
-        normalizeEmail(record.email) === normalizedEmail && record.recordedAt === recordedAt
+        (!normalizedEmail || normalizeEmail(record.email) === normalizedEmail) &&
+        (!normalizedOriginalPhone || normalizePhone(record.phone) === normalizedOriginalPhone) &&
+        record.recordedAt === recordedAt
           ? {
               ...record,
               ...patch,
@@ -286,41 +339,105 @@ export async function retryUnsyncedRegistration(
       await writeRecordsAtomically(updated);
     };
 
-    if (!normalizedPhone) {
+    if (!normalizedPhone && !normalizedCorrectedPhone) {
       await updateRecord({ recoveryStatus: "blocked", recoveryReason: "invalid_phone" });
       return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "invalid_phone" };
     }
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + normalizedPhone}))`);
+    const recoveryPhone = normalizedCorrectedPhone ?? normalizedPhone;
+    if (!recoveryPhone) {
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: "invalid_phone" });
+      return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "invalid_phone" };
+    }
 
-    const [emailMatch] = await tx.select({
+    const [emailMatch] = normalizedCorrectedEmail ? await tx.select({
       id: ucUsersTable.id,
       phone: ucUsersTable.phone,
+      email: ucUsersTable.email,
     }).from(ucUsersTable)
-      .where(and(eq(ucUsersTable.email, normalizedEmail), isNull(ucUsersTable.deletedAt))).limit(1);
-    const [phoneMatch] = await tx.select({
+      .where(and(eq(ucUsersTable.email, normalizedCorrectedEmail), isNull(ucUsersTable.deletedAt))).limit(1) : [];
+    const [phoneMatch] = recoveryPhone ? await tx.select({
       id: ucUsersTable.id,
       email: ucUsersTable.email,
     }).from(ucUsersTable)
-      .where(and(eq(ucUsersTable.phone, normalizedPhone), isNull(ucUsersTable.deletedAt))).limit(1);
+      .where(and(eq(ucUsersTable.phone, recoveryPhone), isNull(ucUsersTable.deletedAt))).limit(1) : [];
+
+    const selectedAccount = options.targetAccountId === undefined
+      ? undefined
+      : (await tx.select({
+          id: ucUsersTable.id,
+          email: ucUsersTable.email,
+          phone: ucUsersTable.phone,
+        }).from(ucUsersTable)
+          .where(and(eq(ucUsersTable.id, options.targetAccountId), isNull(ucUsersTable.deletedAt)))
+          .for("update")
+          .limit(1))[0];
+    if (options.targetAccountId !== undefined && !selectedAccount) {
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: "email_conflict" });
+      return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "email_conflict" };
+    }
+    const effectiveCorrectedEmail = normalizedCorrectedEmail || (selectedAccount ? normalizeEmail(selectedAccount.email) : "");
+    if (!effectiveCorrectedEmail) {
+      throw new Error("A valid corrected email is required when creating an account");
+    }
+    // A selected account must own every corrected identity supplied by the
+    // operator. This prevents a typo from linking a ledger row to the wrong
+    // customer, while allowing the account's other contact to be omitted.
+    if (selectedAccount && (
+      normalizeEmail(selectedAccount.email) !== effectiveCorrectedEmail ||
+      (hasCorrectedPhone && selectedAccount.phone !== recoveryPhone)
+    )) {
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: "email_conflict" });
+      return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "email_conflict" };
+    }
 
     // A matching email and phone represents the same registration that reached
     // the DB before its durable-folder marker could be rewritten.
-    if (emailMatch) {
-      if (emailMatch.phone !== normalizedPhone) {
+    if (emailMatch && (!selectedAccount || emailMatch.id !== selectedAccount.id)) {
+      if (emailMatch.phone !== recoveryPhone) {
         await updateRecord({ recoveryStatus: "blocked", recoveryReason: "email_conflict" });
         return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "email_conflict" };
       }
       await updateRecord({
         dbPersisted: true,
         id: target.id ?? emailMatch.id,
-        recoveryStatus: undefined,
+        email: effectiveCorrectedEmail,
+        phone: recoveryPhone,
+        recoveryStatus: "resolved",
         recoveryReason: undefined,
+        targetAccountId: emailMatch.id,
+        resolvedBy: options.resolvedBy ?? "system",
+        resolvedAt: new Date().toISOString(),
       });
       return { inserted: false, alreadyExists: true, id: emailMatch.id, status: "synced" };
     }
-    if (phoneMatch) {
+    if (phoneMatch && (!selectedAccount || phoneMatch.id !== selectedAccount.id)) {
       await updateRecord({ recoveryStatus: "blocked", recoveryReason: "phone_conflict" });
       return { inserted: false, alreadyExists: false, id: null, status: "blocked", reason: "phone_conflict" };
+    }
+
+    if (selectedAccount) {
+      await updateRecord({
+        dbPersisted: true,
+        id: target.id ?? selectedAccount.id,
+        email: effectiveCorrectedEmail,
+        phone: recoveryPhone,
+        recoveryStatus: "resolved",
+        recoveryReason: undefined,
+        targetAccountId: selectedAccount.id,
+        resolvedBy: options.resolvedBy ?? "system",
+        resolvedAt: new Date().toISOString(),
+      });
+      return { inserted: false, alreadyExists: true, id: selectedAccount.id, status: "synced" };
+    }
+    if (!createAccount && options.targetAccountId === undefined && (emailMatch || phoneMatch)) {
+      // Legacy retry behavior reconciles an exact existing identity. A
+      // corrected identity that belongs to an account must be explicitly
+      // selected by the administrator instead.
+      await updateRecord({ recoveryStatus: "blocked", recoveryReason: emailMatch ? "email_conflict" : "phone_conflict" });
+      return {
+        inserted: false, alreadyExists: false, id: null, status: "blocked",
+        reason: emailMatch ? "email_conflict" : "phone_conflict",
+      };
     }
 
     let dbId: number | null = null;
@@ -330,8 +447,16 @@ export async function retryUnsyncedRegistration(
       ? await (async () => { tempPassword = randomBytes(12).toString("hex"); return bcryptjs.hash(tempPassword, 10); })()
       : await bcryptjs.hash(randomBytes(16).toString("hex"), 10);
     const [created] = await tx.insert(ucUsersTable).values({
-      email: normalizedEmail, passwordHash, phone: normalizedPhone, firstName: target.firstName,
+      email: effectiveCorrectedEmail, passwordHash, phone: recoveryPhone, firstName: target.firstName,
       lastName: target.lastName, authProvider: target.authProvider, createdAt: new Date(target.createdAt),
+      // A recovered password account receives a one-time credential, not a
+      // normal permanent password. Keep the handoff finite and invalidate any
+      // pre-existing credential version semantics from the account creation.
+      ...(target.authProvider === "password" ? {
+        mustChangePassword: true,
+        temporaryPasswordExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        credentialVersion: 1,
+      } : {}),
     }).onConflictDoNothing({ target: ucUsersTable.email }).returning({ id: ucUsersTable.id });
     if (created) {
       dbId = created.id;
@@ -346,8 +471,13 @@ export async function retryUnsyncedRegistration(
     await updateRecord({
       dbPersisted: true,
       id: target.id ?? dbId,
-      recoveryStatus: undefined,
+      email: effectiveCorrectedEmail,
+      phone: recoveryPhone,
+      recoveryStatus: "resolved",
       recoveryReason: undefined,
+      targetAccountId: dbId ?? undefined,
+      resolvedBy: options.resolvedBy ?? "system",
+      resolvedAt: new Date().toISOString(),
     });
     return { inserted, alreadyExists: !inserted, id: dbId, status: "synced", ...(tempPassword ? { tempPassword } : {}) };
   }));
@@ -379,13 +509,26 @@ export async function recoverUnsyncedRegistrations(limit = 25): Promise<{ attemp
 /** Return all folder records that were never persisted to the database. */
 export async function listUnsyncedRegistrations(): Promise<AccountRecord[]> {
   const all = await readAllRecords();
-  const explicit = all.filter((record) => !record.dbPersisted);
   try {
     const rows = await db.select({ email: ucUsersTable.email }).from(ucUsersTable);
     const persisted = new Set(rows.map((row) => normalizeEmail(row.email)));
-    return all.filter((record) => !record.dbPersisted || !persisted.has(normalizeEmail(record.email)));
+    // Keep every folder-only row, plus any row carrying an explicit recovery
+    // state (including a database-persisted resolution) visible for audit.
+    // Ordinary successfully persisted registration backups remain hidden.
+    return all.filter((record) =>
+      !record.dbPersisted
+      || record.recoveryStatus !== undefined
+      || !persisted.has(normalizeEmail(record.email))
+    );
   } catch {
-    return explicit;
+    // A database outage must not hide persisted recovery audit rows. They are
+    // still actionable/visible until the explicit clear operation rewrites the
+    // ledger, even though ordinary persisted registration backups stay hidden.
+    return all.filter((record) =>
+      !record.dbPersisted
+      || record.recoveryStatus !== undefined
+      || record.followUpStatus === "resolved"
+    );
   }
 }
 
@@ -413,6 +556,23 @@ export async function resolveUnsyncedRegistration(
     }
     await writeRecordsAtomically(updated);
     return resolved;
+  });
+}
+
+/**
+ * Remove only rows whose recovery was both persisted to the database and
+ * explicitly resolved. Contacted/follow-up rows and every unresolved or
+ * blocked row remain in the ledger for audit.
+ */
+export async function clearResolvedRegistrations(): Promise<number> {
+  return withWriteLock(async () => {
+    const records = await readAllRecords();
+    const retained = records.filter((record) =>
+      !(record.dbPersisted && record.recoveryStatus === "resolved")
+    );
+    const cleared = records.length - retained.length;
+    if (cleared > 0) await writeRecordsAtomically(retained);
+    return cleared;
   });
 }
 

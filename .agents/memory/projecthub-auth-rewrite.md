@@ -25,7 +25,18 @@ Many components (`whatsapp-qr-card.tsx`, `ConnectSheetDialog.tsx`, `contacts.tsx
 **Why:** These components use fetch directly, not the generated Orval API client.
 
 **Admin seed via env vars**
-First admin is seeded from `PROJECTHUB_ADMIN_EMAIL` + `PROJECTHUB_ADMIN_PASSWORD` at API server startup (idempotent). The user must set these as Replit Secrets.
+The configured email is the break-glass administrator. Startup creates it when missing or restores its admin/active authority when demoted or deactivated, without replacing an existing password or profile.
+
+**Why:** Insert-only seeding allowed the sole configured administrator to lose authority permanently after an accidental role or active-state change.
+
+**How to apply:** Normalize the configured email, reconcile role and active state every startup, and preserve existing credential/profile fields.
+
+**Admin authorization uses live database state**
+Destructive or sensitive team-admin routes must re-read `team_users` and require the account to remain active with the admin role. JWT role claims are not sufficient.
+
+**Why:** An eight-hour token can retain a stale admin claim after the user is demoted or deactivated.
+
+**How to apply:** Use the database-reverified team-admin guard and record the verified team-user ID for audit fields.
 
 **Resend email is graceful**
 Invite and reset URLs are always returned in the API response body so admins can copy them manually when email isn't delivered.

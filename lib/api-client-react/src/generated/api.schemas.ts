@@ -593,12 +593,31 @@ export const WhatsAppStatusState = {
   connecting: 'connecting',
   qr: 'qr',
   connected: 'connected',
+  error: 'error',
 } as const;
+
+export type WhatsAppStatusErrorCode = typeof WhatsAppStatusErrorCode[keyof typeof WhatsAppStatusErrorCode];
+
+
+export const WhatsAppStatusErrorCode = {
+  QR_GENERATION_FAILED: 'QR_GENERATION_FAILED',
+  WHATSAPP_INIT_FAILED: 'WHATSAPP_INIT_FAILED',
+} as const;
+
+export interface WhatsAppStatusError {
+  code: WhatsAppStatusErrorCode;
+  message: string;
+}
 
 export interface WhatsAppStatus {
   state: WhatsAppStatusState;
   /** @nullable */
   qr?: string | null;
+  error?: WhatsAppStatusError | null;
+}
+
+export interface WhatsAppRequestError {
+  error: WhatsAppStatusError;
 }
 
 export interface WhatsAppSendInput {
@@ -737,6 +756,23 @@ export interface UcCustomerTicket {
   createdAt: string;
 }
 
+export type UcCustomerDetailCustomerRecoveryChannelsEmail = {
+  available: boolean;
+  verified: boolean;
+};
+
+export type UcCustomerDetailCustomerRecoveryChannelsWhatsapp = {
+  available: boolean;
+  verified: boolean;
+  /** Current WhatsApp connection state; contains no session or QR material. */
+  status: string;
+};
+
+export type UcCustomerDetailCustomerRecoveryChannels = {
+  email: UcCustomerDetailCustomerRecoveryChannelsEmail;
+  whatsapp: UcCustomerDetailCustomerRecoveryChannelsWhatsapp;
+};
+
 export type UcCustomerDetailCustomer = {
   id: number;
   email: string;
@@ -746,6 +782,11 @@ export type UcCustomerDetailCustomer = {
   phone: string;
   joinedAt: string;
   authProvider: string;
+  /** Explicit verification state; false means the destination must not be treated as verified. */
+  emailVerified: boolean;
+  /** Explicit verification state; false means the destination must not be treated as verified. */
+  phoneVerified: boolean;
+  recoveryChannels: UcCustomerDetailCustomerRecoveryChannels;
 };
 
 export interface UcCustomerDetail {
@@ -794,6 +835,184 @@ export interface UcTemporaryPasswordResult {
   temporaryPassword: string;
   expiresAt: string;
   delivery: UcTemporaryPasswordResultDelivery;
+}
+
+export type PublicActionableErrorCode = typeof PublicActionableErrorCode[keyof typeof PublicActionableErrorCode];
+
+
+export const PublicActionableErrorCode = {
+  INSUFFICIENT_PERMISSION: 'INSUFFICIENT_PERMISSION',
+  ACCOUNT_INELIGIBLE: 'ACCOUNT_INELIGIBLE',
+  UNAVAILABLE_UNVERIFIED_DESTINATION: 'UNAVAILABLE_UNVERIFIED_DESTINATION',
+  WHATSAPP_DISCONNECTED: 'WHATSAPP_DISCONNECTED',
+  DELIVERY_PROVIDER_FAILURE: 'DELIVERY_PROVIDER_FAILURE',
+} as const;
+
+export interface PublicActionableError {
+  code: PublicActionableErrorCode;
+  error: string;
+}
+
+export type UcLocationType = typeof UcLocationType[keyof typeof UcLocationType];
+
+
+export const UcLocationType = {
+  experience_centre: 'experience_centre',
+  refill_atm: 'refill_atm',
+  vendor: 'vendor',
+} as const;
+
+export interface UcLocation {
+  id: string;
+  type: UcLocationType;
+  name: string;
+  address: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lng: number;
+  hours: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  vendorName?: string | null;
+  active: boolean;
+  verified: boolean;
+}
+
+export type UcLocationInputType = typeof UcLocationInputType[keyof typeof UcLocationInputType];
+
+
+export const UcLocationInputType = {
+  experience_centre: 'experience_centre',
+  refill_atm: 'refill_atm',
+  vendor: 'vendor',
+} as const;
+
+export interface UcLocationInput {
+  type: UcLocationInputType;
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  address: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  latitude: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  longitude: number;
+  /** @minLength 1 */
+  hours: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  vendorName?: string | null;
+}
+
+export type UcLocationUpdateInputType = typeof UcLocationUpdateInputType[keyof typeof UcLocationUpdateInputType];
+
+
+export const UcLocationUpdateInputType = {
+  experience_centre: 'experience_centre',
+  refill_atm: 'refill_atm',
+  vendor: 'vendor',
+} as const;
+
+export interface UcLocationUpdateInput {
+  active?: boolean;
+  type?: UcLocationUpdateInputType;
+  /** @minLength 1 */
+  name?: string;
+  /** @minLength 1 */
+  address?: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  latitude?: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  longitude?: number;
+  /** @minLength 1 */
+  hours?: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  vendorName?: string | null;
+}
+
+export type UnsyncedRegistrationRecoveryStatus = typeof UnsyncedRegistrationRecoveryStatus[keyof typeof UnsyncedRegistrationRecoveryStatus];
+
+
+export const UnsyncedRegistrationRecoveryStatus = {
+  pending: 'pending',
+  blocked: 'blocked',
+  resolved: 'resolved',
+  retryable: 'retryable',
+} as const;
+
+export type UnsyncedRegistrationRecoveryReason = typeof UnsyncedRegistrationRecoveryReason[keyof typeof UnsyncedRegistrationRecoveryReason];
+
+
+export const UnsyncedRegistrationRecoveryReason = {
+  email_conflict: 'email_conflict',
+  phone_conflict: 'phone_conflict',
+  invalid_phone: 'invalid_phone',
+} as const;
+
+export interface UnsyncedRegistration {
+  /** @nullable */
+  id?: number | null;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  phone: string;
+  authProvider?: string;
+  recordedAt: string;
+  dbPersisted: boolean;
+  recoveryStatus?: UnsyncedRegistrationRecoveryStatus;
+  recoveryReason?: UnsyncedRegistrationRecoveryReason;
+  targetAccountId?: number;
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
+export type UnsyncedRegistrationRecoveryInputTarget = {
+  type: 'existing';
+  /** @minimum 1 */
+  accountId: number;
+} | {
+  type: 'new';
+};
+
+export interface UnsyncedRegistrationRecoveryInput {
+  /** @minLength 1 */
+  originalEmail: string;
+  originalPhone?: string;
+  /** @minLength 1 */
+  correctedEmail?: string;
+  correctedPhone?: string;
+  recordedAt: string;
+  target: UnsyncedRegistrationRecoveryInputTarget;
+  /**
+     * Backward-compatible shorthand for an existing target
+     * @minimum 1
+     */
+  targetAccountId?: number;
+  /** Explicitly choose a new account */
+  createAccount?: boolean;
 }
 
 export interface UcPermanentPasswordInput {
@@ -949,6 +1168,32 @@ from?: string;
  * Registration date range end (inclusive)
  */
 to?: string;
+};
+
+export type ListUcAdminLocations200 = {
+  locations: UcLocation[];
+};
+
+export type CreateUcAdminLocation201 = {
+  location?: UcLocation;
+};
+
+export type UpdateUcAdminLocation200 = {
+  location?: UcLocation;
+  verificationReset?: boolean;
+};
+
+export type ListUnsyncedRegistrations200 = {
+  records: UnsyncedRegistration[];
+};
+
+export type ClearResolvedRegistrationsBody = {
+  confirm: true;
+};
+
+export type ClearResolvedRegistrations200 = {
+  /** @minimum 0 */
+  cleared: number;
 };
 
 export type ListUcOfflineClients200 = {

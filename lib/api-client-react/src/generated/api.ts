@@ -36,6 +36,8 @@ import type {
   AnthropicMessageInput,
   ChangePasscodeInput,
   ChangePasscodeResult,
+  ClearResolvedRegistrations200,
+  ClearResolvedRegistrationsBody,
   Contact,
   ContactInput,
   ContactMethod,
@@ -43,6 +45,7 @@ import type {
   ContactMethodUpdate,
   ContactUpdate,
   ContactWithMethods,
+  CreateUcAdminLocation201,
   DashboardSummary,
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
@@ -56,8 +59,10 @@ import type {
   InventoryWishlistDemand,
   ListNotificationLogsParams,
   ListTasksParams,
+  ListUcAdminLocations200,
   ListUcCustomersParams,
   ListUcOfflineClients200,
+  ListUnsyncedRegistrations200,
   Member,
   MemberInput,
   MemberUpdate,
@@ -71,6 +76,7 @@ import type {
   ProjectSummary,
   ProjectUpdate,
   ProjectWithProgress,
+  PublicActionableError,
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
@@ -86,6 +92,8 @@ import type {
   UcCustomerDetail,
   UcCustomerList,
   UcCustomersCount,
+  UcLocationInput,
+  UcLocationUpdateInput,
   UcOfflineClientInput,
   UcOfflineClientResponse,
   UcOfflineClientUpdateInput,
@@ -95,8 +103,11 @@ import type {
   UcTemporaryPasswordInput,
   UcTemporaryPasswordResult,
   UcWaterTestCustomerStageInput,
+  UnsyncedRegistrationRecoveryInput,
+  UpdateUcAdminLocation200,
   WebhookIngestResult,
   WebhookPayload,
+  WhatsAppRequestError,
   WhatsAppSendInput,
   WhatsAppSendResult,
   WhatsAppStatus
@@ -1073,7 +1084,7 @@ export const issueUcTemporaryPassword = async (id: number,
 
 
 
-export const getIssueUcTemporaryPasswordMutationOptions = <TError = ErrorType<void>,
+export const getIssueUcTemporaryPasswordMutationOptions = <TError = ErrorType<void | PublicActionableError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, TError,{id: number;data: BodyType<UcTemporaryPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, TError,{id: number;data: BodyType<UcTemporaryPasswordInput>}, TContext> => {
 
@@ -1102,12 +1113,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type IssueUcTemporaryPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof issueUcTemporaryPassword>>>
     export type IssueUcTemporaryPasswordMutationBody = BodyType<UcTemporaryPasswordInput>
-    export type IssueUcTemporaryPasswordMutationError = ErrorType<void>
+    export type IssueUcTemporaryPasswordMutationError = ErrorType<void | PublicActionableError>
 
     /**
  * @summary Issue a verified-channel, 24-hour temporary Companion password
  */
-export const useIssueUcTemporaryPassword = <TError = ErrorType<void>,
+export const useIssueUcTemporaryPassword = <TError = ErrorType<void | PublicActionableError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueUcTemporaryPassword>>, TError,{id: number;data: BodyType<UcTemporaryPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof issueUcTemporaryPassword>>,
@@ -1116,6 +1127,445 @@ export const useIssueUcTemporaryPassword = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getIssueUcTemporaryPasswordMutationOptions(options));
+    }
+
+export const getListUcAdminLocationsUrl = () => {
+
+
+
+
+  return `/api/uc/admin/locations`
+}
+
+/**
+ * @summary List managed Companion service locations
+ */
+export const listUcAdminLocations = async ( options?: RequestInit): Promise<ListUcAdminLocations200> => {
+
+  return customFetch<ListUcAdminLocations200>(getListUcAdminLocationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcAdminLocationsQueryKey = () => {
+    return [
+    `/api/uc/admin/locations`
+    ] as const;
+    }
+
+
+export const getListUcAdminLocationsQueryOptions = <TData = Awaited<ReturnType<typeof listUcAdminLocations>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcAdminLocations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcAdminLocationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcAdminLocations>>> = ({ signal }) => listUcAdminLocations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcAdminLocations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcAdminLocationsQueryResult = NonNullable<Awaited<ReturnType<typeof listUcAdminLocations>>>
+export type ListUcAdminLocationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List managed Companion service locations
+ */
+
+export function useListUcAdminLocations<TData = Awaited<ReturnType<typeof listUcAdminLocations>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcAdminLocations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcAdminLocationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateUcAdminLocationUrl = () => {
+
+
+
+
+  return `/api/uc/admin/locations`
+}
+
+/**
+ * @summary Create a managed Companion service location
+ */
+export const createUcAdminLocation = async (ucLocationInput: UcLocationInput, options?: RequestInit): Promise<CreateUcAdminLocation201> => {
+
+  return customFetch<CreateUcAdminLocation201>(getCreateUcAdminLocationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucLocationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateUcAdminLocationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcAdminLocation>>, TError,{data: BodyType<UcLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUcAdminLocation>>, TError,{data: BodyType<UcLocationInput>}, TContext> => {
+
+const mutationKey = ['createUcAdminLocation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUcAdminLocation>>, {data: BodyType<UcLocationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUcAdminLocation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUcAdminLocationMutationResult = NonNullable<Awaited<ReturnType<typeof createUcAdminLocation>>>
+    export type CreateUcAdminLocationMutationBody = BodyType<UcLocationInput>
+    export type CreateUcAdminLocationMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a managed Companion service location
+ */
+export const useCreateUcAdminLocation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcAdminLocation>>, TError,{data: BodyType<UcLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUcAdminLocation>>,
+        TError,
+        {data: BodyType<UcLocationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateUcAdminLocationMutationOptions(options));
+    }
+
+export const getUpdateUcAdminLocationUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/locations/${id}`
+}
+
+/**
+ * @summary Partially update a managed Companion service location
+ */
+export const updateUcAdminLocation = async (id: string,
+    ucLocationUpdateInput: UcLocationUpdateInput, options?: RequestInit): Promise<UpdateUcAdminLocation200> => {
+
+  return customFetch<UpdateUcAdminLocation200>(getUpdateUcAdminLocationUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucLocationUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcAdminLocationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminLocation>>, TError,{id: string;data: BodyType<UcLocationUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminLocation>>, TError,{id: string;data: BodyType<UcLocationUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateUcAdminLocation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcAdminLocation>>, {id: string;data: BodyType<UcLocationUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcAdminLocation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcAdminLocationMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcAdminLocation>>>
+    export type UpdateUcAdminLocationMutationBody = BodyType<UcLocationUpdateInput>
+    export type UpdateUcAdminLocationMutationError = ErrorType<void>
+
+    /**
+ * @summary Partially update a managed Companion service location
+ */
+export const useUpdateUcAdminLocation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminLocation>>, TError,{id: string;data: BodyType<UcLocationUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcAdminLocation>>,
+        TError,
+        {id: string;data: BodyType<UcLocationUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcAdminLocationMutationOptions(options));
+    }
+
+export const getListUnsyncedRegistrationsUrl = () => {
+
+
+
+
+  return `/api/admin/unsynced-registrations`
+}
+
+/**
+ * @summary List durable registration records needing reconciliation
+ */
+export const listUnsyncedRegistrations = async ( options?: RequestInit): Promise<ListUnsyncedRegistrations200> => {
+
+  return customFetch<ListUnsyncedRegistrations200>(getListUnsyncedRegistrationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUnsyncedRegistrationsQueryKey = () => {
+    return [
+    `/api/admin/unsynced-registrations`
+    ] as const;
+    }
+
+
+export const getListUnsyncedRegistrationsQueryOptions = <TData = Awaited<ReturnType<typeof listUnsyncedRegistrations>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnsyncedRegistrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUnsyncedRegistrationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUnsyncedRegistrations>>> = ({ signal }) => listUnsyncedRegistrations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUnsyncedRegistrations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUnsyncedRegistrationsQueryResult = NonNullable<Awaited<ReturnType<typeof listUnsyncedRegistrations>>>
+export type ListUnsyncedRegistrationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List durable registration records needing reconciliation
+ */
+
+export function useListUnsyncedRegistrations<TData = Awaited<ReturnType<typeof listUnsyncedRegistrations>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnsyncedRegistrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUnsyncedRegistrationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecoverUnsyncedRegistrationUrl = () => {
+
+
+
+
+  return `/api/admin/unsynced-registrations/retry`
+}
+
+/**
+ * @summary Link a durable registration to an account or create one safely
+ */
+export const recoverUnsyncedRegistration = async (unsyncedRegistrationRecoveryInput: UnsyncedRegistrationRecoveryInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRecoverUnsyncedRegistrationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(unsyncedRegistrationRecoveryInput)
+  }
+);}
+
+
+
+
+
+export const getRecoverUnsyncedRegistrationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recoverUnsyncedRegistration>>, TError,{data: BodyType<UnsyncedRegistrationRecoveryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recoverUnsyncedRegistration>>, TError,{data: BodyType<UnsyncedRegistrationRecoveryInput>}, TContext> => {
+
+const mutationKey = ['recoverUnsyncedRegistration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recoverUnsyncedRegistration>>, {data: BodyType<UnsyncedRegistrationRecoveryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recoverUnsyncedRegistration(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecoverUnsyncedRegistrationMutationResult = NonNullable<Awaited<ReturnType<typeof recoverUnsyncedRegistration>>>
+    export type RecoverUnsyncedRegistrationMutationBody = BodyType<UnsyncedRegistrationRecoveryInput>
+    export type RecoverUnsyncedRegistrationMutationError = ErrorType<void>
+
+    /**
+ * @summary Link a durable registration to an account or create one safely
+ */
+export const useRecoverUnsyncedRegistration = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recoverUnsyncedRegistration>>, TError,{data: BodyType<UnsyncedRegistrationRecoveryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recoverUnsyncedRegistration>>,
+        TError,
+        {data: BodyType<UnsyncedRegistrationRecoveryInput>},
+        TContext
+      > => {
+      return useMutation(getRecoverUnsyncedRegistrationMutationOptions(options));
+    }
+
+export const getClearResolvedRegistrationsUrl = () => {
+
+
+
+
+  return `/api/admin/unsynced-registrations/clear-resolved`
+}
+
+/**
+ * @summary Atomically clear database-persisted resolved registration records
+ */
+export const clearResolvedRegistrations = async (clearResolvedRegistrationsBody: ClearResolvedRegistrationsBody, options?: RequestInit): Promise<ClearResolvedRegistrations200> => {
+
+  return customFetch<ClearResolvedRegistrations200>(getClearResolvedRegistrationsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(clearResolvedRegistrationsBody)
+  }
+);}
+
+
+
+
+
+export const getClearResolvedRegistrationsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearResolvedRegistrations>>, TError,{data: BodyType<ClearResolvedRegistrationsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearResolvedRegistrations>>, TError,{data: BodyType<ClearResolvedRegistrationsBody>}, TContext> => {
+
+const mutationKey = ['clearResolvedRegistrations'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearResolvedRegistrations>>, {data: BodyType<ClearResolvedRegistrationsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  clearResolvedRegistrations(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearResolvedRegistrationsMutationResult = NonNullable<Awaited<ReturnType<typeof clearResolvedRegistrations>>>
+    export type ClearResolvedRegistrationsMutationBody = BodyType<ClearResolvedRegistrationsBody>
+    export type ClearResolvedRegistrationsMutationError = ErrorType<void>
+
+    /**
+ * @summary Atomically clear database-persisted resolved registration records
+ */
+export const useClearResolvedRegistrations = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearResolvedRegistrations>>, TError,{data: BodyType<ClearResolvedRegistrationsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearResolvedRegistrations>>,
+        TError,
+        {data: BodyType<ClearResolvedRegistrationsBody>},
+        TContext
+      > => {
+      return useMutation(getClearResolvedRegistrationsMutationOptions(options));
     }
 
 export const getCompleteUcTemporaryPasswordChangeUrl = () => {
@@ -5300,7 +5750,7 @@ export const connectWhatsApp = async ( options?: RequestInit): Promise<WhatsAppS
 
 
 
-export const getConnectWhatsAppMutationOptions = <TError = ErrorType<unknown>,
+export const getConnectWhatsAppMutationOptions = <TError = ErrorType<WhatsAppRequestError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectWhatsApp>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof connectWhatsApp>>, TError,void, TContext> => {
 
@@ -5329,12 +5779,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type ConnectWhatsAppMutationResult = NonNullable<Awaited<ReturnType<typeof connectWhatsApp>>>
 
-    export type ConnectWhatsAppMutationError = ErrorType<unknown>
+    export type ConnectWhatsAppMutationError = ErrorType<WhatsAppRequestError>
 
     /**
  * @summary Initiate WhatsApp pairing flow
  */
-export const useConnectWhatsApp = <TError = ErrorType<unknown>,
+export const useConnectWhatsApp = <TError = ErrorType<WhatsAppRequestError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectWhatsApp>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof connectWhatsApp>>,

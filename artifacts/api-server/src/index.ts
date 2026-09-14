@@ -332,12 +332,12 @@ async function applyStartupMigrations(): Promise<void> {
   // Seed first admin from environment variables (runs once; idempotent).
   const adminEmail = process.env["PROJECTHUB_ADMIN_EMAIL"]?.toLowerCase().trim();
   const adminPassword = process.env["PROJECTHUB_ADMIN_PASSWORD"];
-  if (adminEmail && adminPassword) {
+  if (adminEmail) {
     const existing = await pool.query(
-      "SELECT id FROM team_users WHERE email = $1 LIMIT 1",
+      "SELECT id, role, is_active FROM team_users WHERE lower(trim(email)) = $1 LIMIT 1",
       [adminEmail],
     );
-    if (existing.rows.length === 0) {
+    if (existing.rows.length === 0 && adminPassword) {
       const bcrypt = await import("bcryptjs");
       const passwordHash = await bcrypt.hash(adminPassword, 12);
       const { randomUUID } = await import("crypto");
@@ -347,7 +347,22 @@ async function applyStartupMigrations(): Promise<void> {
          ON CONFLICT (email) DO NOTHING`,
         [randomUUID(), adminEmail, "Admin", passwordHash],
       );
-      logger.info({ email: adminEmail }, "Startup: seeded initial admin user");
+      logger.info({ email: adminEmail, result: "created" }, "Startup: configured ProjectHub administrator reconciled");
+    } else if (existing.rows.length > 0) {
+      const configured = existing.rows[0] as { id: string; role: string; is_active: boolean };
+      const wasAdmin = configured.role === "admin" && configured.is_active === true;
+      // Deliberately update authority state only. Existing password hash and
+      // profile fields are never replaced during break-glass reconciliation.
+      await pool.query(
+        "UPDATE team_users SET role = 'admin', is_active = true, updated_at = now() WHERE id = $1",
+        [configured.id],
+      );
+      logger.info({
+        email: adminEmail,
+        result: wasAdmin ? "confirmed" : "restored",
+      }, "Startup: configured ProjectHub administrator reconciled");
+    } else {
+      logger.warn({ email: adminEmail }, "Startup: configured ProjectHub administrator is missing and PROJECTHUB_ADMIN_PASSWORD is not configured");
     }
   }
 

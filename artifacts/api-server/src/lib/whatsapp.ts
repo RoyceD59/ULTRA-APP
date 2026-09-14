@@ -14,10 +14,10 @@
  *   back so the session survives container replacement.
  *
  * External API:
- *   getWhatsAppStatus()               → { state, qr? }
+ *   getWhatsAppStatus()               → { state, qr?, error? }
  *   sendWhatsAppMessage(to, msg)      → Promise<string> (message key ID)
  *   initWhatsApp()                    → idempotent boot
- *   disconnectWhatsApp()              → logout + wipe session
+ *   disconnectWhatsApp()              → logout + clear active state
  */
 
 import { join, resolve, sep } from "path";
@@ -267,13 +267,50 @@ const baileysLogger = pino({ level: "silent" });
 
 // ─── Module-level state ───────────────────────────────────────────────────────
 
-export type WaState = "disconnected" | "connecting" | "qr" | "connected";
+export type WaState = "disconnected" | "connecting" | "qr" | "connected" | "error";
+export type WaErrorCode = "QR_GENERATION_FAILED" | "WHATSAPP_INIT_FAILED";
+export interface WaError {
+  code: WaErrorCode;
+  message: string;
+}
 
 let sock: WASocket | null = null;
 let currentQrDataUri: string | null = null;
 let connectionState: WaState = "disconnected";
+let currentError: WaError | null = null;
 let isInitializing = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+// Invalidated by disconnect (and by a manual retry) so work belonging to an
+// old socket cannot install a session or change the state of a newer socket.
+let lifecycleGeneration = 0;
+
+/**
+ * A QR update can start an asynchronous conversion while Baileys emits a
+ * newer QR update. Both the lifecycle generation and this per-lifecycle
+ * sequence must still match before a conversion may publish its result.
+ *
+ * Exported as a small seam so the stale-result rule can be tested without
+ * constructing a Baileys socket.
+ */
+export function isCurrentQrConversion(
+  conversionGeneration: number,
+  activeGeneration: number,
+  conversionSequence: number,
+  latestSequence: number,
+): boolean {
+  return (
+    conversionGeneration === activeGeneration &&
+    conversionSequence === latestSequence
+  );
+}
+
+/** Stop an obsolete socket without logging out its persisted session. */
+function closeSocketWithoutLogout(socket: WASocket | null): void {
+  if (!socket) return;
+  void socket.end(undefined).catch(() => {
+    // The socket may already be closed while a retry is being started.
+  });
+}
 
 // Alert deduplication: track whether we have already fired an alert for the
 // current disconnect/qr event so we don't spam the admin inbox.
@@ -362,8 +399,12 @@ export async function sendSessionAlert(
 
 // ─── Public accessors ─────────────────────────────────────────────────────────
 
-export function getWhatsAppStatus(): { state: WaState; qr: string | null } {
-  return { state: connectionState, qr: currentQrDataUri };
+export function getWhatsAppStatus(): {
+  state: WaState;
+  qr: string | null;
+  error: WaError | null;
+} {
+  return { state: connectionState, qr: currentQrDataUri, error: currentError };
 }
 
 /**
@@ -458,6 +499,13 @@ export async function initWhatsApp(): Promise<void> {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  // A manual retry starts a new lifecycle. Events from an older socket must
+  // not be allowed to move the new connection back to a stale state.
+  const generation = ++lifecycleGeneration;
+  let latestQrSequence = 0;
+  const previousSock = sock;
+  sock = null;
+  closeSocketWithoutLogout(previousSock);
 
   // Warn once at startup so misconfiguration is visible in server logs before
   // it silently swallows a real WhatsApp drop event.
@@ -472,6 +520,7 @@ export async function initWhatsApp(): Promise<void> {
   isInitializing = true;
   connectionState = "connecting";
   currentQrDataUri = null;
+  currentError = null;
 
   try {
     // Migrate any legacy in-repo session files to AUTH_DIR and warn loudly if
@@ -484,15 +533,18 @@ export async function initWhatsApp(): Promise<void> {
     await syncFromObjectStorage();
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+    if (generation !== lifecycleGeneration) return;
 
     // Wrap saveCreds so every credential update is mirrored to Object Storage
     // immediately after the local files are written.
     const saveAndSyncCreds = async () => {
+      if (generation !== lifecycleGeneration) return;
       await saveCreds();
+      if (generation !== lifecycleGeneration) return;
       void syncToObjectStorage();
     };
 
-    sock = makeWASocket({
+    const nextSock = makeWASocket({
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, baileysLogger as never),
@@ -503,13 +555,33 @@ export async function initWhatsApp(): Promise<void> {
       // Prevent Baileys from loading the browser media cache — keeps memory low
       generateHighQualityLinkPreview: false,
     });
+    if (generation !== lifecycleGeneration) {
+      closeSocketWithoutLogout(nextSock);
+      return;
+    }
+    sock = nextSock;
 
-    sock.ev.on("connection.update", async (update) => {
+    let qrGenerationFailed = false;
+    nextSock.ev.on("connection.update", async (update) => {
+      if (generation !== lifecycleGeneration) return;
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        const qrSequence = ++latestQrSequence;
         try {
-          currentQrDataUri = await toDataURL(qr, { errorCorrectionLevel: "M", margin: 2 });
+          const qrDataUri = await toDataURL(qr, { errorCorrectionLevel: "M", margin: 2 });
+          if (
+            !isCurrentQrConversion(
+              generation,
+              lifecycleGeneration,
+              qrSequence,
+              latestQrSequence,
+            )
+          ) {
+            return;
+          }
+          currentQrDataUri = qrDataUri;
+          currentError = null;
           connectionState = "qr";
           isInitializing = false;
 
@@ -525,11 +597,35 @@ export async function initWhatsApp(): Promise<void> {
             void sendSessionAlert("qr");
           }
         } catch {
-          // If QR generation fails just stay in connecting state
+          // A failed conversion is actionable and recoverable. Never leave
+          // the card spinning in "connecting" after this failure.
+          if (
+            !isCurrentQrConversion(
+              generation,
+              lifecycleGeneration,
+              qrSequence,
+              latestQrSequence,
+            )
+          ) {
+            return;
+          }
+          currentQrDataUri = null;
+          currentError = {
+            code: "QR_GENERATION_FAILED",
+            message: "Could not generate a WhatsApp QR code. Retry to try again.",
+          };
+          connectionState = "error";
+          isInitializing = false;
+          qrGenerationFailed = true;
+          if (disconnectAlertTimer) {
+            clearTimeout(disconnectAlertTimer);
+            disconnectAlertTimer = null;
+          }
         }
       }
 
       if (connection === "close") {
+        if (generation !== lifecycleGeneration) return;
         const statusCode =
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (lastDisconnect?.error as any)?.output?.statusCode;
@@ -537,12 +633,21 @@ export async function initWhatsApp(): Promise<void> {
 
         sock = null;
         currentQrDataUri = null;
-        connectionState = "disconnected";
         isInitializing = false;
 
-        if (shouldReconnect) {
+        if (qrGenerationFailed) {
+          // Keep the conversion failure visible until the operator retries.
+          connectionState = "error";
+        } else {
+          currentError = null;
+          connectionState = "disconnected";
+        }
+
+        if (shouldReconnect && !qrGenerationFailed) {
           // Back off 5 s before reconnecting so we don't hammer the WA servers
-          reconnectTimer = setTimeout(() => initWhatsApp(), 5_000);
+          if (!reconnectTimer) {
+            reconnectTimer = setTimeout(() => initWhatsApp(), 5_000);
+          }
 
           // Schedule a "still disconnected" alert if we haven't already alerted
           // for this disconnect cycle and no reconnect succeeds within the window.
@@ -567,7 +672,13 @@ export async function initWhatsApp(): Promise<void> {
       }
 
       if (connection === "open") {
+        if (generation !== lifecycleGeneration) return;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
         currentQrDataUri = null;
+        currentError = null;
         connectionState = "connected";
         isInitializing = false;
 
@@ -581,26 +692,37 @@ export async function initWhatsApp(): Promise<void> {
       }
     });
 
-    sock.ev.on("creds.update", saveAndSyncCreds);
+    nextSock.ev.on("creds.update", saveAndSyncCreds);
 
     // ── Delivery & read receipts ─────────────────────────────────────────────
     // Baileys fires "messages.update" when the remote party receives or reads
     // a message we sent.  We match by the Baileys message key ID stored in the
     // notification_logs table and upgrade the delivery_status column.
-    sock.ev.on("messages.update", (updates) => {
+    nextSock.ev.on("messages.update", (updates) => {
       // Fire-and-forget; errors are swallowed inside handleMessageUpdates
       void handleMessageUpdates(updates as WAMessageUpdate[]);
     });
   } catch (err) {
+    if (generation !== lifecycleGeneration) return;
     console.error("[whatsapp] Init failed:", err);
-    connectionState = "disconnected";
+    connectionState = "error";
+    currentError = {
+      code: "WHATSAPP_INIT_FAILED",
+      message: "WhatsApp could not start. Check the server configuration and retry.",
+    };
     isInitializing = false;
-    // Retry after 10 s on unexpected init error
-    reconnectTimer = setTimeout(() => initWhatsApp(), 10_000);
+    // Retry after 10 s on unexpected init error. Disconnect clears this timer.
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void initWhatsApp();
+    }, 10_000);
   }
 }
 
 export async function disconnectWhatsApp(): Promise<void> {
+  // Invalidate all in-flight storage/auth work and event handlers before
+  // awaiting logout. Baileys may emit a late "close" event after logout.
+  lifecycleGeneration++;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -611,13 +733,15 @@ export async function disconnectWhatsApp(): Promise<void> {
   }
   // Reset alert state so the next session start gets a fresh alert if needed.
   alertSentForCurrentSession = false;
+  currentError = null;
   if (sock) {
+    const activeSock = sock;
+    sock = null;
     try {
-      await sock.logout();
+      await activeSock.logout();
     } catch {
       // Ignore — socket may already be closed
     }
-    sock = null;
   }
   currentQrDataUri = null;
   connectionState = "disconnected";

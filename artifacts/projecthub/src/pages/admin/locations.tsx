@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, MapPin, Pencil, Plus, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,32 +9,81 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { getAuthHeaders } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import {
+  createUcAdminLocation, getListUcAdminLocationsQueryKey, listUcAdminLocations,
+  updateUcAdminLocation, useListUcAdminLocations,
+  type UcLocation, type UcLocationInput, type UcLocationInputType,
+} from "@workspace/api-client-react";
 
-const base = () => API_ORIGIN;
-type LocationType = "experience_centre" | "refill_atm" | "vendor";
-interface Location { id: string; name: string; type: LocationType; address: string; hours: string; phone: string | null; vendorName?: string | null; latitude: number | string; longitude: number | string; verified: boolean; active: boolean; verifiedBy?: string | null; verifiedAt?: string | null; }
-interface Form { name: string; type: LocationType; address: string; hours: string; phone: string; vendorName: string; latitude: string; longitude: string; }
+type Form = {
+  name: string; type: UcLocationInputType; address: string; hours: string;
+  phone: string; vendorName: string; latitude: string; longitude: string;
+};
 const blank: Form = { name: "", type: "experience_centre", address: "", hours: "", phone: "", vendorName: "", latitude: "", longitude: "" };
-async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const headers = getAuthHeaders(); if (!headers) throw new Error("Not authenticated");
-  const response = await fetch(`${base()}/api/uc/admin/locations${path}`, { method, headers: { ...headers, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-  const result = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
-  return result;
+function toForm(location: UcLocation): Form {
+  return { name: location.name, type: location.type, address: location.address, hours: location.hours, phone: location.phone ?? "", vendorName: location.vendorName ?? "", latitude: String(location.lat), longitude: String(location.lng) };
 }
-function toForm(location: Location): Form { return { name: location.name, type: location.type, address: location.address, hours: location.hours, phone: location.phone ?? "", vendorName: location.vendorName ?? "", latitude: String(location.latitude), longitude: String(location.longitude) }; }
-function LocationForm({ location, done }: { location?: Location; done: () => void }) {
-  const { toast } = useToast(); const qc = useQueryClient(); const [form, setForm] = useState<Form>(location ? toForm(location) : blank);
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : "The location could not be updated."; }
+
+function LocationForm({ location, done }: { location?: UcLocation; done: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<Form>(location ? toForm(location) : blank);
   useEffect(() => setForm(location ? toForm(location) : blank), [location]);
-  const update = (key: keyof Form, value: string) => setForm(v => ({ ...v, [key]: value }));
-  const latitude = Number(form.latitude), longitude = Number(form.longitude);
+  const update = (key: keyof Form, value: string) => setForm((old) => ({ ...old, [key]: value }));
+  const latitude = Number(form.latitude); const longitude = Number(form.longitude);
   const coordinatesValid = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
-  const mutation = useMutation({ mutationFn: () => request<{ location: Location }>(location ? `/${location.id}` : "", location ? "PATCH" : "POST", { name: form.name.trim(), type: form.type, address: form.address.trim(), hours: form.hours.trim(), phone: form.phone.trim() || null, vendorName: form.type === "vendor" ? form.vendorName.trim() : null, latitude, longitude }), onSuccess: () => { void qc.invalidateQueries({ queryKey: ["admin-locations"] }); toast({ title: location ? "Location updated" : "Location created", description: location ? undefined : "New locations remain pending until verified." }); done(); }, onError: (e: Error) => toast({ title: "Location could not be saved", description: e.message, variant: "destructive" }) });
-  return <form className="rounded-lg border bg-card p-4 space-y-4" onSubmit={e => { e.preventDefault(); mutation.mutate(); }}><div className="grid sm:grid-cols-2 gap-3"><div><Label htmlFor="location-name">Name</Label><Input id="location-name" value={form.name} onChange={e => update("name", e.target.value)} /></div><div><Label>Type</Label><Select value={form.type} onValueChange={v => update("type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="experience_centre">Experience centre</SelectItem><SelectItem value="refill_atm">Refill ATM</SelectItem><SelectItem value="vendor">Verified vendor</SelectItem></SelectContent></Select></div><div><Label htmlFor="location-address">Address</Label><Input id="location-address" value={form.address} onChange={e => update("address", e.target.value)} /></div><div><Label htmlFor="location-hours">Hours</Label><Input id="location-hours" value={form.hours} onChange={e => update("hours", e.target.value)} placeholder="Mon–Sat, 8am–5pm" /></div><div><Label htmlFor="location-phone">Phone</Label><Input id="location-phone" inputMode="tel" value={form.phone} onChange={e => update("phone", e.target.value)} placeholder="+254…" /></div>{form.type === "vendor" && <div><Label htmlFor="location-vendor">Vendor name</Label><Input id="location-vendor" value={form.vendorName} onChange={e => update("vendorName", e.target.value)} /></div>}<div><Label htmlFor="location-lat">Latitude</Label><Input id="location-lat" inputMode="decimal" value={form.latitude} onChange={e => update("latitude", e.target.value)} placeholder="-90 to 90" /></div><div><Label htmlFor="location-lng">Longitude</Label><Input id="location-lng" inputMode="decimal" value={form.longitude} onChange={e => update("longitude", e.target.value)} placeholder="-180 to 180" /></div></div>{(form.latitude || form.longitude) && !coordinatesValid && <p className="text-xs text-destructive" role="alert">Use valid coordinates: latitude −90 to 90 and longitude −180 to 180.</p>}<p className="text-xs text-muted-foreground">Coordinates are required so customers can find this location. New locations are not customer-visible until verified.</p><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={done}>Cancel</Button><Button disabled={!form.name.trim() || !form.address.trim() || !form.hours.trim() || (form.type === "vendor" && !form.vendorName.trim()) || !coordinatesValid || mutation.isPending}>{mutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{location ? "Save changes" : "Create pending location"}</Button></div></form>;
+  const mutation = useMutation({
+    mutationFn: () => {
+      const data: UcLocationInput = { name: form.name.trim(), type: form.type, address: form.address.trim(), hours: form.hours.trim(), phone: form.phone.trim() || null, vendorName: form.type === "vendor" ? form.vendorName.trim() : null, latitude, longitude };
+      return location ? updateUcAdminLocation(location.id, data) : createUcAdminLocation(data);
+    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListUcAdminLocationsQueryKey() }); toast({ title: location ? "Location updated" : "Location created" }); done(); },
+    onError: (error) => toast({ title: "Location could not be saved", description: errorMessage(error), variant: "destructive" }),
+  });
+  return <form className="space-y-4 rounded-lg border bg-card p-4" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div><Label htmlFor="location-name">Name</Label><Input data-testid="input-location-name" id="location-name" value={form.name} onChange={(e) => update("name", e.target.value)} /></div>
+      <div><Label>Type</Label><Select value={form.type} onValueChange={(value) => update("type", value)}><SelectTrigger data-testid="select-location-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="experience_centre">Experience centre</SelectItem><SelectItem value="refill_atm">Refill ATM</SelectItem><SelectItem value="vendor">Verified vendor</SelectItem></SelectContent></Select></div>
+      <div><Label htmlFor="location-address">Address</Label><Input id="location-address" value={form.address} onChange={(e) => update("address", e.target.value)} /></div>
+      <div><Label htmlFor="location-hours">Hours</Label><Input id="location-hours" value={form.hours} onChange={(e) => update("hours", e.target.value)} /></div>
+      <div><Label htmlFor="location-phone">Phone</Label><Input id="location-phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} /></div>
+      {form.type === "vendor" && <div><Label htmlFor="location-vendor">Vendor name</Label><Input id="location-vendor" value={form.vendorName} onChange={(e) => update("vendorName", e.target.value)} /></div>}
+      <div><Label htmlFor="location-lat">Latitude</Label><Input id="location-lat" value={form.latitude} onChange={(e) => update("latitude", e.target.value)} /></div>
+      <div><Label htmlFor="location-lng">Longitude</Label><Input id="location-lng" value={form.longitude} onChange={(e) => update("longitude", e.target.value)} /></div>
+    </div>
+    {!coordinatesValid && (form.latitude || form.longitude) && <p role="alert" className="text-xs text-destructive">Use valid coordinates.</p>}
+    <p className="text-xs text-muted-foreground">New locations remain pending until verified.</p>
+    <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={done}>Cancel</Button><Button data-testid="button-save-location" disabled={!form.name.trim() || !form.address.trim() || !form.hours.trim() || (form.type === "vendor" && !form.vendorName.trim()) || !coordinatesValid || mutation.isPending}>{mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{location ? "Save changes" : "Create location"}</Button></div>
+  </form>;
 }
+
 export default function AdminLocationsPage() {
-  const { toast } = useToast(); const qc = useQueryClient(); const [editing, setEditing] = useState<Location | "new" | null>(null);
-  const { data = [], isLoading, isError } = useQuery({ queryKey: ["admin-locations"], queryFn: () => request<{ locations: Location[] }>("/").then(x => x.locations) });
-  const action = useMutation({ mutationFn: ({ location, action }: { location: Location; action: "verify" | "deactivate" | "activate" }) => action === "verify" ? request<{ location: Location }>(`/${location.id}/verify`, "POST") : request<{ location: Location }>(`/${location.id}`, "PATCH", { active: action === "activate" }), onSuccess: () => { void qc.invalidateQueries({ queryKey: ["admin-locations"] }); toast({ title: "Location updated" }); }, onError: (e: Error) => toast({ title: "Location update failed", description: e.message, variant: "destructive" }) });
-  return <div className="space-y-6"><div className="flex flex-wrap justify-between gap-3"><div><h1 className="text-2xl font-bold flex gap-2 items-center"><MapPin className="w-6 h-6" /> Locations</h1><p className="text-sm text-muted-foreground mt-1">Manage experience centres, refill ATMs, and verified vendors.</p></div><Button onClick={() => setEditing("new")}><Plus className="w-4 h-4 mr-2" />Add location</Button></div>{editing && <LocationForm location={editing === "new" ? undefined : editing} done={() => setEditing(null)} />}{isLoading ? <p className="text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading locations…</p> : isError ? <p className="text-sm text-destructive">Locations could not be loaded.</p> : data.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No locations yet. Add an experience centre, refill ATM, or vendor.</div> : <div className="grid md:grid-cols-2 gap-3">{data.map(location => <article key={location.id} className="rounded-lg border bg-card p-4"><div className="flex justify-between gap-2"><div><h2 className="font-semibold">{location.name}</h2><p className="text-sm text-muted-foreground">{location.type === "experience_centre" ? "Experience centre" : location.type === "refill_atm" ? "Refill ATM" : location.vendorName ? `Vendor · ${location.vendorName}` : "Vendor"}</p></div><div className="flex gap-1 flex-wrap justify-end"><Badge variant={location.verified ? "default" : "secondary"}>{location.verified ? "Verified" : "Pending verification"}</Badge>{!location.active && <Badge variant="outline">Inactive</Badge>}</div></div><p className="text-sm mt-3">{location.address}</p><p className="text-xs text-muted-foreground mt-1">{location.hours} · {location.latitude}, {location.longitude}</p>{location.phone && <p className="text-xs text-muted-foreground mt-1">{location.phone}</p>}{location.verified && location.verifiedBy && <p className="text-xs text-muted-foreground mt-2">Verified by {location.verifiedBy}{location.verifiedAt ? ` · ${new Date(location.verifiedAt).toLocaleString()}` : ""}</p>}<div className="flex gap-2 mt-4 flex-wrap"><Button size="sm" variant="outline" onClick={() => setEditing(location)}><Pencil className="w-3.5 h-3.5 mr-1" />Edit</Button>{!location.verified && <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ location, action: "verify" })}><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Verify</Button>}<Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ location, action: location.active ? "deactivate" : "activate" })}><Power className="w-3.5 h-3.5 mr-1" />{location.active ? "Deactivate" : "Activate"}</Button></div></article>)}</div>}</div>;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<UcLocation | "new" | null>(null);
+  const locationsQuery = useListUcAdminLocations();
+  const locations = locationsQuery.data?.locations ?? [];
+  const action = useMutation({
+    mutationFn: async ({ location, active }: { location: UcLocation; active: boolean }) => updateUcAdminLocation(location.id, { active }),
+    onSuccess: (result) => {
+      // Patch immediately so the visible list reflects the authoritative response
+      // before another query round trip completes.
+      queryClient.setQueryData(getListUcAdminLocationsQueryKey(), (old: { locations: UcLocation[] } | undefined) => old ? { locations: old.locations.map((item) => item.id === result.location?.id ? (result.location ?? item) : item) } : old);
+      void queryClient.invalidateQueries({ queryKey: getListUcAdminLocationsQueryKey() });
+      toast({ title: "Location updated" });
+    },
+    onError: (error) => toast({ title: "Location update failed", description: errorMessage(error), variant: "destructive" }),
+  });
+  async function verify(location: UcLocation) {
+    const response = await fetch(`${API_ORIGIN}/api/uc/admin/locations/${location.id}/verify`, { method: "POST", headers: getAuthHeaders() ?? {} });
+    if (!response.ok) { toast({ title: "Location verification failed", description: "The server rejected verification.", variant: "destructive" }); return; }
+    void queryClient.invalidateQueries({ queryKey: getListUcAdminLocationsQueryKey() });
+    toast({ title: "Location verified" });
+  }
+  return <div className="space-y-6">
+    <div className="flex flex-wrap justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold"><MapPin className="h-6 w-6" />Locations</h1><p className="mt-1 text-sm text-muted-foreground">Manage experience centres, refill ATMs, and verified vendors.</p></div><Button data-testid="button-add-location" onClick={() => setEditing("new")}><Plus className="mr-2 h-4 w-4" />Add location</Button></div>
+    {editing && <LocationForm location={editing === "new" ? undefined : editing} done={() => setEditing(null)} />}
+    {locationsQuery.isLoading ? <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading locations…</p> : locationsQuery.isError ? <p role="alert" className="text-sm text-destructive">Locations could not be loaded.</p> : locations.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No locations yet.</div> : <div className="grid gap-3 md:grid-cols-2">{locations.map((location) => <article data-testid={`card-location-${location.id}`} key={location.id} className="rounded-lg border bg-card p-4"><div className="flex justify-between gap-2"><div><h2 className="font-semibold">{location.name}</h2><p className="text-sm text-muted-foreground">{location.type === "experience_centre" ? "Experience centre" : location.type === "refill_atm" ? "Refill ATM" : location.vendorName ? `Vendor · ${location.vendorName}` : "Vendor"}</p></div><div className="flex flex-wrap justify-end gap-1"><Badge variant={location.verified ? "default" : "secondary"}>{location.verified ? "Verified" : "Pending verification"}</Badge>{!location.active && <Badge variant="outline">Inactive</Badge>}</div></div><p className="mt-3 text-sm">{location.address}</p><p className="mt-1 text-xs text-muted-foreground">{location.hours} · {location.lat}, {location.lng}</p>{location.phone && <p className="mt-1 text-xs text-muted-foreground">{location.phone}</p>}<div className="mt-4 flex flex-wrap gap-2"><Button data-testid={`button-edit-location-${location.id}`} size="sm" variant="outline" onClick={() => setEditing(location)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>{!location.verified && <Button data-testid={`button-verify-location-${location.id}`} size="sm" variant="outline" disabled={action.isPending} onClick={() => void verify(location)}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Verify</Button>}<Button data-testid={`button-toggle-location-${location.id}`} size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ location, active: !location.active })}><Power className="mr-1 h-3.5 w-3.5" />{location.active ? "Deactivate" : "Activate"}</Button></div></article>)}</div>}
+  </div>;
 }

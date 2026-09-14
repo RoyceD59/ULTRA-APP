@@ -25,6 +25,7 @@ import {
   issueUcTemporaryPassword,
   type UcTemporaryPasswordInputChannel,
   type UcTemporaryPasswordResult,
+  type UcCustomerDetail,
 } from "@workspace/api-client-react";
 import { API_ORIGIN } from "@/lib/api-base";
 
@@ -52,44 +53,7 @@ interface CustomerListResponse {
   limit: number;
 }
 
-interface OrderLineItem {
-  name: string;
-  quantity: number;
-  total: string;
-}
-
-interface CustomerOrder {
-  id: number;
-  status: string;
-  total: string;
-  currency: string;
-  paymentMethod: string;
-  dateCreated: string;
-  lineItems: OrderLineItem[];
-}
-
-interface CustomerTicket {
-  id: string;
-  productModel: string;
-  issueDescription: string;
-  status: string;
-  createdAt: string;
-}
-
-interface CustomerDetail {
-  customer: {
-    id: number;
-    email: string;
-    firstName: string;
-    lastName: string;
-    name: string;
-    phone: string;
-    joinedAt: string;
-    authProvider: string;
-  };
-  orders: CustomerOrder[];
-  tickets: CustomerTicket[];
-}
+type CustomerDetail = UcCustomerDetail;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -124,6 +88,18 @@ function ticketStatusVariant(status: string): "default" | "secondary" | "destruc
   }
 }
 
+function actionablePasswordError(error: unknown) {
+  const payload = (error as { data?: { code?: string; error?: string } } | null)?.data;
+  const messages: Record<string, string> = {
+    INSUFFICIENT_PERMISSION: "You do not have permission to issue temporary passwords.",
+    ACCOUNT_INELIGIBLE: "This account is inactive or does not use password authentication.",
+    UNAVAILABLE_UNVERIFIED_DESTINATION: "The selected contact method is missing or has not been verified.",
+    WHATSAPP_DISCONNECTED: "WhatsApp is disconnected. Connect WhatsApp before using this delivery channel.",
+    DELIVERY_PROVIDER_FAILURE: "The delivery provider could not deliver this password. The account credential was not changed.",
+  };
+  return messages[payload?.code ?? ""] ?? payload?.error ?? (error instanceof Error ? error.message : "A temporary password could not be issued.");
+}
+
 // ─── Temporary password dialog ─────────────────────────────────────────────────
 
 function TemporaryPasswordDialog({
@@ -141,6 +117,21 @@ function TemporaryPasswordDialog({
   const [copied, setCopied] = useState(false);
   const [isIssuing, setIsIssuing] = useState(false);
   const requestId = useRef(0);
+  // These are intentionally strict checks.  A missing field must never be
+  // interpreted as verified/available: the API is authoritative for recovery
+  // eligibility and channel health.
+  const emailRecovery = customer.recoveryChannels?.email;
+  const whatsappRecovery = customer.recoveryChannels?.whatsapp;
+  const emailEligible = customer.emailVerified === true
+    && emailRecovery?.verified === true
+    && emailRecovery?.available === true
+    && Boolean(customer.email);
+  const whatsappEligible = customer.phoneVerified === true
+    && whatsappRecovery?.verified === true
+    && whatsappRecovery?.available === true
+    && whatsappRecovery?.status === "connected"
+    && Boolean(customer.phone);
+  const accountEligible = customer.authProvider === "password";
 
   function openDialog() {
     setChannel("email");
@@ -177,7 +168,7 @@ function TemporaryPasswordDialog({
       setResult(issued);
     } catch (err) {
       if (currentRequest === requestId.current) {
-        setError(err instanceof Error ? err.message : "A temporary password could not be issued.");
+        setError(actionablePasswordError(err));
       }
     } finally {
       if (currentRequest === requestId.current) setIsIssuing(false);
@@ -219,6 +210,7 @@ function TemporaryPasswordDialog({
               <Label htmlFor="temporary-password-value">Temporary password (shown once)</Label>
               <div className="flex gap-2">
                 <Input
+                  data-testid="input-temporary-password"
                   id="temporary-password-value"
                   value={result.temporaryPassword}
                   readOnly
@@ -274,49 +266,54 @@ function TemporaryPasswordDialog({
                   className="flex items-start gap-3 rounded-md border p-3 cursor-pointer has-[:checked]:border-primary"
                 >
                   <input
+                    data-testid="input-channel-email"
                     id="temporary-password-email"
                     type="radio"
                     name="temporary-password-channel"
                     value="email"
                     checked={channel === "email"}
                     onChange={() => setChannel("email")}
-                    disabled={isIssuing}
+                   disabled={isIssuing || !emailEligible || !accountEligible}
                     className="mt-1 accent-primary"
                   />
                   <span className="min-w-0">
                     <span className="block text-sm font-medium">Email</span>
-                    <span className="block text-xs text-muted-foreground break-all">{customer.email}</span>
+                     <span className="block text-xs text-muted-foreground break-all">{customer.email || "No email address"}</span>
+                     {!emailEligible && <span className="block text-xs text-destructive">{customer.emailVerified !== true || emailRecovery?.verified !== true ? "Email is not verified" : "Email is unavailable"}</span>}
                   </span>
                 </label>
                 <label
                   htmlFor="temporary-password-whatsapp"
-                  className={`flex items-start gap-3 rounded-md border p-3 ${customer.phone ? "cursor-pointer has-[:checked]:border-primary" : "opacity-60"}`}
+                     className={`flex items-start gap-3 rounded-md border p-3 ${whatsappEligible && accountEligible ? "cursor-pointer has-[:checked]:border-primary" : "opacity-60"}`}
                 >
                   <input
+                    data-testid="input-channel-whatsapp"
                     id="temporary-password-whatsapp"
                     type="radio"
                     name="temporary-password-channel"
                     value="whatsapp"
                     checked={channel === "whatsapp"}
                     onChange={() => setChannel("whatsapp")}
-                    disabled={!customer.phone || isIssuing}
+                     disabled={!whatsappEligible || !accountEligible || isIssuing}
                     className="mt-1 accent-primary"
                   />
                   <span className="min-w-0">
                     <span className="block text-sm font-medium">WhatsApp</span>
                     <span className="block text-xs text-muted-foreground">
-                      {customer.phone || "No phone number on this account"}
+                       {customer.phone || "No phone number on this account"}
                     </span>
+                     {!whatsappEligible && <span className="block text-xs text-destructive">{customer.phoneVerified !== true || whatsappRecovery?.verified !== true ? "Phone is not verified" : whatsappRecovery?.status !== "connected" ? `WhatsApp is ${whatsappRecovery?.status ?? "disconnected"}` : "Phone is unavailable"}</span>}
                   </span>
                 </label>
               </div>
             </fieldset>
 
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            {!accountEligible && <p role="alert" className="text-sm text-destructive">Temporary passwords require an active password-authenticated account.</p>}
+            {error && <p role="alert" data-testid="status-temporary-password-error" className="text-sm text-destructive">{error}</p>}
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={handleClose} disabled={isIssuing}>Cancel</Button>
-              <Button type="button" onClick={generatePassword} disabled={isIssuing || !customer.email}>
+              <Button type="button" data-testid="button-generate-temporary-password" onClick={generatePassword} disabled={isIssuing || !accountEligible || (channel === "email" ? !emailEligible : !whatsappEligible)}>
                 {isIssuing
                   ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</>
                   : "Generate temporary password"}
@@ -414,6 +411,7 @@ function CustomerDetailPanel({
               </div>
               {data.customer.authProvider === "password" ? (
                 <Button
+                  data-testid="button-open-temporary-password"
                   type="button"
                   variant="outline"
                   className="w-full gap-2 mt-3"

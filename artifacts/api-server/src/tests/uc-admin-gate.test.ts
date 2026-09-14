@@ -134,6 +134,11 @@ async function probeAdmin(token: string): Promise<number> {
   return r.status;
 }
 
+async function probeUnsyncedRecovery(token: string): Promise<number> {
+  const r = await apiFetch("/api/admin/unsynced-registrations", authed(token));
+  return r.status;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("UC admin gate — WooCommerce provenance", () => {
@@ -184,6 +189,29 @@ describe("UC admin gate — ProjectHub team sessions", () => {
     } finally {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db as any).select = original;
+    }
+  });
+});
+
+describe("unsynced-registration admin routes use live team authority", () => {
+  it("allows an active database admin even when the JWT role is stale", async () => {
+    assert.equal(await probeUnsyncedRecovery(teamToken(TEAM_ADMIN_ID, "member")), 200);
+  });
+
+  it("rejects a member whose JWT falsely claims admin", async () => {
+    assert.equal(await probeUnsyncedRecovery(teamToken(TEAM_MEMBER_ID, "admin")), 403);
+  });
+
+  it("rejects an admin after the live row is deactivated", async () => {
+    await db.update(teamUsersTable)
+      .set({ isActive: false })
+      .where(inArray(teamUsersTable.id, [TEAM_ADMIN_ID]));
+    try {
+      assert.equal(await probeUnsyncedRecovery(teamToken(TEAM_ADMIN_ID, "admin")), 403);
+    } finally {
+      await db.update(teamUsersTable)
+        .set({ isActive: true })
+        .where(inArray(teamUsersTable.id, [TEAM_ADMIN_ID]));
     }
   });
 });

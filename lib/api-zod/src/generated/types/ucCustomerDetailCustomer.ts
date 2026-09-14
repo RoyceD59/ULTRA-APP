@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UcCustomerDetailCustomerRecoveryChannels } from './ucCustomerDetailCustomerRecoveryChannels';
 
 export type UcCustomerDetailCustomer = {
   id: number;
@@ -15,4 +16,9 @@ export type UcCustomerDetailCustomer = {
   phone: string;
   joinedAt: Date;
   authProvider: string;
+  /** Explicit verification state; false means the destination must not be treated as verified. */
+  emailVerified: boolean;
+  /** Explicit verification state; false means the destination must not be treated as verified. */
+  phoneVerified: boolean;
+  recoveryChannels: UcCustomerDetailCustomerRecoveryChannels;
 };

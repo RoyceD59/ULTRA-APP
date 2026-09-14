@@ -16,6 +16,7 @@ import { buildWhatsAppAlertEmail } from "../lib/email.js";
 import {
   alertRecipients,
   isAlertConfigured,
+  isCurrentQrConversion,
   qrPageUrl,
   sendSessionAlert,
 } from "../lib/whatsapp.js";
@@ -124,6 +125,22 @@ describe("qrPageUrl", () => {
     delete process.env["PROJECTHUB_URL"];
     assert.ok(qrPageUrl().endsWith("/system"), `got: ${qrPageUrl()}`);
     if (saved !== undefined) process.env["PROJECTHUB_URL"] = saved;
+  });
+});
+
+// ── QR conversion ordering ────────────────────────────────────────────────────
+
+describe("isCurrentQrConversion", () => {
+  it("accepts the latest conversion in the active lifecycle", () => {
+    assert.equal(isCurrentQrConversion(3, 3, 2, 2), true);
+  });
+
+  it("rejects a conversion from an older QR sequence", () => {
+    assert.equal(isCurrentQrConversion(3, 3, 1, 2), false);
+  });
+
+  it("rejects a conversion from an older lifecycle generation", () => {
+    assert.equal(isCurrentQrConversion(2, 3, 2, 2), false);
   });
 });
 

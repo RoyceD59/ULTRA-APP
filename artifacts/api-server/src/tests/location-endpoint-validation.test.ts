@@ -91,3 +91,14 @@ test("location PATCH rejects non-finite coordinates without persisting them", as
   assert.equal(Number(location?.longitude), 36.817);
   assert.equal(location?.verified, true);
 });
+
+test("location PATCH accepts activation-only updates and rejects empty bodies", async () => {
+  assert.equal(await patchCoordinate({ active: false }), 200);
+  const [deactivated] = await db.select({
+    active: ucLocationsTable.active,
+    verified: ucLocationsTable.verified,
+  }).from(ucLocationsTable).where(eq(ucLocationsTable.id, locationId)).limit(1);
+  assert.equal(deactivated?.active, false);
+  assert.equal(deactivated?.verified, true);
+  assert.equal(await patchCoordinate({}), 400);
+});

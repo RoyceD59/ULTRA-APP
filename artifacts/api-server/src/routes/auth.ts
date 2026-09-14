@@ -142,11 +142,36 @@ export function requireTeamAuth(req: Request, res: Response, next: NextFunction)
 export function requireTeamAdmin(req: Request, res: Response, next: NextFunction): void {
   requireTeamAuth(req, res, () => {
     const user = (req as AuthRequest).teamUser;
-    if (user?.role !== "admin") {
-      res.status(403).json({ error: "Admin access required." });
-      return;
-    }
-    next();
+    // JWT role claims are intentionally only an identity hint. Re-check the
+    // live row for every admin request so demotions/deactivations take effect
+    // immediately, rather than when the session expires.
+    void db.select({
+      id: teamUsersTable.id,
+      email: teamUsersTable.email,
+      name: teamUsersTable.name,
+      role: teamUsersTable.role,
+      isActive: teamUsersTable.isActive,
+    }).from(teamUsersTable)
+      .where(eq(teamUsersTable.id, user?.id ?? ""))
+      .limit(1)
+      .then(([liveUser]) => {
+        if (!liveUser?.isActive || liveUser.role !== "admin") {
+          res.status(403).json({ error: "Admin access required." });
+          return;
+        }
+        // Preserve the database identity for downstream audit fields such as
+        // resolvedBy; never derive it from a caller-provided body value.
+        (req as AuthRequest).teamUser = {
+          id: liveUser.id,
+          email: liveUser.email,
+          name: liveUser.name,
+          role: liveUser.role,
+        };
+        next();
+      })
+      .catch(() => {
+        res.status(403).json({ error: "Admin access required." });
+      });
   });
 }
 

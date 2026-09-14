@@ -385,15 +385,163 @@ paths:
               schema:
                 $ref: "#/components/schemas/UcTemporaryPasswordResult"
         "202":
-          description: Rejected without disclosing account or verification state
+          description: Legacy generic rejection response
         "400":
           description: Invalid customer id or delivery channel
         "401":
           description: Authentication required
         "403":
           description: Companion password issuance permission required
+        "422":
+          description: Account or selected destination is not eligible
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicActionableError" }
         "502":
-          description: Delivery failed and no temporary credential remains active
+          description: Delivery provider failed and no temporary credential remains active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicActionableError" }
+        "503":
+          description: WhatsApp is disconnected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicActionableError" }
+
+  /uc/admin/locations:
+    get:
+      operationId: listUcAdminLocations
+      tags: [uc-admin]
+      summary: List managed Companion service locations
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Managed locations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [locations]
+                properties:
+                  locations:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcLocation" }
+        "403": { description: Admin access required }
+    post:
+      operationId: createUcAdminLocation
+      tags: [uc-admin]
+      summary: Create a managed Companion service location
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcLocationInput" }
+      responses:
+        "201":
+          description: Location created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { location: { $ref: "#/components/schemas/UcLocation" } }
+        "400": { description: Invalid location fields }
+        "403": { description: Admin access required }
+
+  /uc/admin/locations/{id}:
+    patch:
+      operationId: updateUcAdminLocation
+      tags: [uc-admin]
+      summary: Partially update a managed Companion service location
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcLocationUpdateInput" }
+      responses:
+        "200":
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location: { $ref: "#/components/schemas/UcLocation" }
+                  verificationReset: { type: boolean }
+        "400": { description: Empty or invalid partial update }
+        "403": { description: Admin access required }
+        "404": { description: Location not found }
+
+  /admin/unsynced-registrations:
+    get:
+      operationId: listUnsyncedRegistrations
+      tags: [uc-admin]
+      summary: List durable registration records needing reconciliation
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Registration ledger records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/UnsyncedRegistration" }
+        "403": { description: Admin access required }
+
+  /admin/unsynced-registrations/retry:
+    post:
+      operationId: recoverUnsyncedRegistration
+      tags: [uc-admin]
+      summary: Link a durable registration to an account or create one safely
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnsyncedRegistrationRecoveryInput" }
+      responses:
+        "200": { description: Reconciliation result }
+        "400": { description: Invalid recovery input }
+        "403": { description: Admin access required }
+        "404": { description: Ledger record not found }
+        "409": { description: Identity conflict }
+
+  /admin/unsynced-registrations/clear-resolved:
+    post:
+      operationId: clearResolvedRegistrations
+      tags: [uc-admin]
+      summary: Atomically clear database-persisted resolved registration records
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: boolean, enum: [true] }
+      responses:
+        "200":
+          description: Number of records cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cleared]
+                properties: { cleared: { type: integer, minimum: 0 } }
+        "400": { description: Confirmation required }
+        "403": { description: Admin access required }
 
   /uc/auth/change-password:
     post:
@@ -1462,6 +1610,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WhatsAppStatus"
+        "503":
+          description: WhatsApp could not be started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppRequestError"
 
   /whatsapp/disconnect:
     post:
@@ -2246,9 +2400,30 @@ components:
       properties:
         state:
           type: string
-          enum: [disconnected, connecting, qr, connected]
+          enum: [disconnected, connecting, qr, connected, error]
         qr:
           type: ["string", "null"]
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/WhatsAppStatusError"
+            - type: "null"
+
+    WhatsAppStatusError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [QR_GENERATION_FAILED, WHATSAPP_INIT_FAILED]
+        message:
+          type: string
+
+    WhatsAppRequestError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/WhatsAppStatusError"
 
     WhatsAppSendInput:
       type: object
@@ -2459,7 +2634,7 @@ components:
       properties:
         customer:
           type: object
-          required: [id, email, firstName, lastName, name, phone, joinedAt, authProvider]
+          required: [id, email, firstName, lastName, name, phone, joinedAt, authProvider, emailVerified, phoneVerified, recoveryChannels]
           properties:
             id:
               type: integer
@@ -2478,6 +2653,31 @@ components:
               format: date-time
             authProvider:
               type: string
+            emailVerified:
+              type: boolean
+              description: Explicit verification state; false means the destination must not be treated as verified.
+            phoneVerified:
+              type: boolean
+              description: Explicit verification state; false means the destination must not be treated as verified.
+            recoveryChannels:
+              type: object
+              required: [email, whatsapp]
+              properties:
+                email:
+                  type: object
+                  required: [available, verified]
+                  properties:
+                    available: { type: boolean }
+                    verified: { type: boolean }
+                whatsapp:
+                  type: object
+                  required: [available, verified, status]
+                  properties:
+                    available: { type: boolean }
+                    verified: { type: boolean }
+                    status:
+                      type: string
+                      description: Current WhatsApp connection state; contains no session or QR material.
         orders:
           type: array
           items:
@@ -2530,6 +2730,106 @@ components:
               enum: [email, whatsapp]
             delivered:
               type: boolean
+
+    PublicActionableError:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          enum:
+            - INSUFFICIENT_PERMISSION
+            - ACCOUNT_INELIGIBLE
+            - UNAVAILABLE_UNVERIFIED_DESTINATION
+            - WHATSAPP_DISCONNECTED
+            - DELIVERY_PROVIDER_FAILURE
+        error:
+          type: string
+
+    UcLocation:
+      type: object
+      required: [id, type, name, address, lat, lng, hours, active, verified]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor] }
+        name: { type: string }
+        address: { type: string }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        hours: { type: string }
+        phone: { type: [string, "null"] }
+        vendorName: { type: [string, "null"] }
+        active: { type: boolean }
+        verified: { type: boolean }
+
+    UcLocationInput:
+      type: object
+      required: [type, name, address, latitude, longitude, hours]
+      properties:
+        type: { type: string, enum: [experience_centre, refill_atm, vendor] }
+        name: { type: string, minLength: 1 }
+        address: { type: string, minLength: 1 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        hours: { type: string, minLength: 1 }
+        phone: { type: [string, "null"] }
+        vendorName: { type: [string, "null"] }
+
+    UcLocationUpdateInput:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        active: { type: boolean }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor] }
+        name: { type: string, minLength: 1 }
+        address: { type: string, minLength: 1 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        hours: { type: string, minLength: 1 }
+        phone: { type: [string, "null"] }
+        vendorName: { type: [string, "null"] }
+
+    UnsyncedRegistration:
+      type: object
+      required: [email, phone, recordedAt, dbPersisted]
+      properties:
+        id: { type: [integer, "null"] }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        authProvider: { type: string }
+        recordedAt: { type: string, format: date-time }
+        dbPersisted: { type: boolean }
+        recoveryStatus: { type: string, enum: [pending, blocked, resolved, retryable] }
+        recoveryReason: { type: string, enum: [email_conflict, phone_conflict, invalid_phone] }
+        targetAccountId: { type: integer }
+        resolvedAt: { type: string, format: date-time }
+        resolvedBy: { type: string }
+
+    UnsyncedRegistrationRecoveryInput:
+      type: object
+      required: [originalEmail, recordedAt, target]
+      properties:
+        originalEmail: { type: string, minLength: 1 }
+        originalPhone: { type: string }
+        correctedEmail: { type: string, minLength: 1 }
+        correctedPhone: { type: string }
+        recordedAt: { type: string, format: date-time }
+        target:
+          oneOf:
+            - type: object
+              required: [type, accountId]
+              properties:
+                type: { type: string, enum: [existing] }
+                accountId: { type: integer, minimum: 1 }
+            - type: object
+              required: [type]
+              properties:
+                type: { type: string, enum: [new] }
+        targetAccountId: { type: integer, minimum: 1, description: Backward-compatible shorthand for an existing target }
+        createAccount: { type: boolean, description: Explicitly choose a new account }
 
     UcPermanentPasswordInput:
       type: object

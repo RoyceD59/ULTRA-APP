@@ -9,6 +9,7 @@ const dataDir = await mkdtemp(join(tmpdir(), "uc-account-records-"));
 process.env.UC_ACCOUNTS_DATA_DIR = dataDir;
 const {
   _ioSeams,
+  clearResolvedRegistrations,
   listUnsyncedRegistrations,
   resolveUnsyncedRegistration,
   retryUnsyncedRegistration,
@@ -51,8 +52,18 @@ describe("folder-only registration recovery", () => {
     const recovered = await retryUnsyncedRegistration(fresh, at);
     assert.equal(recovered.inserted, true);
     assert.ok(recovered.tempPassword);
-    const [freshRow] = await db.select({ passwordHash: ucUsersTable.passwordHash }).from(ucUsersTable).where(eq(ucUsersTable.email, fresh));
+    const [freshRow] = await db.select({
+      passwordHash: ucUsersTable.passwordHash,
+      mustChangePassword: ucUsersTable.mustChangePassword,
+      temporaryPasswordExpiresAt: ucUsersTable.temporaryPasswordExpiresAt,
+      credentialVersion: ucUsersTable.credentialVersion,
+    }).from(ucUsersTable).where(eq(ucUsersTable.email, fresh));
     assert.equal(await bcryptjs.compare(recovered.tempPassword!, freshRow!.passwordHash), true);
+    assert.equal(freshRow!.mustChangePassword, true);
+    assert.equal(freshRow!.credentialVersion, 1);
+    assert.ok(freshRow!.temporaryPasswordExpiresAt);
+    assert.ok(freshRow!.temporaryPasswordExpiresAt!.getTime() > Date.now());
+    assert.ok(freshRow!.temporaryPasswordExpiresAt!.getTime() <= Date.now() + 14 * 24 * 60 * 60 * 1000 + 1000);
     assert.equal((await lines()).find((line) => line.email === fresh)?.dbPersisted, true);
 
     const originalHash = await bcryptjs.hash("CustomerPass1!", 4);
@@ -113,5 +124,57 @@ describe("folder-only registration recovery", () => {
     const failedRecord = (await lines()).find((line) => line.email === failing);
     assert.equal(failedRecord?.dbPersisted, false);
     assert.equal(failedRecord?.recoveryAttempts, undefined);
+  });
+
+  it("clears only database-persisted recovery resolutions", async () => {
+    const suffix = Date.now();
+    const persisted = `clear-persisted-${suffix}@test.internal`;
+    const contacted = `clear-contacted-${suffix}@test.internal`;
+    const at = now();
+    await seed(persisted, at, { phone: `+254700${String(suffix).slice(-7)}` });
+    await retryUnsyncedRegistration(persisted, at, {
+      createAccount: true,
+      correctedPhone: `+254700${String(suffix).slice(-7)}`,
+      resolvedBy: "admin-test",
+    });
+    const contactedAt = now();
+    await seed(contacted, contactedAt, { phone: "+254700000099" });
+    await resolveUnsyncedRegistration(contacted, contactedAt);
+
+    const eligibleBeforeClear = (await lines()).filter(
+      (line) => line.dbPersisted === true && line.recoveryStatus === "resolved",
+    ).length;
+    assert.ok(
+      (await listUnsyncedRegistrations()).some((line) => line.email === persisted),
+      "database-persisted resolved recovery rows remain visible until clear",
+    );
+    const cleared = await clearResolvedRegistrations();
+    assert.equal(cleared, eligibleBeforeClear);
+    const records = await lines();
+    assert.equal(records.some((line) => line.email === persisted), false);
+    assert.equal(records.some((line) => line.email === contacted), true);
+  });
+
+  it("keeps persisted recovery audit rows visible when the database is unavailable", async () => {
+    const email = `db-error-resolved-${Date.now()}@test.internal`;
+    const at = now();
+    await seed(email, at, {
+      dbPersisted: true,
+      recoveryStatus: "resolved",
+      followUpStatus: "resolved",
+      resolvedAt: at,
+    });
+    // The fallback must preserve explicit recovery/follow-up state without
+    // treating every ordinary persisted registration backup as unsynced.
+    const originalSelect = db.select.bind(db);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db as any).select = () => { throw new Error("DB unavailable (test)"); };
+    try {
+      const visible = await listUnsyncedRegistrations();
+      assert.ok(visible.some((line) => line.email === email));
+    } finally {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db as any).select = originalSelect;
+    }
   });
 });

@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { WhatsAppStatusError } from './whatsAppStatusError';
 import type { WhatsAppStatusState } from './whatsAppStatusState';
 
 export interface WhatsAppStatus {
   state: WhatsAppStatusState;
   /** @nullable */
   qr?: string | null;
+  error?: WhatsAppStatusError | null;
 }

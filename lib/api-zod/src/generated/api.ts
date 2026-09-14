@@ -191,7 +191,20 @@ export const GetUcCustomerResponse = zod.object({
   "name": zod.string(),
   "phone": zod.string(),
   "joinedAt": zod.coerce.date(),
-  "authProvider": zod.string()
+  "authProvider": zod.string(),
+  "emailVerified": zod.boolean().describe('Explicit verification state; false means the destination must not be treated as verified.'),
+  "phoneVerified": zod.boolean().describe('Explicit verification state; false means the destination must not be treated as verified.'),
+  "recoveryChannels": zod.object({
+  "email": zod.object({
+  "available": zod.boolean(),
+  "verified": zod.boolean()
+}),
+  "whatsapp": zod.object({
+  "available": zod.boolean(),
+  "verified": zod.boolean(),
+  "status": zod.string().describe('Current WhatsApp connection state; contains no session or QR material.')
+})
+})
 }),
   "orders": zod.array(zod.object({
   "id": zod.number(),
@@ -251,6 +264,206 @@ export const IssueUcTemporaryPasswordResponse = zod.object({
   "channel": zod.enum(['email', 'whatsapp']),
   "delivered": zod.boolean()
 })
+})
+
+
+/**
+ * @summary List managed Companion service locations
+ */
+export const listUcAdminLocationsResponseLocationsItemLatMin = -90;
+export const listUcAdminLocationsResponseLocationsItemLatMax = 90;
+
+export const listUcAdminLocationsResponseLocationsItemLngMin = -180;
+export const listUcAdminLocationsResponseLocationsItemLngMax = 180;
+
+
+
+export const ListUcAdminLocationsResponse = zod.object({
+  "locations": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "name": zod.string(),
+  "address": zod.string(),
+  "lat": zod.number().min(listUcAdminLocationsResponseLocationsItemLatMin).max(listUcAdminLocationsResponseLocationsItemLatMax),
+  "lng": zod.number().min(listUcAdminLocationsResponseLocationsItemLngMin).max(listUcAdminLocationsResponseLocationsItemLngMax),
+  "hours": zod.string(),
+  "phone": zod.string().nullish(),
+  "vendorName": zod.string().nullish(),
+  "active": zod.boolean(),
+  "verified": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Create a managed Companion service location
+ */
+
+
+export const createUcAdminLocationBodyLatitudeMin = -90;
+export const createUcAdminLocationBodyLatitudeMax = 90;
+
+export const createUcAdminLocationBodyLongitudeMin = -180;
+export const createUcAdminLocationBodyLongitudeMax = 180;
+
+
+
+
+export const CreateUcAdminLocationBody = zod.object({
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "name": zod.string().min(1),
+  "address": zod.string().min(1),
+  "latitude": zod.number().min(createUcAdminLocationBodyLatitudeMin).max(createUcAdminLocationBodyLatitudeMax),
+  "longitude": zod.number().min(createUcAdminLocationBodyLongitudeMin).max(createUcAdminLocationBodyLongitudeMax),
+  "hours": zod.string().min(1),
+  "phone": zod.string().nullish(),
+  "vendorName": zod.string().nullish()
+})
+
+export const createUcAdminLocationResponseLocationLatMin = -90;
+export const createUcAdminLocationResponseLocationLatMax = 90;
+
+export const createUcAdminLocationResponseLocationLngMin = -180;
+export const createUcAdminLocationResponseLocationLngMax = 180;
+
+
+
+export const CreateUcAdminLocationResponse = zod.object({
+  "location": zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "name": zod.string(),
+  "address": zod.string(),
+  "lat": zod.number().min(createUcAdminLocationResponseLocationLatMin).max(createUcAdminLocationResponseLocationLatMax),
+  "lng": zod.number().min(createUcAdminLocationResponseLocationLngMin).max(createUcAdminLocationResponseLocationLngMax),
+  "hours": zod.string(),
+  "phone": zod.string().nullish(),
+  "vendorName": zod.string().nullish(),
+  "active": zod.boolean(),
+  "verified": zod.boolean()
+}).optional()
+})
+
+
+/**
+ * @summary Partially update a managed Companion service location
+ */
+export const UpdateUcAdminLocationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+
+export const updateUcAdminLocationBodyLatitudeMin = -90;
+export const updateUcAdminLocationBodyLatitudeMax = 90;
+
+export const updateUcAdminLocationBodyLongitudeMin = -180;
+export const updateUcAdminLocationBodyLongitudeMax = 180;
+
+
+
+
+export const UpdateUcAdminLocationBody = zod.object({
+  "active": zod.boolean().optional(),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']).optional(),
+  "name": zod.string().min(1).optional(),
+  "address": zod.string().min(1).optional(),
+  "latitude": zod.number().min(updateUcAdminLocationBodyLatitudeMin).max(updateUcAdminLocationBodyLatitudeMax).optional(),
+  "longitude": zod.number().min(updateUcAdminLocationBodyLongitudeMin).max(updateUcAdminLocationBodyLongitudeMax).optional(),
+  "hours": zod.string().min(1).optional(),
+  "phone": zod.string().nullish(),
+  "vendorName": zod.string().nullish()
+})
+
+export const updateUcAdminLocationResponseLocationLatMin = -90;
+export const updateUcAdminLocationResponseLocationLatMax = 90;
+
+export const updateUcAdminLocationResponseLocationLngMin = -180;
+export const updateUcAdminLocationResponseLocationLngMax = 180;
+
+
+
+export const UpdateUcAdminLocationResponse = zod.object({
+  "location": zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "name": zod.string(),
+  "address": zod.string(),
+  "lat": zod.number().min(updateUcAdminLocationResponseLocationLatMin).max(updateUcAdminLocationResponseLocationLatMax),
+  "lng": zod.number().min(updateUcAdminLocationResponseLocationLngMin).max(updateUcAdminLocationResponseLocationLngMax),
+  "hours": zod.string(),
+  "phone": zod.string().nullish(),
+  "vendorName": zod.string().nullish(),
+  "active": zod.boolean(),
+  "verified": zod.boolean()
+}).optional(),
+  "verificationReset": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List durable registration records needing reconciliation
+ */
+export const ListUnsyncedRegistrationsResponse = zod.object({
+  "records": zod.array(zod.object({
+  "id": zod.number().nullish(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "authProvider": zod.string().optional(),
+  "recordedAt": zod.coerce.date(),
+  "dbPersisted": zod.boolean(),
+  "recoveryStatus": zod.enum(['pending', 'blocked', 'resolved', 'retryable']).optional(),
+  "recoveryReason": zod.enum(['email_conflict', 'phone_conflict', 'invalid_phone']).optional(),
+  "targetAccountId": zod.number().optional(),
+  "resolvedAt": zod.coerce.date().optional(),
+  "resolvedBy": zod.string().optional()
+}))
+})
+
+
+/**
+ * @summary Link a durable registration to an account or create one safely
+ */
+
+
+
+
+
+
+export const RecoverUnsyncedRegistrationBody = zod.object({
+  "originalEmail": zod.string().min(1),
+  "originalPhone": zod.string().optional(),
+  "correctedEmail": zod.string().min(1).optional(),
+  "correctedPhone": zod.string().optional(),
+  "recordedAt": zod.coerce.date(),
+  "target": zod.union([zod.object({
+  "type": zod.enum(['existing']),
+  "accountId": zod.number().min(1)
+}),zod.object({
+  "type": zod.enum(['new'])
+})]),
+  "targetAccountId": zod.number().min(1).optional().describe('Backward-compatible shorthand for an existing target'),
+  "createAccount": zod.boolean().optional().describe('Explicitly choose a new account')
+})
+
+export const RecoverUnsyncedRegistrationResponse = zod.unknown()
+
+
+/**
+ * @summary Atomically clear database-persisted resolved registration records
+ */
+export const ClearResolvedRegistrationsBody = zod.object({
+  "confirm": zod.literal(true)
+})
+
+export const clearResolvedRegistrationsResponseClearedMin = 0;
+
+
+
+export const ClearResolvedRegistrationsResponse = zod.object({
+  "cleared": zod.number().min(clearResolvedRegistrationsResponseClearedMin)
 })
 
 
@@ -1463,8 +1676,12 @@ export const IssueTeamTokenResponse = zod.object({
  * @summary Get current WhatsApp connection state
  */
 export const GetWhatsAppStatusResponse = zod.object({
-  "state": zod.enum(['disconnected', 'connecting', 'qr', 'connected']),
-  "qr": zod.string().nullish()
+  "state": zod.enum(['disconnected', 'connecting', 'qr', 'connected', 'error']),
+  "qr": zod.string().nullish(),
+  "error": zod.union([zod.object({
+  "code": zod.enum(['QR_GENERATION_FAILED', 'WHATSAPP_INIT_FAILED']),
+  "message": zod.string()
+}),zod.null()]).optional()
 })
 
 
@@ -1472,8 +1689,12 @@ export const GetWhatsAppStatusResponse = zod.object({
  * @summary Initiate WhatsApp pairing flow
  */
 export const ConnectWhatsAppResponse = zod.object({
-  "state": zod.enum(['disconnected', 'connecting', 'qr', 'connected']),
-  "qr": zod.string().nullish()
+  "state": zod.enum(['disconnected', 'connecting', 'qr', 'connected', 'error']),
+  "qr": zod.string().nullish(),
+  "error": zod.union([zod.object({
+  "code": zod.enum(['QR_GENERATION_FAILED', 'WHATSAPP_INIT_FAILED']),
+  "message": zod.string()
+}),zod.null()]).optional()
 })
 
 

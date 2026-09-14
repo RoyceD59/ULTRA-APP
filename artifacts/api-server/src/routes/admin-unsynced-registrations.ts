@@ -10,6 +10,7 @@
 import { Router, type Request, type Response } from "express";
 import { requireTeamAdmin } from "./auth.js";
 import {
+  clearResolvedRegistrations,
   listUnsyncedRegistrations,
   resolveUnsyncedRegistration,
   retryUnsyncedRegistration,
@@ -32,22 +33,91 @@ router.post(
   "/admin/unsynced-registrations/retry",
   requireTeamAdmin,
   async (req: Request, res: Response): Promise<void> => {
-    const { email, recordedAt } = req.body as {
+    const {
+      email,
+      originalEmail,
+      originalPhone,
+      correctedEmail,
+      correctedPhone,
+      targetAccountId,
+      target,
+      createAccount,
+      recordedAt,
+    } = req.body as {
       email?: unknown;
+      originalEmail?: unknown;
+      originalPhone?: unknown;
+      correctedEmail?: unknown;
+      correctedPhone?: unknown;
+      targetAccountId?: unknown;
+      target?: unknown;
+      createAccount?: unknown;
       recordedAt?: unknown;
     };
 
-    if (typeof email !== "string" || !email.trim()) {
-      res.status(400).json({ error: "email is required" });
+    const ledgerEmail = typeof originalEmail === "string" ? originalEmail : email;
+    if ((typeof ledgerEmail !== "string" || !ledgerEmail.trim()) &&
+        (typeof originalPhone !== "string" || !originalPhone.trim())) {
+      res.status(400).json({ code: "LEDGER_IDENTITY_REQUIRED", error: "The original ledger email or phone is required." });
       return;
     }
+    const ledgerIdentityEmail = typeof ledgerEmail === "string" ? ledgerEmail.trim() : "";
     if (typeof recordedAt !== "string" || !recordedAt.trim()) {
-      res.status(400).json({ error: "recordedAt is required" });
+      res.status(400).json({ code: "RECORDED_AT_REQUIRED", error: "The original ledger timestamp is required." });
       return;
     }
 
-    const result = await retryUnsyncedRegistration(email.toLowerCase().trim(), recordedAt);
-    res.json(result);
+    const targetValue = target && typeof target === "object" ? target as Record<string, unknown> : {};
+    const selectedTargetId = targetAccountId ?? targetValue["accountId"];
+    const isNewAccount = createAccount === true || target === "new" || targetValue["type"] === "new";
+    if (selectedTargetId !== undefined && (!Number.isInteger(Number(selectedTargetId)) || Number(selectedTargetId) <= 0)) {
+      res.status(400).json({ code: "TARGET_ACCOUNT_INVALID", error: "Select an existing account or choose new account." });
+      return;
+    }
+    if (!isNewAccount && selectedTargetId === undefined && (correctedEmail !== undefined || correctedPhone !== undefined)) {
+      res.status(400).json({ code: "TARGET_ACCOUNT_REQUIRED", error: "Select an existing account or explicitly choose new account." });
+      return;
+    }
+    if (correctedEmail !== undefined && (typeof correctedEmail !== "string" || !correctedEmail.trim())) {
+      res.status(400).json({ code: "CORRECTED_EMAIL_INVALID", error: "Enter a corrected email address." });
+      return;
+    }
+    if (correctedPhone !== undefined && typeof correctedPhone !== "string") {
+      res.status(400).json({ code: "CORRECTED_PHONE_INVALID", error: "Enter a corrected phone number." });
+      return;
+    }
+
+    try {
+      const result = await retryUnsyncedRegistration(ledgerIdentityEmail, recordedAt, {
+        originalPhone: typeof originalPhone === "string" ? originalPhone : undefined,
+        correctedEmail: typeof correctedEmail === "string" ? correctedEmail : undefined,
+        correctedPhone: typeof correctedPhone === "string" ? correctedPhone : undefined,
+        targetAccountId: selectedTargetId === undefined ? undefined : Number(selectedTargetId),
+        createAccount: isNewAccount,
+        resolvedBy: typeof (req as Request & { teamUser?: { id?: string } }).teamUser?.id === "string"
+          ? (req as Request & { teamUser?: { id?: string } }).teamUser?.id
+          : "admin",
+      });
+      if (result.status === "blocked") {
+        res.status(409).json({
+          ...result,
+          code: "IDENTITY_CONFLICT",
+          error: "The corrected identity is already owned by a different account.",
+        });
+        return;
+      }
+      res.json(result);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("No folder record found")) {
+        res.status(404).json({ code: "LEDGER_RECORD_NOT_FOUND", error: "Registration record not found." });
+        return;
+      }
+      if (error instanceof Error && /required|valid corrected|target account/i.test(error.message)) {
+        res.status(400).json({ code: "RECOVERY_INPUT_INVALID", error: error.message });
+        return;
+      }
+      throw error;
+    }
   },
 );
 
@@ -79,6 +149,22 @@ router.post(
       }
       throw error;
     }
+  },
+);
+
+router.post(
+  "/admin/unsynced-registrations/clear-resolved",
+  requireTeamAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    if (req.body?.confirm !== true) {
+      res.status(400).json({
+        code: "CONFIRMATION_REQUIRED",
+        error: "Set confirm to true to clear database-persisted resolved records.",
+      });
+      return;
+    }
+    const cleared = await clearResolvedRegistrations();
+    res.json({ cleared });
   },
 );
 

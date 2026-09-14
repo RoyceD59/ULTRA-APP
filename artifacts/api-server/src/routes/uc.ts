@@ -18,7 +18,7 @@ import { isAdminRequest } from "../lib/adminAuth.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { remoteImageProxyPath } from "./product-images.js";
 import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
-import { sendWhatsAppMessage } from "../lib/whatsapp.js";
+import { getWhatsAppStatus, sendWhatsAppMessage } from "../lib/whatsapp.js";
 import {
   sendSms,
   orderConfirmationSms,
@@ -2179,12 +2179,12 @@ async function recordPasswordResetAudit(input: {
 }
 
 function preferredRecoveryChannel(
-  user: { emailVerified: boolean; phoneVerified: boolean; phone: string },
+  user: { emailVerified: boolean; phoneVerified: boolean; phone: string; email?: string },
   requested: unknown,
 ): RecoveryChannel | null {
-  if (requested === "email") return user.emailVerified ? "email" : null;
+  if (requested === "email") return user.emailVerified && Boolean(user.email?.trim()) ? "email" : null;
   if (requested === "whatsapp") return user.phoneVerified && Boolean(normalizePhone(user.phone)) ? "whatsapp" : null;
-  if (user.emailVerified) return "email";
+  if (user.emailVerified && Boolean(user.email?.trim())) return "email";
   return user.phoneVerified && normalizePhone(user.phone) ? "whatsapp" : null;
 }
 
@@ -2209,10 +2209,10 @@ async function deliverTemporaryPassword(
   channel: RecoveryChannel,
   temporaryPassword: string,
   expiresAt: Date,
-): Promise<boolean> {
+): Promise<{ sent: boolean; reason?: "whatsapp_disconnected" | "delivery_provider_failure" }> {
   const expiry = expiresAt.toISOString();
   if (channel === "email") {
-    return sendViaResend({
+    const sent = await sendViaResend({
       from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
       to: user.email,
       subject: "Your temporary Ultra-Clear password",
@@ -2228,17 +2228,21 @@ async function deliverTemporaryPassword(
       meta: { template: "uc-temporary-password", auditMode: "metadata-only" },
       logBody: "Temporary password email dispatched (credential redacted)",
     });
+    return sent ? { sent: true } : { sent: false, reason: "delivery_provider_failure" };
   }
   const phone = normalizePhone(user.phone);
-  if (!phone) return false;
+  if (!phone) return { sent: false, reason: "delivery_provider_failure" };
+  if (getWhatsAppStatus().state !== "connected") {
+    return { sent: false, reason: "whatsapp_disconnected" };
+  }
   try {
     await sendWhatsAppMessage(
       phone,
       `Ultra-Clear temporary password: ${temporaryPassword}. Sign in within 24 hours and choose a permanent password before using Companion.`,
     );
-    return true;
+    return { sent: true };
   } catch {
-    return false;
+    return { sent: false, reason: "delivery_provider_failure" };
   }
 }
 
@@ -2246,64 +2250,165 @@ async function issueTemporaryPassword(
   user: TemporaryPasswordTarget,
   channel: RecoveryChannel,
   actorId: string,
-): Promise<{ password: string; expiresAt: Date } | null> {
-  if (user.authProvider !== "password") return null;
-  const password = generateTemporaryPassword();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const passwordHash = await bcryptjs.hash(password, 12);
-  const [previous] = await db.select({ passwordHash: ucUsersTable.passwordHash })
-    .from(ucUsersTable)
-    .where(and(eq(ucUsersTable.id, user.id), isNull(ucUsersTable.deletedAt)))
-    .limit(1);
-  if (!previous) return null;
-  await db.transaction(async (tx) => {
-    await tx.update(ucUsersTable)
-      .set({
-        passwordHash,
-        credentialVersion: sql`${ucUsersTable.credentialVersion} + 1`,
-        temporaryPasswordExpiresAt: expiresAt,
-        mustChangePassword: true,
-      })
-      .where(and(eq(ucUsersTable.id, user.id), isNull(ucUsersTable.deletedAt)));
-    // A temporary credential supersedes self-service recovery links.
-    await tx.update(passwordResetTokensTable)
-      .set({ usedAt: new Date() })
-      .where(and(eq(passwordResetTokensTable.userId, String(user.id)), isNull(passwordResetTokensTable.usedAt)));
-  });
+): Promise<
+  | { password: string; expiresAt: Date }
+  | { failure: "account_ineligible" | "unavailable_unverified_destination" | "whatsapp_disconnected" | "delivery_provider_failure" }
+  | null
+> {
+  if (user.authProvider !== "password") return { failure: "account_ineligible" };
 
-  let sent = false;
+  // Keep a per-customer advisory lock on one pool connection across both the
+  // credential installation and external delivery. A transaction-scoped lock
+  // would be released before delivery and permit two issuances to race.
+  const client = await pool.connect();
+  let password = "";
+  let passwordHash = "";
+  let expiresAt: Date;
+  let issuedVersion = 0;
+  let previous: {
+    passwordHash: string;
+    mustChangePassword: boolean;
+    temporaryPasswordExpiresAt: Date | null;
+    credentialVersion: number;
+  } | undefined;
+  let deliveryUser: TemporaryPasswordTarget = user;
   try {
-    sent = await deliverTemporaryPassword(user, channel, password, expiresAt);
-  } catch {
-    logger.warn({ event: "temporary_password_delivery_failed", channel }, "Temporary password delivery failed");
+    await client.query("SELECT pg_advisory_lock(hashtext($1))", [`uc-temporary-password:${user.id}`]);
+    await client.query("BEGIN");
+    const current = await client.query<{
+      password_hash: string;
+      must_change_password: boolean;
+      temporary_password_expires_at: Date | null;
+      credential_version: number;
+      email: string;
+      phone: string;
+      first_name: string;
+      email_verified: boolean;
+      phone_verified: boolean;
+      auth_provider: string;
+    }>(
+      `SELECT password_hash, must_change_password, temporary_password_expires_at,
+              credential_version, email, phone, first_name,
+              email_verified, phone_verified, auth_provider
+         FROM uc_users
+        WHERE id = $1 AND deleted_at IS NULL
+        FOR UPDATE`,
+      [user.id],
+    );
+    const row = current.rows[0];
+    if (!row || row.auth_provider !== "password") {
+      await client.query("ROLLBACK");
+      return { failure: "account_ineligible" };
+    }
+    deliveryUser = {
+      id: user.id,
+      email: row.email,
+      phone: row.phone,
+      firstName: row.first_name,
+      emailVerified: row.email_verified,
+      phoneVerified: row.phone_verified,
+      authProvider: row.auth_provider,
+    };
+    if (
+      (channel === "email" && (!row.email_verified || !row.email.trim()))
+      || (channel === "whatsapp" && (!row.phone_verified || !normalizePhone(row.phone)))
+    ) {
+      await client.query("ROLLBACK");
+      return { failure: "unavailable_unverified_destination" };
+    }
+    previous = {
+      passwordHash: row.password_hash,
+      mustChangePassword: row.must_change_password,
+      temporaryPasswordExpiresAt: row.temporary_password_expires_at,
+      credentialVersion: row.credential_version,
+    };
+    password = generateTemporaryPassword();
+    expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    passwordHash = await bcryptjs.hash(password, 12);
+    issuedVersion = previous.credentialVersion + 1;
+    await client.query(
+      `UPDATE uc_users
+          SET password_hash = $1, credential_version = $2,
+              temporary_password_expires_at = $3, must_change_password = true
+        WHERE id = $4`,
+      [passwordHash, issuedVersion, expiresAt, user.id],
+    );
+    await client.query("COMMIT");
+
+    let sent = false;
+    let failureReason: "whatsapp_disconnected" | "delivery_provider_failure" | undefined;
+    try {
+      const delivery = await deliverTemporaryPassword(deliveryUser, channel, password, expiresAt);
+      sent = delivery.sent;
+      failureReason = delivery.reason;
+    } catch {
+      logger.warn({ event: "temporary_password_delivery_failed", channel }, "Temporary password delivery failed");
+    }
+    if (sent) {
+      // Do not consume recovery links until the operator credential has
+      // actually been accepted by the selected provider. This transaction is
+      // intentionally after delivery; a failed delivery must leave an
+      // existing self-service link usable.
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `UPDATE password_reset_tokens
+              SET used_at = now()
+            WHERE user_id = $1 AND used_at IS NULL`,
+          [String(user.id)],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        try { await client.query("ROLLBACK"); } catch { /* transaction already closed */ }
+        // The temporary credential was delivered, so keep it active. A
+        // transient audit-token failure should not make the operator retry and
+        // issue another credential; the active links remain safe to use.
+        logger.error({ err: error, userId: user.id }, "Could not invalidate prior password-reset links after delivery");
+      }
+    }
+    await recordPasswordResetAudit({
+      actorType: "team",
+      actorId,
+      targetUserId: String(user.id),
+      channel,
+      result: sent ? "issued" : "delivery_failed",
+    });
+    if (!sent) {
+      // Restore every prior credential field only if this issuance still owns
+      // the row. In particular, do not replace a permanent password that won
+      // a concurrent change while delivery was in flight.
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE uc_users
+            SET password_hash = $1, must_change_password = $2,
+                temporary_password_expires_at = $3, credential_version = $4
+          WHERE id = $5 AND credential_version = $6 AND password_hash = $7`,
+        [
+          previous.passwordHash,
+          previous.mustChangePassword,
+          previous.temporaryPasswordExpiresAt,
+          previous.credentialVersion,
+          user.id,
+          issuedVersion,
+          passwordHash,
+        ],
+      );
+      await client.query("COMMIT");
+      return {
+        failure: failureReason === "whatsapp_disconnected"
+          ? "whatsapp_disconnected"
+          : "delivery_provider_failure",
+      };
+    }
+    return { password, expiresAt };
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch { /* transaction already closed */ }
+    logger.warn({ err: error, event: "temporary_password_issue_failed" }, "Temporary password issuance failed");
+    return { failure: "delivery_provider_failure" };
+  } finally {
+    try { await client.query("SELECT pg_advisory_unlock(hashtext($1))", [`uc-temporary-password:${user.id}`]); } catch { /* connection cleanup */ }
+    client.release();
   }
-  await recordPasswordResetAudit({
-    actorType: "team",
-    actorId,
-    targetUserId: String(user.id),
-    channel,
-    result: sent ? "issued" : "delivery_failed",
-  });
-  if (!sent) {
-    // Do not leave an undistributed operator credential active. The guarded
-    // update also avoids clearing a newer issuance made during delivery.
-    await db.update(ucUsersTable)
-      .set({
-        // Delivery failed: put the prior password back rather than leaving an
-        // undistributed credential usable as a normal password.
-        passwordHash: previous.passwordHash,
-        credentialVersion: sql`${ucUsersTable.credentialVersion} + 1`,
-        temporaryPasswordExpiresAt: null,
-        mustChangePassword: false,
-      })
-      .where(and(
-        eq(ucUsersTable.id, user.id),
-        eq(ucUsersTable.temporaryPasswordExpiresAt, expiresAt),
-        eq(ucUsersTable.mustChangePassword, true),
-      ));
-    return null;
-  }
-  return { password, expiresAt };
 }
 
 async function issueCompanionReset(
@@ -2459,7 +2564,7 @@ router.post("/uc/admin/users/:id/reset-password", async (req: Request, res: Resp
 router.post("/uc/admin/users/:id/temporary-password", async (req: Request, res: Response): Promise<void> => {
   const claims = verifyToken(req.headers["authorization"]);
   if (!claims || claims.type !== "team-session") {
-    res.status(401).json({ error: "Authentication required." });
+    res.status(401).json({ code: "AUTHENTICATION_REQUIRED", error: "Authentication required." });
     return;
   }
   const [actor] = await db.select().from(teamUsersTable)
@@ -2471,7 +2576,10 @@ router.post("/uc/admin/users/:id/temporary-password", async (req: Request, res: 
     || ["admin", "manage", "write"].includes(permissions["customers"] ?? "")
   );
   if (!canReset) {
-    res.status(403).json({ error: "Permission to issue Companion temporary passwords is required." });
+    res.status(403).json({
+      code: "INSUFFICIENT_PERMISSION",
+      error: "Permission to issue Companion temporary passwords is required.",
+    });
     return;
   }
 
@@ -2479,7 +2587,7 @@ router.post("/uc/admin/users/:id/temporary-password", async (req: Request, res: 
   const requestedChannel = req.body?.channel;
   if (!Number.isInteger(targetId) || targetId <= 0 || !["email", "whatsapp"].includes(requestedChannel)) {
     await recordPasswordResetAudit({ actorType: "team", actorId: actor!.id, result: "rejected" });
-    res.status(400).json({ error: "A valid user id and delivery channel are required." });
+    res.status(400).json({ code: "TEMPORARY_PASSWORD_INPUT_INVALID", error: "A valid user id and delivery channel are required." });
     return;
   }
   const [target] = await db.select({
@@ -2495,7 +2603,15 @@ router.post("/uc/admin/users/:id/temporary-password", async (req: Request, res: 
     isNull(ucUsersTable.deletedAt),
   )).limit(1);
   const channel = target && preferredRecoveryChannel(target, requestedChannel);
-  if (!target || target.authProvider !== "password" || !channel) {
+  let eligibility: "account_ineligible" | "unavailable_unverified_destination" | "whatsapp_disconnected" | undefined;
+  if (!target || target.authProvider !== "password") {
+    eligibility = "account_ineligible";
+  } else if (!channel) {
+    eligibility = "unavailable_unverified_destination";
+  } else if (channel === "whatsapp" && getWhatsAppStatus().state !== "connected") {
+    eligibility = "whatsapp_disconnected";
+  }
+  if (eligibility) {
     await recordPasswordResetAudit({
       actorType: "team",
       actorId: actor!.id,
@@ -2503,15 +2619,30 @@ router.post("/uc/admin/users/:id/temporary-password", async (req: Request, res: 
       channel: channel ?? undefined,
       result: "rejected",
     });
-    // Avoid disclosing whether the target exists, its provider, or which
-    // channels have been verified.
-    res.status(202).json({ ok: true });
+    res.status(422).json({
+      code: eligibility.toUpperCase(),
+      error: eligibility === "account_ineligible"
+        ? "This account is not eligible for a temporary password."
+        : eligibility === "unavailable_unverified_destination"
+          ? "The selected destination is unavailable or unverified."
+          : "WhatsApp is disconnected. Connect WhatsApp and try again.",
+    });
     return;
   }
 
+  if (!target || !channel) {
+    res.status(422).json({ code: "ACCOUNT_INELIGIBLE", error: "This account is not eligible for a temporary password." });
+    return;
+  }
   const issued = await issueTemporaryPassword(target, channel, actor!.id);
-  if (!issued) {
-    res.status(502).json({ error: "Temporary password delivery failed. No active temporary credential was retained." });
+  if (!issued || "failure" in issued) {
+    const failure = !issued ? "delivery_provider_failure" : issued.failure;
+    res.status(failure === "whatsapp_disconnected" ? 503 : 502).json({
+      code: failure.toUpperCase(),
+      error: failure === "whatsapp_disconnected"
+        ? "WhatsApp is disconnected. Connect WhatsApp and try again."
+        : "The delivery provider failed. No active temporary credential was retained; try again.",
+    });
     return;
   }
   res.status(200).json({
@@ -2649,7 +2780,10 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
   // precheck: the conditional update inside the transaction remains the atomic
   // source of truth, so a concurrent reset cannot win a TOCTOU race.
   const tokenHash = hashResetToken(token);
-  const [validToken] = await db.select({ id: passwordResetTokensTable.id })
+  const [validToken] = await db.select({
+    id: passwordResetTokensTable.id,
+    userId: passwordResetTokensTable.userId,
+  })
     .from(passwordResetTokensTable)
     .where(and(
       eq(passwordResetTokensTable.token, tokenHash),
@@ -2661,6 +2795,11 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
     res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
     return;
   }
+  const lockedUserId = Number(validToken.userId);
+  if (!Number.isInteger(lockedUserId) || lockedUserId <= 0) {
+    res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+    return;
+  }
 
   // Hash after the inexpensive token precheck. bcrypt is CPU-bound; no DB
   // connection is held while hashing.
@@ -2668,6 +2807,15 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
 
   const client = await pool.connect();
   try {
+    // issueTemporaryPassword holds this same session-level advisory lock while
+    // its provider delivery is in flight. Waiting here prevents a reset link
+    // from replacing a just-issued temporary credential before delivery has
+    // either succeeded (and invalidated the link) or failed (and restored the
+    // prior credential).
+    await client.query(
+      "SELECT pg_advisory_lock(hashtext($1))",
+      [`uc-temporary-password:${lockedUserId}`],
+    );
     await client.query("BEGIN");
 
     // Atomically claim the token by hash. The conditional WHERE (used_at IS NULL
@@ -2727,6 +2875,10 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
     await client.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
+    await client.query(
+      "SELECT pg_advisory_unlock(hashtext($1))",
+      [`uc-temporary-password:${lockedUserId}`],
+    ).catch(() => {});
     client.release();
   }
 });
@@ -7137,11 +7289,15 @@ type LocationInput = {
 };
 
 function locationInput(body: unknown, partial = false): LocationInput | null {
-  const source = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const source = body as Record<string, unknown>;
+  const editable = new Set(["active", "type", "name", "address", "latitude", "lat", "longitude", "lng", "hours", "phone", "vendorName"]);
+  if (partial && (!Object.keys(source).some((key) => editable.has(key)) ||
+      Object.keys(source).some((key) => !editable.has(key)))) return null;
   const text = (field: string, required = false): string | null => {
     const value = source[field];
     if (value === undefined && partial) return null;
-    if (typeof value !== "string") return required ? null : "";
+    if (typeof value !== "string") return null;
     const result = value.trim().slice(0, 500);
     return required && !result ? null : result;
   };
@@ -7155,8 +7311,15 @@ function locationInput(body: unknown, partial = false): LocationInput | null {
   const longitude = lngRaw === undefined && partial ? NaN : Number(lngRaw);
   const phoneValue = text("phone");
   const vendorValue = text("vendorName");
-  if ((type !== null && !LOCATION_TYPES.has(type)) || name === null || address === null ||
-      hours === null || (!partial && (!Number.isFinite(latitude) || !Number.isFinite(longitude))) ||
+  if ((type !== null && type !== "" && !LOCATION_TYPES.has(type)) ||
+      (!partial && (name === null || address === null || hours === null)) ||
+      (partial && (source["type"] !== undefined && (!type || type.length === 0)) ||
+        (source["name"] !== undefined && (!name || name.length === 0)) ||
+        (source["address"] !== undefined && (!address || address.length === 0)) ||
+        (source["hours"] !== undefined && (!hours || hours.length === 0))) ||
+      (!partial && (!Number.isFinite(latitude) || !Number.isFinite(longitude))) ||
+       (partial && ((latRaw !== undefined && !Number.isFinite(latitude)) ||
+         (lngRaw !== undefined && !Number.isFinite(longitude)))) ||
       (Number.isFinite(latitude) && (latitude < -90 || latitude > 90)) ||
       (Number.isFinite(longitude) && (longitude < -180 || longitude > 180))) return null;
   return {
@@ -7227,9 +7390,22 @@ router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Pro
   if (!locationId) { res.status(400).json({ error: "Invalid location id" }); return; }
   const existing = await db.select().from(ucLocationsTable).where(eq(ucLocationsTable.id, locationId)).limit(1);
   if (!existing[0]) { res.status(404).json({ error: "Location not found" }); return; }
-  const input = locationInput(req.body, true);
-  if (!input) { res.status(400).json({ error: "Invalid location fields" }); return; }
-  const source = req.body as Record<string, unknown>;
+  const source = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : null;
+  if (!source || Object.keys(source).length === 0) {
+    res.status(400).json({ code: "LOCATION_UPDATE_EMPTY", error: "Provide at least one location field to update." });
+    return;
+  }
+  if (source["active"] !== undefined && typeof source["active"] !== "boolean") {
+    res.status(400).json({ code: "LOCATION_ACTIVE_INVALID", error: "active must be a boolean." });
+    return;
+  }
+  const input = locationInput(source, true);
+  if (!input) {
+    res.status(400).json({ code: "LOCATION_UPDATE_INVALID", error: "Provide valid location fields to update." });
+    return;
+  }
   const identityChanged = ["type", "name", "address", "latitude", "lat", "longitude", "lng", "vendorName"]
     .some((key) => source[key] !== undefined);
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -8194,8 +8370,10 @@ router.get("/uc/admin/customers/:id", async (req, res): Promise<void> => {
     const custRes = await pool.query<{
       id: number; email: string; first_name: string; last_name: string;
       phone: string; created_at: string; auth_provider: string;
+      email_verified: boolean; phone_verified: boolean;
     }>(
-      `SELECT id, email, first_name, last_name, phone, created_at, auth_provider
+      `SELECT id, email, first_name, last_name, phone, created_at, auth_provider,
+              email_verified, phone_verified
        FROM uc_users WHERE id = $1 AND deleted_at IS NULL`,
       [customerId]
     );
@@ -8265,6 +8443,19 @@ router.get("/uc/admin/customers/:id", async (req, res): Promise<void> => {
         phone: cu.phone,
         joinedAt: cu.created_at,
         authProvider: cu.auth_provider,
+         emailVerified: cu.email_verified === true,
+         phoneVerified: cu.phone_verified === true,
+         recoveryChannels: {
+           email: {
+             available: cu.email_verified === true && Boolean(cu.email.trim()),
+             verified: cu.email_verified === true,
+           },
+           whatsapp: {
+             available: cu.phone_verified === true && Boolean(normalizePhone(cu.phone)),
+             verified: cu.phone_verified === true,
+             status: getWhatsAppStatus().state,
+           },
+         },
       },
       orders: ordersWithItems,
       tickets: ticketsRes.rows.map((t) => ({
