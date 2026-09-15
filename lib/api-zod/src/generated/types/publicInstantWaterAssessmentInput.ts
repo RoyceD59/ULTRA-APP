@@ -6,19 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InstantWaterAssessmentAnswers } from './instantWaterAssessmentAnswers';
+import type { InstantWaterFirstName } from './instantWaterFirstName';
+import type { InstantWaterKenyanPhone } from './instantWaterKenyanPhone';
 import type { PublicInstantWaterAssessmentInputSourceAttribution } from './publicInstantWaterAssessmentInputSourceAttribution';
 
 export interface PublicInstantWaterAssessmentInput {
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  firstName: string;
-  /**
-     * @minLength 7
-     * @maxLength 40
-     */
-  phone: string;
+  firstName: InstantWaterFirstName;
+  phone: InstantWaterKenyanPhone;
   consent: true;
   /**
      * @minLength 8

@@ -33,6 +33,7 @@ import {
   processReferralSettlementAlerts,
   retryReferralSettlements,
 } from "../routes/referrals.js";
+import { processOrderNotificationOutbox, reconcileWooOrderStatuses } from "./order-status-pipeline.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -250,6 +251,28 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  // Deliver customer order-status outbox rows.  The transition transaction
+  // never calls Expo, so provider outages cannot block webhook acknowledgements.
+  cron.schedule("*/2 * * * *", async () => {
+    try {
+      const result = await processOrderNotificationOutbox();
+      if (result.processed > 0) logger.info(result, "Scheduler: order notification outbox processed");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: order notification outbox run failed");
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: order notification outbox job registered (every 2 minutes)");
+
+  cron.schedule("*/10 * * * *", async () => {
+    try {
+      const result = await reconcileWooOrderStatuses();
+      if (result.checked > 0) logger.info(result, "Scheduler: Woo order status reconciliation complete");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: Woo order status reconciliation failed");
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: Woo order status reconciliation registered (every 10 minutes)");
+
   cron.schedule("*/5 * * * *", async () => {
     try {
       await retryReferralSettlements();

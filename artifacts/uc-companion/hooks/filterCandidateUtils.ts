@@ -20,7 +20,7 @@ export interface CandidateResult {
 export interface CandidateOrder {
   id:          number;
   dateCreated: string;
-  lineItems?:  { productId: number }[];
+  lineItems?:  { productId?: number }[];
 }
 
 /** Minimal filter-product shape required by the candidate computation. */
@@ -60,6 +60,7 @@ export function computeRegisterCandidate(opts: {
   if (eligibleForRegister) {
     for (const order of sorted) {
       for (const item of order.lineItems ?? []) {
+        if (!item.productId) continue;
         const product = byId.get(item.productId);
         if (product) {
           const daysSincePurchase = Math.max(
@@ -85,6 +86,7 @@ export function computeRegisterCandidate(opts: {
       // Skip the same purchase that registered the current cycle.
       if (order.id === activation.sourceOrderId) continue;
       for (const item of order.lineItems ?? []) {
+        if (!item.productId) continue;
         const product = byId.get(item.productId);
         if (product) {
           const daysSincePurchase = Math.max(

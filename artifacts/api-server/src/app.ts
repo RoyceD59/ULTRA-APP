@@ -44,6 +44,12 @@ app.use(
   rawBodyMiddleware,
 );
 
+app.use(
+  "/api/uc/webhooks/woocommerce",
+  express.raw({ type: "*/*", limit: "1mb" }),
+  rawBodyMiddleware,
+);
+
 // Orchestrator status-callback (echo) endpoint — HMAC-verified against the
 // exact raw bytes, same scheme as /api/webhook/ingest.
 app.use(

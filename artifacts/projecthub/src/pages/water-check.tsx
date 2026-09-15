@@ -28,12 +28,20 @@ import {
   type InstantWaterAssessmentCreated,
   type PublicInstantWaterAssessmentResult,
 } from "@workspace/api-client-react";
+import {
+  isValidInstantFirstName,
+  isValidInstantKenyanPhone,
+  normalizeInstantFirstName,
+  normalizeInstantKenyanPhone,
+} from "@workspace/api-zod/instant-water-identity";
 
 // --- Schema ---
 
 const formSchema = z.object({
-  firstName: z.string().min(1, "First name is required").max(80),
-  phone: z.string().min(7, "Please enter a valid WhatsApp number").max(40),
+  firstName: z.string().min(2, "First name must be 2–80 characters").max(80)
+    .refine(isValidInstantFirstName, "Enter a valid first name (letters only, with normal spaces, apostrophes, or hyphens)"),
+  phone: z.string().min(7, "Please enter a valid Kenyan WhatsApp number").max(40)
+    .refine(isValidInstantKenyanPhone, "Enter a valid Kenyan mobile number, such as 0722 123 456"),
   country: z.string().min(2, "Country is required").max(80),
   area: z.string().min(1, "Area/Town is required").max(160),
   source: z.enum(["municipal", "borehole", "shallow", "vendor", "bottled", "rain"], {
@@ -116,8 +124,8 @@ export default function WaterCheckPage() {
     createMutation.mutate({
       data: {
         idempotencyKey: submitKeyRef.current,
-        firstName: values.firstName,
-        phone: values.phone,
+         firstName: normalizeInstantFirstName(values.firstName) ?? values.firstName,
+         phone: normalizeInstantKenyanPhone(values.phone) ?? values.phone,
         consent: true,
         sourceAttribution: { src, utmSource, utmMedium, utmCampaign, utmContent },
         answers: {
@@ -135,10 +143,16 @@ export default function WaterCheckPage() {
         navigate(`/water-check?token=${data.resultToken}&assessmentId=${data.assessmentId}`);
         window.scrollTo({ top: 0, behavior: "smooth" });
       },
-      onError: () => {
+       onError: (error) => {
+         const serverMessage = error instanceof Error ? error.message.toLowerCase() : "";
+         const description = serverMessage.includes("first name")
+           ? "Please enter a valid first name."
+           : serverMessage.includes("kenyan") || serverMessage.includes("phone")
+             ? "Please enter a valid Kenyan mobile number."
+             : "We couldn't save your assessment. Please try again.";
         toast({
           title: "Something went wrong",
-          description: "We couldn't save your assessment. Please try again.",
+           description,
           variant: "destructive"
         });
       }

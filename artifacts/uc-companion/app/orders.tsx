@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
 import { useColors } from '@/hooks/useColors';
 import OrderCard from '@/components/OrderCard';
+import { useAuth } from '@/context/AuthContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 /** Complete, account-scoped order history. The account tab intentionally only
  * previews recent purchases; this screen never slices the API result. */
@@ -13,7 +15,23 @@ export default function OrdersScreen() {
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
-  const orders = useQuery({ queryKey: ['orders'], queryFn: () => api.getOrders() });
+  const { user } = useAuth();
+
+  const orders = useQuery({
+    queryKey: customerQueryKeys.orders(user?.id),
+    queryFn: () => api.getOrders(),
+    enabled: !!user,
+  });
+
+  const refetchOrders = orders.refetch;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        refetchOrders();
+      }
+    }, [user, refetchOrders])
+  );
 
   return (
     <ScrollView

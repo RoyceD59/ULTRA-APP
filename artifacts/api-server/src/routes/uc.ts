@@ -70,6 +70,7 @@ import {
 } from "../lib/wishlist-demand.js";
 import { quotePromotion, consumePromotionOnClient, type PromotionQuote } from "../lib/reward-promotions.js";
 import { appPurchaseOwnedBy, storePurchaseOwnedBy } from "../lib/purchase-ownership.js";
+import { transitionOrderStatus, ORDER_CUSTOMER_STAGES } from "../lib/order-status-pipeline.js";
 
 const router = Router();
 
@@ -3825,6 +3826,8 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
           wcOrderId: ucOrdersTable.wcOrderId,
           status: ucOrdersTable.status,
           codCollectionStatus: ucOrdersTable.codCollectionStatus,
+          customerStage: ucOrdersTable.customerStage,
+          customerStageUpdatedAt: ucOrdersTable.customerStageUpdatedAt,
         }).from(ucOrdersTable).where(eq(ucOrdersTable.userId, userId));
         const collectedByWcId = new Map(localOrders
           .filter(local => local.codCollectionStatus === "collected" && local.wcOrderId != null)
@@ -3838,8 +3841,16 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
           .map(order => {
             const normalized = normalizeOrder(order);
             const local = collectedByWcId.get(Number(order["id"]));
-            return local
-              ? { ...normalized, status: local.status, paymentStatus: "paid", codCollectionStatus: "collected" }
+            const projection = localOrders.find(candidate => candidate.wcOrderId === Number(order["id"]));
+            return projection
+              ? {
+                ...normalized,
+                ...(projection.customerStage ? {
+                  customerStage: projection.customerStage,
+                  customerStageUpdatedAt: projection.customerStageUpdatedAt,
+                } : {}),
+                ...(local ? { status: local.status, paymentStatus: "paid", codCollectionStatus: "collected" } : {}),
+              }
               : normalized;
           }));
         return;
@@ -3869,10 +3880,24 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
       (acc[item.orderId] ??= []).push(item);
       return acc;
     }, {});
+    const eventRows = await pool.query(
+      `SELECT resource_id,stage,status,actor,idempotency_key AS "eventKey",created_at
+       FROM uc_customer_stage_events
+       WHERE resource_type='order' AND resource_id = ANY($1::text[])
+       ORDER BY created_at DESC`,
+      [orderIds.map(String)],
+    );
+    const eventsByOrder = eventRows.rows.reduce<Record<string, unknown[]>>((acc, event) => {
+      (acc[String(event.resource_id)] ??= []).push(event);
+      return acc;
+    }, {});
     res.json(orders.map(o => ({
       id:              o.id,
       orderNumber:     o.wcOrderId ?? o.id,
       status:          o.status,
+      customerStage:   o.customerStage ?? null,
+      customerStageUpdatedAt: o.customerStageUpdatedAt ?? null,
+      statusEvents:     (eventsByOrder[String(o.id)] ?? []).slice(0, 20),
       fulfillmentStatus: o.status,
       paymentStatus:   o.status === "completed" || o.status === "processing"
         ? "paid"
@@ -4004,10 +4029,74 @@ router.post("/uc/orders/:orderId/return-request", async (req: Request, res: Resp
   }
 });
 
+/** Authenticated account projection for one order.  This is intentionally
+ * local/mirror data: it remains available when Woo or Expo is unavailable. */
+router.get("/uc/orders/:orderId", async (req: Request, res: Response): Promise<void> => {
+  const claims = verifyToken(req.headers["authorization"]);
+  const userId = userIdFromBearer(req.headers["authorization"]);
+  const orderId = Number(req.params["orderId"]);
+  if (!claims || !userId || !Number.isInteger(orderId) || orderId <= 0) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  try {
+    const [order] = await db.select().from(ucOrdersTable).where(
+      and(eq(ucOrdersTable.userId, userId), or(eq(ucOrdersTable.id, orderId), eq(ucOrdersTable.wcOrderId, orderId))),
+    ).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found" });
+      return;
+    }
+    const [items, events] = await Promise.all([
+      db.select().from(ucOrderItemsTable).where(eq(ucOrderItemsTable.orderId, order.id)),
+      pool.query(
+        `SELECT id,stage,status,actor,idempotency_key AS "eventKey",created_at
+         FROM uc_customer_stage_events
+         WHERE resource_type='order' AND resource_id=$1
+         ORDER BY created_at DESC,id DESC LIMIT 20`,
+        [String(order.id)],
+      ),
+    ]);
+    const fulfillmentStatus = order.customerStage ?? order.status;
+    const paymentStatus = ["completed", "processing"].includes(order.status)
+      ? "paid"
+      : ["cancelled", "failed", "refunded"].includes(order.status) ? order.status : "pending";
+    res.json({
+      id: order.id,
+      orderNumber: order.wcOrderId ?? order.id,
+      status: order.status,
+      customerStage: order.customerStage,
+      customerStageUpdatedAt: order.customerStageUpdatedAt,
+      fulfillmentStatus,
+      paymentStatus,
+      total: order.total,
+      currency: order.currency,
+      paymentMethod: order.paymentMethod,
+      dateCreated: order.dateCreated,
+      shippingAddress: order.shippingAddress ?? {},
+      delivery: { method: "", trackingNumber: null },
+      discountPercent: order.discountPercent,
+      discountAmount: order.discountAmount,
+      promoCode: order.promoCode ?? "",
+      webhookRecovery: order.webhookRecovery ?? false,
+      codCollectionStatus: order.codCollectionStatus ?? null,
+      lineItems: items.map(i => ({
+        productId: i.productId,
+        name: i.name,
+        quantity: i.quantity,
+        total: i.total,
+      })),
+      statusEvents: events.rows.slice(0, 20),
+    });
+  } catch (error) {
+    logger.error({ err: error, orderId }, "Failed to load customer order detail");
+    res.status(500).json({ error: "Failed to load order detail" });
+  }
+});
+
 // ─── Admin: all orders (team view) ───────────────────────────────────────────
 // Returns every order in the database regardless of userId.
 // Requires admin auth (DB-anchored: caller must be a registered admin user).
-const ORDER_CUSTOMER_STAGES = ["accepted", "shipped", "delivered"] as const;
 const WATER_TEST_CUSTOMER_STAGES = ["accepted", "conducted", "result_sent"] as const;
 
 async function auditCustomerStagePush(input: {
@@ -4339,19 +4428,23 @@ router.patch("/uc/admin/orders/:id/customer-stage", async (req: Request, res: Re
   const [order] = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.id, id)).limit(1);
   if (!order) { res.status(404).json({ error: "Order not found" }); return; }
   try {
-    const saved = await saveCustomerStage({ resourceType: "order", resourceId: String(id), stage, userId: order.userId,
-      currentStage: order.customerStage, idempotencyKey, actor: String(verifyToken(req.headers["authorization"])?.email ?? "admin") });
-    if (saved.repeated) { res.json({ ok: true, id, customerStage: stage, repeated: true, notification: { status: "skipped", deliveryEvent: "already_processed" } }); return; }
-    const numericUserId = Number(order.userId);
-    const [activeUsers, prefs] = await Promise.all([
-      Number.isInteger(numericUserId) ? db.select({ id: ucUsersTable.id }).from(ucUsersTable).where(and(eq(ucUsersTable.id, numericUserId), isNull(ucUsersTable.deletedAt))).limit(1) : Promise.resolve([]),
-      db.select().from(ucNotifPrefsTable).where(eq(ucNotifPrefsTable.userId, order.userId)).limit(1),
-    ]);
-    if (!activeUsers[0]) {
-      await db.insert(ucNotificationLogTable).values({ channel: "push", provider: "expo", recipient: order.userId, template: "order-customer-stage", messageBody: `order ${id}: ${stage}`, orderId: id, status: "skipped", deliveryEvent: "no_active_account", deliveryEventAt: new Date() });
-      res.json({ ok: true, id, customerStage: stage, notification: { status: "skipped", deliveryEvent: "no_active_account" }, warning: "No active Companion account is linked to this order" }); return;
-    }
-    res.json({ ok: true, id, customerStage: stage, notification: await auditCustomerStagePush({ resourceType: "order", resourceId: String(id), userId: order.userId, stage, optOut: prefs[0]?.optOutOrders ?? false }) });
+    const saved = await transitionOrderStatus({
+      orderId: id,
+      status: order.status,
+      customerStage: stage as typeof ORDER_CUSTOMER_STAGES[number],
+      eventKey: `staff:${id}:${idempotencyKey}`,
+      actor: String(verifyToken(req.headers["authorization"])?.email ?? "admin"),
+      source: "staff",
+    });
+    res.json({
+      ok: true,
+      id,
+      customerStage: saved.customerStage,
+      repeated: saved.repeated,
+      notification: saved.outboxCreated
+        ? { status: "queued", deliveryEvent: "outbox" }
+        : { status: "skipped", deliveryEvent: saved.repeated ? "already_processed" : "no_account" },
+    });
   } catch (err) {
     const e = err as Error & { code?: string };
     if (e.code === "INVALID_STAGE_TRANSITION") res.status(409).json({ error: e.message });

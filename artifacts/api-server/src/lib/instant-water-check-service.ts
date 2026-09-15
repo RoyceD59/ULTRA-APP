@@ -1,7 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "@workspace/db";
-import { normalizePhone } from "./customer-identity.js";
+import {
+  normalizeInstantFirstName,
+  normalizeInstantKenyanPhone,
+} from "@workspace/api-zod/instant-water-identity";
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, ObjectStorageService } from "./objectStorage.js";
 import {
   scoreInstantWaterCheck,
@@ -53,9 +56,7 @@ export type AssessmentResponse = {
 };
 
 export function normalizeInstantPhone(raw: string): string | null {
-  const value = raw.trim().replace(/[()\s.-]/g, "");
-  const kenyan = value.replace(/^0(7|1)/, "+254$1");
-  return normalizePhone(kenyan.startsWith("+") ? kenyan : `+${kenyan}`);
+  return normalizeInstantKenyanPhone(raw);
 }
 
 function hashSecret(value: string): string {
@@ -321,11 +322,13 @@ export async function createInstantAssessment(input: {
   idempotencyKey: string;
   rateKey?: string;
 }): Promise<{ response: AssessmentResponse; replay: boolean }> {
-  const normalizedPhone = normalizeInstantPhone(input.phone) ?? (input.customerUserId ? "" : null);
-  if (normalizedPhone === null) throw new Error("INVALID_PHONE");
+  const normalizedFirstName = normalizeInstantFirstName(input.firstName);
+  if (!normalizedFirstName) throw new Error("INVALID_FIRST_NAME");
+  const normalizedPhone = normalizeInstantPhone(input.phone);
+  if (!normalizedPhone) throw new Error("INVALID_PHONE");
   const result = scoreInstantWaterCheck(input.answers);
   const requestHash = hashSecret(stablePayload({
-    firstName: input.firstName.trim(),
+    firstName: normalizedFirstName,
     normalizedPhone,
     consentVersion: input.consentVersion,
     country: input.country.trim(),
@@ -388,7 +391,7 @@ export async function createInstantAssessment(input: {
         public_token_expires_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
       [
-        id, reference, input.customerUserId ?? null, input.firstName.trim(), normalizedPhone,
+        id, reference, input.customerUserId ?? null, normalizedFirstName, normalizedPhone,
         input.customerUserId ? "verified" : "unverified",
         input.customerUserId ? new Date() : null, "result_and_follow_up",
         input.consentVersion, input.country.trim(), input.area.trim(), input.answers.source,

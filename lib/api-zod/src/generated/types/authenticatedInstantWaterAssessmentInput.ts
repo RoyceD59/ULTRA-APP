@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InstantWaterAssessmentAnswers } from './instantWaterAssessmentAnswers';
+import type { InstantWaterFirstName } from './instantWaterFirstName';
+import type { InstantWaterKenyanPhone } from './instantWaterKenyanPhone';
 
 export interface AuthenticatedInstantWaterAssessmentInput {
   /**
@@ -14,8 +16,6 @@ export interface AuthenticatedInstantWaterAssessmentInput {
      */
   idempotencyKey: string;
   answers: InstantWaterAssessmentAnswers;
-  /** @maxLength 80 */
-  firstName?: string;
-  /** @maxLength 40 */
-  phone?: string;
+  firstName: InstantWaterFirstName;
+  phone: InstantWaterKenyanPhone;
 }

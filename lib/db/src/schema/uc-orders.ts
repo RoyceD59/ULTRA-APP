@@ -56,6 +56,9 @@ export const ucOrdersTable = pgTable("uc_orders", {
   codWcSyncAttemptCount: integer("cod_wc_sync_attempt_count").notNull().default(0),
   customerStage:    text("customer_stage"),
   customerStageUpdatedAt: timestamp("customer_stage_updated_at", { withTimezone: true }),
+  /** Monotonic WooCommerce source version used to reject delayed webhooks. */
+  wooStatusModifiedAt: timestamp("woo_status_modified_at", { withTimezone: true }),
+  wooStatusVersion: text("woo_status_version"),
 }, (t) => [
   // Partial unique index: prevent duplicate orders for the same payment reference.
   // Excludes empty strings so that COD orders (no reference) are not affected.

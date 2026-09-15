@@ -13,6 +13,12 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: keyof typ
   shipped: { label: 'Shipped', color: '#06B6D4', icon: 'car-outline' },
 };
 
+const STAGE_MAP: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  accepted: { label: 'Order Accepted', icon: 'cube-outline' },
+  shipped: { label: 'Shipped', icon: 'car-outline' },
+  delivered: { label: 'Delivered', icon: 'home-outline' },
+};
+
 interface Props {
   order: UCOrder;
   onPress: () => void;
@@ -22,6 +28,8 @@ export default function OrderCard({ order, onPress }: Props) {
   const colors = useColors();
   const status = STATUS_MAP[order.status] ?? { label: order.status, color: colors.mutedForeground, icon: 'help-outline' as const };
   const date = new Date(order.dateCreated).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  const stage = order.customerStage ? STAGE_MAP[order.customerStage] : null;
+  const stageDate = order.customerStageUpdatedAt ? new Date(order.customerStageUpdatedAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : null;
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}
@@ -36,8 +44,17 @@ export default function OrderCard({ order, onPress }: Props) {
           <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
         </View>
       </View>
+
+      {stage && (
+        <View style={[styles.stageRow, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+          <Ionicons name={stage.icon} size={14} color={colors.primary} />
+          <Text style={[styles.stageText, { color: colors.primary }]}>{stage.label}</Text>
+          {stageDate && <Text style={[styles.stageDate, { color: colors.primary }]}>(Updated {stageDate})</Text>}
+        </View>
+      )}
+
       <Text style={[styles.items, { color: colors.mutedForeground }]} numberOfLines={1}>
-        {order.lineItems.map(i => `${i.name} ×${i.quantity}`).join(', ')}
+        {(order.lineItems ?? []).map(i => `${i.name} ×${i.quantity}`).join(', ')}
       </Text>
       <View style={styles.bottom}>
         <Text style={[styles.total, { color: colors.primary }]}>
@@ -50,12 +67,15 @@ export default function OrderCard({ order, onPress }: Props) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 8 },
+  card: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   orderId: { fontSize: 15, fontWeight: '700' as const },
   date: { fontSize: 12, marginTop: 2 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 12, fontWeight: '600' as const },
+  stageRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, alignSelf: 'flex-start' },
+  stageText: { fontSize: 12, fontWeight: '600' as const },
+  stageDate: { fontSize: 12, opacity: 0.8 },
   items: { fontSize: 13 },
   bottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   total: { fontSize: 16, fontWeight: '700' as const },

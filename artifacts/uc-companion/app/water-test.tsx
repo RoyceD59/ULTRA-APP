@@ -35,6 +35,12 @@ import type {
 import { useQueryClient } from '@tanstack/react-query';
 import { HANDOFF_STORAGE_KEY, useConsumeHandoff } from '@/hooks/useWaterTestHandoff';
 import { ApiError } from '@/hooks/apiError';
+import {
+  isValidInstantFirstName,
+  isValidInstantKenyanPhone,
+  normalizeInstantFirstName,
+  normalizeInstantKenyanPhone,
+} from '@workspace/api-zod/instant-water-identity';
 
 type ViewState = 'form' | 'result' | 'history' | 'booking';
 
@@ -215,6 +221,14 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       setError('Please fill in all required fields.');
       return;
     }
+    if (!isValidInstantFirstName(draft.firstName)) {
+      setError('Enter a valid first name (2–80 letters, with normal spaces, apostrophes, or hyphens).');
+      return;
+    }
+    if (!isValidInstantKenyanPhone(draft.phone)) {
+      setError('Enter a valid Kenyan mobile number, such as 0722 123 456.');
+      return;
+    }
     if (!token && !draft.consent) {
       setError('Please agree to receive your result.');
       return;
@@ -231,8 +245,8 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
         res = await authMut.mutateAsync({
           data: {
             idempotencyKey,
-            firstName: draft.firstName.trim(),
-            phone: draft.phone.trim(),
+            firstName: normalizeInstantFirstName(draft.firstName) ?? draft.firstName.trim(),
+            phone: normalizeInstantKenyanPhone(draft.phone) ?? draft.phone.trim(),
             answers: {
               country: draft.country,
               area: draft.area.trim(),
@@ -246,8 +260,8 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
         res = await publicMut.mutateAsync({
           data: {
             idempotencyKey,
-            firstName: draft.firstName.trim(),
-            phone: draft.phone.trim(),
+            firstName: normalizeInstantFirstName(draft.firstName) ?? draft.firstName.trim(),
+            phone: normalizeInstantKenyanPhone(draft.phone) ?? draft.phone.trim(),
             consent: true,
             answers: {
               country: draft.country,

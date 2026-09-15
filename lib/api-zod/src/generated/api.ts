@@ -6,16 +6,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import * as zod from 'zod';
+import { instantWaterFirstNameSchema, instantWaterKenyanPhoneSchema } from '../instant-water-identity.js';
 
 
 /**
  * @summary Create a public instant water assessment
  */
+export const createPublicInstantWaterAssessmentBodyFirstNameMin = 2;
 export const createPublicInstantWaterAssessmentBodyFirstNameMax = 80;
 
+
+export const createPublicInstantWaterAssessmentBodyFirstNameRegExp = new RegExp('^(?![0-9]+$).+$');
 export const createPublicInstantWaterAssessmentBodyPhoneMin = 7;
 export const createPublicInstantWaterAssessmentBodyPhoneMax = 40;
 
+
+export const createPublicInstantWaterAssessmentBodyPhoneRegExp = new RegExp('^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$');
 export const createPublicInstantWaterAssessmentBodyIdempotencyKeyMin = 8;
 export const createPublicInstantWaterAssessmentBodyIdempotencyKeyMax = 200;
 
@@ -40,8 +46,8 @@ export const createPublicInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
 
 export const CreatePublicInstantWaterAssessmentBody = zod.object({
-  "firstName": zod.string().min(1).max(createPublicInstantWaterAssessmentBodyFirstNameMax),
-  "phone": zod.string().min(createPublicInstantWaterAssessmentBodyPhoneMin).max(createPublicInstantWaterAssessmentBodyPhoneMax),
+  "firstName": instantWaterFirstNameSchema,
+  "phone": instantWaterKenyanPhoneSchema,
   "consent": zod.boolean(),
   "idempotencyKey": zod.string().min(createPublicInstantWaterAssessmentBodyIdempotencyKeyMin).max(createPublicInstantWaterAssessmentBodyIdempotencyKeyMax),
   "consentVersion": zod.string().max(createPublicInstantWaterAssessmentBodyConsentVersionMax).default(createPublicInstantWaterAssessmentBodyConsentVersionDefault),
@@ -104,10 +110,16 @@ export const createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax = 80
 
 export const createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
+export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMin = 2;
 export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMax = 80;
 
+
+export const createAuthenticatedInstantWaterAssessmentBodyFirstNameRegExp = new RegExp('^(?![0-9]+$).+$');
+export const createAuthenticatedInstantWaterAssessmentBodyPhoneMin = 7;
 export const createAuthenticatedInstantWaterAssessmentBodyPhoneMax = 40;
 
+
+export const createAuthenticatedInstantWaterAssessmentBodyPhoneRegExp = new RegExp('^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$');
 
 
 export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
@@ -121,8 +133,8 @@ export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
   "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
   "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
 }),
-  "firstName": zod.string().max(createAuthenticatedInstantWaterAssessmentBodyFirstNameMax).optional(),
-  "phone": zod.string().max(createAuthenticatedInstantWaterAssessmentBodyPhoneMax).optional()
+  "firstName": instantWaterFirstNameSchema,
+  "phone": instantWaterKenyanPhoneSchema,
 })
 
 export const createAuthenticatedInstantWaterAssessmentResponseReferenceRegExp = new RegExp('^WT-[A-Za-z0-9-]+$');

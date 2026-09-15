@@ -2,10 +2,17 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  CreateAuthenticatedInstantWaterAssessmentBody,
   CreatePublicInstantWaterAssessmentBody,
   GetProjectHubInstantWaterAssessmentResponse,
   RequestInstantWaterPhysicalTestBody,
 } from "@workspace/api-zod";
+import {
+  isValidInstantFirstName,
+  isValidInstantKenyanPhone,
+  normalizeInstantFirstName,
+  normalizeInstantKenyanPhone,
+} from "@workspace/api-zod/instant-water-identity";
 import { scoreInstantWaterCheck } from "../lib/instant-water-check.js";
 import {
   determineAccountLinkState,
@@ -50,6 +57,113 @@ describe("instant water check security boundaries", () => {
     assert.equal(normalizeInstantPhone("0712 345 678"), "+254712345678");
     assert.equal(normalizeInstantPhone("+254 712 345 678"), "+254712345678");
     assert.equal(normalizeInstantPhone("not-a-phone"), null);
+    assert.equal(normalizeInstantKenyanPhone("01 12 345 678"), "+254112345678");
+    assert.equal(normalizeInstantKenyanPhone("254 712-345-678"), "+254712345678");
+    assert.equal(normalizeInstantKenyanPhone("+255 712 345 678"), null);
+    assert.equal(normalizeInstantKenyanPhone("071234567"), null);
+    assert.equal(normalizeInstantKenyanPhone("07123456789"), null);
+    assert.equal(normalizeInstantKenyanPhone("0800 123 456"), null);
+  });
+
+  it("accepts human first names while rejecting ambiguous or unsafe identities", () => {
+    assert.equal(isValidInstantFirstName("Al"), true);
+    assert.equal(isValidInstantFirstName("Ab".repeat(40)), true);
+    assert.equal(isValidInstantFirstName(`${"Ab".repeat(40)}A`), false);
+    assert.equal(isValidInstantFirstName("A\u0301n"), true);
+    assert.equal(normalizeInstantFirstName("  Amina  "), "Amina");
+    assert.equal(normalizeInstantFirstName("A\u0301n"), "Án");
+    assert.equal(normalizeInstantFirstName("Án"), "Án");
+    assert.equal(isValidInstantFirstName("O'Connor"), true);
+    assert.equal(isValidInstantFirstName("O’Connor"), true);
+    assert.equal(isValidInstantFirstName("Jean-Luc"), true);
+    assert.equal(isValidInstantFirstName("Zoë"), true);
+    assert.equal(isValidInstantFirstName("Beyoncé"), true);
+    assert.equal(isValidInstantFirstName("Élodie"), true);
+    assert.equal(isValidInstantFirstName("李 小龙"), true);
+    for (const value of [" ", "12", "!!!", "-Amina", "Amina-", "Amina  Smith", "Amina--Smith", "Amina\tSmith", "Aaa"]) {
+      assert.equal(isValidInstantFirstName(value), false, value);
+    }
+    assert.equal(isValidInstantFirstName(`Amina\u0000`), false);
+  });
+
+  it("keeps generated Zod request schemas authoritative for identity fields", () => {
+    const answers = {
+      country: "Kenya",
+      area: "Nakuru",
+      source: "borehole" as const,
+      concern: "safety" as const,
+      setting: "home" as const,
+    };
+    const publicInput = {
+      firstName: "A\u0301n",
+      phone: "0712 345 678",
+      consent: true as const,
+      idempotencyKey: "generated-schema-1",
+      answers,
+    };
+    const parsed = CreatePublicInstantWaterAssessmentBody.parse(publicInput);
+    assert.equal(parsed.firstName, "Án");
+    assert.equal(parsed.phone, "+254712345678");
+    assert.equal(
+      CreatePublicInstantWaterAssessmentBody.parse({ ...publicInput, firstName: "Án" }).firstName,
+      parsed.firstName,
+    );
+    assert.equal(
+      CreateAuthenticatedInstantWaterAssessmentBody.parse({
+        firstName: "Zoë",
+        phone: "+254 712 345 678",
+        idempotencyKey: "generated-schema-2",
+        answers,
+      }).phone,
+      "+254712345678",
+    );
+    for (const firstName of ["12", "!!!", "Amina  Smith"]) {
+      assert.throws(() => CreatePublicInstantWaterAssessmentBody.parse({ ...publicInput, firstName }));
+    }
+    for (const phone of ["12", "1234567890", "+255 712 345 678", "071234567"]) {
+      assert.throws(() => CreatePublicInstantWaterAssessmentBody.parse({ ...publicInput, phone }));
+    }
+  });
+
+  it("maps published identity schemas to the exact shared validators", () => {
+    const spec = readFileSync(new URL("../../../../lib/api-spec/openapi.yaml", import.meta.url), "utf8");
+    const schemaBlock = (name: string): string => {
+      const start = spec.indexOf(`    ${name}:\n`);
+      assert.notEqual(start, -1, `missing OpenAPI schema ${name}`);
+      const remainder = spec.slice(start + name.length + 6);
+      const next = remainder.search(/\n    [A-Za-z][A-Za-z0-9]*:\n/);
+      return remainder.slice(0, next < 0 ? undefined : next);
+    };
+    const firstNameSchema = schemaBlock("InstantWaterFirstName");
+    const phoneSchema = schemaBlock("InstantWaterKenyanPhone");
+    assert.equal((spec.match(/\$ref: "#\/components\/schemas\/InstantWaterFirstName"/g) ?? []).length, 2);
+    assert.equal((spec.match(/\$ref: "#\/components\/schemas\/InstantWaterKenyanPhone"/g) ?? []).length, 2);
+    assert.match(firstNameSchema, /x-uc-validator: instant-water-first-name@1/);
+    assert.match(phoneSchema, /x-uc-validator: instant-water-kenyan-phone@1/);
+    assert.match(firstNameSchema, /NFC/);
+    assert.match(firstNameSchema, /punctuation-only/);
+    assert.match(phoneSchema, /Normalize accepted\s+values to \+254XXXXXXXXX/);
+    assert.match(phoneSchema, /no repeated space\/period\/hyphen separators/);
+
+    for (const [value, expected] of [
+      ["李 小龙", true],
+      ["A\u0301n", true],
+      ["!!!", false],
+      ["   ", false],
+      ["Amina  Smith", false],
+      ["Amina--Smith", false],
+      ["Aaa", false],
+    ] as const) {
+      assert.equal(isValidInstantFirstName(value), expected, value);
+    }
+    for (const [value, expected] of [
+      ["0712 345 678", true],
+      ["+254 (712) 345 678", true],
+      ["0712--345 678", false],
+      ["+255 712 345 678", false],
+    ] as const) {
+      assert.equal(isValidInstantKenyanPhone(value), expected, value);
+    }
   });
 
   it("keeps account matching and service availability independent", () => {

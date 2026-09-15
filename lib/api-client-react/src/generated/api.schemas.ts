@@ -95,17 +95,44 @@ export type PublicInstantWaterAssessmentInputSourceAttribution = {
   utmContent?: string;
 };
 
+/**
+ * Authoritative identity policy: trim the value, normalize it to Unicode NFC,
+ * then require 2-80 Unicode code points. The first character and every
+ * segment must be a Unicode letter followed only by Unicode letters or
+ * combining marks. Segments may be separated by exactly one ASCII space,
+ * straight or curly apostrophe, or hyphen. Reject punctuation-only,
+ * whitespace-only, numeric-only, control/separator-containing, repeated
+ * runs of three or more repeated characters, repeated-separator,
+ * leading-separator, and trailing-separator values. The portable pattern above is only a coarse numeric-only
+ * prefilter; x-uc-validator is authoritative when the exact Unicode and
+ * repetition semantics cannot be represented by standard OpenAPI.
+ * @minLength 2
+ * @maxLength 80
+ * @pattern ^(?![0-9]+$).+$
+ */
+export type InstantWaterFirstName = string;
+
+/**
+ * Authoritative identity policy: trim the value, then accept only a Kenyan
+ * mobile number with local 0[17]XXXXXXXX or international 254[17]XXXXXXXX
+ * (optionally prefixed with +) digits. Spaces, parentheses, periods, and
+ * hyphens may format the number, but the value must contain only allowed
+ * phone characters, start with +, a digit, or (, end with a digit, contain
+ * no repeated space/period/hyphen separators, and have balanced,
+ * correctly ordered parentheses. Reject formatted values whose compact
+ * digits are not one of those Kenyan mobile forms. Normalize accepted
+ * values to +254XXXXXXXXX. The portable pattern above is only a coarse
+ * Kenyan-prefix/length prefilter; x-uc-validator is authoritative for
+ * separator and formatting semantics.
+ * @minLength 7
+ * @maxLength 40
+ * @pattern ^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$
+ */
+export type InstantWaterKenyanPhone = string;
+
 export interface PublicInstantWaterAssessmentInput {
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  firstName: string;
-  /**
-     * @minLength 7
-     * @maxLength 40
-     */
-  phone: string;
+  firstName: InstantWaterFirstName;
+  phone: InstantWaterKenyanPhone;
   consent: true;
   /**
      * @minLength 8
@@ -125,10 +152,8 @@ export interface AuthenticatedInstantWaterAssessmentInput {
      */
   idempotencyKey: string;
   answers: InstantWaterAssessmentAnswers;
-  /** @maxLength 80 */
-  firstName?: string;
-  /** @maxLength 40 */
-  phone?: string;
+  firstName: InstantWaterFirstName;
+  phone: InstantWaterKenyanPhone;
 }
 
 export type InstantWaterBandsHardness = typeof InstantWaterBandsHardness[keyof typeof InstantWaterBandsHardness];

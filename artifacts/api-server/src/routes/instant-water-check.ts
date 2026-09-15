@@ -17,6 +17,10 @@ import {
   UpdateProjectHubInstantWaterAssessmentBody,
   ConsumeInstantWaterAssessmentHandoffBody,
 } from "@workspace/api-zod";
+import {
+  isValidInstantFirstName,
+  isValidInstantKenyanPhone,
+} from "@workspace/api-zod/instant-water-identity";
 import { verifyToken } from "../lib/jwt.js";
 import { getLiveWaterTestsAccess } from "../lib/adminAuth.js";
 import { sendSmsAwaitable } from "../lib/sms.js";
@@ -63,12 +67,24 @@ function validAnswers(value: unknown): boolean {
   return onlyKeys(value, ["country", "area", "source", "concern", "symptom", "useContext", "setting"]);
 }
 
+function identityError(value: unknown): "INVALID_FIRST_NAME" | "INVALID_PHONE" | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as { firstName?: unknown; phone?: unknown };
+  if (typeof input.firstName === "string" && !isValidInstantFirstName(input.firstName)) {
+    return "INVALID_FIRST_NAME";
+  }
+  if (typeof input.phone === "string" && !isValidInstantKenyanPhone(input.phone)) {
+    return "INVALID_PHONE";
+  }
+  return null;
+}
+
 function fail(res: Response, error: unknown): void {
   const code = error instanceof Error ? error.message : "";
   const safeCodes = new Set([
     "RATE_LIMITED", "IDEMPOTENCY_CONFLICT", "CONFLICT", "OWNERSHIP_CONFLICT", "NOT_FOUND",
     "ACTION_UNAUTHORIZED", "OTP_LOCKED", "INVALID_CODE", "SMS_CONSENT_REQUIRED",
-    "INVALID_PHONE", "MEDIA_LIMIT", "INVALID_MEDIA_REFERENCE", "ACKNOWLEDGEMENT_REQUIRED",
+     "INVALID_FIRST_NAME", "INVALID_PHONE", "MEDIA_LIMIT", "INVALID_MEDIA_REFERENCE", "ACKNOWLEDGEMENT_REQUIRED",
     "EXPECTED_UPDATED_AT_REQUIRED", "INVALID_STATE_TRANSITION", "MEDIA_OWNERSHIP_INVALID",
     "DELIVERY_RETRYABLE", "DELIVERY_IN_PROGRESS",
     "MEDIA_METADATA_INVALID",
@@ -84,12 +100,21 @@ function fail(res: Response, error: unknown): void {
     code === "DELIVERY_IN_PROGRESS" ? 409 :
     code === "HANDOFF_INVALID" ? 403 :
     code === "INVALID_CODE" ? 400 :
-    code === "SMS_CONSENT_REQUIRED" || code.endsWith("_REQUIRED") || code === "INVALID_PHONE" || code === "MEDIA_LIMIT" || code === "INVALID_MEDIA_REFERENCE" || code === "MEDIA_OWNERSHIP_INVALID" || code === "MEDIA_METADATA_INVALID" || code === "INVALID_STATE_TRANSITION" ? 400 : 500;
-  res.status(status).json({ error: status === 500 ? "Water assessment operation failed" : code.toLowerCase().replaceAll("_", " ") });
+     code === "SMS_CONSENT_REQUIRED" || code.endsWith("_REQUIRED") || code === "INVALID_FIRST_NAME" || code === "INVALID_PHONE" || code === "MEDIA_LIMIT" || code === "INVALID_MEDIA_REFERENCE" || code === "MEDIA_OWNERSHIP_INVALID" || code === "MEDIA_METADATA_INVALID" || code === "INVALID_STATE_TRANSITION" ? 400 : 500;
+  const messages: Record<string, string> = {
+    INVALID_FIRST_NAME: "Please enter a valid first name",
+    INVALID_PHONE: "Please enter a valid Kenyan mobile number",
+  };
+  res.status(status).json({ error: status === 500 ? "Water assessment operation failed" : messages[code] ?? code.toLowerCase().replaceAll("_", " ") });
 }
 
 router.post("/water-check/assessments", async (req, res) => {
   const body = parsed(CreatePublicInstantWaterAssessmentBody.strict(), req.body);
+  const identityCode = identityError(req.body);
+  if (identityCode) {
+    fail(res, new Error(identityCode));
+    return;
+  }
   if (!body || body.consent !== true ||
       !onlyKeys(req.body, ["firstName", "phone", "consent", "consentVersion", "idempotencyKey", "sourceAttribution", "answers"]) ||
       !validAnswers(req.body?.answers) ||
@@ -123,6 +148,11 @@ router.post("/uc/water-check/assessments", async (req, res) => {
     return;
   }
   const body = parsed(CreateAuthenticatedInstantWaterAssessmentBody.strict(), req.body);
+  const identityCode = identityError(req.body);
+  if (identityCode) {
+    fail(res, new Error(identityCode));
+    return;
+  }
   if (!body || !onlyKeys(req.body, ["answers", "firstName", "phone", "idempotencyKey"]) || !validAnswers(req.body?.answers)) {
     res.status(400).json({ error: "Invalid water assessment input" });
     return;

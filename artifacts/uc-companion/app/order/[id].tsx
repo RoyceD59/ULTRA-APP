@@ -4,7 +4,7 @@ import {
   Modal, TextInput, Alert, ActivityIndicator, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
@@ -80,6 +80,12 @@ const STATUS_CONFIG: Record<string, {
   cancelled:  { label: 'Cancelled',     icon: 'close-circle-outline',     color: '#EF4444', desc: 'This order was cancelled.' },
 };
 
+const STAGE_MAP: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  accepted: { label: 'Order Accepted', icon: 'cube-outline' },
+  shipped: { label: 'Shipped', icon: 'car-outline' },
+  delivered: { label: 'Delivered', icon: 'home-outline' },
+};
+
 const RETURN_STATUS: Record<string, { label: string; color: string }> = {
   pending:   { label: 'Under Review', color: '#F59E0B' },
   approved:  { label: 'Approved',     color: '#22C55E' },
@@ -107,13 +113,31 @@ export default function OrderDetailScreen() {
   // the loaded view mounts its own copy of the card.
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
-  const { data: orders, isLoading } = useQuery({
+  const { data: orderList } = useQuery({
     queryKey: customerQueryKeys.orders(user?.id),
     queryFn: () => api.getOrders(),
     enabled: !!user,
   });
 
-  const order = orders?.find(o => String(o.id) === id);
+  const { data: singleOrder, isLoading, refetch } = useQuery({
+    queryKey: customerQueryKeys.order(user?.id, id),
+    queryFn: () => api.getOrder(Number(id)),
+    enabled: !!user,
+    initialData: () => {
+      return orderList?.find(o => String(o.id) === id);
+    }
+  });
+
+  const order = singleOrder;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        refetch();
+      }
+    }, [user, refetch])
+  );
+
   const statusCfg = STATUS_CONFIG[order?.status ?? 'pending'] ?? STATUS_CONFIG['pending']!;
 
   const isReturnEligibleStatus = ['completed', 'shipped'].includes(order?.status ?? '');
@@ -191,6 +215,55 @@ export default function OrderDetailScreen() {
         </View>
       </View>
 
+      {/* ── Customer Stage ──────────────────────────────────── */}
+      {order.customerStage && (
+        <View style={[styles.stageCard, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+          <Ionicons name={STAGE_MAP[order.customerStage]?.icon ?? 'information-circle-outline'} size={24} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.stageLabel, { color: colors.primary }]}>{STAGE_MAP[order.customerStage]?.label ?? order.customerStage}</Text>
+            {order.customerStageUpdatedAt && (
+              <Text style={[styles.stageDate, { color: colors.primary }]}>
+                Updated {new Date(order.customerStageUpdatedAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ── Status Events Timeline ───────────────────────────── */}
+      {order.statusEvents && order.statusEvents.length > 0 && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Status Timeline</Text>
+          <View style={styles.timeline}>
+            {order.statusEvents.map((ev, i) => {
+              const isLast = i === order.statusEvents!.length - 1;
+              const evDate = new Date(ev.created_at).toLocaleString('en-KE', {
+                day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'
+              });
+              const stageMap = STAGE_MAP[ev.stage] || { label: ev.stage, icon: 'ellipse-outline' };
+
+              return (
+                <View key={ev.id || i} style={styles.timelineRow}>
+                  <View style={styles.timelineIconCol}>
+                    <View style={[styles.timelineIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <Ionicons name={stageMap.icon as any} size={14} color={colors.primary} />
+                    </View>
+                    {!isLast && <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />}
+                  </View>
+                  <View style={styles.timelineContent}>
+                    <Text style={[styles.timelineStage, { color: colors.text }]}>{stageMap.label}</Text>
+                    {ev.status && (
+                      <Text style={[styles.timelineDesc, { color: colors.mutedForeground }]}>{ev.status}</Text>
+                    )}
+                    <Text style={[styles.timelineDateText, { color: colors.mutedForeground }]}>{evDate}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {/* ── Guest account nudge (filter reminders) ──────────── */}
       <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
 
@@ -232,7 +305,7 @@ export default function OrderDetailScreen() {
       {/* ── Items ───────────────────────────────────────────── */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Items Ordered</Text>
-        {order.lineItems.map((item, i) => (
+        {(order.lineItems ?? []).map((item, i) => (
           <View key={i} style={styles.lineItem}>
             <View style={[styles.lineIcon, { backgroundColor: colors.primaryLight }]}>
               <Ionicons name="water-outline" size={16} color={colors.primary} />
@@ -432,6 +505,20 @@ const styles = StyleSheet.create({
   statusCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, borderWidth: 1.5, borderRadius: 14, padding: 16 },
   statusLabel: { fontSize: 17, fontWeight: '700' as const },
   statusDesc: { fontSize: 13, lineHeight: 19, marginTop: 4 },
+  // Stage
+  stageCard: { flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1, borderRadius: 14, padding: 16 },
+  stageLabel: { fontSize: 15, fontWeight: '700' as const },
+  stageDate: { fontSize: 13, marginTop: 2, opacity: 0.9 },
+  // Timeline
+  timeline: { marginTop: 4 },
+  timelineRow: { flexDirection: 'row' },
+  timelineIconCol: { alignItems: 'center', width: 30, marginRight: 12 },
+  timelineIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  timelineLine: { width: 2, flex: 1, marginVertical: 2 },
+  timelineContent: { flex: 1, paddingBottom: 20, paddingTop: 2 },
+  timelineStage: { fontSize: 14, fontWeight: '600' as const },
+  timelineDesc: { fontSize: 13, marginTop: 2, lineHeight: 18 },
+  timelineDateText: { fontSize: 12, marginTop: 4 },
   // Cards
   card: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
   cardTitle: { fontSize: 15, fontWeight: '700' as const },

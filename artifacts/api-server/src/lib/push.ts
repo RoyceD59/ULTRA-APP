@@ -5,7 +5,7 @@
  * Fire-and-forget: failures are logged but never thrown to the caller.
  */
 import { db, ucNotificationLogTable, ucPushTokensTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
 
 // ─── Helpers (also exported for routes that need fine-grained control) ────────
@@ -30,13 +30,29 @@ export async function removePushToken(userId: string): Promise<void> {
   } catch { /* ignore */ }
 }
 
+/** Remove only the token observed before a provider call. A reinstall may have
+ * rotated the account to a new token while the old request was in flight. */
+export async function removePushTokenIfCurrent(userId: string, pushToken: string): Promise<void> {
+  try {
+    await db.delete(ucPushTokensTable).where(and(
+      eq(ucPushTokensTable.userId, userId),
+      eq(ucPushTokensTable.pushToken, pushToken),
+    ));
+  } catch { /* ignore */ }
+}
+
 export async function callExpoPushApi(
   token: string,
   title: string,
   body: string,
-  data: Record<string, unknown> = {}
+  data: Record<string, unknown> = {},
+  timeoutMs = 8_000,
 ): Promise<{ staleToken: boolean; accepted: boolean; error?: string }> {
   try {
+    const configuredTimeout = Number(process.env["EXPO_PUSH_TIMEOUT_MS"]);
+    const effectiveTimeout = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+      ? Math.min(configuredTimeout, timeoutMs)
+      : timeoutMs;
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
@@ -44,6 +60,7 @@ export async function callExpoPushApi(
         "Accept":          "application/json",
         "Accept-Encoding": "gzip, deflate",
       },
+      signal: AbortSignal.timeout(effectiveTimeout),
       body: JSON.stringify([{ to: token, title, body, data }]),
     });
     const json = await res.json() as {

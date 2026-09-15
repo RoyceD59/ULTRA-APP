@@ -116,6 +116,15 @@ export interface UCEnquiry {
   createdAt: string;
 }
 
+export interface UCOrderStatusEvent {
+  id?: number;
+  stage: string;
+  status: string | null;
+  actor: string;
+  eventKey: string;
+  created_at: string;
+}
+
 export interface UCOrder {
   id: number;
   orderNumber?: number | string;
@@ -126,10 +135,13 @@ export interface UCOrder {
   dateCreated: string;
   total: string;
   currency: string;
-  lineItems: { productId: number; name: string; quantity: number; total: string }[];
+  lineItems: { productId?: number; name: string; quantity: number; total: string }[];
   paymentMethod: string;
   shippingAddress: UCAddress;
   delivery?: { method: string; trackingNumber: string | null };
+  customerStage?: 'accepted' | 'shipped' | 'delivered' | null;
+  customerStageUpdatedAt?: string | null;
+  statusEvents?: UCOrderStatusEvent[];
 }
 
 export interface UCAddress {
@@ -414,6 +426,7 @@ export function useApi() {
     requestContactVerification: (channel: 'email' | 'whatsapp') =>
       post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getOrder: (orderId: number) => get<UCOrder>(`/api/uc/orders/${orderId}`),
     getReturnRequest: (orderId: number) =>
       get<{ request: { id: number; reason: string; details: string; status: string; createdAt: string } | null }>(`/api/uc/orders/${orderId}/return-request`),
     requestReturn: (orderId: number, data: { reason: string; details?: string }) =>

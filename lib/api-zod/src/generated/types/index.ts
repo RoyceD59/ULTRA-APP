@@ -55,6 +55,8 @@ export * from './instantWaterBandsMicrobial';
 export * from './instantWaterBandsSediment';
 export * from './instantWaterBandsTaste';
 export * from './instantWaterConcern';
+export * from './instantWaterFirstName';
+export * from './instantWaterKenyanPhone';
 export * from './instantWaterLatestSummary';
 export * from './instantWaterPhysicalTestRequestInput';
 export * from './instantWaterPhysicalTestRequestInputMediaReferencesItem';
