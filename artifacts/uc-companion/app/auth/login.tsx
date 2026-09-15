@@ -15,7 +15,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { returnTo: returnToParam } = useLocalSearchParams<{ returnTo?: string }>();
   const returnTo = resolveReturnTo(returnToParam);
-  const { login, mustChangePassword } = useAuth();
+  const { login, mustChangePassword, sessionNotice, dismissSessionNotice } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -34,6 +34,7 @@ export default function LoginScreen() {
       return;
     }
     Keyboard.dismiss();
+    dismissSessionNotice();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     const result = await login(identifier.trim(), password);
@@ -55,6 +56,18 @@ export default function LoginScreen() {
         {/* Brand */}
         <BrandLogo width={104} style={{ marginBottom: 4 }} />
         <Text style={[styles.brandSub, { color: colors.mutedForeground }]}>Sign in to your account</Text>
+
+        {sessionNotice ? (
+          <View
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={[styles.sessionNotice, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}
+            testID="expired-session-notice"
+          >
+            <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
+            <Text style={[styles.sessionNoticeText, { color: colors.text }]}>{sessionNotice}</Text>
+          </View>
+        ) : null}
 
         {/* Form */}
         <View style={styles.form}>
@@ -93,11 +106,14 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             testID="forgot-password-link"
-            onPress={() => router.push(
-              identifier.trim()
-                ? ({ pathname: '/auth/forgot-password', params: { email: identifier.trim() } } as never)
-                : ('/auth/forgot-password' as never),
-            )}
+            onPress={() => {
+              dismissSessionNotice();
+              router.push(
+                identifier.trim()
+                  ? ({ pathname: '/auth/forgot-password', params: { email: identifier.trim() } } as never)
+                  : ('/auth/forgot-password' as never),
+              );
+            }}
             style={styles.forgotPasswordBtn}
           >
             <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>Forgot password?</Text>
@@ -108,11 +124,14 @@ export default function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Don't have an account?</Text>
-          <TouchableOpacity onPress={() => router.push(
-            returnTo
-              ? ({ pathname: '/auth/register', params: { returnTo } } as never)
-              : ('/auth/register' as never),
-          )}>
+          <TouchableOpacity onPress={() => {
+            dismissSessionNotice();
+            router.push(
+              returnTo
+                ? ({ pathname: '/auth/register', params: { returnTo } } as never)
+                : ('/auth/register' as never),
+            );
+          }}>
             <Text style={[styles.footerLink, { color: colors.primary }]}>Create account</Text>
           </TouchableOpacity>
         </View>
@@ -125,6 +144,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 32, alignItems: 'center', gap: 8, paddingTop: Platform.OS === 'web' ? 100 : 60 },
   brandSub: { fontSize: 15, marginBottom: 16 },
+  sessionNotice: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
+  sessionNoticeText: { flex: 1, fontSize: 14, lineHeight: 20 },
   form: { width: '100%', gap: 16 },
   field: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '500' as const },

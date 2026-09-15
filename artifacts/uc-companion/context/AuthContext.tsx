@@ -28,6 +28,9 @@ export interface UCUser {
 interface AuthContextValue {
   user: UCUser | null;
   token: string | null;
+  /** One-time, user-safe explanation for an API-forced sign-out. */
+  sessionNotice: string | null;
+  dismissSessionNotice: () => void;
   /** True while an operator-issued temporary password must be replaced. */
   mustChangePassword: boolean;
   /** Expiry timestamp supplied by the Companion login contract. */
@@ -58,6 +61,8 @@ interface RegisterData {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   token: null,
+  sessionNotice: null,
+  dismissSessionNotice: () => {},
   mustChangePassword: false,
   temporaryPasswordExpiresAt: null,
   isLoading: true,
@@ -94,6 +99,7 @@ async function registerPushTokenWithServer(authToken: string): Promise<void> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<UCUser | null>(null);
   const [token, setToken]     = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const tokenRef = useRef<string | null>(token);
   const sessionVersion = useRef(0);
@@ -152,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (sessionVersion.current !== operation) return false;
     setToken(session.token);
     setUser(session.user as unknown as UCUser);
+    setSessionNotice(null);
     registerPushTokenWithServer(session.token);
     return true;
   }, [enqueueDurableWrite]);
@@ -298,6 +305,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const operation = ++sessionVersion.current;
+    setSessionNotice('Your session has expired. Please sign in again.');
     // Drop memory state first so mounted queries stop issuing authenticated
     // requests while durable credentials are being removed.
     setToken(null);
@@ -338,11 +346,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const mustChangePassword = user?.mustChangePassword === true;
   const temporaryPasswordExpiresAt = user?.temporaryPasswordExpiresAt ?? null;
+  const dismissSessionNotice = useCallback(() => setSessionNotice(null), []);
 
   return (
     <AuthContext.Provider value={{
       user,
       token,
+      sessionNotice,
+      dismissSessionNotice,
       mustChangePassword,
       temporaryPasswordExpiresAt,
       isLoading,
