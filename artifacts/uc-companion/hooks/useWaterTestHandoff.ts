@@ -49,7 +49,8 @@ export async function processHandoffState(
   consumeFn: (handoffToken: string) => Promise<InstantWaterAssessment>,
   onSuccess: (assessment: InstantWaterAssessment) => void,
   setHandoffPending: (val: boolean) => void,
-  setHandoffSuccess: (val: boolean) => void
+  setHandoffSuccess: (val: boolean) => void,
+  setHandoffError: (err: string | null) => void
 ) {
   const handoffToken = await AsyncStorage.getItem(HANDOFF_STORAGE_KEY);
   if (!handoffToken) {
@@ -67,12 +68,14 @@ export async function processHandoffState(
     await AsyncStorage.removeItem(HANDOFF_STORAGE_KEY);
     setHandoffPending(false);
     setHandoffSuccess(true);
+    setHandoffError(null);
     onSuccess(res);
   } catch (err: any) {
-    const isTerminal = err instanceof ApiError && err.status && (err.status === 400 || err.status === 404 || err.status === 410);
+    const isTerminal = err instanceof ApiError && err.status && (err.status === 400 || err.status === 403 || err.status === 404 || err.status === 410);
     if (isTerminal) {
       await AsyncStorage.removeItem(HANDOFF_STORAGE_KEY);
       setHandoffPending(false);
+      setHandoffError('This water check link has expired or belongs to another account.');
     } else {
       setHandoffPending(true);
     }
@@ -88,6 +91,7 @@ export function useConsumeHandoff(
 
   const [handoffPending, setHandoffPending] = useState(false);
   const [handoffSuccess, setHandoffSuccess] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
 
   useEffect(() => {
     processHandoffState(
@@ -99,9 +103,10 @@ export function useConsumeHandoff(
       },
       onSuccess,
       setHandoffPending,
-      setHandoffSuccess
+      setHandoffSuccess,
+      setHandoffError
     );
   }, [token]);
 
-  return { handoffPending, handoffSuccess };
+  return { handoffPending, handoffSuccess, handoffError, clearHandoffError: () => setHandoffError(null) };
 }

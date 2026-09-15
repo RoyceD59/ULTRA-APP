@@ -68,27 +68,30 @@ describe('processHandoffState', () => {
   let pendingState: boolean;
   let successState: boolean;
   let successResult: any;
+  let errorState: string | null;
 
   const setPending = (v: boolean) => { pendingState = v; };
   const setSuccess = (v: boolean) => { successState = v; };
+  const setError = (v: string | null) => { errorState = v; };
   const onSuccess = (res: any) => { successResult = res; };
 
   beforeEach(() => {
     _reset();
     pendingState = false;
     successState = false;
+    errorState = null;
     successResult = null;
   });
 
   it('does nothing if no handoff token', async () => {
-    await processHandoffState('my-jwt', async () => ({} as any), onSuccess, setPending, setSuccess);
+    await processHandoffState('my-jwt', async () => ({} as any), onSuccess, setPending, setSuccess, setError);
     assert.equal(pendingState, false);
     assert.equal(successState, false);
   });
 
   it('persists across signed-out state', async () => {
     _storage.set(HANDOFF_STORAGE_KEY, 'some-handoff');
-    await processHandoffState(null, async () => ({} as any), onSuccess, setPending, setSuccess);
+    await processHandoffState(null, async () => ({} as any), onSuccess, setPending, setSuccess, setError);
     assert.equal(pendingState, true);
     assert.equal(successState, false);
     assert.equal(_storage.get(HANDOFF_STORAGE_KEY), 'some-handoff');
@@ -96,10 +99,11 @@ describe('processHandoffState', () => {
 
   it('cleans up on successful consume', async () => {
     _storage.set(HANDOFF_STORAGE_KEY, 'some-handoff');
-    await processHandoffState('my-jwt', async () => ({ id: 1 } as any), onSuccess, setPending, setSuccess);
+    await processHandoffState('my-jwt', async () => ({ id: 1 } as any), onSuccess, setPending, setSuccess, setError);
     
     assert.equal(pendingState, false);
     assert.equal(successState, true);
+    assert.equal(errorState, null);
     assert.equal(successResult.id, 1);
     assert.equal(_storage.has(HANDOFF_STORAGE_KEY), false);
   });
@@ -108,21 +112,35 @@ describe('processHandoffState', () => {
     _storage.set(HANDOFF_STORAGE_KEY, 'some-handoff');
     const consumeFn = async () => { throw new ApiError('Conflict', 409, {}); };
     
-    await processHandoffState('my-jwt', consumeFn, onSuccess, setPending, setSuccess);
+    await processHandoffState('my-jwt', consumeFn, onSuccess, setPending, setSuccess, setError);
     
     assert.equal(pendingState, true);
     assert.equal(successState, false);
+    assert.equal(errorState, null);
     assert.equal(_storage.get(HANDOFF_STORAGE_KEY), 'some-handoff');
   });
 
-  it('removes token on terminal invalid/expired response', async () => {
+  it('removes token and exposes error on terminal 404 response', async () => {
     _storage.set(HANDOFF_STORAGE_KEY, 'some-handoff');
     const consumeFn = async () => { throw new ApiError('Not found', 404, {}); };
-    
-    await processHandoffState('my-jwt', consumeFn, onSuccess, setPending, setSuccess);
-    
+
+    await processHandoffState('my-jwt', consumeFn, onSuccess, setPending, setSuccess, setError);
+
     assert.equal(pendingState, false);
     assert.equal(successState, false);
+    assert.ok(typeof errorState === 'string');
+    assert.equal(_storage.has(HANDOFF_STORAGE_KEY), false);
+  });
+
+  it('removes token and exposes error on terminal 403 (forbidden) response', async () => {
+    _storage.set(HANDOFF_STORAGE_KEY, 'some-handoff');
+    const consumeFn = async () => { throw new ApiError('Forbidden', 403, {}); };
+
+    await processHandoffState('my-jwt', consumeFn, onSuccess, setPending, setSuccess, setError);
+
+    assert.equal(pendingState, false);
+    assert.equal(successState, false);
+    assert.ok(typeof errorState === 'string');
     assert.equal(_storage.has(HANDOFF_STORAGE_KEY), false);
   });
 });

@@ -77,7 +77,7 @@ export default function WaterTestScreen() {
 
   const attachMut = useAttachInstantWaterAssessment();
 
-  const { handoffPending, handoffSuccess } = useConsumeHandoff((res) => {
+  const { handoffPending, handoffSuccess, handoffError, clearHandoffError } = useConsumeHandoff((res) => {
     setView('history');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   });
@@ -121,6 +121,7 @@ export default function WaterTestScreen() {
         <FormView
           colors={colors} user={user} token={token} router={router}
           handoffPending={handoffPending} handoffSuccess={handoffSuccess}
+          handoffError={handoffError} clearHandoffError={clearHandoffError}
           onResult={(ass) => { setAssessment(ass); setView('result'); }}
           onHistory={() => setView('history')}
         />
@@ -173,9 +174,11 @@ interface FormViewProps {
   router: any;
   handoffPending?: boolean;
   handoffSuccess?: boolean;
+  handoffError?: string | null;
+  clearHandoffError?: () => void;
 }
 
-function FormView({ colors, user, token, handoffPending, handoffSuccess, onResult, onHistory, router }: FormViewProps) {
+function FormView({ colors, user, token, handoffPending, handoffSuccess, handoffError, clearHandoffError, onResult, onHistory, router }: FormViewProps) {
   const [draft, setDraft] = useState<Draft>({
     firstName: user?.firstName || '',
     phone: user?.phone || '',
@@ -281,6 +284,16 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, onResul
       {handoffSuccess && (
         <View style={{ backgroundColor: '#D1FAE5', padding: 12, alignItems: 'center' }}>
           <Text style={{ color: '#065F46', fontSize: 14, fontWeight: '500' }}>Assessment saved to your account!</Text>
+        </View>
+      )}
+      {handoffError && (
+        <View style={{ backgroundColor: '#FEE2E2', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ flex: 1, color: '#B91C1C', fontSize: 14, lineHeight: 20 }}>
+            {handoffError}
+          </Text>
+          <TouchableOpacity onPress={clearHandoffError} style={{ padding: 4, marginLeft: 8 }}>
+            <Ionicons name="close" size={20} color="#B91C1C" />
+          </TouchableOpacity>
         </View>
       )}
 

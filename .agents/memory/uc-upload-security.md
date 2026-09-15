@@ -15,6 +15,14 @@ Presigned PUT URLs cannot bind size or content-type, so upload caps are enforced
 
 Only objects minted by the upload endpoint (`uploads/<uuid>` inside the private object dir) are publicly servable, with `X-Content-Type-Options: nosniff` and inline rendering only for image/* and video/* (everything else forced to octet-stream attachment). Anything else under PRIVATE_OBJECT_DIR must remain unreachable from public routes.
 
+## Assessment evidence is always private
+
+Water-test and other assessment evidence must use an assessment-bound private namespace, never `uploads/<uuid>`. Access requires the attached customer owner or a live team user with the relevant permission.
+
+**Why:** public upload serving is suitable for customer-facing media, but assessment evidence can contain household and location context. Presigned-request metadata is also not proof of the bytes ultimately stored.
+
+**How to apply:** bind the upload to the assessment and principal/action token, keep serving private and non-cacheable, and verify stored metadata plus actual file signatures before attachment. External malware scanning may add another persisted verdict later.
+
 ## Admin is DB-anchored; dev login is dev-only
 
 - Admin = registered DB user row with `is_admin` true OR email in `UC_ADMIN_EMAILS`. JWT claims alone NEVER grant admin (tokens with arbitrary emails can be minted via the dev login fallback).

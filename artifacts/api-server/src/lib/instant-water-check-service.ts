@@ -598,6 +598,7 @@ export async function confirmVerification(assessmentId: string, code: string, ra
   await enforceDurableRateLimit(confirmationLimits.ip, 5, 10 * 60 * 1000);
   await enforceDurableRateLimit(confirmationLimits.phone, 5, 10 * 60 * 1000);
   const client = await pool.connect();
+  let invalidCode = false;
   try {
     await client.query("BEGIN");
     const challengeResult = await client.query(
@@ -608,21 +609,43 @@ export async function confirmVerification(assessmentId: string, code: string, ra
     const challenge = challengeResult.rows[0] as { id: string; code_hash: string; attempts: number; expires_at: Date } | undefined;
     if (!challenge || new Date(challenge.expires_at).getTime() <= Date.now()) {
       const failedLimits = instantOtpRateLimitKeys("failed-confirm", rateKey, phone);
-      await enforceDurableRateLimit(failedLimits.ip, 5, 10 * 60 * 1000);
-      await enforceDurableRateLimit(failedLimits.phone, 5, 10 * 60 * 1000);
-      throw new Error("INVALID_CODE");
-    }
-    if (challenge.attempts >= MAX_OTP_ATTEMPTS) throw new Error("OTP_LOCKED");
-    await client.query(`UPDATE instant_water_verification_challenges SET attempts = attempts + 1 WHERE id = $1`, [challenge.id]);
-    const actualHash = Buffer.from(hashSecret(`${challenge.id}:${code}`), "hex");
-    const storedHash = Buffer.from(challenge.code_hash, "hex");
-    if (actualHash.length !== storedHash.length || !timingSafeEqual(actualHash, storedHash)) {
-      const failedLimits = instantOtpRateLimitKeys("failed-confirm", rateKey, phone);
-      await enforceDurableRateLimit(failedLimits.ip, 5, 10 * 60 * 1000);
-      await enforceDurableRateLimit(failedLimits.phone, 5, 10 * 60 * 1000);
+      if (challenge) {
+        await client.query(`UPDATE instant_water_verification_challenges SET attempts = attempts + 1 WHERE id = $1`, [challenge.id]);
+      }
+      try {
+        await enforceDurableRateLimit(failedLimits.ip, 5, 10 * 60 * 1000, client);
+        await enforceDurableRateLimit(failedLimits.phone, 5, 10 * 60 * 1000, client);
+      } catch (error) {
+        if (error instanceof Error && error.message === "RATE_LIMITED") await client.query("COMMIT");
+        throw error;
+      }
       await client.query("COMMIT");
-      throw new Error("INVALID_CODE");
+      invalidCode = true;
     }
+    if (!invalidCode && challenge && challenge.attempts >= MAX_OTP_ATTEMPTS) throw new Error("OTP_LOCKED");
+    if (!invalidCode && challenge) {
+      await client.query(`UPDATE instant_water_verification_challenges SET attempts = attempts + 1 WHERE id = $1`, [challenge.id]);
+      const actualHash = Buffer.from(hashSecret(`${challenge.id}:${code}`), "hex");
+      const storedHash = Buffer.from(challenge.code_hash, "hex");
+      if (actualHash.length !== storedHash.length || !timingSafeEqual(actualHash, storedHash)) {
+        const failedLimits = instantOtpRateLimitKeys("failed-confirm", rateKey, phone);
+        try {
+          await enforceDurableRateLimit(failedLimits.ip, 5, 10 * 60 * 1000, client);
+          await enforceDurableRateLimit(failedLimits.phone, 5, 10 * 60 * 1000, client);
+        } catch (error) {
+          if (error instanceof Error && error.message === "RATE_LIMITED") await client.query("COMMIT");
+          throw error;
+        }
+      await client.query("COMMIT");
+        invalidCode = true;
+      }
+    }
+    if (invalidCode) {
+      // The challenge attempt and aggregate failed-confirm buckets are committed
+      // before the public INVALID_CODE outcome is returned.
+    } else {
+    const validChallenge = challenge;
+    if (!validChallenge) throw new Error("INVALID_CODE");
     const rowResult = await client.query(
       `SELECT normalized_phone, account_link_state, customer_user_id
          FROM instant_water_assessments WHERE id = $1 FOR UPDATE`,
@@ -640,7 +663,7 @@ export async function confirmVerification(assessmentId: string, code: string, ra
     const state = determineAccountLinkState(users.rows.length);
     const actionToken = token();
     const expiresAt = new Date(Date.now() + ACTION_TOKEN_TTL_MS);
-    await client.query(`UPDATE instant_water_verification_challenges SET used_at = now() WHERE id = $1`, [challenge.id]);
+    await client.query(`UPDATE instant_water_verification_challenges SET used_at = now() WHERE id = $1`, [validChallenge.id]);
     await client.query(
       `UPDATE instant_water_assessments
           SET phone_verification_state = 'verified', phone_verified_at = now(),
@@ -675,12 +698,14 @@ export async function confirmVerification(assessmentId: string, code: string, ra
     }
     await client.query("COMMIT");
     return { actionToken, actionTokenExpiresAt: expiresAt, accountLinkState: state, ...(handoffToken ? { handoffToken } : {}) };
+    }
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally {
     client.release();
   }
+  throw new Error("INVALID_CODE");
 }
 
 async function actionAssessment(actionToken: string, assessmentId: string): Promise<AssessmentRow> {

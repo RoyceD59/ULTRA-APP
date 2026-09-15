@@ -2,7 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
-import { requestVerification } from "../lib/instant-water-check-service.js";
+import {
+  confirmVerification,
+  hashInstantSecurityKey,
+  instantOtpRateLimitKeys,
+  requestVerification,
+} from "../lib/instant-water-check-service.js";
 
 describe("instant water OTP delivery durability", () => {
   it("retries the same challenge after failure, never duplicates sent replay, and recovers expired claims", async () => {
@@ -121,6 +126,104 @@ describe("instant water OTP delivery durability", () => {
       assert.equal(results.length, assessments.length);
     } finally {
       await pool.query(`DELETE FROM instant_water_assessments WHERE id = ANY($1::text[])`, [assessments.map(({ id }) => id)]);
+    }
+  });
+
+  it("commits concurrent wrong-code attempts and aggregate limits without starvation", async () => {
+    process.env.WATER_CHECK_TOKEN_SECRET ??= "otp-test-secret";
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      id: `otp-wrong-${randomUUID()}`,
+      phone: `+25470001${String(index).padStart(4, "0")}`,
+      rateKey: `wrong-ip-${randomUUID()}`,
+    }));
+    try {
+      for (const row of rows) {
+        const challengeId = `challenge-${row.id}`;
+        await pool.query(
+          `INSERT INTO instant_water_assessments
+            (id, reference, first_name, normalized_phone, consent_given, consent_version,
+             country, area, source, concern, setting, raw_answers, rules_version, result)
+           VALUES ($1, $2, 'OTP', $3, 'true', 'instant-water-check-v1',
+             'Kenya', 'Nakuru', 'borehole', 'safety', 'home', '{}'::jsonb,
+             'instant-water-check-v1', $4::jsonb)`,
+          [row.id, `WT-WRONG-${randomUUID()}`, row.phone, JSON.stringify({ bands: {} })],
+        );
+        await pool.query(
+          `INSERT INTO instant_water_verification_challenges
+            (id, assessment_id, channel, phone_hash, code_hash, code_ciphertext, delivery_status, expires_at)
+           VALUES ($1, $2, 'sms', $3, $4, 'encrypted-test-code', 'sent', now() + interval '10 minutes')`,
+          [
+            challengeId,
+            row.id,
+            hashInstantSecurityKey(row.phone),
+            hashInstantSecurityKey(`${challengeId}:123456`),
+          ],
+        );
+      }
+      const outcomes = await Promise.all(rows.map(async (row) => {
+        try {
+          await confirmVerification(row.id, "000000", row.rateKey);
+          return "unexpected-success";
+        } catch (error) {
+          return error instanceof Error ? error.message : "unknown";
+        }
+      }));
+      assert.deepEqual(outcomes, rows.map(() => "INVALID_CODE"));
+
+      const attempts = await pool.query(
+        `SELECT count(*)::int AS count, sum(attempts)::int AS attempts
+           FROM instant_water_verification_challenges
+          WHERE assessment_id = ANY($1::text[])`,
+        [rows.map((row) => row.id)],
+      );
+      assert.equal(attempts.rows[0].count, rows.length);
+      assert.equal(attempts.rows[0].attempts, rows.length);
+      const failedKeys = rows.flatMap((row) => {
+        const keys = instantOtpRateLimitKeys("failed-confirm", row.rateKey, row.phone);
+        return [hashInstantSecurityKey(`rate:${keys.ip}`), hashInstantSecurityKey(`rate:${keys.phone}`)];
+      });
+      const buckets = await pool.query(
+        `SELECT count(*)::int AS count
+           FROM instant_water_rate_limits
+          WHERE key_hash = ANY($1::text[])`,
+        [failedKeys],
+      );
+      assert.equal(buckets.rows[0].count, rows.length * 2);
+    } finally {
+      await pool.query(`DELETE FROM instant_water_assessments WHERE id = ANY($1::text[])`, [rows.map((row) => row.id)]);
+    }
+  });
+
+  it("commits the attempt and failed buckets for an expired challenge", async () => {
+    process.env.WATER_CHECK_TOKEN_SECRET ??= "otp-test-secret";
+    const assessmentId = `otp-expired-${randomUUID()}`;
+    const challengeId = `challenge-${assessmentId}`;
+    const phone = "+254700020001";
+    const rateKey = `expired-ip-${randomUUID()}`;
+    try {
+      await pool.query(
+        `INSERT INTO instant_water_assessments
+          (id, reference, first_name, normalized_phone, consent_given, consent_version,
+           country, area, source, concern, setting, raw_answers, rules_version, result)
+         VALUES ($1, $2, 'OTP', $3, 'true', 'instant-water-check-v1',
+           'Kenya', 'Nakuru', 'borehole', 'safety', 'home', '{}'::jsonb,
+           'instant-water-check-v1', $4::jsonb)`,
+        [assessmentId, `WT-EXPIRED-${randomUUID()}`, phone, JSON.stringify({ bands: {} })],
+      );
+      await pool.query(
+        `INSERT INTO instant_water_verification_challenges
+          (id, assessment_id, channel, phone_hash, code_hash, code_ciphertext, delivery_status, expires_at)
+         VALUES ($1, $2, 'sms', $3, $4, 'encrypted-test-code', 'sent', now() - interval '1 minute')`,
+        [challengeId, assessmentId, hashInstantSecurityKey(phone), hashInstantSecurityKey(`${challengeId}:123456`)],
+      );
+      await assert.rejects(confirmVerification(assessmentId, "123456", rateKey), /INVALID_CODE/);
+      const state = await pool.query(
+        `SELECT attempts FROM instant_water_verification_challenges WHERE id = $1`,
+        [challengeId],
+      );
+      assert.equal(state.rows[0].attempts, 1);
+    } finally {
+      await pool.query(`DELETE FROM instant_water_assessments WHERE id = $1`, [assessmentId]);
     }
   });
 });
