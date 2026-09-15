@@ -20,7 +20,9 @@ export const instantWaterAssessmentsTable = pgTable(
   "instant_water_assessments",
   {
     id: text("id").primaryKey(),
-    reference: text("reference").notNull().unique(),
+    reference: text("reference")
+      .notNull()
+      .unique("instant_water_assessments_reference_key"),
     customerUserId: text("customer_user_id"),
     firstName: text("first_name").notNull(),
     normalizedPhone: text("normalized_phone").notNull(),
