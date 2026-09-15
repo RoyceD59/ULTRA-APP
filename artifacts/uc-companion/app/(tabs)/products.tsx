@@ -7,9 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
+import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import ProductCard from '@/components/ProductCard';
@@ -93,6 +95,8 @@ function ProductsScreenContent() {
   const router = useRouter();
   const { category: categoryParam } = useLocalSearchParams<{ category?: string }>();
   const api = useApi();
+  const queryClient = useQueryClient();
+  const { token, user } = useAuth();
   const insets = useSafeAreaInsets();
   const { items, addItem, refreshCart, cartHydrated, totalItems } = useCart();
   const cartBarInset = useCartBarInset();
@@ -207,6 +211,64 @@ function ProductsScreenContent() {
     enabled: hasItems && basketSkus.length > 0,
     staleTime: 60 * 1000,
   });
+
+  // Wishlist
+  const { data: wishlist } = useQuery({
+    queryKey: customerQueryKeys.wishlist(user?.id),
+    queryFn: () => api.getWishlist(),
+    enabled: !!token && !!user,
+    staleTime: 60 * 1000,
+  });
+
+  // Track pending wishlist toggles per product ID
+  const [wishlistPendingMap, setWishlistPendingMap] = useState<Record<number, boolean>>({});
+
+  // Track current customer to avoid state leaks on sign-out/switch
+  const currentCustomerId = useRef<number | null>(user?.id ?? null);
+  useEffect(() => {
+    currentCustomerId.current = user?.id ?? null;
+    setWishlistPendingMap({});
+  }, [user?.id]);
+
+  const toggleWishlist = useCallback(async (product: UCProduct) => {
+    if (!token || !user) {
+      router.push('/auth/login');
+      return;
+    }
+    const pid = product.id;
+    const initiatingCustomerId = user.id;
+    const serverWishlisted = wishlist?.some((w) => w.productId === pid) ?? false;
+    const isCurrentlyWishlisted = wishlistPendingMap[pid] !== undefined ? wishlistPendingMap[pid] : serverWishlisted;
+    const nextState = !isCurrentlyWishlisted;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setWishlistPendingMap(prev => ({ ...prev, [pid]: nextState }));
+
+    try {
+      if (nextState) {
+        await api.addToWishlist(pid, product.name);
+      } else {
+        await api.removeFromWishlist(pid);
+      }
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.wishlist(initiatingCustomerId) });
+    } catch {
+      if (currentCustomerId.current === initiatingCustomerId) {
+        setWishlistPendingMap(prev => {
+          const newState = { ...prev };
+          delete newState[pid];
+          return newState;
+        });
+      }
+    } finally {
+      if (currentCustomerId.current === initiatingCustomerId) {
+        setWishlistPendingMap(prev => {
+          const newState = { ...prev };
+          delete newState[pid];
+          return newState;
+        });
+      }
+    }
+  }, [token, user, router, wishlist, wishlistPendingMap, api, queryClient]);
 
   const numColumns = 2;
 
@@ -494,17 +556,25 @@ function ProductsScreenContent() {
                   {showNudge && (
                     <>
                       <View style={styles.row}>
-                        {(products ?? []).slice(0, numColumns).map(product => (
-                          <View key={product.id} style={styles.cardWrap}>
-                            <ProductCard
-                              product={product}
-                              onPress={() => router.push({
-                                pathname: '/product/[id]',
-                                params: { id: String(product.id), category },
-                              } as never)}
-                            />
-                          </View>
-                        ))}
+                        {(products ?? []).slice(0, numColumns).map(product => {
+                          const isServerWishlisted = wishlist?.some(w => w.productId === product.id) ?? false;
+                          const pendingState = wishlistPendingMap[product.id];
+                          const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
+                          return (
+                            <View key={product.id} style={styles.cardWrap}>
+                              <ProductCard
+                                product={product}
+                                isWishlisted={isWishlisted}
+                                wishlistPending={pendingState !== undefined}
+                                onToggleWishlist={() => toggleWishlist(product)}
+                                onPress={() => router.push({
+                                  pathname: '/product/[id]',
+                                  params: { id: String(product.id), category },
+                                } as never)}
+                              />
+                            </View>
+                          );
+                        })}
                       </View>
                       {alisonNudge}
                     </>
@@ -524,17 +594,25 @@ function ProductsScreenContent() {
                   </Text>
                 </View>
               }
-              renderItem={({ item }) => (
-                <View style={styles.cardWrap}>
-                  <ProductCard
-                    product={item}
-                    onPress={() => router.push({
-                      pathname: '/product/[id]',
-                      params: { id: String(item.id), category },
-                    } as never)}
-                  />
-                </View>
-              )}
+              renderItem={({ item }) => {
+                const isServerWishlisted = wishlist?.some(w => w.productId === item.id) ?? false;
+                const pendingState = wishlistPendingMap[item.id];
+                const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
+                return (
+                  <View style={styles.cardWrap}>
+                    <ProductCard
+                      product={item}
+                      isWishlisted={isWishlisted}
+                      wishlistPending={pendingState !== undefined}
+                      onToggleWishlist={() => toggleWishlist(item)}
+                      onPress={() => router.push({
+                        pathname: '/product/[id]',
+                        params: { id: String(item.id), category },
+                      } as never)}
+                    />
+                  </View>
+                );
+              }}
               data={showNudge ? (products ?? []).slice(numColumns) : (products ?? [])}
             />
           )}

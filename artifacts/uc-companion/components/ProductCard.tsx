@@ -12,6 +12,9 @@ interface Props {
   product: UCProduct;
   onPress: () => void;
   layout?: 'grid' | 'list';
+  isWishlisted?: boolean;
+  wishlistPending?: boolean;
+  onToggleWishlist?: () => void;
 }
 
 function formatKES(price: string) {
@@ -20,7 +23,7 @@ function formatKES(price: string) {
   return `KES ${n.toLocaleString('en-KE')}`;
 }
 
-export default function ProductCard({ product, onPress, layout = 'grid' }: Props) {
+export default function ProductCard({ product, onPress, layout = 'grid', isWishlisted, wishlistPending, onToggleWishlist }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { addItem } = useCart();
@@ -29,6 +32,7 @@ export default function ProductCard({ product, onPress, layout = 'grid' }: Props
   // this '' and render a stray text node inside the card View on web.
   const isOnSale = !isEnquiryOnly && !!product.salePrice && parseFloat(product.salePrice) < parseFloat(product.regularPrice);
   const displayPrice = product.salePrice || product.price || product.regularPrice;
+  const inStock = product.stockStatus === 'instock';
 
   const handleAddToCart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -87,10 +91,30 @@ export default function ProductCard({ product, onPress, layout = 'grid' }: Props
               style={[styles.addBtn, { backgroundColor: colors.accent }]}>
               <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
             </TouchableOpacity>
-          : <TouchableOpacity onPress={handleAddToCart} activeOpacity={0.7}
-              style={[styles.addBtn, { backgroundColor: colors.primary }]}>
-              <Ionicons name="add" size={20} color="#fff" />
-            </TouchableOpacity>
+          : inStock ? (
+              <TouchableOpacity onPress={handleAddToCart} activeOpacity={0.7}
+                style={[styles.addBtn, { backgroundColor: colors.primary }]}>
+                <Ionicons name="add" size={20} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={onToggleWishlist}
+                activeOpacity={0.7}
+                disabled={wishlistPending}
+                accessibilityLabel={isWishlisted ? "Restock alert on" : "Notify me"}
+                style={[
+                  styles.addBtn,
+                  isWishlisted
+                    ? { backgroundColor: colors.destructive }
+                    : { backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.primary },
+                ]}>
+                <Ionicons
+                  name={isWishlisted ? "heart" : "heart-outline"}
+                  size={18}
+                  color={isWishlisted ? "#fff" : colors.primary}
+                />
+              </TouchableOpacity>
+            )
         }
       </TouchableOpacity>
     );
@@ -151,11 +175,37 @@ export default function ProductCard({ product, onPress, layout = 'grid' }: Props
                   <Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{formatKES(product.regularPrice)}</Text>
                 )}
               </View>
-              <TouchableOpacity onPress={handleAddToCart} activeOpacity={0.8}
-                style={[styles.cartBtn, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
-                <Ionicons name="cart-outline" size={14} color={colors.primary} />
-                <Text style={[styles.cartBtnText, { color: colors.primary }]}>Add to Cart</Text>
-              </TouchableOpacity>
+              {inStock ? (
+                <TouchableOpacity onPress={handleAddToCart} activeOpacity={0.8}
+                  style={[styles.cartBtn, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+                  <Ionicons name="cart-outline" size={14} color={colors.primary} />
+                  <Text style={[styles.cartBtnText, { color: colors.primary }]}>Add to Cart</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={onToggleWishlist}
+                  activeOpacity={0.8}
+                  disabled={wishlistPending}
+                  accessibilityLabel={isWishlisted ? "Restock alert on" : "Notify me"}
+                  style={[
+                    styles.cartBtn,
+                    isWishlisted
+                      ? { backgroundColor: '#FFF0F0', borderColor: colors.destructive }
+                      : { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+                  ]}>
+                  <Ionicons
+                    name={isWishlisted ? "heart" : "heart-outline"}
+                    size={14}
+                    color={isWishlisted ? colors.destructive : colors.primary}
+                  />
+                  <Text style={[
+                    styles.cartBtnText,
+                    { color: isWishlisted ? colors.destructive : colors.primary }
+                  ]}>
+                    {isWishlisted ? 'Restock alert on' : 'Notify me'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
         }
       </View>
