@@ -5,18 +5,16 @@ import { useColors } from '@/hooks/useColors';
 import type { PersonalImpact } from '@/hooks/useApi';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import { buildImpactShareMessage } from '@/lib/impactBadge';
 
 interface Props {
   visible: boolean;
   impact: PersonalImpact;
+  referralCode: string | null;
   onClose: () => void;
 }
 
-export function buildShareMessage(totalLitres: number) {
-  return `I’ve refilled ${totalLitres} litres with Ultra-Clear! Cleaner water, zero plastic waste. Join me in the green-living community.`;
-}
-
-export default function ImpactShareModal({ visible, impact, onClose }: Props) {
+export default function ImpactShareModal({ visible, impact, referralCode, onClose }: Props) {
   const colors = useColors();
   const badgeRef = useRef<View>(null);
   const [sharing, setSharing] = useState(false);
@@ -24,8 +22,8 @@ export default function ImpactShareModal({ visible, impact, onClose }: Props) {
   async function handleShare() {
     if (sharing) return;
     
-    const message = buildShareMessage(impact.totalLitres);
-    const url = Platform.OS === 'ios' ? 'https://ultra-clear.com/app' : undefined;
+    const message = buildImpactShareMessage(impact.totalLitres, impact.starLevel, referralCode);
+    const url = Platform.OS === 'ios' ? 'https://ucfilters.com/app' : undefined;
 
     setSharing(true);
     
@@ -90,12 +88,14 @@ export default function ImpactShareModal({ visible, impact, onClose }: Props) {
               <Text style={styles.badgeBrand}>Ultra-Clear</Text>
             </View>
             <View style={styles.badgeBody}>
-              <Text style={styles.badgeValue}>{impact.totalLitres}</Text>
+              <Text style={styles.badgeValue}>{impact.totalLitres.toLocaleString()}</Text>
               <Text style={styles.badgeLabel}>LITRES REFILLED</Text>
             </View>
             <View style={styles.badgeFooter}>
-              <Text style={styles.badgeStar}>{impact.starLevel} ★ Contributor</Text>
-              <Text style={styles.badgeSlogan}>Zero plastic waste.</Text>
+              <Text style={styles.badgeStar}>LEVEL {impact.starLevel} · GREEN-LIVING IMPACT</Text>
+              <Text style={styles.badgeSlogan}>
+                {referralCode ? `INVITE CODE: ${referralCode}` : 'JOIN ULTRA-CLEAR COMPANION'}
+              </Text>
             </View>
           </View>
 

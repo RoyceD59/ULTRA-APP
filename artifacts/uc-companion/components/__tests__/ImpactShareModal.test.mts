@@ -1,13 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShareMessage } from '../ImpactShareModal';
+import { buildImpactShareMessage } from '../../lib/impactBadge.ts';
 
 describe('ImpactShareModal pure logic', () => {
-  it('buildShareMessage formats the litres correctly without PII', () => {
-    const message = buildShareMessage(1250);
-    assert.match(message, /1250 litres/);
+  it('uses the shared badge caption with current impact and no PII', () => {
+    const message = buildImpactShareMessage(1250, 4, 'UC123');
+    assert.match(message, /1,250 L refilled/);
+    assert.match(message, /Level 4/);
+    assert.match(message, /UC123/);
     assert.match(message, /Ultra-Clear/);
-    assert.match(message, /zero plastic waste/);
     
     // Ensure no name or other PII placeholders snuck in
     assert.doesNotMatch(message, /Name/i);

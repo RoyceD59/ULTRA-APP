@@ -1172,6 +1172,7 @@ function AccountScreenContent() {
         <ImpactShareModal
           visible={impactShareVisible}
           impact={rewards.impact}
+          referralCode={referral?.code ?? null}
           onClose={() => setImpactShareVisible(false)}
         />
       )}
