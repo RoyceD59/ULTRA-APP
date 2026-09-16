@@ -24,6 +24,7 @@ import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
 import { parseOrderNotificationId } from '@/lib/orderNotification';
 import { evaluateColdStart } from '@/lib/coldStartNotification';
+import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 
 // Import the notification hook — this also runs setNotificationHandler at
 // module level so it's registered before any notification can arrive.
@@ -59,13 +60,13 @@ function RootLayoutNav() {
   useWaterTestHandoffCapture();
 
   useEffect(() => {
-    const wasSignedIn = previousToken.current !== null;
+    const tokenBeforeUpdate = previousToken.current;
     previousToken.current = token;
 
     // Update API client auth token for this session
     setAuthTokenGetter(token ? () => Promise.resolve(token) : null);
 
-    if (wasSignedIn && token === null) {
+    if (shouldRedirectToLogin(tokenBeforeUpdate, token)) {
       client.clear();
       router.replace('/auth/login' as never);
     }

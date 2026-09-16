@@ -4,6 +4,9 @@ export const Alert    = { alert: () => {} };
 export const Text = 'Text';
 export const TouchableOpacity = 'TouchableOpacity';
 export const View = 'View';
+export const StyleSheet = {
+  create: <T extends Record<string, unknown>>(styles: T): T => styles,
+};
 
 // ── Controllable AppState mock ────────────────────────────────────────────────
 // Tests drive foreground/background transitions via __setAppState() and can

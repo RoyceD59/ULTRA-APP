@@ -9,6 +9,7 @@ import BrandLogo from '@/components/BrandLogo';
 import SocialAuthButtons from '@/components/SocialAuthButtons';
 import { resolveReturnTo } from '@/lib/authReturn';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { ExpiredSessionNotice } from '@/components/ExpiredSessionNotice';
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -57,17 +58,12 @@ export default function LoginScreen() {
         <BrandLogo width={104} style={{ marginBottom: 4 }} />
         <Text style={[styles.brandSub, { color: colors.mutedForeground }]}>Sign in to your account</Text>
 
-        {sessionNotice ? (
-          <View
-            accessibilityRole="alert"
-            accessibilityLiveRegion="polite"
-            style={[styles.sessionNotice, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}
-            testID="expired-session-notice"
-          >
-            <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
-            <Text style={[styles.sessionNoticeText, { color: colors.text }]}>{sessionNotice}</Text>
-          </View>
-        ) : null}
+        <ExpiredSessionNotice
+          message={sessionNotice}
+          backgroundColor={colors.warningLight}
+          borderColor={colors.warning}
+          textColor={colors.text}
+        />
 
         {/* Form */}
         <View style={styles.form}>
@@ -144,8 +140,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 32, alignItems: 'center', gap: 8, paddingTop: Platform.OS === 'web' ? 100 : 60 },
   brandSub: { fontSize: 15, marginBottom: 16 },
-  sessionNotice: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
-  sessionNoticeText: { flex: 1, fontSize: 14, lineHeight: 20 },
   form: { width: '100%', gap: 16 },
   field: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '500' as const },
