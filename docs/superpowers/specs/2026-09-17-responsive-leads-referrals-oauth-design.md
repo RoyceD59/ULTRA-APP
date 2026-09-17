@@ -174,18 +174,31 @@ After the referred customer completes the first qualifying paid order:
 - Callers cannot submit discount amounts or another customer's identity.
 - Referral and promotion endpoints are represented in OpenAPI and generated clients.
 
-## External OAuth API
+## Private back-office agent orchestration and OAuth API
+
+The integration is an internal company operations capability embedded in ProjectHub. It is not a Companion feature and is never advertised or rendered to Companion customers.
+
+- Only a currently active ProjectHub administrator may open the agent-operations area.
+- Agent navigation, status, authorization, and audit interfaces are omitted from all public and Companion bundles.
+- Non-admin ProjectHub users cannot discover clients, grants, agent identities, scopes, logs, or orchestration endpoints through menus or API responses.
+- The ProjectHub admin UI may embed approved agent tools through an explicit allowlist; arbitrary user-supplied iframe URLs are prohibited.
+- Embedded tools receive no browser session token through query parameters, referrers, or client-side storage.
+- Frame sources, messaging origins, and message schemas are allowlisted. Content Security Policy and frame restrictions are set deliberately for the approved deployment.
 
 ### Authorization model
 
-Approved external plugins use OAuth 2.1 authorization-code flow with PKCE.
+Human-directed authorization uses OAuth 2.1 authorization-code flow with PKCE. Non-interactive orchestration agents use separately registered confidential service clients with short-lived client-credentials tokens.
 
 - Clients are registered by an administrator.
 - Redirect URIs use exact matching.
 - Access tokens are short lived.
 - Refresh tokens are revocable, rotated, and stored hashed where applicable.
 - Client, user, and grant revocation take effect without waiting for token expiry where sensitive operations require it.
-- Machine-to-machine access, if later needed, receives a separate client-credentials policy and cannot impersonate customers.
+- Service-client secrets are shown only at creation, stored hashed, rotated, and never placed in browser bundles or URLs.
+- Service clients cannot impersonate customers or ProjectHub users.
+- Every service client has an administrator-approved scope allowlist, environment, status, expiry/rotation policy, and network/rate policy.
+- A ProjectHub admin session is required to create, rotate, suspend, revoke, or expand a service client's scopes.
+- A client-credentials token cannot call authorization-management endpoints.
 
 ### Scopes
 
@@ -198,15 +211,43 @@ Approved external plugins use OAuth 2.1 authorization-code flow with PKCE.
 
 Read access does not imply manage access. Monitoring access does not imply personal-data access.
 
+### Agent action safety
+
+- Read-only monitoring and analysis are the default.
+- Mutating operations are individually enumerated; there is no generic execute, SQL, or arbitrary HTTP action.
+- High-impact actions require a ProjectHub administrator approval record before execution.
+- Approval records bind the client, requested action, target, normalized parameters, expiry, and one-time idempotency key.
+- Agents cannot approve their own actions or broaden their own scopes.
+- Destructive actions use an additional confirmation policy and support cancellation before provider dispatch where possible.
+- Per-client and global emergency disable controls fail closed.
+- Agent output is treated as untrusted input and validated against strict schemas before display or execution.
+- Prompts, retrieved content, tool output, and embedded messages cannot override authorization checks.
+
 ### Resource boundaries
 
 - API responses use stable, paginated OpenAPI resources.
 - Customer identity, contact, order, assessment, interaction, and Alison fields are filtered by scope and tenant/account boundary.
 - Secret values, credentials, raw provider payloads, internal security fields, and unrelated customers are never returned.
 - Customer consent and deletion state are enforced when exposing interaction and Alison data.
+- Data returned to agents is minimized for the operational purpose; direct identifiers are omitted unless the granted scope and requested operation require them.
+- Sensitive response fields are masked in ProjectHub displays and excluded from agent logs.
+- Retention limits apply independently to OAuth grants, audit records, agent conversations, and exported operational data.
 - Management endpoints use explicit action schemas and idempotency keys rather than general record mutation.
 - Every sensitive read and management action records actor, client, scopes, target class, timestamp, and outcome in an audit trail.
 - Rate limits apply per client, grant, and sensitive resource.
+
+### Administrative visibility
+
+The ProjectHub admin area provides:
+
+- Registered agents and service clients.
+- Granted scopes and last-use time.
+- Health and failure state.
+- Pending high-impact approvals.
+- Recent read and mutation audit activity.
+- Credential rotation, suspension, and revocation controls.
+
+Companion customers and non-admin team members receive no indication that this internal operations system exists. This lack of UI visibility does not weaken privacy enforcement: customer ownership, deletion, consent, and legal retention rules remain authoritative at the API boundary.
 
 ## Failure handling
 
@@ -214,6 +255,7 @@ Read access does not imply manage access. Monitoring access does not imply perso
 - Outbox processing is lease-based and safe across worker restarts.
 - OAuth denial returns a scope-specific error without leaking whether an inaccessible resource exists.
 - Revoked clients and grants fail closed.
+- Suspended orchestration or unavailable agents do not affect ProjectHub, Companion, checkout, water assessment, or notification availability.
 - Partial external-provider responses are not treated as committed success.
 - Loading clients retain valid cached data and clearly indicate stale or unavailable sections.
 
@@ -249,17 +291,22 @@ Read access does not imply manage access. Monitoring access does not imply perso
 ### OAuth
 
 - Authorization-code and PKCE validation.
+- Client-credentials issuance, secret rotation, service-client expiry, and inability to impersonate users.
 - Exact redirect URI matching, token rotation, revocation, and expiry.
 - Each read and management scope independently allowed and denied.
 - Cross-customer and cross-scope requests fail closed.
 - Interaction and Alison filtering, pagination, rate limits, idempotency, and audit records.
+- Admin-only client management and agent-console access.
+- Non-admin route, menu, API, and direct-URL denial.
+- High-impact approval binding, expiry, one-time execution, cancellation, and self-approval denial.
+- Embedded-origin, frame, message-schema, and token-leakage checks.
 
 ## Delivery order
 
 1. Responsive and resilient ProjectHub/Companion UI plus accurate install messaging.
 2. Lead backup contract, outbox, paired Apps Script, and browser emergency fallback.
 3. Referral/promotion contract separation and end-to-end reward repair.
-4. External OAuth authorization server surface and scoped Companion/Alison resources.
+4. Private ProjectHub agent-operations console, OAuth service authorization, scoped Companion/Alison resources, and approval controls.
 5. Consolidated verification and operational documentation.
 
 Each stage must preserve existing primary functionality and may be validated independently.
