@@ -140,6 +140,7 @@ externalPort = 80
 [[ports]]
 localPort = 20002
 externalPort = 3000
+exposeLocalhost = true
 
 [[ports]]
 localPort = 20100
