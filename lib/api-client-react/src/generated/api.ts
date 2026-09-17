@@ -21,6 +21,9 @@ import type {
 
 import type {
   ActivityItem,
+  AgentClientInput,
+  AgentClientList,
+  AgentToken,
   AiPushEchoAck,
   AiPushEchoInput,
   AiPushEvent,
@@ -71,6 +74,7 @@ import type {
   InventoryStockUpdate,
   InventoryUpdateResult,
   InventoryWishlistDemand,
+  IssueAgentClientTokenBody,
   ListNotificationLogsParams,
   ListProjectHubInstantWaterAssessmentsParams,
   ListTasksParams,
@@ -100,6 +104,7 @@ import type {
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
+  SuspendAgentOauthClientBody,
   SyncTriggered,
   SystemStatusInput,
   SystemStatusRecord,
@@ -109,6 +114,7 @@ import type {
   TaskUpdate,
   TeamTokenRequest,
   TeamTokenResponse,
+  UcCodeValidation,
   UcCustomerDetail,
   UcCustomerList,
   UcCustomersCount,
@@ -120,11 +126,13 @@ import type {
   UcOrderCustomerStageInput,
   UcPasswordChangeResult,
   UcPermanentPasswordInput,
+  UcReferralSnapshot,
   UcTemporaryPasswordInput,
   UcTemporaryPasswordResult,
   UcWaterTestCustomerStageInput,
   UnsyncedRegistrationRecoveryInput,
   UpdateUcAdminLocation200,
+  ValidateUcReferralOrPromotionCodeBody,
   WebhookIngestResult,
   WebhookPayload,
   WhatsAppRequestError,
@@ -6992,3 +7000,832 @@ export const useIngestWebhook = <TError = ErrorType<void>,
       > => {
       return useMutation(getIngestWebhookMutationOptions(options));
     }
+
+export const getValidateUcReferralOrPromotionCodeUrl = () => {
+
+
+
+
+  return `/api/uc/referrals/validate`
+}
+
+export const validateUcReferralOrPromotionCode = async (validateUcReferralOrPromotionCodeBody: ValidateUcReferralOrPromotionCodeBody, options?: RequestInit): Promise<UcCodeValidation> => {
+
+  return customFetch<UcCodeValidation>(getValidateUcReferralOrPromotionCodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(validateUcReferralOrPromotionCodeBody)
+  }
+);}
+
+
+
+
+
+export const getValidateUcReferralOrPromotionCodeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateUcReferralOrPromotionCode>>, TError,{data: BodyType<ValidateUcReferralOrPromotionCodeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateUcReferralOrPromotionCode>>, TError,{data: BodyType<ValidateUcReferralOrPromotionCodeBody>}, TContext> => {
+
+const mutationKey = ['validateUcReferralOrPromotionCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateUcReferralOrPromotionCode>>, {data: BodyType<ValidateUcReferralOrPromotionCodeBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  validateUcReferralOrPromotionCode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateUcReferralOrPromotionCodeMutationResult = NonNullable<Awaited<ReturnType<typeof validateUcReferralOrPromotionCode>>>
+    export type ValidateUcReferralOrPromotionCodeMutationBody = BodyType<ValidateUcReferralOrPromotionCodeBody>
+    export type ValidateUcReferralOrPromotionCodeMutationError = ErrorType<void>
+
+    export const useValidateUcReferralOrPromotionCode = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateUcReferralOrPromotionCode>>, TError,{data: BodyType<ValidateUcReferralOrPromotionCodeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof validateUcReferralOrPromotionCode>>,
+        TError,
+        {data: BodyType<ValidateUcReferralOrPromotionCodeBody>},
+        TContext
+      > => {
+      return useMutation(getValidateUcReferralOrPromotionCodeMutationOptions(options));
+    }
+
+export const getGetUcReferralCodeUrl = () => {
+
+
+
+
+  return `/api/uc/referrals/my-code`
+}
+
+export const getUcReferralCode = async ( options?: RequestInit): Promise<UcReferralSnapshot> => {
+
+  return customFetch<UcReferralSnapshot>(getGetUcReferralCodeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcReferralCodeQueryKey = () => {
+    return [
+    `/api/uc/referrals/my-code`
+    ] as const;
+    }
+
+
+export const getGetUcReferralCodeQueryOptions = <TData = Awaited<ReturnType<typeof getUcReferralCode>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcReferralCode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcReferralCodeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcReferralCode>>> = ({ signal }) => getUcReferralCode({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcReferralCode>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcReferralCodeQueryResult = NonNullable<Awaited<ReturnType<typeof getUcReferralCode>>>
+export type GetUcReferralCodeQueryError = ErrorType<void>
+
+
+
+export function useGetUcReferralCode<TData = Awaited<ReturnType<typeof getUcReferralCode>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcReferralCode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcReferralCodeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getIssueAgentClientTokenUrl = () => {
+
+
+
+
+  return `/api/oauth/token`
+}
+
+/**
+ * Send client_id and client_secret using HTTP Basic authentication. Client secret post authentication is not accepted.
+ * @summary Issue a short-lived private machine-agent token
+ */
+export const issueAgentClientToken = async (issueAgentClientTokenBody: IssueAgentClientTokenBody, options?: RequestInit): Promise<AgentToken> => {
+    const formUrlEncoded = new URLSearchParams();
+formUrlEncoded.append(`grant_type`, issueAgentClientTokenBody.grant_type);
+if(issueAgentClientTokenBody.scope !== undefined) {
+ formUrlEncoded.append(`scope`, issueAgentClientTokenBody.scope);
+ }
+
+  return customFetch<AgentToken>(getIssueAgentClientTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...options?.headers },
+    body: formUrlEncoded
+  }
+);}
+
+
+
+
+
+export const getIssueAgentClientTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueAgentClientToken>>, TError,{data: BodyType<IssueAgentClientTokenBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof issueAgentClientToken>>, TError,{data: BodyType<IssueAgentClientTokenBody>}, TContext> => {
+
+const mutationKey = ['issueAgentClientToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof issueAgentClientToken>>, {data: BodyType<IssueAgentClientTokenBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  issueAgentClientToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type IssueAgentClientTokenMutationResult = NonNullable<Awaited<ReturnType<typeof issueAgentClientToken>>>
+    export type IssueAgentClientTokenMutationBody = BodyType<IssueAgentClientTokenBody>
+    export type IssueAgentClientTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Issue a short-lived private machine-agent token
+ */
+export const useIssueAgentClientToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueAgentClientToken>>, TError,{data: BodyType<IssueAgentClientTokenBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof issueAgentClientToken>>,
+        TError,
+        {data: BodyType<IssueAgentClientTokenBody>},
+        TContext
+      > => {
+      return useMutation(getIssueAgentClientTokenMutationOptions(options));
+    }
+
+export const getListAgentOauthClientsUrl = () => {
+
+
+
+
+  return `/api/oauth/clients`
+}
+
+export const listAgentOauthClients = async ( options?: RequestInit): Promise<AgentClientList> => {
+
+  return customFetch<AgentClientList>(getListAgentOauthClientsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentOauthClientsQueryKey = () => {
+    return [
+    `/api/oauth/clients`
+    ] as const;
+    }
+
+
+export const getListAgentOauthClientsQueryOptions = <TData = Awaited<ReturnType<typeof listAgentOauthClients>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentOauthClients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentOauthClientsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentOauthClients>>> = ({ signal }) => listAgentOauthClients({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentOauthClients>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentOauthClientsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentOauthClients>>>
+export type ListAgentOauthClientsQueryError = ErrorType<void>
+
+
+
+export function useListAgentOauthClients<TData = Awaited<ReturnType<typeof listAgentOauthClients>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentOauthClients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentOauthClientsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAgentOauthClientUrl = () => {
+
+
+
+
+  return `/api/oauth/clients`
+}
+
+export const createAgentOauthClient = async (agentClientInput: AgentClientInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getCreateAgentOauthClientUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentClientInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAgentOauthClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgentOauthClient>>, TError,{data: BodyType<AgentClientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAgentOauthClient>>, TError,{data: BodyType<AgentClientInput>}, TContext> => {
+
+const mutationKey = ['createAgentOauthClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAgentOauthClient>>, {data: BodyType<AgentClientInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAgentOauthClient(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAgentOauthClientMutationResult = NonNullable<Awaited<ReturnType<typeof createAgentOauthClient>>>
+    export type CreateAgentOauthClientMutationBody = BodyType<AgentClientInput>
+    export type CreateAgentOauthClientMutationError = ErrorType<void>
+
+    export const useCreateAgentOauthClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgentOauthClient>>, TError,{data: BodyType<AgentClientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAgentOauthClient>>,
+        TError,
+        {data: BodyType<AgentClientInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAgentOauthClientMutationOptions(options));
+    }
+
+export const getRotateAgentOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/api/oauth/clients/${id}/rotate`
+}
+
+export const rotateAgentOauthClient = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRotateAgentOauthClientUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRotateAgentOauthClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateAgentOauthClient>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rotateAgentOauthClient>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['rotateAgentOauthClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rotateAgentOauthClient>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  rotateAgentOauthClient(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RotateAgentOauthClientMutationResult = NonNullable<Awaited<ReturnType<typeof rotateAgentOauthClient>>>
+
+    export type RotateAgentOauthClientMutationError = ErrorType<void>
+
+    export const useRotateAgentOauthClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateAgentOauthClient>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rotateAgentOauthClient>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getRotateAgentOauthClientMutationOptions(options));
+    }
+
+export const getSuspendAgentOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/api/oauth/clients/${id}/suspend`
+}
+
+export const suspendAgentOauthClient = async (id: string,
+    suspendAgentOauthClientBody?: SuspendAgentOauthClientBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getSuspendAgentOauthClientUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(suspendAgentOauthClientBody)
+  }
+);}
+
+
+
+
+
+export const getSuspendAgentOauthClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suspendAgentOauthClient>>, TError,{id: string;data?: BodyType<SuspendAgentOauthClientBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suspendAgentOauthClient>>, TError,{id: string;data?: BodyType<SuspendAgentOauthClientBody>}, TContext> => {
+
+const mutationKey = ['suspendAgentOauthClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suspendAgentOauthClient>>, {id: string;data?: BodyType<SuspendAgentOauthClientBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  suspendAgentOauthClient(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuspendAgentOauthClientMutationResult = NonNullable<Awaited<ReturnType<typeof suspendAgentOauthClient>>>
+    export type SuspendAgentOauthClientMutationBody = BodyType<SuspendAgentOauthClientBody> | undefined
+    export type SuspendAgentOauthClientMutationError = ErrorType<void>
+
+    export const useSuspendAgentOauthClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suspendAgentOauthClient>>, TError,{id: string;data?: BodyType<SuspendAgentOauthClientBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suspendAgentOauthClient>>,
+        TError,
+        {id: string;data?: BodyType<SuspendAgentOauthClientBody>},
+        TContext
+      > => {
+      return useMutation(getSuspendAgentOauthClientMutationOptions(options));
+    }
+
+export const getListAgentOauthAuditUrl = () => {
+
+
+
+
+  return `/api/oauth/audit`
+}
+
+export const listAgentOauthAudit = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getListAgentOauthAuditUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentOauthAuditQueryKey = () => {
+    return [
+    `/api/oauth/audit`
+    ] as const;
+    }
+
+
+export const getListAgentOauthAuditQueryOptions = <TData = Awaited<ReturnType<typeof listAgentOauthAudit>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentOauthAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentOauthAuditQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentOauthAudit>>> = ({ signal }) => listAgentOauthAudit({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentOauthAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentOauthAuditQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentOauthAudit>>>
+export type ListAgentOauthAuditQueryError = ErrorType<void>
+
+
+
+export function useListAgentOauthAudit<TData = Awaited<ReturnType<typeof listAgentOauthAudit>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentOauthAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentOauthAuditQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAgentMonitorUrl = () => {
+
+
+
+
+  return `/api/integrations/v1/monitor`
+}
+
+export const getAgentMonitor = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getGetAgentMonitorUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAgentMonitorQueryKey = () => {
+    return [
+    `/api/integrations/v1/monitor`
+    ] as const;
+    }
+
+
+export const getGetAgentMonitorQueryOptions = <TData = Awaited<ReturnType<typeof getAgentMonitor>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentMonitor>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAgentMonitorQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentMonitor>>> = ({ signal }) => getAgentMonitor({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentMonitor>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAgentMonitorQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentMonitor>>>
+export type GetAgentMonitorQueryError = ErrorType<void>
+
+
+
+export function useGetAgentMonitor<TData = Awaited<ReturnType<typeof getAgentMonitor>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentMonitor>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAgentMonitorQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAgentCompanionUsersUrl = () => {
+
+
+
+
+  return `/api/integrations/v1/companion/users`
+}
+
+export const listAgentCompanionUsers = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getListAgentCompanionUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentCompanionUsersQueryKey = () => {
+    return [
+    `/api/integrations/v1/companion/users`
+    ] as const;
+    }
+
+
+export const getListAgentCompanionUsersQueryOptions = <TData = Awaited<ReturnType<typeof listAgentCompanionUsers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentCompanionUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentCompanionUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentCompanionUsers>>> = ({ signal }) => listAgentCompanionUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentCompanionUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentCompanionUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentCompanionUsers>>>
+export type ListAgentCompanionUsersQueryError = ErrorType<unknown>
+
+
+
+export function useListAgentCompanionUsers<TData = Awaited<ReturnType<typeof listAgentCompanionUsers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentCompanionUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentCompanionUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAgentInteractionsUrl = () => {
+
+
+
+
+  return `/api/integrations/v1/interactions`
+}
+
+export const listAgentInteractions = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getListAgentInteractionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentInteractionsQueryKey = () => {
+    return [
+    `/api/integrations/v1/interactions`
+    ] as const;
+    }
+
+
+export const getListAgentInteractionsQueryOptions = <TData = Awaited<ReturnType<typeof listAgentInteractions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentInteractions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentInteractionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentInteractions>>> = ({ signal }) => listAgentInteractions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentInteractions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentInteractionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentInteractions>>>
+export type ListAgentInteractionsQueryError = ErrorType<unknown>
+
+
+
+export function useListAgentInteractions<TData = Awaited<ReturnType<typeof listAgentInteractions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentInteractions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentInteractionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAgentAlisonFeedbackUrl = () => {
+
+
+
+
+  return `/api/integrations/v1/alison/feedback`
+}
+
+export const listAgentAlisonFeedback = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getListAgentAlisonFeedbackUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentAlisonFeedbackQueryKey = () => {
+    return [
+    `/api/integrations/v1/alison/feedback`
+    ] as const;
+    }
+
+
+export const getListAgentAlisonFeedbackQueryOptions = <TData = Awaited<ReturnType<typeof listAgentAlisonFeedback>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentAlisonFeedback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentAlisonFeedbackQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentAlisonFeedback>>> = ({ signal }) => listAgentAlisonFeedback({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentAlisonFeedback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentAlisonFeedbackQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentAlisonFeedback>>>
+export type ListAgentAlisonFeedbackQueryError = ErrorType<unknown>
+
+
+
+export function useListAgentAlisonFeedback<TData = Awaited<ReturnType<typeof listAgentAlisonFeedback>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentAlisonFeedback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentAlisonFeedbackQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

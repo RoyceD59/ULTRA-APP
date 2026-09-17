@@ -77,7 +77,8 @@ export async function processHandoffState(
       setHandoffPending(false);
       setHandoffError('This water check link has expired or belongs to another account.');
     } else {
-      setHandoffPending(true);
+      setHandoffPending(false);
+      setHandoffError('Something went wrong securely saving your test. Please try again.');
     }
   }
 }
@@ -93,7 +94,7 @@ export function useConsumeHandoff(
   const [handoffSuccess, setHandoffSuccess] = useState(false);
   const [handoffError, setHandoffError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const attemptConsume = () => {
     processHandoffState(
       token,
       async (handoffToken) => {
@@ -106,7 +107,11 @@ export function useConsumeHandoff(
       setHandoffSuccess,
       setHandoffError
     );
+  };
+
+  useEffect(() => {
+    attemptConsume();
   }, [token]);
 
-  return { handoffPending, handoffSuccess, handoffError, clearHandoffError: () => setHandoffError(null) };
+  return { handoffPending, handoffSuccess, handoffError, clearHandoffError: () => setHandoffError(null), retryHandoff: attemptConsume };
 }

@@ -24,6 +24,7 @@ import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
 import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
 import { sendPushToUser } from "./push.js";
+import { processLeadDeliveryOutbox } from "./lead-delivery.js";
 import {
   checkRestockDemandForProduct,
   getRestockDemandThreshold,
@@ -251,6 +252,15 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  cron.schedule("* * * * *", async () => {
+    try {
+      const processed = await processLeadDeliveryOutbox();
+      if (processed > 0) logger.info({ processed }, "Scheduler: lead delivery outbox processed");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: lead delivery outbox run failed");
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: lead delivery outbox job registered (every minute)");
   // Deliver customer order-status outbox rows.  The transition transaction
   // never calls Expo, so provider outages cannot block webhook acknowledgements.
   cron.schedule("*/2 * * * *", async () => {

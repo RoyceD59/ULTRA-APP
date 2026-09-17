@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import * as Haptics from 'expo-haptics';
@@ -76,17 +77,45 @@ export default function WaterTestScreen() {
   const { user, token } = useAuth();
   const api = useApi();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [view, setView] = useState<ViewState>('form');
   const [assessment, setAssessment] = useState<InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated | null>(null);
   const [actionToken, setActionToken] = useState<string>('');
 
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [pendingAttach, setPendingAttach] = useState<any>(null);
+
   const attachMut = useAttachInstantWaterAssessment();
 
-  const { handoffPending, handoffSuccess, handoffError, clearHandoffError } = useConsumeHandoff((res) => {
+  const { handoffPending, handoffSuccess, handoffError, clearHandoffError, retryHandoff } = useConsumeHandoff((res) => {
     setView('history');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   });
+
+  const attemptAttach = async (parsed: any) => {
+    const pending = parsed.assessment || parsed;
+    if (pending && pending.assessmentId) {
+      setAttachError(null);
+      const attachData: any = {};
+      if (pending.resultToken) attachData.resultToken = pending.resultToken;
+      try {
+        await attachMut.mutateAsync({
+          assessmentId: pending.assessmentId,
+          data: attachData
+        });
+        await AsyncStorage.removeItem('pending_water_test_attach');
+        setPendingAttach(null);
+        setAssessment(pending);
+        setView('history');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } catch (err) {
+        console.warn('Failed to attach pending test on login:', err);
+        setPendingAttach(parsed);
+        setAttachError("We couldn't securely save your previous test to your account. Please try again.");
+      }
+    }
+  };
 
   // On mount or login, check if there's a pending public test to attach
   useEffect(() => {
@@ -94,27 +123,7 @@ export default function WaterTestScreen() {
       AsyncStorage.getItem('pending_water_test_attach').then(val => {
         if (val) {
           try {
-            const parsed = JSON.parse(val);
-            // Handle both legacy (just assessment) and new format
-            const pending = parsed.assessment || parsed;
-            const actionToken = parsed.actionToken;
-
-            if (pending && pending.assessmentId) {
-              const attachData: any = {};
-              if (pending.resultToken) attachData.resultToken = pending.resultToken;
-
-              attachMut.mutateAsync({
-                assessmentId: pending.assessmentId,
-                data: attachData
-              }).then(() => {
-                AsyncStorage.removeItem('pending_water_test_attach');
-                setAssessment(pending);
-                setView('history');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              }).catch((err) => {
-                console.warn('Failed to attach pending test on login:', err);
-              });
-            }
+            attemptAttach(JSON.parse(val));
           } catch (e) {}
         }
       });
@@ -123,27 +132,30 @@ export default function WaterTestScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {view === 'form' && (
+      {view === 'form' ? (
         <FormView
           colors={colors} user={user} token={token} router={router}
           handoffPending={handoffPending} handoffSuccess={handoffSuccess}
           handoffError={handoffError} clearHandoffError={clearHandoffError}
+          retryHandoff={retryHandoff}
+          attachError={attachError} pendingAttach={pendingAttach} attemptAttach={attemptAttach}
+          clearAttachError={() => { setAttachError(null); AsyncStorage.removeItem('pending_water_test_attach'); }}
           onResult={(ass) => { setAssessment(ass); setView('result'); }}
           onHistory={() => setView('history')}
         />
-      )}
-      {view === 'result' && assessment && (
+      ) : null}
+      {view === 'result' && assessment ? (
         <ResultView
           colors={colors} token={token} assessment={assessment}
           actionToken={actionToken} setActionToken={setActionToken}
           onBook={() => setView('booking')} onBack={() => setView('form')}
           onHistory={() => setView('history')} router={router}
         />
-      )}
-      {view === 'history' && (
+      ) : null}
+      {view === 'history' ? (
         <HistoryView colors={colors} onBack={() => setView('form')} token={token} />
-      )}
-      {view === 'booking' && assessment && (
+      ) : null}
+      {view === 'booking' && assessment ? (
         <BookingView
           colors={colors} api={api} assessment={assessment} actionToken={actionToken}
           onBack={() => setView('result')}
@@ -152,7 +164,7 @@ export default function WaterTestScreen() {
             setView('history');
           }}
         />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -182,9 +194,15 @@ interface FormViewProps {
   handoffSuccess?: boolean;
   handoffError?: string | null;
   clearHandoffError?: () => void;
+  retryHandoff?: () => void;
+  attachError?: string | null;
+  pendingAttach?: any;
+  attemptAttach?: (parsed: any) => void;
+  clearAttachError?: () => void;
 }
 
-function FormView({ colors, user, token, handoffPending, handoffSuccess, handoffError, clearHandoffError, onResult, onHistory, router }: FormViewProps) {
+function FormView({ colors, user, token, handoffPending, handoffSuccess, handoffError, clearHandoffError, retryHandoff, attachError, pendingAttach, attemptAttach, clearAttachError, onResult, onHistory, router }: FormViewProps) {
+  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<Draft>({
     firstName: user?.firstName || '',
     phone: user?.phone || '',
@@ -276,17 +294,22 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       await clearDraft('water-test');
       idempKeyRef.current = Crypto.randomUUID(); // reset on success
       onResult(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+    } catch (err: any) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 400) {
+        setError('Please check your details and try again.');
+      } else {
+        setError('Something went wrong connecting to the server. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-      {handoffPending && !token && (
-        <View style={{ backgroundColor: '#FEF3C7', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 20) }} keyboardShouldPersistTaps="handled">
+      {handoffPending && !token ? (
+        <View style={{ backgroundColor: '#FEF3C7', padding: Math.max(insets.top + 8, 16), paddingBottom: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ flex: 1, color: '#92400E', fontSize: 14 }}>
             Please sign in or create an account to view your water check.
           </Text>
@@ -294,32 +317,60 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
             <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Sign In</Text>
           </TouchableOpacity>
         </View>
-      )}
-      {handoffSuccess && (
-        <View style={{ backgroundColor: '#D1FAE5', padding: 12, alignItems: 'center' }}>
+      ) : null}
+      {handoffPending && token ? (
+        <View style={{ backgroundColor: '#DBEAFE', padding: Math.max(insets.top + 8, 16), paddingBottom: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ flex: 1, color: '#1E3A8A', fontSize: 14 }}>
+            Saving your water check securely...
+          </Text>
+          <ActivityIndicator color="#1E3A8A" style={{ marginLeft: 8 }} />
+        </View>
+      ) : null}
+      {handoffSuccess ? (
+        <View style={{ backgroundColor: '#D1FAE5', padding: Math.max(insets.top + 8, 12), paddingBottom: 12, paddingHorizontal: 12, alignItems: 'center' }}>
           <Text style={{ color: '#065F46', fontSize: 14, fontWeight: '500' }}>Assessment saved to your account!</Text>
         </View>
-      )}
-      {handoffError && (
-        <View style={{ backgroundColor: '#FEE2E2', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      ) : null}
+      {handoffError ? (
+        <View style={{ backgroundColor: '#FEE2E2', padding: Math.max(insets.top + 8, 16), paddingBottom: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ flex: 1, color: '#B91C1C', fontSize: 14, lineHeight: 20 }}>
             {handoffError}
           </Text>
+          {retryHandoff ? (
+             <Pressable onPress={retryHandoff} style={({ pressed }) => [{ padding: 6, opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={{ color: '#B91C1C', fontWeight: '600', fontSize: 13 }}>Retry</Text>
+             </Pressable>
+          ) : null}
           <TouchableOpacity onPress={clearHandoffError} style={{ padding: 4, marginLeft: 8 }}>
             <Ionicons name="close" size={20} color="#B91C1C" />
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
+      {attachError ? (
+        <View style={{ backgroundColor: '#FEE2E2', padding: Math.max(insets.top + 8, 16), paddingBottom: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ flex: 1, color: '#B91C1C', fontSize: 14, lineHeight: 20 }}>
+            {attachError}
+          </Text>
+          {attemptAttach && pendingAttach ? (
+             <Pressable onPress={() => attemptAttach(pendingAttach)} style={({ pressed }) => [{ padding: 6, opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={{ color: '#B91C1C', fontWeight: '600', fontSize: 13 }}>Retry</Text>
+             </Pressable>
+          ) : null}
+          <TouchableOpacity onPress={clearAttachError} style={{ padding: 4, marginLeft: 8 }}>
+            <Ionicons name="close" size={20} color="#B91C1C" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
-      <View style={[styles.hero, { backgroundColor: colors.primary }]}>
+      <View style={[styles.hero, { backgroundColor: colors.primary, paddingTop: !handoffPending && !handoffSuccess && !handoffError && !attachError ? Math.max(insets.top + 16, 40) : 24 }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
            <Text style={styles.eyebrow}>FREE · 60 SECONDS · NO LAB NEEDED</Text>
-           {token && (
+           {token ? (
              <TouchableOpacity onPress={onHistory} style={[styles.historyBtn, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="time-outline" size={16} color="#fff" />
                 <Text style={styles.historyBtnText}>History</Text>
              </TouchableOpacity>
-           )}
+           ) : null}
         </View>
         <Text style={styles.heroTitle}>What is actually in your water?</Text>
         <Text style={styles.heroLede}>
@@ -330,7 +381,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       <View style={styles.formContainer}>
         {/* Contact details */}
         <View style={styles.row}>
-          <View style={styles.field}>
+          <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>First name *</Text>
             <TextInput
               value={draft.firstName} onChangeText={v => setField('firstName', v)}
@@ -338,7 +389,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
             />
           </View>
-          <View style={styles.field}>
+          <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>WhatsApp *</Text>
             <TextInput
               value={draft.phone} onChangeText={v => setField('phone', v)}
@@ -349,7 +400,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
         </View>
 
         <View style={styles.row}>
-          <View style={styles.field}>
+          <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Country *</Text>
             <View style={styles.chipsWrap}>
               {COUNTRIES.map(c => (
@@ -377,7 +428,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
             {SOURCES.map(s => (
               <TouchableOpacity key={s.value} onPress={() => setField('source', s.value)}
                 style={[styles.fullChip, { backgroundColor: draft.source === s.value ? colors.primary : colors.surface, borderColor: draft.source === s.value ? colors.primary : colors.border }]}>
-                <Text style={{ fontSize: 14, fontWeight: '500', color: draft.source === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+                <Text style={{ flexShrink: 1, fontSize: 14, fontWeight: '500', color: draft.source === s.value ? '#fff' : colors.text }}>{s.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -389,7 +440,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
             {CONCERNS.map(s => (
               <TouchableOpacity key={s.value} onPress={() => setField('concern', s.value)}
                 style={[styles.fullChip, { backgroundColor: draft.concern === s.value ? colors.primary : colors.surface, borderColor: draft.concern === s.value ? colors.primary : colors.border }]}>
-                <Text style={{ fontSize: 14, fontWeight: '500', color: draft.concern === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+                <Text style={{ flexShrink: 1, fontSize: 14, fontWeight: '500', color: draft.concern === s.value ? '#fff' : colors.text }}>{s.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -407,23 +458,23 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           </View>
         </View>
 
-        {!token && (
+        {!token ? (
           <TouchableOpacity activeOpacity={0.8} onPress={() => setField('consent', !draft.consent)} style={styles.consentRow}>
             <View style={[styles.checkbox, { backgroundColor: draft.consent ? colors.primary : colors.surface, borderColor: draft.consent ? colors.primary : colors.border }]}>
-              {draft.consent && <Ionicons name="checkmark" size={16} color="#fff" />}
+              {draft.consent ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
             </View>
             <Text style={[styles.consentText, { color: colors.mutedForeground }]}>
               Send my result and let an Ultra Clear specialist follow up on WhatsApp. I can opt out any time.
             </Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
-        {!!error && (
+        {error ? (
           <View style={[styles.errorBox, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '30' }]}>
             <Ionicons name="alert-circle-outline" size={16} color={colors.destructive} />
             <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
           </View>
-        )}
+        ) : null}
 
         <TouchableOpacity onPress={submit} disabled={submitting} style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}>
           {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Show my water reading</Text>}
@@ -453,9 +504,10 @@ function ResultView({ colors, token, assessment, actionToken, setActionToken, on
   const result = assessment.result;
   const isPublic = !token && 'resultToken' in assessment && assessment.resultToken;
   const [verifyVisible, setVerifyVisible] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleWhatsApp = () => {
-    const text = `Hello Ultra Clear, here is my water check result.\nReference: ${assessment.reference}\nResult: Hardness ${result.bands.hardness}, Taste ${result.bands.taste}, Sediment ${result.bands.sediment}, Microbial ${result.bands.microbial}\nRecommendation: ${result.recommendation.name}`;
+    const text = `Hello Ultra Clear, here is my water check result.\nReference: ${assessment.reference}\nResult: Hardness ${result.bands?.hardness || 'Unknown'}, Taste ${result.bands?.taste || 'Unknown'}, Sediment ${result.bands?.sediment || 'Unknown'}, Microbial ${result.bands?.microbial || 'Unknown'}\nRecommendation: ${result.recommendation?.name || 'Please contact us'}`;
     openWhatsApp(text);
   };
 
@@ -477,38 +529,40 @@ function ResultView({ colors, token, assessment, actionToken, setActionToken, on
   };
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-      <TouchableOpacity onPress={onBack} style={{ marginBottom: 16 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingTop: Math.max(insets.top + 16, 20), paddingBottom: Math.max(insets.bottom + 40, 40) }}>
+      <TouchableOpacity onPress={onBack} style={{ marginBottom: 16, alignSelf: 'flex-start' }}>
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
 
       <View style={styles.resultHeader}>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>YOUR INDICATIVE READING</Text>
-        <Text style={[styles.rTitle, { color: colors.text }]}>Water profile</Text>
-        <Text style={[styles.rSub, { color: colors.mutedForeground }]}>Ref: {assessment.reference}</Text>
+        <Text style={[styles.rTitle, { color: colors.text, textAlign: 'center' }]}>Water profile</Text>
+        <Text style={[styles.rSub, { color: colors.mutedForeground, textAlign: 'center' }]}>Ref: {assessment.reference}</Text>
       </View>
 
       <View style={styles.bands}>
-        <BandBar name="Hardness & scale" level={result.bands.hardness} colors={colors} />
-        <BandBar name="Taste & odour" level={result.bands.taste} colors={colors} />
-        <BandBar name="Sediment & clarity" level={result.bands.sediment} colors={colors} />
-        <BandBar name="Microbial risk" level={result.bands.microbial} colors={colors} />
+        <BandBar name="Hardness & scale" level={result.bands?.hardness || 'Unknown'} colors={colors} />
+        <BandBar name="Taste & odour" level={result.bands?.taste || 'Unknown'} colors={colors} />
+        <BandBar name="Sediment & clarity" level={result.bands?.sediment || 'Unknown'} colors={colors} />
+        <BandBar name="Microbial risk" level={result.bands?.microbial || 'Unknown'} colors={colors} />
       </View>
 
-      <View style={[styles.recBox, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
-        <Text style={[styles.eyebrow, { color: colors.primary }]}>BEST MATCH</Text>
-        <Text style={[styles.recName, { color: colors.text }]}>{result.recommendation.name}</Text>
-        <Text style={[styles.recWhy, { color: colors.mutedForeground }]}>{result.recommendation.explanation}</Text>
-      </View>
+      {result.recommendation ? (
+        <View style={[styles.recBox, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
+          <Text style={[styles.eyebrow, { color: colors.primary }]}>BEST MATCH</Text>
+          <Text style={[styles.recName, { color: colors.text }]}>{result.recommendation.name}</Text>
+          <Text style={[styles.recWhy, { color: colors.mutedForeground }]}>{result.recommendation.explanation}</Text>
+        </View>
+      ) : null}
 
-      {result.areaFlag === 'rift_valley_fluoride' && (
+      {result.areaFlag === 'rift_valley_fluoride' ? (
         <View style={[styles.flagBox, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
           <Text style={[styles.flagText, { color: '#92400E' }]}>
             <Text style={{ fontWeight: '700' }}>Rift Valley Flag: </Text>
             Groundwater across the Rift Valley commonly carries elevated fluoride. That needs a laboratory test, not a field kit. We flag it for the technician so it is measured properly.
           </Text>
         </View>
-      )}
+      ) : null}
 
       <View style={[styles.nextBox, { borderTopColor: colors.border }]}>
         <Text style={[styles.nextTitle, { color: colors.text }]}>Next steps</Text>
@@ -518,26 +572,26 @@ function ResultView({ colors, token, assessment, actionToken, setActionToken, on
             : 'A specialist can send the right options for this profile on WhatsApp.'}
         </Text>
 
-        {result.serviceAvailable && (
+        {result.serviceAvailable ? (
           <TouchableOpacity onPress={handleBookClick} style={[styles.actionBtn, { backgroundColor: colors.primary }]}>
              <Text style={styles.actionBtnText}>Book a physical water test</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
         <TouchableOpacity onPress={handleWhatsApp} style={[styles.actionBtn, { backgroundColor: '#25D366' }]}>
            <Text style={styles.actionBtnText}>Send result on WhatsApp</Text>
         </TouchableOpacity>
 
-        {isPublic && (
+        {isPublic ? (
           <TouchableOpacity onPress={handleSaveToAccount} style={[styles.ghostBtn, { borderColor: colors.primary }]}>
              <Text style={[styles.ghostBtnText, { color: colors.primary }]}>Sign in to save to my account</Text>
           </TouchableOpacity>
-        )}
-        {token && (
+        ) : null}
+        {token ? (
           <TouchableOpacity onPress={onHistory} style={[styles.ghostBtn, { borderColor: colors.primary }]}>
              <Text style={[styles.ghostBtnText, { color: colors.primary }]}>View in my account</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
@@ -554,15 +608,15 @@ function ResultView({ colors, token, assessment, actionToken, setActionToken, on
 }
 
 function BandBar({ name, level, colors }: { name: string, level: string, colors: any }) {
-  const levels: Record<string, number> = { Low: 1, Moderate: 2, High: 3 };
-  const val = levels[level] || 1;
-  const pct = (val / 3) * 100;
-  const color = level === 'High' ? colors.destructive : level === 'Moderate' ? '#F59E0B' : colors.success;
+  const levels: Record<string, number> = { Low: 1, Moderate: 2, High: 3, Unknown: 0 };
+  const val = levels[level] || 0;
+  const pct = val === 0 ? 0 : (val / 3) * 100;
+  const color = level === 'High' ? colors.destructive : level === 'Moderate' ? '#F59E0B' : level === 'Low' ? colors.success : colors.muted;
 
   return (
     <View style={{ marginBottom: 16 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{name}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text, flexShrink: 1, marginRight: 8 }}>{name}</Text>
         <Text style={{ fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, color }}>{level}</Text>
       </View>
       <View style={{ height: 8, backgroundColor: colors.border, borderRadius: 4, overflow: 'hidden' }}>
@@ -583,11 +637,12 @@ interface HistoryViewProps {
 }
 
 function HistoryView({ colors, onBack, token }: HistoryViewProps) {
-  const { data, isLoading, error } = useListAuthenticatedInstantWaterAssessments();
+  const { data, isLoading, error, refetch } = useListAuthenticatedInstantWaterAssessments();
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={[styles.historyHeader, { backgroundColor: colors.primary }]}>
+      <View style={[styles.historyHeader, { backgroundColor: colors.primary, paddingTop: Math.max(insets.top + 8, 16) }]}>
         <TouchableOpacity onPress={onBack} style={{ padding: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -602,33 +657,38 @@ function HistoryView({ colors, onBack, token }: HistoryViewProps) {
       ) : isLoading ? (
          <View style={{ padding: 40, alignItems: 'center' }}><ActivityIndicator color={colors.primary} /></View>
       ) : error ? (
-         <View style={{ padding: 24 }}><Text style={{ color: colors.destructive }}>Failed to load history.</Text></View>
-      ) : data?.assessments.length === 0 ? (
+         <View style={{ padding: 24, alignItems: 'center' }}>
+            <Text style={{ color: colors.destructive, textAlign: 'center', marginBottom: 16 }}>Failed to load history securely.</Text>
+            <Pressable onPress={() => refetch()} style={({ pressed }) => [{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 }]}>
+               <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+            </Pressable>
+         </View>
+      ) : data?.assessments && data.assessments.length === 0 ? (
          <View style={{ padding: 40, alignItems: 'center' }}>
             <Ionicons name="flask-outline" size={48} color={colors.border} />
             <Text style={{ color: colors.mutedForeground, marginTop: 12 }}>No tests found.</Text>
          </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          {data?.assessments.map((item: InstantWaterAssessment) => (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: Math.max(insets.bottom + 16, 16) }}>
+          {data?.assessments?.map((item: InstantWaterAssessment) => (
             <View key={item.assessmentId} style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{item.reference}</Text>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, flexShrink: 1 }}>{item.reference}</Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, marginLeft: 8 }}>
                   {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
                 </Text>
               </View>
               <View style={styles.historyBandsRow}>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Hardness: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.hardness}</Text></Text>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Taste: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.taste}</Text></Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Hardness: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands?.hardness || 'N/A'}</Text></Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Taste: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands?.taste || 'N/A'}</Text></Text>
               </View>
               <View style={styles.historyBandsRow}>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Sediment: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.sediment}</Text></Text>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Microbial: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands.microbial}</Text></Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Sediment: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands?.sediment || 'N/A'}</Text></Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Microbial: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands?.microbial || 'N/A'}</Text></Text>
               </View>
               <View style={[styles.statusPill, { backgroundColor: colors.surface, marginTop: 10 }]}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.mutedForeground, textTransform: 'uppercase' }}>
-                  {item.serviceState.replace(/_/g, ' ')}
+                  {item.serviceState ? item.serviceState.replace(/_/g, ' ') : 'UNKNOWN'}
                 </Text>
               </View>
             </View>
@@ -658,6 +718,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const insets = useSafeAreaInsets();
 
   const bookMut = useRequestInstantWaterPhysicalTest();
   const idempKeyRef = useRef(Crypto.randomUUID());
@@ -701,16 +762,21 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
       });
       idempKeyRef.current = Crypto.randomUUID(); // reset on success
       onComplete();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Booking failed.');
+    } catch (err: any) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 400) {
+        setError('Please check your booking details and try again.');
+      } else {
+        setError('Booking failed to submit securely. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-      <TouchableOpacity onPress={onBack} style={{ marginBottom: 16 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingTop: Math.max(insets.top + 16, 20), paddingBottom: Math.max(insets.bottom + 40, 40) }} keyboardShouldPersistTaps="handled">
+      <TouchableOpacity onPress={onBack} style={{ marginBottom: 16, alignSelf: 'flex-start' }}>
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
 
@@ -742,12 +808,12 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
           <MediaPicker items={media} onChange={setMedia} maxItems={4} label="Attach Photos & Videos (optional)" />
         </View>
 
-        {!!error && (
+        {error ? (
           <View style={[styles.errorBox, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '30' }]}>
             <Ionicons name="alert-circle-outline" size={16} color={colors.destructive} />
             <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
           </View>
-        )}
+        ) : null}
 
         <TouchableOpacity onPress={submit} disabled={submitting} style={[styles.submitBtn, { backgroundColor: submitting ? colors.muted : colors.primary, marginTop: 12 }]}>
           {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Confirm Booking</Text>}
@@ -796,8 +862,13 @@ function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }
         }
       });
       setStep('confirm');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification request failed');
+    } catch (err: any) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 400) {
+        setError('Verification request rejected. Please try again later.');
+      } else {
+        setError('Verification request failed securely. Please try again.');
+      }
     } finally {
       setBusy(false);
     }
@@ -813,17 +884,24 @@ function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }
       } else {
         setError('Invalid code');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+    } catch (err: any) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 400 || status === 404) {
+        setError('Invalid or expired code. Please request a new one.');
+      } else {
+        setError('Verification failed securely. Please try again.');
+      }
     } finally {
       setBusy(false);
     }
   };
 
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+        <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom + 24, 24) }]}>
           <TouchableOpacity onPress={onClose} style={styles.modalClose}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -837,11 +915,11 @@ function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }
                <View style={styles.colChips}>
                  <TouchableOpacity onPress={() => setChannel('whatsapp')} style={[styles.fullChip, { backgroundColor: channel === 'whatsapp' ? colors.primary : colors.surface, borderColor: channel === 'whatsapp' ? colors.primary : colors.border }]}>
                    <Ionicons name="logo-whatsapp" size={18} color={channel === 'whatsapp' ? '#fff' : colors.text} />
-                   <Text style={{ fontSize: 14, fontWeight: '600', color: channel === 'whatsapp' ? '#fff' : colors.text, marginLeft: 8 }}>Send via WhatsApp</Text>
+                   <Text style={{ flexShrink: 1, flexWrap: 'wrap', fontSize: 14, fontWeight: '600', color: channel === 'whatsapp' ? '#fff' : colors.text, marginLeft: 8 }}>Send via WhatsApp</Text>
                  </TouchableOpacity>
                  <TouchableOpacity onPress={() => setChannel('sms')} style={[styles.fullChip, { backgroundColor: channel === 'sms' ? colors.primary : colors.surface, borderColor: channel === 'sms' ? colors.primary : colors.border }]}>
                    <Ionicons name="chatbubble-outline" size={18} color={channel === 'sms' ? '#fff' : colors.text} />
-                   <Text style={{ fontSize: 14, fontWeight: '600', color: channel === 'sms' ? '#fff' : colors.text, marginLeft: 8 }}>Send via SMS</Text>
+                   <Text style={{ flexShrink: 1, flexWrap: 'wrap', fontSize: 14, fontWeight: '600', color: channel === 'sms' ? '#fff' : colors.text, marginLeft: 8 }}>Send via SMS</Text>
                  </TouchableOpacity>
                </View>
                {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
@@ -882,7 +960,8 @@ const styles = StyleSheet.create({
 
   formContainer: { padding: 20, gap: 20 },
   row: { flexDirection: 'row', gap: 12 },
-  field: { flex: 1, gap: 6 },
+  field: { gap: 6 },
+  rowField: { flex: 1, minWidth: 0 },
   label: { fontSize: 13, fontWeight: '600' },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
 
@@ -917,14 +996,14 @@ const styles = StyleSheet.create({
   nextTitle: { fontSize: 18, fontWeight: '700' },
   nextBody: { fontSize: 14, lineHeight: 22, marginBottom: 8 },
 
-  actionBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  ghostBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
-  ghostBtnText: { fontSize: 15, fontWeight: '600' },
+  actionBtn: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center' },
+  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700', textAlign: 'center', flexShrink: 1 },
+  ghostBtn: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
+  ghostBtnText: { fontSize: 15, fontWeight: '600', textAlign: 'center', flexShrink: 1 },
 
   disclaimer: { fontSize: 11, lineHeight: 18, marginTop: 32, textAlign: 'center' },
 
-  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   historyTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
   historyCard: { padding: 16, borderRadius: 12, borderWidth: 1 },
   historyBandsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },

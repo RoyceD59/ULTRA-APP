@@ -50,6 +50,7 @@ const ADMIN_NAVIGATION = [
   ["Locations", "/admin/locations", MapPin],
   ["Customers", "/admin/customers", Users],
   ["Unsynced Registrations", "/admin/unsynced-registrations", AlertTriangle],
+  ["Agent Operations", "/admin/agent-operations", Bot],
 ] as const;
 
 const SECURITY_BANNER_DISMISS_KEY = "ph_sec_mpesa_dismissed";

@@ -258,7 +258,8 @@
                   country is one line: set live:true and list its areas.
    ══════════════════════════════════════════════════════════════════════════ */
 
-const UC_LEADS_URL = 'https://script.google.com/macros/s/AKfycby-MFRcEDl4cZRF3QlwK36TzJLcJlD3hKsPpcS4aWjhl0PfQpFUloG36irYshwtCFtW/exec';
+/* Leave empty until the company verifies the paired POST-only deployment. */
+const UC_LEADS_URL = '';
 const UC_WHATSAPP  = '254717774049';
 
 const UC_MARKETS = [
@@ -455,46 +456,28 @@ function render(out) {
   postHeight();
 }
 
-/* ── transport: JSONP GET, identical to the rep form ── */
+/* ── transport: POST-only emergency fallback; never put lead data in a URL ── */
 function ucSend(url, data, cb, opts) {
   opts = opts || {};
   if (!url || url === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
     return cb({ status: 'error', reason: 'unconfigured' });
   }
-  var name = 'ucCb' + Date.now() + Math.floor(Math.random() * 1000);
-  var tag = document.createElement('script');
-  var done = false, settleTimer = null;
-
-  function cleanup() {
-    clearTimeout(timer); clearTimeout(settleTimer);
-    window.removeEventListener('error', onWinError, true);
-    try { delete window[name]; } catch (e) { window[name] = undefined; }
-    if (tag.parentNode) tag.parentNode.removeChild(tag);
-  }
-  function finish(res) { if (done) return; done = true; cleanup(); cb(res); }
-  function settle(reason) {
-    if (done || settleTimer) return;
-    settleTimer = setTimeout(function () { finish({ status: 'error', reason: reason }); }, 300);
-  }
-  function onWinError(e) {
-    if (done) return;
-    var f = (e && e.filename) || '';
-    if (f.indexOf('script.google') !== -1 || f.indexOf('googleusercontent') !== -1) settle('stale');
-  }
-  window.addEventListener('error', onWinError, true);
-  window[name] = function (res) { finish(res || {}); };
-  tag.onload  = function () { settle('stale'); };
-  tag.onerror = function () { finish({ status: 'error', reason: 'network' }); };
-
-  var qs = Object.keys(data).map(function (k) {
-    var val = data[k] == null ? '' : String(data[k]);
-    if (opts.maxField && val.length > opts.maxField) val = val.slice(0, opts.maxField);
-    return encodeURIComponent(k) + '=' + encodeURIComponent(val);
-  }).join('&');
-  var timer = setTimeout(function () { finish({ status: 'error', reason: 'timeout' }); },
-                         opts.timeout || 20000);
-  tag.src = url + '?callback=' + name + '&' + qs;
-  document.head.appendChild(tag);
+  var controller = new AbortController();
+  var timer = setTimeout(function () { controller.abort(); }, opts.timeout || 8000);
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ schemaVersion: 1, submissionId: data.submissionId,
+      idempotencyKey: data.submissionId, firstName: data.firstName, phone: data.phone,
+      country: data.country, area: data.city, source: data.waterSource, concern: data.useCase,
+      setting: data.setting, consent: data.consent, consentVersion: 'water-check-v1',
+      sourceAttribution: { src: data.source, utm: data.utm }, assessmentId: '', reference: '' }),
+    signal: controller.signal
+  }).then(function (res) {
+    return res.json().catch(function () { return { status: 'error', reason: 'invalid_response' }; });
+  }).then(cb).catch(function (err) {
+    cb({ status: 'error', reason: err && err.name === 'AbortError' ? 'timeout' : 'network' });
+  }).finally(function () { clearTimeout(timer); });
 }
 
 /* ── iframe auto-height for blog embeds ── */

@@ -13,6 +13,7 @@ import {
   processPendingReferralSettlements,
   processReferralSettlementAlerts,
   deleteOrderWithReferralRelease,
+  setReferralRuleLookupForTests,
 } from "../routes/referrals.js";
 import { finalizeRecoveryOrder } from "../routes/uc.js";
 
@@ -41,7 +42,7 @@ async function attribute(referrer: number, invited: number, code = "TEST-CODE") 
     VALUES($1,$2,$3)`, [referrer, invited, code]);
 }
 
-describe("durable referral lifecycle", () => {
+describe("durable referral lifecycle", { concurrency: false }, () => {
   before(async () => {
     stamp = `${Date.now()}-${process.pid}`;
     await pool.query(`INSERT INTO uc_rewards_rules(event_type,label,points_value,active)
@@ -53,6 +54,7 @@ describe("durable referral lifecycle", () => {
     base = `http://127.0.0.1:${address.port}/api`;
   });
   after(async () => {
+    setReferralRuleLookupForTests(null);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     if (orderIds.length) {
       await pool.query(`DELETE FROM uc_rewards_ledger WHERE ref_id LIKE 'referral:%' OR ref_id LIKE 'referral-reversal:%'`);
@@ -62,16 +64,24 @@ describe("durable referral lifecycle", () => {
     if (ids.length) await pool.query("DELETE FROM uc_referral_attributions WHERE referrer_user_id=ANY($1::int[]) OR referred_user_id=ANY($1::int[])", [ids]);
     if (orderIds.length) await pool.query("DELETE FROM uc_orders WHERE id=ANY($1::int[])", [orderIds]);
     if (ids.length) await pool.query("DELETE FROM uc_users WHERE id=ANY($1::int[])", [ids]);
-    if (teamUserIds.length) await db.delete(teamUsersTable).where(inArray(teamUsersTable.id, teamUserIds));
+    if (teamUserIds.length) {
+      await pool.query(
+        "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id=ANY($1::text[])",
+        [teamUserIds],
+      );
+      await db.delete(teamUsersTable).where(inArray(teamUsersTable.id, teamUserIds));
+    }
   });
 
   it("rejects self attribution and first attribution wins; signup alone grants nothing", async () => {
     const owner = await user("owner"), invitee = await user("invitee");
-    await pool.query(`INSERT INTO uc_referral_codes(code,owner_email,owner_name) VALUES($1,$2,'Owner')`, ["FIRST", owner.email]);
-    await pool.query(`INSERT INTO uc_referral_codes(code,owner_email,owner_name) VALUES($1,$2,'Other')`, ["SECOND", (await user("other")).email]);
-    await registerReferralAtSignup(owner.email, "FIRST");
-    await registerReferralAtSignup(invitee.email, "FIRST");
-    await registerReferralAtSignup(invitee.email, "SECOND");
+    const firstCode = `FIRST-${stamp}`;
+    const secondCode = `SECOND-${stamp}`;
+    await pool.query(`INSERT INTO uc_referral_codes(code,owner_email,owner_name) VALUES($1,$2,'Owner')`, [firstCode, owner.email]);
+    await pool.query(`INSERT INTO uc_referral_codes(code,owner_email,owner_name) VALUES($1,$2,'Other')`, [secondCode, (await user("other")).email]);
+    await registerReferralAtSignup(owner.email, firstCode);
+    await registerReferralAtSignup(invitee.email, firstCode);
+    await registerReferralAtSignup(invitee.email, secondCode);
     const a = await pool.query("SELECT * FROM uc_referral_attributions WHERE referred_user_id=$1", [invitee.id]);
     assert.equal(a.rows.length, 1); assert.equal(Number(a.rows[0].referrer_user_id), owner.id);
     const self = await pool.query("SELECT count(*)::int n FROM uc_referral_attributions WHERE referred_user_id=$1", [owner.id]);
@@ -89,8 +99,14 @@ describe("durable referral lifecycle", () => {
     const paid = await order(i.id); assert.equal((await qualifyReferralSuccessfulPayment(paid)).issued, true);
     assert.equal((await qualifyReferralSuccessfulPayment(paid)).issued, false, "replay is idempotent");
     const c = await pool.query("SELECT count(*)::int n FROM uc_referral_conversions WHERE qualifying_order_id=$1", [paid]);
-    const b = await pool.query("SELECT count(*)::int n,coalesce(sum(points),0)::int points FROM uc_referral_benefits WHERE conversion_id=(SELECT id FROM uc_referral_conversions WHERE qualifying_order_id=$1)", [paid]);
+    const b = await pool.query(`SELECT count(*)::int n,coalesce(sum(points),0)::int points,
+      coalesce(max(discount_percent) FILTER (WHERE recipient_role='referred' AND kind='discount'),0)::int referred_discount
+      FROM uc_referral_benefits WHERE conversion_id=(SELECT id FROM uc_referral_conversions WHERE qualifying_order_id=$1)`, [paid]);
     assert.equal(Number(c.rows[0].n), 1); assert.equal(Number(b.rows[0].n), 4); assert.equal(Number(b.rows[0].points), 74);
+    assert.equal(Number(b.rows[0].referred_discount), 10);
+    const ledger = await pool.query(`SELECT points FROM uc_rewards_ledger
+      WHERE user_id=$1 AND ref_id LIKE 'referral:%' ORDER BY id DESC LIMIT 1`, [r.id]);
+    assert.equal(Number(ledger.rows[0].points), 37);
   });
 
   it("qualifies the earliest successful purchase even when a later paid row already exists", async () => {
@@ -122,7 +138,10 @@ describe("durable referral lifecycle", () => {
   it("retains a failed settlement and later completes it without duplicate benefits", async () => {
     const r = await user("retry-referrer"), i = await user("retry-invitee"); await attribute(r.id, i.id);
     const paid = await order(i.id);
-    await pool.query("ALTER TABLE uc_rewards_rules RENAME TO uc_rewards_rules_retry_test");
+    setReferralRuleLookupForTests(async (orderId) => {
+      if (orderId === paid) throw new Error("deliberate reward-rule lookup failure");
+      return undefined;
+    });
     try {
       await enqueueReferralSettlement(paid);
       await processPendingReferralSettlements();
@@ -130,7 +149,7 @@ describe("durable referral lifecycle", () => {
       assert.equal(pending.rows[0].status, "pending"); assert.equal(Number(pending.rows[0].attempts), 1);
       assert.ok(String(pending.rows[0].last_error).length > 0);
     } finally {
-      await pool.query("ALTER TABLE uc_rewards_rules_retry_test RENAME TO uc_rewards_rules");
+      setReferralRuleLookupForTests(null);
     }
     await pool.query("UPDATE uc_referral_settlements SET next_attempt_at=now() WHERE order_id=$1", [paid]);
     await processPendingReferralSettlements();

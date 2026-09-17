@@ -35,6 +35,7 @@ import ucRewardsRouter from "./uc-rewards.js";
 import adminUnsyncedRegistrationsRouter from "./admin-unsynced-registrations.js";
 import instantWaterCheckRouter from "./instant-water-check.js";
 import orderStatusWebhookRouter from "./order-status-webhook.js";
+import agentOauthRouter from "./agent-oauth.js";
 
 const router: IRouter = Router();
 
@@ -72,6 +73,7 @@ router.use(projectsRouter);
 router.use(tasksRouter);
 router.use(dashboardRouter);
 router.use(anthropicRouter);
+router.use(agentOauthRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);

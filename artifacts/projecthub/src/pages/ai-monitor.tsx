@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { API_ORIGIN } from '@/lib/api-base';
+import { getAuthHeaders } from '@/lib/team-auth';
 
 const BASE = API_ORIGIN;
 
@@ -208,7 +209,7 @@ const CHAT_GREETING: ChatMsg = {
 };
 
 async function fetchConversationTranscript(convId: number, base: string) {
-  const res = await fetch(`${base}/api/anthropic/conversations/${convId}`);
+  const res = await fetch(`${base}/api/anthropic/conversations/${convId}`, { headers: getAuthHeaders() ?? {} });
   if (!res.ok) return null;
   return await res.json() as { id: number; messages: { id: number; role: string; content: string }[] };
 }
@@ -288,7 +289,7 @@ export function ChatPanel() {
   async function ensureConversation(): Promise<number> {
     if (convIdRef.current !== null) return convIdRef.current;
     const res = await fetch(`${BASE}/api/anthropic/conversations`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(getAuthHeaders() ?? {}) },
       body: JSON.stringify({ title: 'ProjectHub Monitor Chat' }),
     });
     const data = await res.json();
@@ -347,7 +348,7 @@ export function ChatPanel() {
     try {
       const convId = await ensureConversation();
       const res = await fetch(`${BASE}/api/anthropic/conversations/${convId}/messages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(getAuthHeaders() ?? {}) },
         body: JSON.stringify({ content: q }),
       });
       if (!res.body) throw new Error('No response body');

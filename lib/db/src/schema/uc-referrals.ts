@@ -21,6 +21,10 @@ export const ucReferralCodesTable = pgTable("uc_referral_codes", {
   conversions:      integer("conversions").notNull().default(0),
   /** Total KES credits the owner has earned through conversions. */
   creditsEarnedKes: integer("credits_earned_kes").notNull().default(0),
+  active:           boolean("active").notNull().default(true),
+  expiresAt:        timestamp("expires_at", { withTimezone: true }),
+  maxReferrals:     integer("max_referrals"),
+  firstOrderDiscountPercent: integer("first_order_discount_percent").notNull().default(10),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

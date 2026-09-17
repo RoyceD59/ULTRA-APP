@@ -46,6 +46,56 @@ function shutdown(server: ReturnType<typeof app.listen>, signal: string) {
 // Add any new columns to sheet_syncs that may not exist on older deployments.
 // Uses IF NOT EXISTS so it is safe to run on every startup.
 async function applyStartupMigrations(): Promise<void> {
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS agent_oauth_clients (
+      id text PRIMARY KEY,
+      name text NOT NULL,
+      secret_hash text NOT NULL,
+      scopes jsonb NOT NULL DEFAULT '[]'::jsonb,
+      status text NOT NULL DEFAULT 'active',
+      created_by text NOT NULL,
+      expires_at timestamptz,
+      last_used_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS agent_oauth_clients_status_idx ON agent_oauth_clients(status);
+    CREATE TABLE IF NOT EXISTS agent_oauth_tokens (
+      id bigserial PRIMARY KEY,
+      client_id text NOT NULL REFERENCES agent_oauth_clients(id) ON DELETE CASCADE,
+      token_hash text NOT NULL UNIQUE,
+      scopes jsonb NOT NULL DEFAULT '[]'::jsonb,
+      expires_at timestamptz NOT NULL,
+      revoked_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS agent_oauth_tokens_client_idx ON agent_oauth_tokens(client_id);
+    CREATE TABLE IF NOT EXISTS agent_oauth_audit (
+      id bigserial PRIMARY KEY,
+      client_id text,
+      actor_id text,
+      action text NOT NULL,
+      target text,
+      scopes jsonb NOT NULL DEFAULT '[]'::jsonb,
+      outcome text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS agent_oauth_audit_created_idx ON agent_oauth_audit(created_at);
+    CREATE TABLE IF NOT EXISTS agent_oauth_approvals (
+      id text PRIMARY KEY,
+      client_id text NOT NULL,
+      action text NOT NULL,
+      target text NOT NULL,
+      parameters_hash text NOT NULL,
+      approved_by text NOT NULL,
+      expires_at timestamptz NOT NULL,
+      used_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  logger.info("Startup migration: private agent OAuth tables ensured");
+
   await pool.query(`
     ALTER TABLE sheet_syncs
       ADD COLUMN IF NOT EXISTS last_error      text,
@@ -217,7 +267,7 @@ async function applyStartupMigrations(): Promise<void> {
       referral_code   text,
       user_email      text,
       status          text NOT NULL DEFAULT 'pending',
-      attempts        integer NOT NULL DEFAULT 1,
+      attempts        integer NOT NULL DEFAULT 0,
       last_error      text,
       next_attempt_at timestamptz NOT NULL DEFAULT now(),
       claim_token     text,
@@ -237,6 +287,7 @@ async function applyStartupMigrations(): Promise<void> {
       updated_at      timestamptz NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`ALTER TABLE uc_referral_settlements ALTER COLUMN attempts SET DEFAULT 0`);
   await pool.query(`
     ALTER TABLE uc_referral_settlements
       ALTER COLUMN referral_code DROP NOT NULL,
@@ -1064,10 +1115,19 @@ async function applyStartupMigrations(): Promise<void> {
       referred_emails   json         NOT NULL DEFAULT '[]'::json,
       conversions       integer      NOT NULL DEFAULT 0,
       credits_earned_kes integer     NOT NULL DEFAULT 0,
+      active            boolean      NOT NULL DEFAULT true,
+      expires_at        timestamptz,
+      max_referrals     integer,
+      first_order_discount_percent integer NOT NULL DEFAULT 10,
       created_at        timestamptz  NOT NULL DEFAULT now(),
       updated_at        timestamptz  NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`ALTER TABLE uc_referral_codes
+    ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true,
+    ADD COLUMN IF NOT EXISTS expires_at timestamptz,
+    ADD COLUMN IF NOT EXISTS max_referrals integer,
+    ADD COLUMN IF NOT EXISTS first_order_discount_percent integer NOT NULL DEFAULT 10`);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS uc_referral_codes_code_idx
       ON uc_referral_codes (code);
@@ -1320,6 +1380,27 @@ async function applyStartupMigrations(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS instant_water_audit_events_assessment_idx ON instant_water_audit_events (assessment_id, created_at);
     CREATE INDEX IF NOT EXISTS instant_water_audit_events_actor_idx ON instant_water_audit_events (actor_team_user_id, created_at);
+    CREATE TABLE IF NOT EXISTS instant_water_lead_outbox (
+      id text PRIMARY KEY,
+      assessment_id text NOT NULL REFERENCES instant_water_assessments(id) ON DELETE CASCADE,
+      idempotency_key text NOT NULL UNIQUE,
+      submission_id text NOT NULL,
+      payload jsonb NOT NULL,
+      status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','delivered','review')),
+      attempts integer NOT NULL DEFAULT 0,
+      next_attempt_at timestamptz NOT NULL DEFAULT now(),
+      claimed_at timestamptz,
+      claim_token text,
+      delivered_at timestamptz,
+      provider_ack text,
+      last_error text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    ALTER TABLE instant_water_lead_outbox
+      ADD COLUMN IF NOT EXISTS claim_token text;
+    CREATE INDEX IF NOT EXISTS instant_water_lead_outbox_due_idx
+      ON instant_water_lead_outbox(status, next_attempt_at);
   `);
   logger.info("Startup migration: instant water assessment and ticket tables ensured");
 }

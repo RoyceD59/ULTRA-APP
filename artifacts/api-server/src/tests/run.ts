@@ -251,7 +251,10 @@ console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 // connects to the isolated database.
 
 const testGlob = process.env["TEST_GLOB"] ?? "src/tests/**/*.test.ts";
-const TEST_CONCURRENCY = 32;
+// Referral lifecycle uses shared account/settlement state across cases; keep
+// that focused suite serial even when the general runner is highly parallel.
+const TEST_CONCURRENCY = testGlob.includes("referral-lifecycle") ? 1 : 32;
+const testNamePattern = process.env["TEST_NAME_PATTERN"];
 
 const childExitCode = await spawnAsync(
   "node",
@@ -259,7 +262,9 @@ const childExitCode = await spawnAsync(
     "--import",
     "tsx/esm",
     "--test",
+    "--test-force-exit",
     `--test-concurrency=${TEST_CONCURRENCY}`,
+    ...(testNamePattern ? ["--test-name-pattern", testNamePattern] : []),
     testGlob,
   ],
   {

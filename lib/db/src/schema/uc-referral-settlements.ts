@@ -9,7 +9,7 @@ export const ucReferralSettlementsTable = pgTable("uc_referral_settlements", {
   referralCode: text("referral_code"),
   userEmail: text("user_email"),
   status: text("status").notNull().default("pending"),
-  attempts: integer("attempts").notNull().default(1),
+  attempts: integer("attempts").notNull().default(0),
   lastError: text("last_error"),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
   claimToken: text("claim_token"),

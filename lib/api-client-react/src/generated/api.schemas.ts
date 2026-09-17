@@ -5,6 +5,98 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type AgentTokenTokenType = typeof AgentTokenTokenType[keyof typeof AgentTokenTokenType];
+
+
+export const AgentTokenTokenType = {
+  Bearer: 'Bearer',
+} as const;
+
+export interface AgentToken {
+  access_token: string;
+  token_type: AgentTokenTokenType;
+  expires_in: number;
+  scope: string;
+}
+
+export type AgentClientInputScopesItem = typeof AgentClientInputScopesItem[keyof typeof AgentClientInputScopesItem];
+
+
+export const AgentClientInputScopesItem = {
+  companionmonitorread: 'companion.monitor.read',
+  companionusersread: 'companion.users.read',
+  interactionsread: 'interactions.read',
+  alisonread: 'alison.read',
+} as const;
+
+export interface AgentClientInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  scopes: AgentClientInputScopesItem[];
+  expiresAt?: string;
+}
+
+export type AgentClientStatus = typeof AgentClientStatus[keyof typeof AgentClientStatus];
+
+
+export const AgentClientStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  revoked: 'revoked',
+} as const;
+
+export interface AgentClient {
+  id: string;
+  name: string;
+  scopes: string[];
+  status: AgentClientStatus;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  lastUsedAt?: string | null;
+  createdAt?: string;
+}
+
+export interface AgentClientList {
+  clients: AgentClient[];
+}
+
+/**
+ * @nullable
+ */
+export type UcCodeValidationType = typeof UcCodeValidationType[keyof typeof UcCodeValidationType] | null;
+
+
+export const UcCodeValidationType = {
+  referral: 'referral',
+  promotion: 'promotion',
+} as const;
+
+export interface UcCodeValidation {
+  valid: boolean;
+  /** @nullable */
+  type: UcCodeValidationType;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  discountPercent: number;
+  label: string;
+}
+
+export interface UcReferralSnapshot {
+  /** @nullable */
+  code?: string | null;
+  referredCount?: number;
+  conversions?: number;
+  creditsEarnedKes?: number;
+  /** @nullable */
+  usedReferralCode?: string | null;
+}
+
 export type InstantWaterSource = typeof InstantWaterSource[keyof typeof InstantWaterSource];
 
 
@@ -1711,4 +1803,36 @@ export type SendWhatsAppQuickMessage400 = {
 
 export type SendWhatsAppQuickMessage503 = {
   error?: string;
+};
+
+export type ValidateUcReferralOrPromotionCodeBody = {
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  code: string;
+};
+
+export type IssueAgentClientTokenBodyGrantType = typeof IssueAgentClientTokenBodyGrantType[keyof typeof IssueAgentClientTokenBodyGrantType];
+
+
+export const IssueAgentClientTokenBodyGrantType = {
+  client_credentials: 'client_credentials',
+} as const;
+
+export type IssueAgentClientTokenBody = {
+  grant_type: IssueAgentClientTokenBodyGrantType;
+  scope?: string;
+};
+
+export type SuspendAgentOauthClientBodyStatus = typeof SuspendAgentOauthClientBodyStatus[keyof typeof SuspendAgentOauthClientBodyStatus];
+
+
+export const SuspendAgentOauthClientBodyStatus = {
+  suspended: 'suspended',
+  revoked: 'revoked',
+} as const;
+
+export type SuspendAgentOauthClientBody = {
+  status?: SuspendAgentOauthClientBodyStatus;
 };

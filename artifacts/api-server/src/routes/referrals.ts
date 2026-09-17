@@ -10,9 +10,16 @@ import { requireAdmin } from "../lib/adminAuth.js";
 import { verifyToken } from "../lib/jwt.js";
 import { sendViaResend } from "../lib/resend.js";
 import { sendSlackTeamMessage } from "../lib/slack.js";
+import type { PoolClient } from "pg";
 
 const router = Router();
 const DEFAULT_REFERRAL_FAILURE_ALERT_THRESHOLD = 3;
+let referralRuleLookupOverrideForTests: ((orderId: number) => Promise<number | undefined>) | null = null;
+
+/** Test-only dependency seam; production leaves reward-rule lookup unchanged. */
+export function setReferralRuleLookupForTests(lookup: ((orderId: number) => Promise<number | undefined>) | null): void {
+  referralRuleLookupOverrideForTests = lookup;
+}
 
 function configuredFailureThreshold(databaseValue: unknown): number {
   const value = Number(
@@ -151,25 +158,24 @@ async function getOrCreateReferralCode(
   return created!;
 }
 
-function decodeUserFromAuth(
-  req: Request
-): { email: string; firstName: string; lastName: string } | null {
-  const auth = req.headers["authorization"];
-  if (!auth?.startsWith("Bearer ")) return null;
-  try {
-    const parts = auth.slice(7).split(".");
-    if (parts.length < 2) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1] ?? "", "base64url").toString()
-    ) as Record<string, string>;
-    return {
-      email: payload["email"] ?? "",
-      firstName: payload["firstName"] ?? payload["name"]?.split(" ")[0] ?? "User",
-      lastName: payload["lastName"] ?? payload["name"]?.split(" ").slice(1).join(" ") ?? "",
-    };
-  } catch {
-    return null;
-  }
+async function authenticatedCustomer(req: Request): Promise<{
+  id: number; email: string; firstName: string; lastName: string;
+} | null> {
+  const claims = verifyToken(req.headers["authorization"]);
+  const id = Number(claims?.id);
+  if (!claims || claims.type === "team-session" || !Number.isInteger(id) || id <= 0) return null;
+  const result = await pool.query(
+    `SELECT id,email,first_name,last_name FROM uc_users
+     WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
+    [id],
+  );
+  const row = result.rows[0];
+  return row ? {
+    id: Number(row.id),
+    email: String(row.email).toLowerCase(),
+    firstName: String(row.first_name ?? claims.firstName ?? "User"),
+    lastName: String(row.last_name ?? claims.lastName ?? ""),
+  } : null;
 }
 
 // ─── Exported helpers (consumed by uc.ts for order creation) ─────────────────
@@ -245,11 +251,49 @@ export async function validateCodeForDiscount(
     return { valid: false, type: null, discountPercent: 0, label: "You can't use your own referral code." };
   }
 
+  const policy = await pool.query(
+    `SELECT active,expires_at,max_referrals,first_order_discount_percent
+       FROM uc_referral_codes WHERE code=$1 LIMIT 1`,
+    [upper],
+  );
+  const row = policy.rows[0];
+  if (!row?.active) return { valid: false, type: null, discountPercent: 0, label: "This referral code is inactive." };
+  if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
+    return { valid: false, type: null, discountPercent: 0, label: "This referral code has expired." };
+  }
+  if (row.max_referrals != null) {
+    const count = await pool.query(`SELECT count(*)::int AS n FROM uc_referral_attributions WHERE referral_code=$1`, [upper]);
+    if (Number(count.rows[0]?.n ?? 0) >= Number(row.max_referrals)) {
+      return { valid: false, type: null, discountPercent: 0, label: "This referral code has reached its limit." };
+    }
+  }
+  const attributed = await pool.query(
+    `SELECT 1 FROM uc_referral_users WHERE lower(email)=lower($1) AND referred_by_code=$2
+     UNION SELECT 1 FROM uc_referral_attributions a JOIN uc_users u ON u.id=a.referred_user_id
+      WHERE lower(u.email)=lower($1) AND a.referral_code=$2 LIMIT 1`,
+    [email, upper],
+  );
+  if (!attributed.rows[0]) {
+    return { valid: false, type: null, discountPercent: 0, label: "This referral code must be recorded during registration." };
+  }
+  const priorPaid = await pool.query(
+    `SELECT 1 FROM uc_users u
+      JOIN uc_orders o ON (o.user_id= u.id::text OR o.user_id=CAST(u.id AS text))
+     WHERE lower(u.email)=lower($1) AND o.payment_method <> 'cod'
+       AND lower(o.status) IN ('processing','completed','paid')
+       AND (o.webhook_recovery IS FALSE OR o.webhook_recovery IS NULL)
+     LIMIT 1`,
+    [email],
+  );
+  if (priorPaid.rows[0]) {
+    return { valid: false, type: null, discountPercent: 0, label: "Referral discount is only available on your first paid order." };
+  }
+
   return {
-    valid: false,
-    type: null,
-    discountPercent: 0,
-    label: "This share code is recorded at signup; referral discounts are earned after successful payment.",
+    valid: true,
+    type: "referral",
+    discountPercent: Math.max(0, Math.min(100, Number(row.first_order_discount_percent ?? 10))),
+    label: "Your referred-customer first-order discount",
   };
 }
 
@@ -345,11 +389,13 @@ export async function qualifyReferralSuccessfulPayment(
       await client.query("COMMIT");
       return { issued: false, reason: "Referral cap reached" };
     }
-    const rule = await client.query(
-      `SELECT points_value FROM uc_rewards_rules
-       WHERE event_type='referral-successful-payment' AND active=true LIMIT 1`,
-    );
-    const points = Number(rule.rows[0]?.points_value ?? 0);
+    const injectedPoints = referralRuleLookupOverrideForTests
+      ? await referralRuleLookupOverrideForTests(orderId)
+      : undefined;
+    const points = injectedPoints ?? Number((await client.query(
+        `SELECT points_value FROM uc_rewards_rules
+         WHERE event_type='referral-successful-payment' AND active=true LIMIT 1`,
+      )).rows[0]?.points_value ?? 0);
     const conversion = await client.query(
       `INSERT INTO uc_referral_conversions(attribution_id,qualifying_order_id,points_snapshot)
        VALUES($1,$2,$3) ON CONFLICT (attribution_id) DO NOTHING RETURNING id`,
@@ -968,7 +1014,8 @@ export async function processReferralSettlementAlerts(
         if (accepted) {
           await pool.query(
             `UPDATE uc_referral_settlements
-             SET alerted_at=now(),alert_claimed_at=NULL,updated_at=now()
+             SET alerted_at=now(),alert_claimed_at=NULL,
+                 alert_attempts=alert_attempts+1,updated_at=now()
              WHERE id=$1 AND alerted_at IS NULL`,
             [row.id],
           );
@@ -1004,7 +1051,7 @@ export async function processReferralSettlementAlerts(
           await pool.query(
             `UPDATE uc_referral_settlements
              SET slack_alerted_at=now(),slack_alert_claimed_at=NULL,
-                 updated_at=now()
+                 slack_alert_attempts=slack_alert_attempts+1,updated_at=now()
              WHERE id=$1 AND slack_alerted_at IS NULL`,
             [row.id],
           );
@@ -1036,42 +1083,51 @@ export async function processReferralSettlementAlerts(
 /**
  * Associate a new user with a referral code at registration time.
  */
-export async function registerReferralAtSignup(
+export async function registerReferralAtSignupWithClient(
+  client: PoolClient,
   userEmail: string,
   referralCode: string
-): Promise<void> {
+): Promise<"accepted" | "invalid" | "self_referral" | "expired" | "inactive" | "exhausted"> {
   const upper = referralCode.trim().toUpperCase();
   const email = userEmail.toLowerCase();
 
-  // Validate the code exists before touching anything
-  const [ref] = await db
-    .select({
-      code: ucReferralCodesTable.code,
-      ownerEmail: ucReferralCodesTable.ownerEmail,
-      referredEmails: ucReferralCodesTable.referredEmails,
-    })
-    .from(ucReferralCodesTable)
-    .where(eq(ucReferralCodesTable.code, upper))
-    .limit(1);
-
-  if (!ref) return;
-
-  // Keep an immutable, account-id-backed attribution as soon as both accounts
-  // exist.  This is first-write-wins and deliberately rejects self-referrals;
-  // the legacy email summary below remains for older clients only.
-  const accounts = await pool.query(
+  try {
+    const locked = await client.query(
+      `SELECT code,owner_email,referred_emails,active,expires_at,max_referrals
+       FROM uc_referral_codes WHERE code=$1 FOR UPDATE`,
+      [upper],
+    );
+    const ref = locked.rows[0];
+    if (!ref) return "invalid";
+    if (!ref.active) return "inactive";
+    if (ref.expires_at && new Date(ref.expires_at).getTime() <= Date.now()) {
+      return "expired";
+    }
+    if (String(ref.owner_email).toLowerCase() === email) {
+      return "self_referral";
+    }
+    if (ref.max_referrals != null) {
+      const count = await client.query(
+        `SELECT count(*)::int AS n FROM uc_referral_attributions WHERE referral_code=$1`,
+        [upper],
+      );
+      if (Number(count.rows[0]?.n ?? 0) >= Number(ref.max_referrals)) {
+        return "exhausted";
+      }
+    }
+    const accounts = await client.query(
     `SELECT id,email FROM uc_users
      WHERE lower(email)=lower($1) OR lower(email)=lower($2)`,
-    [email, ref.ownerEmail],
-  );
+      [email, ref.owner_email],
+    );
   const invited = accounts.rows.find(
     (row) => String(row.email).toLowerCase() === email,
   );
   const inviter = accounts.rows.find(
-    (row) => String(row.email).toLowerCase() === String(ref.ownerEmail).toLowerCase(),
+    (row) => String(row.email).toLowerCase() === String(ref.owner_email).toLowerCase(),
   );
   if (invited && inviter && Number(invited.id) !== Number(inviter.id)) {
-    await pool.query(
+    await client.query(
       `INSERT INTO uc_referral_attributions
          (referrer_user_id,referred_user_id,referral_code)
        VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING`,
@@ -1079,29 +1135,46 @@ export async function registerReferralAtSignup(
     );
   }
 
-  // Upsert user row with the referral code (do not overwrite an existing referredByCode)
-  await db
-    .insert(ucReferralUsersTable)
-    .values({ email, referredByCode: upper })
-    .onConflictDoUpdate({
-      target: ucReferralUsersTable.email,
-      set: {
-        // Only set referredByCode if it was previously null
-        referredByCode: sql`COALESCE(${ucReferralUsersTable.referredByCode}, EXCLUDED.referred_by_code)`,
-        updatedAt: new Date(),
-      },
-    });
+    await client.query(
+      `INSERT INTO uc_referral_users(email,first_order_done,referred_by_code,updated_at)
+       VALUES($1,false,$2,now())
+       ON CONFLICT(email) DO UPDATE SET
+         referred_by_code=COALESCE(uc_referral_users.referred_by_code,EXCLUDED.referred_by_code),
+         updated_at=now()`,
+      [email, upper],
+    );
 
   // Add user to the owner's referred_emails if not already listed
-  const emails: string[] = Array.isArray(ref.referredEmails) ? ref.referredEmails : [];
+  const emails: string[] = Array.isArray(ref.referred_emails) ? ref.referred_emails : [];
   if (!emails.includes(email)) {
-    await db
-      .update(ucReferralCodesTable)
-      .set({
-        referredEmails: [...emails, email],
-        updatedAt:      new Date(),
-      })
-      .where(eq(ucReferralCodesTable.code, upper));
+      await client.query(
+        `UPDATE uc_referral_codes SET referred_emails=$2::json,updated_at=now() WHERE code=$1`,
+        [upper, JSON.stringify([...emails, email])],
+      );
+  }
+    return "accepted";
+  } catch (error) {
+    throw error;
+  } finally {
+  }
+}
+
+/** Standalone compatibility wrapper for callers outside registration. */
+export async function registerReferralAtSignup(
+  userEmail: string,
+  referralCode: string,
+): Promise<"accepted" | "invalid" | "self_referral" | "expired" | "inactive" | "exhausted"> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await registerReferralAtSignupWithClient(client, userEmail, referralCode);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -1248,8 +1321,8 @@ router.patch("/uc/admin/referrals/settings", async (req, res): Promise<void> => 
 
 /** GET /api/uc/referrals/my-code — authenticated user's code + stats */
 router.get("/uc/referrals/my-code", async (req: Request, res: Response): Promise<void> => {
-  const u = decodeUserFromAuth(req);
-  if (!u || !u.email) {
+  const u = await authenticatedCustomer(req);
+  if (!u) {
     res.status(401).json({ error: "Authenticated required" });
     return;
   }
@@ -1279,13 +1352,19 @@ router.get("/uc/referrals/my-code", async (req: Request, res: Response): Promise
 
 /** POST /api/uc/referrals/validate — validate promo or referral code */
 router.post("/uc/referrals/validate", async (req: Request, res: Response): Promise<void> => {
-  const { code, userEmail } = req.body as { code?: string; userEmail?: string };
+  const { code } = req.body as { code?: string };
   if (!code) {
     res.status(400).json({ valid: false, label: "No code provided", discountPercent: 0, type: null });
     return;
   }
   try {
-    res.json(await validateCodeForDiscount(code, userEmail ?? ""));
+    const customer = await authenticatedCustomer(req);
+    const isPromotion = promotions.some((p) => p.code.toUpperCase() === code.trim().toUpperCase());
+    if (!customer && !isPromotion) {
+      res.status(401).json({ valid: false, label: "Sign in to validate a referral code.", discountPercent: 0, type: null });
+      return;
+    }
+    res.json(await validateCodeForDiscount(code, customer?.email ?? ""));
   } catch (err) {
     console.error("[referrals] validate error:", err);
     res.status(500).json({ valid: false, label: "Validation failed", discountPercent: 0, type: null });

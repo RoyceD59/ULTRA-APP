@@ -1,6 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { eq } from "drizzle-orm";
-import { db, conversations as conversationsTable, messages as messagesTable } from "@workspace/db";
+import { db, conversations as conversationsTable, messages as messagesTable, teamUsersTable } from "@workspace/db";
 import {
   ListAnthropicConversationsResponse,
   CreateAnthropicConversationBody,
@@ -15,8 +15,29 @@ import {
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { buildProjectContext } from "../ai/context";
+import { requireTeamAuth } from "../auth.js";
 
 const router: IRouter = Router();
+function requireActiveTeamAuth(req: Request, res: Response, next: NextFunction): void {
+  requireTeamAuth(req, res, () => {
+    const userId = (req as Request & { teamUser?: { id: string } }).teamUser?.id;
+    void db.select({ isActive: teamUsersTable.isActive })
+      .from(teamUsersTable)
+      .where(eq(teamUsersTable.id, userId ?? ""))
+      .limit(1)
+      .then(([user]) => {
+        if (!user?.isActive) {
+          res.status(401).json({ error: "Authentication required. Sign in at /login." });
+          return;
+        }
+        next();
+      })
+      .catch(() => res.status(401).json({ error: "Authentication required. Sign in at /login." }));
+  });
+}
+// Keep this guard path-scoped: the parent API router mounts this router without
+// a prefix, so an unscoped router.use would also intercept unrelated routes.
+router.use("/anthropic/conversations", requireActiveTeamAuth);
 
 router.get("/anthropic/conversations", async (_req, res): Promise<void> => {
   const conversations = await db

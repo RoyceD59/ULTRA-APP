@@ -2264,3 +2264,109 @@ export const IngestWebhookResponse = zod.object({
   "message": zod.string(),
   "validationErrors": zod.array(zod.string()).optional()
 })
+
+
+export const validateUcReferralOrPromotionCodeBodyCodeMax = 40;
+
+
+
+export const ValidateUcReferralOrPromotionCodeBody = zod.object({
+  "code": zod.string().min(1).max(validateUcReferralOrPromotionCodeBodyCodeMax)
+})
+
+export const validateUcReferralOrPromotionCodeResponseDiscountPercentMin = 0;
+export const validateUcReferralOrPromotionCodeResponseDiscountPercentMax = 100;
+
+
+
+export const ValidateUcReferralOrPromotionCodeResponse = zod.object({
+  "valid": zod.boolean(),
+  "type": zod.union([zod.literal('referral'),zod.literal('promotion'),zod.literal(null)]).nullable(),
+  "discountPercent": zod.number().min(validateUcReferralOrPromotionCodeResponseDiscountPercentMin).max(validateUcReferralOrPromotionCodeResponseDiscountPercentMax),
+  "label": zod.string()
+})
+
+
+export const GetUcReferralCodeResponse = zod.object({
+  "code": zod.string().nullish(),
+  "referredCount": zod.number().optional(),
+  "conversions": zod.number().optional(),
+  "creditsEarnedKes": zod.number().optional(),
+  "usedReferralCode": zod.string().nullish()
+})
+
+
+/**
+ * Send client_id and client_secret using HTTP Basic authentication. Client secret post authentication is not accepted.
+ * @summary Issue a short-lived private machine-agent token
+ */
+export const IssueAgentClientTokenBody = zod.object({
+  "grant_type": zod.enum(['client_credentials']),
+  "scope": zod.string().optional()
+})
+
+export const IssueAgentClientTokenResponse = zod.object({
+  "access_token": zod.string(),
+  "token_type": zod.enum(['Bearer']),
+  "expires_in": zod.number(),
+  "scope": zod.string()
+})
+
+
+export const ListAgentOauthClientsResponse = zod.object({
+  "clients": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "scopes": zod.array(zod.string()),
+  "status": zod.enum(['active', 'suspended', 'revoked']),
+  "expiresAt": zod.coerce.date().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}))
+})
+
+
+export const createAgentOauthClientBodyNameMax = 120;
+
+
+
+export const CreateAgentOauthClientBody = zod.object({
+  "name": zod.string().min(1).max(createAgentOauthClientBodyNameMax),
+  "scopes": zod.array(zod.enum(['companion.monitor.read', 'companion.users.read', 'interactions.read', 'alison.read'])),
+  "expiresAt": zod.coerce.date().optional()
+})
+
+export const CreateAgentOauthClientResponse = zod.void()
+
+
+export const RotateAgentOauthClientParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RotateAgentOauthClientResponse = zod.unknown()
+
+
+export const SuspendAgentOauthClientParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const SuspendAgentOauthClientBody = zod.object({
+  "status": zod.enum(['suspended', 'revoked']).optional()
+})
+
+export const SuspendAgentOauthClientResponse = zod.unknown()
+
+
+export const ListAgentOauthAuditResponse = zod.unknown()
+
+
+export const GetAgentMonitorResponse = zod.unknown()
+
+
+export const ListAgentCompanionUsersResponse = zod.unknown()
+
+
+export const ListAgentInteractionsResponse = zod.unknown()
+
+
+export const ListAgentAlisonFeedbackResponse = zod.unknown()

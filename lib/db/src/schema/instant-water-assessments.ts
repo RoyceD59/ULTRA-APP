@@ -278,6 +278,33 @@ export const instantWaterAuditEventsTable = pgTable(
   ],
 );
 
+export const instantWaterLeadOutboxTable = pgTable(
+  "instant_water_lead_outbox",
+  {
+    id: text("id").primaryKey(),
+    assessmentId: text("assessment_id")
+      .notNull()
+      .references(() => instantWaterAssessmentsTable.id, { onDelete: "cascade" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    submissionId: text("submission_id").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: text("status").$type<"pending" | "processing" | "delivered" | "review">().notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    claimToken: text("claim_token"),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    providerAck: text("provider_ack"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("instant_water_lead_outbox_idempotency_idx").on(table.idempotencyKey),
+    index("instant_water_lead_outbox_due_idx").on(table.status, table.nextAttemptAt),
+  ],
+);
+
 export type InstantWaterAssessment =
   typeof instantWaterAssessmentsTable.$inferSelect;
 export type InstantWaterCheckTicket =
@@ -290,3 +317,4 @@ export type InstantWaterActionToken =
 export type InstantWaterRateLimit = typeof instantWaterRateLimitsTable.$inferSelect;
 export type InstantWaterMediaUpload = typeof instantWaterMediaUploadsTable.$inferSelect;
 export type InstantWaterAuditEvent = typeof instantWaterAuditEventsTable.$inferSelect;
+export type InstantWaterLeadOutbox = typeof instantWaterLeadOutboxTable.$inferSelect;

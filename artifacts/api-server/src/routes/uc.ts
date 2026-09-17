@@ -8,8 +8,7 @@ import { join } from "node:path";
 const UC_DATA_DIR = ACCOUNT_DATA_DIR;
 import {
   validateCodeForDiscount,
-  recordReferralConversion,
-  registerReferralAtSignup,
+  registerReferralAtSignupWithClient,
   getReferralExportData,
 } from "./referrals";
 import { sanitiseCsvCell } from "./uc-water-chat.js";
@@ -1882,32 +1881,47 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     // Serialize both identity values before querying. This protects races even
     // when a legacy duplicate prevents the optional partial unique index from
     // being installed.
-    const registration = await db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + normalizedEmail}))`);
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"uc-phone:" + cleanPhone}))`);
-      const [emailOwner] = await tx.select({ id: ucUsersTable.id })
-        .from(ucUsersTable)
-        .where(and(eq(ucUsersTable.email, normalizedEmail), isNull(ucUsersTable.deletedAt)))
-        .limit(1);
-      if (emailOwner) return { kind: "email-conflict" as const };
-      const [phoneOwner] = await tx.select({ id: ucUsersTable.id })
-        .from(ucUsersTable)
-        .where(and(eq(ucUsersTable.phone, cleanPhone), isNull(ucUsersTable.deletedAt)))
-        .limit(1);
-      if (phoneOwner) return { kind: "phone-conflict" as const };
-
-      const passwordHash = await bcryptjs.hash(password, 10);
-      const [dbUser] = await tx.insert(ucUsersTable).values({
-        email: normalizedEmail,
-        passwordHash,
-        phone: cleanPhone,
-        emailVerified: false,
-        phoneVerified: false,
-        firstName: firstName.trim(),
-        lastName: lastName?.trim() ?? "",
-      }).returning();
-      return { kind: "created" as const, dbUser: dbUser! };
-    });
+    const registrationClient = await pool.connect();
+    let registration: { kind: string; dbUser?: any; referral?: { status: string } };
+    try {
+      await registrationClient.query("BEGIN");
+      await registrationClient.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`uc-email:${normalizedEmail}`]);
+      await registrationClient.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`uc-phone:${cleanPhone}`]);
+      const emailOwner = await registrationClient.query(
+        "SELECT id FROM uc_users WHERE email=$1 AND deleted_at IS NULL LIMIT 1", [normalizedEmail],
+      );
+      if (emailOwner.rowCount) { await registrationClient.query("COMMIT"); registration = { kind: "email-conflict" }; }
+      else {
+        const phoneOwner = await registrationClient.query(
+          "SELECT id FROM uc_users WHERE phone=$1 AND deleted_at IS NULL LIMIT 1", [cleanPhone],
+        );
+        if (phoneOwner.rowCount) { await registrationClient.query("COMMIT"); registration = { kind: "phone-conflict" }; }
+        else {
+          const passwordHash = await bcryptjs.hash(password, 10);
+          const inserted = await registrationClient.query(
+            `INSERT INTO uc_users(email,password_hash,phone,email_verified,phone_verified,first_name,last_name)
+             VALUES($1,$2,$3,false,false,$4,$5) RETURNING *`,
+            [normalizedEmail, passwordHash, cleanPhone, firstName.trim(), lastName?.trim() ?? ""],
+          );
+          const row = inserted.rows[0];
+          let referral: { status: string } | undefined;
+          if (referralCode?.trim()) {
+            referral = { status: await registerReferralAtSignupWithClient(registrationClient, normalizedEmail, referralCode.trim()) };
+          }
+          await registrationClient.query("COMMIT");
+          registration = { kind: "created", dbUser: {
+            id: row.id, email: row.email, phone: row.phone, firstName: row.first_name,
+            lastName: row.last_name, address: row.address, credentialVersion: row.credential_version,
+            emailVerified: row.email_verified, phoneVerified: row.phone_verified, createdAt: row.created_at,
+          }, referral };
+        }
+      }
+    } catch (error) {
+      await registrationClient.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      registrationClient.release();
+    }
 
     if (registration.kind === "email-conflict") {
       res.status(409).json({
@@ -1941,13 +1955,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       authProvider: "password", createdAt: dbUser!.createdAt,
       source: "registration", dbPersisted: true,
     }).catch(() => {});
-    // Store referral association so first-order discount can be applied later
-    if (referralCode?.trim()) {
-      await registerReferralAtSignup(normalizedEmail, referralCode.trim()).catch((err) => {
-        logger.warn({ err, email: normalizedEmail }, "[register] referral signup association failed (non-fatal)");
-      });
-    }
-    res.json({ token: issueToken(user), user });
+    res.json({ token: issueToken(user), user, ...(registration.referral ? { referral: registration.referral } : {}) });
   } catch (err) {
     // DB insert failed. Never silently issue a session with no saved account —
     // write the registration to the durable folder record and tell the caller
@@ -5795,16 +5803,24 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const orderNumericId = Number(orderUserId);
   if (await guardDeletedAccount(orderNumericId, res)) return;
 
-  const { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, userEmail, idempotencyKey } =
+  const { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey } =
     req.body as {
       lineItems: { productId: number; quantity: number }[];
       paymentMethod: string;
       paymentReference?: string;
       shippingAddress?: Record<string, string>;
       promoCode?: string;            // referral or promotion code
-      userEmail?: string;            // used to gate referral first-order discount
       idempotencyKey?: string;
     };
+  const accountResult = await pool.query(
+    `SELECT id,email FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
+    [orderNumericId],
+  );
+  const userEmail = accountResult.rows[0]?.email as string | undefined;
+  if (!userEmail) {
+    res.status(401).json({ error: "Authenticated customer account required" });
+    return;
+  }
   if (!lineItems || !paymentMethod) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -6401,11 +6417,6 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           if (wcAnchorId !== null) {
             const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcPreFlight.order["id"]));
             if (iConfirmed) {
-              if (discountType === "referral" && promoCode && userEmail) {
-                await recordReferralConversion(promoCode, userEmail, 200, wcAnchorId ?? Number(wcPreFlight.order["id"])).catch((err) => {
-                  logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
-                });
-              }
               sendWcOrderNotifications(normalized, orderUserId);
               // Credit qualifying-product reward for this paid WC pre-flight order
               if (orderNumericId > 0 && !isNaN(orderNumericId)) {
@@ -6446,7 +6457,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           { key: "promo_code", value: promoCode ?? "" },
           { key: "discount_percent", value: String(discountPercent) },
         ],
-        coupon_lines: discountPercent > 0 && promoCode ? [{ code: promoCode }] : [],
+        coupon_lines: discountType === "promotion" && discountPercent > 0 && promoCode ? [{ code: promoCode }] : [],
       };
 
       let wcOrder: Record<string, unknown> | null = null;
@@ -6493,11 +6504,6 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         if (wcAnchorId !== null) {
           const iConfirmed = await confirmWcAnchor(wcAnchorId, Number(wcOrder["id"]));
           if (iConfirmed) {
-            if (discountType === "referral" && promoCode && userEmail) {
-              await recordReferralConversion(promoCode, userEmail, 200, wcAnchorId ?? Number(wcOrder["id"])).catch((err) => {
-                logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
-              });
-            }
             sendWcOrderNotifications(normalized, orderUserId);
             // Credit qualifying-product reward for this paid WC order (main path)
             if (orderNumericId > 0 && !isNaN(orderNumericId)) {
@@ -6512,11 +6518,6 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           // concurrent-request race for reference-less orders, so send
           // the confirmation unconditionally whenever WC accepts the order.
           // COD orders are not paid at time of placement — no rewards credit.
-          if (discountType === "referral" && promoCode && userEmail) {
-            await recordReferralConversion(promoCode, userEmail, 200, Number(wcOrder["id"])).catch((err) => {
-              logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
-            });
-          }
           sendWcOrderNotifications(normalized, orderUserId);
         }
         res.json(normalized);
@@ -6658,11 +6659,6 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     }
 
     // Record referral conversion so the referrer earns credit
-    if (discountType === "referral" && promoCode && userEmail) {
-      await recordReferralConversion(promoCode, userEmail, 200, dbOrder!.id).catch((err) => {
-        logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
-      });
-    }
 
     const newOrder = {
       id:              dbOrder!.id,
@@ -6778,11 +6774,6 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       promoCode:   promoCode ?? "",
     };
     orderStoreFallback.push(fallbackOrder);
-    if (discountType === "referral" && promoCode && userEmail) {
-      await recordReferralConversion(promoCode, userEmail, 200, fallbackOrder.id).catch((err) => {
-        logger.warn({ err, code: promoCode, userEmail }, "[orders] referral conversion record failed (non-fatal)");
-      });
-    }
     sendPushToUser(
       orderUserId,
       "✅ Order confirmed!",

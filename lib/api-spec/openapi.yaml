@@ -36,6 +36,8 @@ tags:
     description: WhatsApp session management and messaging
   - name: instant-water-check
     description: Instant water assessment and physical-test lead flow
+  - name: agent-oauth
+    description: Private ProjectHub administrator-managed machine-agent access
 paths:
   /water-check/assessments:
     post:
@@ -1330,6 +1332,7 @@ paths:
       operationId: listAnthropicConversations
       tags: [anthropic]
       summary: List all conversations
+      security: [{ bearerAuth: [] }]
       responses:
         "200":
           description: List of conversations
@@ -1343,6 +1346,7 @@ paths:
       operationId: createAnthropicConversation
       tags: [anthropic]
       summary: Create a new conversation
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -1361,6 +1365,7 @@ paths:
       operationId: getAnthropicConversation
       tags: [anthropic]
       summary: Get conversation with messages
+      security: [{ bearerAuth: [] }]
       parameters:
         - name: id
           in: path
@@ -1384,6 +1389,7 @@ paths:
       operationId: deleteAnthropicConversation
       tags: [anthropic]
       summary: Delete a conversation
+      security: [{ bearerAuth: [] }]
       parameters:
         - name: id
           in: path
@@ -1404,6 +1410,7 @@ paths:
       operationId: listAnthropicMessages
       tags: [anthropic]
       summary: List messages in a conversation
+      security: [{ bearerAuth: [] }]
       parameters:
         - name: id
           in: path
@@ -1423,6 +1430,7 @@ paths:
       operationId: sendAnthropicMessage
       tags: [anthropic]
       summary: Send a message and receive an AI response (SSE stream)
+      security: [{ bearerAuth: [] }]
       parameters:
         - name: id
           in: path
@@ -2002,6 +2010,145 @@ paths:
         "400":
           description: Validation failed
 
+  /uc/referrals/validate:
+    post:
+      operationId: validateUcReferralOrPromotionCode
+      tags: [uc-referrals]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 40 }
+      responses:
+        "200":
+          description: Explicit code validity and type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcCodeValidation" }
+        "401": { description: Authentication required }
+  /uc/referrals/my-code:
+    get:
+      operationId: getUcReferralCode
+      tags: [uc-referrals]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Authenticated account referral snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcReferralSnapshot" }
+        "401": { description: Authentication required }
+
+  /oauth/token:
+    post:
+      operationId: issueAgentClientToken
+      tags: [agent-oauth]
+      summary: Issue a short-lived private machine-agent token
+      description: Send client_id and client_secret using HTTP Basic authentication. Client secret post authentication is not accepted.
+      security: [{ clientBasic: [] }]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type: { type: string, enum: [client_credentials] }
+                scope: { type: string }
+      responses:
+        "200": { description: Token issued, content: { application/json: { schema: { $ref: "#/components/schemas/AgentToken" } } } }
+        "401": { description: Invalid client }
+        "429": { description: Rate limited }
+  /oauth/clients:
+    get:
+      operationId: listAgentOauthClients
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Registered private clients, content: { application/json: { schema: { $ref: "#/components/schemas/AgentClientList" } } } }
+        "403": { description: Active ProjectHub administrator required }
+    post:
+      operationId: createAgentOauthClient
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentClientInput"
+      responses:
+        "201": { description: Client and one-time secret }
+        "400": { description: Invalid scope list }
+        "403": { description: Active ProjectHub administrator required }
+  /oauth/clients/{id}/rotate:
+    post:
+      operationId: rotateAgentOauthClient
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Rotated one-time secret }
+        "403": { description: Active ProjectHub administrator required }
+  /oauth/clients/{id}/suspend:
+    post:
+      operationId: suspendAgentOauthClient
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { status: { type: string, enum: [suspended, revoked] } }
+      responses:
+        "200": { description: Client suspended or revoked }
+        "403": { description: Active ProjectHub administrator required }
+  /oauth/audit:
+    get:
+      operationId: listAgentOauthAudit
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Audit entries }
+        "403": { description: Active ProjectHub administrator required }
+  /integrations/v1/monitor:
+    get:
+      operationId: getAgentMonitor
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Operational health }
+        "403": { description: Scope required }
+  /integrations/v1/companion/users:
+    get:
+      operationId: listAgentCompanionUsers
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Minimized non-deleted customer records }
+  /integrations/v1/interactions:
+    get:
+      operationId: listAgentInteractions
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Minimized interaction records }
+  /integrations/v1/alison/feedback:
+    get:
+      operationId: listAgentAlisonFeedback
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Filtered Alison feedback records }
+
 components:
   parameters:
     MemberId:
@@ -2029,7 +2176,70 @@ components:
       schema:
         type: integer
 
+  securitySchemes:
+    clientBasic:
+      type: http
+      scheme: basic
+    bearerAuth:
+      type: http
+      scheme: bearer
+    agentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+
   schemas:
+    AgentToken:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in: { type: integer }
+        scope: { type: string }
+    AgentClientInput:
+      type: object
+      required: [name, scopes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [companion.monitor.read, companion.users.read, interactions.read, alison.read]
+        expiresAt: { type: string, format: date-time }
+    AgentClient:
+      type: object
+      required: [id, name, scopes, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        scopes: { type: array, items: { type: string } }
+        status: { type: string, enum: [active, suspended, revoked] }
+        expiresAt: { type: [string, "null"], format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    AgentClientList:
+      type: object
+      required: [clients]
+      properties:
+        clients: { type: array, items: { $ref: "#/components/schemas/AgentClient" } }
+    UcCodeValidation:
+      type: object
+      required: [valid, type, discountPercent, label]
+      properties:
+        valid: { type: boolean }
+        type: { type: [string, "null"], enum: [referral, promotion, null] }
+        discountPercent: { type: integer, minimum: 0, maximum: 100 }
+        label: { type: string }
+    UcReferralSnapshot:
+      type: object
+      properties:
+        code: { type: [string, "null"] }
+        referredCount: { type: integer }
+        conversions: { type: integer }
+        creditsEarnedKes: { type: integer }
+        usedReferralCode: { type: [string, "null"] }
     InstantWaterSource:
       type: string
       enum: [municipal, borehole, shallow, vendor, bottled, rain]

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
 const CERTIFIED = [
-  { label: 'Unilever\nPartner',      icon: 'ribbon-outline',           color: '#1B3A6B' },
+  { label: 'Your Neighborhood\nRated', icon: 'people-circle-outline', color: '#1B3A6B' },
   { label: 'WHO\nCompliant',         icon: 'shield-checkmark-outline', color: '#006FB7' },
   { label: 'Dermatologist\nTested',  icon: 'medical-outline',          color: '#00857C' },
   { label: 'ISO 9001\nCertified',    icon: 'star-outline',             color: '#F4A100' },

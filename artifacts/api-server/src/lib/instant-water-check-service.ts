@@ -11,6 +11,7 @@ import {
   type InstantWaterCheckAnswers,
   type InstantWaterCheckResult,
 } from "./instant-water-check.js";
+import { enqueueLeadDelivery } from "./lead-delivery.js";
 
 const PUBLIC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTION_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -414,6 +415,22 @@ export async function createInstantAssessment(input: {
        VALUES ($1,'create-instant-water-assessment',$2,$3,$4,$5,$6,now() + interval '30 days')`,
       [randomUUID(), input.scope, input.idempotencyKey, requestHash, id, response],
     );
+    await enqueueLeadDelivery(client, {
+      submissionId: `${input.scope}:${input.idempotencyKey}`,
+      idempotencyKey: `${input.scope}:${input.idempotencyKey}`,
+      firstName: normalizedFirstName,
+      phone: normalizedPhone,
+      country: input.country.trim(),
+      area: input.area.trim(),
+      source: input.answers.source,
+      concern: input.answers.concern,
+      setting: input.answers.setting,
+      consent: "result_and_follow_up",
+      consentVersion: input.consentVersion,
+      sourceAttribution: input.sourceAttribution ?? {},
+      assessmentId: id,
+      reference,
+    });
     await client.query("COMMIT");
     return { response, replay: false };
   } catch (error) {
