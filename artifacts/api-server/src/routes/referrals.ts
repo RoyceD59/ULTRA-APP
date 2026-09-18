@@ -1259,6 +1259,50 @@ router.get("/uc/admin/referrals", async (req, res): Promise<void> => {
   });
 });
 
+router.get("/uc/admin/referrals/threshold-history", async (req, res): Promise<void> => {
+  const actor = await authenticatedTeamAdmin(req, res);
+  if (!actor) return;
+
+  const rawPage = Array.isArray(req.query.page) ? req.query.page[0] : req.query.page;
+  const rawPageSize = Array.isArray(req.query.pageSize) ? req.query.pageSize[0] : req.query.pageSize;
+  const page = rawPage === undefined ? 1 : Number(rawPage);
+  const pageSize = rawPageSize === undefined ? 10 : Number(rawPageSize);
+  if (
+    !Number.isInteger(page) ||
+    page < 1 ||
+    !Number.isInteger(pageSize) ||
+    pageSize < 1 ||
+    pageSize > 100
+  ) {
+    res.status(400).json({
+      error: "page must be a positive whole number and pageSize must be a whole number from 1 to 100",
+    });
+    return;
+  }
+
+  const result = await pool.query(
+    `SELECT actor_team_user_id,actor_name,actor_email,previous_value,new_value,changed_at,
+       count(*) OVER()::int AS total_count
+     FROM referral_alert_threshold_changes
+     ORDER BY changed_at DESC,id DESC
+     LIMIT $1 OFFSET $2`,
+    [pageSize, (page - 1) * pageSize],
+  );
+  const total = Number(result.rows[0]?.total_count ?? (
+    await pool.query("SELECT count(*)::int AS total FROM referral_alert_threshold_changes")
+  ).rows[0]?.total ?? 0);
+
+  res.json({
+    changes: result.rows.map(({ total_count: _totalCount, ...change }) => change),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  });
+});
+
 router.patch("/uc/admin/referrals/settings", async (req, res): Promise<void> => {
   const actor = await authenticatedTeamAdmin(req, res);
   if (!actor) return;

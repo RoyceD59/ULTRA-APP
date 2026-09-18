@@ -113,6 +113,61 @@ describe("referral alert threshold audit", () => {
     assert.equal(Number(read.body.latestThresholdChange.new_value), 11);
   });
 
+  it("returns threshold history to admins in stable, paginated reverse chronology", async () => {
+    await pool.query(
+      "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id=$1",
+      [ADMIN_ID],
+    );
+    await pool.query(
+      `INSERT INTO referral_alert_threshold_changes(
+         actor_team_user_id,actor_name,actor_email,previous_value,new_value,changed_at
+       ) VALUES
+         ($1,'Referral Audit Admin',$2,1,2,'2026-01-01T00:00:00Z'),
+         ($1,'Referral Audit Admin',$2,2,3,'2026-01-02T00:00:00Z'),
+         ($1,'Referral Audit Admin',$2,3,4,'2026-01-03T00:00:00Z')`,
+      [ADMIN_ID, `${ADMIN_ID}@test.invalid`],
+    );
+
+    const firstPage = await supertest(app)
+      .get("/api/uc/admin/referrals/threshold-history?page=1&pageSize=2")
+      .set("Authorization", bearer(ADMIN_ID, "admin"));
+    assert.equal(firstPage.status, 200);
+    assert.deepEqual(firstPage.body.pagination, {
+      page: 1,
+      pageSize: 2,
+      total: 3,
+      totalPages: 2,
+    });
+    assert.deepEqual(
+      firstPage.body.changes.map((change: { new_value: number }) => Number(change.new_value)),
+      [4, 3],
+    );
+
+    const secondPage = await supertest(app)
+      .get("/api/uc/admin/referrals/threshold-history?page=2&pageSize=2")
+      .set("Authorization", bearer(ADMIN_ID, "admin"));
+    assert.equal(secondPage.status, 200);
+    assert.deepEqual(
+      secondPage.body.changes.map((change: { new_value: number }) => Number(change.new_value)),
+      [2],
+    );
+  });
+
+  it("protects threshold history and rejects invalid pagination", async () => {
+    const unauthenticated = await supertest(app)
+      .get("/api/uc/admin/referrals/threshold-history");
+    const member = await supertest(app)
+      .get("/api/uc/admin/referrals/threshold-history")
+      .set("Authorization", bearer(MEMBER_ID, "member"));
+    const invalid = await supertest(app)
+      .get("/api/uc/admin/referrals/threshold-history?page=0&pageSize=101")
+      .set("Authorization", bearer(ADMIN_ID, "admin"));
+
+    assert.equal(unauthenticated.status, 401);
+    assert.equal(member.status, 401);
+    assert.equal(invalid.status, 400);
+  });
+
   it("does not audit invalid, coerced, or unauthorized attempts", async () => {
     const beforeCount = await auditCount();
     const invalid = await supertest(app)

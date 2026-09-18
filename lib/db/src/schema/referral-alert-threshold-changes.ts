@@ -1,4 +1,4 @@
-import { bigserial, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigserial, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { teamUsersTable } from "./team-users";
 
 /**
@@ -19,6 +19,12 @@ export const referralAlertThresholdChangesTable = pgTable(
     newValue: integer("new_value").notNull(),
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   },
+  (table) => [
+    index("referral_alert_threshold_changes_latest_idx").on(
+      table.changedAt.desc(),
+      table.id.desc(),
+    ),
+  ],
 );
 
 export type ReferralAlertThresholdChange =
