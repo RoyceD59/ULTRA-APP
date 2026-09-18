@@ -1,8 +1,9 @@
 // Web fallback — react-native-maps only works on native.
 // This screen shows a location list on web; map.native.tsx has the MapView.
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
@@ -13,6 +14,7 @@ import LocationDetailModal from '@/components/LocationDetailModal';
 
 const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
+const LOCATIONS_FRESHNESS_MS = 60 * 1000;
 
 function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onPress: (location: MapLocation) => void }) {
   const isCentre = loc.type === 'experience_centre';
@@ -63,10 +65,22 @@ export default function MapScreen() {
   const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn: () => api.getLocations(),
-    staleTime: 10 * 60 * 1000,
+    staleTime: LOCATIONS_FRESHNESS_MS,
   });
 
   const visible = filterMapLocations(locations, filter);
+
+  useFocusEffect(useCallback(() => {
+    void refetch();
+    const interval = setInterval(() => void refetch(), LOCATIONS_FRESHNESS_MS);
+    return () => clearInterval(interval);
+  }, [refetch]));
+
+  useEffect(() => {
+    if (selected && !locations.some(location => location.id === selected.id)) {
+      setSelected(null);
+    }
+  }, [locations, selected]);
 
   async function openDirections(location: MapLocation) {
     setDirectionsError('');

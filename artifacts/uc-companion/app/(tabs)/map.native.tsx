@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
@@ -31,6 +32,7 @@ const REFILL_PIN = '#1976D2';
 const TAP_PIN    = '#0288D1';
 
 const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
+const LOCATIONS_FRESHNESS_MS = 60 * 1000;
 
 // ── screen ───────────────────────────────────────────────────────────────────
 
@@ -50,10 +52,22 @@ export default function MapScreen() {
   const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn:  () => api.getLocations(),
-    staleTime: 10 * 60 * 1000,
+    staleTime: LOCATIONS_FRESHNESS_MS,
   });
 
   const visible = useMemo(() => filterMapLocations(locations, filter), [filter, locations]);
+
+  useFocusEffect(useCallback(() => {
+    void refetch();
+    const interval = setInterval(() => void refetch(), LOCATIONS_FRESHNESS_MS);
+    return () => clearInterval(interval);
+  }, [refetch]));
+
+  useEffect(() => {
+    if (selected && !locations.some(location => location.id === selected.id)) {
+      setSelected(null);
+    }
+  }, [locations, selected]);
 
   useEffect(() => {
     if (!mapReady || !visible.length) return;
