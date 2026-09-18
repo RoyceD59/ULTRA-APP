@@ -32,6 +32,7 @@ const TEAM_IDS      = [TEAM_ADMIN_ID];
 
 let server: http.Server;
 let adminToken: string;
+let payloadSequence = 0;
 /** IDs of rows created during the test — cleaned up in `after`. */
 const createdIds: number[] = [];
 
@@ -65,6 +66,7 @@ function validPayload(overrides: Record<string, unknown> = {}): Record<string, u
     products:  [{ productName: "Hydra Flux bottle", productId: 1, quantity: 2 }],
     saleDate:  "2025-01-15",
     notes:     "",
+    idempotencyKey: `offline-phone-email-${++payloadSequence}`,
     ...overrides,
   };
 }
@@ -123,7 +125,7 @@ describe("offline clients — phone and email: valid values round-trip", () => {
     const { status, body } = await apiFetch("/api/uc/offline-clients", {
       method: "POST",
       ...authedJson(adminToken, validPayload({
-        phone: "+254 712 345 678",
+         phone: "+254712345678",
         email: "jane@example.com",
       })),
     });
@@ -133,7 +135,7 @@ describe("offline clients — phone and email: valid values round-trip", () => {
     assert.ok(client?.id, "response must include the new row id");
     createdIds.push(client.id);
 
-    assert.equal(client.phone, "+254 712 345 678", "phone must round-trip exactly");
+     assert.equal(client.phone, "+254712345678", "phone must round-trip exactly");
     assert.equal(client.email, "jane@example.com", "email must be lowercased and stored");
   });
 
@@ -146,7 +148,7 @@ describe("offline clients — phone and email: valid values round-trip", () => {
     const clients = (body as { clients: Array<{ id: number; phone: string | null; email: string | null }> }).clients;
     const row = clients.find(c => c.id === createdIds[0]);
     assert.ok(row, "row must appear in the list");
-    assert.equal(row.phone, "+254 712 345 678");
+    assert.equal(row.phone, "+254712345678");
     assert.equal(row.email, "jane@example.com");
   });
 
@@ -155,14 +157,14 @@ describe("offline clients — phone and email: valid values round-trip", () => {
     const { status, body } = await apiFetch(`/api/uc/offline-clients/${id}`, {
       method: "PUT",
       ...authedJson(adminToken, validPayload({
-        phone: "0722000111",
+         phone: "+254722000111",
         email: "UPDATED@example.com",
       })),
     });
 
     assert.equal(status, 200, `expected 200, got ${status}: ${JSON.stringify(body)}`);
     const client = (body as { client: { phone: string; email: string } }).client;
-    assert.equal(client.phone, "0722000111");
+     assert.equal(client.phone, "+254722000111");
     assert.equal(client.email, "updated@example.com", "email must be lowercased on save");
   });
 
@@ -192,30 +194,30 @@ describe("offline clients — phone and email: valid values round-trip", () => {
     assert.equal(row.email, null, "null email must remain null in the list");
   });
 
-  it("POST with omitted phone and email creates a row with null phone/email", async () => {
+  it("POST with omitted phone stores a null phone when email is supplied", async () => {
     const { status, body } = await apiFetch("/api/uc/offline-clients", {
       method: "POST",
-      ...authedJson(adminToken, validPayload()),   // no phone / email keys
+      ...authedJson(adminToken, validPayload({ email: "omitted-phone@example.com" })),
     });
 
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
     const client = (body as { client: { id: number; phone: string | null; email: string | null } }).client;
     createdIds.push(client.id);
     assert.equal(client.phone, null);
-    assert.equal(client.email, null);
+    assert.equal(client.email, "omitted-phone@example.com");
   });
 
-  it("POST with empty-string phone and email stores null (treated as absent)", async () => {
+  it("POST with empty-string phone stores null when email is supplied", async () => {
     const { status, body } = await apiFetch("/api/uc/offline-clients", {
       method: "POST",
-      ...authedJson(adminToken, validPayload({ phone: "", email: "" })),
+      ...authedJson(adminToken, validPayload({ phone: "", email: "empty-phone@example.com" })),
     });
 
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
     const client = (body as { client: { id: number; phone: string | null; email: string | null } }).client;
     createdIds.push(client.id);
     assert.equal(client.phone, null, "empty phone string must be stored as null");
-    assert.equal(client.email, null, "empty email string must be stored as null");
+    assert.equal(client.email, "empty-phone@example.com");
   });
 });
 

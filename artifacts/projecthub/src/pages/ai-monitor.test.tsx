@@ -277,6 +277,7 @@ describe("ChatPanel conversation picker", () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringMatching(/\/api\/anthropic\/conversations\/1$/),
+        expect.objectContaining({ headers: expect.any(Object) }),
       );
     });
     expect(await screen.findByText("Show me the original blockers")).toBeInTheDocument();

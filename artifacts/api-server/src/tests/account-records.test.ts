@@ -131,10 +131,11 @@ describe("folder-only registration recovery", () => {
     const persisted = `clear-persisted-${suffix}@test.internal`;
     const contacted = `clear-contacted-${suffix}@test.internal`;
     const at = now();
-    await seed(persisted, at, { phone: `+254700${String(suffix).slice(-7)}` });
+    // Keep the generated fixture within Kenya's 12-digit E.164 contract.
+    await seed(persisted, at, { phone: `+254700${String(suffix).slice(-6)}` });
     await retryUnsyncedRegistration(persisted, at, {
       createAccount: true,
-      correctedPhone: `+254700${String(suffix).slice(-7)}`,
+      correctedPhone: `+254700${String(suffix).slice(-6)}`,
       resolvedBy: "admin-test",
     });
     const contactedAt = now();

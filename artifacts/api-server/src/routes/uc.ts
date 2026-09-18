@@ -5814,14 +5814,23 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       promoCode?: string;            // referral or promotion code
       idempotencyKey?: string;
     };
-  const accountResult = await pool.query(
-    `SELECT id,email FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
-    [orderNumericId],
-  );
-  const userEmail = accountResult.rows[0]?.email as string | undefined;
-  if (!userEmail) {
-    res.status(401).json({ error: "Authenticated customer account required" });
-    return;
+  // Guest checkout is supported for orders that carry their own delivery
+  // details.  In particular, never pass the sentinel "anonymous" through to
+  // PostgreSQL as an integer: an invalid integer parameter used to turn a
+  // perfectly valid guest COD request into a 500 before validation ran.
+  // Authenticated orders still use the account email for referral discounts;
+  // guests simply have no account-bound email.
+  let userEmail: string | undefined;
+  if (Number.isInteger(orderNumericId) && orderNumericId > 0) {
+    const accountResult = await pool.query(
+      `SELECT id,email FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
+      [orderNumericId],
+    );
+    userEmail = accountResult.rows[0]?.email as string | undefined;
+    if (!userEmail) {
+      res.status(401).json({ error: "Authenticated customer account required" });
+      return;
+    }
   }
   if (!lineItems || !paymentMethod) {
     res.status(400).json({ error: "Missing required fields" });
@@ -6533,6 +6542,23 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           res.status(503).json({ error: "Service temporarily unavailable, please retry", retryable: true });
           return;
         }
+      }
+
+      // A reference-less order (normally COD) cannot be reconciled after an
+      // uncertain WooCommerce POST.  Falling through to the local DB path
+      // would report success even though the store order was not created (and
+      // could create a duplicate when the caller retries), so surface the
+      // outage explicitly as retryable.
+      if (!wcOrder) {
+        logger.warn(
+          { paymentMethod, paymentReference },
+          "[orders] WooCommerce order creation failed; client should retry",
+        );
+        res.status(503).json({
+          error: "WooCommerce is temporarily unavailable, please retry",
+          retryable: true,
+        });
+        return;
       }
 
       if (wcOrder) {

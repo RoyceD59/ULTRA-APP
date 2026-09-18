@@ -122,6 +122,7 @@ let teamAdminToken = "";
 let teamMemberToken = "";
 let savedWcConsumerKey: string | undefined;
 let savedWcConsumerSecret: string | undefined;
+const TEAM_ADMIN_ID = "inventory-team-admin";
 
 before(async () => {
   savedWcConsumerKey = process.env["WC_CONSUMER_KEY"];
@@ -129,17 +130,22 @@ before(async () => {
   delete process.env["WC_CONSUMER_KEY"];
   delete process.env["WC_CONSUMER_SECRET"];
 
-  process.env["UC_ADMIN_EMAILS"] = "inventory-admin@test.internal";
-  process.env["PROJECTHUB_ADMIN_EMAIL"] = "inventory-admin@test.internal";
-  process.env["PROJECTHUB_ADMIN_PASSWORD"] = "test-pw-inv";
   process.env["SESSION_SECRET"] ??= "test-session-secret-inv";
 
-  // Admin WC-style token: src:"woo" + email on UC_ADMIN_EMAILS → isAdminRequest passes
+  await pool.query(
+    `INSERT INTO team_users (id, email, name, password_hash, role, is_active)
+     VALUES ($1, 'inventory-admin@test.internal', 'Inventory Admin', 'unused', 'admin', true)
+     ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true`,
+    [TEAM_ADMIN_ID],
+  );
+  // Admin authority is re-verified against the live team_users row.
   adminToken = `Bearer ${issueToken({
-    id: String(Date.now()),
+    id: TEAM_ADMIN_ID,
     email: "inventory-admin@test.internal",
-    src: "woo",
-  } as Record<string, unknown>)}`;
+    name: "Inventory Admin",
+    type: "team-session",
+    role: "admin",
+  })}`;
 
   // Non-admin WC token
   memberToken = `Bearer ${issueToken({
@@ -179,6 +185,7 @@ before(async () => {
 
 after(async () => {
   appServer?.close();
+  await pool.query("DELETE FROM team_users WHERE id = $1", [TEAM_ADMIN_ID]).catch(() => undefined);
   // Clean up: ensure n8n_inventory_webhook_url_enc is null
   await pool.query(
     "UPDATE team_settings SET n8n_inventory_webhook_url_enc = null WHERE id = 'singleton'",

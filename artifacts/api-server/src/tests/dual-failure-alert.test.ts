@@ -11,7 +11,8 @@
  *
  * Test strategy:
  *   - Spin up a configurable stub Resend HTTP server.
- *   - Force db.transaction to throw ("DB down").
+ *   - Force pool.connect to throw ("DB down"), matching the registration
+ *     endpoint's client-level transaction seam.
  *   - Force _ioSeams.appendFile to throw ("disk full").
  *   - Intercept Slack via _slackSeams.sendMessage to capture or fail calls.
  */
@@ -31,7 +32,7 @@ process.env["SESSION_SECRET"] ??= "test-secret-for-dual-failure-alert-tests";
 const { default: app } = await import("../app.js");
 const { _ioSeams } = await import("../lib/account-records.js");
 const { _slackSeams } = await import("../lib/slack.js");
-const { db } = await import("@workspace/db");
+const { pool } = await import("@workspace/db");
 // mock is the node:test built-in
 import { mock } from "node:test";
 
@@ -106,7 +107,10 @@ async function post(
 
 // ── Shared helper: force both DB and folder to fail ──────────────────────────
 function simulateDualFailure() {
-  const transactionMock = mock.method(db, "transaction", () => {
+  // Registration now owns a transaction through pool.connect()/client.query,
+  // rather than drizzle's db.transaction helper.  Fail at connect so the
+  // endpoint enters its persistence fallback before attempting the file write.
+  const connectMock = mock.method(pool, "connect", () => {
     throw new Error("DB_DOWN_SIMULATION");
   });
   const realAppendFile = _ioSeams.appendFile;
@@ -115,7 +119,7 @@ function simulateDualFailure() {
   };
   return {
     restore() {
-      transactionMock.mock.restore();
+      connectMock.mock.restore();
       _ioSeams.appendFile = realAppendFile;
     },
   };

@@ -46,8 +46,15 @@ const { issueToken } = await import("../lib/jwt.js");
 const { pool } = await import("@workspace/db");
 
 let appServer: http.Server;
+const TEAM_ADMIN_ID = "projecthub-email-admin";
 
 before(async () => {
+  await pool.query(
+    `INSERT INTO team_users (id, email, name, password_hash, role, is_active)
+     VALUES ($1, 'projecthub-email-admin@example.test', 'Email Test Admin', 'unused', 'admin', true)
+     ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true`,
+    [TEAM_ADMIN_ID],
+  );
   await new Promise<void>((resolve, reject) => {
     appServer = app.listen(0, "127.0.0.1", (err?: Error) => err ? reject(err) : resolve());
   });
@@ -55,11 +62,12 @@ before(async () => {
 
 after(async () => {
   await new Promise<void>((resolve, reject) => appServer.close((err) => err ? reject(err) : resolve()));
+  await pool.query("DELETE FROM team_users WHERE id = $1", [TEAM_ADMIN_ID]).catch(() => undefined);
 });
 
 function adminToken(): string {
   return issueToken({
-    id: "projecthub-email-admin",
+    id: TEAM_ADMIN_ID,
     email: "projecthub-email-admin@example.test",
     name: "Email Test Admin",
     type: "team-session",

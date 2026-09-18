@@ -158,7 +158,7 @@ after(async () => {
 describe("route handlers pass customer SMS metadata end-to-end", () => {
   it("WooCommerce-created order logs its template, order ID, and E.164 recipient", async () => {
     capturedNotifications = [];
-    const user = await createUser("order", "0712 345 678");
+    const user = await createUser("order", "+254712345678");
     const wcOrderId = 987654;
 
     process.env["WC_CONSUMER_KEY"] = "test-wc-key";
@@ -193,12 +193,14 @@ describe("route handlers pass customer SMS metadata end-to-end", () => {
     const result = await post("/uc/orders", {
       lineItems: [{ productId: 1, quantity: 1 }],
       paymentMethod: "paystack",
-      paymentReference: `SMS_ROUTE_${Date.now()}`,
+       paymentReference: `SMS_ROUTE_${Date.now()}`,
+       idempotencyKey: `sms-route-order-${Date.now()}`,
       shippingAddress: {
         firstName: "Route",
         lastName: "Test",
         address1: "1 Test Street",
         city: "Nairobi",
+         phone: "+254712345678",
       },
     }, bearerFor(user.id, user.email));
 
@@ -259,7 +261,7 @@ describe("route handlers pass customer SMS metadata end-to-end", () => {
     const result = await post("/uc/water-tests", {
       name: "Water Route",
       address: "10 Clean Water Avenue, Nairobi",
-      phone: "0700 123 456",
+       phone: "+254700123456",
       waterSource: "Borehole",
       concerns: "Taste",
       photos: [],

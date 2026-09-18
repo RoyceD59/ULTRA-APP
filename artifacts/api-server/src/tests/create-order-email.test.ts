@@ -271,7 +271,8 @@ describe("createOrder — WooCommerce path — sendViaResend is called", () => {
           lineItems:        [{ productId: 1, quantity: 1 }],
           paymentMethod:    "paystack",
           paymentReference: payRef,
-          shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "1 Test St", city: "Nairobi" },
+          shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "1 Test St", city: "Nairobi", phone: "+254711000011" },
+          idempotencyKey:   `coe-wc-${payRef}`,
         },
         jwt,
       );
@@ -380,6 +381,7 @@ describe("createOrder — WooCommerce COD path — sendViaResend is called", () 
           paymentMethod: "cod",
           // No paymentReference — this is the COD case with no anchor.
           shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "4 Test St", city: "Nairobi", phone: "+254700000041" },
+          idempotencyKey:  `coe-wc-cod-${wcOrderId}`,
         },
         jwt,
       );
@@ -490,7 +492,8 @@ describe("createOrder — WooCommerce path — empty line_items — fallback rec
           lineItems:        [],              // client also sends no items
           paymentMethod:    "paystack",
           paymentReference: payRef,
-          shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "5 Empty St", city: "Nairobi" },
+          shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "5 Empty St", city: "Nairobi", phone: "+254711000013" },
+          idempotencyKey:   `coe-wc-empty-${payRef}`,
         },
         jwt,
       );
@@ -569,7 +572,8 @@ describe("createOrder — DB path — sendViaResend is called", () => {
         {
           lineItems:     [{ productId: 22, quantity: 2 }],  // Bottle Filter Cartridge × 2
           paymentMethod: "cod",
-          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "2 Test St", city: "Nairobi", phone: "0712345021" },
+          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "2 Test St", city: "Nairobi", phone: "+254712345021" },
+          idempotencyKey:  `coe-db-${Date.now()}`,
         },
         jwt,
       );

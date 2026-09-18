@@ -36,6 +36,7 @@
 
 import { Pool } from "pg";
 import { spawn, type ChildProcess } from "node:child_process";
+import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 // ── 0. Require DATABASE_URL ───────────────────────────────────────────────────
@@ -250,29 +251,98 @@ console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 // the node:test runner spawns inherits this variable, so @workspace/db always
 // connects to the isolated database.
 
-const testGlob = process.env["TEST_GLOB"] ?? "src/tests/**/*.test.ts";
-// Referral lifecycle uses shared account/settlement state across cases; keep
-// that focused suite serial even when the general runner is highly parallel.
-const TEST_CONCURRENCY = testGlob.includes("referral-lifecycle") ? 1 : 32;
+const testGlob = process.env["TEST_GLOB"];
+// These suites deliberately replace process-wide seams (process.env and
+// globalThis.fetch), while the referral suite shares account/settlement state.
+// The default run executes ordinary files in one parallel phase, then these
+// four files in a separate serial phase against the same isolated database.
+const SHARED_STATE_FILES = [
+  "dual-failure-alert",
+  "reminder-concurrency",
+  "reminder-rewards-credit",
+  "referral-lifecycle",
+];
 const testNamePattern = process.env["TEST_NAME_PATTERN"];
 
-const childExitCode = await spawnAsync(
-  "node",
-  [
-    "--import",
-    "tsx/esm",
-    "--test",
-    "--test-force-exit",
-    `--test-concurrency=${TEST_CONCURRENCY}`,
-    ...(testNamePattern ? ["--test-name-pattern", testNamePattern] : []),
-    testGlob,
-  ],
-  {
-    cwd: fileURLToPath(new URL("../..", import.meta.url)), // artifacts/api-server
-    env: { ...process.env, DATABASE_URL: TEST_URL },
-    stdio: "inherit",
-  },
-);
+const testCwd = fileURLToPath(new URL("../..", import.meta.url)); // artifacts/api-server
+
+async function listTestFiles(directory: string, prefix = ""): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const absolutePath = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...await listTestFiles(absolutePath, relativePath));
+    } else if (entry.isFile() && entry.name.endsWith(".test.ts")) {
+      files.push(relativePath);
+    }
+  }
+  return files.sort();
+}
+
+async function runTestPhase(
+  phaseName: string,
+  testFiles: string[],
+  concurrency: number,
+  fileCount = testFiles.length,
+): Promise<number> {
+  if (testFiles.length === 0) return 0;
+  console.log(`[test-setup] Running ${phaseName} (${fileCount} file${fileCount === 1 ? "" : "s"})…\n`);
+  return spawnAsync(
+    "node",
+    [
+      "--import",
+      "tsx/esm",
+      "--test",
+      "--test-force-exit",
+      `--test-concurrency=${concurrency}`,
+      ...(testNamePattern ? ["--test-name-pattern", testNamePattern] : []),
+      ...testFiles,
+    ],
+    {
+      cwd: testCwd,
+      env: { ...process.env, DATABASE_URL: TEST_URL },
+      stdio: "inherit",
+    },
+  );
+}
+
+let childExitCode: number;
+if (testGlob) {
+  // Explicit TEST_GLOB runs retain their historical single-phase behavior.
+  const concurrency = SHARED_STATE_FILES.some((part) => testGlob.includes(part)) ? 1 : 32;
+  childExitCode = await runTestPhase("focused tests", [testGlob], concurrency);
+} else {
+  const allTests = await listTestFiles(`${testCwd}/src/tests`);
+  const sharedTests = allTests.filter((file) =>
+    SHARED_STATE_FILES.some((part) => file.endsWith(`${part}.test.ts`)),
+  );
+  const ordinaryTests = allTests.filter((file) => !sharedTests.includes(file));
+  // Keep each phase to one glob argument. Node's test CLI folds a large list
+  // of positional paths into one invalid comma-separated glob, while brace
+  // expansion handles the full suite reliably.
+  const asGlob = (files: string[]): string => {
+    const paths = files.map((file) => `src/tests/${file}`);
+    return paths.length === 1 ? paths[0]! : `{${paths.join(",")}}`;
+  };
+
+  // Run both phases even if the first fails, so the final result reflects
+  // failures from either phase and the shared-state suites still get coverage.
+  const ordinaryExitCode = await runTestPhase(
+    "ordinary tests",
+    [asGlob(ordinaryTests)],
+    32,
+    ordinaryTests.length,
+  );
+  const sharedExitCode = await runTestPhase(
+    "shared-state tests",
+    [asGlob(sharedTests)],
+    1,
+    sharedTests.length,
+  );
+  childExitCode = ordinaryExitCode !== 0 ? ordinaryExitCode : sharedExitCode;
+}
 
 // ── 7. Drop the database unconditionally ─────────────────────────────────────
 //

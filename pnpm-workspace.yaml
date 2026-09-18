@@ -36,10 +36,8 @@ minimumReleaseAgeExclude:
   - '@replit/*'
   - stripe-replit-sync
   - expo
-  - expo-constants
-  - expo-file-system
-  - expo-modules-autolinking
-  - '@expo/cli'
+  - 'expo-*'
+  - '@expo/*'
 
 onlyBuiltDependencies:
   - '@swc/core'
