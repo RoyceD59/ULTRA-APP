@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import * as Location from 'expo-location';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
-import { directionsUrls, mapCoordinates, regionForLocations } from '@/lib/locationMap';
+import { directionsUrls, filterMapLocations, mapCoordinates, regionForLocations, type LocationMapFilter } from '@/lib/locationMap';
 import LocationDetailModal from '@/components/LocationDetailModal';
 
 // ── constants ────────────────────────────────────────────────────────────────
@@ -30,8 +30,7 @@ const VENDOR_PIN = '#2E7D32';
 const REFILL_PIN = '#1976D2';
 const TAP_PIN    = '#0288D1';
 
-const FILTER_TABS = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'] as const;
-type Filter = typeof FILTER_TABS[number];
+const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
 
 // ── screen ───────────────────────────────────────────────────────────────────
 
@@ -39,7 +38,7 @@ export default function MapScreen() {
   const colors   = useColors();
   const api      = useApi();
   const mapRef   = useRef<MapView>(null);
-  const [filter,   setFilter]   = useState<Filter>('All');
+  const [filter,   setFilter]   = useState<LocationMapFilter>('All');
   const [selected, setSelected] = useState<MapLocation | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [directionsError, setDirectionsError] = useState('');
@@ -54,15 +53,7 @@ export default function MapScreen() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const visible = useMemo(() => locations.filter(l => {
-    if (filter === 'All') return true;
-    if (filter === 'Centres') return l.type === 'experience_centre';
-    if (filter === 'ATMs') return l.type === 'water_atm';
-    if (filter === 'Vendors') return l.type === 'vendor';
-    if (filter === 'Stations') return l.type === 'refill_station';
-    if (filter === 'Taps') return l.type === 'city_tap';
-    return false;
-  }), [filter, locations]);
+  const visible = useMemo(() => filterMapLocations(locations, filter), [filter, locations]);
 
   useEffect(() => {
     if (!mapReady || !visible.length) return;

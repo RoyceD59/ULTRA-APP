@@ -7,11 +7,11 @@ import { useColors } from '@/hooks/useColors';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
-import { directionsUrls } from '@/lib/locationMap';
+import { directionsUrls, filterMapLocations, type LocationMapFilter } from '@/lib/locationMap';
 
 import LocationDetailModal from '@/components/LocationDetailModal';
 
-const FILTER_TABS = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
+const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
 function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onPress: (location: MapLocation) => void }) {
@@ -55,7 +55,7 @@ function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: Retu
 export default function MapScreen() {
   const colors = useColors();
   const api = useApi();
-  const [filter, setFilter] = useState('All');
+  const [filter, setFilter] = useState<LocationMapFilter>('All');
   const [directionsError, setDirectionsError] = useState('');
   const [selected, setSelected] = useState<MapLocation | null>(null);
   const cartBarInset = useCartBarInset();
@@ -66,15 +66,7 @@ export default function MapScreen() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const visible = locations.filter(l => {
-    if (filter === 'All') return true;
-    if (filter === 'Centres') return l.type === 'experience_centre';
-    if (filter === 'ATMs') return l.type === 'water_atm';
-    if (filter === 'Vendors') return l.type === 'vendor';
-    if (filter === 'Stations') return l.type === 'refill_station';
-    if (filter === 'Taps') return l.type === 'city_tap';
-    return false;
-  });
+  const visible = filterMapLocations(locations, filter);
 
   async function openDirections(location: MapLocation) {
     setDirectionsError('');

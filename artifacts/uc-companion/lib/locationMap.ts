@@ -16,6 +16,12 @@ export interface MapRegion extends MapCoordinate {
   longitudeDelta: number;
 }
 
+export type LocationMapFilter = 'All' | 'Centres' | 'ATMs' | 'Vendors' | 'Stations' | 'Taps';
+
+export interface FilterableLocation {
+  type: string;
+}
+
 const MIN_DELTA = 0.02;
 const REGION_PADDING = 1.35;
 
@@ -53,6 +59,22 @@ export function mapCoordinates(locations: DirectionsLocation[]): MapCoordinate[]
   return locations
     .filter(location => Number.isFinite(location.lat) && Number.isFinite(location.lng))
     .map(location => ({ latitude: location.lat, longitude: location.lng }));
+}
+
+/** Keeps web and native map tabs aligned as new location types are added. */
+export function filterMapLocations<T extends FilterableLocation>(
+  locations: readonly T[],
+  filter: LocationMapFilter,
+): T[] {
+  if (filter === 'All') return [...locations];
+  const typeByFilter: Record<Exclude<LocationMapFilter, 'All'>, string> = {
+    Centres: 'experience_centre',
+    ATMs: 'water_atm',
+    Vendors: 'vendor',
+    Stations: 'refill_station',
+    Taps: 'city_tap',
+  };
+  return locations.filter(location => location.type === typeByFilter[filter]);
 }
 
 /** Derives a padded region for one or more markers when fitting is unavailable. */

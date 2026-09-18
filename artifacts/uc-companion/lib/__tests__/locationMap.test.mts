@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { directionsUrls, regionForLocations } from "../locationMap.ts";
+import { directionsUrls, filterMapLocations, regionForLocations } from "../locationMap.ts";
 
 const location = { name: "Ultra-Clear Westlands", lat: -1.2633, lng: 36.8072 };
 
@@ -37,5 +37,18 @@ describe("customer location map helpers", () => {
       latitudeDelta: 0.02,
       longitudeDelta: 0.02,
     });
+  });
+
+  it("shows seeded city taps only under the tap and all-location filters", () => {
+    const locations = [
+      { id: "ghana-tap", type: "city_tap" },
+      { id: "kenya-atm", type: "water_atm" },
+      { id: "rwanda-station", type: "refill_station" },
+    ];
+
+    assert.deepEqual(filterMapLocations(locations, "Taps").map(item => item.id), ["ghana-tap"]);
+    assert.deepEqual(filterMapLocations(locations, "ATMs").map(item => item.id), ["kenya-atm"]);
+    assert.deepEqual(filterMapLocations(locations, "Stations").map(item => item.id), ["rwanda-station"]);
+    assert.equal(filterMapLocations(locations, "All").length, 3);
   });
 });

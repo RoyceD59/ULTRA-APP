@@ -11,6 +11,7 @@ import { sendViaResend } from "./lib/resend.js";
 import { migrateAndGuardSessionDir } from "./lib/whatsapp";
 import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/account-records.js";
 import { processPendingReferralSettlements } from "./routes/referrals.js";
+import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -951,7 +952,42 @@ async function applyStartupMigrations(): Promise<void> {
       location,
     );
   }
-  logger.info("Startup migration: managed UC locations ensured and legacy locations seeded");
+  for (const location of PRIORITY_LOCATION_SEEDS) {
+    await pool.query(
+      `INSERT INTO uc_locations
+       (id, type, name, address, latitude, longitude, hours, phone, vendor_name,
+        country_iso, city, access_notes, municipal, source_attribution,
+        active, verified, verified_by, verified_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,false,NULL,NULL,'seed:wpdx-priority-countries')
+       ON CONFLICT (id) DO UPDATE SET
+         type = EXCLUDED.type,
+         name = EXCLUDED.name,
+         address = EXCLUDED.address,
+         latitude = EXCLUDED.latitude,
+         longitude = EXCLUDED.longitude,
+         hours = EXCLUDED.hours,
+         phone = EXCLUDED.phone,
+         vendor_name = EXCLUDED.vendor_name,
+         country_iso = EXCLUDED.country_iso,
+         city = EXCLUDED.city,
+         access_notes = EXCLUDED.access_notes,
+         municipal = EXCLUDED.municipal,
+         source_attribution = EXCLUDED.source_attribution,
+         updated_at = now()
+       WHERE uc_locations.created_by = 'seed:wpdx-priority-countries'
+         AND uc_locations.verified = false`,
+      [
+        location.id, location.type, location.name, location.address,
+        location.latitude, location.longitude, location.hours, location.phone,
+        location.vendorName, location.countryIso, location.city,
+        location.accessNotes, location.municipal, location.sourceAttribution,
+      ],
+    );
+  }
+  logger.info(
+    { priorityLocationCount: PRIORITY_LOCATION_SEEDS.length },
+    "Startup migration: managed UC locations ensured and location seeds applied",
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS uc_location_ratings (
       id text PRIMARY KEY, location_id text NOT NULL, user_id integer NOT NULL,
