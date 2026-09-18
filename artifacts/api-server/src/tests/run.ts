@@ -256,10 +256,14 @@ const testGlob = process.env["TEST_GLOB"];
 // The default run executes ordinary files in one parallel phase, then these
 // files in a separate serial phase against the same isolated database.
 const SHARED_STATE_FILES = [
+  "canonical-dual-write-routes",
   "cod-order-validation",
   "dual-failure-alert",
   "paystack-retryable",
   "referral-lifecycle",
+  "reminder-checkin-sent-stages",
+  "reminder-good-checkin-revert",
+  "reminder-sync-first-insert",
 ];
 const testNamePattern = process.env["TEST_NAME_PATTERN"];
 

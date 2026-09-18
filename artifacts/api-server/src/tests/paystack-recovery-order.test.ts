@@ -30,7 +30,7 @@ import http from "node:http";
 import { createHmac } from "node:crypto";
 
 import app from "../app.js";
-import { db, ucOrdersTable } from "@workspace/db";
+import { db, pool, ucOrdersTable } from "@workspace/db";
 import { eq, like } from "drizzle-orm";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
@@ -153,6 +153,18 @@ after(async () => {
       .from(ucOrdersTable)
       .where(like(ucOrdersTable.paymentReference, `${TEST_PREFIX}%`));
 
+    const orderIds = rows.map((row) => row.id);
+    if (orderIds.length) {
+      await pool.query(
+        "DELETE FROM uc_reconciliation_conflicts WHERE source_reference LIKE ANY($1::text[])",
+        [orderIds.map((id) => `order:${id}:%`)],
+      ).catch(() => {});
+      await pool.query(
+        "DELETE FROM uc_canonical_purchase_lines WHERE purchase_id IN (SELECT id FROM uc_canonical_purchases WHERE companion_order_id=ANY($1::int[]))",
+        [orderIds],
+      ).catch(() => {});
+      await pool.query("DELETE FROM uc_canonical_purchases WHERE companion_order_id=ANY($1::int[])", [orderIds]).catch(() => {});
+    }
     for (const row of rows) {
       await db.delete(ucOrdersTable).where(eq(ucOrdersTable.id, row.id)).catch(() => {});
     }
@@ -357,6 +369,90 @@ describe("Paystack webhook — concurrent duplicate charge.success", () => {
       }
     },
   );
+});
+
+describe("Paystack webhook — enabled canonical dual-write recovery", () => {
+  it("heals the winning existing order and converges duplicates to one canonical purchase and line", async () => {
+    const previous = process.env["UC_CANONICAL_DUAL_WRITES"];
+    process.env["UC_CANONICAL_DUAL_WRITES"] = "true";
+    const reference = nextRef();
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = silentFetch();
+    const user = await pool.query(
+      "INSERT INTO uc_users (email,password_hash,first_name) VALUES ($1,'unused','Paystack') RETURNING id",
+      [`paystack-${Date.now()}@test.invalid`],
+    );
+    const order = await pool.query(
+      `INSERT INTO uc_orders
+       (user_id,status,total,currency,payment_method,payment_reference,promo_code,discount_percent,discount_amount,shipping_address)
+       VALUES ($1,'pending','3500','KES','paystack',$2,'',0,0,'{}') RETURNING id`,
+      [String(user.rows[0].id), reference],
+    );
+    const orderId = Number(order.rows[0].id);
+    await pool.query(
+      "INSERT INTO uc_order_items (order_id,product_id,name,quantity,total) VALUES ($1,1,'Paystack item',1,'3500')",
+      [orderId],
+    );
+    try {
+      const event = chargeSuccessEvent({ reference, amountKobo: 350_000, customerEmail: "buyer@example.com" });
+      const [first, second] = await Promise.all([postWebhook(event), postWebhook(event)]);
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 200);
+      assert.equal(first.body["orderId"], orderId);
+      assert.equal(second.body["orderId"], orderId);
+      const canonical = await pool.query(
+        "SELECT id FROM uc_canonical_purchases WHERE companion_order_id=$1",
+        [orderId],
+      );
+      assert.equal(canonical.rows.length, 1);
+      const lines = await pool.query(
+        "SELECT count(*)::int AS count FROM uc_canonical_purchase_lines WHERE purchase_id=$1",
+        [canonical.rows[0].id],
+      );
+      assert.equal(lines.rows[0].count, 1);
+    } finally {
+      globalThis.fetch = savedFetch;
+      if (previous === undefined) delete process.env["UC_CANONICAL_DUAL_WRITES"];
+      else process.env["UC_CANONICAL_DUAL_WRITES"] = previous;
+      await pool.query("DELETE FROM uc_canonical_purchase_lines WHERE purchase_id IN (SELECT id FROM uc_canonical_purchases WHERE companion_order_id=$1)", [orderId]);
+      await pool.query("DELETE FROM uc_canonical_purchases WHERE companion_order_id=$1", [orderId]);
+      await pool.query("DELETE FROM uc_order_items WHERE order_id=$1", [orderId]);
+      await pool.query("DELETE FROM uc_orders WHERE id=$1", [orderId]);
+      await pool.query("DELETE FROM uc_users WHERE id=$1", [user.rows[0].id]);
+    }
+  });
+
+  it("returns retryable non-2xx for an incompatible canonical purchase without duplicating the order", async () => {
+    const previous = process.env["UC_CANONICAL_DUAL_WRITES"];
+    process.env["UC_CANONICAL_DUAL_WRITES"] = "true";
+    const reference = nextRef();
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = silentFetch();
+    try {
+      await pool.query(
+        "INSERT INTO uc_canonical_purchases (companion_order_id,payment_provider,payment_reference,currency,total_minor,payment_status,fulfilment_status) VALUES (NULL,'paystack',$1,'KES',999999,'paid','processing')",
+        [reference],
+      );
+      const response = await postWebhook(chargeSuccessEvent({
+        reference,
+        amountKobo: 350_000,
+        customerEmail: "paystack-conflict@example.com",
+      }));
+      assert.notEqual(response.status, 200);
+      assert.ok(response.status >= 500, `expected retryable 5xx, got ${response.status}`);
+      const orders = await pool.query("SELECT count(*)::int AS count FROM uc_orders WHERE payment_reference=$1", [reference]);
+      assert.equal(orders.rows[0].count, 1);
+      const canonical = await pool.query("SELECT count(*)::int AS count FROM uc_canonical_purchases WHERE payment_reference=$1", [reference]);
+      assert.equal(canonical.rows[0].count, 1);
+    } finally {
+      globalThis.fetch = savedFetch;
+      if (previous === undefined) delete process.env["UC_CANONICAL_DUAL_WRITES"];
+      else process.env["UC_CANONICAL_DUAL_WRITES"] = previous;
+      await pool.query("DELETE FROM uc_reconciliation_conflicts WHERE source_reference LIKE $1", [`%${reference}%`]).catch(() => {});
+      await pool.query("DELETE FROM uc_canonical_purchase_lines WHERE purchase_id IN (SELECT id FROM uc_canonical_purchases WHERE payment_reference=$1)", [reference]).catch(() => {});
+      await pool.query("DELETE FROM uc_canonical_purchases WHERE payment_reference=$1", [reference]).catch(() => {});
+    }
+  });
 });
 
 describe("Paystack initialize — transient outage signalling", () => {

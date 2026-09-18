@@ -1,8 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import bcryptjs from "bcryptjs";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
 import {
   db,
+  pool,
   ucOfflineClientsTable,
   ucUsersTable,
   type OfflineProduct,
@@ -11,6 +13,7 @@ import { normalizeEmail, normalizePhone } from "./customer-identity.js";
 import { sendViaResend } from "./resend.js";
 import { sendWhatsAppMessage } from "./whatsapp.js";
 import { logger } from "./logger.js";
+import { resolveCustomerIdentity } from "./customer-identity-resolution.js";
 
 const TEMPORARY_PASSWORD_DAYS = 14;
 const COMPANION_URL = "https://app.ucfilters.com";
@@ -156,31 +159,25 @@ export async function provisionOfflineSale(input: OfflineProvisioningInput): Pro
     throw new Error("A valid email address or international phone number is required");
   }
 
-  const result = await db.transaction(async (tx) => {
-    // Identity locks are taken in one deterministic order. This serializes
-    // different sale keys for the same contact before the account re-query.
-    const lockKeys = [
-      normalizedEmail ? `offline-email:${normalizedEmail}` : null,
-      normalizedPhone ? `offline-phone:${normalizedPhone}` : null,
-      `offline-sale:${input.idempotencyKey}`,
-    ].filter((key): key is string => !!key).sort();
-    for (const lockKey of lockKeys) {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`);
-    }
+  const client = await pool.connect();
+  let result: { row: typeof ucOfflineClientsTable.$inferSelect; created: boolean };
+  try {
+    await client.query("BEGIN");
+    // Serialize sale idempotency first, then use the shared email/phone locks.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`offline-sale:${input.idempotencyKey}`]);
+    const tx = drizzle(client);
+    result = await (async () => {
     const [existingSale] = await tx.select().from(ucOfflineClientsTable)
       .where(eq(ucOfflineClientsTable.idempotencyKey, input.idempotencyKey)).limit(1);
     if (existingSale) return { row: existingSale, created: false };
 
-    const emailMatches = normalizedEmail
-      ? await tx.select().from(ucUsersTable).where(and(eq(ucUsersTable.email, normalizedEmail), isNull(ucUsersTable.deletedAt)))
-      : [];
-    const phoneMatches = normalizedPhone
-      ? await tx.select().from(ucUsersTable).where(and(eq(ucUsersTable.phone, normalizedPhone), isNull(ucUsersTable.deletedAt)))
-      : [];
-    const emailUser = emailMatches.length === 1 ? emailMatches[0] : undefined;
-    const phoneUser = phoneMatches.length === 1 ? phoneMatches[0] : undefined;
-    const conflict = emailMatches.length > 1 || phoneMatches.length > 1
-      || (!!emailUser && !!phoneUser && emailUser.id !== phoneUser.id);
+    const identity = await resolveCustomerIdentity(
+      { email: normalizedEmail, phone: normalizedPhone },
+      client,
+    );
+    const conflict = identity.kind === "email_phone_conflict"
+      || identity.kind === "ambiguous" || identity.kind === "deleted_only"
+      || identity.kind === "mixed_deleted_conflict";
 
     if (conflict) {
       const [sale] = await tx.insert(ucOfflineClientsTable).values({
@@ -199,8 +196,7 @@ export async function provisionOfflineSale(input: OfflineProvisioningInput): Pro
       return { row: sale!, created: true };
     }
 
-    const matched = emailUser ?? phoneUser;
-    if (matched) {
+    if (identity.kind === "one_active_candidate") {
       const [sale] = await tx.insert(ucOfflineClientsTable).values({
         idempotencyKey: input.idempotencyKey,
         clientRef: input.clientRef,
@@ -209,10 +205,10 @@ export async function provisionOfflineSale(input: OfflineProvisioningInput): Pro
         products: input.products,
         saleDate: input.saleDate,
         notes: input.notes,
-        companionUserId: matched.id,
+        companionUserId: identity.customerId,
         accountSetupStatus: "linked-existing",
         deliveryStatus: "not_applicable",
-        deliveryMetadata: { matchedBy: emailUser ? "email" : "phone" },
+        deliveryMetadata: { matchedBy: normalizedEmail ? "email" : "phone" },
       }).returning();
       return { row: sale!, created: true };
     }
@@ -249,7 +245,14 @@ export async function provisionOfflineSale(input: OfflineProvisioningInput): Pro
       deliveryMetadata: { loginIdentifier: normalizedEmail ?? normalizedPhone },
     }).returning();
     return { row: sale!, created: true };
-  });
+    })();
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 
   if (!result.created || result.row.accountSetupStatus !== "created") {
     return { ...result, row: toPublicOfflineSale(result.row) };

@@ -10,6 +10,7 @@ import { sendSms } from "../lib/sms.js";
 import { buildOrderReceiptEmail } from "../lib/email.js";
 import { paymentLimiter } from "../lib/rate-limiters.js";
 import { enqueueReferralSettlement } from "./referrals.js";
+import { reconcileCanonicalPurchaseDualWrite } from "../lib/canonical-purchase-dual-write.js";
 
 async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
   // Provider recovery rows carry an email/phone placeholder until /uc/orders
@@ -744,6 +745,7 @@ router.post(
           );
         }
 
+        await reconcileCanonicalPurchaseDualWrite(order.id, `paystack:${order.id}`);
         res.json({ received: true, orderId: order.id });
         return;
       }
@@ -769,6 +771,7 @@ router.post(
         })
         .returning();
       await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [recovered!.id]);
+      await reconcileCanonicalPurchaseDualWrite(recovered!.id, `paystack:${recovered!.id}`);
 
       console.info(
         `[Paystack webhook] Recovery order ${recovered!.id} created for ref ${reference} (${currency} ${totalKes})`
@@ -815,6 +818,7 @@ router.post(
             .where(eq(ucOrdersTable.paymentReference, reference))
             .limit(1);
           if (winner) {
+            await reconcileCanonicalPurchaseDualWrite(winner.id, `paystack:${winner.id}`);
             console.info(
               `[Paystack webhook] Concurrent duplicate resolved — existing recovery order ${winner.id}`
             );
@@ -1199,6 +1203,9 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
 
       if (advanced.length > 0) {
         await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [order.id]);
+      }
+      await reconcileCanonicalPurchaseDualWrite(order.id, `mpesa:${order.id}`);
+      if (advanced.length > 0) {
         // We won the race — app closed during the wait, polling stopped.
         console.info(
           `[M-Pesa callback] Order ${order.id} (ref ${paymentReference}) advanced to processing`
@@ -1329,6 +1336,7 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
       })
       .returning();
     await pool.query("UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()) WHERE id=$1", [recovered!.id]);
+    await reconcileCanonicalPurchaseDualWrite(recovered!.id, `mpesa:${recovered!.id}`);
 
     console.info(
       `[M-Pesa callback] Recovery order ${recovered!.id} created — ref=${paymentReference} receipt=${receiptNum} amount=KES ${recoveryAmount} phone=${recoveryPhone}`
@@ -1363,18 +1371,38 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
     ack({ orderId: recovered!.id, recovered: true });
   } catch (err) {
     // ── Unique-constraint violation: two concurrent callbacks raced to insert ─
-    if (
-      typeof err === "object" && err !== null &&
-      "code" in err && (err as { code: string }).code === "23505"
-    ) {
-      console.info("[M-Pesa callback] Concurrent duplicate — unique constraint hit, recovery order already exists");
-      ack();
-      return;
+    const pgErrorCode = typeof err === "object" && err !== null
+      ? (err as { code?: string; cause?: { code?: string } }).code ??
+        (err as { cause?: { code?: string } }).cause?.code
+      : undefined;
+    if (pgErrorCode === "23505") {
+      const reference = String((req.body as { Body?: { stkCallback?: { CheckoutRequestID?: string } } })
+        ?.Body?.stkCallback?.CheckoutRequestID ?? "");
+      let winner: { id: number } | undefined;
+      for (let attempt = 0; attempt < 5 && !winner; attempt++) {
+        const result = await pool.query<{ id: number }>(
+          "SELECT id FROM uc_orders WHERE payment_reference=$1 ORDER BY id LIMIT 1", [reference],
+        );
+        winner = result.rows[0];
+        if (!winner) await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+      }
+      if (winner) {
+        let reconciled = false;
+        for (let attempt = 0; attempt < 5 && !reconciled; attempt++) {
+          try {
+        await reconcileCanonicalPurchaseDualWrite(winner.id, `mpesa:${winner.id}`);
+            reconciled = true;
+          } catch (error) {
+            if (attempt === 4) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+          }
+        }
+        ack({ orderId: winner.id, recovered: true });
+        return;
+      }
     }
-    console.error("[M-Pesa callback] Unexpected error:", err);
-    // Still ack — returning an error status causes Safaricom to retry with
-    // unpredictable timing, which can create duplicate recovery orders.
-    ack();
+    console.error("[M-Pesa callback] Retryable processing failure:", err instanceof Error ? err.name : "unknown");
+    res.status(503).json({ ResultCode: 1, ResultDesc: "Retryable processing failure" });
   }
 });
 

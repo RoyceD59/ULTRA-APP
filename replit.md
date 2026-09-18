@@ -99,6 +99,7 @@ The `GOOGLE_MAPS_ANDROID_KEY` is embedded in every Android build and can be extr
 
 Before submitting the **first production build** to the Play Store, confirm each item below:
 
+- [ ] **Review photo/video uploads verified on physical devices** — Test both camera capture and library selection for photos and videos through upload, attach, review submission, reopening, and playback. Do not deploy while either source fails.
 - [ ] **Maps key Android restriction verified** — In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), the `GOOGLE_MAPS_ANDROID_KEY` has an **Android apps** application restriction configured with package name `com.ultraclean.companion` and the SHA-1 of the **Google Play app-signing certificate** (Play Console → Setup → App signing) — not the EAS upload keystore. If the restriction is absent or uses only the debug fingerprint, rotate the key before uploading the AAB.
 - [ ] **Signing fingerprint guard passes** — `node artifacts/uc-companion/scripts/check-maps-key-fingerprint.mjs --fingerprint <Play app-signing SHA-1>` exits 0 (fingerprint recorded and GCP restriction confirmed). Also record the upload keystore: `--identity upload --fingerprint <SHA-1 from eas credentials> --update`. See `artifacts/uc-companion/docs/maps-key-rotation-runbook.md`.
 - [ ] EAS project initialised and `app.json` `updates.url` set to the live EAS project URL (replace `REPLACE_AFTER_EAS_PROJECT_INIT`).

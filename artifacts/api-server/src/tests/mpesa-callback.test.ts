@@ -29,7 +29,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { db, ucOrdersTable, mpesaStkInitiationsTable } from "@workspace/db";
+import { db, pool, ucOrdersTable, mpesaStkInitiationsTable } from "@workspace/db";
 import { invalidateMpesaSecretCache } from "../routes/payments.js";
 import { eq } from "drizzle-orm";
 
@@ -37,6 +37,7 @@ import { eq } from "drizzle-orm";
 let realFetch: typeof globalThis.fetch;
 let server: http.Server;
 let savedWebhookSecret: string | undefined;   // cleared in before(), restored in after()
+let savedDualWriteFlag: string | undefined;
 
 // Unique prefix so parallel/repeated test runs don't collide on payment refs.
 const TEST_PREFIX = `CB_${Date.now()}`;
@@ -143,6 +144,18 @@ async function cleanTestRows(): Promise<void> {
   const orderRows = await db
     .select({ id: ucOrdersTable.id, ref: ucOrdersTable.paymentReference })
     .from(ucOrdersTable);
+  const orderIds = orderRows.filter((x) => x.ref?.startsWith(TEST_PREFIX)).map((x) => x.id);
+  if (orderIds.length) {
+    await pool.query(
+      "DELETE FROM uc_reconciliation_conflicts WHERE source_reference LIKE ANY($1::text[])",
+      [orderIds.map((id) => `order:${id}:%`)],
+    ).catch(() => {});
+    await pool.query(
+      "DELETE FROM uc_canonical_purchase_lines WHERE purchase_id IN (SELECT id FROM uc_canonical_purchases WHERE companion_order_id=ANY($1::int[]))",
+      [orderIds],
+    ).catch(() => {});
+    await pool.query("DELETE FROM uc_canonical_purchases WHERE companion_order_id=ANY($1::int[])", [orderIds]).catch(() => {});
+  }
   for (const r of orderRows.filter((x) => x.ref?.startsWith(TEST_PREFIX))) {
     await db.delete(ucOrdersTable).where(eq(ucOrdersTable.id, r.id));
   }
@@ -163,6 +176,8 @@ before(async () => {
   // run without the bearer-token guard.  The token-specific describe blocks
   // set and restore the value themselves around each test.
   savedWebhookSecret = process.env["MPESA_WEBHOOK_SECRET"];
+  savedDualWriteFlag = process.env["UC_CANONICAL_DUAL_WRITES"];
+  process.env["UC_CANONICAL_DUAL_WRITES"] = "false";
   delete process.env["MPESA_WEBHOOK_SECRET"];
   invalidateMpesaSecretCache();
 
@@ -192,6 +207,8 @@ after(async () => {
   // Restore webhook secret to whatever it was before the suite ran.
   if (savedWebhookSecret !== undefined) process.env["MPESA_WEBHOOK_SECRET"] = savedWebhookSecret;
   else delete process.env["MPESA_WEBHOOK_SECRET"];
+  if (savedDualWriteFlag !== undefined) process.env["UC_CANONICAL_DUAL_WRITES"] = savedDualWriteFlag;
+  else delete process.env["UC_CANONICAL_DUAL_WRITES"];
   invalidateMpesaSecretCache();
 });
 
@@ -1140,6 +1157,123 @@ describe("M-Pesa callback — full round-trip (sandbox)", () => {
       if (savedShort)  process.env["MPESA_SHORTCODE"]       = savedShort;
       if (savedPass)   process.env["MPESA_PASSKEY"]         = savedPass;
       restore();
+    }
+  });
+});
+
+// ── Enabled canonical dual-write HTTP regression coverage ─────────────────────
+
+describe("M-Pesa callback — enabled canonical dual-write recovery", () => {
+  it("concurrent duplicate callbacks converge to HTTP 200 with one primary and one canonical purchase", async () => {
+    const previous = process.env["UC_CANONICAL_DUAL_WRITES"];
+    process.env["UC_CANONICAL_DUAL_WRITES"] = "true";
+    const restore = stubDaraja("0");
+    const ref = nextRef();
+    const fixtureEmail = `mpesa-canonical-${Date.now()}@test.invalid`;
+    const fixtureUser = await pool.query(
+      "INSERT INTO uc_users (email,password_hash,first_name) VALUES ($1,'unused','M-Pesa') RETURNING id",
+      [fixtureEmail],
+    );
+    const fixturePhone = String(fixtureUser.rows[0].id);
+    await insertInitiation(ref, 5100, fixturePhone);
+    try {
+      const [first, second] = await Promise.all([
+        postCallback(stkPayload(ref, 0, 5100, fixturePhone, "LCANON01")),
+        postCallback(stkPayload(ref, 0, 5100, fixturePhone, "LCANON01")),
+      ]);
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 200);
+      const orders = await pool.query("SELECT id FROM uc_orders WHERE payment_reference=$1", [ref]);
+      assert.equal(orders.rows.length, 1);
+      const canonical = await pool.query(
+        "SELECT id FROM uc_canonical_purchases WHERE companion_order_id=$1",
+        [orders.rows[0].id],
+      );
+      assert.equal(canonical.rows.length, 1);
+    } finally {
+      restore();
+      if (previous === undefined) delete process.env["UC_CANONICAL_DUAL_WRITES"];
+      else process.env["UC_CANONICAL_DUAL_WRITES"] = previous;
+      const cleanupOrders = await pool.query<{ id: number }>(
+        "SELECT id FROM uc_orders WHERE payment_reference=$1", [ref],
+      );
+      await pool.query(
+        "DELETE FROM uc_canonical_purchase_lines WHERE purchase_id IN (SELECT id FROM uc_canonical_purchases WHERE companion_order_id=ANY($1::int[]))",
+        [cleanupOrders.rows.map((row) => row.id)],
+      ).catch(() => {});
+      await pool.query("DELETE FROM uc_canonical_purchases WHERE companion_order_id=ANY($1::int[])", [cleanupOrders.rows.map((row) => row.id)]).catch(() => {});
+      await pool.query("DELETE FROM uc_orders WHERE id=ANY($1::int[])", [cleanupOrders.rows.map((row) => row.id)]).catch(() => {});
+      await pool.query("DELETE FROM uc_users WHERE id=$1", [fixtureUser.rows[0].id]).catch(() => {});
+    }
+  });
+
+  it("heals an already-processing primary order when a retry finds no canonical projection", async () => {
+    const previous = process.env["UC_CANONICAL_DUAL_WRITES"];
+    process.env["UC_CANONICAL_DUAL_WRITES"] = "true";
+    const restore = stubDaraja("0");
+    const ref = nextRef();
+    await insertInitiation(ref, 6400, "254755000002");
+    const inserted = await pool.query(
+      `INSERT INTO uc_orders
+       (user_id,status,total,currency,payment_method,payment_reference,promo_code,discount_percent,discount_amount,shipping_address,mpesa_receipt,payment_confirmed_at)
+       VALUES ('mpesa-retry-user','processing','6400','KES','mpesa',$1,'',0,0,'{}','LRETRY01',now()) RETURNING id`,
+      [ref],
+    );
+    const orderId = Number(inserted.rows[0].id);
+    try {
+      const response = await postCallback(stkPayload(ref, 0, 6400, "254755000002", "LRETRY01"));
+      assert.equal(response.status, 200);
+      assert.equal(response.body["orderId"], orderId);
+      const canonical = await pool.query(
+        "SELECT id FROM uc_canonical_purchases WHERE companion_order_id=$1",
+        [orderId],
+      );
+      assert.equal(canonical.rows.length, 1);
+    } finally {
+      restore();
+      if (previous === undefined) delete process.env["UC_CANONICAL_DUAL_WRITES"];
+      else process.env["UC_CANONICAL_DUAL_WRITES"] = previous;
+    }
+  });
+
+  it("returns 503 before acknowledgement when an incompatible canonical fixture blocks reconciliation", async () => {
+    const previous = process.env["UC_CANONICAL_DUAL_WRITES"];
+    process.env["UC_CANONICAL_DUAL_WRITES"] = "true";
+    const restore = stubDaraja("0");
+    const ref = nextRef();
+    await insertInitiation(ref, 7200, "254755000003");
+    const inserted = await pool.query(
+      `INSERT INTO uc_orders
+       (user_id,status,total,currency,payment_method,payment_reference,promo_code,discount_percent,discount_amount,shipping_address)
+       VALUES ('mpesa-conflict-user','processing','7200','KES','mpesa',$1,'',0,0,'{}') RETURNING id`,
+      [ref],
+    );
+    const orderId = Number(inserted.rows[0].id);
+    await pool.query(
+      `INSERT INTO uc_canonical_purchases
+       (companion_order_id,payment_provider,payment_reference,currency,total,total_minor,payment_status,fulfilment_status)
+       VALUES ($1,'mpesa',$2,'KES','9999',999999,'paid','processing')`,
+      [orderId, ref],
+    );
+    const sent: string[] = [];
+    const savedFetch = globalThis.fetch;
+    const darajaFetch = globalThis.fetch;
+    globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes("resend.com")) sent.push(String(url));
+      return darajaFetch(url, init);
+    };
+    try {
+      const response = await postCallback(stkPayload(ref, 0, 7200, "254755000003", "LCANON03"));
+      assert.equal(response.status, 503);
+      assert.equal(response.body["ResultCode"], 1);
+      assert.equal(sent.length, 0, "receipt/publication must not be sent after reconciliation failure");
+      const orders = await pool.query("SELECT count(*)::int AS count FROM uc_orders WHERE payment_reference=$1", [ref]);
+      assert.equal(orders.rows[0].count, 1);
+    } finally {
+      globalThis.fetch = savedFetch;
+      restore();
+      if (previous === undefined) delete process.env["UC_CANONICAL_DUAL_WRITES"];
+      else process.env["UC_CANONICAL_DUAL_WRITES"] = previous;
     }
   });
 });

@@ -56,6 +56,7 @@ import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import { ACCOUNT_DATA_DIR, recordAccountRegistration } from "../lib/account-records";
 import { normalizeEmail, normalizePhone, phoneValidationMessage } from "../lib/customer-identity";
+import { resolveCustomerIdentity } from "../lib/customer-identity-resolution.js";
 import {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -72,6 +73,19 @@ import {
 import { quotePromotion, consumePromotionOnClient, type PromotionQuote } from "../lib/reward-promotions.js";
 import { appPurchaseOwnedBy, storePurchaseOwnedBy } from "../lib/purchase-ownership.js";
 import { transitionOrderStatus, ORDER_CUSTOMER_STAGES } from "../lib/order-status-pipeline.js";
+import {
+  reconcileCanonicalPurchaseDualWrite,
+  CanonicalPurchaseDualWriteError,
+} from "../lib/canonical-purchase-dual-write.js";
+import { isCustomerLifecycleFlagEnabled } from "../lib/customer-lifecycle-flags.js";
+
+class CheckoutKeyOwnershipConflict extends Error {
+  readonly code = "CHECKOUT_KEY_OWNERSHIP_CONFLICT";
+  constructor() {
+    super("Checkout idempotency key is already in use");
+    this.name = "CheckoutKeyOwnershipConflict";
+  }
+}
 
 const router = Router();
 
@@ -1693,6 +1707,18 @@ function publicCompanionEmail(email: string): string {
   return email.endsWith("@accounts.ucfilters.invalid") ? "" : email;
 }
 
+export type RegistrationDbErrorCode = "unique_conflict" | "unavailable" | "unknown";
+
+/** Convert database failures to an allowlisted, non-sensitive operational code. */
+export function classifyRegistrationDbError(error: unknown): RegistrationDbErrorCode {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : "";
+  if (code === "23505") return "unique_conflict";
+  if (["08000", "08001", "08003", "08004", "08006", "57P01"].includes(code)) return "unavailable";
+  return "unknown";
+}
+
 router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): Promise<void> => {
   res.set("Cache-Control", "no-store");
   const { email, identifier, phone, password } = req.body as {
@@ -1775,6 +1801,33 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
     });
     const jwtData: unknown = await jwtRes.json();
     if (
+      !jwtRes.ok
+      || !jwtData
+      || typeof jwtData !== "object"
+      || !("token" in jwtData)
+      || typeof (jwtData as Record<string, unknown>)["token"] !== "string"
+      || !((jwtData as Record<string, unknown>)["token"] as string).trim()
+    ) {
+      // Preserve the development-only demo-session path when Woo explicitly
+      // rejects credentials or is unavailable. Production still fails closed
+      // after the catch below.
+      throw new Error("WooCommerce credentials were not verified");
+    }
+    if (
+      typeof (jwtData as Record<string, unknown>)["user_email"] !== "string"
+      || !((jwtData as Record<string, unknown>)["user_email"] as string).trim()
+    ) {
+      // A successful token response must bind the asserted account to a
+      // provider-owned email; never downgrade an incomplete success to demo.
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+    const providerEmail = normalizeEmail((jwtData as Record<string, unknown>)["user_email"] as string);
+    if (!providerEmail || providerEmail !== normalizedEmail) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+    if (
       jwtData &&
       typeof jwtData === "object" &&
       "token" in jwtData &&
@@ -1782,39 +1835,55 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
     ) {
       const d = jwtData as Record<string, unknown>;
       const displayName = (d["user_display_name"] as string | undefined) ?? "";
-      const wcEmail = normalizeEmail(String(d["user_email"] ?? email));
+      const wcEmail = providerEmail;
       const firstName = displayName.split(" ")[0] || "Customer";
       const lastName = displayName.split(" ").slice(1).join(" ");
 
-      const provisioned = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${"uc-email:" + wcEmail}))`,
-        );
-        const [existing] = await tx
-          .select()
-          .from(ucUsersTable)
-          .where(and(eq(ucUsersTable.email, wcEmail), isNull(ucUsersTable.deletedAt)))
-          .limit(1);
-        if (existing) {
-          // A password/social account appearing during this login race must
-          // not be claimed through WooCommerce.
-          return existing.authProvider === "woocommerce" ? existing : null;
+      const wooClient = await pool.connect();
+      let provisioned: any = null;
+      try {
+        await wooClient.query("BEGIN");
+        const classification = await resolveCustomerIdentity({ email: wcEmail }, wooClient);
+        if (classification.kind === "one_active_candidate") {
+          const existing = await wooClient.query<any>(
+            "SELECT * FROM uc_users WHERE id=$1", [classification.customerId],
+          );
+          // Woo credentials were verified above. Existing Companion/password
+          // accounts still require their Companion password and are never
+          // claimed or modified by this fallback.
+          if (existing.rows[0]?.auth_provider === "woocommerce") {
+            const row = existing.rows[0];
+            provisioned = {
+              id: row.id, email: row.email, phone: row.phone,
+              firstName: row.first_name, lastName: row.last_name,
+              address: row.address, credentialVersion: row.credential_version,
+              emailVerified: row.email_verified, phoneVerified: row.phone_verified,
+            };
+          }
+        } else if (classification.kind === "create_allowed") {
+          const passwordHash = await bcryptjs.hash(randomUUID(), 10);
+          const inserted = await wooClient.query<any>(
+            `INSERT INTO uc_users(email,password_hash,first_name,last_name,auth_provider,email_verified)
+             VALUES($1,$2,$3,$4,'woocommerce',true) RETURNING *`,
+            [wcEmail, passwordHash, firstName, lastName],
+          );
+          const row = inserted.rows[0];
+          if (row) {
+            provisioned = {
+              id: row.id, email: row.email, phone: row.phone,
+              firstName: row.first_name, lastName: row.last_name,
+              address: row.address, credentialVersion: row.credential_version,
+              emailVerified: row.email_verified, phoneVerified: row.phone_verified,
+            };
+          }
         }
-
-        const passwordHash = await bcryptjs.hash(randomUUID(), 10);
-        const [created] = await tx
-          .insert(ucUsersTable)
-          .values({
-            email: wcEmail,
-            passwordHash,
-            firstName,
-            lastName,
-            authProvider: "woocommerce",
-            emailVerified: true,
-          })
-          .returning();
-        return created ?? null;
-      });
+        await wooClient.query("COMMIT");
+      } catch (error) {
+        await wooClient.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        wooClient.release();
+      }
 
       if (!provisioned) {
         res.status(409).json({
@@ -1887,18 +1956,28 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     let registration: { kind: string; dbUser?: any; referral?: { status: string } };
     try {
       await registrationClient.query("BEGIN");
-      await registrationClient.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`uc-email:${normalizedEmail}`]);
-      await registrationClient.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`uc-phone:${cleanPhone}`]);
-      const emailOwner = await registrationClient.query(
-        "SELECT id FROM uc_users WHERE email=$1 AND deleted_at IS NULL LIMIT 1", [normalizedEmail],
+      const classification = await resolveCustomerIdentity(
+        { email: normalizedEmail, phone: cleanPhone },
+        registrationClient,
       );
-      if (emailOwner.rowCount) { await registrationClient.query("COMMIT"); registration = { kind: "email-conflict" }; }
-      else {
-        const phoneOwner = await registrationClient.query(
-          "SELECT id FROM uc_users WHERE phone=$1 AND deleted_at IS NULL LIMIT 1", [cleanPhone],
-        );
-        if (phoneOwner.rowCount) { await registrationClient.query("COMMIT"); registration = { kind: "phone-conflict" }; }
-        else {
+      if (classification.kind !== "create_allowed") {
+        if (classification.kind === "one_active_candidate") {
+          const owner = await registrationClient.query<{ email: string }>(
+            "SELECT email FROM uc_users WHERE id=$1", [classification.customerId],
+          );
+          registration = {
+            kind: owner.rows[0]?.email === normalizedEmail ? "email-conflict" : "phone-conflict",
+          };
+        } else {
+          // Preserve the historical public conflict distinction where it is
+          // unambiguous, while never creating around a deleted/ambiguous owner.
+          registration = {
+            kind: classification.kind === "email_phone_conflict" || classification.kind === "deleted_only"
+              ? "email-conflict" : "phone-conflict",
+          };
+        }
+        await registrationClient.query("COMMIT");
+      } else {
           const passwordHash = await bcryptjs.hash(password, 10);
           const inserted = await registrationClient.query(
             `INSERT INTO uc_users(email,password_hash,phone,email_verified,phone_verified,first_name,last_name)
@@ -1916,7 +1995,6 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
             lastName: row.last_name, address: row.address, credentialVersion: row.credential_version,
             emailVerified: row.email_verified, phoneVerified: row.phone_verified, createdAt: row.created_at,
           }, referral };
-        }
       }
     } catch (error) {
       await registrationClient.query("ROLLBACK").catch(() => undefined);
@@ -1962,7 +2040,10 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     // DB insert failed. Never silently issue a session with no saved account —
     // write the registration to the durable folder record and tell the caller
     // what happened so they can retry once the database is back.
-    logger.error({ err, email: normalizedEmail }, "[register] DB error — writing folder record instead of ephemeral session");
+    logger.error(
+      { event: "registration_db_error", errorCode: classifyRegistrationDbError(err) },
+      "[register] DB error — writing folder record instead of ephemeral session",
+    );
     try {
       await recordAccountRegistration({
         id: null, firstName, lastName: lastName ?? "",
@@ -1975,7 +2056,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       });
     } catch (innerErr) {
       logger.error(
-        { err: innerErr },
+        { event: "registration_backup_write_error", errorCode: classifyRegistrationDbError(innerErr) },
         "[register] dual failure — DB insert failed AND folder write failed; registration details not recorded",
       );
       // Alert the team — the customer's details were NOT saved anywhere.
@@ -5895,6 +5976,16 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   // All downstream persistence/provider calls use this normalized value.
   shippingAddress = normalizedShippingAddress;
 
+  if (
+    isCustomerLifecycleFlagEnabled("dualWrites") &&
+    paymentMethod === "cod" &&
+    hasWCCredentials() &&
+    !idempotencyKey?.trim()
+  ) {
+    res.status(400).json({ error: "idempotencyKey is required for canonical Woo COD checkout", retryable: false });
+    return;
+  }
+
   // Server-side payment verification — gate order creation on confirmed payment.
   const verification = await verifyPaymentOnServer(paymentMethod, paymentReference ?? "");
   if (!verification.ok) {
@@ -5939,6 +6030,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           .select()
           .from(ucOrderItemsTable)
           .where(eq(ucOrderItemsTable.orderId, existingOrder.id));
+        await reconcileCanonicalPurchaseDualWrite(existingOrder.id, `order-retry:${existingOrder.id}`);
 
         // If the existing row was created by the webhook recovery path it was
         // only recorded for team fulfilment — no customer confirmation email was
@@ -6083,6 +6175,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       const row = prior.rows[0];
       if (row.wc_order_id) {
         const storedItems = await pool.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [row.id]);
+        await reconcileCanonicalPurchaseDualWrite(row.id, `woo:${row.id}`);
         res.json({ id: row.wc_order_id, status: row.status, dateCreated: row.date_created, total: row.total,
           currency: row.currency, paymentMethod: row.payment_method, shippingAddress: row.shipping_address ?? {},
           discountPercent: row.discount_percent, discountAmount: row.discount_amount, promoCode: row.promo_code ?? "",
@@ -6094,6 +6187,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         (candidate["meta_data"] as Record<string, unknown>[]).some((meta) => meta["key"] === "uc_checkout_claim_id" && meta["value"] === row.checkout_claim_id));
       if (matched?.["id"]) {
         await pool.query("UPDATE uc_orders SET wc_order_id=$2,status='processing',checkout_state='remote_confirmed' WHERE id=$1", [row.id, Number(matched["id"])]);
+        await reconcileCanonicalPurchaseDualWrite(row.id, `woo:${row.id}`);
         res.json(normalizeOrder(matched)); return;
       }
       // Unknown/attempted claims are deliberately reconciliation-only: never
@@ -6132,8 +6226,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       const order = await remote.json() as Record<string, unknown>;
       if (!order || !order["id"]) throw new Error("WC did not return an order");
       await pool.query("UPDATE uc_orders SET wc_order_id=$2,status='processing',checkout_state='remote_confirmed' WHERE id=$1", [anchor.id, Number(order["id"])]);
+      await reconcileCanonicalPurchaseDualWrite(anchor.id, claimId);
       res.json(normalizeOrder(order)); return;
-    } catch {
+    } catch (error) {
+      if (error instanceof CanonicalPurchaseDualWriteError) {
+        res.status(503).json({ error: "Order recorded; canonical reconciliation will retry", retryable: true });
+        return;
+      }
       await pool.query("UPDATE uc_orders SET checkout_state='remote_unknown' WHERE id=$1", [anchor.id]);
       res.status(202).json({ id: anchor.id, checkoutState: "remote_unknown", reconciliationRequired: true }); return;
     }
@@ -6185,7 +6284,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         const meta = o["meta_data"];
         if (!Array.isArray(meta)) continue;
         const found = (meta as Array<Record<string, unknown>>).some(
-          m => m["key"] === "payment_reference" && m["value"] === ref
+          (m) => (m["key"] === "payment_reference" || m["key"] === "uc_checkout_key") && m["value"] === ref
         );
         if (found) return { status: "found", order: o };
       }
@@ -6216,6 +6315,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         logger.warn({ err: e, anchorId }, "[orders] confirmWcAnchor DB update failed");
         return [] as { id: number }[];
       });
+    if (updated.length > 0) {
+      await reconcileCanonicalPurchaseDualWrite(anchorId, `woo:${anchorId}`);
+    }
     return updated.length > 0;
   }
 
@@ -6269,8 +6371,32 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       //   permanently failed WC calls are cleaned up by a periodic job.
 
       let wcAnchorId: number | null = null;
+      let pendingAnchorId: number | null = null;
+      let pendingAnchorReleased = false;
+      let createdByThisRequest = false;
+      // Reference-less COD still gets a durable, request-scoped claim. Empty
+      // payment references are never used as a global idempotency key.
+      const wcCheckoutKey = paymentReference || (paymentMethod === "cod" ? idempotencyKey?.trim() : "");
 
-      if (paymentReference) {
+      if (wcCheckoutKey) {
+        const [confirmedKeyOrder] = await db.select().from(ucOrdersTable).where(and(
+          eq(ucOrdersTable.userId, orderUserId),
+          eq(ucOrdersTable.checkoutIdempotencyKey, wcCheckoutKey),
+          eq(ucOrdersTable.status, "processing"),
+        )).limit(1);
+        if (confirmedKeyOrder) {
+          await reconcileCanonicalPurchaseDualWrite(confirmedKeyOrder.id, `woo-retry:${confirmedKeyOrder.id}`);
+          const confirmedItems = await db.select().from(ucOrderItemsTable)
+            .where(eq(ucOrderItemsTable.orderId, confirmedKeyOrder.id));
+          res.json({
+            id: confirmedKeyOrder.id, status: confirmedKeyOrder.status,
+            dateCreated: confirmedKeyOrder.dateCreated, total: confirmedKeyOrder.total,
+            currency: confirmedKeyOrder.currency, paymentMethod: confirmedKeyOrder.paymentMethod,
+            shippingAddress: confirmedKeyOrder.shippingAddress ?? {},
+            lineItems: confirmedItems.map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity, total: i.total })),
+          });
+          return;
+        }
         const [pendingAnchor] = await db
           .select({
             id: ucOrdersTable.id,
@@ -6279,14 +6405,18 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           })
           .from(ucOrdersTable)
           .where(and(
-            eq(ucOrdersTable.paymentReference, paymentReference),
+             or(
+               and(eq(ucOrdersTable.paymentReference, paymentReference ?? ""), ne(ucOrdersTable.paymentReference, "")),
+               eq(ucOrdersTable.checkoutIdempotencyKey, wcCheckoutKey),
+             ),
+             eq(ucOrdersTable.userId, orderUserId),
             eq(ucOrdersTable.status, "pending-wc"),
           ))
           .limit(1);
 
         const staleBefore = new Date(Date.now() - WC_PENDING_ANCHOR_MAX_AGE_MS);
         if (pendingAnchor && pendingAnchor.dateCreated <= staleBefore) {
-          const staleLookup = await findWcOrderByRef(paymentReference);
+          const staleLookup = await findWcOrderByRef(wcCheckoutKey || paymentReference || "");
           if (staleLookup.status === "found") {
             const normalized = normalizeOrder(staleLookup.order);
             const iConfirmed = await confirmWcAnchor(
@@ -6318,6 +6448,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               ))
               .returning({ id: ucOrdersTable.id });
             if (released.length > 0) {
+              pendingAnchorId = null;
+              pendingAnchorReleased = true;
               logger.info(
                 { anchorId: pendingAnchor.id, paymentReference },
                 "[orders] released stale WC anchor after confirmed absence",
@@ -6325,17 +6457,59 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             }
           }
         }
+        if (pendingAnchor && !pendingAnchorReleased) pendingAnchorId = pendingAnchor.id;
 
-        try {
+        if (pendingAnchorId) {
+          wcAnchorId = pendingAnchorId;
+          if (paymentReference) {
+            const inFlightLookup = await findWcOrderByRef(paymentReference);
+            if (inFlightLookup.status === "found") {
+              const normalized = normalizeOrder(inFlightLookup.order);
+              const iConfirmed = await confirmWcAnchor(
+                pendingAnchorId,
+                Number(inFlightLookup.order["id"]),
+              );
+              if (iConfirmed) {
+                sendWcOrderNotifications(normalized, pendingAnchor!.userId);
+                const pendingOwnerId = Number(pendingAnchor!.userId);
+                if (pendingOwnerId > 0 && !isNaN(pendingOwnerId)) {
+                  creditQualifyingProductPoints(pendingOwnerId, pendingAnchorId).catch((err) => {
+                    logger.warn(
+                      { err, userId: pendingOwnerId, orderId: pendingAnchorId },
+                      "createOrder (in-flight WC reconcile): qualifying-product rewards credit failed (non-fatal)",
+                    );
+                  });
+                }
+              }
+              res.json(normalized);
+              return;
+            }
+          }
+          // A young anchor belongs to another in-flight request. Never issue
+          // a second Woo POST; the owner will confirm it or the caller can
+          // safely retry after this bounded hand-off window.
+          res.status(503).json({ error: "Order is being processed, please retry shortly", retryable: true });
+          return;
+        } else try {
           // Atomic insert of anchor + items — if either fails, both roll back.
-          wcAnchorId = await db.transaction(async (tx) => {
+          const claim = await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"uc-checkout-key:" + wcCheckoutKey}, 0))`);
+            const [claimed] = await tx.select({ id: ucOrdersTable.id, userId: ucOrdersTable.userId })
+              .from(ucOrdersTable)
+              .where(eq(ucOrdersTable.checkoutIdempotencyKey, wcCheckoutKey))
+              .limit(1);
+            if (claimed) {
+              if (String(claimed.userId) !== String(orderUserId)) throw new CheckoutKeyOwnershipConflict();
+              return { anchorId: claimed.id, createdByThisRequest: false, state: "existing" as const };
+            }
             const [anchor] = await tx.insert(ucOrdersTable).values({
               userId:           orderUserId,
               status:           "pending-wc",
               total:            String(netTotal),
               currency:         "KES",
               paymentMethod,
-              paymentReference,
+             paymentReference: paymentReference || "",
+             checkoutIdempotencyKey: wcCheckoutKey,
               promoCode:        promoCode ?? "",
               discountPercent,
               discountAmount,
@@ -6354,9 +6528,19 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
                 }))
               );
             }
-            return anchorId;
+            return { anchorId, createdByThisRequest: true, state: "created" as const };
           });
+          wcAnchorId = claim.anchorId;
+          createdByThisRequest = claim.createdByThisRequest;
+          if (!createdByThisRequest) {
+            res.status(503).json({ error: "Order is being processed, please retry shortly", retryable: true });
+            return;
+          }
         } catch (claimErr) {
+          if (claimErr instanceof CheckoutKeyOwnershipConflict) {
+            res.status(409).json({ error: "Idempotency key is already in use", retryable: false });
+            return;
+          }
           // DrizzleQueryError wraps the pg error in `.cause`; check both locations.
           const _wcPgCode =
             (claimErr as { code?: string }).code ??
@@ -6366,8 +6550,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               .select()
               .from(ucOrdersTable)
               .where(and(
-                eq(ucOrdersTable.paymentReference, paymentReference),
-                ne(ucOrdersTable.paymentReference, ""),
+                eq(ucOrdersTable.userId, orderUserId),
+                eq(ucOrdersTable.checkoutIdempotencyKey, wcCheckoutKey),
               ))
               .limit(1);
 
@@ -6381,6 +6565,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
                 .select()
                 .from(ucOrderItemsTable)
                 .where(eq(ucOrderItemsTable.orderId, winner.id));
+              await reconcileCanonicalPurchaseDualWrite(winner.id, `woo-retry:${winner.id}`);
               res.json({
                 id:              winner.id,
                 status:          winner.status,
@@ -6406,7 +6591,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               // Another request still owns this anchor, or stale reconciliation
               // could not confirm absence. Reconcile against WC without deleting
               // on uncertain data.
-              const wcLookup = await findWcOrderByRef(paymentReference);
+              const wcLookup = await findWcOrderByRef(wcCheckoutKey || paymentReference || "");
               if (wcLookup.status === "found") {
                 // WC has the order — atomically claim the confirmation.
                 // Only the request that wins the status transition sends
@@ -6434,6 +6619,10 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
               res.status(503).json({ error: "Order is being processed, please retry shortly", retryable: true });
               return;
             }
+            // The global uniqueness constraint may have been claimed by a
+            // different customer. Never fall through to Woo or expose it.
+            res.status(409).json({ error: "Idempotency key is already in use", retryable: false });
+            return;
           }
           logger.error({ err: claimErr }, "[orders] idempotency claim failed before WC");
           res.status(503).json({ error: "Service temporarily unavailable, please retry", retryable: true });
@@ -6456,7 +6645,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       //                 exists but temporarily unreachable" — proceeding would
       //                 risk a duplicate POST.
       if (paymentReference) {
-        const wcPreFlight = await findWcOrderByRef(paymentReference);
+        const wcPreFlight = await findWcOrderByRef(wcCheckoutKey || paymentReference);
         if (wcPreFlight.status === "found") {
           logger.info(
             { paymentReference, wcAnchorId },
@@ -6503,6 +6692,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         line_items: lineItems.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
         meta_data: [
           { key: "payment_reference", value: paymentReference ?? "" },
+          ...(wcCheckoutKey ? [{ key: "uc_checkout_key", value: wcCheckoutKey }] : []),
           { key: "promo_code", value: promoCode ?? "" },
           { key: "discount_percent", value: String(discountPercent) },
         ],
@@ -6530,8 +6720,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       // Tri-state: "found" → use reconciled order; "not_found" or "error" →
       // keep anchor intact and return a retriable 503 — both states mean we
       // cannot safely confirm that WC did not create an order.
-      if (!wcOrder && paymentReference) {
-        const reconciled = await findWcOrderByRef(paymentReference);
+      if (!wcOrder && wcCheckoutKey) {
+        const reconciled = await findWcOrderByRef(wcCheckoutKey);
         if (reconciled.status === "found") {
           wcOrder = reconciled.order;
         } else {
@@ -6592,7 +6782,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       // ── WC returned no usable order and reconciliation was skipped ────────
       // (paymentReference was empty / COD — fall through to DB path)
     }
-  } catch { /* fall through to mock */ }
+  } catch (error) {
+    if (error instanceof CanonicalPurchaseDualWriteError ||
+      (error instanceof Error && error.message.includes("Canonical purchase"))) {
+      throw error;
+    }
+    /* fall through to local/mock persistence */
+  }
 
   // Persist order to DB
   try {
@@ -6609,6 +6805,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       );
       if (priorCheckout.rows[0]) {
         const row = priorCheckout.rows[0];
+        await reconcileCanonicalPurchaseDualWrite(Number(row.id), `checkout-retry:${row.id}`);
         const priorItems = await pool.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [row.id]);
         res.json({ id: row.id, status: row.status, dateCreated: row.date_created, total: row.total,
           currency: row.currency, paymentMethod: row.payment_method, shippingAddress: row.shipping_address ?? {},
@@ -6640,6 +6837,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           const priorItems = await client.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [priorOrderId]);
           await client.query("COMMIT");
           const row = prior.rows[0];
+          await reconcileCanonicalPurchaseDualWrite(Number(row.id), `promotion-retry:${row.id}`);
           res.json({
             id: row.id, status: row.status, dateCreated: row.date_created,
             total: row.total, currency: row.currency, paymentMethod: row.payment_method,
@@ -6674,6 +6872,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           if (prior.rows[0]) {
             const row = prior.rows[0];
             const items = await client.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [row.id]);
+            await reconcileCanonicalPurchaseDualWrite(Number(row.id), `promotion-race:${row.id}`);
             res.json({ id: row.id, status: row.status, dateCreated: row.date_created, total: row.total,
               currency: row.currency, paymentMethod: row.payment_method, shippingAddress: row.shipping_address ?? {},
               discountPercent: row.discount_percent, discountAmount: row.discount_amount, promoCode: row.promo_code ?? "",
@@ -6712,6 +6911,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           total:     String(t),
         }))
       );
+    }
+    if (!hasWCCredentials()) {
+      await reconcileCanonicalPurchaseDualWrite(dbOrder!.id, `companion:${dbOrder!.id}`);
     }
 
     // Credit qualifying-product rewards for paid (non-COD) orders.
@@ -6788,6 +6990,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           ))
           .limit(1);
         if (winner) {
+          await reconcileCanonicalPurchaseDualWrite(winner.id, `payment-race:${winner.id}`);
           logger.info(
             { orderId: winner.id },
             "[orders] unique-constraint race resolved — returning existing order without re-notifying",
@@ -6817,6 +7020,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           return;
         }
       } catch (rerr) {
+        if (rerr instanceof CanonicalPurchaseDualWriteError) throw rerr;
         logger.error({ err: rerr }, "[orders] failed to re-read order after unique-constraint conflict");
       }
     }

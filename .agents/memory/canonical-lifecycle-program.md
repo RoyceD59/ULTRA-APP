@@ -9,6 +9,24 @@ Use one server-owned canonical lifecycle model for authenticated customer identi
 
 **How to apply:** Preserve current records through additive migration, shadow reconciliation, dual writes, and progressive rollout. Never reduce known maintenance history or let one physical purchase line create duplicate verified impact.
 
+Identity resolution may normalize, lock, and classify candidates, but it must never authorize account reuse. Password, session, or provider proof stays in the trusted route boundary, and mixed active/deleted or cross-contact candidates fail closed.
+
+**Why:** A caller-asserted proof label or a weak email/phone match can turn reconciliation into account takeover.
+
+**How to apply:** Hold the shared email/phone advisory locks through create or link commit. Registration creates only when no candidate exists; authenticated/provider flows must independently bind proof to the selected customer.
+
+Canonical purchase dual writes are default-off. When enabled, provider callbacks and order-status transitions must reconcile before acknowledging success or publishing customer/team events.
+
+**Why:** Acknowledging first makes a failed shadow write impossible to heal reliably and can leave primary and canonical state permanently inconsistent.
+
+**How to apply:** Reconcile in the primary transaction when possible. Duplicate and retry paths must heal the winning durable order. Retryable canonical conflicts must return non-success without transferring ownership.
+
+Woo COD checkout keys are idempotency handles, not authorization credentials. One owner and one request may claim the remote Woo order attempt; followers never issue another Woo POST.
+
+**Why:** Global key lookup can disclose another customer's order, while same-owner concurrent callers can otherwise create duplicate remote orders.
+
+**How to apply:** Serialize claims with a transaction-scoped advisory lock, reject cross-owner reuse generically, distinguish creator from follower, and let only the creator contact WooCommerce.
+
 Unmatched legacy purchases may be submitted, but they require ProjectHub staff review before activation and must not contribute to public impact while pending or rejected.
 
 **Why:** This includes legitimate older customers while protecting global totals from unsupported or duplicate registrations.

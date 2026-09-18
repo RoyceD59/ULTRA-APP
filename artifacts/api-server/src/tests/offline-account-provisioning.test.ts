@@ -133,6 +133,28 @@ describe("offline Companion account provisioning", () => {
     assert.equal(rows.length, 1);
   });
 
+  it("leaves an active-email/deleted-phone identity conflicted and unlinked", async () => {
+    const suffix = randomUUID();
+    const email = `mixed-active-${suffix}@example.com`;
+    const phone = `+2547${Math.floor(Math.random() * 1e8).toString().padStart(8, "0")}`;
+    const [active] = await db.insert(ucUsersTable).values({
+      email, phone: "+254700000002", passwordHash: await bcryptjs.hash("active-secret", 10),
+      firstName: "Active", lastName: "Identity",
+    }).returning();
+    const [deleted] = await db.insert(ucUsersTable).values({
+      email: `deleted-${suffix}@example.com`, phone, passwordHash: await bcryptjs.hash("deleted-secret", 10),
+      firstName: "Deleted", lastName: "Identity", deletedAt: new Date(),
+    }).returning();
+    userIds.push(active!.id, deleted!.id);
+    const result = await request("/api/uc/offline-clients", adminJson(
+      sale(`offline-mixed-${suffix}`, email, phone),
+    ));
+    assert.equal(result.status, 201);
+    saleIds.push(result.body.client.id);
+    assert.equal(result.body.client.accountSetupStatus, "conflict");
+    assert.equal(result.body.client.companionUserId, null);
+  });
+
   it("serializes different idempotency keys for the same normalized phone", async () => {
     const phone = "+254 733 444 555";
     const body = (key: string) => ({

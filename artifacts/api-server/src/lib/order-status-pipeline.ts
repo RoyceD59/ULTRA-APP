@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import { callExpoPushApi, removePushTokenIfCurrent } from "./push.js";
 import { logger } from "./logger.js";
+import { reconcileCanonicalPurchaseDualWrite } from "./canonical-purchase-dual-write.js";
 
 export const ORDER_CUSTOMER_STAGES = ["accepted", "shipped", "delivered"] as const;
 export type OrderCustomerStage = (typeof ORDER_CUSTOMER_STAGES)[number];
@@ -129,6 +130,7 @@ export async function transitionOrderStatus(input: {
     );
     if (duplicate.rows[0]) {
       await client.query("COMMIT");
+     await reconcileCanonicalPurchaseDualWrite(input.orderId, eventKey);
       return {
         repeated: true,
         orderId: input.orderId,
@@ -312,6 +314,7 @@ export async function transitionOrderStatus(input: {
       );
       outboxCreated = Boolean(outbox.rows[0]);
     }
+    await reconcileCanonicalPurchaseDualWrite(input.orderId, eventKey, client);
     await client.query("COMMIT");
     return {
       repeated: false,

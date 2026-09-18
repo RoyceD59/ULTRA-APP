@@ -20,7 +20,13 @@ import http from "node:http";
 import bcryptjs from "bcryptjs";
 
 import app from "../app.js";
-import { db, ucUsersTable, ucOrdersTable, ucOrderItemsTable } from "@workspace/db";
+import {
+  db,
+  ucUsersTable,
+  ucOrdersTable,
+  ucOrderItemsTable,
+  ucRewardsLedgerTable,
+} from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { looksLikeRealName, validatePhone } from "../lib/order-validation.js";
 
@@ -163,6 +169,9 @@ describe("COD order input validation", () => {
     if (createdOrderIds.length > 0) {
       await db.delete(ucOrderItemsTable).where(inArray(ucOrderItemsTable.orderId, createdOrderIds));
       await db.delete(ucOrdersTable).where(inArray(ucOrdersTable.id, createdOrderIds));
+    }
+    if (createdUserIds.length > 0) {
+      await db.delete(ucRewardsLedgerTable).where(inArray(ucRewardsLedgerTable.userId, createdUserIds));
     }
     for (const id of createdUserIds) {
       await db.delete(ucUsersTable).where(eq(ucUsersTable.id, id));
