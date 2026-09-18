@@ -39,3 +39,4 @@
 - [Drizzle post-merge false success](drizzle-post-merge-false-success.md) — push-force may print a non-TTY prompt error yet exit 0; detect the text and align constraint/index declarations instead of forcing truncation.
 - [Woo customer identity](woo-customer-identity.md) — successful Woo login must provision a DB-backed Companion user; non-DB principals cannot use rewards, QR, or other customer-owned data.
 - [Expo web routing and previews](expo-static-production-routing.md) — SDK 57 asset URLs need rewriting; web root must flex; verify slow Metro previews in a real browser.
+- [Canonical lifecycle program](canonical-lifecycle-program.md) — unify identity, purchases, registrations, maintenance, and impact; unmatched legacy purchases require staff review.
