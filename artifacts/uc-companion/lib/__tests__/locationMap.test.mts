@@ -39,8 +39,8 @@ describe("customer location map helpers", () => {
     });
   });
 
-  it("shows a reviewed starter tap with its customer details only under Taps and All", () => {
-    const reviewedTap = {
+  it("returns a reactivated reviewed tap under the shared Taps and All filters", () => {
+    const reactivatedReviewedTap = {
       id: "reviewed-starter-tap",
       type: "city_tap",
       name: "Reviewed Starter Tap",
@@ -55,21 +55,22 @@ describe("customer location map helpers", () => {
       sourceAttribution: "Starter tap field survey",
     };
     const locations = [
-      reviewedTap,
+      reactivatedReviewedTap,
       { id: "kenya-centre", type: "experience_centre" },
       { id: "kenya-atm", type: "water_atm" },
       { id: "kenya-vendor", type: "vendor" },
       { id: "rwanda-station", type: "refill_station" },
     ];
 
-    assert.deepEqual(filterMapLocations(locations, "Taps"), [reviewedTap]);
-    assert.equal(filterMapLocations(locations, "All").includes(reviewedTap), true);
+    // Web and native map screens both use this helper over the public endpoint payload.
+    assert.deepEqual(filterMapLocations(locations, "Taps"), [reactivatedReviewedTap]);
+    assert.equal(filterMapLocations(locations, "All").includes(reactivatedReviewedTap), true);
     for (const filter of ["Centres", "ATMs", "Vendors", "Stations"] as const) {
-      assert.equal(filterMapLocations(locations, filter).includes(reviewedTap), false);
+      assert.equal(filterMapLocations(locations, filter).includes(reactivatedReviewedTap), false);
     }
-    assert.equal(reviewedTap.city, "Nairobi");
-    assert.equal(reviewedTap.municipal, "Nairobi City Water");
-    assert.equal(reviewedTap.sourceAttribution, "Starter tap field survey");
-    assert.match(reviewedTap.accessNotes, /market entrance/);
+    assert.equal(reactivatedReviewedTap.city, "Nairobi");
+    assert.equal(reactivatedReviewedTap.municipal, "Nairobi City Water");
+    assert.equal(reactivatedReviewedTap.sourceAttribution, "Starter tap field survey");
+    assert.match(reactivatedReviewedTap.accessNotes, /market entrance/);
   });
 });

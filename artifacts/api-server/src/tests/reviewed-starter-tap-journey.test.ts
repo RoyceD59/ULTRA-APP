@@ -103,6 +103,8 @@ describe("reviewed starter tap customer journey", () => {
     assert.equal(reactivated.status, 200);
     assert.equal(reactivated.body.location.active, true);
     assert.equal(reactivated.body.location.verified, true);
+    assert.equal(reactivated.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.equal(reactivated.body.location.verifiedAt, deactivated.body.location.verifiedAt);
 
     const republished = await supertest(app).get("/api/uc/locations");
     assert.equal(republished.status, 200);
