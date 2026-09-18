@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('LocationDetailModal features', () => {
-  it('uses valid report enums and renders city-tap provenance', () => {
+  it('uses valid report enums and renders reviewed city-tap provenance', () => {
     const srcPath = path.join(process.cwd(), 'components', 'LocationDetailModal.tsx');
     const content = fs.readFileSync(srcPath, 'utf-8');
 
@@ -16,5 +16,7 @@ describe('LocationDetailModal features', () => {
     for (const field of ['city', 'countryIso', 'municipal', 'sourceAttribution', 'accessNotes']) {
       assert.match(content, new RegExp(`location\\.${field}`));
     }
+    assert.match(content, /Operator:\s*\{location\.municipal\}/);
+    assert.match(content, /Source:\s*\{location\.sourceAttribution\}/);
   });
 });
