@@ -22,6 +22,7 @@
     "hooks/useWaterTestHandoff.ts",
     "hooks/mpesaStatusClassifier.ts",
     "hooks/mpesaRetryGuard.ts",
+    "hooks/checkoutOrderIdentity.ts",
     "hooks/reminderOptInStorage.ts",
     "hooks/reminderOptInFlow.ts",
     "context/cartStorage.ts",

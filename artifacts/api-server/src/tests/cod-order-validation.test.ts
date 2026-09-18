@@ -315,6 +315,63 @@ describe("COD order input validation", () => {
     track(body);
   });
 
+  it("returns retryable 503 and creates no local order when WooCommerce is unavailable", async () => {
+    const previousKey = process.env["WC_CONSUMER_KEY"];
+    const previousSecret = process.env["WC_CONSUMER_SECRET"];
+    process.env["WC_CONSUMER_KEY"] = "ck_cod_outage_test";
+    process.env["WC_CONSUMER_SECRET"] = "cs_cod_outage_test";
+
+    const firstReference = `cod_checkout_${Date.now()}_a`;
+    const secondReference = `cod_checkout_${Date.now()}_b`;
+    const firstPayload = {
+      ...codPayload(),
+      paymentReference: firstReference,
+      idempotencyKey: "checkout-attempt-a",
+    };
+    const secondPayload = {
+      ...codPayload(),
+      paymentReference: secondReference,
+      idempotencyKey: "checkout-attempt-b",
+    };
+
+    try {
+      const first = await postOrders(firstPayload);
+      const retry = await postOrders(firstPayload);
+      const independentCheckout = await postOrders(secondPayload);
+
+      assert.equal(first.status, 503);
+      assert.equal(first.body["retryable"], true);
+      assert.equal(retry.status, 503);
+      assert.equal(retry.body["retryable"], true);
+      assert.equal(independentCheckout.status, 503);
+      assert.equal(independentCheckout.body["retryable"], true);
+
+      const pendingAnchors = await db
+        .select({ paymentReference: ucOrdersTable.paymentReference })
+        .from(ucOrdersTable)
+        .where(inArray(ucOrdersTable.paymentReference, [firstReference, secondReference]));
+      assert.deepEqual(
+        pendingAnchors.map(row => row.paymentReference).sort(),
+        [firstReference, secondReference].sort(),
+        "a retry must reuse one anchor while an independent checkout gets its own",
+      );
+    } finally {
+      const anchors = await db
+        .select({ id: ucOrdersTable.id })
+        .from(ucOrdersTable)
+        .where(inArray(ucOrdersTable.paymentReference, [firstReference, secondReference]));
+      const anchorIds = anchors.map(row => row.id);
+      if (anchorIds.length > 0) {
+        await db.delete(ucOrderItemsTable).where(inArray(ucOrderItemsTable.orderId, anchorIds));
+        await db.delete(ucOrdersTable).where(inArray(ucOrdersTable.id, anchorIds));
+      }
+      if (previousKey === undefined) delete process.env["WC_CONSUMER_KEY"];
+      else process.env["WC_CONSUMER_KEY"] = previousKey;
+      if (previousSecret === undefined) delete process.env["WC_CONSUMER_SECRET"];
+      else process.env["WC_CONSUMER_SECRET"] = previousSecret;
+    }
+  });
+
   it("rejects invalid phone numbers before a verified-payment order", async () => {
     // Phone normalization is required for every method, even though paid
     // methods do not use the COD name heuristics.

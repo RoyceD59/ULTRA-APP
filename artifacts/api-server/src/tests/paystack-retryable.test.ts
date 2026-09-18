@@ -15,7 +15,7 @@
  *        server returns 503 with { retryable: true } so client can offer retry/COD
  *   7. Paystack outage during order creation (thrown exception) → 503 + retryable: true
  *   8. Checkout-level: ApiError classification — 503/5xx body → retryable; 402 decline → not retryable
- *      (Mirrors the logic in uc-companion checkout.tsx that decides retry/COD vs "check your card".
+ *      (Mirrors the contract consumed by uc-companion checkout.tsx.
  *       Tested here because the uc-companion test runner is blocked by an Expo module resolution issue.)
  *
  * Run with: pnpm --filter @workspace/api-server test
@@ -308,11 +308,69 @@ describe("Paystack retryable error signalling", () => {
       fetchMock.mock.restore();
     }
   });
+
+  it("WooCommerce outage after Paystack verification → retryable 503 on repeated order confirmation", async () => {
+    const previousKey = process.env["WC_CONSUMER_KEY"];
+    const previousSecret = process.env["WC_CONSUMER_SECRET"];
+    process.env["WC_CONSUMER_KEY"] = "ck_paystack_wc_outage_test";
+    process.env["WC_CONSUMER_SECRET"] = "cs_paystack_wc_outage_test";
+
+    const fetchMock = mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("api.paystack.co/transaction/verify/")) {
+        return new Response(JSON.stringify({
+          status: true,
+          data: { status: "success", amount: 150000 },
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/wp-json/wc/v3/orders") && (init?.method ?? "GET").toUpperCase() === "GET") {
+        return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/wp-json/wc/v3/orders")) {
+        return new Response(JSON.stringify({ message: "Service Unavailable" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const payload = {
+      lineItems: [{ productId: 1, quantity: 1 }],
+      paymentMethod: "paystack",
+      paymentReference: "ps_ref_wc_outage_retry_test",
+      idempotencyKey: "checkout-wc-outage-retry-test",
+      shippingAddress: {
+        firstName: "Test", lastName: "User",
+        address1: "1 Test St", city: "Nairobi",
+        country: "KE", phone: "+254700000000",
+      },
+    };
+
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { status, body } = await apiFetch("/api/uc/orders", {
+          server,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        assert.equal(status, 503);
+        assert.equal(body["retryable"], true);
+      }
+    } finally {
+      fetchMock.mock.restore();
+      if (previousKey === undefined) delete process.env["WC_CONSUMER_KEY"];
+      else process.env["WC_CONSUMER_KEY"] = previousKey;
+      if (previousSecret === undefined) delete process.env["WC_CONSUMER_SECRET"];
+      else process.env["WC_CONSUMER_SECRET"] = previousSecret;
+    }
+  });
 });
 
 // ── Checkout-level: ApiError classification tests ─────────────────────────────
-// These replicate the ApiError class and classification logic from
-// uc-companion/hooks/useApi.ts and uc-companion/app/checkout.tsx.
+// These replicate the ApiError class contract from
+// uc-companion/hooks/useApi.ts and the payment-decline classification.
 // They are placed here because the uc-companion test runner is blocked by an
 // Expo module-resolution issue.  Any change to ApiError or the checkout
 // retryable-handling logic must keep these contracts.
@@ -367,29 +425,4 @@ describe("Checkout-level: ApiError classification", () => {
     assert.equal(classifyCheckoutError(e), "retryable");
   });
 
-  it("createOrder re-throws ApiError so handlePaystack catch receives it", () => {
-    // Verify the contract: ApiError propagates through createOrder's catch block.
-    // If createOrder catches and re-throws ApiError, handlePaystack sees it.
-    let rethrown: unknown = null;
-    const simulateCreateOrder = async () => {
-      try {
-        throw new ApiError("Payment not verified", 503, { retryable: true });
-      } catch (e) {
-        if (e instanceof ApiError) throw e; // re-throw — let caller handle
-        // Only non-ApiError gets swallowed with "contact support"
-      }
-    };
-    const handlePaystack = async () => {
-      try {
-        await simulateCreateOrder();
-      } catch (e) {
-        rethrown = e;
-      }
-    };
-    return handlePaystack().then(() => {
-      assert.ok(rethrown instanceof ApiError, "handlePaystack must receive the ApiError");
-      assert.equal((rethrown as ApiError).retryable, true);
-      assert.equal(classifyCheckoutError(rethrown), "retryable");
-    });
-  });
 });

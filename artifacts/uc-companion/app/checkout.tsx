@@ -16,6 +16,10 @@ import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusCla
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
 import { classifyPaymentInitError, RATE_LIMIT_TITLE, RATE_LIMIT_MESSAGE } from '@/hooks/rateLimitAlert';
+import {
+  retainCheckoutOrderIdentity,
+  type CheckoutOrderIdentity,
+} from '@/hooks/checkoutOrderIdentity';
 import AlisonBubble from '@/components/AlisonBubble';
 import { CountryPicker } from '@/components/CountryPicker';
 import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
@@ -188,7 +192,7 @@ export default function CheckoutScreen() {
   const [usingReferralDiscount, setUsingReferralDiscount] = useState(false);
   // A payment confirmation can retry order persistence; keep its key stable
   // until it succeeds so an intermittent connection cannot consume a promo twice.
-  const orderIdempotencyKeyRef = useRef<string | null>(null);
+  const orderIdentityRef = useRef<CheckoutOrderIdentity | null>(null);
 
   const grossTotal = totalPrice + DELIVERY_FEE;
   const total = appliedQuote?.total ?? grossTotal;
@@ -719,9 +723,9 @@ export default function CheckoutScreen() {
    * Returns `true` when the order was created and the router has navigated away.
    * Returns `false` when order creation failed for a non-retriable reason (the
    *   function has already shown an alert to the user; callers need not show another).
-   * Throws `ApiError` for retriable server/auth errors so that callers
-   *   (handlePaystack, handleStripeCheckout) can inspect `retryable` and show the
-   *   correct advice (retry/COD vs "check your card").
+   * Handles retryable order-persistence failures here so every payment method,
+   * including COD, preserves the checkout and retries the same order identity.
+   * Throws only non-retryable `ApiError` values for payment-specific callers.
    *
    * IMPORTANT: for M-Pesa flows, callers must only clear `lastCheckoutRequestIdRef`
    * after this function returns `true`.  Clearing early — before the order is
@@ -742,16 +746,19 @@ export default function CheckoutScreen() {
     // Use this local payload directly. setAddress() is asynchronous and the
     // current request must not send the stale, pre-normalized value.
     const normalizedShippingAddress = { ...address, phone: normalizedPhone };
+    const orderIdentity = retainCheckoutOrderIdentity(orderIdentityRef.current);
+    orderIdentityRef.current = orderIdentity;
+    const stableReference = method === 'cod' ? orderIdentity.codReference : reference;
     setProcessing(true);
     try {
       const order = await api.createOrder({
         lineItems: items.map(i => ({ productId: i.id, quantity: i.quantity })),
         paymentMethod: method,
-        paymentReference: reference,
+        paymentReference: stableReference,
         shippingAddress: normalizedShippingAddress,
         promoCode: appliedQuote?.promotion.code,
         applyReferralDiscount: usingReferralDiscount,
-        idempotencyKey: orderIdempotencyKeyRef.current ?? (orderIdempotencyKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
+        idempotencyKey: orderIdentity.idempotencyKey,
       });
       clearCart();
       setMpesaWaiting(false);
@@ -778,9 +785,22 @@ export default function CheckoutScreen() {
         );
         return false;
       }
-      // Re-throw ApiError so callers (handlePaystack, handleStripeCheckout)
-      // can inspect retryable and show the correct advice (retry/COD vs
-      // "check your card") rather than a generic "contact support" message.
+      if (!(e instanceof ApiError) || e.retryable) {
+        Alert.alert(
+          'Checkout temporarily unavailable',
+          'We could not confirm your order with the store. Your cart and delivery details are still here, and you have not been charged again.',
+          [
+            {
+              text: 'Try again',
+              onPress: () => { void createOrder(method, reference); },
+            },
+            { text: 'Not now', style: 'cancel' },
+          ],
+        );
+        return false;
+      }
+      // Non-retryable payment errors still belong to the payment-specific
+      // caller, which can show decline or authentication advice.
       if (e instanceof ApiError) throw e;
       Alert.alert('Error', 'Order could not be created. Please contact support.');
       return false;
