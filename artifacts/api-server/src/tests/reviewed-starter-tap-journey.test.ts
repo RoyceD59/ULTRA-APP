@@ -46,23 +46,58 @@ after(async () => {
 });
 
 describe("reviewed starter tap customer journey", () => {
-  it("publishes a pending tap exactly once after administrator verification", async () => {
+  it("hides edited tap details from customer maps until a second administrator review", async () => {
     const pending = await supertest(app).get("/api/uc/locations");
     assert.equal(pending.status, 200);
     assert.equal(pending.body.some((location: { id: string }) => location.id === LOCATION_ID), false);
 
-    const verified = await supertest(app)
+    const firstReview = await supertest(app)
       .post(`/api/uc/admin/locations/${LOCATION_ID}/verify`)
       .set("Authorization", bearer(adminToken));
-    assert.equal(verified.status, 200);
-    assert.equal(verified.body.location.verified, true);
-    assert.equal(verified.body.location.verifiedBy, ADMIN_EMAIL);
-    assert.ok(verified.body.location.verifiedAt);
+    assert.equal(firstReview.status, 200);
+    assert.equal(firstReview.body.location.verified, true);
+    assert.equal(firstReview.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.ok(firstReview.body.location.verifiedAt);
 
-    const repeated = await supertest(app)
+    const initiallyPublished = await supertest(app).get("/api/uc/locations");
+    assert.equal(initiallyPublished.status, 200);
+    assert.equal(
+      initiallyPublished.body.filter((location: { id: string }) => location.id === LOCATION_ID).length,
+      1,
+    );
+
+    const edited = await supertest(app)
+      .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
+      .set("Authorization", bearer(adminToken))
+      .send({
+        name: "Reviewed Starter Tap - Updated",
+        address: "New Market Road",
+        type: "water_atm",
+        lat: -1.287,
+        lng: 36.818,
+      });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.verificationReset, true);
+    assert.equal(edited.body.location.verified, false);
+    assert.equal(edited.body.location.verifiedBy, null);
+    assert.equal(edited.body.location.verifiedAt, null);
+
+    // Both customer map implementations consume this endpoint and therefore
+    // receive no marker or list item while the edited identity is unreviewed.
+    const hiddenFromCustomerMaps = await supertest(app).get("/api/uc/locations");
+    assert.equal(hiddenFromCustomerMaps.status, 200);
+    assert.equal(
+      hiddenFromCustomerMaps.body.some((location: { id: string }) => location.id === LOCATION_ID),
+      false,
+    );
+
+    const secondReview = await supertest(app)
       .post(`/api/uc/admin/locations/${LOCATION_ID}/verify`)
       .set("Authorization", bearer(adminToken));
-    assert.equal(repeated.status, 200);
+    assert.equal(secondReview.status, 200);
+    assert.equal(secondReview.body.location.verified, true);
+    assert.equal(secondReview.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.ok(secondReview.body.location.verifiedAt);
 
     const published = await supertest(app).get("/api/uc/locations");
     assert.equal(published.status, 200);
@@ -70,11 +105,11 @@ describe("reviewed starter tap customer journey", () => {
     assert.equal(matches.length, 1);
     assert.deepEqual(matches[0], {
       id: LOCATION_ID,
-      type: "city_tap",
-      name: "Reviewed Starter Tap",
-      address: "Market Road",
-      lat: -1.2864,
-      lng: 36.8172,
+      type: "water_atm",
+      name: "Reviewed Starter Tap - Updated",
+      address: "New Market Road",
+      lat: -1.287,
+      lng: 36.818,
       hours: "Daily, 06:00–20:00",
       phone: null,
       vendorName: null,
