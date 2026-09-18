@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, MapPin, Pencil, Plus, Power } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, MapPin, Pencil, Plus, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,15 +22,17 @@ type Form = {
   name: string; type: UcLocationInputType; address: string; hours: string;
   phone: string; vendorName: string; latitude: string; longitude: string;
   countryIso: string; city: string; accessNotes: string; municipal: string; sourceAttribution: string;
+  lastFieldVerifiedOn: string; nextReviewOn: string;
 };
-const blank: Form = { name: "", type: "experience_centre", address: "", hours: "", phone: "", vendorName: "", latitude: "", longitude: "", countryIso: "", city: "", accessNotes: "", municipal: "", sourceAttribution: "" };
+const blank: Form = { name: "", type: "experience_centre", address: "", hours: "", phone: "", vendorName: "", latitude: "", longitude: "", countryIso: "", city: "", accessNotes: "", municipal: "", sourceAttribution: "", lastFieldVerifiedOn: "", nextReviewOn: "" };
 function toForm(location: UcLocation): Form {
   return {
     name: location.name, type: location.type, address: location.address, hours: location.hours,
     phone: location.phone ?? "", vendorName: location.vendorName ?? "",
     latitude: String(location.lat), longitude: String(location.lng),
     countryIso: location.countryIso ?? "", city: location.city ?? "", accessNotes: location.accessNotes ?? "",
-    municipal: location.municipal ?? "", sourceAttribution: location.sourceAttribution ?? ""
+    municipal: location.municipal ?? "", sourceAttribution: location.sourceAttribution ?? "",
+    lastFieldVerifiedOn: location.lastFieldVerifiedOn ?? "", nextReviewOn: location.nextReviewOn ?? ""
   };
 }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : "The location could not be updated."; }
@@ -53,7 +55,9 @@ function LocationForm({ location, done }: { location?: UcLocation; done: () => v
         city: form.type === "city_tap" ? (form.city.trim() || null) : null,
         accessNotes: form.type === "city_tap" ? (form.accessNotes.trim() || null) : null,
         municipal: form.type === "city_tap" ? (form.municipal.trim() || null) : null,
-        sourceAttribution: form.type === "city_tap" ? (form.sourceAttribution.trim() || null) : null
+        sourceAttribution: form.type === "city_tap" ? (form.sourceAttribution.trim() || null) : null,
+        lastFieldVerifiedOn: form.lastFieldVerifiedOn || null,
+        nextReviewOn: form.nextReviewOn || null
       };
       return location ? updateUcAdminLocation(location.id, data) : createUcAdminLocation(data);
     },
@@ -70,6 +74,8 @@ function LocationForm({ location, done }: { location?: UcLocation; done: () => v
       {form.type === "vendor" && <div><Label htmlFor="location-vendor">Vendor name</Label><Input id="location-vendor" value={form.vendorName} onChange={(e) => update("vendorName", e.target.value)} /></div>}
       <div><Label htmlFor="location-lat">Latitude</Label><Input id="location-lat" value={form.latitude} onChange={(e) => update("latitude", e.target.value)} /></div>
       <div><Label htmlFor="location-lng">Longitude</Label><Input id="location-lng" value={form.longitude} onChange={(e) => update("longitude", e.target.value)} /></div>
+      <div><Label htmlFor="location-field-verified">Latest field verification</Label><Input id="location-field-verified" type="date" value={form.lastFieldVerifiedOn} onChange={(e) => update("lastFieldVerifiedOn", e.target.value)} /></div>
+      <div><Label htmlFor="location-next-review">Next review (optional)</Label><Input id="location-next-review" type="date" min={form.lastFieldVerifiedOn || undefined} value={form.nextReviewOn} onChange={(e) => update("nextReviewOn", e.target.value)} /></div>
 
       {form.type === "city_tap" && (
         <>
@@ -82,8 +88,9 @@ function LocationForm({ location, done }: { location?: UcLocation; done: () => v
       )}
     </div>
     {!coordinatesValid && (form.latitude || form.longitude) && <p role="alert" className="text-xs text-destructive">Use valid coordinates.</p>}
+    {form.lastFieldVerifiedOn && form.nextReviewOn && form.nextReviewOn < form.lastFieldVerifiedOn && <p role="alert" className="text-xs text-destructive">Next review cannot be earlier than the latest field verification.</p>}
     <p className="text-xs text-muted-foreground">New locations remain pending until verified.</p>
-    <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={done}>Cancel</Button><Button data-testid="button-save-location" disabled={!form.name.trim() || !form.address.trim() || !form.hours.trim() || (form.type === "vendor" && !form.vendorName.trim()) || (form.type === "city_tap" && (!form.countryIso.trim() || !/^[A-Z]{2}$/.test(form.countryIso.trim()))) || !coordinatesValid || mutation.isPending}>{mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{location ? "Save changes" : "Create location"}</Button></div>
+    <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={done}>Cancel</Button><Button data-testid="button-save-location" disabled={!form.name.trim() || !form.address.trim() || !form.hours.trim() || (form.type === "vendor" && !form.vendorName.trim()) || (form.type === "city_tap" && (!form.countryIso.trim() || !/^[A-Z]{2}$/.test(form.countryIso.trim()))) || !coordinatesValid || (!!form.lastFieldVerifiedOn && !!form.nextReviewOn && form.nextReviewOn < form.lastFieldVerifiedOn) || mutation.isPending}>{mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{location ? "Save changes" : "Create location"}</Button></div>
   </form>;
 }
 
@@ -93,6 +100,7 @@ export default function AdminLocationsPage() {
   const [editing, setEditing] = useState<UcLocation | "new" | null>(null);
   const locationsQuery = useListUcAdminLocations();
   const locations = locationsQuery.data?.locations ?? [];
+  const today = new Date().toISOString().slice(0, 10);
   const action = useMutation({
     mutationFn: async ({ location, active }: { location: UcLocation; active: boolean }) => updateUcAdminLocation(location.id, { active }),
     onSuccess: (result) => {
@@ -122,7 +130,36 @@ export default function AdminLocationsPage() {
 
       <TabsContent value="locations" className="space-y-4 m-0">
         {editing && <LocationForm location={editing === "new" ? undefined : editing} done={() => setEditing(null)} />}
-        {locationsQuery.isLoading ? <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading locations…</p> : locationsQuery.isError ? <p role="alert" className="text-sm text-destructive">Locations could not be loaded.</p> : locations.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No locations yet.</div> : <div className="grid gap-3 md:grid-cols-2">{locations.map((location) => <article data-testid={`card-location-${location.id}`} key={location.id} className="rounded-lg border bg-card p-4"><div className="flex justify-between gap-2"><div><h2 className="font-semibold">{location.name}</h2><p className="text-sm text-muted-foreground">{location.type === "experience_centre" ? "Experience centre" : location.type === "refill_atm" || location.type === "water_atm" ? "Water ATM" : location.type === "refill_station" ? "Refill Station" : location.type === "city_tap" ? "City Tap" : location.vendorName ? `Vendor · ${location.vendorName}` : "Vendor"}</p></div><div className="flex flex-wrap justify-end gap-1"><Badge variant={location.verified ? "default" : "secondary"}>{location.verified ? "Verified" : "Pending verification"}</Badge>{!location.active && <Badge variant="outline">Inactive</Badge>}</div></div><p className="mt-3 text-sm">{location.address}</p><p className="mt-1 text-xs text-muted-foreground">{location.hours} · {location.lat}, {location.lng}</p>{location.phone && <p className="mt-1 text-xs text-muted-foreground">{location.phone}</p>}{location.type === "city_tap" && <p className="mt-1 text-xs text-muted-foreground">Country: {location.countryIso}{location.city ? `, ${location.city}` : ""}{location.municipal ? ` · ${location.municipal}` : ""}</p>}<div className="mt-4 flex flex-wrap gap-2"><Button data-testid={`button-edit-location-${location.id}`} size="sm" variant="outline" onClick={() => setEditing(location)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>{!location.verified && <Button data-testid={`button-verify-location-${location.id}`} size="sm" variant="outline" disabled={action.isPending} onClick={() => void verify(location)}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Verify</Button>}<Button data-testid={`button-toggle-location-${location.id}`} size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ location, active: !location.active })}><Power className="mr-1 h-3.5 w-3.5" />{location.active ? "Deactivate" : "Activate"}</Button></div></article>)}</div>}
+        {locationsQuery.isLoading ? <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading locations…</p> : locationsQuery.isError ? <p role="alert" className="text-sm text-destructive">Locations could not be loaded.</p> : locations.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No locations yet.</div> : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {locations.map((location) => {
+              const published = location.active && location.verified;
+              const reviewWarning = published && (!location.nextReviewOn || location.nextReviewOn <= today);
+              return (
+                <article data-testid={`card-location-${location.id}`} key={location.id} className={`rounded-lg border bg-card p-4 ${reviewWarning ? "border-amber-500 bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
+                  <div className="flex justify-between gap-2">
+                    <div>
+                      <h2 className="font-semibold">{location.name}</h2>
+                      <p className="text-sm text-muted-foreground">{location.type === "experience_centre" ? "Experience centre" : location.type === "refill_atm" || location.type === "water_atm" ? "Water ATM" : location.type === "refill_station" ? "Refill Station" : location.type === "city_tap" ? "City Tap" : location.vendorName ? `Vendor · ${location.vendorName}` : "Vendor"}</p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-1"><Badge variant={location.verified ? "default" : "secondary"}>{location.verified ? "Verified" : "Pending verification"}</Badge>{!location.active && <Badge variant="outline">Inactive</Badge>}</div>
+                  </div>
+                  <p className="mt-3 text-sm">{location.address}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{location.hours} · {location.lat}, {location.lng}</p>
+                  {location.phone && <p className="mt-1 text-xs text-muted-foreground">{location.phone}</p>}
+                  {location.type === "city_tap" && <p className="mt-1 text-xs text-muted-foreground">Country: {location.countryIso}{location.city ? `, ${location.city}` : ""}{location.municipal ? ` · ${location.municipal}` : ""}</p>}
+                  {reviewWarning && <div className="mt-3 flex items-start gap-2 rounded-md bg-amber-100 p-2 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{location.nextReviewOn ? `Field review was due ${location.nextReviewOn}.` : "Published location has no next field-review date."}</div>}
+                  <p className="mt-2 text-xs text-muted-foreground">Last field check: {location.lastFieldVerifiedOn ?? "Not recorded"}{location.nextReviewOn ? ` · Next review: ${location.nextReviewOn}` : ""}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button data-testid={`button-edit-location-${location.id}`} size="sm" variant="outline" onClick={() => setEditing(location)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+                    {!location.verified && <Button data-testid={`button-verify-location-${location.id}`} size="sm" variant="outline" disabled={action.isPending} onClick={() => void verify(location)}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Verify</Button>}
+                    <Button data-testid={`button-toggle-location-${location.id}`} size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ location, active: !location.active })}><Power className="mr-1 h-3.5 w-3.5" />{location.active ? "Deactivate" : "Activate"}</Button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </TabsContent>
 
       <TabsContent value="assessments" className="m-0">

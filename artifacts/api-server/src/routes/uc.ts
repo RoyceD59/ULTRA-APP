@@ -7411,12 +7411,13 @@ type LocationInput = {
   type: string; name: string; address: string; latitude: number; longitude: number;
   hours: string; phone: string | null; vendorName: string | null; countryIso?: string;
   city?: string | null; accessNotes?: string | null; municipal?: string | null; sourceAttribution?: string | null;
+  lastFieldVerifiedOn?: string | null; nextReviewOn?: string | null;
 };
 
 export function locationInput(body: unknown, partial = false): LocationInput | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const source = body as Record<string, unknown>;
-  const editable = new Set(["active", "type", "name", "address", "latitude", "lat", "longitude", "lng", "hours", "phone", "vendorName", "countryIso", "city", "accessNotes", "municipal", "sourceAttribution"]);
+  const editable = new Set(["active", "type", "name", "address", "latitude", "lat", "longitude", "lng", "hours", "phone", "vendorName", "countryIso", "city", "accessNotes", "municipal", "sourceAttribution", "lastFieldVerifiedOn", "nextReviewOn"]);
   if (partial && (!Object.keys(source).some((key) => editable.has(key)) ||
       Object.keys(source).some((key) => !editable.has(key)))) return null;
   const text = (field: string, required = false): string | null => {
@@ -7443,6 +7444,14 @@ export function locationInput(body: unknown, partial = false): LocationInput | n
   const accessNotesValue = text("accessNotes");
   const municipalValue = text("municipal");
   const sourceValue = text("sourceAttribution");
+  const fieldCheckValue = text("lastFieldVerifiedOn");
+  const nextReviewValue = text("nextReviewOn");
+  const calendarDate = (value: string | null) => {
+    if (value === null || value === "") return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+  };
   const normalizedCountry = countryValue === null ? null : countryValue.toUpperCase();
   if ((type !== null && type !== "" && !LOCATION_TYPES.has(type)) ||
       (!partial && (name === null || address === null || hours === null)) ||
@@ -7459,7 +7468,9 @@ export function locationInput(body: unknown, partial = false): LocationInput | n
        (cityValue !== null && cityValue.length > 120) ||
        (accessNotesValue !== null && accessNotesValue.length > 1000) ||
        (municipalValue !== null && municipalValue.length > 200) ||
-       (sourceValue !== null && sourceValue.length > 500)) return null;
+       (sourceValue !== null && sourceValue.length > 500) ||
+       !calendarDate(fieldCheckValue) || !calendarDate(nextReviewValue) ||
+       (fieldCheckValue && nextReviewValue && nextReviewValue < fieldCheckValue)) return null;
   return {
     type: type ?? "", name: name ?? "", address: address ?? "", latitude, longitude, hours: hours ?? "",
     phone: phoneValue === null || phoneValue === "" ? null : phoneValue,
@@ -7469,6 +7480,8 @@ export function locationInput(body: unknown, partial = false): LocationInput | n
     ...(source["accessNotes"] !== undefined ? { accessNotes: accessNotesValue } : {}),
     ...(source["municipal"] !== undefined ? { municipal: municipalValue } : {}),
     ...(source["sourceAttribution"] !== undefined ? { sourceAttribution: sourceValue } : {}),
+    ...(source["lastFieldVerifiedOn"] !== undefined ? { lastFieldVerifiedOn: fieldCheckValue || null } : {}),
+    ...(source["nextReviewOn"] !== undefined ? { nextReviewOn: nextReviewValue || null } : {}),
   };
 }
 function cityTapMetadataValid(input: LocationInput): boolean {
@@ -7486,6 +7499,7 @@ function publicLocation(row: typeof ucLocationsTable.$inferSelect) {
     phone: row.phone, vendorName: row.vendorName,
     countryIso: row.countryIso, city: row.city, accessNotes: row.accessNotes,
     municipal: row.municipal, sourceAttribution: row.sourceAttribution,
+    lastFieldVerifiedOn: row.lastFieldVerifiedOn,
   };
 }
 
@@ -7558,6 +7572,19 @@ router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Pro
     res.status(400).json({ code: "LOCATION_UPDATE_INVALID", error: "Provide valid location fields to update." });
     return;
   }
+  const mergedLastFieldVerifiedOn = source["lastFieldVerifiedOn"] === undefined
+    ? existing[0].lastFieldVerifiedOn
+    : input.lastFieldVerifiedOn;
+  const mergedNextReviewOn = source["nextReviewOn"] === undefined
+    ? existing[0].nextReviewOn
+    : input.nextReviewOn;
+  if (mergedLastFieldVerifiedOn && mergedNextReviewOn && mergedNextReviewOn < mergedLastFieldVerifiedOn) {
+    res.status(400).json({
+      code: "LOCATION_REVIEW_DATES_INVALID",
+      error: "nextReviewOn cannot be earlier than lastFieldVerifiedOn.",
+    });
+    return;
+  }
   const mergedInput = { ...existing[0], ...input, type: source["type"] === undefined ? existing[0].type : input.type };
   if (!cityTapMetadataValid({
     ...input, type: String(mergedInput.type), countryIso: source["countryIso"] === undefined ? existing[0].countryIso : input.countryIso,
@@ -7583,6 +7610,8 @@ router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Pro
   if (source["accessNotes"] !== undefined) updates["accessNotes"] = input.accessNotes;
   if (source["municipal"] !== undefined) updates["municipal"] = input.municipal;
   if (source["sourceAttribution"] !== undefined) updates["sourceAttribution"] = input.sourceAttribution;
+  if (source["lastFieldVerifiedOn"] !== undefined) updates["lastFieldVerifiedOn"] = input.lastFieldVerifiedOn;
+  if (source["nextReviewOn"] !== undefined) updates["nextReviewOn"] = input.nextReviewOn;
   if (source["latitude"] !== undefined || source["lat"] !== undefined) updates["latitude"] = String(input.latitude);
   if (source["longitude"] !== undefined || source["lng"] !== undefined) updates["longitude"] = String(input.longitude);
   if (source["active"] !== undefined) {

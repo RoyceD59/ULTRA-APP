@@ -102,3 +102,30 @@ test("location PATCH accepts activation-only updates and rejects empty bodies", 
   assert.equal(deactivated?.verified, true);
   assert.equal(await patchCoordinate({}), 400);
 });
+
+test("location PATCH stores valid field-review dates without resetting publication verification", async () => {
+  assert.equal(await patchCoordinate({
+    lastFieldVerifiedOn: "2026-09-18",
+    nextReviewOn: "2027-03-18",
+  }), 200);
+
+  const [location] = await db.select({
+    lastFieldVerifiedOn: ucLocationsTable.lastFieldVerifiedOn,
+    nextReviewOn: ucLocationsTable.nextReviewOn,
+    verified: ucLocationsTable.verified,
+  }).from(ucLocationsTable).where(eq(ucLocationsTable.id, locationId)).limit(1);
+
+  assert.equal(location?.lastFieldVerifiedOn, "2026-09-18");
+  assert.equal(location?.nextReviewOn, "2027-03-18");
+  assert.equal(location?.verified, true);
+});
+
+test("location PATCH rejects invalid or reversed field-review dates", async () => {
+  assert.equal(await patchCoordinate({ lastFieldVerifiedOn: "2026-02-30" }), 400);
+  assert.equal(await patchCoordinate({
+    lastFieldVerifiedOn: "2026-09-18",
+    nextReviewOn: "2026-09-17",
+  }), 400);
+  assert.equal(await patchCoordinate({ nextReviewOn: "2026-09-17" }), 400);
+  assert.equal(await patchCoordinate({ lastFieldVerifiedOn: "2027-03-19" }), 400);
+});

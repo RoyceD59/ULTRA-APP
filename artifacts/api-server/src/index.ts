@@ -923,6 +923,8 @@ async function applyStartupMigrations(): Promise<void> {
       verified boolean NOT NULL DEFAULT false,
       verified_by text,
       verified_at timestamptz,
+      last_field_verified_on date,
+      next_review_on date,
       created_by text,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
@@ -933,6 +935,14 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS access_notes text;
     ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS municipal text;
     ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS source_attribution text;
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS last_field_verified_on date;
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS next_review_on date;
+    ALTER TABLE uc_locations DROP CONSTRAINT IF EXISTS uc_locations_review_order_check;
+    ALTER TABLE uc_locations ADD CONSTRAINT uc_locations_review_order_check CHECK (
+      next_review_on IS NULL
+      OR last_field_verified_on IS NULL
+      OR next_review_on >= last_field_verified_on
+    );
   `);
   const legacyLocations = [
     ["loc1", "experience_centre", "UC Experience Centre Westlands", "Woodvale Groove, Westlands, Nairobi", -1.2633, 36.8072, "Mon–Sat 8am–6pm, Sun 10am–4pm", "+254 700 123456"],

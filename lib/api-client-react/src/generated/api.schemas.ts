@@ -1468,6 +1468,16 @@ export interface UcLocation {
      * @nullable
      */
   sourceAttribution?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  lastFieldVerifiedOn?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  nextReviewOn?: string | null;
   active: boolean;
   verified: boolean;
 }
@@ -1608,6 +1618,16 @@ export interface UcLocationInput {
      * @nullable
      */
   sourceAttribution?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  lastFieldVerifiedOn?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  nextReviewOn?: string | null;
 }
 
 export type UcLocationAssessmentInputChecks = {[key: string]: unknown};
@@ -1737,6 +1757,16 @@ export interface UcLocationUpdateInput {
      * @nullable
      */
   sourceAttribution?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  lastFieldVerifiedOn?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  nextReviewOn?: string | null;
 }
 
 export type UnsyncedRegistrationRecoveryStatus = typeof UnsyncedRegistrationRecoveryStatus[keyof typeof UnsyncedRegistrationRecoveryStatus];

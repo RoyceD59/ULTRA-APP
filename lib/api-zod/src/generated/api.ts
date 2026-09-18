@@ -800,6 +800,8 @@ export const listUcAdminLocationsResponseLocationsItemMunicipalMax = 200;
 
 export const listUcAdminLocationsResponseLocationsItemSourceAttributionMax = 500;
 
+export const listUcAdminLocationsResponseLocationsItemLastFieldVerifiedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listUcAdminLocationsResponseLocationsItemNextReviewOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const ListUcAdminLocationsResponse = zod.object({
@@ -818,6 +820,8 @@ export const ListUcAdminLocationsResponse = zod.object({
   "accessNotes": zod.string().max(listUcAdminLocationsResponseLocationsItemAccessNotesMax).nullish(),
   "municipal": zod.string().max(listUcAdminLocationsResponseLocationsItemMunicipalMax).nullish(),
   "sourceAttribution": zod.string().max(listUcAdminLocationsResponseLocationsItemSourceAttributionMax).nullish(),
+  "lastFieldVerifiedOn": zod.string().regex(listUcAdminLocationsResponseLocationsItemLastFieldVerifiedOnRegExp).nullish(),
+  "nextReviewOn": zod.string().regex(listUcAdminLocationsResponseLocationsItemNextReviewOnRegExp).nullish(),
   "active": zod.boolean(),
   "verified": zod.boolean()
 }))
@@ -845,6 +849,8 @@ export const createUcAdminLocationBodyMunicipalMax = 200;
 
 export const createUcAdminLocationBodySourceAttributionMax = 500;
 
+export const createUcAdminLocationBodyLastFieldVerifiedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createUcAdminLocationBodyNextReviewOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const CreateUcAdminLocationBody = zod.object({
@@ -860,7 +866,9 @@ export const CreateUcAdminLocationBody = zod.object({
   "city": zod.string().max(createUcAdminLocationBodyCityMax).nullish(),
   "accessNotes": zod.string().max(createUcAdminLocationBodyAccessNotesMax).nullish(),
   "municipal": zod.string().max(createUcAdminLocationBodyMunicipalMax).nullish(),
-  "sourceAttribution": zod.string().max(createUcAdminLocationBodySourceAttributionMax).nullish()
+  "sourceAttribution": zod.string().max(createUcAdminLocationBodySourceAttributionMax).nullish(),
+  "lastFieldVerifiedOn": zod.string().regex(createUcAdminLocationBodyLastFieldVerifiedOnRegExp).nullish(),
+  "nextReviewOn": zod.string().regex(createUcAdminLocationBodyNextReviewOnRegExp).nullish()
 })
 
 export const createUcAdminLocationResponseLocationLatMin = -90;
@@ -878,6 +886,8 @@ export const createUcAdminLocationResponseLocationMunicipalMax = 200;
 
 export const createUcAdminLocationResponseLocationSourceAttributionMax = 500;
 
+export const createUcAdminLocationResponseLocationLastFieldVerifiedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createUcAdminLocationResponseLocationNextReviewOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const CreateUcAdminLocationResponse = zod.object({
@@ -896,6 +906,8 @@ export const CreateUcAdminLocationResponse = zod.object({
   "accessNotes": zod.string().max(createUcAdminLocationResponseLocationAccessNotesMax).nullish(),
   "municipal": zod.string().max(createUcAdminLocationResponseLocationMunicipalMax).nullish(),
   "sourceAttribution": zod.string().max(createUcAdminLocationResponseLocationSourceAttributionMax).nullish(),
+  "lastFieldVerifiedOn": zod.string().regex(createUcAdminLocationResponseLocationLastFieldVerifiedOnRegExp).nullish(),
+  "nextReviewOn": zod.string().regex(createUcAdminLocationResponseLocationNextReviewOnRegExp).nullish(),
   "active": zod.boolean(),
   "verified": zod.boolean()
 }).optional()
@@ -1010,6 +1022,8 @@ export const updateUcAdminLocationBodyMunicipalMax = 200;
 
 export const updateUcAdminLocationBodySourceAttributionMax = 500;
 
+export const updateUcAdminLocationBodyLastFieldVerifiedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateUcAdminLocationBodyNextReviewOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdateUcAdminLocationBody = zod.object({
@@ -1026,7 +1040,9 @@ export const UpdateUcAdminLocationBody = zod.object({
   "city": zod.string().max(updateUcAdminLocationBodyCityMax).nullish(),
   "accessNotes": zod.string().max(updateUcAdminLocationBodyAccessNotesMax).nullish(),
   "municipal": zod.string().max(updateUcAdminLocationBodyMunicipalMax).nullish(),
-  "sourceAttribution": zod.string().max(updateUcAdminLocationBodySourceAttributionMax).nullish()
+  "sourceAttribution": zod.string().max(updateUcAdminLocationBodySourceAttributionMax).nullish(),
+  "lastFieldVerifiedOn": zod.string().regex(updateUcAdminLocationBodyLastFieldVerifiedOnRegExp).nullish(),
+  "nextReviewOn": zod.string().regex(updateUcAdminLocationBodyNextReviewOnRegExp).nullish()
 })
 
 export const updateUcAdminLocationResponseLocationLatMin = -90;
@@ -1044,6 +1060,8 @@ export const updateUcAdminLocationResponseLocationMunicipalMax = 200;
 
 export const updateUcAdminLocationResponseLocationSourceAttributionMax = 500;
 
+export const updateUcAdminLocationResponseLocationLastFieldVerifiedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateUcAdminLocationResponseLocationNextReviewOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdateUcAdminLocationResponse = zod.object({
@@ -1062,6 +1080,8 @@ export const UpdateUcAdminLocationResponse = zod.object({
   "accessNotes": zod.string().max(updateUcAdminLocationResponseLocationAccessNotesMax).nullish(),
   "municipal": zod.string().max(updateUcAdminLocationResponseLocationMunicipalMax).nullish(),
   "sourceAttribution": zod.string().max(updateUcAdminLocationResponseLocationSourceAttributionMax).nullish(),
+  "lastFieldVerifiedOn": zod.string().regex(updateUcAdminLocationResponseLocationLastFieldVerifiedOnRegExp).nullish(),
+  "nextReviewOn": zod.string().regex(updateUcAdminLocationResponseLocationNextReviewOnRegExp).nullish(),
   "active": zod.boolean(),
   "verified": zod.boolean()
 }).optional(),

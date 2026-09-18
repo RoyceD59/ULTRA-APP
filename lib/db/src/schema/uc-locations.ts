@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, numeric, index, date } from "drizzle-orm/pg-core";
 
 /** Managed public service locations. Verification is deliberately server-audited. */
 export const ucLocationsTable = pgTable("uc_locations", {
@@ -20,6 +20,8 @@ export const ucLocationsTable = pgTable("uc_locations", {
   verified: boolean("verified").notNull().default(false),
   verifiedBy: text("verified_by"),
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  lastFieldVerifiedOn: date("last_field_verified_on", { mode: "string" }),
+  nextReviewOn: date("next_review_on", { mode: "string" }),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

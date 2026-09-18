@@ -52,4 +52,14 @@ export interface UcLocationUpdateInput {
      * @nullable
      */
   sourceAttribution?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  lastFieldVerifiedOn?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  nextReviewOn?: string | null;
 }

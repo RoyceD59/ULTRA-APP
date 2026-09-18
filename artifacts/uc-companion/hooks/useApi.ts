@@ -182,6 +182,7 @@ export interface MapLocation {
   accessNotes: string | null;
   municipal: string | null;
   sourceAttribution: string | null;
+  lastFieldVerifiedOn: string | null;
 }
 
 export interface LocationRatingAggregate {

@@ -128,6 +128,14 @@ export default function LocationDetailModal({
                   <Text style={[s.metaTxt, { color: colors.text }]}>{location.phone}</Text>
                 </View>
               )}
+              <View style={s.metaRow}>
+                <Ionicons name="shield-checkmark-outline" size={16} color={colors.mutedForeground} />
+                <Text style={[s.metaTxt, { color: colors.text }]}>
+                  {location.lastFieldVerifiedOn
+                    ? `Location details last checked ${new Date(`${location.lastFieldVerifiedOn}T00:00:00`).toLocaleDateString()}`
+                    : 'Location field-check date not available'}
+                </Text>
+              </View>
               {location.type === 'city_tap' && (
                 <>
                   {location.city && location.countryIso && (

@@ -3893,6 +3893,8 @@ components:
         accessNotes: { type: [string, "null"], maxLength: 1000 }
         municipal: { type: [string, "null"], maxLength: 200 }
         sourceAttribution: { type: [string, "null"], maxLength: 500 }
+        lastFieldVerifiedOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        nextReviewOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
         active: { type: boolean }
         verified: { type: boolean }
 
@@ -3948,6 +3950,8 @@ components:
         accessNotes: { type: [string, "null"], maxLength: 1000 }
         municipal: { type: [string, "null"], maxLength: 200 }
         sourceAttribution: { type: [string, "null"], maxLength: 500 }
+        lastFieldVerifiedOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        nextReviewOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
 
     UcLocationAssessmentInput:
       type: object
@@ -4001,6 +4005,8 @@ components:
         accessNotes: { type: [string, "null"], maxLength: 1000 }
         municipal: { type: [string, "null"], maxLength: 200 }
         sourceAttribution: { type: [string, "null"], maxLength: 500 }
+        lastFieldVerifiedOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        nextReviewOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
 
     UnsyncedRegistration:
       type: object
