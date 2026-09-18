@@ -9,12 +9,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { directionsUrls, filterMapLocations, type LocationMapFilter } from '@/lib/locationMap';
+import { LOCATIONS_REFRESH_INTERVAL_MS, reconcileSelectedLocation, startFocusedLocationRefresh } from '@/lib/locationRefresh';
 
 import LocationDetailModal from '@/components/LocationDetailModal';
 
 const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
-const LOCATIONS_FRESHNESS_MS = 60 * 1000;
 
 function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onPress: (location: MapLocation) => void }) {
   const isCentre = loc.type === 'experience_centre';
@@ -65,21 +65,18 @@ export default function MapScreen() {
   const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn: () => api.getLocations(),
-    staleTime: LOCATIONS_FRESHNESS_MS,
+    staleTime: LOCATIONS_REFRESH_INTERVAL_MS,
   });
 
   const visible = filterMapLocations(locations, filter);
 
   useFocusEffect(useCallback(() => {
-    void refetch();
-    const interval = setInterval(() => void refetch(), LOCATIONS_FRESHNESS_MS);
-    return () => clearInterval(interval);
+    return startFocusedLocationRefresh(refetch);
   }, [refetch]));
 
   useEffect(() => {
-    if (selected && !locations.some(location => location.id === selected.id)) {
-      setSelected(null);
-    }
+    const reconciled = reconcileSelectedLocation(selected, locations);
+    if (reconciled !== selected) setSelected(reconciled);
   }, [locations, selected]);
 
   async function openDirections(location: MapLocation) {
