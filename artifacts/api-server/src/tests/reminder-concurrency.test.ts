@@ -15,8 +15,8 @@
  * Strategy:
  *   - Insert a real uc_users row (required by the inner join in
  *     dispatchFilterReminders) with reminderEmail=true.
- *   - Set RESEND_BASE_URL to a local stub endpoint and intercept
- *     globalThis.fetch so every attempted send is counted without network I/O.
+ *   - Inject a Resend provider stub so every attempted send is counted without
+ *     network I/O or process-wide state changes.
  *   - SMS is a silent no-op when AT credentials are absent (default in test env).
  *   - WhatsApp is skipped when the session is disconnected (default).
  *   - All rows are deleted in after().
@@ -45,31 +45,20 @@ let testUserId: number;
 
 /** Count of stub Resend calls made during the current test window. */
 let resendCallCount = 0;
-let realFetch: typeof globalThis.fetch;
-const RESEND_STUB = "http://resend-stub.test";
+function dispatchReminderCheck() {
+  return dispatchFilterReminders({
+    userIds: [String(testUserId)],
+    sendEmail: async () => {
+      resendCallCount++;
+      return true;
+    },
+    getWhatsAppConnectionStatus: () => ({ state: "disconnected" as const }),
+  });
+}
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 before(async () => {
-  realFetch = globalThis.fetch;
-
-  // Route sendViaResend through the direct-fetch path (not the connector proxy)
-  // by pointing RESEND_BASE_URL at our stub host.
-  process.env["RESEND_BASE_URL"] = RESEND_STUB;
-
-  // Intercept fetch: count Resend calls and return a stub 200.
-  globalThis.fetch = async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    if (String(url).startsWith(RESEND_STUB)) {
-      resendCallCount++;
-      return new Response(JSON.stringify({ id: "re_stub" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    // Let anything else (connector proxy, DB, etc.) through.
-    return realFetch(url, init);
-  };
-
   // Create the test user (integer id).
   const hash = await bcryptjs.hash("TestPass1!", 4);
   const [user] = await db
@@ -94,10 +83,6 @@ before(async () => {
 });
 
 after(async () => {
-  // Restore environment and globals.
-  delete process.env["RESEND_BASE_URL"];
-  globalThis.fetch = realFetch;
-
   // Remove all seeded rows.
   await db
     .delete(ucFilterRemindersTable)
@@ -158,8 +143,8 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
 
     // Race two full dispatch runs.
     const [s1, s2] = await Promise.all([
-      dispatchFilterReminders(),
-      dispatchFilterReminders(),
+      dispatchReminderCheck(),
+      dispatchReminderCheck(),
     ]);
 
     // Exactly one run should have claimed and sent the activation stage.
@@ -182,7 +167,7 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
     // Reminder row still has activation claimed from the previous test.
     resetCounter();
 
-    const s3 = await dispatchFilterReminders();
+    const s3 = await dispatchReminderCheck();
 
     assert.equal(
       resendCallCount,
@@ -224,8 +209,8 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
       resetCounter();
 
       const [first, second] = await Promise.all([
-        dispatchFilterReminders(),
-        dispatchFilterReminders(),
+        dispatchReminderCheck(),
+        dispatchReminderCheck(),
       ]);
 
       assert.equal(
@@ -252,7 +237,7 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
       );
 
       resetCounter();
-      const third = await dispatchFilterReminders();
+      const third = await dispatchReminderCheck();
       assert.equal(
         resendCallCount,
         0,
@@ -277,7 +262,10 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
     resetCounter();
 
     // Two concurrent runs race to claim the reset cycle's activation stage.
-    await Promise.all([dispatchFilterReminders(), dispatchFilterReminders()]);
+    await Promise.all([
+      dispatchReminderCheck(),
+      dispatchReminderCheck(),
+    ]);
 
     assert.equal(
       resendCallCount,
@@ -288,7 +276,7 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
 
   it("a second dispatch after a cycle reset sends nothing", async () => {
     resetCounter();
-    const s = await dispatchFilterReminders();
+    const s = await dispatchReminderCheck();
     assert.equal(
       resendCallCount,
       0,
@@ -332,7 +320,10 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
     resetCounter();
 
     // Two concurrent runs — claim must fire exactly once despite µs precision.
-    await Promise.all([dispatchFilterReminders(), dispatchFilterReminders()]);
+    await Promise.all([
+      dispatchReminderCheck(),
+      dispatchReminderCheck(),
+    ]);
 
     assert.equal(
       resendCallCount,

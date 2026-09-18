@@ -22,7 +22,7 @@
  * - Channel helpers already audit to uc_notification_log (email, sms);
  *   WhatsApp attempts are logged here with channel "whatsapp".
  */
-import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   ucFilterRemindersTable,
@@ -218,7 +218,23 @@ export interface DispatchSummary {
   channelSends: number;
 }
 
-export async function dispatchFilterReminders(): Promise<DispatchSummary> {
+export interface ReminderDispatchDependencies {
+  sendEmail?: typeof sendViaResend;
+  sendTextMessage?: typeof sendSms;
+  getWhatsAppConnectionStatus?: typeof getWhatsAppStatus;
+  sendWhatsApp?: typeof sendWhatsAppMessage;
+  replacementRewardPoints?: number | null;
+  userIds?: string[];
+}
+
+export async function dispatchFilterReminders(
+  dependencies: ReminderDispatchDependencies = {},
+): Promise<DispatchSummary> {
+  const sendEmail = dependencies.sendEmail ?? sendViaResend;
+  const sendTextMessage = dependencies.sendTextMessage ?? sendSms;
+  const getWhatsAppConnectionStatus =
+    dependencies.getWhatsAppConnectionStatus ?? getWhatsAppStatus;
+  const sendWhatsApp = dependencies.sendWhatsApp ?? sendWhatsAppMessage;
   const summary: DispatchSummary = {
     usersConsidered: 0,
     stagesSent: 0,
@@ -254,6 +270,9 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
         eq(ucFilterRemindersTable.active, true),
         gt(ucFilterRemindersTable.lifespanDays, 0),
         isNull(ucUsersTable.deletedAt),
+        dependencies.userIds?.length
+          ? inArray(ucFilterRemindersTable.userId, dependencies.userIds)
+          : undefined,
         or(
           eq(ucNotifPrefsTable.reminderEmail, true),
           eq(ucNotifPrefsTable.reminderSms, true),
@@ -262,7 +281,7 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
       )
     );
 
-  const waConnected = getWhatsAppStatus().state === "connected";
+  const waConnected = getWhatsAppConnectionStatus().state === "connected";
 
   for (const row of rows) {
     summary.usersConsidered++;
@@ -301,7 +320,14 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
       // A partial unique DB index on (user_id, ref_id) ensures concurrent
       // dispatch runs and retries cannot double-credit the same stage.
       if (decision.key === "replace30" || decision.key === "replace15") {
-        await creditReplacementPoints(row.userId, row.productId, row.activatedAt, row.productName, decision.key).catch((err) => {
+        await creditReplacementPoints(
+          row.userId,
+          row.productId,
+          row.activatedAt,
+          row.productName,
+          decision.key,
+          dependencies.replacementRewardPoints,
+        ).catch((err) => {
           logger.warn({ err, userId: row.userId, stage: decision.key }, "reminder-dispatch: rewards credit failed (non-fatal)");
         });
       }
@@ -319,7 +345,7 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
       // Email
       if (row.reminderEmail && row.email) {
         summary.channelSends++;
-        await sendViaResend({
+        await sendEmail({
           from: FROM_ADDRESS,
           to: row.email,
           subject: msg.subject,
@@ -330,7 +356,7 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
       // SMS (no-op with a logged skip when AT credentials are absent)
       if (row.reminderSms && row.phone) {
         summary.channelSends++;
-        await sendSms(row.phone, msg.short, {
+        await sendTextMessage(row.phone, msg.short, {
           template,
           orderId: row.sourceOrderId ?? undefined,
         });
@@ -348,7 +374,7 @@ export async function dispatchFilterReminders(): Promise<DispatchSummary> {
           });
         } else {
           try {
-            await sendWhatsAppMessage(row.phone, msg.short);
+            await sendWhatsApp(row.phone, msg.short);
             logWhatsAppAttempt({
               recipient: row.phone,
               template,
@@ -388,7 +414,8 @@ async function creditReplacementPoints(
   productId: number,
   activatedAt: Date,
   productName: string,
-  stageKey: "replace30" | "replace15"
+  stageKey: "replace30" | "replace15",
+  configuredPoints?: number | null,
 ): Promise<void> {
   // Cycle-scoped idempotency key: each filter lifecycle cycle (product + activation date)
   // earns its own set of points. Encoding the activation timestamp in milliseconds means
@@ -409,19 +436,20 @@ async function creditReplacementPoints(
     .limit(1);
   if (existing.length > 0) return;
 
-  // Look up the active filter-replacement rule
-  const [rule] = await db
-    .select({ pointsValue: ucRewardsRulesTable.pointsValue })
-    .from(ucRewardsRulesTable)
-    .where(
-      and(
-        eq(ucRewardsRulesTable.eventType, "filter-replacement"),
-        eq(ucRewardsRulesTable.active, true)
-      )
-    )
-    .limit(1);
+  const pointsValue = configuredPoints === undefined
+    ? (await db
+        .select({ pointsValue: ucRewardsRulesTable.pointsValue })
+        .from(ucRewardsRulesTable)
+        .where(
+          and(
+            eq(ucRewardsRulesTable.eventType, "filter-replacement"),
+            eq(ucRewardsRulesTable.active, true)
+          )
+        )
+        .limit(1))[0]?.pointsValue
+    : configuredPoints;
 
-  if (!rule || rule.pointsValue <= 0) return;
+  if (!pointsValue || pointsValue <= 0) return;
 
   const numericUserId = parseInt(userId, 10);
   if (isNaN(numericUserId) || numericUserId <= 0) return;
@@ -430,13 +458,13 @@ async function creditReplacementPoints(
 
   const [entry] = await db.insert(ucRewardsLedgerTable).values({
     userId:    numericUserId,
-    points:    rule.pointsValue,
+    points:    pointsValue,
     reason,
     eventType: "filter-replacement",
     refId,
   }).returning({ id: ucRewardsLedgerTable.id });
 
-  logger.info({ userId, stageKey, points: rule.pointsValue }, "reminder-dispatch: rewards points credited");
+  logger.info({ userId, stageKey, points: pointsValue }, "reminder-dispatch: rewards points credited");
 
   const [balanceRow] = await db
     .select({ balance: sql<number>`COALESCE(SUM(${ucRewardsLedgerTable.points}), 0)` })
@@ -449,7 +477,7 @@ async function creditReplacementPoints(
     userId: numericUserId,
     ledgerId: entry!.id,
     title: "Points earned",
-    body: `🌟 You earned ${rule.pointsValue} points! ${reason}. Your balance is now ${newBalance} pts.`,
+    body: `🌟 You earned ${pointsValue} points! ${reason}. Your balance is now ${newBalance} pts.`,
   });
 }
 

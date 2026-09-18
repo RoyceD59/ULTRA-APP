@@ -16,8 +16,8 @@
  * Strategy:
  *   - Insert real uc_users / uc_notif_prefs / uc_rewards_rules rows.
  *   - Set activated_at far enough in the past so replace30 / replace15 are due.
- *   - Stub Resend (same pattern as reminder-concurrency.test.ts) so no real
- *     email I/O happens.
+ *   - Inject provider and reward-rule dependencies so no process-wide state or
+ *     shared singleton reward rule is changed.
  *   - SMS is a silent no-op when AT credentials are absent (default in test env).
  *   - WhatsApp is skipped when the session is disconnected (default).
  *   - All seeded rows are deleted in after().
@@ -35,7 +35,6 @@ import {
   ucUsersTable,
   ucFilterRemindersTable,
   ucNotifPrefsTable,
-  ucRewardsRulesTable,
   ucRewardsLedgerTable,
 } from "@workspace/db";
 import { dispatchFilterReminders } from "../lib/reminder-dispatch.js";
@@ -58,28 +57,18 @@ const TEST_PRODUCT_ID = 99801;
 const TEST_EMAIL = `reminder-rewards-${Date.now()}@uctest.internal`;
 let testUserId: number;
 
-let realFetch: typeof globalThis.fetch;
-const RESEND_STUB = "http://resend-rewards-stub.test";
+function dispatchReminderCheck(replacementRewardPoints: number | null = 50) {
+  return dispatchFilterReminders({
+    userIds: [String(testUserId)],
+    sendEmail: async () => true,
+    getWhatsAppConnectionStatus: () => ({ state: "disconnected" as const }),
+    replacementRewardPoints,
+  });
+}
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 before(async () => {
-  realFetch = globalThis.fetch;
-
-  // Route sendViaResend through the direct-fetch path.
-  process.env["RESEND_BASE_URL"] = RESEND_STUB;
-
-  // Intercept fetch: absorb Resend calls without network I/O.
-  globalThis.fetch = async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    if (String(url).startsWith(RESEND_STUB)) {
-      return new Response(JSON.stringify({ id: "re_rewards_stub" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    return realFetch(url, init);
-  };
-
   // Create the test user.
   const hash = await bcryptjs.hash("TestPass1!", 4);
   const [user] = await db
@@ -102,26 +91,9 @@ before(async () => {
     reminderWhatsapp: false,
   });
 
-  // Seed an active filter-replacement rewards rule.
-  await db
-    .insert(ucRewardsRulesTable)
-    .values({
-      eventType: "filter-replacement",
-      label: "Filter Replacement Reward (test)",
-      pointsValue: 50,
-      active: true,
-    })
-    .onConflictDoUpdate({
-      target: ucRewardsRulesTable.eventType,
-      set: { pointsValue: 50, active: true },
-    });
 });
 
 after(async () => {
-  // Restore environment and globals.
-  delete process.env["RESEND_BASE_URL"];
-  globalThis.fetch = realFetch;
-
   // Remove ledger rows created by this test run.
   await db
     .delete(ucRewardsLedgerTable)
@@ -138,9 +110,6 @@ after(async () => {
   // Remove the test user.
   await db.delete(ucUsersTable).where(eq(ucUsersTable.id, testUserId));
 
-  // Restore the rewards rule to active=true / pointsValue=50 so other tests
-  // that depend on it are unaffected.  Leave the row in place; it may have
-  // existed before this test ran.
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -217,7 +186,7 @@ describe("dispatchFilterReminders — rewards points crediting", () => {
       .where(eq(ucRewardsLedgerTable.userId, testUserId));
 
     // Act
-    const summary = await dispatchFilterReminders();
+    const summary = await dispatchReminderCheck();
 
     // Assert dispatch recorded a send.
     assert.ok(summary.stagesSent >= 1, `expected at least one stagesSent, got ${summary.stagesSent}`);
@@ -243,7 +212,7 @@ describe("dispatchFilterReminders — rewards points crediting", () => {
     assert.equal(rowsBefore.length, 1, "prerequisite: exactly 1 ledger row should exist before re-dispatch");
 
     // Act: second dispatch run.
-    const summary = await dispatchFilterReminders();
+    const summary = await dispatchReminderCheck();
 
     // No new stages should be sent (stage already claimed).
     assert.equal(summary.stagesSent, 0, `stagesSent must be 0 on re-dispatch, got ${summary.stagesSent}`);
@@ -264,7 +233,7 @@ describe("dispatchFilterReminders — rewards points crediting", () => {
       .where(eq(ucRewardsLedgerTable.userId, testUserId));
 
     // Act
-    const summary = await dispatchFilterReminders();
+    const summary = await dispatchReminderCheck();
 
     assert.ok(summary.stagesSent >= 1, `expected at least 1 stagesSent for replace15, got ${summary.stagesSent}`);
 
@@ -280,13 +249,7 @@ describe("dispatchFilterReminders — rewards points crediting", () => {
   });
 
   it("does NOT credit points when the filter-replacement rule is inactive", async () => {
-    // Arrange: deactivate the rule and set up replace30 on a fresh cycle.
-    await db
-      .update(ucRewardsRulesTable)
-      .set({ active: false })
-      .where(eq(ucRewardsRulesTable.eventType, "filter-replacement"));
-
-    // Use a new activatedAt to avoid any existing claimed stages.
+    // Arrange: inject an inactive rule and set up replace30 on a fresh cycle.
     const newActivatedAt = daysAgo(61);
     await db
       .insert(ucFilterRemindersTable)
@@ -317,7 +280,7 @@ describe("dispatchFilterReminders — rewards points crediting", () => {
       .where(eq(ucRewardsLedgerTable.userId, testUserId));
 
     // Act
-    await dispatchFilterReminders();
+    await dispatchReminderCheck(null);
 
     // Assert: no ledger row inserted because the rule is inactive.
     const rows = await fetchLedgerRows();
@@ -326,11 +289,5 @@ describe("dispatchFilterReminders — rewards points crediting", () => {
       0,
       `expected 0 ledger rows when rule is inactive, got ${rows.length}`,
     );
-
-    // Restore rule for any subsequent tests.
-    await db
-      .update(ucRewardsRulesTable)
-      .set({ active: true })
-      .where(eq(ucRewardsRulesTable.eventType, "filter-replacement"));
   });
 });

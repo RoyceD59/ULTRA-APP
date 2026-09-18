@@ -13,7 +13,7 @@
  * Strategy:
  *   - Intercept globalThis.fetch to absorb Expo push API calls and capture
  *     the outgoing payload without real network I/O.
- *   - Resend calls are absorbed via RESEND_BASE_URL stub (same as other tests).
+ *   - Inject the reminder email and reward dependencies.
  *   - All seeded rows are removed in after().
  *
  * Run with: pnpm --filter @workspace/api-server test
@@ -30,7 +30,6 @@ import {
   ucUsersTable,
   ucFilterRemindersTable,
   ucNotifPrefsTable,
-  ucRewardsRulesTable,
   ucRewardsLedgerTable,
   ucPushTokensTable,
 } from "@workspace/db";
@@ -44,7 +43,6 @@ const TEST_LIFESPAN = 90;
 const DAYS_BACK_REPLACE30 = 61;
 const TEST_PRODUCT_ID = 99871;
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-const RESEND_STUB = "http://resend-rewards-push-stub.test";
 const TEST_PUSH_TOKEN = "ExponentPushToken[rewards-push-test-token]";
 const STALE_PUSH_TOKEN  = "ExponentPushToken[rewards-stale-token]";
 
@@ -61,6 +59,14 @@ let simulateStaleToken = false;
 
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 86_400_000);
+}
+
+function dispatchReminderCheck() {
+  return dispatchFilterReminders({
+    userIds: [String(testUserId)],
+    sendEmail: async () => true,
+    replacementRewardPoints: 75,
+  });
 }
 
 async function seedPushToken(opts: { optOutOrders?: boolean; token?: string } = {}): Promise<void> {
@@ -138,17 +144,10 @@ function adminAuthHeader(): string {
 before(async () => {
   realFetch = globalThis.fetch;
   process.env["SESSION_SECRET"] ??= "test-secret-rewards-push";
-  process.env["RESEND_BASE_URL"] = RESEND_STUB;
 
-  // Intercept fetch: capture Expo push calls; absorb Resend calls.
+  // Intercept fetch to capture Expo push calls.
   globalThis.fetch = async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const urlStr = String(url);
-    if (urlStr.startsWith(RESEND_STUB)) {
-      return new Response(JSON.stringify({ id: "re_stub" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
     if (urlStr === EXPO_PUSH_URL) {
       const body = init?.body ? JSON.parse(String(init.body)) : [];
       capturedPushPayloads.push(...body);
@@ -189,15 +188,6 @@ before(async () => {
     reminderWhatsapp: false,
   });
 
-  // Ensure active filter-replacement rewards rule exists.
-  await db
-    .insert(ucRewardsRulesTable)
-    .values({ eventType: "filter-replacement", label: "Push Test Reward", pointsValue: 75, active: true })
-    .onConflictDoUpdate({
-      target: ucRewardsRulesTable.eventType,
-      set: { pointsValue: 75, active: true },
-    });
-
   // Start HTTP server for admin-grant tests.
   const { default: app } = await import("../app.js");
   await new Promise<void>((resolve, reject) => {
@@ -207,7 +197,6 @@ before(async () => {
 
 after(async () => {
   globalThis.fetch = realFetch;
-  delete process.env["RESEND_BASE_URL"];
 
   await clearLedger();
   await clearPushToken();
@@ -231,7 +220,7 @@ describe("Rewards push notification — filter-replacement credit path", () => {
     await seedPushToken();
     await seedFilterReminder(["activation"]);
 
-    await dispatchFilterReminders();
+    await dispatchReminderCheck();
 
     // Allow fire-and-forget to complete.
     await new Promise(r => setTimeout(r, 200));
@@ -248,7 +237,7 @@ describe("Rewards push notification — filter-replacement credit path", () => {
     await seedPushToken({ optOutOrders: true });
     await seedFilterReminder(["activation"]);
 
-    await dispatchFilterReminders();
+    await dispatchReminderCheck();
     await new Promise(r => setTimeout(r, 200));
 
     // A ledger row should still be created — push is the only skipped part.
@@ -265,7 +254,7 @@ describe("Rewards push notification — filter-replacement credit path", () => {
     await clearPushToken();
     await seedFilterReminder(["activation"]);
 
-    await dispatchFilterReminders();
+    await dispatchReminderCheck();
     await new Promise(r => setTimeout(r, 200));
 
     assert.equal(capturedPushPayloads.length, 0, "no push should fire when no token is registered");
@@ -276,7 +265,7 @@ describe("Rewards push notification — filter-replacement credit path", () => {
     await seedPushToken({ token: STALE_PUSH_TOKEN });
     await seedFilterReminder(["activation"]);
 
-    await dispatchFilterReminders();
+    await dispatchReminderCheck();
     await new Promise(r => setTimeout(r, 400));
 
     // Token must have been removed from uc_push_tokens.

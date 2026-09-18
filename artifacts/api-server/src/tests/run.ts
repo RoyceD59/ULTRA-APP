@@ -252,16 +252,13 @@ console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 // connects to the isolated database.
 
 const testGlob = process.env["TEST_GLOB"];
-// These suites deliberately replace process-wide seams (process.env and
-// globalThis.fetch), while the referral suite shares account/settlement state.
+// These remaining suites share process-wide or account/settlement state.
 // The default run executes ordinary files in one parallel phase, then these
 // files in a separate serial phase against the same isolated database.
 const SHARED_STATE_FILES = [
   "cod-order-validation",
   "dual-failure-alert",
   "paystack-retryable",
-  "reminder-concurrency",
-  "reminder-rewards-credit",
   "referral-lifecycle",
 ];
 const testNamePattern = process.env["TEST_NAME_PATTERN"];

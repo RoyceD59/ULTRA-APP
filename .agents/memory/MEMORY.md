@@ -40,3 +40,4 @@
 - [Woo customer identity](woo-customer-identity.md) — successful Woo login must provision a DB-backed Companion user; non-DB principals cannot use rewards, QR, or other customer-owned data.
 - [Expo web routing and previews](expo-static-production-routing.md) — SDK 57 asset URLs need rewriting; web root must flex; verify slow Metro previews in a real browser.
 - [Canonical lifecycle program](canonical-lifecycle-program.md) — unify identity, purchases, registrations, maintenance, and impact; unmatched legacy purchases require staff review.
+- [Parallel dispatcher tests](parallel-dispatcher-tests.md) — inject providers, shared configuration, and recipient scope; a shared test DB alone does not isolate broad dispatch scans.
