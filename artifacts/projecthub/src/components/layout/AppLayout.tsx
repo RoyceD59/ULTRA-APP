@@ -3,7 +3,7 @@ import {
   Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets, MapPin, Tag,
   FolderKanban, Gauge, Gift, LayoutDashboard, Leaf, Link2, LogOut,
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
-  AlertTriangle, BellRing, Menu, WifiOff, X,
+  AlertTriangle, BellRing, Menu, WifiOff, X, FileText,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,7 @@ const ADMIN_NAVIGATION = [
   ["Customers", "/admin/customers", Users],
   ["Unsynced Registrations", "/admin/unsynced-registrations", AlertTriangle],
   ["Agent Operations", "/admin/agent-operations", Bot],
+  ["Companion Guides", "/admin/guides", FileText],
 ] as const;
 
 const SECURITY_BANNER_DISMISS_KEY = "ph_sec_mpesa_dismissed";

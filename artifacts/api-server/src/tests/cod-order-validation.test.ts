@@ -315,9 +315,9 @@ describe("COD order input validation", () => {
     track(body);
   });
 
-  it("does NOT gate verified-payment methods on shipping validation", async () => {
-    // M-Pesa runs in mock verification mode in tests ({ ok: true }); a junk
-    // name must still be accepted because the payment itself proves intent.
+  it("rejects invalid phone numbers before a verified-payment order", async () => {
+    // Phone normalization is required for every method, even though paid
+    // methods do not use the COD name heuristics.
     const { status, body } = await postOrders(
       {
         lineItems: [{ productId: 22, quantity: 1 }],
@@ -327,8 +327,42 @@ describe("COD order input validation", () => {
       },
       jwt,
     );
-    assert.equal(status, 200, `mpesa order must not be blocked: ${JSON.stringify(body)}`);
+    assert.equal(status, 400, `invalid phone must be rejected: ${JSON.stringify(body)}`);
+    assert.ok((body["fields"] as Record<string, string>)["phone"]);
+  });
+
+  it("normalizes a non-Kenyan local phone before paid-order persistence", async () => {
+    const { status, body } = await postOrders(
+      {
+        lineItems: [{ productId: 22, quantity: 1 }],
+        paymentMethod: "mpesa",
+        paymentReference: `ws_GH_${Date.now()}`,
+        shippingAddress: {
+          firstName: "Amina",
+          country: "GH",
+          phone: "0241234567",
+        },
+      },
+      jwt,
+    );
+    assert.equal(status, 200, JSON.stringify(body));
     track(body);
+    const shipping = await storedShipping(body["id"] as number);
+    assert.equal(shipping["phone"], "+233241234567");
+  });
+
+  it("rejects local phone values when no valid country is supplied", async () => {
+    const { status, body } = await postOrders(
+      {
+        lineItems: [{ productId: 22, quantity: 1 }],
+        paymentMethod: "mpesa",
+        paymentReference: `ws_NO_COUNTRY_${Date.now()}`,
+        shippingAddress: { firstName: "Amina", phone: "0722123456" },
+      },
+      jwt,
+    );
+    assert.equal(status, 400);
+    assert.ok((body["fields"] as Record<string, string>)["phone"]);
   });
 });
 
@@ -349,10 +383,10 @@ describe("looksLikeRealName", () => {
 
 describe("validatePhone", () => {
   it("normalizes Kenyan formats to +254", () => {
-    assert.equal(validatePhone("0712 345 678").normalized, "+254712345678");
-    assert.equal(validatePhone("0112345678").normalized, "+254112345678");
-    assert.equal(validatePhone("254712345678").normalized, "+254712345678");
-    assert.equal(validatePhone("+254712345678").normalized, "+254712345678");
+    assert.equal(validatePhone("0712 345 678", "KE").normalized, "+254712345678");
+    assert.equal(validatePhone("0112345678", "KE").normalized, "+254112345678");
+    assert.equal(validatePhone("254712345678", "KE").normalized, "+254712345678");
+    assert.equal(validatePhone("+254712345678", "KE").normalized, "+254712345678");
   });
   it("accepts other international numbers with +", () => {
     assert.ok(validatePhone("+14155552671").valid);
@@ -361,5 +395,9 @@ describe("validatePhone", () => {
     for (const p of ["", "123", "0712", "07123456789", "abcdefghij", "0812345678", "+0712345678"]) {
       assert.ok(!validatePhone(p).valid, `${JSON.stringify(p)} must be rejected`);
     }
+  });
+  it("requires country for local numbers", () => {
+    assert.equal(validatePhone("0712 345 678").valid, false);
+    assert.equal(validatePhone("0241234567", "GH").normalized, "+233241234567");
   });
 });

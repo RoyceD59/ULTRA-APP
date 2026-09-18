@@ -19,8 +19,9 @@ import {
 } from "@workspace/api-zod";
 import {
   isValidInstantFirstName,
-  isValidInstantKenyanPhone,
+  isValidInstantPhone,
 } from "@workspace/api-zod/instant-water-identity";
+import { countryCodeFromValue } from "@workspace/api-zod/phone";
 import { verifyToken } from "../lib/jwt.js";
 import { getLiveWaterTestsAccess } from "../lib/adminAuth.js";
 import { sendSmsAwaitable } from "../lib/sms.js";
@@ -69,11 +70,14 @@ function validAnswers(value: unknown): boolean {
 
 function identityError(value: unknown): "INVALID_FIRST_NAME" | "INVALID_PHONE" | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const input = value as { firstName?: unknown; phone?: unknown };
+  const input = value as { firstName?: unknown; phone?: unknown; answers?: { country?: unknown } };
   if (typeof input.firstName === "string" && !isValidInstantFirstName(input.firstName)) {
     return "INVALID_FIRST_NAME";
   }
-  if (typeof input.phone === "string" && !isValidInstantKenyanPhone(input.phone)) {
+  const country = typeof input.answers?.country === "string"
+    ? countryCodeFromValue(input.answers.country)
+    : "KE";
+  if (typeof input.phone === "string" && !isValidInstantPhone(input.phone, country ?? "KE")) {
     return "INVALID_PHONE";
   }
   return null;
@@ -103,7 +107,7 @@ function fail(res: Response, error: unknown): void {
      code === "SMS_CONSENT_REQUIRED" || code.endsWith("_REQUIRED") || code === "INVALID_FIRST_NAME" || code === "INVALID_PHONE" || code === "MEDIA_LIMIT" || code === "INVALID_MEDIA_REFERENCE" || code === "MEDIA_OWNERSHIP_INVALID" || code === "MEDIA_METADATA_INVALID" || code === "INVALID_STATE_TRANSITION" ? 400 : 500;
   const messages: Record<string, string> = {
     INVALID_FIRST_NAME: "Please enter a valid first name",
-    INVALID_PHONE: "Please enter a valid Kenyan mobile number",
+    INVALID_PHONE: "Please enter a valid phone number for the selected country",
   };
   res.status(status).json({ error: status === 500 ? "Water assessment operation failed" : messages[code] ?? code.toLowerCase().replaceAll("_", " ") });
 }

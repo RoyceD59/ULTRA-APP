@@ -1690,6 +1690,102 @@ export interface UcOfflineClientResponse {
   client: UcOfflineClient;
 }
 
+export type UcGuideMediaKind = typeof UcGuideMediaKind[keyof typeof UcGuideMediaKind];
+
+
+export const UcGuideMediaKind = {
+  image: 'image',
+  animation: 'animation',
+  video: 'video',
+} as const;
+
+export interface UcGuideMedia {
+  id: string;
+  kind: UcGuideMediaKind;
+  url: string;
+  /** @nullable */
+  objectPath?: string | null;
+  mimeType: string;
+  altText: string;
+  /** @nullable */
+  caption?: string | null;
+  /** @nullable */
+  posterUrl?: string | null;
+  /** @nullable */
+  byteSize?: number | null;
+  /** @nullable */
+  durationSeconds?: number | null;
+  animated?: boolean;
+}
+
+export interface UcGuideSection {
+  id: string;
+  position: number;
+  heading: string;
+  /** @nullable */
+  body?: string | null;
+  steps: string[];
+  /** @nullable */
+  tip?: string | null;
+  /** @nullable */
+  warning?: string | null;
+  /** @nullable */
+  illustrationIcon?: string | null;
+  media: UcGuideMedia[];
+}
+
+/**
+ * @nullable
+ */
+export type UcGuideSummaryStatus = typeof UcGuideSummaryStatus[keyof typeof UcGuideSummaryStatus] | null;
+
+
+export const UcGuideSummaryStatus = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export interface UcGuideSummary {
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  products: string;
+  icon: string;
+  readTime: string;
+  /** @nullable */
+  status?: UcGuideSummaryStatus;
+  version: number;
+  /** @nullable */
+  publishedAt?: string | null;
+  updatedAt: string;
+}
+
+export type UcGuide = UcGuideSummary & {
+  id: string;
+  sections: UcGuideSection[];
+};
+
+export interface UcGuideInput {
+  /** @pattern ^[a-z0-9-]{3,120}$ */
+  slug: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  summary: string;
+  category?: string;
+  products?: string;
+  icon?: string;
+  readTime?: string;
+  sections: UcGuideSection[];
+}
+
 export type ListProjectHubInstantWaterAssessmentsParams = {
 status?: string;
 /**
@@ -1835,4 +1931,24 @@ export const SuspendAgentOauthClientBodyStatus = {
 
 export type SuspendAgentOauthClientBody = {
   status?: SuspendAgentOauthClientBodyStatus;
+};
+
+export type ListPublishedUcGuides200 = {
+  guides: UcGuideSummary[];
+};
+
+export type GetPublishedUcGuide200 = {
+  guide: UcGuide;
+};
+
+export type ListUcAdminGuides200 = {
+  guides: UcGuideSummary[];
+};
+
+export type CreateUcAdminGuide201 = {
+  guide: UcGuide;
+};
+
+export type GetUcAdminGuide200 = {
+  guide: UcGuide;
 };

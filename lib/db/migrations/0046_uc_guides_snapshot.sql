@@ -1,0 +1,1 @@
+ALTER TABLE uc_guides ADD COLUMN IF NOT EXISTS published_snapshot jsonb;

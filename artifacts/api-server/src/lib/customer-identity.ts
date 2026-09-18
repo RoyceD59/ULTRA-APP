@@ -3,6 +3,8 @@
  * and staff lookup. Keep customer matching deterministic across every entry
  * point so formatting differences cannot create another account.
  */
+import { normalizeInternationalPhone } from "@workspace/api-zod/phone";
+
 export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -13,8 +15,7 @@ export function normalizeEmail(value: string): string {
  * formats are deliberately not guessed.
  */
 export function normalizePhone(value: string): string | null {
-  const compact = value.trim().replace(/[\s().-]/g, "");
-  return /^\+\d{10,15}$/.test(compact) ? compact : null;
+  return normalizeInternationalPhone(value);
 }
 
 export function phoneValidationMessage(): string {

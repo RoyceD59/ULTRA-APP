@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   TextInput, ScrollView, SectionList,
@@ -14,10 +14,12 @@ import {
   GUIDES, GUIDE_CATEGORIES, CATEGORY_ICONS,
   type Guide, type GuideCategory,
 } from '@/data/guides';
+import { fetchPublishedGuides, readCachedGuides, mergeGuideFallback } from '@/lib/guideContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { trackEvent } from '@/lib/analytics';
 
 const TABS = ['Guides', 'My Tickets', 'Water Test'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
@@ -119,6 +121,23 @@ function SupportScreenContent() {
   const [tab, setTab]       = useState(0);
   const [search, setSearch] = useState('');
   const cartBarInset = useCartBarInset();
+  const guidesQuery = useQuery({
+    queryKey: ['companion', 'guides'],
+    queryFn: fetchPublishedGuides,
+    placeholderData: GUIDES,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+  });
+  const cachedGuidesQuery = useQuery({
+    queryKey: ['companion', 'guides', 'cached'],
+    queryFn: readCachedGuides,
+    staleTime: Infinity,
+    enabled: !guidesQuery.data,
+  });
+  const guides = mergeGuideFallback(guidesQuery.data, cachedGuidesQuery.data);
+  useEffect(() => {
+    if (guides.length > 0) trackEvent('guide_list_viewed', { guideCount: guides.length });
+  }, [guides.length]);
 
   const { data: tickets, isLoading: loadingTickets } = useQuery({
     queryKey: customerQueryKeys.tickets(user?.id),
@@ -130,13 +149,13 @@ function SupportScreenContent() {
   const sections = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = q
-      ? GUIDES.filter(
+      ? guides.filter(
           g =>
             g.title.toLowerCase().includes(q) ||
             g.products.toLowerCase().includes(q) ||
             g.summary.toLowerCase().includes(q),
         )
-      : GUIDES;
+      : guides;
 
     if (q) {
       // When searching, show flat list as one section
@@ -147,7 +166,7 @@ function SupportScreenContent() {
       category: cat,
       data: filtered.filter(g => g.category === cat),
     })).filter(s => s.data.length > 0);
-  }, [search]);
+  }, [search, guides]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -247,7 +266,10 @@ function SupportScreenContent() {
               ]}>
                 <GuideCard
                   guide={guide}
-                  onPress={() => router.push(`/guide/${guide.id}` as never)}
+                  onPress={() => {
+                    trackEvent('guide_opened', { guideId: guide.id });
+                    router.push(`/guide/${guide.id}` as never);
+                  }}
                   colors={colors}
                   isLast={isLast}
                 />

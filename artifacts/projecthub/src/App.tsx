@@ -42,6 +42,7 @@ import AdminReferralsPage from '@/pages/admin/referrals';
 import AdminPromotionsPage from '@/pages/admin/promotions';
 import AdminLocationsPage from '@/pages/admin/locations';
 import AgentOperationsPage from '@/pages/admin/agent-operations';
+import AdminGuidesPage from '@/pages/admin/guides';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -127,6 +128,7 @@ function Router() {
               <Route path="/admin/promotions"><AdminGuard><AdminPromotionsPage /></AdminGuard></Route>
               <Route path="/admin/locations"><AdminGuard><AdminLocationsPage /></AdminGuard></Route>
               <Route path="/admin/agent-operations"><AdminGuard><AgentOperationsPage /></AdminGuard></Route>
+              <Route path="/admin/guides"><AdminGuard><AdminGuidesPage /></AdminGuard></Route>
               <Route component={NotFound} />
             </Switch>
           </AppLayout>

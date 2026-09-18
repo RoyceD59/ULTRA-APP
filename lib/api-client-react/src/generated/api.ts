@@ -50,11 +50,14 @@ import type {
   ContactMethodUpdate,
   ContactUpdate,
   ContactWithMethods,
+  CreateUcAdminGuide201,
   CreateUcAdminLocation201,
   DashboardSummary,
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
   GetDashboardActivityParams,
+  GetPublishedUcGuide200,
+  GetUcAdminGuide200,
   HealthStatus,
   InstantWaterAssessment,
   InstantWaterAssessmentAttachInput,
@@ -77,7 +80,9 @@ import type {
   IssueAgentClientTokenBody,
   ListNotificationLogsParams,
   ListProjectHubInstantWaterAssessmentsParams,
+  ListPublishedUcGuides200,
   ListTasksParams,
+  ListUcAdminGuides200,
   ListUcAdminLocations200,
   ListUcCustomersParams,
   ListUcOfflineClients200,
@@ -118,6 +123,7 @@ import type {
   UcCustomerDetail,
   UcCustomerList,
   UcCustomersCount,
+  UcGuideInput,
   UcLocationInput,
   UcLocationUpdateInput,
   UcOfflineClientInput,
@@ -7829,3 +7835,566 @@ export function useListAgentAlisonFeedback<TData = Awaited<ReturnType<typeof lis
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
+export const getListPublishedUcGuidesUrl = () => {
+
+
+
+
+  return `/api/uc/guides`
+}
+
+/**
+ * @summary List published Companion installation guides
+ */
+export const listPublishedUcGuides = async ( options?: RequestInit): Promise<ListPublishedUcGuides200> => {
+
+  return customFetch<ListPublishedUcGuides200>(getListPublishedUcGuidesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPublishedUcGuidesQueryKey = () => {
+    return [
+    `/api/uc/guides`
+    ] as const;
+    }
+
+
+export const getListPublishedUcGuidesQueryOptions = <TData = Awaited<ReturnType<typeof listPublishedUcGuides>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPublishedUcGuides>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPublishedUcGuidesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPublishedUcGuides>>> = ({ signal }) => listPublishedUcGuides({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPublishedUcGuides>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPublishedUcGuidesQueryResult = NonNullable<Awaited<ReturnType<typeof listPublishedUcGuides>>>
+export type ListPublishedUcGuidesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List published Companion installation guides
+ */
+
+export function useListPublishedUcGuides<TData = Awaited<ReturnType<typeof listPublishedUcGuides>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPublishedUcGuides>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPublishedUcGuidesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPublishedUcGuideUrl = (slug: string,) => {
+
+
+
+
+  return `/api/uc/guides/${slug}`
+}
+
+/**
+ * @summary Get one published Companion installation guide
+ */
+export const getPublishedUcGuide = async (slug: string, options?: RequestInit): Promise<GetPublishedUcGuide200> => {
+
+  return customFetch<GetPublishedUcGuide200>(getGetPublishedUcGuideUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublishedUcGuideQueryKey = (slug: string,) => {
+    return [
+    `/api/uc/guides/${slug}`
+    ] as const;
+    }
+
+
+export const getGetPublishedUcGuideQueryOptions = <TData = Awaited<ReturnType<typeof getPublishedUcGuide>>, TError = ErrorType<void>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublishedUcGuide>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublishedUcGuideQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublishedUcGuide>>> = ({ signal }) => getPublishedUcGuide(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: slug !== null && slug !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublishedUcGuide>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublishedUcGuideQueryResult = NonNullable<Awaited<ReturnType<typeof getPublishedUcGuide>>>
+export type GetPublishedUcGuideQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get one published Companion installation guide
+ */
+
+export function useGetPublishedUcGuide<TData = Awaited<ReturnType<typeof getPublishedUcGuide>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublishedUcGuide>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublishedUcGuideQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListUcAdminGuidesUrl = () => {
+
+
+
+
+  return `/api/uc/admin/guides`
+}
+
+export const listUcAdminGuides = async ( options?: RequestInit): Promise<ListUcAdminGuides200> => {
+
+  return customFetch<ListUcAdminGuides200>(getListUcAdminGuidesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcAdminGuidesQueryKey = () => {
+    return [
+    `/api/uc/admin/guides`
+    ] as const;
+    }
+
+
+export const getListUcAdminGuidesQueryOptions = <TData = Awaited<ReturnType<typeof listUcAdminGuides>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcAdminGuides>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcAdminGuidesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcAdminGuides>>> = ({ signal }) => listUcAdminGuides({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcAdminGuides>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcAdminGuidesQueryResult = NonNullable<Awaited<ReturnType<typeof listUcAdminGuides>>>
+export type ListUcAdminGuidesQueryError = ErrorType<unknown>
+
+
+
+export function useListUcAdminGuides<TData = Awaited<ReturnType<typeof listUcAdminGuides>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcAdminGuides>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcAdminGuidesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateUcAdminGuideUrl = () => {
+
+
+
+
+  return `/api/uc/admin/guides`
+}
+
+export const createUcAdminGuide = async (ucGuideInput: UcGuideInput, options?: RequestInit): Promise<CreateUcAdminGuide201> => {
+
+  return customFetch<CreateUcAdminGuide201>(getCreateUcAdminGuideUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucGuideInput)
+  }
+);}
+
+
+
+
+
+export const getCreateUcAdminGuideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcAdminGuide>>, TError,{data: BodyType<UcGuideInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUcAdminGuide>>, TError,{data: BodyType<UcGuideInput>}, TContext> => {
+
+const mutationKey = ['createUcAdminGuide'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUcAdminGuide>>, {data: BodyType<UcGuideInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUcAdminGuide(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUcAdminGuideMutationResult = NonNullable<Awaited<ReturnType<typeof createUcAdminGuide>>>
+    export type CreateUcAdminGuideMutationBody = BodyType<UcGuideInput>
+    export type CreateUcAdminGuideMutationError = ErrorType<void>
+
+    export const useCreateUcAdminGuide = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcAdminGuide>>, TError,{data: BodyType<UcGuideInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUcAdminGuide>>,
+        TError,
+        {data: BodyType<UcGuideInput>},
+        TContext
+      > => {
+      return useMutation(getCreateUcAdminGuideMutationOptions(options));
+    }
+
+export const getGetUcAdminGuideUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/guides/${id}`
+}
+
+export const getUcAdminGuide = async (id: string, options?: RequestInit): Promise<GetUcAdminGuide200> => {
+
+  return customFetch<GetUcAdminGuide200>(getGetUcAdminGuideUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcAdminGuideQueryKey = (id: string,) => {
+    return [
+    `/api/uc/admin/guides/${id}`
+    ] as const;
+    }
+
+
+export const getGetUcAdminGuideQueryOptions = <TData = Awaited<ReturnType<typeof getUcAdminGuide>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcAdminGuide>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcAdminGuideQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcAdminGuide>>> = ({ signal }) => getUcAdminGuide(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcAdminGuide>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcAdminGuideQueryResult = NonNullable<Awaited<ReturnType<typeof getUcAdminGuide>>>
+export type GetUcAdminGuideQueryError = ErrorType<void>
+
+
+
+export function useGetUcAdminGuide<TData = Awaited<ReturnType<typeof getUcAdminGuide>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcAdminGuide>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcAdminGuideQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateUcAdminGuideUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/guides/${id}`
+}
+
+export const updateUcAdminGuide = async (id: string,
+    ucGuideInput: UcGuideInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUpdateUcAdminGuideUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucGuideInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcAdminGuideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminGuide>>, TError,{id: string;data: BodyType<UcGuideInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminGuide>>, TError,{id: string;data: BodyType<UcGuideInput>}, TContext> => {
+
+const mutationKey = ['updateUcAdminGuide'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcAdminGuide>>, {id: string;data: BodyType<UcGuideInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcAdminGuide(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcAdminGuideMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcAdminGuide>>>
+    export type UpdateUcAdminGuideMutationBody = BodyType<UcGuideInput>
+    export type UpdateUcAdminGuideMutationError = ErrorType<void>
+
+    export const useUpdateUcAdminGuide = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminGuide>>, TError,{id: string;data: BodyType<UcGuideInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcAdminGuide>>,
+        TError,
+        {id: string;data: BodyType<UcGuideInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcAdminGuideMutationOptions(options));
+    }
+
+export const getPublishUcAdminGuideUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/guides/${id}/publish`
+}
+
+export const publishUcAdminGuide = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPublishUcAdminGuideUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPublishUcAdminGuideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishUcAdminGuide>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishUcAdminGuide>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['publishUcAdminGuide'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishUcAdminGuide>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  publishUcAdminGuide(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishUcAdminGuideMutationResult = NonNullable<Awaited<ReturnType<typeof publishUcAdminGuide>>>
+
+    export type PublishUcAdminGuideMutationError = ErrorType<void>
+
+    export const usePublishUcAdminGuide = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishUcAdminGuide>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishUcAdminGuide>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPublishUcAdminGuideMutationOptions(options));
+    }
+
+export const getUnpublishUcAdminGuideUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/guides/${id}/unpublish`
+}
+
+export const unpublishUcAdminGuide = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUnpublishUcAdminGuideUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnpublishUcAdminGuideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpublishUcAdminGuide>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unpublishUcAdminGuide>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['unpublishUcAdminGuide'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unpublishUcAdminGuide>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unpublishUcAdminGuide(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnpublishUcAdminGuideMutationResult = NonNullable<Awaited<ReturnType<typeof unpublishUcAdminGuide>>>
+
+    export type UnpublishUcAdminGuideMutationError = ErrorType<void>
+
+    export const useUnpublishUcAdminGuide = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpublishUcAdminGuide>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unpublishUcAdminGuide>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getUnpublishUcAdminGuideMutationOptions(options));
+    }

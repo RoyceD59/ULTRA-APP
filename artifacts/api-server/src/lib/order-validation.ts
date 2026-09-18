@@ -1,16 +1,14 @@
 /**
- * Input validation for Cash-on-Delivery (COD) orders.
+ * Input validation for checkout delivery details.
  *
- * COD is the only payment method with no payment barrier — anyone can submit
- * an order with mashed-keyboard names and a junk phone number, and the team
- * then wastes time calling dead numbers. Verified-payment methods (M-Pesa,
- * Paystack, Stripe) are deliberately NOT gated on these checks: a confirmed
- * payment already establishes genuine intent, and rejecting a paid order
- * would be far worse than a sloppy name.
+ * COD additionally uses the name heuristics below because it has no payment
+ * barrier. Phone parsing is shared by every checkout method and happens before
+ * any provider or persistence call.
  *
  * Heuristics are intentionally gentle — they block obvious junk ("hjkhjk",
  * "asdf", "12345") without rejecting real names (Ng'ang'a, Ngũgĩ, Jean-Paul).
  */
+import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
 
 /** Keyboard-row runs that indicate mashing rather than a real name. */
 const KEYBOARD_RUNS = [
@@ -46,16 +44,12 @@ export function looksLikeRealName(raw: string): boolean {
 
 /**
  * Validate and normalize a phone number.
- * Kenyan numbers (07XX/01XX local, 254… or +254… international) normalize to
- * +254XXXXXXXXX; other international numbers are accepted as +<10-15 digits>.
+ * Local numbers are parsed only when a valid submitted country is available;
+ * international numbers may use their + prefix.
  */
-export function validatePhone(raw: string): { valid: boolean; normalized?: string } {
-  const cleaned = raw.replace(/[\s().-]/g, "");
-  if (!cleaned) return { valid: false };
-  const kenyan = cleaned.match(/^(?:\+254|254|0)([71]\d{8})$/);
-  if (kenyan) return { valid: true, normalized: `+254${kenyan[1]}` };
-  if (/^\+[1-9]\d{9,14}$/.test(cleaned)) return { valid: true, normalized: cleaned };
-  return { valid: false };
+export function validatePhone(raw: string, country?: string): { valid: boolean; normalized?: string } {
+  const normalized = normalizeInternationalPhone(raw, countryCodeFromValue(country));
+  return normalized ? { valid: true, normalized } : { valid: false };
 }
 
 export interface CodShippingValidation {
@@ -67,7 +61,7 @@ export interface CodShippingValidation {
 }
 
 /**
- * Validate the shipping details of a COD order.
+ * Validate the shipping details of a COD order after universal phone parsing.
  * Requires a plausible first name and a valid phone number; the last name is
  * validated only when provided (older app versions do not require it).
  */
@@ -84,6 +78,7 @@ export function validateCodShipping(
   const firstName = asString(shipping["firstName"]);
   const lastName = asString(shipping["lastName"]);
   const phone = asString(shipping["phone"]);
+  const country = asString(shipping["country"]);
 
   if (!firstName) {
     fields["firstName"] = "First name is required for cash orders.";
@@ -97,7 +92,7 @@ export function validateCodShipping(
   if (!phone) {
     fields["phone"] = "A phone number is required for cash orders.";
   } else {
-    const check = validatePhone(phone);
+    const check = validatePhone(phone, country);
     if (!check.valid) {
       fields["phone"] = "Please enter a valid phone number, e.g. 0712 345 678.";
     } else {

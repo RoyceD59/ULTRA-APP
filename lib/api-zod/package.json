@@ -5,9 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./instant-water-identity": "./src/instant-water-identity.ts"
+    "./instant-water-identity": "./src/instant-water-identity.ts",
+    "./phone": "./src/phone.ts"
   },
   "dependencies": {
+    "libphonenumber-js": "^1.13.13",
     "zod": "catalog:"
   }
 }

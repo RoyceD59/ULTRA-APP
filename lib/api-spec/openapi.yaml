@@ -2149,6 +2149,136 @@ paths:
       responses:
         "200": { description: Filtered Alison feedback records }
 
+  /uc/guides:
+    get:
+      operationId: listPublishedUcGuides
+      tags: [uc-guides]
+      summary: List published Companion installation guides
+      responses:
+        "200":
+          description: Published guide index
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guides]
+                properties:
+                  guides:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcGuideSummary" }
+        "304": { description: Not modified }
+  /uc/guides/{slug}:
+    get:
+      operationId: getPublishedUcGuide
+      tags: [uc-guides]
+      summary: Get one published Companion installation guide
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Published guide
+          headers:
+            ETag: { schema: { type: string } }
+            Last-Modified: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guide]
+                properties:
+                  guide: { $ref: "#/components/schemas/UcGuide" }
+        "304": { description: Not modified }
+        "404": { description: Guide not found }
+  /uc/admin/guides:
+    get:
+      operationId: listUcAdminGuides
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: All draft and published guides
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guides]
+                properties:
+                  guides:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcGuideSummary" }
+    post:
+      operationId: createUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcGuideInput" }
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guide]
+                properties: { guide: { $ref: "#/components/schemas/UcGuide" } }
+        "400": { description: Invalid guide or media metadata }
+        "403": { description: Active administrator required }
+  /uc/admin/guides/{id}:
+    get:
+      operationId: getUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: Draft or published guide
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guide]
+                properties: { guide: { $ref: "#/components/schemas/UcGuide" } }
+        "404": { description: Guide not found }
+    put:
+      operationId: updateUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcGuideInput" }
+      responses:
+        "200": { description: Guide saved }
+        "400": { description: Invalid guide or media metadata }
+        "403": { description: Active administrator required }
+        "404": { description: Guide not found }
+  /uc/admin/guides/{id}/publish:
+    post:
+      operationId: publishUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Guide published }
+        "400": { description: Guide content or media is invalid }
+        "403": { description: Active administrator required }
+        "404": { description: Guide not found }
+  /uc/admin/guides/{id}/unpublish:
+    post:
+      operationId: unpublishUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Guide unpublished }
+        "403": { description: Active administrator required }
 components:
   parameters:
     MemberId:
@@ -3795,3 +3925,67 @@ components:
       required: [client]
       properties:
         client: { $ref: "#/components/schemas/UcOfflineClient" }
+
+    UcGuideMedia:
+      type: object
+      required: [id, kind, url, mimeType, altText]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [image, animation, video] }
+        url: { type: string }
+        objectPath: { type: [string, "null"] }
+        mimeType: { type: string }
+        altText: { type: string }
+        caption: { type: [string, "null"] }
+        posterUrl: { type: [string, "null"] }
+        byteSize: { type: [integer, "null"] }
+        durationSeconds: { type: [integer, "null"] }
+        animated: { type: boolean }
+    UcGuideSection:
+      type: object
+      required: [id, position, heading, steps, media]
+      properties:
+        id: { type: string }
+        position: { type: integer }
+        heading: { type: string }
+        body: { type: [string, "null"] }
+        steps: { type: array, items: { type: string } }
+        tip: { type: [string, "null"] }
+        warning: { type: [string, "null"] }
+        illustrationIcon: { type: [string, "null"] }
+        media: { type: array, items: { $ref: "#/components/schemas/UcGuideMedia" } }
+    UcGuideSummary:
+      type: object
+      required: [slug, title, summary, category, products, icon, readTime, version, updatedAt]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        category: { type: string }
+        products: { type: string }
+        icon: { type: string }
+        readTime: { type: string }
+        status: { type: [string, "null"], enum: [draft, published, null] }
+        version: { type: integer }
+        publishedAt: { type: [string, "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UcGuide:
+      allOf:
+        - $ref: "#/components/schemas/UcGuideSummary"
+        - type: object
+          required: [id, sections]
+          properties:
+            id: { type: string }
+            sections: { type: array, items: { $ref: "#/components/schemas/UcGuideSection" } }
+    UcGuideInput:
+      type: object
+      required: [slug, title, summary, sections]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9-]{3,120}$" }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 1000 }
+        category: { type: string }
+        products: { type: string }
+        icon: { type: string }
+        readTime: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/UcGuideSection" } }

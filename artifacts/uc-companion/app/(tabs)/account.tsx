@@ -37,6 +37,9 @@ import {
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
 import ImpactShareModal from '@/components/ImpactShareModal';
+import { CountryPicker } from '@/components/CountryPicker';
+import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
+import type { SupportedCountryCode } from '@workspace/api-zod/phone';
 
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -75,6 +78,7 @@ function EditProfileModal({
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [phoneCountry, setPhoneCountry] = useState<SupportedCountryCode>('KE');
   const [loadedAccountId, setLoadedAccountId] = useState<number | null>(null);
   const draftReady = useRef(false);
 
@@ -132,8 +136,14 @@ function EditProfileModal({
       setError('First name is required');
       return;
     }
-    if (form.phone.trim() && !/^\+\d{10,15}$/.test(form.phone.replace(/\s/g, ''))) {
-      setError('Enter a valid phone number, e.g. +254712345678');
+    const phoneInput = form.phone.trim();
+    if (!phoneInput) {
+      setError('Phone number is required');
+      return;
+    }
+    const normalizedPhone = normalizeInstantPhone(phoneInput, phoneCountry);
+    if (!normalizedPhone || !isValidInstantPhone(phoneInput, phoneCountry)) {
+      setError('Enter a valid phone number for the selected country');
       return;
     }
     if (form.address.trim().length > 500) {
@@ -147,19 +157,19 @@ function EditProfileModal({
       await api.updateProfile({
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
-        phone:     form.phone.replace(/\s/g, ''),
+        phone:     normalizedPhone,
         address:   form.address.trim(),
       });
       await updateUser({
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
-        phone:     form.phone.replace(/\s/g, ''),
+        phone:     normalizedPhone,
         address:   form.address.trim(),
       });
       onSaved({
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
-        phone:     form.phone.replace(/\s/g, ''),
+        phone:     normalizedPhone,
         address:   form.address.trim(),
       });
       await clearProfileDraft();
@@ -247,7 +257,7 @@ function EditProfileModal({
 
               {/* Phone */}
               <View style={editStyles.fieldGroup}>
-                <Text style={[editStyles.label, { color: colors.mutedForeground }]}>Phone Number</Text>
+                <CountryPicker value={phoneCountry} onChange={setPhoneCountry} colors={colors} label="Phone country" />
                 <View style={[editStyles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Ionicons name="call-outline" size={15} color={colors.mutedForeground} />
                   <TextInput
@@ -262,7 +272,7 @@ function EditProfileModal({
                   />
                 </View>
                 <Text style={[editStyles.hint, { color: colors.mutedForeground }]}>
-                  International format, e.g. +254712345678
+                  International format, or a local number for the selected country
                 </Text>
               </View>
 
@@ -563,6 +573,14 @@ function AccountScreenContent() {
   const [ownerDetailsOpen,   setOwnerDetailsOpen]    = useState(false);
   const [redeemVisible,      setRedeemVisible]         = useState(false);
   const [impactShareVisible, setImpactShareVisible]    = useState(false);
+  const [accountFocused,     setAccountFocused]       = useState(false);
+
+  // Delay authenticated account payloads until this tab is actually focused.
+  // This keeps cold-start navigation from mounting four network observers.
+  useFocusEffect(useCallback(() => {
+    setAccountFocused(true);
+    return () => setAccountFocused(false);
+  }, []));
 
   // Auto-open the Edit Profile modal when navigated here with ?editProfile=1
   // (e.g. from the ticket form's "add phone number" link).
@@ -642,7 +660,8 @@ function AccountScreenContent() {
   const { data: orders } = useQuery({
     queryKey: customerQueryKeys.orders(user?.id),
     queryFn: () => api.getOrders(),
-    enabled: !!user,
+    enabled: !!user && accountFocused,
+    staleTime: 2 * 60 * 1000,
   });
 
   const {
@@ -653,9 +672,8 @@ function AccountScreenContent() {
   } = useQuery({
     queryKey: customerQueryKeys.rewards(user?.id),
     queryFn: () => api.getRewards(),
-    enabled: !!user,
-    staleTime: 0,
-    refetchOnMount: 'always',
+    enabled: !!user && accountFocused,
+    staleTime: 2 * 60 * 1000,
   });
 
   const {
@@ -666,14 +684,14 @@ function AccountScreenContent() {
   } = useQuery({
     queryKey: customerQueryKeys.waterTests(user?.id),
     queryFn: () => api.getWaterTestHistory(),
-    enabled: !!user,
+    enabled: !!user && accountFocused,
     staleTime: 60 * 1000,
   });
 
   const { data: referral } = useQuery({
     queryKey: customerQueryKeys.referral(user?.id),
     queryFn: () => api.getMyReferral(),
-    enabled: !!user,
+    enabled: !!user && accountFocused,
     staleTime: 5 * 60 * 1000,
   });
 

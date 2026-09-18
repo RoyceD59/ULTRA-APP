@@ -842,6 +842,9 @@ importers:
 
   lib/api-zod:
     dependencies:
+      libphonenumber-js:
+        specifier: ^1.13.13
+        version: 1.13.13
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -6053,6 +6056,9 @@ packages:
   leven@4.1.0:
     resolution: {integrity: sha512-KZ9W9nWDT7rF7Dazg8xyLHGLrmpgq2nVNFUckhqdW3szVP6YhCpp/RAnpmVExA9JvrMynjwSLVrEj3AepHR6ew==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  libphonenumber-js@1.13.13:
+    resolution: {integrity: sha512-hV6SmWnyQ8U1QXhhqbqYBHIStNnscG7A5XbGodgdHhf/8N5PwhYpJA5U/yHDjYwPYTd8uNGXqq416XctuvK2PA==}
 
   libsignal@6.0.0:
     resolution: {integrity: sha512-d/5V3YFtDljbFMufz4ncyUYGYhJl+vzAe+c2EFFBQ6bz1h8Q3IOMEGXYMzlibU60I+e8GagMMpji18iez3P1hA==}
@@ -13704,6 +13710,8 @@ snapshots:
   leven@3.1.0: {}
 
   leven@4.1.0: {}
+
+  libphonenumber-js@1.13.13: {}
 
   libsignal@6.0.0:
     dependencies:

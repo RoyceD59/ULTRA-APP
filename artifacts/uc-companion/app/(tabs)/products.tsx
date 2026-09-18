@@ -201,7 +201,7 @@ function ProductsScreenContent() {
       category: category === 'All' ? undefined : category,
       search: settledSearch,
     }), signal),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Compatibility add-ons — only fetched when basket has items

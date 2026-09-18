@@ -2370,3 +2370,278 @@ export const ListAgentInteractionsResponse = zod.unknown()
 
 
 export const ListAgentAlisonFeedbackResponse = zod.unknown()
+
+
+/**
+ * @summary List published Companion installation guides
+ */
+export const ListPublishedUcGuidesResponse = zod.object({
+  "guides": zod.array(zod.object({
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "category": zod.string(),
+  "products": zod.string(),
+  "icon": zod.string(),
+  "readTime": zod.string(),
+  "status": zod.union([zod.literal('draft'),zod.literal('published'),zod.literal(null)]).nullish(),
+  "version": zod.number(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Get one published Companion installation guide
+ */
+export const GetPublishedUcGuideParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetPublishedUcGuideResponse = zod.object({
+  "guide": zod.object({
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "category": zod.string(),
+  "products": zod.string(),
+  "icon": zod.string(),
+  "readTime": zod.string(),
+  "status": zod.union([zod.literal('draft'),zod.literal('published'),zod.literal(null)]).nullish(),
+  "version": zod.number(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "id": zod.string(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "heading": zod.string(),
+  "body": zod.string().nullish(),
+  "steps": zod.array(zod.string()),
+  "tip": zod.string().nullish(),
+  "warning": zod.string().nullish(),
+  "illustrationIcon": zod.string().nullish(),
+  "media": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['image', 'animation', 'video']),
+  "url": zod.string(),
+  "objectPath": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "altText": zod.string(),
+  "caption": zod.string().nullish(),
+  "posterUrl": zod.string().nullish(),
+  "byteSize": zod.number().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "animated": zod.boolean().optional()
+}))
+}))
+}))
+})
+
+
+export const ListUcAdminGuidesResponse = zod.object({
+  "guides": zod.array(zod.object({
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "category": zod.string(),
+  "products": zod.string(),
+  "icon": zod.string(),
+  "readTime": zod.string(),
+  "status": zod.union([zod.literal('draft'),zod.literal('published'),zod.literal(null)]).nullish(),
+  "version": zod.number(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+export const createUcAdminGuideBodySlugRegExp = new RegExp('^[a-z0-9-]{3,120}$');
+export const createUcAdminGuideBodyTitleMax = 200;
+
+export const createUcAdminGuideBodySummaryMax = 1000;
+
+
+
+export const CreateUcAdminGuideBody = zod.object({
+  "slug": zod.string().regex(createUcAdminGuideBodySlugRegExp),
+  "title": zod.string().min(1).max(createUcAdminGuideBodyTitleMax),
+  "summary": zod.string().min(1).max(createUcAdminGuideBodySummaryMax),
+  "category": zod.string().optional(),
+  "products": zod.string().optional(),
+  "icon": zod.string().optional(),
+  "readTime": zod.string().optional(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "heading": zod.string(),
+  "body": zod.string().nullish(),
+  "steps": zod.array(zod.string()),
+  "tip": zod.string().nullish(),
+  "warning": zod.string().nullish(),
+  "illustrationIcon": zod.string().nullish(),
+  "media": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['image', 'animation', 'video']),
+  "url": zod.string(),
+  "objectPath": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "altText": zod.string(),
+  "caption": zod.string().nullish(),
+  "posterUrl": zod.string().nullish(),
+  "byteSize": zod.number().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "animated": zod.boolean().optional()
+}))
+}))
+})
+
+export const CreateUcAdminGuideResponse = zod.object({
+  "guide": zod.object({
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "category": zod.string(),
+  "products": zod.string(),
+  "icon": zod.string(),
+  "readTime": zod.string(),
+  "status": zod.union([zod.literal('draft'),zod.literal('published'),zod.literal(null)]).nullish(),
+  "version": zod.number(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "id": zod.string(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "heading": zod.string(),
+  "body": zod.string().nullish(),
+  "steps": zod.array(zod.string()),
+  "tip": zod.string().nullish(),
+  "warning": zod.string().nullish(),
+  "illustrationIcon": zod.string().nullish(),
+  "media": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['image', 'animation', 'video']),
+  "url": zod.string(),
+  "objectPath": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "altText": zod.string(),
+  "caption": zod.string().nullish(),
+  "posterUrl": zod.string().nullish(),
+  "byteSize": zod.number().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "animated": zod.boolean().optional()
+}))
+}))
+}))
+})
+
+
+export const GetUcAdminGuideParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetUcAdminGuideResponse = zod.object({
+  "guide": zod.object({
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "category": zod.string(),
+  "products": zod.string(),
+  "icon": zod.string(),
+  "readTime": zod.string(),
+  "status": zod.union([zod.literal('draft'),zod.literal('published'),zod.literal(null)]).nullish(),
+  "version": zod.number(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "id": zod.string(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "heading": zod.string(),
+  "body": zod.string().nullish(),
+  "steps": zod.array(zod.string()),
+  "tip": zod.string().nullish(),
+  "warning": zod.string().nullish(),
+  "illustrationIcon": zod.string().nullish(),
+  "media": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['image', 'animation', 'video']),
+  "url": zod.string(),
+  "objectPath": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "altText": zod.string(),
+  "caption": zod.string().nullish(),
+  "posterUrl": zod.string().nullish(),
+  "byteSize": zod.number().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "animated": zod.boolean().optional()
+}))
+}))
+}))
+})
+
+
+export const UpdateUcAdminGuideParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateUcAdminGuideBodySlugRegExp = new RegExp('^[a-z0-9-]{3,120}$');
+export const updateUcAdminGuideBodyTitleMax = 200;
+
+export const updateUcAdminGuideBodySummaryMax = 1000;
+
+
+
+export const UpdateUcAdminGuideBody = zod.object({
+  "slug": zod.string().regex(updateUcAdminGuideBodySlugRegExp),
+  "title": zod.string().min(1).max(updateUcAdminGuideBodyTitleMax),
+  "summary": zod.string().min(1).max(updateUcAdminGuideBodySummaryMax),
+  "category": zod.string().optional(),
+  "products": zod.string().optional(),
+  "icon": zod.string().optional(),
+  "readTime": zod.string().optional(),
+  "sections": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "heading": zod.string(),
+  "body": zod.string().nullish(),
+  "steps": zod.array(zod.string()),
+  "tip": zod.string().nullish(),
+  "warning": zod.string().nullish(),
+  "illustrationIcon": zod.string().nullish(),
+  "media": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['image', 'animation', 'video']),
+  "url": zod.string(),
+  "objectPath": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "altText": zod.string(),
+  "caption": zod.string().nullish(),
+  "posterUrl": zod.string().nullish(),
+  "byteSize": zod.number().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "animated": zod.boolean().optional()
+}))
+}))
+})
+
+export const UpdateUcAdminGuideResponse = zod.unknown()
+
+
+export const PublishUcAdminGuideParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PublishUcAdminGuideResponse = zod.unknown()
+
+
+export const UnpublishUcAdminGuideParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnpublishUcAdminGuideResponse = zod.unknown()

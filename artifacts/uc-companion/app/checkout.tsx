@@ -17,6 +17,9 @@ import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
 import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
 import { classifyPaymentInitError, RATE_LIMIT_TITLE, RATE_LIMIT_MESSAGE } from '@/hooks/rateLimitAlert';
 import AlisonBubble from '@/components/AlisonBubble';
+import { CountryPicker } from '@/components/CountryPicker';
+import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
+import { countryCodeFromValue } from '@workspace/api-zod/phone';
 
 const DELIVERY_FEE = 500;
 
@@ -69,13 +72,6 @@ function looksLikeRealName(raw: string): boolean {
   return true;
 }
 
-/** Valid Kenyan (07…/01…/254…/+254…) or international (+…) phone number. */
-function isValidPhone(raw: string): boolean {
-  const cleaned = raw.replace(/[\s().-]/g, '');
-  if (/^(?:\+254|254|0)[71]\d{8}$/.test(cleaned)) return true;
-  return /^\+[1-9]\d{9,14}$/.test(cleaned);
-}
-
 type AddressErrors = Partial<Record<'firstName' | 'lastName' | 'address1' | 'city' | 'phone', string>>;
 
 /**
@@ -98,7 +94,7 @@ function checkAddress(address: UCAddress, strict: boolean): AddressErrors {
   }
   if (!address.address1.trim()) errors.address1 = 'Delivery address is required.';
   if (!address.phone.trim()) errors.phone = 'Phone number is required.';
-  else if (strict && !isValidPhone(address.phone)) errors.phone = 'Enter a valid phone number, e.g. 0712 345 678.';
+  else if (!isValidInstantPhone(address.phone, countryCodeFromValue(address.country) ?? 'KE')) errors.phone = 'Enter a valid phone number for the selected country.';
   return errors;
 }
 
@@ -204,6 +200,10 @@ export default function CheckoutScreen() {
     if (first) {
       Alert.alert('Check your delivery details', first);
       return false;
+    }
+    const normalizedPhone = normalizeInstantPhone(address.phone, countryCodeFromValue(address.country) ?? 'KE');
+    if (normalizedPhone && normalizedPhone !== address.phone) {
+      setAddress(prev => ({ ...prev, phone: normalizedPhone }));
     }
     return true;
   }
@@ -729,13 +729,26 @@ export default function CheckoutScreen() {
    * fails mid-creation and the customer retries.
    */
   async function createOrder(method: string, reference: string): Promise<boolean> {
+    const normalizedPhone = normalizeInstantPhone(
+      address.phone.trim(),
+      countryCodeFromValue(address.country) ?? undefined,
+    );
+    if (!normalizedPhone) {
+      const fields: AddressErrors = { phone: 'Enter a valid phone number for the selected country.' };
+      setAddressErrors(fields);
+      Alert.alert('Check your delivery details', fields.phone);
+      return false;
+    }
+    // Use this local payload directly. setAddress() is asynchronous and the
+    // current request must not send the stale, pre-normalized value.
+    const normalizedShippingAddress = { ...address, phone: normalizedPhone };
     setProcessing(true);
     try {
       const order = await api.createOrder({
         lineItems: items.map(i => ({ productId: i.id, quantity: i.quantity })),
         paymentMethod: method,
         paymentReference: reference,
-        shippingAddress: address,
+        shippingAddress: normalizedShippingAddress,
         promoCode: appliedQuote?.promotion.code,
         applyReferralDiscount: usingReferralDiscount,
         idempotencyKey: orderIdempotencyKeyRef.current ?? (orderIdempotencyKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
@@ -828,6 +841,14 @@ export default function CheckoutScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Address</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.field}>
+            <CountryPicker
+              value={countryCodeFromValue(address.country) ?? 'KE'}
+              onChange={code => setAddress(prev => ({ ...prev, country: code }))}
+              colors={colors}
+              label="Phone country"
+            />
+          </View>
           {ADDRESS_FIELDS.map(f => (
             <View key={f.key} style={styles.field}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{f.label}</Text>

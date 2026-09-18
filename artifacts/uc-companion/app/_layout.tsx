@@ -15,20 +15,13 @@ import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { ActivityIndicator, Platform, View } from 'react-native';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { usePushTokenSync } from '@/hooks/useNotifications';
+import { useNativeNotificationRouting, usePushTokenSync } from '@/hooks/useNativeNotifications';
 import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
 import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
-import { parseOrderNotificationId } from '@/lib/orderNotification';
-import { evaluateColdStart } from '@/lib/coldStartNotification';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
-
-// Import the notification hook — this also runs setNotificationHandler at
-// module level so it's registered before any notification can arrive.
-import * as Notifications from 'expo-notifications';
 
 // Set API base URL before any component renders
 const apiBase = getApiBase();
@@ -44,18 +37,26 @@ SplashScreen.preventAutoHideAsync();
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function RootLayoutNav() {
   const router = useRouter();
-  const { token, user, isLoading: authLoading, mustChangePassword } = useAuth();
+  const { token, mustChangePassword } = useAuth();
   const client = useQueryClient();
   const previousToken = useRef<string | null>(token);
-  const handledNotificationRef = useRef<string | null>(null);
-
   // Keep the server's push token fresh: re-registers on app foreground if
   // Expo has rotated the token since the last registration.
   usePushTokenSync(token);
+  useNativeNotificationRouting();
 
   useWaterTestHandoffCapture();
 
@@ -77,89 +78,6 @@ function RootLayoutNav() {
       router.replace('/auth/change-password' as never);
     }
   }, [mustChangePassword, router, token]);
-
-  // Handle notification taps: route user to the relevant screen
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-
-    const hasUser = !!user?.id;
-    const userId = user?.id;
-
-    if (!authLoading) {
-      Notifications.getLastNotificationResponseAsync().then(response => {
-        if (response && response.notification.request.identifier !== handledNotificationRef.current) {
-          const data = response.notification.request.content.data as Record<string, any> | undefined;
-          const action = evaluateColdStart(data, hasUser);
-          
-          if (action.type === 'ROUTE_AND_CLEAR') {
-            handledNotificationRef.current = response.notification.request.identifier;
-            
-            if (action.screen === 'order-detail' && action.orderId) {
-              if (userId) {
-                client.invalidateQueries({ queryKey: ['customer', userId, 'orders'] });
-                client.invalidateQueries({ queryKey: ['customer', userId, 'order', String(action.orderId)] });
-                client.invalidateQueries({ queryKey: ['customer', userId, 'order', action.orderId] });
-              }
-              router.push(`/order/${action.orderId}` as never);
-            } else if (action.screen === 'products' || action.screen === 'shop') {
-              router.push('/(tabs)/products' as never);
-            } else if (action.screen === 'orders' || action.screen === 'filterTracker') {
-              router.push('/(tabs)/account' as never);
-            }
-            
-            Notifications.clearLastNotificationResponseAsync().catch(() => {});
-          } else if (action.type === 'CLEAR') {
-            handledNotificationRef.current = response.notification.request.identifier;
-            Notifications.clearLastNotificationResponseAsync().catch(() => {});
-          }
-        }
-      });
-    }
-
-    const sub = Notifications.addNotificationResponseReceivedListener(response => {
-      handledNotificationRef.current = response.notification.request.identifier;
-      const data = response.notification.request.content.data as Record<string, any> | undefined;
-      const screen = data?.['screen'];
-      if (screen === 'products' || screen === 'shop') {
-        router.push('/(tabs)/products' as never);
-      } else if (screen === 'orders' || screen === 'filterTracker') {
-        router.push('/(tabs)/account' as never);
-      } else if (screen === 'order-detail') {
-        const orderId = parseOrderNotificationId(data);
-        if (orderId !== null) {
-          router.push(`/order/${orderId}` as never);
-        }
-      }
-    });
-
-    const fgSub = Notifications.addNotificationReceivedListener(notification => {
-      const data = notification.request.content.data as Record<string, any> | undefined;
-      if (data?.screen === 'order-detail') {
-        const orderId = parseOrderNotificationId(data);
-        if (userId && orderId !== null) {
-          client.invalidateQueries({ queryKey: ['customer', userId, 'orders'] });
-          client.invalidateQueries({ queryKey: ['customer', userId, 'order', String(orderId)] });
-          client.invalidateQueries({ queryKey: ['customer', userId, 'order', orderId] });
-        }
-      }
-    });
-
-    return () => {
-      sub.remove();
-      fgSub.remove();
-    };
-  }, [router, client, user?.id, authLoading]);
-
-  // Do not mount protected tabs or their React Query observers until the
-  // combined Companion session record has been hydrated. This avoids a
-  // guest navigation flash and unauthenticated requests during cold start.
-  if (authLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#0054A6" />
-      </View>
-    );
-  }
 
   // Temporary sessions are deliberately unable to mount customer routes (and
   // therefore cannot create authenticated query observers) until the new

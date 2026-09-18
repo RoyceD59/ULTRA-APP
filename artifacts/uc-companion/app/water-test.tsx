@@ -38,14 +38,16 @@ import { HANDOFF_STORAGE_KEY, useConsumeHandoff } from '@/hooks/useWaterTestHand
 import { ApiError } from '@/hooks/apiError';
 import {
   isValidInstantFirstName,
-  isValidInstantKenyanPhone,
+  isValidInstantPhone,
   normalizeInstantFirstName,
-  normalizeInstantKenyanPhone,
+  normalizeInstantPhone,
 } from '@workspace/api-zod/instant-water-identity';
+import { countryCodeFromValue, type SupportedCountryCode } from '@workspace/api-zod/phone';
+import { trackEvent } from '@/lib/analytics';
+import { CountryPicker } from '@/components/CountryPicker';
 
 type ViewState = 'form' | 'result' | 'history' | 'booking';
 
-const COUNTRIES = ['Kenya', 'Tanzania', 'Rwanda', 'Ghana', 'Other'];
 const SOURCES = [
   { label: 'Piped / municipal tap', value: InstantWaterSource.municipal },
   { label: 'Borehole or deep well', value: InstantWaterSource.borehole },
@@ -206,7 +208,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
   const [draft, setDraft] = useState<Draft>({
     firstName: user?.firstName || '',
     phone: user?.phone || '',
-    country: '', area: '', source: '', concern: '', setting: '', consent: false
+    country: 'KE', area: '', source: '', concern: '', setting: '', consent: false
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -219,7 +221,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
 
   useEffect(() => {
     loadDraft<Draft>('water-test').then(d => {
-      if (d) setDraft(prev => ({ ...prev, ...d }));
+      if (d) setDraft(prev => ({ ...prev, ...d, country: countryCodeFromValue(d.country) ?? 'KE' }));
       draftReady.current = true;
     });
   }, []);
@@ -243,8 +245,9 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       setError('Enter a valid first name (2–80 letters, with normal spaces, apostrophes, or hyphens).');
       return;
     }
-    if (!isValidInstantKenyanPhone(draft.phone)) {
-      setError('Enter a valid Kenyan mobile number, such as 0722 123 456.');
+    const country = countryCodeFromValue(draft.country) ?? 'KE';
+    if (!isValidInstantPhone(draft.phone, country)) {
+      setError('Enter a valid phone number for the selected country.');
       return;
     }
     if (!token && !draft.consent) {
@@ -252,6 +255,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       return;
     }
 
+    trackEvent('water_check_started', { countryCode: country });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSubmitting(true);
     setError('');
@@ -264,7 +268,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           data: {
             idempotencyKey,
             firstName: normalizeInstantFirstName(draft.firstName) ?? draft.firstName.trim(),
-            phone: normalizeInstantKenyanPhone(draft.phone) ?? draft.phone.trim(),
+            phone: normalizeInstantPhone(draft.phone, country) ?? draft.phone.trim(),
             answers: {
               country: draft.country,
               area: draft.area.trim(),
@@ -279,7 +283,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           data: {
             idempotencyKey,
             firstName: normalizeInstantFirstName(draft.firstName) ?? draft.firstName.trim(),
-            phone: normalizeInstantKenyanPhone(draft.phone) ?? draft.phone.trim(),
+            phone: normalizeInstantPhone(draft.phone, country) ?? draft.phone.trim(),
             consent: true,
             answers: {
               country: draft.country,
@@ -293,6 +297,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       }
       await clearDraft('water-test');
       idempKeyRef.current = Crypto.randomUUID(); // reset on success
+      trackEvent('water_check_completed', { countryCode: country });
       onResult(res);
     } catch (err: any) {
       const status = err instanceof ApiError ? err.status : 0;
@@ -401,15 +406,12 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
 
         <View style={styles.row}>
           <View style={[styles.field, styles.rowField]}>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Country *</Text>
-            <View style={styles.chipsWrap}>
-              {COUNTRIES.map(c => (
-                <TouchableOpacity key={c} onPress={() => setField('country', c)}
-                  style={[styles.chip, { backgroundColor: draft.country === c ? colors.primary : colors.surface, borderColor: draft.country === c ? colors.primary : colors.border }]}>
-                  <Text style={{ fontSize: 13, fontWeight: '500', color: draft.country === c ? '#fff' : colors.text }}>{c}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <CountryPicker
+              value={(countryCodeFromValue(draft.country) ?? 'KE') as SupportedCountryCode}
+              onChange={(code) => setField('country', code)}
+              colors={colors}
+              label="Country *"
+            />
           </View>
         </View>
 

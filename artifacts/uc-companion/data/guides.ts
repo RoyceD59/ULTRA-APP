@@ -6,6 +6,19 @@
 
 export type GuideStep = string; // plain text step
 
+export interface GuideMedia {
+  id: string;
+  kind: 'image' | 'animation' | 'video';
+  url: string;
+  mimeType: string;
+  altText: string;
+  caption?: string | null;
+  posterUrl?: string | null;
+  byteSize?: number | null;
+  durationSeconds?: number | null;
+  animated?: boolean;
+}
+
 export interface GuideSection {
   heading: string;
   body?: string;           // prose paragraph
@@ -13,6 +26,7 @@ export interface GuideSection {
   tip?: string;            // highlighted callout box
   warning?: string;        // red warning callout
   illustrationIcon?: string; // Ionicons name for the section illustration banner
+  media?: GuideMedia[];
 }
 
 export type GuideCategory =
@@ -30,6 +44,8 @@ export interface Guide {
   icon: string;            // Ionicons name
   readTime: string;
   sections: GuideSection[];
+  version?: number;
+  updatedAt?: string;
 }
 
 export const GUIDES: Guide[] = [

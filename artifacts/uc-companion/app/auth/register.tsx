@@ -11,43 +11,13 @@ import BrandLogo from '@/components/BrandLogo';
 import SocialAuthButtons from '@/components/SocialAuthButtons';
 import RegistrationErrorNotice from '@/components/RegistrationErrorNotice';
 import { resolveReturnTo } from '@/lib/authReturn';
+import { CountryPicker } from '@/components/CountryPicker';
+import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
+import type { SupportedCountryCode } from '@workspace/api-zod/phone';
+import { trackEvent } from '@/lib/analytics';
 
-// ── Phone helpers ─────────────────────────────────────────────────────────────
 import React, { useRef, useState } from 'react';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-
-/**
- * Normalise to E.164 for Kenya (+254):
- *   07XXXXXXXX  →  +2547XXXXXXXX
- *   01XXXXXXXX  →  +2541XXXXXXXX
- *   2547XXXXXXXX → +2547XXXXXXXX
- *   +254…       → kept as-is
- */
-function normaliseKenyaPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.startsWith('254') && digits.length === 12) return `+${digits}`;
-  if (digits.startsWith('0')   && digits.length === 10) return `+254${digits.slice(1)}`;
-  if (digits.length === 9)                               return `+254${digits}`;
-  return raw.trim(); // return as-entered for non-KE numbers
-}
-
-function isValidPhone(raw: string): boolean {
-  const normalised = normaliseKenyaPhone(raw);
-  // Accept +254 (12 chars) or any other +XX… with 10-15 digits total
-  return /^\+\d{10,15}$/.test(normalised);
-}
-
-/** Formats while typing: turn leading 07 / 01 into +254 7 / +254 1 */
-function liveFormatPhone(raw: string): string {
-  // Only auto-expand if the user typed digits (not if they typed "+" already)
-  if (!raw.startsWith('+')) {
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length > 1 && digits.startsWith('07')) return `+254 ${digits.slice(1)}`;
-    if (digits.length > 1 && digits.startsWith('01')) return `+254 ${digits.slice(1)}`;
-    if (digits.length > 0 && digits.startsWith('254')) return `+${digits}`;
-  }
-  return raw;
-}
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +31,7 @@ export default function RegisterScreen() {
   const [lastName,     setLastName]     = useState('');
   const [email,        setEmail]        = useState('');
   const [phone,        setPhone]        = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<SupportedCountryCode>('KE');
   const [password,     setPassword]     = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [showPass,     setShowPass]     = useState(false);
@@ -73,7 +44,7 @@ export default function RegisterScreen() {
   const referralRef = useRef<TextInput>(null);
 
   function handlePhoneChange(text: string) {
-    setPhone(liveFormatPhone(text));
+    setPhone(text);
   }
 
   async function handleRegister() {
@@ -85,8 +56,9 @@ export default function RegisterScreen() {
       Alert.alert('Weak password', 'Password must be at least 6 characters.');
       return;
     }
-    if (!isValidPhone(phone)) {
-      Alert.alert('Invalid phone number', 'Enter a valid number, e.g. 0712 345678 or +254 712 345678.');
+    const normalizedPhone = normalizeInstantPhone(phone, phoneCountry);
+    if (!normalizedPhone || !isValidInstantPhone(phone, phoneCountry)) {
+      Alert.alert('Invalid phone number', 'Enter a valid phone number for the selected country.');
       return;
     }
     Keyboard.dismiss();
@@ -97,12 +69,13 @@ export default function RegisterScreen() {
       firstName,
       lastName,
       email:        email.trim(),
-      phone:        normaliseKenyaPhone(phone),
+      phone:        normalizedPhone,
       password,
       referralCode: referralCode.trim() || undefined,
     });
     setLoading(false);
     if (result.success) {
+      trackEvent('signup_completed', { countryCode: phoneCountry });
       navigateAfterAuth();
     } else {
       setRegisterError({ message: result.error ?? 'Please try again.', hint: result.hint });
@@ -166,10 +139,10 @@ export default function RegisterScreen() {
 
           {/* Phone */}
           <View style={styles.field}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Phone number *</Text>
+            <CountryPicker value={phoneCountry} onChange={setPhoneCountry} colors={colors} label="Phone country *" />
             <View style={[
               styles.inputWrap,
-              { borderColor: phone && !isValidPhone(phone) ? '#EF4444' : colors.border, backgroundColor: colors.card },
+              { borderColor: phone && !isValidInstantPhone(phone, phoneCountry) ? '#EF4444' : colors.border, backgroundColor: colors.card },
             ]}>
               <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
               <TextInput ref={phoneRef}
@@ -178,7 +151,7 @@ export default function RegisterScreen() {
                 autoComplete="tel" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.inputInner, { color: colors.text }]}
               />
-              {phone && isValidPhone(phone) && (
+              {phone && isValidInstantPhone(phone, phoneCountry) && (
                 <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
               )}
             </View>

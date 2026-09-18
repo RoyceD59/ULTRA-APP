@@ -15,6 +15,7 @@ import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
 import { validateCodShipping } from "../lib/order-validation.js";
+import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
 import { remoteImageProxyPath } from "./product-images.js";
 import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
 import { getWhatsAppStatus, sendWhatsAppMessage } from "../lib/whatsapp.js";
@@ -5803,7 +5804,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const orderNumericId = Number(orderUserId);
   if (await guardDeletedAccount(orderNumericId, res)) return;
 
-  const { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey } =
+  let { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey } =
     req.body as {
       lineItems: { productId: number; quantity: number }[];
       paymentMethod: string;
@@ -5826,12 +5827,48 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     return;
   }
 
+  // Phone numbers are persisted and handed to payment/order providers for
+  // every payment method, not only COD. Parse with the submitted country for
+  // local numbers; without a valid country, local formats are rejected rather
+  // than guessed as Kenyan.
+  const submittedShipping = shippingAddress;
+  const submittedPhone = typeof submittedShipping?.phone === "string"
+    ? submittedShipping.phone
+    : "";
+  const submittedCountry = typeof submittedShipping?.country === "string"
+    ? countryCodeFromValue(submittedShipping.country)
+    : undefined;
+  const normalizedOrderPhone = submittedPhone
+    ? normalizeInternationalPhone(submittedPhone, submittedCountry)
+    : null;
+  if (!normalizedOrderPhone) {
+    if (paymentMethod === "cod") {
+      const codCheck = validateCodShipping(submittedShipping);
+      if (!codCheck.ok) {
+        res.status(400).json({
+          error: "Please check your delivery details",
+          fields: codCheck.fields,
+        });
+        return;
+      }
+    }
+    res.status(400).json({
+      error: "Please check your delivery details",
+      fields: { phone: "Please enter a valid phone number for the selected country." },
+    });
+    return;
+  }
+  const normalizedShippingAddress: Record<string, string> = {
+    ...(submittedShipping ?? {}),
+    phone: normalizedOrderPhone,
+  };
+
   // ── COD input validation ────────────────────────────────────────────────
   // Cash orders have no payment barrier, so junk submissions (mashed names,
   // invalid phone numbers) are rejected here. Verified-payment methods are
   // deliberately not gated — a confirmed payment already proves intent.
   if (paymentMethod === "cod") {
-    const codCheck = validateCodShipping(shippingAddress);
+    const codCheck = validateCodShipping(normalizedShippingAddress);
     if (!codCheck.ok) {
       res.status(400).json({
         error: "Please check your delivery details",
@@ -5841,10 +5878,12 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     }
     // Normalize the phone (07… → +254…) so SMS/WhatsApp reminders and the
     // team's callbacks always have a dialable international number.
-    if (shippingAddress && codCheck.normalizedPhone) {
-      shippingAddress["phone"] = codCheck.normalizedPhone;
+    if (codCheck.normalizedPhone) {
+      normalizedShippingAddress.phone = codCheck.normalizedPhone;
     }
   }
+  // All downstream persistence/provider calls use this normalized value.
+  shippingAddress = normalizedShippingAddress;
 
   // Server-side payment verification — gate order creation on confirmed payment.
   const verification = await verifyPaymentOnServer(paymentMethod, paymentReference ?? "");

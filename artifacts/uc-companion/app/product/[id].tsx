@@ -78,7 +78,8 @@ export default function ProductDetailScreen() {
   const { data: profile } = useQuery({
     queryKey: customerQueryKeys.profile(user?.id),
     queryFn: () => api.getProfile(),
-    enabled: !!token && !!user,
+    enabled: !!token && !!user && !!product,
+    staleTime: 10 * 60 * 1000,
   });
   const isAdmin = profile?.isAdmin === true;
 

@@ -1,12 +1,18 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, LayoutAnimation, UIManager, TextInput, Linking,
+  Platform, LayoutAnimation, UIManager, TextInput, Linking, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { GUIDES, GuideSection } from '@/data/guides';
+import { Image } from 'expo-image';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useQuery } from '@tanstack/react-query';
+import { fetchPublishedGuide } from '@/lib/guideContent';
+import { resolveMediaUrl } from '@/hooks/useApi';
+import { trackEvent } from '@/lib/analytics';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -46,6 +52,91 @@ function iconForHeading(heading: string, fallback: string): string {
   return fallback;
 }
 
+type GuideMedia = NonNullable<GuideSection['media']>[number];
+
+function GuideVideoBlock({ media, guideId }: { media: GuideMedia; guideId: string }) {
+  const colors = useColors();
+  const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const player = useVideoPlayer(null, (instance) => {
+    instance.loop = false;
+  });
+  useEffect(() => {
+    const subscription = player.addListener('playToEnd', () => {
+      trackEvent('guide_media_completed', { guideId, mediaKind: 'video' });
+    });
+    return () => subscription.remove();
+  }, [guideId, player]);
+  useEffect(() => {
+    const subscription = player.addListener('statusChange', ({ status }) => {
+      if (status === 'error') {
+        setFailed(true);
+        trackEvent('guide_media_failed', { guideId, mediaKind: 'video' });
+      }
+    });
+    return () => subscription.remove();
+  }, [guideId, player]);
+  const openMedia = () => { void Linking.openURL(resolveMediaUrl(media.url)); };
+  const startVideo = () => {
+    try {
+      player.replace(resolveMediaUrl(media.url));
+      setPlaying(true);
+      player.play();
+      trackEvent('guide_media_started', { guideId, mediaKind: 'video' });
+    } catch {
+      setFailed(true);
+      trackEvent('guide_media_failed', { guideId, mediaKind: 'video' });
+    }
+  };
+  return failed ? (
+    <View style={[styles.mediaFallback, { borderColor: colors.border, backgroundColor: colors.background }]}>
+      <Ionicons name="videocam-off-outline" size={18} color={colors.mutedForeground} />
+      <Text style={[styles.mediaFallbackText, { color: colors.mutedForeground }]}>Video unavailable</Text>
+       <TouchableOpacity onPress={() => { setFailed(false); setPlaying(false); }}><Text style={{ color: colors.primary, fontWeight: '700' }}>Retry</Text></TouchableOpacity>
+       <TouchableOpacity onPress={openMedia}><Text style={{ color: colors.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity>
+    </View>
+  ) : (
+    <View style={styles.mediaFrame}>
+      {!playing && media.posterUrl ? (
+        <Image source={{ uri: resolveMediaUrl(media.posterUrl) }} style={styles.mediaImage} contentFit="cover" accessibilityLabel={media.altText} onError={() => { setFailed(true); trackEvent('guide_media_failed', { guideId, mediaKind: 'video' }); }} />
+      ) : (
+        <VideoView player={player} style={styles.mediaImage} contentFit="contain" nativeControls={playing} />
+      )}
+      {!playing && (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Play ${media.altText}`} onPress={startVideo} style={styles.playButton}>
+          <Ionicons name="play" size={22} color="#fff" />
+        </Pressable>
+      )}
+      {media.caption ? <Text style={[styles.mediaCaption, { color: colors.mutedForeground }]}>{media.caption}</Text> : null}
+    </View>
+  );
+}
+
+function GuideMediaBlock({ media, guideId }: { media: GuideMedia; guideId: string }) {
+  const colors = useColors();
+  const [failed, setFailed] = useState(false);
+  const openMedia = () => { void Linking.openURL(resolveMediaUrl(media.url)); };
+  if (media.kind === 'video') return <GuideVideoBlock media={media} guideId={guideId} />;
+  if (failed) {
+    return (
+      <View style={[styles.mediaFallback, { borderColor: colors.border, backgroundColor: colors.background }]}>
+        <Ionicons name="image-outline" size={18} color={colors.mutedForeground} />
+        <Text style={[styles.mediaFallbackText, { color: colors.mutedForeground }]}>Media unavailable</Text>
+        <TouchableOpacity onPress={() => setFailed(false)}><Text style={{ color: colors.primary, fontWeight: '700' }}>Retry</Text></TouchableOpacity>
+        <TouchableOpacity onPress={openMedia}><Text style={{ color: colors.primary, fontWeight: '700' }}>Open</Text></TouchableOpacity>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.mediaFrame}>
+       <Image source={{ uri: resolveMediaUrl(media.url) }} style={styles.mediaImage} contentFit="contain" accessibilityLabel={media.altText}
+         onLoad={() => trackEvent('guide_media_completed', { guideId, mediaKind: 'image' })}
+         onError={() => { setFailed(true); trackEvent('guide_media_failed', { guideId, mediaKind: 'image' }); }} />
+      {media.caption ? <Text style={[styles.mediaCaption, { color: colors.mutedForeground }]}>{media.caption}</Text> : null}
+    </View>
+  );
+}
+
 // ── Compact inline illustration strip ────────────────────────────────────────
 function IllustrationStrip({
   icon, accentColor, stepCount,
@@ -72,10 +163,10 @@ function IllustrationStrip({
 
 // ── Collapsible section card ──────────────────────────────────────────────────
 function SectionCard({
-  section, index, guideIcon, accentColor, defaultOpen,
+  section, index, guideIcon, accentColor, defaultOpen, guideId,
 }: {
   section: GuideSection; index: number; guideIcon: string;
-  accentColor: string; defaultOpen: boolean;
+  accentColor: string; defaultOpen: boolean; guideId: string;
 }) {
   const colors = useColors();
   const [open, setOpen] = useState(defaultOpen);
@@ -138,6 +229,7 @@ function SectionCard({
               <Text style={[styles.calloutText, { color: '#92400E' }]}>{section.warning}</Text>
             </View>
           ) : null}
+          {section.media?.map((media) => <GuideMediaBlock key={media.id} media={media} guideId={guideId} />)}
         </View>
       )}
     </View>
@@ -269,7 +361,16 @@ export default function GuideDetailScreen() {
   const { id }  = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
   const colors  = useColors();
-  const guide   = GUIDES.find(g => g.id === id);
+  const guidesQuery = useQuery({
+    queryKey: ['companion', 'guide', id],
+    queryFn: () => fetchPublishedGuide(String(id)),
+    placeholderData: () => GUIDES.find((guide) => guide.id === id),
+    staleTime: 5 * 60 * 1000,
+  });
+  const guide = guidesQuery.data;
+  useEffect(() => {
+    if (guide) trackEvent('guide_opened', { guideId: guide.id });
+  }, [guide?.id]);
 
   if (!guide) {
     return (
@@ -341,6 +442,7 @@ export default function GuideDetailScreen() {
             guideIcon={guide.icon}
             accentColor={accent}
             defaultOpen={si === 0}
+            guideId={guide.id}
           />
         ))}
 
@@ -443,4 +545,10 @@ const styles = StyleSheet.create({
   footerSub:        { fontSize: 11, marginTop: 1 },
   footerBtn:        { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
   footerBtnText:    { color: '#fff', fontSize: 12, fontWeight: '600' as const },
+  mediaFrame:       { borderRadius: 10, overflow: 'hidden', gap: 5 },
+  mediaImage:       { width: '100%', minHeight: 160, aspectRatio: 16 / 9, backgroundColor: '#0F172A' },
+  mediaCaption:     { fontSize: 11, lineHeight: 17 },
+  playButton:       { position: 'absolute', alignSelf: 'center', top: '38%', width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15,23,42,0.86)' },
+  mediaFallback:    { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, padding: 12 },
+  mediaFallbackText:{ flex: 1, fontSize: 12 },
 });

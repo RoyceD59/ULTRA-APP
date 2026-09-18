@@ -76,6 +76,13 @@ export async function processHandoffState(
       await AsyncStorage.removeItem(HANDOFF_STORAGE_KEY);
       setHandoffPending(false);
       setHandoffError('This water check link has expired or belongs to another account.');
+    } else if (err instanceof ApiError && err.status === 409) {
+      // The signed-in account still needs a verified phone before the server
+      // can attach the assessment. Keep the one-time handoff available so a
+      // profile update can retry it without making the customer retake the test.
+      setHandoffPending(true);
+      setHandoffSuccess(false);
+      setHandoffError(null);
     } else {
       setHandoffPending(false);
       setHandoffError('Something went wrong securely saving your test. Please try again.');

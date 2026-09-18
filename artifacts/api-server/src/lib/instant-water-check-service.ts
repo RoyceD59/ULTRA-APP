@@ -3,8 +3,9 @@ import type { PoolClient } from "pg";
 import { pool } from "@workspace/db";
 import {
   normalizeInstantFirstName,
-  normalizeInstantKenyanPhone,
+  normalizeInstantPhone as normalizeSharedPhone,
 } from "@workspace/api-zod/instant-water-identity";
+import { countryCodeFromValue } from "@workspace/api-zod/phone";
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, ObjectStorageService } from "./objectStorage.js";
 import {
   scoreInstantWaterCheck,
@@ -57,7 +58,7 @@ export type AssessmentResponse = {
 };
 
 export function normalizeInstantPhone(raw: string): string | null {
-  return normalizeInstantKenyanPhone(raw);
+  return normalizeSharedPhone(raw, "KE");
 }
 
 function hashSecret(value: string): string {
@@ -325,7 +326,7 @@ export async function createInstantAssessment(input: {
 }): Promise<{ response: AssessmentResponse; replay: boolean }> {
   const normalizedFirstName = normalizeInstantFirstName(input.firstName);
   if (!normalizedFirstName) throw new Error("INVALID_FIRST_NAME");
-  const normalizedPhone = normalizeInstantPhone(input.phone);
+  const normalizedPhone = normalizeSharedPhone(input.phone, countryCodeFromValue(input.country) ?? "KE");
   if (!normalizedPhone) throw new Error("INVALID_PHONE");
   const result = scoreInstantWaterCheck(input.answers);
   const requestHash = hashSecret(stablePayload({

@@ -6,11 +6,11 @@
  * request is sent.
  */
 import { z } from "zod";
+import { normalizeInternationalPhone, type SupportedCountryCode } from "./phone";
 
 const FIRST_NAME_PATTERN = /^\p{L}[\p{L}\p{M}]*(?:[ '\u2019-]\p{L}[\p{L}\p{M}]*)*$/u;
 const REPEATED_CHARACTER_PATTERN = /([\p{L}\p{M}])\1{2,}/iu;
 const PHONE_CHARACTERS_PATTERN = /^\+?[0-9() .-]+$/;
-const KENYAN_MOBILE_PATTERN = /^(?:0[17][0-9]{8}|254[17][0-9]{8}|\+254[17][0-9]{8})$/;
 
 export function normalizeInstantFirstName(raw: string): string | null {
   if (typeof raw !== "string") return null;
@@ -25,21 +25,21 @@ export function isValidInstantFirstName(raw: string): boolean {
   return normalizeInstantFirstName(raw) !== null;
 }
 
-export function normalizeInstantKenyanPhone(raw: string): string | null {
+export function normalizeInstantPhone(raw: string, country: SupportedCountryCode = "KE"): string | null {
   if (typeof raw !== "string") return null;
   const value = raw.trim();
   if (value.length < 7 || value.length > 40 || !PHONE_CHARACTERS_PATTERN.test(value)) return null;
   if (!/^(?:\+|[0-9(])/.test(value) || !/[0-9]$/.test(value) || /[ .-]{2,}/.test(value)) return null;
   if (value.startsWith("+") && value.indexOf("+", 1) !== -1) return null;
+  return normalizeInternationalPhone(value, country);
+}
 
-  const openingParentheses = (value.match(/\(/g) ?? []).length;
-  const closingParentheses = (value.match(/\)/g) ?? []).length;
-  if (openingParentheses !== closingParentheses || value.indexOf(")") < value.indexOf("(")) return null;
+export function normalizeInstantKenyanPhone(raw: string): string | null {
+  return normalizeInstantPhone(raw, "KE");
+}
 
-  const compact = value.replace(/[()\s.-]/g, "");
-  if (!KENYAN_MOBILE_PATTERN.test(compact)) return null;
-  if (compact.startsWith("0")) return `+254${compact.slice(1)}`;
-  return compact.startsWith("+") ? compact : `+${compact}`;
+export function isValidInstantPhone(raw: string, country: SupportedCountryCode = "KE"): boolean {
+  return normalizeInstantPhone(raw, country) !== null;
 }
 
 export function isValidInstantKenyanPhone(raw: string): boolean {

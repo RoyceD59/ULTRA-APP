@@ -156,11 +156,27 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : String(raw);
     // Only objects minted by the upload endpoint above (uploads/<uuid>) are
     // servable. Everything else under PRIVATE_OBJECT_DIR stays private.
-    if (!/^uploads\/[A-Za-z0-9-]+$/.test(wildcardPath)) {
+    const guidePrefix = "library/guides/";
+    const guideParts = wildcardPath.startsWith(guidePrefix) ? wildcardPath.slice(guidePrefix.length).split("/") : [];
+    const isGuideObject = guideParts.length > 0 &&
+      guideParts.every((part) => part.length > 0 && part !== "." && part !== ".." && !part.includes("..") && !part.includes("\\"));
+    if (!/^uploads\/[A-Za-z0-9-]+$/.test(wildcardPath) && !isGuideObject) {
       res.status(404).json({ error: "Object not found" });
       return;
     }
     const objectPath = `/objects/${wildcardPath}`;
+    if (isGuideObject) {
+      const guideObject = await pool.query(
+        `SELECT 1 FROM uc_guide_media m JOIN uc_guide_sections s ON s.id=m.section_id
+          JOIN uc_guides g ON g.id=s.guide_id
+         WHERE m.object_path=$1 AND g.status='published' LIMIT 1`,
+        [objectPath],
+      );
+      if (!guideObject.rows[0]) {
+        res.status(404).json({ error: "Object not found" });
+        return;
+      }
+    }
     const bound = await pool.query(
       `SELECT 1 FROM instant_water_media_uploads
         WHERE object_path = $1 AND assessment_id IS NOT NULL
@@ -177,7 +193,10 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     // mobile data. Any failure (video, GIF, HEIC, storage hiccup) falls
     // through to streaming the original bytes below.
     const wRaw = parseInt(String(req.query["w"] ?? ""), 10);
-    if (!isNaN(wRaw) && wRaw > 0) {
+    // Guide media is immutable and must be served byte-for-byte: in particular,
+    // never send animated GIF/WebP through sharp, which can drop animation
+    // frames. Guide clients use the original object and its poster instead.
+    if (!isGuideObject && !isNaN(wRaw) && wRaw > 0) {
       const width = snapWidth(wRaw);
       const uuid = wildcardPath.slice("uploads/".length);
       try {
