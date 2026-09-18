@@ -38,6 +38,8 @@ tags:
     description: Instant water assessment and physical-test lead flow
   - name: agent-oauth
     description: Private ProjectHub administrator-managed machine-agent access
+  - name: customer-lifecycle
+    description: Canonical customer identity, filter lifecycle, impact, and mission control contracts
 paths:
   /water-check/assessments:
     post:
@@ -2417,6 +2419,287 @@ paths:
       responses:
         "200": { description: Guide unpublished }
         "403": { description: Active administrator required }
+  /uc/customer/lifecycle/lookup:
+    get:
+      operationId: lookupCustomerLifecycle
+      tags: [customer-lifecycle]
+      summary: Look up authenticated customer purchases eligible for filter registration
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer-scoped purchase matches and identity status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerLifecycleLookup" }
+        "401": { description: Authentication required }
+        "409": { description: Customer identity requires staff reconciliation }
+
+  /uc/customer/filters/register:
+    post:
+      operationId: registerCustomerFilterFromPurchase
+      tags: [customer-lifecycle]
+      summary: Register one filter from an eligible canonical purchase line
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VerifiedFilterRegistrationInput" }
+      responses:
+        "201":
+          description: Verified filter registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CanonicalFilterRegistration" }
+        "400": { description: Invalid registration input }
+        "401": { description: Authentication required }
+        "409": { description: Purchase line is already registered or ownership conflicts }
+
+  /uc/customer/legacy-reviews:
+    get:
+      operationId: listCustomerLegacyRegistrationReviews
+      tags: [customer-lifecycle]
+      summary: List legacy registration reviews owned by the authenticated customer
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer-scoped review statuses and messages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacyRegistrationReviewList" }
+        "401": { description: Authentication required }
+    post:
+      operationId: submitCustomerLegacyRegistrationReview
+      tags: [customer-lifecycle]
+      summary: Submit unmatched legacy purchase details for staff review
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegacyRegistrationSubmissionInput" }
+      responses:
+        "202":
+          description: Review submitted and pending staff decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacyRegistrationStatus" }
+        "400": { description: Invalid evidence metadata }
+        "401": { description: Authentication required }
+        "409": { description: Idempotency key conflict or duplicate review }
+
+  /uc/customer/history:
+    get:
+      operationId: getCanonicalCustomerHistory
+      tags: [customer-lifecycle]
+      summary: Get canonical customer purchases, filters, maintenance, receipts, and impact
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Complete history for the authenticated customer only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CanonicalCustomerHistory" }
+        "401": { description: Authentication required }
+
+  /uc/customer/impact/share:
+    get:
+      operationId: getCanonicalImpactShare
+      tags: [customer-lifecycle]
+      summary: Get verified personal and global impact for Share My Impact
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Share payload with validated referral attribution metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImpactSharePayload" }
+        "401": { description: Authentication required }
+
+  /uc/customer/location-tier-events:
+    post:
+      operationId: recordLocationTierAnalytics
+      tags: [customer-lifecycle]
+      summary: Record a privacy-safe nearby-location tier outcome
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LocationTierAnalyticsInput" }
+      responses:
+        "202": { description: Event accepted without storing customer coordinates }
+        "400": { description: Invalid coarse analytics payload }
+        "401": { description: Authentication required }
+
+  /uc/admin/customer-lifecycle/reviews:
+    get:
+      operationId: listLifecycleRegistrationReviews
+      tags: [customer-lifecycle]
+      summary: List legacy registration reviews for ProjectHub staff
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ReviewStatus" } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Paginated staff review queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffReviewQueue" }
+        "401": { description: Authentication required }
+        "403": { description: Lifecycle review permission required }
+
+  /uc/admin/customer-lifecycle/reviews/{reviewId}/decision:
+    post:
+      operationId: decideLifecycleRegistrationReview
+      tags: [customer-lifecycle]
+      summary: Apply an approved DB review decision to a legacy review
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reviewId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegacyReviewDecisionInput" }
+      responses:
+        "200":
+          description: Idempotent review decision result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffLegacyRegistrationReview" }
+        "400": { description: Invalid decision or missing reason }
+        "401": { description: Authentication required }
+        "403": { description: Lifecycle review permission required }
+        "404": { description: Review not found }
+        "409": { description: Review is stale or ownership conflicts }
+
+  /uc/admin/customer-lifecycle/identity-conflicts:
+    get:
+      operationId: listLifecycleIdentityConflicts
+      tags: [customer-lifecycle]
+      summary: List unresolved identity conflicts without exposing credentials
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Paginated identity conflict queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityConflictQueue" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/admin/customer-lifecycle/identity-conflicts/{conflictId}/resolve:
+    post:
+      operationId: resolveLifecycleIdentityConflict
+      tags: [customer-lifecycle]
+      summary: Resolve one identity conflict with an audited reason
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conflictId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityConflictResolutionInput" }
+      responses:
+        "200":
+          description: Conflict resolution
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityConflict" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+        "404": { description: Conflict not found }
+
+  /uc/admin/customer-lifecycle/reconciliation-conflicts:
+    get:
+      operationId: listLifecycleReconciliationConflicts
+      tags: [customer-lifecycle]
+      summary: List unresolved order and receipt reconciliation conflicts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, in_review, resolved] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Paginated reconciliation queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationConflictQueue" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/admin/customer-lifecycle/mission-control:
+    get:
+      operationId: getCustomerLifecycleMissionControl
+      tags: [customer-lifecycle]
+      summary: Get aggregate lifecycle integrity indicators and queue counts
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Privacy-safe mission-control indicators
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MissionControlIndicators" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/admin/customer-lifecycle/timeline:
+    get:
+      operationId: getCustomerLifecycleTimeline
+      tags: [customer-lifecycle]
+      summary: Reconstruct a customer, purchase, filter, and impact timeline
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: customerId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Timeline without secrets or raw evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerLifecycleTimeline" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+        "404": { description: Customer not found }
+
+  /uc/admin/customer-lifecycle/audit:
+    get:
+      operationId: listCustomerLifecycleAuditEvents
+      tags: [customer-lifecycle]
+      summary: List audited lifecycle mutations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: resourceType, in: query, schema: { type: string } }
+        - { name: resourceId, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Audit events with redacted values
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventPage" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/customer-lifecycle/config:
+    get:
+      operationId: getCustomerLifecycleFeatureConfig
+      tags: [customer-lifecycle]
+      summary: Get non-sensitive customer lifecycle feature availability
+      responses:
+        "200":
+          description: Public feature availability; secrets and internal settings are excluded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerLifecycleFeatureConfig" }
+
 components:
   parameters:
     MemberId:
@@ -2443,7 +2726,6 @@ components:
       required: true
       schema:
         type: integer
-
   securitySchemes:
     clientBasic:
       type: http
@@ -4216,3 +4498,328 @@ components:
         icon: { type: string }
         readTime: { type: string }
         sections: { type: array, items: { $ref: "#/components/schemas/UcGuideSection" } }
+
+    ReviewStatus:
+      type: string
+      enum: [pending_review, approved, rejected, correction_requested]
+
+    CustomerLifecycleFeatureConfig:
+      type: object
+      required: [canonicalReads, legacyReviewSubmission, canonicalGlobalImpact, nearbyDistanceTiers]
+      properties:
+        canonicalReads: { type: boolean }
+        legacyReviewSubmission: { type: boolean }
+        canonicalGlobalImpact: { type: boolean }
+        nearbyDistanceTiers: { type: boolean }
+
+    CustomerLifecycleIdentity:
+      type: object
+      required: [customerId, status]
+      properties:
+        customerId: { type: integer, minimum: 1 }
+        status: { type: string, enum: [verified, review_required, deleted] }
+        identitySources: { type: array, items: { type: string, enum: [companion, woocommerce, social, offline] } }
+
+    CanonicalPurchaseLine:
+      type: object
+      required: [id, productId, productName, quantity, lineTotal, registrationEligible]
+      properties:
+        id: { type: integer, format: int64 }
+        productId: { type: integer }
+        productName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        productReference: { type: [string, "null"] }
+        lineTotal: { type: string }
+        registrationEligible: { type: boolean }
+        registeredFilterId: { type: [integer, "null"] }
+
+    CanonicalPurchase:
+      type: object
+      required: [id, currency, total, paymentStatus, fulfilmentStatus, lines]
+      properties:
+        id: { type: integer, format: int64 }
+        companionOrderId: { type: [integer, "null"] }
+        woocommerceOrderId: { type: [integer, "null"] }
+        receiptNumber: { type: [string, "null"] }
+        currency: { type: string }
+        total: { type: string }
+        paymentStatus: { type: string }
+        fulfilmentStatus: { type: string }
+        sourceCreatedAt: { type: [string, "null"], format: date-time }
+        lines: { type: array, items: { $ref: "#/components/schemas/CanonicalPurchaseLine" } }
+
+    CustomerLifecycleLookup:
+      type: object
+      required: [identity, purchases, featureEnabled]
+      properties:
+        identity: { $ref: "#/components/schemas/CustomerLifecycleIdentity" }
+        purchases: { type: array, items: { $ref: "#/components/schemas/CanonicalPurchase" } }
+        featureEnabled: { type: boolean }
+
+    VerifiedFilterRegistrationInput:
+      type: object
+      required: [purchaseLineId, activatedAt, idempotencyKey]
+      properties:
+        purchaseLineId: { type: integer, format: int64 }
+        activatedAt: { type: string, format: date-time }
+        referralCode: { type: [string, "null"], maxLength: 120 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    CanonicalFilterRegistration:
+      type: object
+      required: [id, customerId, productId, productName, verificationStatus, lifecycleStatus, activatedAt, maintenanceCount]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        productId: { type: integer }
+        productName: { type: string }
+        verificationStatus: { $ref: "#/components/schemas/ReviewStatus" }
+        lifecycleStatus: { type: string, enum: [active, inactive] }
+        activatedAt: { type: string, format: date-time }
+        deactivatedAt: { type: [string, "null"], format: date-time }
+        maintenanceCount: { type: integer, minimum: 0 }
+        verifiedLitres: { type: integer, minimum: 0 }
+
+    LegacyRegistrationSubmissionInput:
+      type: object
+      required: [productId, productName, idempotencyKey]
+      properties:
+        productId: { type: integer }
+        productName: { type: string, minLength: 1, maxLength: 200 }
+        approximatePurchaseDate: { type: [string, "null"], format: date }
+        installationDate: { type: [string, "null"], format: date }
+        receiptReference: { type: [string, "null"], maxLength: 200 }
+        serialOrQrReference: { type: [string, "null"], maxLength: 200 }
+        sellerChannel: { type: [string, "null"], maxLength: 120 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    LegacyRegistrationStatus:
+      type: object
+      required: [id, customerId, productId, productName, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        customerId: { type: integer }
+        productId: { type: integer }
+        productName: { type: string }
+        approximatePurchaseDate: { type: [string, "null"], format: date }
+        installationDate: { type: [string, "null"], format: date }
+        receiptReference: { type: [string, "null"], maxLength: 200 }
+        serialOrQrReference: { type: [string, "null"], maxLength: 200 }
+        sellerChannel: { type: [string, "null"], maxLength: 120 }
+        status: { $ref: "#/components/schemas/ReviewStatus" }
+        customerMessage: { type: [string, "null"] }
+        canonicalPurchaseId: { type: [integer, "null"], format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    StaffLegacyRegistrationReview:
+      allOf:
+        - $ref: "#/components/schemas/LegacyRegistrationStatus"
+        - type: object
+          required: [evidenceObjectPath]
+          properties:
+            evidenceObjectPath: { type: [string, "null"], maxLength: 500 }
+            decisionReason: { type: [string, "null"] }
+
+    LegacyRegistrationReviewList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LegacyRegistrationStatus" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    LegacyReviewDecisionInput:
+      type: object
+      required: [decision, reason, idempotencyKey]
+      properties:
+        decision: { type: string, enum: [approved, rejected, correction_requested, merged] }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        canonicalPurchaseId: { type: [integer, "null"], format: int64 }
+        purchaseLineId: { type: [integer, "null"], format: int64 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    CanonicalMaintenanceEvent:
+      type: object
+      required: [id, eventType, value, unit, actor, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        eventType: { type: string, enum: [registration, activation, deactivation, maintenance, replacement, referral_conversion, correction] }
+        value: { type: integer }
+        unit: { type: string }
+        actor: { type: string }
+        eligible: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CanonicalCustomerHistory:
+      type: object
+      required: [customerId, filters, purchases, maintenanceEvents, personalImpact]
+      properties:
+        customerId: { type: integer }
+        filters: { type: array, items: { $ref: "#/components/schemas/CanonicalFilterRegistration" } }
+        purchases: { type: array, items: { $ref: "#/components/schemas/CanonicalPurchase" } }
+        maintenanceEvents: { type: array, items: { $ref: "#/components/schemas/CanonicalMaintenanceEvent" } }
+        personalImpact: { $ref: "#/components/schemas/ImpactTotals" }
+        reviewMessages: { type: array, items: { type: string } }
+
+    ImpactTotals:
+      type: object
+      required: [verifiedLitres, maintenanceCount]
+      properties:
+        verifiedLitres: { type: integer, minimum: 0 }
+        maintenanceCount: { type: integer, minimum: 0 }
+
+    ImpactSharePayload:
+      type: object
+      required: [heading, personalImpact, globalImpact, joinUrl]
+      properties:
+        heading: { type: string, enum: ["The Ultra Clear Impact"] }
+        personalImpact: { $ref: "#/components/schemas/ImpactTotals" }
+        globalImpact: { $ref: "#/components/schemas/ImpactTotals" }
+        joinUrl: { type: string, format: uri-reference }
+        attributionId: { type: [string, "null"] }
+
+    LocationTierAnalyticsInput:
+      type: object
+      required: [event, tier, idempotencyKey]
+      properties:
+        event: { type: string, enum: [permission_granted, permission_denied, tier_selected, no_results_within_10km] }
+        tier: { type: [string, "null"], enum: [tier_1_0_to_2km, tier_2_2_to_5km, tier_3_5_to_10km, null] }
+        coarseCountry: { type: [string, "null"], maxLength: 2 }
+        coarseCity: { type: [string, "null"], maxLength: 120 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    StaffReviewQueue:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/StaffLegacyRegistrationReview" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    IdentityConflict:
+      type: object
+      required: [id, principalType, reason, status, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        principalType: { type: string }
+        reason: { $ref: "#/components/schemas/ConflictReasonCode" }
+        status: { type: string, enum: [open, in_review, resolved] }
+        candidateCustomerIds: { type: array, items: { type: integer } }
+        createdAt: { type: string, format: date-time }
+
+    IdentityConflictQueue:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/IdentityConflict" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    IdentityConflictResolutionInput:
+      type: object
+      required: [customerId, reason, idempotencyKey]
+      properties:
+        customerId: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    ReconciliationConflict:
+      type: object
+      required: [id, conflictType, source, reason, status, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        conflictType: { type: string }
+        source: { type: string }
+        sourceReference: { type: string }
+        reason: { $ref: "#/components/schemas/ConflictReasonCode" }
+        status: { type: string, enum: [open, in_review, resolved] }
+        priority: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    ConflictReasonCode:
+      type: string
+      enum: [customer_identity_mismatch, duplicate_provider_reference, duplicate_receipt_reference, product_line_mismatch, quantity_mismatch, amount_currency_mismatch, paid_order_missing_receipt, receipt_multiple_customers, app_woocommerce_duplicate, registration_already_owned, ambiguous_identity]
+
+    ReconciliationConflictQueue:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReconciliationConflict" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    MissionControlIndicators:
+      type: object
+      required: [eligibleCustomers, registrationAttempts, pendingReviews, oldestPendingReviewAgeSeconds, impactReconciled]
+      properties:
+        eligibleCustomers: { type: integer, minimum: 0 }
+        registrationAttempts: { type: integer, minimum: 0 }
+        registrationSuccessRate: { type: number, minimum: 0, maximum: 1 }
+        pendingReviews: { type: integer, minimum: 0 }
+        oldestPendingReviewAgeSeconds: { type: integer, minimum: 0 }
+        identityConflicts: { type: integer, minimum: 0 }
+        reconciliationConflicts: { type: integer, minimum: 0 }
+        impactReconciled: { type: boolean }
+        shareSignupConversionRate: { type: number, minimum: 0, maximum: 1 }
+        locationNoResultRate: { type: number, minimum: 0, maximum: 1 }
+
+    CustomerLifecycleTimelineEvent:
+      type: object
+      required: [eventType, createdAt]
+      properties:
+        eventType: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        summaryCode: { type: string, enum: [registration_submitted, registration_approved, registration_rejected, correction_requested, purchase_linked, maintenance_recorded, impact_posted, impact_corrected] }
+        createdAt: { type: string, format: date-time }
+
+    CustomerLifecycleTimeline:
+      type: object
+      required: [customerId, events, page, limit, total]
+      properties:
+        customerId: { type: integer }
+        events: { type: array, items: { $ref: "#/components/schemas/CustomerLifecycleTimelineEvent" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    AuditEvent:
+      type: object
+      required: [id, actorType, action, resourceType, resourceId, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        actorType: { type: string }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        reasonCode: { type: [string, "null"], enum: [identity_conflict, ownership_conflict, evidence_review, status_change, purchase_link, impact_correction, maintenance_correction, null] }
+        changedFields:
+          type: array
+          items: { $ref: "#/components/schemas/AuditChangeField" }
+        correlationId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AuditChangeField:
+      type: object
+      required: [field, changeType]
+      properties:
+        field:
+          type: string
+          enum: [status, verification_status, lifecycle_status, purchase_link, assigned_owner, impact_eligibility, maintenance_count]
+        changeType:
+          type: string
+          enum: [set, changed, cleared, linked, unlinked, increased, decreased]
+
+    AuditEventPage:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }

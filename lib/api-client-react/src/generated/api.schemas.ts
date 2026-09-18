@@ -2047,6 +2047,554 @@ export interface UcGuideInput {
   sections: UcGuideSection[];
 }
 
+export type ReviewStatus = typeof ReviewStatus[keyof typeof ReviewStatus];
+
+
+export const ReviewStatus = {
+  pending_review: 'pending_review',
+  approved: 'approved',
+  rejected: 'rejected',
+  correction_requested: 'correction_requested',
+} as const;
+
+export interface CustomerLifecycleFeatureConfig {
+  canonicalReads: boolean;
+  legacyReviewSubmission: boolean;
+  canonicalGlobalImpact: boolean;
+  nearbyDistanceTiers: boolean;
+}
+
+export type CustomerLifecycleIdentityStatus = typeof CustomerLifecycleIdentityStatus[keyof typeof CustomerLifecycleIdentityStatus];
+
+
+export const CustomerLifecycleIdentityStatus = {
+  verified: 'verified',
+  review_required: 'review_required',
+  deleted: 'deleted',
+} as const;
+
+export type CustomerLifecycleIdentityIdentitySourcesItem = typeof CustomerLifecycleIdentityIdentitySourcesItem[keyof typeof CustomerLifecycleIdentityIdentitySourcesItem];
+
+
+export const CustomerLifecycleIdentityIdentitySourcesItem = {
+  companion: 'companion',
+  woocommerce: 'woocommerce',
+  social: 'social',
+  offline: 'offline',
+} as const;
+
+export interface CustomerLifecycleIdentity {
+  /** @minimum 1 */
+  customerId: number;
+  status: CustomerLifecycleIdentityStatus;
+  identitySources?: CustomerLifecycleIdentityIdentitySourcesItem[];
+}
+
+export interface CanonicalPurchaseLine {
+  id: number;
+  productId: number;
+  productName: string;
+  /** @minimum 1 */
+  quantity: number;
+  /** @nullable */
+  productReference?: string | null;
+  lineTotal: string;
+  registrationEligible: boolean;
+  /** @nullable */
+  registeredFilterId?: number | null;
+}
+
+export interface CanonicalPurchase {
+  id: number;
+  /** @nullable */
+  companionOrderId?: number | null;
+  /** @nullable */
+  woocommerceOrderId?: number | null;
+  /** @nullable */
+  receiptNumber?: string | null;
+  currency: string;
+  total: string;
+  paymentStatus: string;
+  fulfilmentStatus: string;
+  /** @nullable */
+  sourceCreatedAt?: string | null;
+  lines: CanonicalPurchaseLine[];
+}
+
+export interface CustomerLifecycleLookup {
+  identity: CustomerLifecycleIdentity;
+  purchases: CanonicalPurchase[];
+  featureEnabled: boolean;
+}
+
+export interface VerifiedFilterRegistrationInput {
+  purchaseLineId: number;
+  activatedAt: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  referralCode?: string | null;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export type CanonicalFilterRegistrationLifecycleStatus = typeof CanonicalFilterRegistrationLifecycleStatus[keyof typeof CanonicalFilterRegistrationLifecycleStatus];
+
+
+export const CanonicalFilterRegistrationLifecycleStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface CanonicalFilterRegistration {
+  id: number;
+  customerId: number;
+  productId: number;
+  productName: string;
+  verificationStatus: ReviewStatus;
+  lifecycleStatus: CanonicalFilterRegistrationLifecycleStatus;
+  activatedAt: string;
+  /** @nullable */
+  deactivatedAt?: string | null;
+  /** @minimum 0 */
+  maintenanceCount: number;
+  /** @minimum 0 */
+  verifiedLitres?: number;
+}
+
+export interface LegacyRegistrationSubmissionInput {
+  productId: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  productName: string;
+  /** @nullable */
+  approximatePurchaseDate?: string | null;
+  /** @nullable */
+  installationDate?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  receiptReference?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  serialOrQrReference?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  sellerChannel?: string | null;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export interface LegacyRegistrationStatus {
+  id: number;
+  customerId: number;
+  productId: number;
+  productName: string;
+  /** @nullable */
+  approximatePurchaseDate?: string | null;
+  /** @nullable */
+  installationDate?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  receiptReference?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  serialOrQrReference?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  sellerChannel?: string | null;
+  status: ReviewStatus;
+  /** @nullable */
+  customerMessage?: string | null;
+  /** @nullable */
+  canonicalPurchaseId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StaffLegacyRegistrationReview = LegacyRegistrationStatus & ({
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  evidenceObjectPath: string | null;
+  /** @nullable */
+  decisionReason?: string | null;
+});
+
+export interface LegacyRegistrationReviewList {
+  items: LegacyRegistrationStatus[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export type LegacyReviewDecisionInputDecision = typeof LegacyReviewDecisionInputDecision[keyof typeof LegacyReviewDecisionInputDecision];
+
+
+export const LegacyReviewDecisionInputDecision = {
+  approved: 'approved',
+  rejected: 'rejected',
+  correction_requested: 'correction_requested',
+  merged: 'merged',
+} as const;
+
+export interface LegacyReviewDecisionInput {
+  decision: LegacyReviewDecisionInputDecision;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  reason: string;
+  /** @nullable */
+  canonicalPurchaseId?: number | null;
+  /** @nullable */
+  purchaseLineId?: number | null;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export type CanonicalMaintenanceEventEventType = typeof CanonicalMaintenanceEventEventType[keyof typeof CanonicalMaintenanceEventEventType];
+
+
+export const CanonicalMaintenanceEventEventType = {
+  registration: 'registration',
+  activation: 'activation',
+  deactivation: 'deactivation',
+  maintenance: 'maintenance',
+  replacement: 'replacement',
+  referral_conversion: 'referral_conversion',
+  correction: 'correction',
+} as const;
+
+export interface CanonicalMaintenanceEvent {
+  id: number;
+  eventType: CanonicalMaintenanceEventEventType;
+  value: number;
+  unit: string;
+  actor: string;
+  eligible?: boolean;
+  createdAt: string;
+}
+
+export interface ImpactTotals {
+  /** @minimum 0 */
+  verifiedLitres: number;
+  /** @minimum 0 */
+  maintenanceCount: number;
+}
+
+export interface CanonicalCustomerHistory {
+  customerId: number;
+  filters: CanonicalFilterRegistration[];
+  purchases: CanonicalPurchase[];
+  maintenanceEvents: CanonicalMaintenanceEvent[];
+  personalImpact: ImpactTotals;
+  reviewMessages?: string[];
+}
+
+export type ImpactSharePayloadHeading = typeof ImpactSharePayloadHeading[keyof typeof ImpactSharePayloadHeading];
+
+
+export const ImpactSharePayloadHeading = {
+  The_Ultra_Clear_Impact: 'The Ultra Clear Impact',
+} as const;
+
+export interface ImpactSharePayload {
+  heading: ImpactSharePayloadHeading;
+  personalImpact: ImpactTotals;
+  globalImpact: ImpactTotals;
+  joinUrl: string;
+  /** @nullable */
+  attributionId?: string | null;
+}
+
+export type LocationTierAnalyticsInputEvent = typeof LocationTierAnalyticsInputEvent[keyof typeof LocationTierAnalyticsInputEvent];
+
+
+export const LocationTierAnalyticsInputEvent = {
+  permission_granted: 'permission_granted',
+  permission_denied: 'permission_denied',
+  tier_selected: 'tier_selected',
+  no_results_within_10km: 'no_results_within_10km',
+} as const;
+
+/**
+ * @nullable
+ */
+export type LocationTierAnalyticsInputTier = typeof LocationTierAnalyticsInputTier[keyof typeof LocationTierAnalyticsInputTier] | null;
+
+
+export const LocationTierAnalyticsInputTier = {
+  tier_1_0_to_2km: 'tier_1_0_to_2km',
+  tier_2_2_to_5km: 'tier_2_2_to_5km',
+  tier_3_5_to_10km: 'tier_3_5_to_10km',
+} as const;
+
+export interface LocationTierAnalyticsInput {
+  event: LocationTierAnalyticsInputEvent;
+  /** @nullable */
+  tier: LocationTierAnalyticsInputTier;
+  /**
+     * @maxLength 2
+     * @nullable
+     */
+  coarseCountry?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  coarseCity?: string | null;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export interface StaffReviewQueue {
+  items: StaffLegacyRegistrationReview[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export type IdentityConflictStatus = typeof IdentityConflictStatus[keyof typeof IdentityConflictStatus];
+
+
+export const IdentityConflictStatus = {
+  open: 'open',
+  in_review: 'in_review',
+  resolved: 'resolved',
+} as const;
+
+export type ConflictReasonCode = typeof ConflictReasonCode[keyof typeof ConflictReasonCode];
+
+
+export const ConflictReasonCode = {
+  customer_identity_mismatch: 'customer_identity_mismatch',
+  duplicate_provider_reference: 'duplicate_provider_reference',
+  duplicate_receipt_reference: 'duplicate_receipt_reference',
+  product_line_mismatch: 'product_line_mismatch',
+  quantity_mismatch: 'quantity_mismatch',
+  amount_currency_mismatch: 'amount_currency_mismatch',
+  paid_order_missing_receipt: 'paid_order_missing_receipt',
+  receipt_multiple_customers: 'receipt_multiple_customers',
+  app_woocommerce_duplicate: 'app_woocommerce_duplicate',
+  registration_already_owned: 'registration_already_owned',
+  ambiguous_identity: 'ambiguous_identity',
+} as const;
+
+export interface IdentityConflict {
+  id: number;
+  principalType: string;
+  reason: ConflictReasonCode;
+  status: IdentityConflictStatus;
+  candidateCustomerIds?: number[];
+  createdAt: string;
+}
+
+export interface IdentityConflictQueue {
+  items: IdentityConflict[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface IdentityConflictResolutionInput {
+  /** @minimum 1 */
+  customerId: number;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  reason: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export type ReconciliationConflictStatus = typeof ReconciliationConflictStatus[keyof typeof ReconciliationConflictStatus];
+
+
+export const ReconciliationConflictStatus = {
+  open: 'open',
+  in_review: 'in_review',
+  resolved: 'resolved',
+} as const;
+
+export interface ReconciliationConflict {
+  id: number;
+  conflictType: string;
+  source: string;
+  sourceReference?: string;
+  reason: ConflictReasonCode;
+  status: ReconciliationConflictStatus;
+  priority?: number;
+  createdAt: string;
+}
+
+export interface ReconciliationConflictQueue {
+  items: ReconciliationConflict[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface MissionControlIndicators {
+  /** @minimum 0 */
+  eligibleCustomers: number;
+  /** @minimum 0 */
+  registrationAttempts: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  registrationSuccessRate?: number;
+  /** @minimum 0 */
+  pendingReviews: number;
+  /** @minimum 0 */
+  oldestPendingReviewAgeSeconds: number;
+  /** @minimum 0 */
+  identityConflicts?: number;
+  /** @minimum 0 */
+  reconciliationConflicts?: number;
+  impactReconciled: boolean;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  shareSignupConversionRate?: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  locationNoResultRate?: number;
+}
+
+export type CustomerLifecycleTimelineEventSummaryCode = typeof CustomerLifecycleTimelineEventSummaryCode[keyof typeof CustomerLifecycleTimelineEventSummaryCode];
+
+
+export const CustomerLifecycleTimelineEventSummaryCode = {
+  registration_submitted: 'registration_submitted',
+  registration_approved: 'registration_approved',
+  registration_rejected: 'registration_rejected',
+  correction_requested: 'correction_requested',
+  purchase_linked: 'purchase_linked',
+  maintenance_recorded: 'maintenance_recorded',
+  impact_posted: 'impact_posted',
+  impact_corrected: 'impact_corrected',
+} as const;
+
+export interface CustomerLifecycleTimelineEvent {
+  eventType: string;
+  resourceType?: string;
+  resourceId?: string;
+  summaryCode?: CustomerLifecycleTimelineEventSummaryCode;
+  createdAt: string;
+}
+
+export interface CustomerLifecycleTimeline {
+  customerId: number;
+  events: CustomerLifecycleTimelineEvent[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+/**
+ * @nullable
+ */
+export type AuditEventReasonCode = typeof AuditEventReasonCode[keyof typeof AuditEventReasonCode] | null;
+
+
+export const AuditEventReasonCode = {
+  identity_conflict: 'identity_conflict',
+  ownership_conflict: 'ownership_conflict',
+  evidence_review: 'evidence_review',
+  status_change: 'status_change',
+  purchase_link: 'purchase_link',
+  impact_correction: 'impact_correction',
+  maintenance_correction: 'maintenance_correction',
+} as const;
+
+export type AuditChangeFieldField = typeof AuditChangeFieldField[keyof typeof AuditChangeFieldField];
+
+
+export const AuditChangeFieldField = {
+  status: 'status',
+  verification_status: 'verification_status',
+  lifecycle_status: 'lifecycle_status',
+  purchase_link: 'purchase_link',
+  assigned_owner: 'assigned_owner',
+  impact_eligibility: 'impact_eligibility',
+  maintenance_count: 'maintenance_count',
+} as const;
+
+export type AuditChangeFieldChangeType = typeof AuditChangeFieldChangeType[keyof typeof AuditChangeFieldChangeType];
+
+
+export const AuditChangeFieldChangeType = {
+  set: 'set',
+  changed: 'changed',
+  cleared: 'cleared',
+  linked: 'linked',
+  unlinked: 'unlinked',
+  increased: 'increased',
+  decreased: 'decreased',
+} as const;
+
+export interface AuditChangeField {
+  field: AuditChangeFieldField;
+  changeType: AuditChangeFieldChangeType;
+}
+
+export interface AuditEvent {
+  id: number;
+  actorType: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  /** @nullable */
+  reasonCode?: AuditEventReasonCode;
+  changedFields?: AuditChangeField[];
+  /** @nullable */
+  correlationId?: string | null;
+  createdAt: string;
+}
+
+export interface AuditEventPage {
+  items: AuditEvent[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
 export type ListProjectHubInstantWaterAssessmentsParams = {
 status?: string;
 /**
@@ -2268,4 +2816,69 @@ export type CreateUcAdminGuide201 = {
 
 export type GetUcAdminGuide200 = {
   guide: UcGuide;
+};
+
+export type ListLifecycleRegistrationReviewsParams = {
+status?: ReviewStatus;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListLifecycleReconciliationConflictsParams = {
+status?: ListLifecycleReconciliationConflictsStatus;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListLifecycleReconciliationConflictsStatus = typeof ListLifecycleReconciliationConflictsStatus[keyof typeof ListLifecycleReconciliationConflictsStatus];
+
+
+export const ListLifecycleReconciliationConflictsStatus = {
+  open: 'open',
+  in_review: 'in_review',
+  resolved: 'resolved',
+} as const;
+
+export type GetCustomerLifecycleTimelineParams = {
+/**
+ * @minimum 1
+ */
+customerId: number;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListCustomerLifecycleAuditEventsParams = {
+resourceType?: string;
+resourceId?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
 };

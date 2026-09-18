@@ -66,6 +66,8 @@ export * from "./uc-wishlist";
 export * from "./uc-restock-demand-alerts";
 export * from "./uc-registered-filters";
 export * from "./uc-water-impact";
+export * from "./uc-canonical-purchases";
+export * from "./uc-lifecycle-review";
 export * from "./uc-reward-conversion";
 export * from "./uc-locations";
 export * from "./uc-location-quality";

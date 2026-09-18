@@ -37,8 +37,11 @@ import type {
   AnthropicError,
   AnthropicMessage,
   AnthropicMessageInput,
+  AuditEventPage,
   AuthenticatedInstantWaterAssessmentCreated,
   AuthenticatedInstantWaterAssessmentInput,
+  CanonicalCustomerHistory,
+  CanonicalFilterRegistration,
   ChangePasscodeInput,
   ChangePasscodeResult,
   ClearResolvedRegistrations200,
@@ -52,15 +55,23 @@ import type {
   ContactWithMethods,
   CreateUcAdminGuide201,
   CreateUcAdminLocation201,
+  CustomerLifecycleFeatureConfig,
+  CustomerLifecycleLookup,
+  CustomerLifecycleTimeline,
   DashboardSummary,
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
+  GetCustomerLifecycleTimelineParams,
   GetDashboardActivityParams,
   GetLocationAssessment200,
   GetPublishedUcGuide200,
   GetUcAdminGuide200,
   GetUcLocationRatingAggregateParams,
   HealthStatus,
+  IdentityConflict,
+  IdentityConflictQueue,
+  IdentityConflictResolutionInput,
+  ImpactSharePayload,
   InstantWaterAssessment,
   InstantWaterAssessmentAttachInput,
   InstantWaterAssessmentCreated,
@@ -80,6 +91,13 @@ import type {
   InventoryUpdateResult,
   InventoryWishlistDemand,
   IssueAgentClientTokenBody,
+  LegacyRegistrationReviewList,
+  LegacyRegistrationStatus,
+  LegacyRegistrationSubmissionInput,
+  LegacyReviewDecisionInput,
+  ListCustomerLifecycleAuditEventsParams,
+  ListLifecycleReconciliationConflictsParams,
+  ListLifecycleRegistrationReviewsParams,
   ListLocationRatingReports200,
   ListNotificationLogsParams,
   ListProjectHubInstantWaterAssessmentsParams,
@@ -90,9 +108,11 @@ import type {
   ListUcCustomersParams,
   ListUcOfflineClients200,
   ListUnsyncedRegistrations200,
+  LocationTierAnalyticsInput,
   Member,
   MemberInput,
   MemberUpdate,
+  MissionControlIndicators,
   ModerateLocationRating200,
   ModerateLocationRatingBody,
   MonitoringSnapshot,
@@ -111,9 +131,12 @@ import type {
   PublicActionableError,
   PublicInstantWaterAssessmentInput,
   PublicInstantWaterAssessmentResult,
+  ReconciliationConflictQueue,
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
+  StaffLegacyRegistrationReview,
+  StaffReviewQueue,
   SuspendAgentOauthClientBody,
   SyncTriggered,
   SystemStatusInput,
@@ -148,6 +171,7 @@ import type {
   UpdateLocationAssessment200,
   UpdateUcAdminLocation200,
   ValidateUcReferralOrPromotionCodeBody,
+  VerifiedFilterRegistrationInput,
   WebhookIngestResult,
   WebhookPayload,
   WhatsAppRequestError,
@@ -8860,3 +8884,1229 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getUnpublishUcAdminGuideMutationOptions(options));
     }
+
+export const getLookupCustomerLifecycleUrl = () => {
+
+
+
+
+  return `/api/uc/customer/lifecycle/lookup`
+}
+
+/**
+ * @summary Look up authenticated customer purchases eligible for filter registration
+ */
+export const lookupCustomerLifecycle = async ( options?: RequestInit): Promise<CustomerLifecycleLookup> => {
+
+  return customFetch<CustomerLifecycleLookup>(getLookupCustomerLifecycleUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupCustomerLifecycleQueryKey = () => {
+    return [
+    `/api/uc/customer/lifecycle/lookup`
+    ] as const;
+    }
+
+
+export const getLookupCustomerLifecycleQueryOptions = <TData = Awaited<ReturnType<typeof lookupCustomerLifecycle>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupCustomerLifecycle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupCustomerLifecycleQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupCustomerLifecycle>>> = ({ signal }) => lookupCustomerLifecycle({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupCustomerLifecycle>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupCustomerLifecycleQueryResult = NonNullable<Awaited<ReturnType<typeof lookupCustomerLifecycle>>>
+export type LookupCustomerLifecycleQueryError = ErrorType<void>
+
+
+/**
+ * @summary Look up authenticated customer purchases eligible for filter registration
+ */
+
+export function useLookupCustomerLifecycle<TData = Awaited<ReturnType<typeof lookupCustomerLifecycle>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupCustomerLifecycle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupCustomerLifecycleQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRegisterCustomerFilterFromPurchaseUrl = () => {
+
+
+
+
+  return `/api/uc/customer/filters/register`
+}
+
+/**
+ * @summary Register one filter from an eligible canonical purchase line
+ */
+export const registerCustomerFilterFromPurchase = async (verifiedFilterRegistrationInput: VerifiedFilterRegistrationInput, options?: RequestInit): Promise<CanonicalFilterRegistration> => {
+
+  return customFetch<CanonicalFilterRegistration>(getRegisterCustomerFilterFromPurchaseUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(verifiedFilterRegistrationInput)
+  }
+);}
+
+
+
+
+
+export const getRegisterCustomerFilterFromPurchaseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerCustomerFilterFromPurchase>>, TError,{data: BodyType<VerifiedFilterRegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerCustomerFilterFromPurchase>>, TError,{data: BodyType<VerifiedFilterRegistrationInput>}, TContext> => {
+
+const mutationKey = ['registerCustomerFilterFromPurchase'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerCustomerFilterFromPurchase>>, {data: BodyType<VerifiedFilterRegistrationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerCustomerFilterFromPurchase(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterCustomerFilterFromPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof registerCustomerFilterFromPurchase>>>
+    export type RegisterCustomerFilterFromPurchaseMutationBody = BodyType<VerifiedFilterRegistrationInput>
+    export type RegisterCustomerFilterFromPurchaseMutationError = ErrorType<void>
+
+    /**
+ * @summary Register one filter from an eligible canonical purchase line
+ */
+export const useRegisterCustomerFilterFromPurchase = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerCustomerFilterFromPurchase>>, TError,{data: BodyType<VerifiedFilterRegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerCustomerFilterFromPurchase>>,
+        TError,
+        {data: BodyType<VerifiedFilterRegistrationInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterCustomerFilterFromPurchaseMutationOptions(options));
+    }
+
+export const getListCustomerLegacyRegistrationReviewsUrl = () => {
+
+
+
+
+  return `/api/uc/customer/legacy-reviews`
+}
+
+/**
+ * @summary List legacy registration reviews owned by the authenticated customer
+ */
+export const listCustomerLegacyRegistrationReviews = async ( options?: RequestInit): Promise<LegacyRegistrationReviewList> => {
+
+  return customFetch<LegacyRegistrationReviewList>(getListCustomerLegacyRegistrationReviewsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerLegacyRegistrationReviewsQueryKey = () => {
+    return [
+    `/api/uc/customer/legacy-reviews`
+    ] as const;
+    }
+
+
+export const getListCustomerLegacyRegistrationReviewsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerLegacyRegistrationReviewsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>> = ({ signal }) => listCustomerLegacyRegistrationReviews({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerLegacyRegistrationReviewsQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>>
+export type ListCustomerLegacyRegistrationReviewsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List legacy registration reviews owned by the authenticated customer
+ */
+
+export function useListCustomerLegacyRegistrationReviews<TData = Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerLegacyRegistrationReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerLegacyRegistrationReviewsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitCustomerLegacyRegistrationReviewUrl = () => {
+
+
+
+
+  return `/api/uc/customer/legacy-reviews`
+}
+
+/**
+ * @summary Submit unmatched legacy purchase details for staff review
+ */
+export const submitCustomerLegacyRegistrationReview = async (legacyRegistrationSubmissionInput: LegacyRegistrationSubmissionInput, options?: RequestInit): Promise<LegacyRegistrationStatus> => {
+
+  return customFetch<LegacyRegistrationStatus>(getSubmitCustomerLegacyRegistrationReviewUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(legacyRegistrationSubmissionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitCustomerLegacyRegistrationReviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCustomerLegacyRegistrationReview>>, TError,{data: BodyType<LegacyRegistrationSubmissionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitCustomerLegacyRegistrationReview>>, TError,{data: BodyType<LegacyRegistrationSubmissionInput>}, TContext> => {
+
+const mutationKey = ['submitCustomerLegacyRegistrationReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitCustomerLegacyRegistrationReview>>, {data: BodyType<LegacyRegistrationSubmissionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitCustomerLegacyRegistrationReview(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitCustomerLegacyRegistrationReviewMutationResult = NonNullable<Awaited<ReturnType<typeof submitCustomerLegacyRegistrationReview>>>
+    export type SubmitCustomerLegacyRegistrationReviewMutationBody = BodyType<LegacyRegistrationSubmissionInput>
+    export type SubmitCustomerLegacyRegistrationReviewMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit unmatched legacy purchase details for staff review
+ */
+export const useSubmitCustomerLegacyRegistrationReview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCustomerLegacyRegistrationReview>>, TError,{data: BodyType<LegacyRegistrationSubmissionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitCustomerLegacyRegistrationReview>>,
+        TError,
+        {data: BodyType<LegacyRegistrationSubmissionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitCustomerLegacyRegistrationReviewMutationOptions(options));
+    }
+
+export const getGetCanonicalCustomerHistoryUrl = () => {
+
+
+
+
+  return `/api/uc/customer/history`
+}
+
+/**
+ * @summary Get canonical customer purchases, filters, maintenance, receipts, and impact
+ */
+export const getCanonicalCustomerHistory = async ( options?: RequestInit): Promise<CanonicalCustomerHistory> => {
+
+  return customFetch<CanonicalCustomerHistory>(getGetCanonicalCustomerHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCanonicalCustomerHistoryQueryKey = () => {
+    return [
+    `/api/uc/customer/history`
+    ] as const;
+    }
+
+
+export const getGetCanonicalCustomerHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getCanonicalCustomerHistory>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCanonicalCustomerHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCanonicalCustomerHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCanonicalCustomerHistory>>> = ({ signal }) => getCanonicalCustomerHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCanonicalCustomerHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCanonicalCustomerHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getCanonicalCustomerHistory>>>
+export type GetCanonicalCustomerHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get canonical customer purchases, filters, maintenance, receipts, and impact
+ */
+
+export function useGetCanonicalCustomerHistory<TData = Awaited<ReturnType<typeof getCanonicalCustomerHistory>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCanonicalCustomerHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCanonicalCustomerHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCanonicalImpactShareUrl = () => {
+
+
+
+
+  return `/api/uc/customer/impact/share`
+}
+
+/**
+ * @summary Get verified personal and global impact for Share My Impact
+ */
+export const getCanonicalImpactShare = async ( options?: RequestInit): Promise<ImpactSharePayload> => {
+
+  return customFetch<ImpactSharePayload>(getGetCanonicalImpactShareUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCanonicalImpactShareQueryKey = () => {
+    return [
+    `/api/uc/customer/impact/share`
+    ] as const;
+    }
+
+
+export const getGetCanonicalImpactShareQueryOptions = <TData = Awaited<ReturnType<typeof getCanonicalImpactShare>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCanonicalImpactShare>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCanonicalImpactShareQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCanonicalImpactShare>>> = ({ signal }) => getCanonicalImpactShare({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCanonicalImpactShare>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCanonicalImpactShareQueryResult = NonNullable<Awaited<ReturnType<typeof getCanonicalImpactShare>>>
+export type GetCanonicalImpactShareQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get verified personal and global impact for Share My Impact
+ */
+
+export function useGetCanonicalImpactShare<TData = Awaited<ReturnType<typeof getCanonicalImpactShare>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCanonicalImpactShare>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCanonicalImpactShareQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordLocationTierAnalyticsUrl = () => {
+
+
+
+
+  return `/api/uc/customer/location-tier-events`
+}
+
+/**
+ * @summary Record a privacy-safe nearby-location tier outcome
+ */
+export const recordLocationTierAnalytics = async (locationTierAnalyticsInput: LocationTierAnalyticsInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRecordLocationTierAnalyticsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(locationTierAnalyticsInput)
+  }
+);}
+
+
+
+
+
+export const getRecordLocationTierAnalyticsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordLocationTierAnalytics>>, TError,{data: BodyType<LocationTierAnalyticsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordLocationTierAnalytics>>, TError,{data: BodyType<LocationTierAnalyticsInput>}, TContext> => {
+
+const mutationKey = ['recordLocationTierAnalytics'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordLocationTierAnalytics>>, {data: BodyType<LocationTierAnalyticsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordLocationTierAnalytics(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordLocationTierAnalyticsMutationResult = NonNullable<Awaited<ReturnType<typeof recordLocationTierAnalytics>>>
+    export type RecordLocationTierAnalyticsMutationBody = BodyType<LocationTierAnalyticsInput>
+    export type RecordLocationTierAnalyticsMutationError = ErrorType<void>
+
+    /**
+ * @summary Record a privacy-safe nearby-location tier outcome
+ */
+export const useRecordLocationTierAnalytics = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordLocationTierAnalytics>>, TError,{data: BodyType<LocationTierAnalyticsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordLocationTierAnalytics>>,
+        TError,
+        {data: BodyType<LocationTierAnalyticsInput>},
+        TContext
+      > => {
+      return useMutation(getRecordLocationTierAnalyticsMutationOptions(options));
+    }
+
+export const getListLifecycleRegistrationReviewsUrl = (params?: ListLifecycleRegistrationReviewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/customer-lifecycle/reviews?${stringifiedParams}` : `/api/uc/admin/customer-lifecycle/reviews`
+}
+
+/**
+ * @summary List legacy registration reviews for ProjectHub staff
+ */
+export const listLifecycleRegistrationReviews = async (params?: ListLifecycleRegistrationReviewsParams, options?: RequestInit): Promise<StaffReviewQueue> => {
+
+  return customFetch<StaffReviewQueue>(getListLifecycleRegistrationReviewsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLifecycleRegistrationReviewsQueryKey = (params?: ListLifecycleRegistrationReviewsParams,) => {
+    return [
+    `/api/uc/admin/customer-lifecycle/reviews`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLifecycleRegistrationReviewsQueryOptions = <TData = Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>, TError = ErrorType<void>>(params?: ListLifecycleRegistrationReviewsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLifecycleRegistrationReviewsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>> = ({ signal }) => listLifecycleRegistrationReviews(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLifecycleRegistrationReviewsQueryResult = NonNullable<Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>>
+export type ListLifecycleRegistrationReviewsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List legacy registration reviews for ProjectHub staff
+ */
+
+export function useListLifecycleRegistrationReviews<TData = Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>, TError = ErrorType<void>>(
+ params?: ListLifecycleRegistrationReviewsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifecycleRegistrationReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLifecycleRegistrationReviewsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideLifecycleRegistrationReviewUrl = (reviewId: number,) => {
+
+
+
+
+  return `/api/uc/admin/customer-lifecycle/reviews/${reviewId}/decision`
+}
+
+/**
+ * @summary Apply an approved DB review decision to a legacy review
+ */
+export const decideLifecycleRegistrationReview = async (reviewId: number,
+    legacyReviewDecisionInput: LegacyReviewDecisionInput, options?: RequestInit): Promise<StaffLegacyRegistrationReview> => {
+
+  return customFetch<StaffLegacyRegistrationReview>(getDecideLifecycleRegistrationReviewUrl(reviewId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(legacyReviewDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getDecideLifecycleRegistrationReviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideLifecycleRegistrationReview>>, TError,{reviewId: number;data: BodyType<LegacyReviewDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideLifecycleRegistrationReview>>, TError,{reviewId: number;data: BodyType<LegacyReviewDecisionInput>}, TContext> => {
+
+const mutationKey = ['decideLifecycleRegistrationReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideLifecycleRegistrationReview>>, {reviewId: number;data: BodyType<LegacyReviewDecisionInput>}> = (props) => {
+          const {reviewId,data} = props ?? {};
+
+          return  decideLifecycleRegistrationReview(reviewId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideLifecycleRegistrationReviewMutationResult = NonNullable<Awaited<ReturnType<typeof decideLifecycleRegistrationReview>>>
+    export type DecideLifecycleRegistrationReviewMutationBody = BodyType<LegacyReviewDecisionInput>
+    export type DecideLifecycleRegistrationReviewMutationError = ErrorType<void>
+
+    /**
+ * @summary Apply an approved DB review decision to a legacy review
+ */
+export const useDecideLifecycleRegistrationReview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideLifecycleRegistrationReview>>, TError,{reviewId: number;data: BodyType<LegacyReviewDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideLifecycleRegistrationReview>>,
+        TError,
+        {reviewId: number;data: BodyType<LegacyReviewDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getDecideLifecycleRegistrationReviewMutationOptions(options));
+    }
+
+export const getListLifecycleIdentityConflictsUrl = () => {
+
+
+
+
+  return `/api/uc/admin/customer-lifecycle/identity-conflicts`
+}
+
+/**
+ * @summary List unresolved identity conflicts without exposing credentials
+ */
+export const listLifecycleIdentityConflicts = async ( options?: RequestInit): Promise<IdentityConflictQueue> => {
+
+  return customFetch<IdentityConflictQueue>(getListLifecycleIdentityConflictsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLifecycleIdentityConflictsQueryKey = () => {
+    return [
+    `/api/uc/admin/customer-lifecycle/identity-conflicts`
+    ] as const;
+    }
+
+
+export const getListLifecycleIdentityConflictsQueryOptions = <TData = Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLifecycleIdentityConflictsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>> = ({ signal }) => listLifecycleIdentityConflicts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLifecycleIdentityConflictsQueryResult = NonNullable<Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>>
+export type ListLifecycleIdentityConflictsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List unresolved identity conflicts without exposing credentials
+ */
+
+export function useListLifecycleIdentityConflicts<TData = Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifecycleIdentityConflicts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLifecycleIdentityConflictsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResolveLifecycleIdentityConflictUrl = (conflictId: number,) => {
+
+
+
+
+  return `/api/uc/admin/customer-lifecycle/identity-conflicts/${conflictId}/resolve`
+}
+
+/**
+ * @summary Resolve one identity conflict with an audited reason
+ */
+export const resolveLifecycleIdentityConflict = async (conflictId: number,
+    identityConflictResolutionInput: IdentityConflictResolutionInput, options?: RequestInit): Promise<IdentityConflict> => {
+
+  return customFetch<IdentityConflict>(getResolveLifecycleIdentityConflictUrl(conflictId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(identityConflictResolutionInput)
+  }
+);}
+
+
+
+
+
+export const getResolveLifecycleIdentityConflictMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveLifecycleIdentityConflict>>, TError,{conflictId: number;data: BodyType<IdentityConflictResolutionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveLifecycleIdentityConflict>>, TError,{conflictId: number;data: BodyType<IdentityConflictResolutionInput>}, TContext> => {
+
+const mutationKey = ['resolveLifecycleIdentityConflict'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveLifecycleIdentityConflict>>, {conflictId: number;data: BodyType<IdentityConflictResolutionInput>}> = (props) => {
+          const {conflictId,data} = props ?? {};
+
+          return  resolveLifecycleIdentityConflict(conflictId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveLifecycleIdentityConflictMutationResult = NonNullable<Awaited<ReturnType<typeof resolveLifecycleIdentityConflict>>>
+    export type ResolveLifecycleIdentityConflictMutationBody = BodyType<IdentityConflictResolutionInput>
+    export type ResolveLifecycleIdentityConflictMutationError = ErrorType<void>
+
+    /**
+ * @summary Resolve one identity conflict with an audited reason
+ */
+export const useResolveLifecycleIdentityConflict = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveLifecycleIdentityConflict>>, TError,{conflictId: number;data: BodyType<IdentityConflictResolutionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveLifecycleIdentityConflict>>,
+        TError,
+        {conflictId: number;data: BodyType<IdentityConflictResolutionInput>},
+        TContext
+      > => {
+      return useMutation(getResolveLifecycleIdentityConflictMutationOptions(options));
+    }
+
+export const getListLifecycleReconciliationConflictsUrl = (params?: ListLifecycleReconciliationConflictsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/customer-lifecycle/reconciliation-conflicts?${stringifiedParams}` : `/api/uc/admin/customer-lifecycle/reconciliation-conflicts`
+}
+
+/**
+ * @summary List unresolved order and receipt reconciliation conflicts
+ */
+export const listLifecycleReconciliationConflicts = async (params?: ListLifecycleReconciliationConflictsParams, options?: RequestInit): Promise<ReconciliationConflictQueue> => {
+
+  return customFetch<ReconciliationConflictQueue>(getListLifecycleReconciliationConflictsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLifecycleReconciliationConflictsQueryKey = (params?: ListLifecycleReconciliationConflictsParams,) => {
+    return [
+    `/api/uc/admin/customer-lifecycle/reconciliation-conflicts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLifecycleReconciliationConflictsQueryOptions = <TData = Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>, TError = ErrorType<void>>(params?: ListLifecycleReconciliationConflictsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLifecycleReconciliationConflictsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>> = ({ signal }) => listLifecycleReconciliationConflicts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLifecycleReconciliationConflictsQueryResult = NonNullable<Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>>
+export type ListLifecycleReconciliationConflictsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List unresolved order and receipt reconciliation conflicts
+ */
+
+export function useListLifecycleReconciliationConflicts<TData = Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>, TError = ErrorType<void>>(
+ params?: ListLifecycleReconciliationConflictsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifecycleReconciliationConflicts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLifecycleReconciliationConflictsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCustomerLifecycleMissionControlUrl = () => {
+
+
+
+
+  return `/api/uc/admin/customer-lifecycle/mission-control`
+}
+
+/**
+ * @summary Get aggregate lifecycle integrity indicators and queue counts
+ */
+export const getCustomerLifecycleMissionControl = async ( options?: RequestInit): Promise<MissionControlIndicators> => {
+
+  return customFetch<MissionControlIndicators>(getGetCustomerLifecycleMissionControlUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomerLifecycleMissionControlQueryKey = () => {
+    return [
+    `/api/uc/admin/customer-lifecycle/mission-control`
+    ] as const;
+    }
+
+
+export const getGetCustomerLifecycleMissionControlQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerLifecycleMissionControlQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>> = ({ signal }) => getCustomerLifecycleMissionControl({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomerLifecycleMissionControlQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>>
+export type GetCustomerLifecycleMissionControlQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get aggregate lifecycle integrity indicators and queue counts
+ */
+
+export function useGetCustomerLifecycleMissionControl<TData = Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleMissionControl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomerLifecycleMissionControlQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCustomerLifecycleTimelineUrl = (params: GetCustomerLifecycleTimelineParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/customer-lifecycle/timeline?${stringifiedParams}` : `/api/uc/admin/customer-lifecycle/timeline`
+}
+
+/**
+ * @summary Reconstruct a customer, purchase, filter, and impact timeline
+ */
+export const getCustomerLifecycleTimeline = async (params: GetCustomerLifecycleTimelineParams, options?: RequestInit): Promise<CustomerLifecycleTimeline> => {
+
+  return customFetch<CustomerLifecycleTimeline>(getGetCustomerLifecycleTimelineUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomerLifecycleTimelineQueryKey = (params?: GetCustomerLifecycleTimelineParams,) => {
+    return [
+    `/api/uc/admin/customer-lifecycle/timeline`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCustomerLifecycleTimelineQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>, TError = ErrorType<void>>(params: GetCustomerLifecycleTimelineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerLifecycleTimelineQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>> = ({ signal }) => getCustomerLifecycleTimeline(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomerLifecycleTimelineQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>>
+export type GetCustomerLifecycleTimelineQueryError = ErrorType<void>
+
+
+/**
+ * @summary Reconstruct a customer, purchase, filter, and impact timeline
+ */
+
+export function useGetCustomerLifecycleTimeline<TData = Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>, TError = ErrorType<void>>(
+ params: GetCustomerLifecycleTimelineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleTimeline>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomerLifecycleTimelineQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListCustomerLifecycleAuditEventsUrl = (params?: ListCustomerLifecycleAuditEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/customer-lifecycle/audit?${stringifiedParams}` : `/api/uc/admin/customer-lifecycle/audit`
+}
+
+/**
+ * @summary List audited lifecycle mutations
+ */
+export const listCustomerLifecycleAuditEvents = async (params?: ListCustomerLifecycleAuditEventsParams, options?: RequestInit): Promise<AuditEventPage> => {
+
+  return customFetch<AuditEventPage>(getListCustomerLifecycleAuditEventsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerLifecycleAuditEventsQueryKey = (params?: ListCustomerLifecycleAuditEventsParams,) => {
+    return [
+    `/api/uc/admin/customer-lifecycle/audit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCustomerLifecycleAuditEventsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>, TError = ErrorType<void>>(params?: ListCustomerLifecycleAuditEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerLifecycleAuditEventsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>> = ({ signal }) => listCustomerLifecycleAuditEvents(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerLifecycleAuditEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>>
+export type ListCustomerLifecycleAuditEventsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List audited lifecycle mutations
+ */
+
+export function useListCustomerLifecycleAuditEvents<TData = Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>, TError = ErrorType<void>>(
+ params?: ListCustomerLifecycleAuditEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerLifecycleAuditEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerLifecycleAuditEventsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCustomerLifecycleFeatureConfigUrl = () => {
+
+
+
+
+  return `/api/uc/customer-lifecycle/config`
+}
+
+/**
+ * @summary Get non-sensitive customer lifecycle feature availability
+ */
+export const getCustomerLifecycleFeatureConfig = async ( options?: RequestInit): Promise<CustomerLifecycleFeatureConfig> => {
+
+  return customFetch<CustomerLifecycleFeatureConfig>(getGetCustomerLifecycleFeatureConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomerLifecycleFeatureConfigQueryKey = () => {
+    return [
+    `/api/uc/customer-lifecycle/config`
+    ] as const;
+    }
+
+
+export const getGetCustomerLifecycleFeatureConfigQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerLifecycleFeatureConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>> = ({ signal }) => getCustomerLifecycleFeatureConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomerLifecycleFeatureConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>>
+export type GetCustomerLifecycleFeatureConfigQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get non-sensitive customer lifecycle feature availability
+ */
+
+export function useGetCustomerLifecycleFeatureConfig<TData = Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerLifecycleFeatureConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomerLifecycleFeatureConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

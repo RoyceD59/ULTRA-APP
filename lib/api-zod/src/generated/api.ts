@@ -2958,3 +2958,590 @@ export const UnpublishUcAdminGuideParams = zod.object({
 })
 
 export const UnpublishUcAdminGuideResponse = zod.unknown()
+
+
+/**
+ * @summary Look up authenticated customer purchases eligible for filter registration
+ */
+
+
+
+
+export const LookupCustomerLifecycleResponse = zod.object({
+  "identity": zod.object({
+  "customerId": zod.number().min(1),
+  "status": zod.enum(['verified', 'review_required', 'deleted']),
+  "identitySources": zod.array(zod.enum(['companion', 'woocommerce', 'social', 'offline'])).optional()
+}),
+  "purchases": zod.array(zod.object({
+  "id": zod.number(),
+  "companionOrderId": zod.number().nullish(),
+  "woocommerceOrderId": zod.number().nullish(),
+  "receiptNumber": zod.string().nullish(),
+  "currency": zod.string(),
+  "total": zod.string(),
+  "paymentStatus": zod.string(),
+  "fulfilmentStatus": zod.string(),
+  "sourceCreatedAt": zod.coerce.date().nullish(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "productReference": zod.string().nullish(),
+  "lineTotal": zod.string(),
+  "registrationEligible": zod.boolean(),
+  "registeredFilterId": zod.number().nullish()
+}))
+})),
+  "featureEnabled": zod.boolean()
+})
+
+
+/**
+ * @summary Register one filter from an eligible canonical purchase line
+ */
+export const registerCustomerFilterFromPurchaseBodyReferralCodeMax = 120;
+
+export const registerCustomerFilterFromPurchaseBodyIdempotencyKeyMin = 8;
+export const registerCustomerFilterFromPurchaseBodyIdempotencyKeyMax = 200;
+
+
+
+export const RegisterCustomerFilterFromPurchaseBody = zod.object({
+  "purchaseLineId": zod.number(),
+  "activatedAt": zod.coerce.date(),
+  "referralCode": zod.string().max(registerCustomerFilterFromPurchaseBodyReferralCodeMax).nullish(),
+  "idempotencyKey": zod.string().min(registerCustomerFilterFromPurchaseBodyIdempotencyKeyMin).max(registerCustomerFilterFromPurchaseBodyIdempotencyKeyMax)
+})
+
+export const registerCustomerFilterFromPurchaseResponseMaintenanceCountMin = 0;
+
+export const registerCustomerFilterFromPurchaseResponseVerifiedLitresMin = 0;
+
+
+
+export const RegisterCustomerFilterFromPurchaseResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "verificationStatus": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']),
+  "lifecycleStatus": zod.enum(['active', 'inactive']),
+  "activatedAt": zod.coerce.date(),
+  "deactivatedAt": zod.coerce.date().nullish(),
+  "maintenanceCount": zod.number().min(registerCustomerFilterFromPurchaseResponseMaintenanceCountMin),
+  "verifiedLitres": zod.number().min(registerCustomerFilterFromPurchaseResponseVerifiedLitresMin).optional()
+})
+
+
+/**
+ * @summary List legacy registration reviews owned by the authenticated customer
+ */
+export const listCustomerLegacyRegistrationReviewsResponseItemsItemReceiptReferenceMax = 200;
+
+export const listCustomerLegacyRegistrationReviewsResponseItemsItemSerialOrQrReferenceMax = 200;
+
+export const listCustomerLegacyRegistrationReviewsResponseItemsItemSellerChannelMax = 120;
+
+
+
+export const ListCustomerLegacyRegistrationReviewsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "approximatePurchaseDate": zod.coerce.date().nullish(),
+  "installationDate": zod.coerce.date().nullish(),
+  "receiptReference": zod.string().max(listCustomerLegacyRegistrationReviewsResponseItemsItemReceiptReferenceMax).nullish(),
+  "serialOrQrReference": zod.string().max(listCustomerLegacyRegistrationReviewsResponseItemsItemSerialOrQrReferenceMax).nullish(),
+  "sellerChannel": zod.string().max(listCustomerLegacyRegistrationReviewsResponseItemsItemSellerChannelMax).nullish(),
+  "status": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']),
+  "customerMessage": zod.string().nullish(),
+  "canonicalPurchaseId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Submit unmatched legacy purchase details for staff review
+ */
+export const submitCustomerLegacyRegistrationReviewBodyProductNameMax = 200;
+
+export const submitCustomerLegacyRegistrationReviewBodyReceiptReferenceMax = 200;
+
+export const submitCustomerLegacyRegistrationReviewBodySerialOrQrReferenceMax = 200;
+
+export const submitCustomerLegacyRegistrationReviewBodySellerChannelMax = 120;
+
+export const submitCustomerLegacyRegistrationReviewBodyIdempotencyKeyMin = 8;
+export const submitCustomerLegacyRegistrationReviewBodyIdempotencyKeyMax = 200;
+
+
+
+export const SubmitCustomerLegacyRegistrationReviewBody = zod.object({
+  "productId": zod.number(),
+  "productName": zod.string().min(1).max(submitCustomerLegacyRegistrationReviewBodyProductNameMax),
+  "approximatePurchaseDate": zod.coerce.date().nullish(),
+  "installationDate": zod.coerce.date().nullish(),
+  "receiptReference": zod.string().max(submitCustomerLegacyRegistrationReviewBodyReceiptReferenceMax).nullish(),
+  "serialOrQrReference": zod.string().max(submitCustomerLegacyRegistrationReviewBodySerialOrQrReferenceMax).nullish(),
+  "sellerChannel": zod.string().max(submitCustomerLegacyRegistrationReviewBodySellerChannelMax).nullish(),
+  "idempotencyKey": zod.string().min(submitCustomerLegacyRegistrationReviewBodyIdempotencyKeyMin).max(submitCustomerLegacyRegistrationReviewBodyIdempotencyKeyMax)
+})
+
+export const submitCustomerLegacyRegistrationReviewResponseReceiptReferenceMax = 200;
+
+export const submitCustomerLegacyRegistrationReviewResponseSerialOrQrReferenceMax = 200;
+
+export const submitCustomerLegacyRegistrationReviewResponseSellerChannelMax = 120;
+
+
+
+export const SubmitCustomerLegacyRegistrationReviewResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "approximatePurchaseDate": zod.coerce.date().nullish(),
+  "installationDate": zod.coerce.date().nullish(),
+  "receiptReference": zod.string().max(submitCustomerLegacyRegistrationReviewResponseReceiptReferenceMax).nullish(),
+  "serialOrQrReference": zod.string().max(submitCustomerLegacyRegistrationReviewResponseSerialOrQrReferenceMax).nullish(),
+  "sellerChannel": zod.string().max(submitCustomerLegacyRegistrationReviewResponseSellerChannelMax).nullish(),
+  "status": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']),
+  "customerMessage": zod.string().nullish(),
+  "canonicalPurchaseId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get canonical customer purchases, filters, maintenance, receipts, and impact
+ */
+export const getCanonicalCustomerHistoryResponseFiltersItemMaintenanceCountMin = 0;
+
+export const getCanonicalCustomerHistoryResponseFiltersItemVerifiedLitresMin = 0;
+
+
+export const getCanonicalCustomerHistoryResponsePersonalImpactVerifiedLitresMin = 0;
+
+export const getCanonicalCustomerHistoryResponsePersonalImpactMaintenanceCountMin = 0;
+
+
+
+export const GetCanonicalCustomerHistoryResponse = zod.object({
+  "customerId": zod.number(),
+  "filters": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "verificationStatus": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']),
+  "lifecycleStatus": zod.enum(['active', 'inactive']),
+  "activatedAt": zod.coerce.date(),
+  "deactivatedAt": zod.coerce.date().nullish(),
+  "maintenanceCount": zod.number().min(getCanonicalCustomerHistoryResponseFiltersItemMaintenanceCountMin),
+  "verifiedLitres": zod.number().min(getCanonicalCustomerHistoryResponseFiltersItemVerifiedLitresMin).optional()
+})),
+  "purchases": zod.array(zod.object({
+  "id": zod.number(),
+  "companionOrderId": zod.number().nullish(),
+  "woocommerceOrderId": zod.number().nullish(),
+  "receiptNumber": zod.string().nullish(),
+  "currency": zod.string(),
+  "total": zod.string(),
+  "paymentStatus": zod.string(),
+  "fulfilmentStatus": zod.string(),
+  "sourceCreatedAt": zod.coerce.date().nullish(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "productReference": zod.string().nullish(),
+  "lineTotal": zod.string(),
+  "registrationEligible": zod.boolean(),
+  "registeredFilterId": zod.number().nullish()
+}))
+})),
+  "maintenanceEvents": zod.array(zod.object({
+  "id": zod.number(),
+  "eventType": zod.enum(['registration', 'activation', 'deactivation', 'maintenance', 'replacement', 'referral_conversion', 'correction']),
+  "value": zod.number(),
+  "unit": zod.string(),
+  "actor": zod.string(),
+  "eligible": zod.boolean().optional(),
+  "createdAt": zod.coerce.date()
+})),
+  "personalImpact": zod.object({
+  "verifiedLitres": zod.number().min(getCanonicalCustomerHistoryResponsePersonalImpactVerifiedLitresMin),
+  "maintenanceCount": zod.number().min(getCanonicalCustomerHistoryResponsePersonalImpactMaintenanceCountMin)
+}),
+  "reviewMessages": zod.array(zod.string()).optional()
+})
+
+
+/**
+ * @summary Get verified personal and global impact for Share My Impact
+ */
+export const getCanonicalImpactShareResponsePersonalImpactVerifiedLitresMin = 0;
+
+export const getCanonicalImpactShareResponsePersonalImpactMaintenanceCountMin = 0;
+
+export const getCanonicalImpactShareResponseGlobalImpactVerifiedLitresMin = 0;
+
+export const getCanonicalImpactShareResponseGlobalImpactMaintenanceCountMin = 0;
+
+
+
+export const GetCanonicalImpactShareResponse = zod.object({
+  "heading": zod.enum(['The Ultra Clear Impact']),
+  "personalImpact": zod.object({
+  "verifiedLitres": zod.number().min(getCanonicalImpactShareResponsePersonalImpactVerifiedLitresMin),
+  "maintenanceCount": zod.number().min(getCanonicalImpactShareResponsePersonalImpactMaintenanceCountMin)
+}),
+  "globalImpact": zod.object({
+  "verifiedLitres": zod.number().min(getCanonicalImpactShareResponseGlobalImpactVerifiedLitresMin),
+  "maintenanceCount": zod.number().min(getCanonicalImpactShareResponseGlobalImpactMaintenanceCountMin)
+}),
+  "joinUrl": zod.string(),
+  "attributionId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Record a privacy-safe nearby-location tier outcome
+ */
+export const recordLocationTierAnalyticsBodyCoarseCountryMax = 2;
+
+export const recordLocationTierAnalyticsBodyCoarseCityMax = 120;
+
+export const recordLocationTierAnalyticsBodyIdempotencyKeyMin = 8;
+export const recordLocationTierAnalyticsBodyIdempotencyKeyMax = 200;
+
+
+
+export const RecordLocationTierAnalyticsBody = zod.object({
+  "event": zod.enum(['permission_granted', 'permission_denied', 'tier_selected', 'no_results_within_10km']),
+  "tier": zod.union([zod.literal('tier_1_0_to_2km'),zod.literal('tier_2_2_to_5km'),zod.literal('tier_3_5_to_10km'),zod.literal(null)]).nullable(),
+  "coarseCountry": zod.string().max(recordLocationTierAnalyticsBodyCoarseCountryMax).nullish(),
+  "coarseCity": zod.string().max(recordLocationTierAnalyticsBodyCoarseCityMax).nullish(),
+  "idempotencyKey": zod.string().min(recordLocationTierAnalyticsBodyIdempotencyKeyMin).max(recordLocationTierAnalyticsBodyIdempotencyKeyMax)
+})
+
+export const RecordLocationTierAnalyticsResponse = zod.void()
+
+
+/**
+ * @summary List legacy registration reviews for ProjectHub staff
+ */
+export const listLifecycleRegistrationReviewsQueryPageDefault = 1;
+
+export const listLifecycleRegistrationReviewsQueryLimitDefault = 50;
+export const listLifecycleRegistrationReviewsQueryLimitMax = 100;
+
+
+
+export const ListLifecycleRegistrationReviewsQueryParams = zod.object({
+  "status": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']).optional(),
+  "page": zod.coerce.number().min(1).default(listLifecycleRegistrationReviewsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listLifecycleRegistrationReviewsQueryLimitMax).default(listLifecycleRegistrationReviewsQueryLimitDefault)
+})
+
+export const listLifecycleRegistrationReviewsResponseItemsItemOneReceiptReferenceMax = 200;
+
+export const listLifecycleRegistrationReviewsResponseItemsItemOneSerialOrQrReferenceMax = 200;
+
+export const listLifecycleRegistrationReviewsResponseItemsItemOneSellerChannelMax = 120;
+
+export const listLifecycleRegistrationReviewsResponseItemsItemTwoEvidenceObjectPathMax = 500;
+
+
+
+export const ListLifecycleRegistrationReviewsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "approximatePurchaseDate": zod.coerce.date().nullish(),
+  "installationDate": zod.coerce.date().nullish(),
+  "receiptReference": zod.string().max(listLifecycleRegistrationReviewsResponseItemsItemOneReceiptReferenceMax).nullish(),
+  "serialOrQrReference": zod.string().max(listLifecycleRegistrationReviewsResponseItemsItemOneSerialOrQrReferenceMax).nullish(),
+  "sellerChannel": zod.string().max(listLifecycleRegistrationReviewsResponseItemsItemOneSellerChannelMax).nullish(),
+  "status": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']),
+  "customerMessage": zod.string().nullish(),
+  "canonicalPurchaseId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "evidenceObjectPath": zod.string().max(listLifecycleRegistrationReviewsResponseItemsItemTwoEvidenceObjectPathMax).nullable(),
+  "decisionReason": zod.string().nullish()
+}))),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Apply an approved DB review decision to a legacy review
+ */
+export const DecideLifecycleRegistrationReviewParams = zod.object({
+  "reviewId": zod.coerce.number()
+})
+
+export const decideLifecycleRegistrationReviewBodyReasonMax = 1000;
+
+export const decideLifecycleRegistrationReviewBodyIdempotencyKeyMin = 8;
+export const decideLifecycleRegistrationReviewBodyIdempotencyKeyMax = 200;
+
+
+
+export const DecideLifecycleRegistrationReviewBody = zod.object({
+  "decision": zod.enum(['approved', 'rejected', 'correction_requested', 'merged']),
+  "reason": zod.string().min(1).max(decideLifecycleRegistrationReviewBodyReasonMax),
+  "canonicalPurchaseId": zod.number().nullish(),
+  "purchaseLineId": zod.number().nullish(),
+  "idempotencyKey": zod.string().min(decideLifecycleRegistrationReviewBodyIdempotencyKeyMin).max(decideLifecycleRegistrationReviewBodyIdempotencyKeyMax)
+})
+
+export const decideLifecycleRegistrationReviewResponseOneReceiptReferenceMax = 200;
+
+export const decideLifecycleRegistrationReviewResponseOneSerialOrQrReferenceMax = 200;
+
+export const decideLifecycleRegistrationReviewResponseOneSellerChannelMax = 120;
+
+export const decideLifecycleRegistrationReviewResponseTwoEvidenceObjectPathMax = 500;
+
+
+
+export const DecideLifecycleRegistrationReviewResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "approximatePurchaseDate": zod.coerce.date().nullish(),
+  "installationDate": zod.coerce.date().nullish(),
+  "receiptReference": zod.string().max(decideLifecycleRegistrationReviewResponseOneReceiptReferenceMax).nullish(),
+  "serialOrQrReference": zod.string().max(decideLifecycleRegistrationReviewResponseOneSerialOrQrReferenceMax).nullish(),
+  "sellerChannel": zod.string().max(decideLifecycleRegistrationReviewResponseOneSellerChannelMax).nullish(),
+  "status": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']),
+  "customerMessage": zod.string().nullish(),
+  "canonicalPurchaseId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "evidenceObjectPath": zod.string().max(decideLifecycleRegistrationReviewResponseTwoEvidenceObjectPathMax).nullable(),
+  "decisionReason": zod.string().nullish()
+}))
+
+
+/**
+ * @summary List unresolved identity conflicts without exposing credentials
+ */
+export const ListLifecycleIdentityConflictsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "principalType": zod.string(),
+  "reason": zod.enum(['customer_identity_mismatch', 'duplicate_provider_reference', 'duplicate_receipt_reference', 'product_line_mismatch', 'quantity_mismatch', 'amount_currency_mismatch', 'paid_order_missing_receipt', 'receipt_multiple_customers', 'app_woocommerce_duplicate', 'registration_already_owned', 'ambiguous_identity']),
+  "status": zod.enum(['open', 'in_review', 'resolved']),
+  "candidateCustomerIds": zod.array(zod.number()).optional(),
+  "createdAt": zod.coerce.date()
+})),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Resolve one identity conflict with an audited reason
+ */
+export const ResolveLifecycleIdentityConflictParams = zod.object({
+  "conflictId": zod.coerce.number()
+})
+
+
+export const resolveLifecycleIdentityConflictBodyReasonMax = 1000;
+
+export const resolveLifecycleIdentityConflictBodyIdempotencyKeyMin = 8;
+export const resolveLifecycleIdentityConflictBodyIdempotencyKeyMax = 200;
+
+
+
+export const ResolveLifecycleIdentityConflictBody = zod.object({
+  "customerId": zod.number().min(1),
+  "reason": zod.string().min(1).max(resolveLifecycleIdentityConflictBodyReasonMax),
+  "idempotencyKey": zod.string().min(resolveLifecycleIdentityConflictBodyIdempotencyKeyMin).max(resolveLifecycleIdentityConflictBodyIdempotencyKeyMax)
+})
+
+export const ResolveLifecycleIdentityConflictResponse = zod.object({
+  "id": zod.number(),
+  "principalType": zod.string(),
+  "reason": zod.enum(['customer_identity_mismatch', 'duplicate_provider_reference', 'duplicate_receipt_reference', 'product_line_mismatch', 'quantity_mismatch', 'amount_currency_mismatch', 'paid_order_missing_receipt', 'receipt_multiple_customers', 'app_woocommerce_duplicate', 'registration_already_owned', 'ambiguous_identity']),
+  "status": zod.enum(['open', 'in_review', 'resolved']),
+  "candidateCustomerIds": zod.array(zod.number()).optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List unresolved order and receipt reconciliation conflicts
+ */
+export const listLifecycleReconciliationConflictsQueryPageDefault = 1;
+
+export const listLifecycleReconciliationConflictsQueryLimitDefault = 50;
+export const listLifecycleReconciliationConflictsQueryLimitMax = 100;
+
+
+
+export const ListLifecycleReconciliationConflictsQueryParams = zod.object({
+  "status": zod.enum(['open', 'in_review', 'resolved']).optional(),
+  "page": zod.coerce.number().min(1).default(listLifecycleReconciliationConflictsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listLifecycleReconciliationConflictsQueryLimitMax).default(listLifecycleReconciliationConflictsQueryLimitDefault)
+})
+
+export const ListLifecycleReconciliationConflictsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "conflictType": zod.string(),
+  "source": zod.string(),
+  "sourceReference": zod.string().optional(),
+  "reason": zod.enum(['customer_identity_mismatch', 'duplicate_provider_reference', 'duplicate_receipt_reference', 'product_line_mismatch', 'quantity_mismatch', 'amount_currency_mismatch', 'paid_order_missing_receipt', 'receipt_multiple_customers', 'app_woocommerce_duplicate', 'registration_already_owned', 'ambiguous_identity']),
+  "status": zod.enum(['open', 'in_review', 'resolved']),
+  "priority": zod.number().optional(),
+  "createdAt": zod.coerce.date()
+})),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Get aggregate lifecycle integrity indicators and queue counts
+ */
+export const getCustomerLifecycleMissionControlResponseEligibleCustomersMin = 0;
+
+export const getCustomerLifecycleMissionControlResponseRegistrationAttemptsMin = 0;
+
+export const getCustomerLifecycleMissionControlResponseRegistrationSuccessRateMin = 0;
+export const getCustomerLifecycleMissionControlResponseRegistrationSuccessRateMax = 1;
+
+export const getCustomerLifecycleMissionControlResponsePendingReviewsMin = 0;
+
+export const getCustomerLifecycleMissionControlResponseOldestPendingReviewAgeSecondsMin = 0;
+
+export const getCustomerLifecycleMissionControlResponseIdentityConflictsMin = 0;
+
+export const getCustomerLifecycleMissionControlResponseReconciliationConflictsMin = 0;
+
+export const getCustomerLifecycleMissionControlResponseShareSignupConversionRateMin = 0;
+export const getCustomerLifecycleMissionControlResponseShareSignupConversionRateMax = 1;
+
+export const getCustomerLifecycleMissionControlResponseLocationNoResultRateMin = 0;
+export const getCustomerLifecycleMissionControlResponseLocationNoResultRateMax = 1;
+
+
+
+export const GetCustomerLifecycleMissionControlResponse = zod.object({
+  "eligibleCustomers": zod.number().min(getCustomerLifecycleMissionControlResponseEligibleCustomersMin),
+  "registrationAttempts": zod.number().min(getCustomerLifecycleMissionControlResponseRegistrationAttemptsMin),
+  "registrationSuccessRate": zod.number().min(getCustomerLifecycleMissionControlResponseRegistrationSuccessRateMin).max(getCustomerLifecycleMissionControlResponseRegistrationSuccessRateMax).optional(),
+  "pendingReviews": zod.number().min(getCustomerLifecycleMissionControlResponsePendingReviewsMin),
+  "oldestPendingReviewAgeSeconds": zod.number().min(getCustomerLifecycleMissionControlResponseOldestPendingReviewAgeSecondsMin),
+  "identityConflicts": zod.number().min(getCustomerLifecycleMissionControlResponseIdentityConflictsMin).optional(),
+  "reconciliationConflicts": zod.number().min(getCustomerLifecycleMissionControlResponseReconciliationConflictsMin).optional(),
+  "impactReconciled": zod.boolean(),
+  "shareSignupConversionRate": zod.number().min(getCustomerLifecycleMissionControlResponseShareSignupConversionRateMin).max(getCustomerLifecycleMissionControlResponseShareSignupConversionRateMax).optional(),
+  "locationNoResultRate": zod.number().min(getCustomerLifecycleMissionControlResponseLocationNoResultRateMin).max(getCustomerLifecycleMissionControlResponseLocationNoResultRateMax).optional()
+})
+
+
+/**
+ * @summary Reconstruct a customer, purchase, filter, and impact timeline
+ */
+
+export const getCustomerLifecycleTimelineQueryPageDefault = 1;
+
+export const getCustomerLifecycleTimelineQueryLimitDefault = 50;
+export const getCustomerLifecycleTimelineQueryLimitMax = 100;
+
+
+
+export const GetCustomerLifecycleTimelineQueryParams = zod.object({
+  "customerId": zod.coerce.number().min(1),
+  "page": zod.coerce.number().min(1).default(getCustomerLifecycleTimelineQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(getCustomerLifecycleTimelineQueryLimitMax).default(getCustomerLifecycleTimelineQueryLimitDefault)
+})
+
+export const GetCustomerLifecycleTimelineResponse = zod.object({
+  "customerId": zod.number(),
+  "events": zod.array(zod.object({
+  "eventType": zod.string(),
+  "resourceType": zod.string().optional(),
+  "resourceId": zod.string().optional(),
+  "summaryCode": zod.enum(['registration_submitted', 'registration_approved', 'registration_rejected', 'correction_requested', 'purchase_linked', 'maintenance_recorded', 'impact_posted', 'impact_corrected']).optional(),
+  "createdAt": zod.coerce.date()
+})),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary List audited lifecycle mutations
+ */
+export const listCustomerLifecycleAuditEventsQueryPageDefault = 1;
+
+export const listCustomerLifecycleAuditEventsQueryLimitDefault = 50;
+export const listCustomerLifecycleAuditEventsQueryLimitMax = 100;
+
+
+
+export const ListCustomerLifecycleAuditEventsQueryParams = zod.object({
+  "resourceType": zod.coerce.string().optional(),
+  "resourceId": zod.coerce.string().optional(),
+  "page": zod.coerce.number().min(1).default(listCustomerLifecycleAuditEventsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listCustomerLifecycleAuditEventsQueryLimitMax).default(listCustomerLifecycleAuditEventsQueryLimitDefault)
+})
+
+export const ListCustomerLifecycleAuditEventsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "actorType": zod.string(),
+  "action": zod.string(),
+  "resourceType": zod.string(),
+  "resourceId": zod.string(),
+  "reasonCode": zod.union([zod.literal('identity_conflict'),zod.literal('ownership_conflict'),zod.literal('evidence_review'),zod.literal('status_change'),zod.literal('purchase_link'),zod.literal('impact_correction'),zod.literal('maintenance_correction'),zod.literal(null)]).nullish(),
+  "changedFields": zod.array(zod.object({
+  "field": zod.enum(['status', 'verification_status', 'lifecycle_status', 'purchase_link', 'assigned_owner', 'impact_eligibility', 'maintenance_count']),
+  "changeType": zod.enum(['set', 'changed', 'cleared', 'linked', 'unlinked', 'increased', 'decreased'])
+})).optional(),
+  "correlationId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Get non-sensitive customer lifecycle feature availability
+ */
+export const GetCustomerLifecycleFeatureConfigResponse = zod.object({
+  "canonicalReads": zod.boolean(),
+  "legacyReviewSubmission": zod.boolean(),
+  "canonicalGlobalImpact": zod.boolean(),
+  "nearbyDistanceTiers": zod.boolean()
+})
