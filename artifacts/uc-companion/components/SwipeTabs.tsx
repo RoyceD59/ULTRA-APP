@@ -10,6 +10,9 @@ import Animated, {
 import { useRouter, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { CarouselRegisterContext, type CarouselRef } from './SwipeTabsContext';
+import { getSwipeNeighbours, type SwipeTab } from '../lib/swipeTabs';
+
+export type { SwipeTab } from '../lib/swipeTabs';
 
 /**
  * SwipeTabs — horizontal swipe navigation between the bottom tabs.
@@ -51,9 +54,6 @@ import { CarouselRegisterContext, type CarouselRef } from './SwipeTabsContext';
  * If a carousel loses the race: raise ACTIVATE_X or lower TRIGGER_DIST.
  */
 
-const TAB_ORDER = ['index', 'products', 'support', 'map', 'account'] as const;
-export type SwipeTab = (typeof TAB_ORDER)[number];
-
 const TAB_HREF: Record<SwipeTab, Href> = {
   index: '/',
   products: '/products',
@@ -61,21 +61,6 @@ const TAB_HREF: Record<SwipeTab, Href> = {
   map: '/map',
   account: '/account',
 };
-
-/**
- * Tabs that are NOT wrapped in SwipeTabs and therefore cannot be reached via a
- * swipe gesture. They still appear in TAB_ORDER (which drives the tab bar) but
- * are skipped when computing the swipe neighbours of an adjacent tab.
- *
- * Map is excluded because horizontal panning is how you interact with the map
- * itself — wrapping it would intercept those drags. Navigating to/from Map is
- * done via the tab bar only.
- *
- * Effect on neighbours:
- *   • Support (left of Map) — nextTab skips Map → no right-edge swipe to Map
- *   • Account (right of Map) — prevTab skips Map → no left-edge swipe to Map
- */
-const NON_SWIPE_TABS = new Set<SwipeTab>(['map']);
 
 const ACTIVATE_X = 45;   // px of horizontal drag before the gesture claims the touch
 const FAIL_Y = 20;       // px of vertical drag that hands the touch to scrolling
@@ -99,23 +84,7 @@ export default function SwipeTabs({ tab, children }: { tab: SwipeTab; children: 
     return () => setCarouselRefs(prev => prev.filter(r => r !== ref));
   }, []);
 
-  const idx = TAB_ORDER.indexOf(tab);
-
-  // Walk backwards/forwards through TAB_ORDER, skipping any tab in
-  // NON_SWIPE_TABS, so that swipe navigation never lands on a tab that isn't
-  // wrapped in SwipeTabs (e.g. Map).
-  const prevTab = (() => {
-    for (let i = idx - 1; i >= 0; i--) {
-      if (!NON_SWIPE_TABS.has(TAB_ORDER[i])) return TAB_ORDER[i];
-    }
-    return null;
-  })();
-  const nextTab = (() => {
-    for (let i = idx + 1; i < TAB_ORDER.length; i++) {
-      if (!NON_SWIPE_TABS.has(TAB_ORDER[i])) return TAB_ORDER[i];
-    }
-    return null;
-  })();
+  const { previous: prevTab, next: nextTab } = getSwipeNeighbours(tab);
 
   const goTo = (target: SwipeTab) => {
     if (Platform.OS !== 'web') {

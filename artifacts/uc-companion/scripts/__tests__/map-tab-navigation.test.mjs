@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const layoutSource = readFileSync(join(appRoot, 'app', '(tabs)', '_layout.tsx'), 'utf8');
 const swipeSource = readFileSync(join(appRoot, 'components', 'SwipeTabs.tsx'), 'utf8');
+const swipeHelperSource = readFileSync(join(appRoot, 'lib', 'swipeTabs.ts'), 'utf8');
 
 const TAB_NAMES = ['index', 'products', 'support', 'map', 'account'];
 
@@ -71,12 +72,13 @@ describe('Map tab-bar navigation contract', () => {
   });
 
   test('swipe exclusion does not remove Map from tab order or tab layouts', () => {
-    assert.match(swipeSource, /const\s+NON_SWIPE_TABS\s*=\s*new Set<SwipeTab>\(\[['"]map['"]\]\)/);
+    assert.match(swipeHelperSource, /const\s+NON_SWIPE_TABS\s*=\s*new Set<SwipeTab>\(\[['"]map['"]\]\)/);
     assert.match(
-      swipeSource,
-      /const\s+TAB_ORDER\s*=\s*\[['"]index['"],\s*['"]products['"],\s*['"]support['"],\s*['"]map['"],\s*['"]account['"]\]/,
+      swipeHelperSource,
+      /const\s+SWIPE_TAB_ORDER\s*=\s*\[['"]index['"],\s*['"]products['"],\s*['"]support['"],\s*['"]map['"],\s*['"]account['"]\]/,
       'Map stays in tab order while being excluded only from swipe destinations',
     );
+    assert.match(swipeSource, /getSwipeNeighbours\(tab\)/);
     assert.doesNotMatch(
       readFileSync(join(appRoot, 'app', '(tabs)', 'map.native.tsx'), 'utf8'),
       /<SwipeTabs\b/,
