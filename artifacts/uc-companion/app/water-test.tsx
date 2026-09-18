@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { useApi } from '@/hooks/useApi';
 import { saveDraft, loadDraft, clearDraft, enqueueDraftSave } from '@/lib/formDrafts';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import {
   useCreatePublicInstantWaterAssessment,
   useCreateAuthenticatedInstantWaterAssessment,
@@ -902,48 +903,50 @@ function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom + 24, 24) }]}>
-          <TouchableOpacity onPress={onClose} style={styles.modalClose}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.modalTitle, { color: colors.text }]}>Verify your phone</Text>
-          <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
-            To authorize this physical test or attach it to your account, we need to quickly verify your number.
-          </Text>
+      <View style={styles.modalOverlay}>
+        <KeyboardAwareScrollViewCompat contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom + 24, 24) }]}>
+            <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Verify your phone</Text>
+            <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
+              To authorize this physical test or attach it to your account, we need to quickly verify your number.
+            </Text>
 
-          {step === 'request' ? (
-             <View style={{ gap: 16 }}>
-               <View style={styles.colChips}>
-                 <TouchableOpacity onPress={() => setChannel('whatsapp')} style={[styles.fullChip, { backgroundColor: channel === 'whatsapp' ? colors.primary : colors.surface, borderColor: channel === 'whatsapp' ? colors.primary : colors.border }]}>
-                   <Ionicons name="logo-whatsapp" size={18} color={channel === 'whatsapp' ? '#fff' : colors.text} />
-                   <Text style={{ flexShrink: 1, flexWrap: 'wrap', fontSize: 14, fontWeight: '600', color: channel === 'whatsapp' ? '#fff' : colors.text, marginLeft: 8 }}>Send via WhatsApp</Text>
-                 </TouchableOpacity>
-                 <TouchableOpacity onPress={() => setChannel('sms')} style={[styles.fullChip, { backgroundColor: channel === 'sms' ? colors.primary : colors.surface, borderColor: channel === 'sms' ? colors.primary : colors.border }]}>
-                   <Ionicons name="chatbubble-outline" size={18} color={channel === 'sms' ? '#fff' : colors.text} />
-                   <Text style={{ flexShrink: 1, flexWrap: 'wrap', fontSize: 14, fontWeight: '600', color: channel === 'sms' ? '#fff' : colors.text, marginLeft: 8 }}>Send via SMS</Text>
+            {step === 'request' ? (
+               <View style={{ gap: 16 }}>
+                 <View style={styles.colChips}>
+                   <TouchableOpacity onPress={() => setChannel('whatsapp')} style={[styles.fullChip, { backgroundColor: channel === 'whatsapp' ? colors.primary : colors.surface, borderColor: channel === 'whatsapp' ? colors.primary : colors.border }]}>
+                     <Ionicons name="logo-whatsapp" size={18} color={channel === 'whatsapp' ? '#fff' : colors.text} />
+                     <Text style={{ flexShrink: 1, flexWrap: 'wrap', fontSize: 14, fontWeight: '600', color: channel === 'whatsapp' ? '#fff' : colors.text, marginLeft: 8 }}>Send via WhatsApp</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity onPress={() => setChannel('sms')} style={[styles.fullChip, { backgroundColor: channel === 'sms' ? colors.primary : colors.surface, borderColor: channel === 'sms' ? colors.primary : colors.border }]}>
+                     <Ionicons name="chatbubble-outline" size={18} color={channel === 'sms' ? '#fff' : colors.text} />
+                     <Text style={{ flexShrink: 1, flexWrap: 'wrap', fontSize: 14, fontWeight: '600', color: channel === 'sms' ? '#fff' : colors.text, marginLeft: 8 }}>Send via SMS</Text>
+                   </TouchableOpacity>
+                 </View>
+                 {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
+                 <TouchableOpacity onPress={handleRequest} disabled={busy} style={[styles.submitBtn, { backgroundColor: busy ? colors.muted : colors.primary }]}>
+                   {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Get Code</Text>}
                  </TouchableOpacity>
                </View>
-               {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
-               <TouchableOpacity onPress={handleRequest} disabled={busy} style={[styles.submitBtn, { backgroundColor: busy ? colors.muted : colors.primary }]}>
-                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Get Code</Text>}
-               </TouchableOpacity>
-             </View>
-          ) : (
-             <View style={{ gap: 16 }}>
-               <TextInput
-                 value={code} onChangeText={setCode} placeholder="6-digit code"
-                 keyboardType="number-pad" placeholderTextColor={colors.border}
-                 style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card, fontSize: 24, textAlign: 'center', letterSpacing: 4 }]}
-               />
-               {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
-               <TouchableOpacity onPress={handleConfirm} disabled={busy} style={[styles.submitBtn, { backgroundColor: busy ? colors.muted : colors.primary }]}>
-                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Confirm</Text>}
-               </TouchableOpacity>
-             </View>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+            ) : (
+               <View style={{ gap: 16 }}>
+                 <TextInput
+                   value={code} onChangeText={setCode} placeholder="6-digit code"
+                   keyboardType="number-pad" placeholderTextColor={colors.border}
+                   style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card, fontSize: 24, textAlign: 'center', letterSpacing: 4 }]}
+                 />
+                 {error ? <Text style={{ color: colors.destructive, fontSize: 13 }}>{error}</Text> : null}
+                 <TouchableOpacity onPress={handleConfirm} disabled={busy} style={[styles.submitBtn, { backgroundColor: busy ? colors.muted : colors.primary }]}>
+                   {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Confirm</Text>}
+                 </TouchableOpacity>
+               </View>
+            )}
+          </View>
+        </KeyboardAwareScrollViewCompat>
+      </View>
     </Modal>
   );
 }

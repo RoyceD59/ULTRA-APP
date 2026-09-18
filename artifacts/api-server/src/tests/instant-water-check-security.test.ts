@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import {
   isValidInstantFirstName,
+  isValidInstantPhone,
   isValidInstantKenyanPhone,
   normalizeInstantFirstName,
   normalizeInstantKenyanPhone,
@@ -43,6 +44,7 @@ describe("instant water check security boundaries", () => {
       "bands",
       "disclaimer",
       "physicalTestStatus",
+      "provenance",
       "recommendation",
       "reference",
       "rulesVersion",
@@ -59,9 +61,11 @@ describe("instant water check security boundaries", () => {
     assert.equal(normalizeInstantPhone("not-a-phone"), null);
     assert.equal(normalizeInstantKenyanPhone("01 12 345 678"), "+254112345678");
     assert.equal(normalizeInstantKenyanPhone("254 712-345-678"), "+254712345678");
+    assert.equal(normalizeInstantPhone("+255 712 345 678"), "+255712345678");
     assert.equal(normalizeInstantKenyanPhone("+255 712 345 678"), null);
     assert.equal(normalizeInstantKenyanPhone("071234567"), null);
     assert.equal(normalizeInstantKenyanPhone("07123456789"), null);
+    assert.equal(normalizeInstantPhone("0800 123 456"), "+254800123456");
     assert.equal(normalizeInstantKenyanPhone("0800 123 456"), null);
   });
 
@@ -120,9 +124,20 @@ describe("instant water check security boundaries", () => {
     for (const firstName of ["12", "!!!", "Amina  Smith"]) {
       assert.throws(() => CreatePublicInstantWaterAssessmentBody.parse({ ...publicInput, firstName }));
     }
-    for (const phone of ["12", "1234567890", "+255 712 345 678", "071234567"]) {
+    for (const phone of ["12", "1234567890", "071234567"]) {
       assert.throws(() => CreatePublicInstantWaterAssessmentBody.parse({ ...publicInput, phone }));
     }
+    assert.equal(
+      CreatePublicInstantWaterAssessmentBody.parse({
+        ...publicInput,
+        phone: "+255 712 345 678",
+        answers: { ...answers, country: "Tanzania" },
+      }).phone,
+      "+255712345678",
+    );
+    assert.equal(isValidInstantPhone("0712 345 678", "TZ"), true);
+    assert.equal(isValidInstantPhone("0712 345 678", "KE"), true);
+    assert.equal(isValidInstantPhone("+255 712 345 678", "KE"), false);
   });
 
   it("maps published identity schemas to the exact shared validators", () => {
@@ -135,15 +150,15 @@ describe("instant water check security boundaries", () => {
       return remainder.slice(0, next < 0 ? undefined : next);
     };
     const firstNameSchema = schemaBlock("InstantWaterFirstName");
-    const phoneSchema = schemaBlock("InstantWaterKenyanPhone");
+    const phoneSchema = schemaBlock("InstantWaterPhone");
     assert.equal((spec.match(/\$ref: "#\/components\/schemas\/InstantWaterFirstName"/g) ?? []).length, 2);
-    assert.equal((spec.match(/\$ref: "#\/components\/schemas\/InstantWaterKenyanPhone"/g) ?? []).length, 2);
+    assert.equal((spec.match(/\$ref: "#\/components\/schemas\/InstantWaterPhone"/g) ?? []).length, 2);
     assert.match(firstNameSchema, /x-uc-validator: instant-water-first-name@1/);
-    assert.match(phoneSchema, /x-uc-validator: instant-water-kenyan-phone@1/);
+    assert.match(phoneSchema, /x-uc-validator: instant-water-phone@1/);
     assert.match(firstNameSchema, /NFC/);
     assert.match(firstNameSchema, /punctuation-only/);
-    assert.match(phoneSchema, /Normalize accepted\s+values to \+254XXXXXXXXX/);
-    assert.match(phoneSchema, /no repeated space\/period\/hyphen separators/);
+    assert.match(phoneSchema, /normalize it to E\.164/i);
+    assert.match(phoneSchema, /repeated separators/);
 
     for (const [value, expected] of [
       ["李 小龙", true],

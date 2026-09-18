@@ -58,6 +58,10 @@ export interface InstantWaterCheckAnswers {
   setting: WaterSetting;
 }
 
+export type InstantWaterCheckProvenance =
+  | "general_indicative"
+  | "reviewed_regional_guidance";
+
 export interface InstantWaterCheckBands {
   hardness: WaterBand;
   taste: WaterBand;
@@ -86,6 +90,7 @@ export interface InstantWaterCheckResult {
     explanation: string;
   };
   disclaimer: string;
+  provenance: InstantWaterCheckProvenance;
 }
 
 const BASE: Record<
@@ -152,8 +157,21 @@ const RIFT_AREAS = [
   "longonot",
 ] as const;
 
-const DISCLAIMER =
-  "This is an indicative profile built from your answers and known conditions in your area. It is not a laboratory analysis and is not a health assessment.";
+const REVIEWED_COUNTRIES = new Set([
+  "ghana", "gh", "kenya", "ke", "tanzania", "tz", "rwanda", "rw",
+  "nigeria", "ng", "uganda", "ug",
+]);
+
+// These are deliberately broad source-type cautions, not claims about a
+// particular city or water utility. The reviewed country set only determines
+// whether these conservative rules are applied; it never uses community
+// ratings or other unreviewed local data.
+const REVIEWED_SOURCE_BUMP: Partial<
+  Record<WaterSource, Partial<Record<keyof InstantWaterCheckResult["levels"], 1>>>
+> = {
+  borehole: { hardness: 1 },
+  shallow: { microbial: 1 },
+};
 
 const SOURCE_LABEL: Record<WaterSource, string> = {
   municipal: "piped municipal supply",
@@ -163,6 +181,10 @@ const SOURCE_LABEL: Record<WaterSource, string> = {
   bottled: "bottled or sachet water",
   rain: "harvested rainwater",
 };
+
+function normalizeCountry(country: string): string {
+  return country.trim().normalize("NFKD").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
 
 function hasArea(area: string, terms: readonly string[]): boolean {
   const normalized = area
@@ -251,6 +273,7 @@ function recommendation(
 
 export function scoreInstantWaterCheck(
   answers: InstantWaterCheckAnswers,
+  country = "Kenya",
 ): InstantWaterCheckResult {
   if (!WATER_SOURCES.includes(answers.source)) {
     throw new Error("Invalid water source");
@@ -287,7 +310,17 @@ export function scoreInstantWaterCheck(
     }
   }
 
-  const hardGroundwater = hasArea(answers.area, HARD_AREAS);
+  const reviewedRegionalGuidance = REVIEWED_COUNTRIES.has(normalizeCountry(country));
+  if (reviewedRegionalGuidance) {
+    for (const [key, increment] of Object.entries(REVIEWED_SOURCE_BUMP[answers.source] ?? {})) {
+      const scoreKey = key as keyof typeof levels;
+      levels[scoreKey] = Math.min(3, levels[scoreKey] + increment) as 1 | 2 | 3;
+    }
+  }
+
+  const normalizedCountry = normalizeCountry(country);
+  const kenya = normalizedCountry === "kenya" || normalizedCountry === "ke";
+  const hardGroundwater = kenya && hasArea(answers.area, HARD_AREAS);
   if (
     hardGroundwater &&
     (answers.source === "borehole" || answers.source === "municipal")
@@ -295,7 +328,7 @@ export function scoreInstantWaterCheck(
     levels.hardness = 3;
   }
   const riftValleyFluoride =
-    answers.source === "borehole" && hasArea(answers.area, RIFT_AREAS);
+    kenya && answers.source === "borehole" && hasArea(answers.area, RIFT_AREAS);
   const rec = recommendation(levels, answers.concern, answers.setting);
 
   return {
@@ -313,11 +346,15 @@ export function scoreInstantWaterCheck(
     // bearer result token must not disclose location or contact details.
     summary: `Based on ${SOURCE_LABEL[answers.source]} and the answers provided.`,
     recommendation: rec,
-    disclaimer: DISCLAIMER,
+    disclaimer: reviewedRegionalGuidance
+      ? "This is an indicative profile using reviewed, broad country-level source guidance and your answers. It is not a laboratory analysis and is not a health assessment."
+      : "This is an indicative profile using general source-type rules and your answers. It is not a laboratory analysis and is not a health assessment.",
+    provenance: reviewedRegionalGuidance ? "reviewed_regional_guidance" : "general_indicative",
   };
 }
 
 /** Alias retained for callers that make the version explicit. */
 export const scoreInstantWaterCheckV1 = scoreInstantWaterCheck;
 
-export const instantWaterCheckDisclaimer = DISCLAIMER;
+export const instantWaterCheckDisclaimer =
+  "This is an indicative profile using general source-type rules and your answers. It is not a laboratory analysis and is not a health assessment.";

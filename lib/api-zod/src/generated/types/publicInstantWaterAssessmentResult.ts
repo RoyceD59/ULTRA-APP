@@ -7,6 +7,7 @@
  */
 import type { InstantWaterBands } from './instantWaterBands';
 import type { PublicInstantWaterAssessmentResultAreaFlag } from './publicInstantWaterAssessmentResultAreaFlag';
+import type { PublicInstantWaterAssessmentResultProvenance } from './publicInstantWaterAssessmentResultProvenance';
 import type { PublicInstantWaterAssessmentResultRecommendation } from './publicInstantWaterAssessmentResultRecommendation';
 import type { PublicInstantWaterAssessmentResultRulesVersion } from './publicInstantWaterAssessmentResultRulesVersion';
 
@@ -18,6 +19,7 @@ export interface PublicInstantWaterAssessmentResult {
   areaFlag?: PublicInstantWaterAssessmentResultAreaFlag;
   recommendation: PublicInstantWaterAssessmentResultRecommendation;
   disclaimer: string;
+  provenance: PublicInstantWaterAssessmentResultProvenance;
   serviceAvailable: boolean;
   physicalTestStatus?: string;
 }

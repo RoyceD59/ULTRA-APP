@@ -9,32 +9,41 @@ import { useApi, MapLocation } from '@/hooks/useApi';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { directionsUrls } from '@/lib/locationMap';
 
-const FILTER_TABS = ['All', 'Centres', 'ATMs', 'Vendors'];
+import LocationDetailModal from '@/components/LocationDetailModal';
+
+const FILTER_TABS = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
 const topPad = Platform.OS === 'web' ? 67 : 0;
 
-function LocationCard({ loc, colors, onDirections }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onDirections: (location: MapLocation) => void }) {
+function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onPress: (location: MapLocation) => void }) {
   const isCentre = loc.type === 'experience_centre';
   const isVendor = loc.type === 'vendor';
-  const accent = isCentre ? colors.primary : isVendor ? '#2E7D32' : '#00B4D8';
-  const typeLabel = isCentre ? 'Centre' : isVendor ? 'Verified vendor' : 'ATM';
+  const isStation = loc.type === 'refill_station';
+  const isTap = loc.type === 'city_tap';
+
+  const accent = isCentre ? colors.primary : isVendor ? '#2E7D32' : isStation ? '#1976D2' : isTap ? '#0288D1' : '#00B4D8';
+  const typeLabel = isCentre ? 'Centre' : isVendor ? 'Verified vendor' : isStation ? 'Station' : isTap ? 'City Tap' : 'ATM';
+  const iconName = (isCentre || isVendor) ? 'business-outline' : isStation ? 'pint-outline' : 'water-outline';
+  const bgColor = isCentre ? colors.primaryLight : isVendor ? '#E8F5E9' : isStation ? '#E3F2FD' : isTap ? '#E1F5FE' : '#E0F7FA';
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
-      onPress={() => onDirections(loc)}
+      onPress={() => onPress(loc)}
       style={[styles.locCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.locIcon, { backgroundColor: isCentre ? colors.primaryLight : isVendor ? '#E8F5E9' : '#E0F7FA' }]}>
-        <Ionicons name={isCentre || isVendor ? 'business-outline' : 'water-outline'} size={20}
-          color={accent} />
+      <View style={[styles.locIcon, { backgroundColor: bgColor }]}>
+        <Ionicons name={iconName} size={20} color={accent} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.locName, { color: colors.text }]} numberOfLines={1}>{loc.name}</Text>
-        <Text style={[styles.locAddr, { color: colors.mutedForeground }]} numberOfLines={1}>{loc.address}</Text>
+        <Text style={[styles.locAddr, { color: colors.mutedForeground }]} numberOfLines={1}>
+          {loc.address}{loc.city && loc.countryIso ? ` · ${loc.city}, ${loc.countryIso}` : ''}
+        </Text>
         <View style={styles.locMeta}>
           <Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
           <Text style={[styles.locHours, { color: colors.mutedForeground }]}>{loc.hours}</Text>
         </View>
       </View>
-      <View style={[styles.typeBadge, { backgroundColor: isCentre ? colors.primaryLight : isVendor ? '#E8F5E9' : '#E0F7FA' }]}>
+      <View style={[styles.typeBadge, { backgroundColor: bgColor }]}>
         <Text style={[styles.typeText, { color: accent }]}>
           {typeLabel}
         </Text>
@@ -48,6 +57,7 @@ export default function MapScreen() {
   const api = useApi();
   const [filter, setFilter] = useState('All');
   const [directionsError, setDirectionsError] = useState('');
+  const [selected, setSelected] = useState<MapLocation | null>(null);
   const cartBarInset = useCartBarInset();
 
   const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
@@ -59,8 +69,11 @@ export default function MapScreen() {
   const visible = locations.filter(l => {
     if (filter === 'All') return true;
     if (filter === 'Centres') return l.type === 'experience_centre';
-    if (filter === 'ATMs') return l.type === 'refill_atm';
-    return l.type === 'vendor';
+    if (filter === 'ATMs') return l.type === 'water_atm';
+    if (filter === 'Vendors') return l.type === 'vendor';
+    if (filter === 'Stations') return l.type === 'refill_station';
+    if (filter === 'Taps') return l.type === 'city_tap';
+    return false;
   });
 
   async function openDirections(location: MapLocation) {
@@ -95,8 +108,8 @@ export default function MapScreen() {
 
       {/* Map hint for web */}
       <View style={[styles.mapHint, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
-        <Ionicons name="map-outline" size={18} color={colors.primary} />
-        <Text style={[styles.mapHintText, { color: colors.primary }]}>Tap any location to open in Google Maps</Text>
+        <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+        <Text style={[styles.mapHintText, { color: colors.primary }]}>Tap any location to view details and community ratings</Text>
       </View>
 
        {isLoading ? (
@@ -121,9 +134,16 @@ export default function MapScreen() {
             </View>
           }
           ListHeaderComponent={directionsError ? <Text style={[styles.directionsError, { color: colors.mutedForeground }]}>{directionsError}</Text> : null}
-          renderItem={({ item }) => <LocationCard loc={item} colors={colors} onDirections={openDirections} />}
+          renderItem={({ item }) => <LocationCard loc={item} colors={colors} onPress={setSelected} />}
         />
       )}
+
+      <LocationDetailModal
+        location={selected}
+        visible={!!selected}
+        onClose={() => setSelected(null)}
+        onDirections={openDirections}
+      />
     </View>
   );
 }

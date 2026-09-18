@@ -57,8 +57,8 @@ export type AssessmentResponse = {
   result: ReturnType<typeof redactInstantWaterResult>;
 };
 
-export function normalizeInstantPhone(raw: string): string | null {
-  return normalizeSharedPhone(raw, "KE");
+export function normalizeInstantPhone(raw: string, country?: Parameters<typeof normalizeSharedPhone>[1]): string | null {
+  return normalizeSharedPhone(raw, country);
 }
 
 function hashSecret(value: string): string {
@@ -158,6 +158,7 @@ export function redactInstantWaterResult(result: InstantWaterCheckResult, refere
     areaFlag: flag as "none" | "hard_groundwater" | "rift_valley_fluoride",
     recommendation: result.recommendation,
     disclaimer: result.disclaimer,
+    provenance: result.provenance,
     serviceAvailable: serviceAvailable(country),
     physicalTestStatus: status,
   };
@@ -328,7 +329,7 @@ export async function createInstantAssessment(input: {
   if (!normalizedFirstName) throw new Error("INVALID_FIRST_NAME");
   const normalizedPhone = normalizeSharedPhone(input.phone, countryCodeFromValue(input.country) ?? "KE");
   if (!normalizedPhone) throw new Error("INVALID_PHONE");
-  const result = scoreInstantWaterCheck(input.answers);
+  const result = scoreInstantWaterCheck(input.answers, input.country);
   const requestHash = hashSecret(stablePayload({
     firstName: normalizedFirstName,
     normalizedPhone,

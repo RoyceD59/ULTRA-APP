@@ -53,3 +53,11 @@ export const lookupLimiter = rateLimit({
   },
   skipSuccessfulRequests: false,
 });
+
+export const locationQualityLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many rating requests. Please try again later." },
+});

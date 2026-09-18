@@ -56,8 +56,10 @@ import type {
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
   GetDashboardActivityParams,
+  GetLocationAssessment200,
   GetPublishedUcGuide200,
   GetUcAdminGuide200,
+  GetUcLocationRatingAggregateParams,
   HealthStatus,
   InstantWaterAssessment,
   InstantWaterAssessmentAttachInput,
@@ -78,6 +80,7 @@ import type {
   InventoryUpdateResult,
   InventoryWishlistDemand,
   IssueAgentClientTokenBody,
+  ListLocationRatingReports200,
   ListNotificationLogsParams,
   ListProjectHubInstantWaterAssessmentsParams,
   ListPublishedUcGuides200,
@@ -90,6 +93,8 @@ import type {
   Member,
   MemberInput,
   MemberUpdate,
+  ModerateLocationRating200,
+  ModerateLocationRatingBody,
   MonitoringSnapshot,
   NotificationDispatchInput,
   NotificationDispatchResult,
@@ -124,7 +129,10 @@ import type {
   UcCustomerList,
   UcCustomersCount,
   UcGuideInput,
+  UcLocationAssessmentInput,
   UcLocationInput,
+  UcLocationRatingAggregate,
+  UcLocationRatingInput,
   UcLocationUpdateInput,
   UcOfflineClientInput,
   UcOfflineClientResponse,
@@ -137,6 +145,7 @@ import type {
   UcTemporaryPasswordResult,
   UcWaterTestCustomerStageInput,
   UnsyncedRegistrationRecoveryInput,
+  UpdateLocationAssessment200,
   UpdateUcAdminLocation200,
   ValidateUcReferralOrPromotionCodeBody,
   WebhookIngestResult,
@@ -2276,6 +2285,161 @@ export const useCreateUcAdminLocation = <TError = ErrorType<void>,
       return useMutation(getCreateUcAdminLocationMutationOptions(options));
     }
 
+export const getGetUcLocationRatingAggregateUrl = (id: string,
+    params?: GetUcLocationRatingAggregateParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/locations/${id}/ratings?${stringifiedParams}` : `/api/uc/locations/${id}/ratings`
+}
+
+/**
+ * @summary Get privacy-safe community rating aggregates for a location
+ */
+export const getUcLocationRatingAggregate = async (id: string,
+    params?: GetUcLocationRatingAggregateParams, options?: RequestInit): Promise<UcLocationRatingAggregate> => {
+
+  return customFetch<UcLocationRatingAggregate>(getGetUcLocationRatingAggregateUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcLocationRatingAggregateQueryKey = (id: string,
+    params?: GetUcLocationRatingAggregateParams,) => {
+    return [
+    `/api/uc/locations/${id}/ratings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetUcLocationRatingAggregateQueryOptions = <TData = Awaited<ReturnType<typeof getUcLocationRatingAggregate>>, TError = ErrorType<unknown>>(id: string,
+    params?: GetUcLocationRatingAggregateParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcLocationRatingAggregate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcLocationRatingAggregateQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcLocationRatingAggregate>>> = ({ signal }) => getUcLocationRatingAggregate(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcLocationRatingAggregate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcLocationRatingAggregateQueryResult = NonNullable<Awaited<ReturnType<typeof getUcLocationRatingAggregate>>>
+export type GetUcLocationRatingAggregateQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get privacy-safe community rating aggregates for a location
+ */
+
+export function useGetUcLocationRatingAggregate<TData = Awaited<ReturnType<typeof getUcLocationRatingAggregate>>, TError = ErrorType<unknown>>(
+ id: string,
+    params?: GetUcLocationRatingAggregateParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcLocationRatingAggregate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcLocationRatingAggregateQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertUcLocationRatingUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/locations/${id}/rating`
+}
+
+export const upsertUcLocationRating = async (id: string,
+    ucLocationRatingInput: UcLocationRatingInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUpsertUcLocationRatingUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucLocationRatingInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertUcLocationRatingMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertUcLocationRating>>, TError,{id: string;data: BodyType<UcLocationRatingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertUcLocationRating>>, TError,{id: string;data: BodyType<UcLocationRatingInput>}, TContext> => {
+
+const mutationKey = ['upsertUcLocationRating'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertUcLocationRating>>, {id: string;data: BodyType<UcLocationRatingInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  upsertUcLocationRating(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertUcLocationRatingMutationResult = NonNullable<Awaited<ReturnType<typeof upsertUcLocationRating>>>
+    export type UpsertUcLocationRatingMutationBody = BodyType<UcLocationRatingInput>
+    export type UpsertUcLocationRatingMutationError = ErrorType<void>
+
+    export const useUpsertUcLocationRating = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertUcLocationRating>>, TError,{id: string;data: BodyType<UcLocationRatingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertUcLocationRating>>,
+        TError,
+        {id: string;data: BodyType<UcLocationRatingInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertUcLocationRatingMutationOptions(options));
+    }
+
 export const getUpdateUcAdminLocationUrl = (id: string,) => {
 
 
@@ -2346,6 +2510,304 @@ export const useUpdateUcAdminLocation = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateUcAdminLocationMutationOptions(options));
+    }
+
+export const getListLocationRatingReportsUrl = () => {
+
+
+
+
+  return `/api/uc/admin/location-rating-reports`
+}
+
+/**
+ * @summary List reports on community location ratings
+ */
+export const listLocationRatingReports = async ( options?: RequestInit): Promise<ListLocationRatingReports200> => {
+
+  return customFetch<ListLocationRatingReports200>(getListLocationRatingReportsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLocationRatingReportsQueryKey = () => {
+    return [
+    `/api/uc/admin/location-rating-reports`
+    ] as const;
+    }
+
+
+export const getListLocationRatingReportsQueryOptions = <TData = Awaited<ReturnType<typeof listLocationRatingReports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLocationRatingReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLocationRatingReportsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLocationRatingReports>>> = ({ signal }) => listLocationRatingReports({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLocationRatingReports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLocationRatingReportsQueryResult = NonNullable<Awaited<ReturnType<typeof listLocationRatingReports>>>
+export type ListLocationRatingReportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List reports on community location ratings
+ */
+
+export function useListLocationRatingReports<TData = Awaited<ReturnType<typeof listLocationRatingReports>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLocationRatingReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLocationRatingReportsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getModerateLocationRatingUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/location-ratings/${id}/moderation`
+}
+
+/**
+ * @summary Update the moderation status of a location rating
+ */
+export const moderateLocationRating = async (id: string,
+    moderateLocationRatingBody: ModerateLocationRatingBody, options?: RequestInit): Promise<ModerateLocationRating200> => {
+
+  return customFetch<ModerateLocationRating200>(getModerateLocationRatingUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(moderateLocationRatingBody)
+  }
+);}
+
+
+
+
+
+export const getModerateLocationRatingMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moderateLocationRating>>, TError,{id: string;data: BodyType<ModerateLocationRatingBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof moderateLocationRating>>, TError,{id: string;data: BodyType<ModerateLocationRatingBody>}, TContext> => {
+
+const mutationKey = ['moderateLocationRating'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof moderateLocationRating>>, {id: string;data: BodyType<ModerateLocationRatingBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  moderateLocationRating(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ModerateLocationRatingMutationResult = NonNullable<Awaited<ReturnType<typeof moderateLocationRating>>>
+    export type ModerateLocationRatingMutationBody = BodyType<ModerateLocationRatingBody>
+    export type ModerateLocationRatingMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update the moderation status of a location rating
+ */
+export const useModerateLocationRating = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moderateLocationRating>>, TError,{id: string;data: BodyType<ModerateLocationRatingBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof moderateLocationRating>>,
+        TError,
+        {id: string;data: BodyType<ModerateLocationRatingBody>},
+        TContext
+      > => {
+      return useMutation(getModerateLocationRatingMutationOptions(options));
+    }
+
+export const getGetLocationAssessmentUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/locations/${id}/assessment`
+}
+
+/**
+ * @summary Get verified location assessment
+ */
+export const getLocationAssessment = async (id: string, options?: RequestInit): Promise<GetLocationAssessment200> => {
+
+  return customFetch<GetLocationAssessment200>(getGetLocationAssessmentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLocationAssessmentQueryKey = (id: string,) => {
+    return [
+    `/api/uc/admin/locations/${id}/assessment`
+    ] as const;
+    }
+
+
+export const getGetLocationAssessmentQueryOptions = <TData = Awaited<ReturnType<typeof getLocationAssessment>>, TError = ErrorType<unknown>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLocationAssessment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLocationAssessmentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLocationAssessment>>> = ({ signal }) => getLocationAssessment(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLocationAssessment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLocationAssessmentQueryResult = NonNullable<Awaited<ReturnType<typeof getLocationAssessment>>>
+export type GetLocationAssessmentQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get verified location assessment
+ */
+
+export function useGetLocationAssessment<TData = Awaited<ReturnType<typeof getLocationAssessment>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLocationAssessment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLocationAssessmentQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateLocationAssessmentUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/admin/locations/${id}/assessment`
+}
+
+/**
+ * @summary Create or update verified location assessment
+ */
+export const updateLocationAssessment = async (id: string,
+    ucLocationAssessmentInput: UcLocationAssessmentInput, options?: RequestInit): Promise<UpdateLocationAssessment200> => {
+
+  return customFetch<UpdateLocationAssessment200>(getUpdateLocationAssessmentUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucLocationAssessmentInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateLocationAssessmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLocationAssessment>>, TError,{id: string;data: BodyType<UcLocationAssessmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLocationAssessment>>, TError,{id: string;data: BodyType<UcLocationAssessmentInput>}, TContext> => {
+
+const mutationKey = ['updateLocationAssessment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLocationAssessment>>, {id: string;data: BodyType<UcLocationAssessmentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLocationAssessment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLocationAssessmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateLocationAssessment>>>
+    export type UpdateLocationAssessmentMutationBody = BodyType<UcLocationAssessmentInput>
+    export type UpdateLocationAssessmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create or update verified location assessment
+ */
+export const useUpdateLocationAssessment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLocationAssessment>>, TError,{id: string;data: BodyType<UcLocationAssessmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLocationAssessment>>,
+        TError,
+        {id: string;data: BodyType<UcLocationAssessmentInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateLocationAssessmentMutationOptions(options));
     }
 
 export const getListUnsyncedRegistrationsUrl = () => {

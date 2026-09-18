@@ -30,4 +30,26 @@ export interface UcLocationUpdateInput {
   phone?: string | null;
   /** @nullable */
   vendorName?: string | null;
+  /** @pattern ^[A-Z]{2}$ */
+  countryIso?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  city?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  accessNotes?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  municipal?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  sourceAttribution?: string | null;
 }

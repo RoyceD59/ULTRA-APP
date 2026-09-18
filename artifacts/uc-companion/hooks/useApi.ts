@@ -169,7 +169,7 @@ export interface UCCustomer {
 export interface MapLocation {
   id: string;
   /** Locations are published from the verified locations table. */
-  type: 'experience_centre' | 'refill_atm' | 'vendor';
+  type: 'experience_centre' | 'vendor' | 'water_atm' | 'refill_station' | 'city_tap';
   name: string;
   address: string;
   lat: number;
@@ -177,6 +177,42 @@ export interface MapLocation {
   hours: string;
   phone: string | null;
   vendorName: string | null;
+  countryIso: string;
+  city: string | null;
+  accessNotes: string | null;
+  municipal: string | null;
+  sourceAttribution: string | null;
+}
+
+export interface LocationRatingAggregate {
+  count: number;
+  averages: {
+    waterQuality?: number;
+    cleanliness?: number;
+    equipmentCondition?: number;
+    serviceReliability?: number;
+    safetyConfidence?: number;
+  };
+  ratings?: {
+    id: string;
+    waterQuality: number;
+    cleanliness: number;
+    equipmentCondition: number;
+    serviceReliability: number;
+    safetyConfidence: number;
+    comment?: string | null;
+    createdAt?: string;
+  }[];
+}
+
+export interface LocationRating {
+  id?: string;
+  waterQuality: number;
+  cleanliness: number;
+  equipmentCondition: number;
+  serviceReliability: number;
+  safetyConfidence: number;
+  comment?: string | null;
 }
 
 export interface MaintenanceTicket {
@@ -400,6 +436,18 @@ export function useApi() {
     return res.json() as Promise<T>;
   }, [authHeaders, throwResponseError]);
 
+  const put = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
+    const res = await fetch(`${getApiBase()}${path}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      return throwResponseError(res);
+    }
+    return res.json() as Promise<T>;
+  }, [authHeaders, throwResponseError]);
+
   const patch = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
     const res = await fetch(`${getApiBase()}${path}`, {
       method: 'PATCH',
@@ -454,6 +502,14 @@ export function useApi() {
     registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string }) =>
       post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone, ...registration }),
     getLocations: () => get<MapLocation[]>('/api/uc/locations'),
+    getLocationRatingAggregate: (id: string) =>
+      get<LocationRatingAggregate>(`/api/uc/locations/${id}/ratings`),
+    getMyLocationRating: (id: string) =>
+      get<{ rating: LocationRating | null }>(`/api/uc/me/locations/${id}/rating`),
+    upsertLocationRating: (id: string, data: LocationRating) =>
+      put<{ rating: LocationRating }>(`/api/uc/locations/${id}/rating`, data),
+    reportLocationRating: (locationId: string, ratingId: string, data: { reason: 'spam' | 'unsafe' | 'inaccurate' | 'offensive' | 'other'; detail?: string }) =>
+      post<{ report: any }>(`/api/uc/locations/${locationId}/ratings/${ratingId}/reports`, data),
     getTickets: () => get<MaintenanceTicket[]>('/api/uc/tickets'),
     createTicket: (data: {
       productModel: string;

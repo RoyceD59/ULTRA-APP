@@ -68,6 +68,7 @@ export * from "./uc-registered-filters";
 export * from "./uc-water-impact";
 export * from "./uc-reward-conversion";
 export * from "./uc-locations";
+export * from "./uc-location-quality";
 export * from "./uc-promotions";
 export * from "./instant-water-assessments";
 export * from "./agent-oauth";

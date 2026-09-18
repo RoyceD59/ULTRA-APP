@@ -168,3 +168,51 @@ Replit website analytics is preferred for the web artifact because pageviews are
 - Type checks for libraries, API, ProjectHub, and Companion.
 - Production-like bundle comparison for root JavaScript and the duplicate icon.
 - Workflow restart and visible screenshots after the completed implementation.
+
+## Approved Extension: Worldwide Guidance and Water-Point Quality
+
+Approved on 2026-09-18 using the reviewed-regional-profile approach.
+
+### Worldwide Quick Water Test
+
+- Generic source, concern, symptom, and setting rules remain available worldwide.
+- Every geographic rule is country-scoped; place-name matching must never apply a Kenyan condition to a similarly named place in another country.
+- Ghana, Kenya, Tanzania, Rwanda, Nigeria, and Uganda receive reviewed country-level guidance and may receive narrower city/region profiles only when the supporting condition is documented.
+- Results state whether they use general indicative rules or reviewed regional guidance.
+- Community ratings never change health-risk bands or recommendations.
+
+### Water Location Types
+
+Managed locations support:
+
+- `water_atm`;
+- `refill_station`;
+- `city_tap`.
+
+City tap points include country, city, coordinates, access/operating notes, municipal/source attribution, and verification status.
+
+### Consumer Ratings
+
+Authenticated, non-deleted consumers may submit one editable rating per location with:
+
+- water quality;
+- cleanliness;
+- equipment condition;
+- service reliability;
+- overall safety confidence;
+- an optional bounded comment.
+
+The API enforces one row per user/location, score bounds, text bounds, authenticated write limits, and ownership. Public aggregates expose count and rounded averages only and never expose account IDs, email, phone, IP, moderation notes, or report identities.
+
+Consumers may report a rating once using a bounded reason enum and optional bounded detail. Reports are retained for audit. Ratings can be hidden or removed from public aggregates without deleting their source record.
+
+### ProjectHub Assessments
+
+Active ProjectHub administrators may create a separately labelled assessment containing structured quality-control scores/checks, inspection notes, status, assessor, and verification date. Admin assessments are never merged into consumer averages.
+
+### Release Safety
+
+- Ratings are advisory community observations, not laboratory evidence.
+- Verified-location status does not imply a verified reviewer.
+- Consumer comments are published only under the moderation policy; aggregate scores remain server-computed.
+- Automated rewards, anonymous ratings, photo reviews, replies, and rating-driven health recommendations are excluded.

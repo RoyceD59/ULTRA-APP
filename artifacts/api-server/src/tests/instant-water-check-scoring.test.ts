@@ -12,7 +12,7 @@ describe("instant-water-check-v1 scorer", () => {
       concern: "taste",
       area: "Nairobi – Westlands",
       setting: "home",
-    });
+    }, "Kenya");
     assert.equal(result.rulesVersion, INSTANT_WATER_CHECK_RULES_VERSION);
     assert.deepEqual(result.levels, {
       hardness: 2,
@@ -27,6 +27,7 @@ describe("instant-water-check-v1 scorer", () => {
       microbial: "Low",
     });
     assert.match(result.disclaimer, /not a laboratory analysis/i);
+    assert.equal(result.provenance, "reviewed_regional_guidance");
   });
 
   it("caps adjustments at High and raises hard groundwater only for the approved sources", () => {
@@ -35,7 +36,7 @@ describe("instant-water-check-v1 scorer", () => {
       concern: "scale",
       area: "Kitengela",
       setting: "home",
-    });
+    }, "Kenya");
     assert.equal(result.levels.hardness, 3);
     assert.equal(result.bands.hardness, "High");
     assert.equal(result.areaFlags.hardGroundwater, true);
@@ -48,13 +49,13 @@ describe("instant-water-check-v1 scorer", () => {
       concern: "safety",
       area: "Nakuru",
       setting: "home",
-    });
+    }, "Kenya");
     const municipal = scoreInstantWaterCheck({
       source: "municipal",
       concern: "safety",
       area: "Nakuru",
       setting: "home",
-    });
+    }, "Kenya");
     assert.equal(borehole.areaFlags.riftValleyFluoride, true);
     assert.equal(municipal.areaFlags.riftValleyFluoride, false);
   });
@@ -65,6 +66,46 @@ describe("instant-water-check-v1 scorer", () => {
       concern: "cost",
       area: "Nairobi",
       setting: "home",
-    }), /Invalid water source/);
+    }, "Kenya"), /Invalid water source/);
+  });
+
+  it("applies reviewed broad source guidance across the six approved countries", () => {
+    for (const country of ["Ghana", "Kenya", "Tanzania", "Rwanda", "Nigeria", "Uganda"]) {
+      const result = scoreInstantWaterCheck({
+        source: "borehole",
+        concern: "cost",
+        area: "Springfield",
+        setting: "home",
+      }, country);
+      assert.equal(result.provenance, "reviewed_regional_guidance");
+      assert.equal(result.levels.hardness, 3);
+      assert.match(result.disclaimer, /reviewed.*country-level source guidance/i);
+    }
+  });
+
+  it("keeps unknown countries general and scopes Kenya area flags to Kenya", () => {
+    const kenya = scoreInstantWaterCheck({
+      source: "borehole",
+      concern: "cost",
+      area: "Nakuru",
+      setting: "home",
+    }, "Kenya");
+    const tanzania = scoreInstantWaterCheck({
+      source: "borehole",
+      concern: "cost",
+      area: "Nakuru",
+      setting: "home",
+    }, "Tanzania");
+    const unknown = scoreInstantWaterCheck({
+      source: "borehole",
+      concern: "cost",
+      area: "Nakuru",
+      setting: "home",
+    }, "Zambia");
+    assert.equal(kenya.areaFlags.riftValleyFluoride, true);
+    assert.equal(tanzania.areaFlags.riftValleyFluoride, false);
+    assert.equal(tanzania.areaFlags.hardGroundwater, false);
+    assert.equal(unknown.provenance, "general_indicative");
+    assert.match(unknown.disclaimer, /general source-type rules/i);
   });
 });

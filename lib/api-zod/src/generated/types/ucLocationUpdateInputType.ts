@@ -13,4 +13,7 @@ export const UcLocationUpdateInputType = {
   experience_centre: 'experience_centre',
   refill_atm: 'refill_atm',
   vendor: 'vendor',
+  water_atm: 'water_atm',
+  refill_station: 'refill_station',
+  city_tap: 'city_tap',
 } as const;

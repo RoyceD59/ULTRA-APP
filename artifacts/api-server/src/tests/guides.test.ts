@@ -4,6 +4,7 @@ import supertest from "supertest";
 import { pool } from "@workspace/db";
 import app from "../app.js";
 import { issueToken } from "../lib/jwt.js";
+import { validateAuthoritativeVideoDuration } from "../routes/guides.js";
 
 const GUIDE_ID = "guide-focused-test";
 const SECTION_ID = "guide-focused-test-section";
@@ -67,6 +68,14 @@ after(async () => {
 });
 
 describe("Companion guide API", () => {
+  it("requires authoritative finite video duration metadata and enforces 90 seconds", () => {
+    assert.equal(validateAuthoritativeVideoDuration({ metadata: {} }).ok, false);
+    assert.equal(validateAuthoritativeVideoDuration({ metadata: { durationSeconds: "not-a-number" } }).ok, false);
+    assert.equal(validateAuthoritativeVideoDuration({ metadata: { durationSeconds: -1 } }).ok, false);
+    assert.equal(validateAuthoritativeVideoDuration({ metadata: { durationSeconds: 90 }}).ok, true);
+    assert.equal(validateAuthoritativeVideoDuration({ metadata: { durationSeconds: 90.01 }}).ok, false);
+  });
+
   it("isolates drafts and returns cache validators", async () => {
     const list = await supertest(app).get("/api/uc/guides");
     assert.equal(list.status, 200);

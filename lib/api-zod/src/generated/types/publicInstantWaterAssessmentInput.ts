@@ -7,12 +7,12 @@
  */
 import type { InstantWaterAssessmentAnswers } from './instantWaterAssessmentAnswers';
 import type { InstantWaterFirstName } from './instantWaterFirstName';
-import type { InstantWaterKenyanPhone } from './instantWaterKenyanPhone';
+import type { InstantWaterPhone } from './instantWaterPhone';
 import type { PublicInstantWaterAssessmentInputSourceAttribution } from './publicInstantWaterAssessmentInputSourceAttribution';
 
 export interface PublicInstantWaterAssessmentInput {
   firstName: InstantWaterFirstName;
-  phone: InstantWaterKenyanPhone;
+  phone: InstantWaterPhone;
   consent: true;
   /**
      * @minLength 8

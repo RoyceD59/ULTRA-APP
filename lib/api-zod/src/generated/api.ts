@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import * as zod from 'zod';
-import { instantWaterFirstNameSchema, instantWaterKenyanPhoneSchema } from '../instant-water-identity.js';
+import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant-water-identity.js';
 
 
 /**
@@ -21,7 +21,7 @@ export const createPublicInstantWaterAssessmentBodyPhoneMin = 7;
 export const createPublicInstantWaterAssessmentBodyPhoneMax = 40;
 
 
-export const createPublicInstantWaterAssessmentBodyPhoneRegExp = new RegExp('^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$');
+export const createPublicInstantWaterAssessmentBodyPhoneRegExp = new RegExp('^\\+?[ () .-]*[0-9](?:[ () .-]*[0-9]){6,38}$');
 export const createPublicInstantWaterAssessmentBodyIdempotencyKeyMin = 8;
 export const createPublicInstantWaterAssessmentBodyIdempotencyKeyMax = 200;
 
@@ -47,7 +47,7 @@ export const createPublicInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
 export const CreatePublicInstantWaterAssessmentBody = zod.object({
   "firstName": instantWaterFirstNameSchema,
-  "phone": instantWaterKenyanPhoneSchema,
+  "phone": instantWaterPhoneSchema,
   "consent": zod.boolean(),
   "idempotencyKey": zod.string().min(createPublicInstantWaterAssessmentBodyIdempotencyKeyMin).max(createPublicInstantWaterAssessmentBodyIdempotencyKeyMax),
   "consentVersion": zod.string().max(createPublicInstantWaterAssessmentBodyConsentVersionMax).default(createPublicInstantWaterAssessmentBodyConsentVersionDefault),
@@ -93,6 +93,7 @@ export const CreatePublicInstantWaterAssessmentResponse = zod.object({
   "explanation": zod.string()
 }),
   "disclaimer": zod.string(),
+  "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
   "serviceAvailable": zod.boolean(),
   "physicalTestStatus": zod.string().optional()
 })
@@ -119,7 +120,7 @@ export const createAuthenticatedInstantWaterAssessmentBodyPhoneMin = 7;
 export const createAuthenticatedInstantWaterAssessmentBodyPhoneMax = 40;
 
 
-export const createAuthenticatedInstantWaterAssessmentBodyPhoneRegExp = new RegExp('^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$');
+export const createAuthenticatedInstantWaterAssessmentBodyPhoneRegExp = new RegExp('^\\+?[ () .-]*[0-9](?:[ () .-]*[0-9]){6,38}$');
 
 
 export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
@@ -134,7 +135,7 @@ export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
   "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
 }),
   "firstName": instantWaterFirstNameSchema,
-  "phone": instantWaterKenyanPhoneSchema,
+  "phone": instantWaterPhoneSchema,
 })
 
 export const createAuthenticatedInstantWaterAssessmentResponseReferenceRegExp = new RegExp('^WT-[A-Za-z0-9-]+$');
@@ -159,6 +160,7 @@ export const CreateAuthenticatedInstantWaterAssessmentResponse = zod.object({
   "explanation": zod.string()
 }),
   "disclaimer": zod.string(),
+  "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
   "serviceAvailable": zod.boolean(),
   "physicalTestStatus": zod.string().optional()
 })
@@ -193,6 +195,7 @@ export const GetPublicInstantWaterAssessmentResultResponse = zod.object({
   "explanation": zod.string()
 }),
   "disclaimer": zod.string(),
+  "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
   "serviceAvailable": zod.boolean(),
   "physicalTestStatus": zod.string().optional()
 })
@@ -788,12 +791,21 @@ export const listUcAdminLocationsResponseLocationsItemLatMax = 90;
 export const listUcAdminLocationsResponseLocationsItemLngMin = -180;
 export const listUcAdminLocationsResponseLocationsItemLngMax = 180;
 
+export const listUcAdminLocationsResponseLocationsItemCountryIsoRegExp = new RegExp('^[A-Z]{2}$');
+export const listUcAdminLocationsResponseLocationsItemCityMax = 120;
+
+export const listUcAdminLocationsResponseLocationsItemAccessNotesMax = 1000;
+
+export const listUcAdminLocationsResponseLocationsItemMunicipalMax = 200;
+
+export const listUcAdminLocationsResponseLocationsItemSourceAttributionMax = 500;
+
 
 
 export const ListUcAdminLocationsResponse = zod.object({
   "locations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor', 'water_atm', 'refill_station', 'city_tap']),
   "name": zod.string(),
   "address": zod.string(),
   "lat": zod.number().min(listUcAdminLocationsResponseLocationsItemLatMin).max(listUcAdminLocationsResponseLocationsItemLatMax),
@@ -801,6 +813,11 @@ export const ListUcAdminLocationsResponse = zod.object({
   "hours": zod.string(),
   "phone": zod.string().nullish(),
   "vendorName": zod.string().nullish(),
+  "countryIso": zod.string().regex(listUcAdminLocationsResponseLocationsItemCountryIsoRegExp),
+  "city": zod.string().max(listUcAdminLocationsResponseLocationsItemCityMax).nullish(),
+  "accessNotes": zod.string().max(listUcAdminLocationsResponseLocationsItemAccessNotesMax).nullish(),
+  "municipal": zod.string().max(listUcAdminLocationsResponseLocationsItemMunicipalMax).nullish(),
+  "sourceAttribution": zod.string().max(listUcAdminLocationsResponseLocationsItemSourceAttributionMax).nullish(),
   "active": zod.boolean(),
   "verified": zod.boolean()
 }))
@@ -819,17 +836,31 @@ export const createUcAdminLocationBodyLongitudeMin = -180;
 export const createUcAdminLocationBodyLongitudeMax = 180;
 
 
+export const createUcAdminLocationBodyCountryIsoRegExp = new RegExp('^[A-Z]{2}$');
+export const createUcAdminLocationBodyCityMax = 120;
+
+export const createUcAdminLocationBodyAccessNotesMax = 1000;
+
+export const createUcAdminLocationBodyMunicipalMax = 200;
+
+export const createUcAdminLocationBodySourceAttributionMax = 500;
+
 
 
 export const CreateUcAdminLocationBody = zod.object({
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor', 'water_atm', 'refill_station', 'city_tap']),
   "name": zod.string().min(1),
   "address": zod.string().min(1),
   "latitude": zod.number().min(createUcAdminLocationBodyLatitudeMin).max(createUcAdminLocationBodyLatitudeMax),
   "longitude": zod.number().min(createUcAdminLocationBodyLongitudeMin).max(createUcAdminLocationBodyLongitudeMax),
   "hours": zod.string().min(1),
   "phone": zod.string().nullish(),
-  "vendorName": zod.string().nullish()
+  "vendorName": zod.string().nullish(),
+  "countryIso": zod.string().regex(createUcAdminLocationBodyCountryIsoRegExp).optional(),
+  "city": zod.string().max(createUcAdminLocationBodyCityMax).nullish(),
+  "accessNotes": zod.string().max(createUcAdminLocationBodyAccessNotesMax).nullish(),
+  "municipal": zod.string().max(createUcAdminLocationBodyMunicipalMax).nullish(),
+  "sourceAttribution": zod.string().max(createUcAdminLocationBodySourceAttributionMax).nullish()
 })
 
 export const createUcAdminLocationResponseLocationLatMin = -90;
@@ -838,12 +869,21 @@ export const createUcAdminLocationResponseLocationLatMax = 90;
 export const createUcAdminLocationResponseLocationLngMin = -180;
 export const createUcAdminLocationResponseLocationLngMax = 180;
 
+export const createUcAdminLocationResponseLocationCountryIsoRegExp = new RegExp('^[A-Z]{2}$');
+export const createUcAdminLocationResponseLocationCityMax = 120;
+
+export const createUcAdminLocationResponseLocationAccessNotesMax = 1000;
+
+export const createUcAdminLocationResponseLocationMunicipalMax = 200;
+
+export const createUcAdminLocationResponseLocationSourceAttributionMax = 500;
+
 
 
 export const CreateUcAdminLocationResponse = zod.object({
   "location": zod.object({
   "id": zod.string(),
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor', 'water_atm', 'refill_station', 'city_tap']),
   "name": zod.string(),
   "address": zod.string(),
   "lat": zod.number().min(createUcAdminLocationResponseLocationLatMin).max(createUcAdminLocationResponseLocationLatMax),
@@ -851,10 +891,98 @@ export const CreateUcAdminLocationResponse = zod.object({
   "hours": zod.string(),
   "phone": zod.string().nullish(),
   "vendorName": zod.string().nullish(),
+  "countryIso": zod.string().regex(createUcAdminLocationResponseLocationCountryIsoRegExp),
+  "city": zod.string().max(createUcAdminLocationResponseLocationCityMax).nullish(),
+  "accessNotes": zod.string().max(createUcAdminLocationResponseLocationAccessNotesMax).nullish(),
+  "municipal": zod.string().max(createUcAdminLocationResponseLocationMunicipalMax).nullish(),
+  "sourceAttribution": zod.string().max(createUcAdminLocationResponseLocationSourceAttributionMax).nullish(),
   "active": zod.boolean(),
   "verified": zod.boolean()
 }).optional()
 })
+
+
+/**
+ * @summary Get privacy-safe community rating aggregates for a location
+ */
+export const GetUcLocationRatingAggregateParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getUcLocationRatingAggregateQueryPageDefault = 1;
+
+export const getUcLocationRatingAggregateQueryLimitDefault = 20;
+export const getUcLocationRatingAggregateQueryLimitMax = 50;
+
+
+
+export const GetUcLocationRatingAggregateQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).default(getUcLocationRatingAggregateQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(getUcLocationRatingAggregateQueryLimitMax).default(getUcLocationRatingAggregateQueryLimitDefault)
+})
+
+export const getUcLocationRatingAggregateResponseRatingsItemWaterQualityMax = 5;
+
+export const getUcLocationRatingAggregateResponseRatingsItemCleanlinessMax = 5;
+
+export const getUcLocationRatingAggregateResponseRatingsItemEquipmentConditionMax = 5;
+
+export const getUcLocationRatingAggregateResponseRatingsItemServiceReliabilityMax = 5;
+
+export const getUcLocationRatingAggregateResponseRatingsItemSafetyConfidenceMax = 5;
+
+export const getUcLocationRatingAggregateResponseRatingsItemCommentMax = 1000;
+
+
+
+export const GetUcLocationRatingAggregateResponse = zod.object({
+  "locationId": zod.string(),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "count": zod.number(),
+  "averages": zod.record(zod.string(), zod.number()),
+  "ratings": zod.array(zod.object({
+  "id": zod.string(),
+  "waterQuality": zod.number().min(1).max(getUcLocationRatingAggregateResponseRatingsItemWaterQualityMax),
+  "cleanliness": zod.number().min(1).max(getUcLocationRatingAggregateResponseRatingsItemCleanlinessMax),
+  "equipmentCondition": zod.number().min(1).max(getUcLocationRatingAggregateResponseRatingsItemEquipmentConditionMax),
+  "serviceReliability": zod.number().min(1).max(getUcLocationRatingAggregateResponseRatingsItemServiceReliabilityMax),
+  "safetyConfidence": zod.number().min(1).max(getUcLocationRatingAggregateResponseRatingsItemSafetyConfidenceMax),
+  "comment": zod.string().max(getUcLocationRatingAggregateResponseRatingsItemCommentMax).nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+export const UpsertUcLocationRatingParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const upsertUcLocationRatingBodyWaterQualityMax = 5;
+
+export const upsertUcLocationRatingBodyCleanlinessMax = 5;
+
+export const upsertUcLocationRatingBodyEquipmentConditionMax = 5;
+
+export const upsertUcLocationRatingBodyServiceReliabilityMax = 5;
+
+export const upsertUcLocationRatingBodySafetyConfidenceMax = 5;
+
+export const upsertUcLocationRatingBodyCommentMax = 1000;
+
+
+
+export const UpsertUcLocationRatingBody = zod.object({
+  "waterQuality": zod.number().min(1).max(upsertUcLocationRatingBodyWaterQualityMax),
+  "cleanliness": zod.number().min(1).max(upsertUcLocationRatingBodyCleanlinessMax),
+  "equipmentCondition": zod.number().min(1).max(upsertUcLocationRatingBodyEquipmentConditionMax),
+  "serviceReliability": zod.number().min(1).max(upsertUcLocationRatingBodyServiceReliabilityMax),
+  "safetyConfidence": zod.number().min(1).max(upsertUcLocationRatingBodySafetyConfidenceMax),
+  "comment": zod.string().max(upsertUcLocationRatingBodyCommentMax).nullish()
+})
+
+export const UpsertUcLocationRatingResponse = zod.unknown()
 
 
 /**
@@ -873,18 +1001,32 @@ export const updateUcAdminLocationBodyLongitudeMin = -180;
 export const updateUcAdminLocationBodyLongitudeMax = 180;
 
 
+export const updateUcAdminLocationBodyCountryIsoRegExp = new RegExp('^[A-Z]{2}$');
+export const updateUcAdminLocationBodyCityMax = 120;
+
+export const updateUcAdminLocationBodyAccessNotesMax = 1000;
+
+export const updateUcAdminLocationBodyMunicipalMax = 200;
+
+export const updateUcAdminLocationBodySourceAttributionMax = 500;
+
 
 
 export const UpdateUcAdminLocationBody = zod.object({
   "active": zod.boolean().optional(),
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']).optional(),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor', 'water_atm', 'refill_station', 'city_tap']).optional(),
   "name": zod.string().min(1).optional(),
   "address": zod.string().min(1).optional(),
   "latitude": zod.number().min(updateUcAdminLocationBodyLatitudeMin).max(updateUcAdminLocationBodyLatitudeMax).optional(),
   "longitude": zod.number().min(updateUcAdminLocationBodyLongitudeMin).max(updateUcAdminLocationBodyLongitudeMax).optional(),
   "hours": zod.string().min(1).optional(),
   "phone": zod.string().nullish(),
-  "vendorName": zod.string().nullish()
+  "vendorName": zod.string().nullish(),
+  "countryIso": zod.string().regex(updateUcAdminLocationBodyCountryIsoRegExp).optional(),
+  "city": zod.string().max(updateUcAdminLocationBodyCityMax).nullish(),
+  "accessNotes": zod.string().max(updateUcAdminLocationBodyAccessNotesMax).nullish(),
+  "municipal": zod.string().max(updateUcAdminLocationBodyMunicipalMax).nullish(),
+  "sourceAttribution": zod.string().max(updateUcAdminLocationBodySourceAttributionMax).nullish()
 })
 
 export const updateUcAdminLocationResponseLocationLatMin = -90;
@@ -893,12 +1035,21 @@ export const updateUcAdminLocationResponseLocationLatMax = 90;
 export const updateUcAdminLocationResponseLocationLngMin = -180;
 export const updateUcAdminLocationResponseLocationLngMax = 180;
 
+export const updateUcAdminLocationResponseLocationCountryIsoRegExp = new RegExp('^[A-Z]{2}$');
+export const updateUcAdminLocationResponseLocationCityMax = 120;
+
+export const updateUcAdminLocationResponseLocationAccessNotesMax = 1000;
+
+export const updateUcAdminLocationResponseLocationMunicipalMax = 200;
+
+export const updateUcAdminLocationResponseLocationSourceAttributionMax = 500;
+
 
 
 export const UpdateUcAdminLocationResponse = zod.object({
   "location": zod.object({
   "id": zod.string(),
-  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor']),
+  "type": zod.enum(['experience_centre', 'refill_atm', 'vendor', 'water_atm', 'refill_station', 'city_tap']),
   "name": zod.string(),
   "address": zod.string(),
   "lat": zod.number().min(updateUcAdminLocationResponseLocationLatMin).max(updateUcAdminLocationResponseLocationLatMax),
@@ -906,10 +1057,152 @@ export const UpdateUcAdminLocationResponse = zod.object({
   "hours": zod.string(),
   "phone": zod.string().nullish(),
   "vendorName": zod.string().nullish(),
+  "countryIso": zod.string().regex(updateUcAdminLocationResponseLocationCountryIsoRegExp),
+  "city": zod.string().max(updateUcAdminLocationResponseLocationCityMax).nullish(),
+  "accessNotes": zod.string().max(updateUcAdminLocationResponseLocationAccessNotesMax).nullish(),
+  "municipal": zod.string().max(updateUcAdminLocationResponseLocationMunicipalMax).nullish(),
+  "sourceAttribution": zod.string().max(updateUcAdminLocationResponseLocationSourceAttributionMax).nullish(),
   "active": zod.boolean(),
   "verified": zod.boolean()
 }).optional(),
   "verificationReset": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List reports on community location ratings
+ */
+export const ListLocationRatingReportsResponse = zod.object({
+  "reports": zod.array(zod.object({
+  "id": zod.string(),
+  "ratingId": zod.string(),
+  "reporterUserId": zod.number(),
+  "reason": zod.string(),
+  "detail": zod.string().nullish(),
+  "createdAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Update the moderation status of a location rating
+ */
+export const ModerateLocationRatingParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ModerateLocationRatingBody = zod.object({
+  "status": zod.enum(['published', 'hidden', 'removed'])
+})
+
+export const ModerateLocationRatingResponse = zod.object({
+  "rating": zod.object({
+  "id": zod.string(),
+  "status": zod.string(),
+  "updatedAt": zod.string()
+}).optional()
+})
+
+
+/**
+ * @summary Get verified location assessment
+ */
+export const GetLocationAssessmentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getLocationAssessmentResponseAssessmentWaterQualityMax = 5;
+
+export const getLocationAssessmentResponseAssessmentCleanlinessMax = 5;
+
+export const getLocationAssessmentResponseAssessmentEquipmentConditionMax = 5;
+
+export const getLocationAssessmentResponseAssessmentServiceReliabilityMax = 5;
+
+export const getLocationAssessmentResponseAssessmentSafetyConfidenceMax = 5;
+
+
+
+export const GetLocationAssessmentResponse = zod.object({
+  "assessment": zod.object({
+  "id": zod.string(),
+  "locationId": zod.string(),
+  "assessorId": zod.string(),
+  "waterQuality": zod.number().min(1).max(getLocationAssessmentResponseAssessmentWaterQualityMax),
+  "cleanliness": zod.number().min(1).max(getLocationAssessmentResponseAssessmentCleanlinessMax),
+  "equipmentCondition": zod.number().min(1).max(getLocationAssessmentResponseAssessmentEquipmentConditionMax),
+  "serviceReliability": zod.number().min(1).max(getLocationAssessmentResponseAssessmentServiceReliabilityMax),
+  "safetyConfidence": zod.number().min(1).max(getLocationAssessmentResponseAssessmentSafetyConfidenceMax),
+  "checks": zod.string(),
+  "notes": zod.string().nullish(),
+  "status": zod.string(),
+  "verifiedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional()
+})
+
+
+/**
+ * @summary Create or update verified location assessment
+ */
+export const UpdateLocationAssessmentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateLocationAssessmentBodyWaterQualityMax = 5;
+
+export const updateLocationAssessmentBodyCleanlinessMax = 5;
+
+export const updateLocationAssessmentBodyEquipmentConditionMax = 5;
+
+export const updateLocationAssessmentBodyServiceReliabilityMax = 5;
+
+export const updateLocationAssessmentBodySafetyConfidenceMax = 5;
+
+export const updateLocationAssessmentBodyNotesMax = 2000;
+
+
+
+export const UpdateLocationAssessmentBody = zod.object({
+  "waterQuality": zod.number().min(1).max(updateLocationAssessmentBodyWaterQualityMax),
+  "cleanliness": zod.number().min(1).max(updateLocationAssessmentBodyCleanlinessMax),
+  "equipmentCondition": zod.number().min(1).max(updateLocationAssessmentBodyEquipmentConditionMax),
+  "serviceReliability": zod.number().min(1).max(updateLocationAssessmentBodyServiceReliabilityMax),
+  "safetyConfidence": zod.number().min(1).max(updateLocationAssessmentBodySafetyConfidenceMax),
+  "checks": zod.record(zod.string(), zod.unknown()).optional(),
+  "notes": zod.string().max(updateLocationAssessmentBodyNotesMax).nullish()
+})
+
+export const updateLocationAssessmentResponseAssessmentWaterQualityMax = 5;
+
+export const updateLocationAssessmentResponseAssessmentCleanlinessMax = 5;
+
+export const updateLocationAssessmentResponseAssessmentEquipmentConditionMax = 5;
+
+export const updateLocationAssessmentResponseAssessmentServiceReliabilityMax = 5;
+
+export const updateLocationAssessmentResponseAssessmentSafetyConfidenceMax = 5;
+
+
+
+export const UpdateLocationAssessmentResponse = zod.object({
+  "assessment": zod.object({
+  "id": zod.string(),
+  "locationId": zod.string(),
+  "assessorId": zod.string(),
+  "waterQuality": zod.number().min(1).max(updateLocationAssessmentResponseAssessmentWaterQualityMax),
+  "cleanliness": zod.number().min(1).max(updateLocationAssessmentResponseAssessmentCleanlinessMax),
+  "equipmentCondition": zod.number().min(1).max(updateLocationAssessmentResponseAssessmentEquipmentConditionMax),
+  "serviceReliability": zod.number().min(1).max(updateLocationAssessmentResponseAssessmentServiceReliabilityMax),
+  "safetyConfidence": zod.number().min(1).max(updateLocationAssessmentResponseAssessmentSafetyConfidenceMax),
+  "checks": zod.string(),
+  "notes": zod.string().nullish(),
+  "status": zod.string(),
+  "verifiedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional()
 })
 
 

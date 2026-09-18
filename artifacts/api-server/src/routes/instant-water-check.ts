@@ -129,7 +129,9 @@ router.post("/water-check/assessments", async (req, res) => {
   try {
     const result = await createInstantAssessment({
       firstName: body.firstName,
-      phone: body.phone,
+       // Keep the raw value through the country-aware service normalizer;
+       // the generated transport schema cannot perform this cross-field check.
+       phone: typeof req.body.phone === "string" ? req.body.phone : body.phone,
       consentVersion: body.consentVersion,
       country: body.answers.country,
       area: body.answers.area,
@@ -164,7 +166,7 @@ router.post("/uc/water-check/assessments", async (req, res) => {
   try {
     const result = await createInstantAssessment({
       firstName: body.firstName ?? "",
-      phone: body.phone ?? "",
+       phone: typeof req.body.phone === "string" ? req.body.phone : (body.phone ?? ""),
       consentVersion: "authenticated-session",
       country: body.answers.country,
       area: body.answers.area,

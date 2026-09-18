@@ -17,7 +17,7 @@ import { isAdminRequest } from "../lib/adminAuth.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
 import { remoteImageProxyPath } from "./product-images.js";
-import { authLimiter, lookupLimiter } from "../lib/rate-limiters.js";
+import { authLimiter, lookupLimiter, locationQualityLimiter } from "../lib/rate-limiters.js";
 import { getWhatsAppStatus, sendWhatsAppMessage } from "../lib/whatsapp.js";
 import {
   sendSms,
@@ -47,7 +47,8 @@ import {
   ucLifespanAlertsTable, teamSettingsTable, passwordResetTokensTable, ucWishlistTable,
   ucRestockDemandAlertsTable, ucRegisteredFiltersTable, ucWaterImpactLedgerTable,
   ucRewardConversionTable, ucLocationsTable, teamUsersTable, ucPasswordResetAuditTable,
-  ucContactVerificationTokensTable,
+  ucContactVerificationTokensTable, ucLocationRatingsTable, ucLocationRatingReportsTable,
+  ucLocationAssessmentsTable,
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
@@ -7405,16 +7406,17 @@ router.post("/uc/enquiries", async (req: Request, res: Response): Promise<void> 
 // ─── Locations ────────────────────────────────────────────────────────────────
 // Location discovery is intentionally sourced only from the managed table.  A
 // location is not public until a staff member has explicitly verified it.
-const LOCATION_TYPES = new Set(["experience_centre", "refill_atm", "vendor"]);
+const LOCATION_TYPES = new Set(["experience_centre", "refill_atm", "vendor", "water_atm", "refill_station", "city_tap"]);
 type LocationInput = {
   type: string; name: string; address: string; latitude: number; longitude: number;
-  hours: string; phone: string | null; vendorName: string | null;
+  hours: string; phone: string | null; vendorName: string | null; countryIso?: string;
+  city?: string | null; accessNotes?: string | null; municipal?: string | null; sourceAttribution?: string | null;
 };
 
-function locationInput(body: unknown, partial = false): LocationInput | null {
+export function locationInput(body: unknown, partial = false): LocationInput | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const source = body as Record<string, unknown>;
-  const editable = new Set(["active", "type", "name", "address", "latitude", "lat", "longitude", "lng", "hours", "phone", "vendorName"]);
+  const editable = new Set(["active", "type", "name", "address", "latitude", "lat", "longitude", "lng", "hours", "phone", "vendorName", "countryIso", "city", "accessNotes", "municipal", "sourceAttribution"]);
   if (partial && (!Object.keys(source).some((key) => editable.has(key)) ||
       Object.keys(source).some((key) => !editable.has(key)))) return null;
   const text = (field: string, required = false): string | null => {
@@ -7428,12 +7430,20 @@ function locationInput(body: unknown, partial = false): LocationInput | null {
   const name = text("name", !partial);
   const address = text("address", !partial);
   const hours = text("hours", !partial);
-  const latRaw = source["latitude"] ?? source["lat"];
-  const lngRaw = source["longitude"] ?? source["lng"];
+  const latRaw = source["latitude"] !== undefined ? source["latitude"] : source["lat"];
+  const lngRaw = source["longitude"] !== undefined ? source["longitude"] : source["lng"];
+  const invalidCoordinateValue = (value: unknown) =>
+    value !== undefined && (value === null || (typeof value === "string" && value.trim() === ""));
   const latitude = latRaw === undefined && partial ? NaN : Number(latRaw);
   const longitude = lngRaw === undefined && partial ? NaN : Number(lngRaw);
   const phoneValue = text("phone");
   const vendorValue = text("vendorName");
+  const countryValue = text("countryIso");
+  const cityValue = text("city");
+  const accessNotesValue = text("accessNotes");
+  const municipalValue = text("municipal");
+  const sourceValue = text("sourceAttribution");
+  const normalizedCountry = countryValue === null ? null : countryValue.toUpperCase();
   if ((type !== null && type !== "" && !LOCATION_TYPES.has(type)) ||
       (!partial && (name === null || address === null || hours === null)) ||
       (partial && (source["type"] !== undefined && (!type || type.length === 0)) ||
@@ -7441,15 +7451,32 @@ function locationInput(body: unknown, partial = false): LocationInput | null {
         (source["address"] !== undefined && (!address || address.length === 0)) ||
         (source["hours"] !== undefined && (!hours || hours.length === 0))) ||
       (!partial && (!Number.isFinite(latitude) || !Number.isFinite(longitude))) ||
-       (partial && ((latRaw !== undefined && !Number.isFinite(latitude)) ||
-         (lngRaw !== undefined && !Number.isFinite(longitude)))) ||
+       (partial && ((latRaw !== undefined && (invalidCoordinateValue(latRaw) || !Number.isFinite(latitude))) ||
+         (lngRaw !== undefined && (invalidCoordinateValue(lngRaw) || !Number.isFinite(longitude))))) ||
       (Number.isFinite(latitude) && (latitude < -90 || latitude > 90)) ||
-      (Number.isFinite(longitude) && (longitude < -180 || longitude > 180))) return null;
+       (Number.isFinite(longitude) && (longitude < -180 || longitude > 180)) ||
+       (normalizedCountry !== null && !/^[A-Z]{2}$/.test(normalizedCountry)) ||
+       (cityValue !== null && cityValue.length > 120) ||
+       (accessNotesValue !== null && accessNotesValue.length > 1000) ||
+       (municipalValue !== null && municipalValue.length > 200) ||
+       (sourceValue !== null && sourceValue.length > 500)) return null;
   return {
     type: type ?? "", name: name ?? "", address: address ?? "", latitude, longitude, hours: hours ?? "",
     phone: phoneValue === null || phoneValue === "" ? null : phoneValue,
     vendorName: vendorValue === null || vendorValue === "" ? null : vendorValue,
+    ...(source["countryIso"] !== undefined ? { countryIso: normalizedCountry ?? "" } : {}),
+    ...(source["city"] !== undefined ? { city: cityValue } : {}),
+    ...(source["accessNotes"] !== undefined ? { accessNotes: accessNotesValue } : {}),
+    ...(source["municipal"] !== undefined ? { municipal: municipalValue } : {}),
+    ...(source["sourceAttribution"] !== undefined ? { sourceAttribution: sourceValue } : {}),
   };
+}
+function cityTapMetadataValid(input: LocationInput): boolean {
+  return input.type !== "city_tap" || (
+    !!input.countryIso && /^[A-Z]{2}$/.test(input.countryIso) &&
+    !!input.city?.trim() && !!input.accessNotes?.trim() &&
+    !!input.municipal?.trim() && !!input.sourceAttribution?.trim()
+  );
 }
 
 function publicLocation(row: typeof ucLocationsTable.$inferSelect) {
@@ -7457,6 +7484,8 @@ function publicLocation(row: typeof ucLocationsTable.$inferSelect) {
     id: row.id, type: row.type, name: row.name, address: row.address,
     lat: Number(row.latitude), lng: Number(row.longitude), hours: row.hours,
     phone: row.phone, vendorName: row.vendorName,
+    countryIso: row.countryIso, city: row.city, accessNotes: row.accessNotes,
+    municipal: row.municipal, sourceAttribution: row.sourceAttribution,
   };
 }
 
@@ -7498,7 +7527,7 @@ router.get("/uc/admin/locations", async (req: Request, res: Response): Promise<v
 router.post("/uc/admin/locations", async (req: Request, res: Response): Promise<void> => {
   if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
   const input = locationInput(req.body);
-  if (!input) { res.status(400).json({ error: "Valid type, name, address, latitude, longitude, and hours are required" }); return; }
+  if (!input || !cityTapMetadataValid(input)) { res.status(400).json({ error: "Valid location fields and city_tap metadata are required" }); return; }
   const actor = await locationActor(req);
   const [location] = await db.insert(ucLocationsTable).values({
     id: randomUUID(), ...input, latitude: String(input.latitude), longitude: String(input.longitude),
@@ -7529,6 +7558,17 @@ router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Pro
     res.status(400).json({ code: "LOCATION_UPDATE_INVALID", error: "Provide valid location fields to update." });
     return;
   }
+  const mergedInput = { ...existing[0], ...input, type: source["type"] === undefined ? existing[0].type : input.type };
+  if (!cityTapMetadataValid({
+    ...input, type: String(mergedInput.type), countryIso: source["countryIso"] === undefined ? existing[0].countryIso : input.countryIso,
+    city: source["city"] === undefined ? existing[0].city : input.city,
+    accessNotes: source["accessNotes"] === undefined ? existing[0].accessNotes : input.accessNotes,
+    municipal: source["municipal"] === undefined ? existing[0].municipal : input.municipal,
+    sourceAttribution: source["sourceAttribution"] === undefined ? existing[0].sourceAttribution : input.sourceAttribution,
+  })) {
+    res.status(400).json({ code: "LOCATION_CITY_TAP_METADATA_REQUIRED", error: "city_tap requires countryIso, city, accessNotes, municipal, and sourceAttribution." });
+    return;
+  }
   const identityChanged = ["type", "name", "address", "latitude", "lat", "longitude", "lng", "vendorName"]
     .some((key) => source[key] !== undefined);
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -7538,6 +7578,11 @@ router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Pro
   if (source["hours"] !== undefined) updates["hours"] = input.hours;
   if (source["phone"] !== undefined) updates["phone"] = input.phone;
   if (source["vendorName"] !== undefined) updates["vendorName"] = input.vendorName;
+  if (source["countryIso"] !== undefined) updates["countryIso"] = input.countryIso;
+  if (source["city"] !== undefined) updates["city"] = input.city;
+  if (source["accessNotes"] !== undefined) updates["accessNotes"] = input.accessNotes;
+  if (source["municipal"] !== undefined) updates["municipal"] = input.municipal;
+  if (source["sourceAttribution"] !== undefined) updates["sourceAttribution"] = input.sourceAttribution;
   if (source["latitude"] !== undefined || source["lat"] !== undefined) updates["latitude"] = String(input.latitude);
   if (source["longitude"] !== undefined || source["lng"] !== undefined) updates["longitude"] = String(input.longitude);
   if (source["active"] !== undefined) {
@@ -7558,6 +7603,173 @@ router.post("/uc/admin/locations/:id/verify", async (req: Request, res: Response
   }).where(eq(ucLocationsTable.id, locationId)).returning();
   if (!location) { res.status(404).json({ error: "Location not found" }); return; }
   res.json({ location });
+});
+
+// ─── Managed location quality (community observations, separate from tests) ───
+const RATING_FIELDS = ["waterQuality", "cleanliness", "equipmentCondition", "serviceReliability", "safetyConfidence"] as const;
+const REPORT_REASONS = new Set(["spam", "unsafe", "inaccurate", "offensive", "other"]);
+function qualityInput(body: unknown): Record<string, number> | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const out: Record<string, number> = {};
+  for (const key of RATING_FIELDS) {
+    const value = (body as Record<string, unknown>)[key];
+    if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 5) return null;
+    out[key] = Number(value);
+  }
+  return out;
+}
+function qualityUserId(req: Request): number | null {
+  const id = Number(userIdFromBearer(req.headers["authorization"]));
+  return Number.isInteger(id) && id > 0 && id < 1_000_000_000 ? id : null;
+}
+async function activeQualityUser(req: Request): Promise<number | null> {
+  const id = qualityUserId(req);
+  if (!id) return null;
+  const [user] = await db.select({ id: ucUsersTable.id }).from(ucUsersTable)
+    .where(and(eq(ucUsersTable.id, id), isNull(ucUsersTable.deletedAt))).limit(1);
+  return user?.id ?? null;
+}
+
+router.get("/uc/locations/:id/ratings", async (req: Request, res: Response): Promise<void> => {
+  const locationId = String(req.params["id"] ?? "");
+  const page = Math.max(1, Number.parseInt(String(req.query["page"] ?? "1"), 10) || 1);
+  const limit = Math.min(50, Math.max(1, Number.parseInt(String(req.query["limit"] ?? "20"), 10) || 20));
+  const [aggregate] = await db.select({
+    count: sql<number>`count(*)::int`,
+    waterQuality: sql<number>`round(avg(${ucLocationRatingsTable.waterQuality})::numeric, 1)`,
+    cleanliness: sql<number>`round(avg(${ucLocationRatingsTable.cleanliness})::numeric, 1)`,
+    equipmentCondition: sql<number>`round(avg(${ucLocationRatingsTable.equipmentCondition})::numeric, 1)`,
+    serviceReliability: sql<number>`round(avg(${ucLocationRatingsTable.serviceReliability})::numeric, 1)`,
+    safetyConfidence: sql<number>`round(avg(${ucLocationRatingsTable.safetyConfidence})::numeric, 1)`,
+  }).from(ucLocationRatingsTable).where(and(eq(ucLocationRatingsTable.locationId, locationId), eq(ucLocationRatingsTable.status, "published")));
+  const ratings = await db.select({
+    id: ucLocationRatingsTable.id,
+    waterQuality: ucLocationRatingsTable.waterQuality,
+    cleanliness: ucLocationRatingsTable.cleanliness,
+    equipmentCondition: ucLocationRatingsTable.equipmentCondition,
+    serviceReliability: ucLocationRatingsTable.serviceReliability,
+    safetyConfidence: ucLocationRatingsTable.safetyConfidence,
+    comment: ucLocationRatingsTable.comment,
+    createdAt: ucLocationRatingsTable.createdAt,
+    updatedAt: ucLocationRatingsTable.updatedAt,
+  }).from(ucLocationRatingsTable)
+    .where(and(eq(ucLocationRatingsTable.locationId, locationId), eq(ucLocationRatingsTable.status, "published")))
+    .orderBy(desc(ucLocationRatingsTable.createdAt)).limit(limit).offset((page - 1) * limit);
+  const { count: aggregateCount, ...averages } = aggregate ?? {};
+  res.json({ locationId, page, limit, count: aggregateCount ?? 0, averages, ratings });
+});
+
+router.get("/uc/me/locations/:id/rating", async (req: Request, res: Response): Promise<void> => {
+  const userId = await activeQualityUser(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  const [rating] = await db.select().from(ucLocationRatingsTable).where(and(
+    eq(ucLocationRatingsTable.locationId, String(req.params["id"])), eq(ucLocationRatingsTable.userId, userId),
+  )).limit(1);
+  res.json({ rating: rating ?? null });
+});
+
+router.put("/uc/locations/:id/rating", locationQualityLimiter, async (req: Request, res: Response): Promise<void> => {
+  const userId = await activeQualityUser(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  const input = qualityInput(req.body);
+  if (!input) { res.status(400).json({ error: "All five scores must be integers from 1 to 5" }); return; }
+  const rawComment = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>).comment : undefined;
+  if (rawComment !== undefined && rawComment !== null && (typeof rawComment !== "string" || rawComment.length > 1000)) {
+    res.status(400).json({ error: "comment must be at most 1000 characters" }); return;
+  }
+  const locationId = String(req.params["id"] ?? "");
+  const [location] = await db.select({ id: ucLocationsTable.id }).from(ucLocationsTable)
+    .where(and(eq(ucLocationsTable.id, locationId), eq(ucLocationsTable.active, true))).limit(1);
+  if (!location) { res.status(404).json({ error: "Location not found" }); return; }
+  const [rating] = await db.insert(ucLocationRatingsTable).values({
+    id: randomUUID(), locationId, userId,
+    waterQuality: input.waterQuality, cleanliness: input.cleanliness,
+    equipmentCondition: input.equipmentCondition, serviceReliability: input.serviceReliability,
+    safetyConfidence: input.safetyConfidence, comment: rawComment as string | null ?? null,
+  }).onConflictDoUpdate({ target: [ucLocationRatingsTable.userId, ucLocationRatingsTable.locationId],
+    set: { ...input, comment: rawComment as string | null ?? null, status: "published", updatedAt: new Date() },
+  }).returning();
+  res.json({ rating });
+});
+
+router.post("/uc/locations/:locationId/ratings/:ratingId/reports", locationQualityLimiter, async (req: Request, res: Response): Promise<void> => {
+  const userId = await activeQualityUser(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  const reason = req.body?.reason;
+  const detail = req.body?.detail;
+  if (typeof reason !== "string" || !REPORT_REASONS.has(reason) || (detail !== undefined && (typeof detail !== "string" || detail.length > 500))) {
+    res.status(400).json({ error: "Invalid report reason or detail" }); return;
+  }
+  const locationId = String(req.params["locationId"]);
+  const ratingId = String(req.params["ratingId"]);
+  try {
+    const report = await db.transaction(async (tx) => {
+      const [target] = await tx.select({ userId: ucLocationRatingsTable.userId })
+        .from(ucLocationRatingsTable).where(and(
+          eq(ucLocationRatingsTable.id, ratingId),
+          eq(ucLocationRatingsTable.locationId, locationId),
+          eq(ucLocationRatingsTable.status, "published"),
+        )).limit(1);
+      if (!target) throw new Error("RATING_NOT_FOUND");
+      if (target.userId === userId) throw new Error("RATING_OWNER");
+      const [created] = await tx.insert(ucLocationRatingReportsTable).values({
+        id: randomUUID(), ratingId, reporterUserId: userId, reason, detail: detail ?? null,
+      }).returning();
+      return created;
+    });
+    res.status(201).json({ report: { id: report.id, reason: report.reason, createdAt: report.createdAt } });
+  } catch (error) {
+    if (error instanceof Error && error.message === "RATING_NOT_FOUND") {
+      res.status(404).json({ error: "Published rating not found for this location" }); return;
+    }
+    if (error instanceof Error && error.message === "RATING_OWNER") {
+      res.status(400).json({ error: "You cannot report your own rating" }); return;
+    }
+    res.status(409).json({ error: "You have already reported this rating" });
+  }
+});
+
+router.get("/uc/admin/location-rating-reports", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const reports = await db.select().from(ucLocationRatingReportsTable).orderBy(desc(ucLocationRatingReportsTable.createdAt));
+  res.json({ reports });
+});
+router.patch("/uc/admin/location-ratings/:id/moderation", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const status = req.body?.status;
+  if (!["published", "hidden", "removed"].includes(status)) { res.status(400).json({ error: "Invalid moderation status" }); return; }
+  const [rating] = await db.update(ucLocationRatingsTable).set({ status, updatedAt: new Date() })
+    .where(eq(ucLocationRatingsTable.id, String(req.params["id"]))).returning();
+  if (!rating) { res.status(404).json({ error: "Rating not found" }); return; }
+  res.json({ rating });
+});
+
+router.get("/uc/admin/locations/:id/assessment", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const [assessment] = await db.select().from(ucLocationAssessmentsTable).where(eq(ucLocationAssessmentsTable.locationId, String(req.params["id"]))).limit(1);
+  res.json({ assessment: assessment ?? null });
+});
+router.put("/uc/admin/locations/:id/assessment", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const input = qualityInput(req.body);
+  if (!input) { res.status(400).json({ error: "All five scores must be integers from 1 to 5" }); return; }
+  const checks = req.body?.checks;
+  const notes = req.body?.notes;
+  if (checks !== undefined && (typeof checks !== "object" || checks === null || Array.isArray(checks)) || notes !== undefined && (typeof notes !== "string" || notes.length > 2000)) {
+    res.status(400).json({ error: "Invalid checks or notes" }); return;
+  }
+  const claims = verifyToken(req.headers["authorization"]);
+  const assessorId = claims?.type === "team-session" ? String(claims.id) : String(userIdFromBearer(req.headers["authorization"]));
+  const locationId = String(req.params["id"]);
+  const [assessment] = await db.insert(ucLocationAssessmentsTable).values({
+    id: randomUUID(), locationId, assessorId,
+    waterQuality: input.waterQuality, cleanliness: input.cleanliness,
+    equipmentCondition: input.equipmentCondition, serviceReliability: input.serviceReliability,
+    safetyConfidence: input.safetyConfidence, checks: JSON.stringify(checks ?? {}), notes: notes ?? null, verifiedAt: new Date(),
+  }).onConflictDoUpdate({ target: ucLocationAssessmentsTable.locationId,
+    set: { assessorId, ...input, checks: JSON.stringify(checks ?? {}), notes: notes ?? null, status: "verified", verifiedAt: new Date(), updatedAt: new Date() },
+  }).returning();
+  res.json({ assessment });
 });
 
 // ─── Tickets ──────────────────────────────────────────────────────────────────

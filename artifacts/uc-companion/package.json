@@ -8,7 +8,7 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "TSX_TSCONFIG_PATH=$(pwd)/tsconfig.test.json node --import ./test-setup.mjs --import tsx/esm --test hooks/__tests__/**/*.test.mts lib/__tests__/**/*.test.mts scripts/__tests__/*.test.mjs",
+    "test": "TSX_TSCONFIG_PATH=$(pwd)/tsconfig.test.json node --import ./test-setup.mjs --import tsx/esm --test hooks/__tests__/**/*.test.mts lib/__tests__/**/*.test.mts scripts/__tests__/*.test.mjs components/__tests__/*.test.mts",
     "eas-build-pre-install": "node scripts/eas-build-maps-check.mjs",
     "submit:android": "node scripts/submit-android.mjs"
   },

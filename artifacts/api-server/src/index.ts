@@ -913,6 +913,11 @@ async function applyStartupMigrations(): Promise<void> {
       hours text NOT NULL DEFAULT '',
       phone text,
       vendor_name text,
+      country_iso text NOT NULL DEFAULT 'KE',
+      city text,
+      access_notes text,
+      municipal text,
+      source_attribution text,
       active boolean NOT NULL DEFAULT true,
       verified boolean NOT NULL DEFAULT false,
       verified_by text,
@@ -922,6 +927,11 @@ async function applyStartupMigrations(): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS uc_locations_public_idx ON uc_locations (active, verified);
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS country_iso text NOT NULL DEFAULT 'KE';
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS city text;
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS access_notes text;
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS municipal text;
+    ALTER TABLE uc_locations ADD COLUMN IF NOT EXISTS source_attribution text;
   `);
   const legacyLocations = [
     ["loc1", "experience_centre", "UC Experience Centre Westlands", "Woodvale Groove, Westlands, Nairobi", -1.2633, 36.8072, "Mon–Sat 8am–6pm, Sun 10am–4pm", "+254 700 123456"],
@@ -942,6 +952,36 @@ async function applyStartupMigrations(): Promise<void> {
     );
   }
   logger.info("Startup migration: managed UC locations ensured and legacy locations seeded");
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_location_ratings (
+      id text PRIMARY KEY, location_id text NOT NULL, user_id integer NOT NULL,
+      water_quality integer NOT NULL CHECK (water_quality BETWEEN 1 AND 5),
+      cleanliness integer NOT NULL CHECK (cleanliness BETWEEN 1 AND 5),
+      equipment_condition integer NOT NULL CHECK (equipment_condition BETWEEN 1 AND 5),
+      service_reliability integer NOT NULL CHECK (service_reliability BETWEEN 1 AND 5),
+      safety_confidence integer NOT NULL CHECK (safety_confidence BETWEEN 1 AND 5),
+      comment text, status text NOT NULL DEFAULT 'published',
+      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (user_id, location_id)
+    );
+    CREATE TABLE IF NOT EXISTS uc_location_rating_reports (
+      id text PRIMARY KEY, rating_id text NOT NULL, reporter_user_id integer NOT NULL,
+      reason text NOT NULL, detail text, created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (rating_id, reporter_user_id)
+    );
+    CREATE TABLE IF NOT EXISTS uc_location_assessments (
+      id text PRIMARY KEY, location_id text NOT NULL, assessor_id text NOT NULL,
+      water_quality integer NOT NULL, cleanliness integer NOT NULL,
+      equipment_condition integer NOT NULL, service_reliability integer NOT NULL,
+      safety_confidence integer NOT NULL, checks text NOT NULL DEFAULT '{}',
+      notes text, status text NOT NULL DEFAULT 'verified', verified_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (location_id)
+    );
+    CREATE INDEX IF NOT EXISTS uc_location_ratings_location_status_idx
+      ON uc_location_ratings(location_id,status);
+  `);
+  logger.info("Startup migration: location quality tables ensured");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS uc_promotions (

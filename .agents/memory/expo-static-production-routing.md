@@ -26,3 +26,9 @@ Public Expo domains and the Clerk proxy path must be declared in the artifact's 
 **Why:** Publish builds do not inherit development-only variables. Metro can also reuse a transform where an `EXPO_PUBLIC_*` value was previously absent, leaving that compiled constant `undefined` even after the build environment supplies it.
 
 **How to apply:** Keep public build variables in the validated artifact configuration, use Metro's cache-clear option for production builds, and inspect the compiled root-layout constant—not just build logs—when changing Clerk proxy settings.
+
+Replit's static screenshot helper can capture an all-white Expo web page before a large development Metro bundle finishes painting, even when React later mounts without errors.
+
+**Why:** The Companion's direct deep route repeatedly looked blank in static captures while a real browser, after the bundle was warm, showed a populated non-zero root and the complete screen.
+
+**How to apply:** Before treating a blank Expo screenshot as an app failure, confirm the generated entry-bundle URL returns JavaScript, check for the `Running application "main"` log, and use a real browser test to inspect the DOM and computed root dimensions.

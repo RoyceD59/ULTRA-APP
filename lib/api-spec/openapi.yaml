@@ -760,7 +760,31 @@ paths:
                 properties: { location: { $ref: "#/components/schemas/UcLocation" } }
         "400": { description: Invalid location fields }
         "403": { description: Admin access required }
-
+  /uc/locations/{id}/ratings:
+    get:
+      operationId: getUcLocationRatingAggregate
+      tags: [uc-admin]
+      summary: Get privacy-safe community rating aggregates for a location
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200": { description: Rating aggregate, content: { application/json: { schema: { $ref: "#/components/schemas/UcLocationRatingAggregate" } } } }
+  /uc/locations/{id}/rating:
+    put:
+      operationId: upsertUcLocationRating
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UcLocationRatingInput" } } }
+      responses:
+        "200": { description: Rating saved }
+        "401": { description: Authentication required }
+        "400": { description: Invalid rating }
   /uc/admin/locations/{id}:
     patch:
       operationId: updateUcAdminLocation
@@ -790,6 +814,120 @@ paths:
         "400": { description: Empty or invalid partial update }
         "403": { description: Admin access required }
         "404": { description: Location not found }
+
+  /uc/admin/location-rating-reports:
+    get:
+      operationId: listLocationRatingReports
+      tags: [uc-admin]
+      summary: List reports on community location ratings
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Location rating reports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, ratingId, reporterUserId, reason, createdAt]
+                      properties:
+                        id: { type: string }
+                        ratingId: { type: string }
+                        reporterUserId: { type: integer }
+                        reason: { type: string }
+                        detail: { type: string, nullable: true }
+                        createdAt: { type: string }
+
+  /uc/admin/location-ratings/{id}/moderation:
+    patch:
+      operationId: moderateLocationRating
+      tags: [uc-admin]
+      summary: Update the moderation status of a location rating
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [published, hidden, removed]
+      responses:
+        "200":
+          description: Rating updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rating:
+                    type: object
+                    required: [id, status, updatedAt]
+                    properties:
+                      id: { type: string }
+                      status: { type: string }
+                      updatedAt: { type: string }
+
+  /uc/admin/locations/{id}/assessment:
+    get:
+      operationId: getLocationAssessment
+      tags: [uc-admin]
+      summary: Get verified location assessment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assessment:
+                    $ref: "#/components/schemas/UcLocationAssessment"
+    put:
+      operationId: updateLocationAssessment
+      tags: [uc-admin]
+      summary: Create or update verified location assessment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcLocationAssessmentInput"
+      responses:
+        "200":
+          description: Assessment updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assessment:
+                    $ref: "#/components/schemas/UcLocationAssessment"
 
   /admin/unsynced-registrations:
     get:
@@ -2407,7 +2545,7 @@ components:
         firstName:
           $ref: "#/components/schemas/InstantWaterFirstName"
         phone:
-          $ref: "#/components/schemas/InstantWaterKenyanPhone"
+          $ref: "#/components/schemas/InstantWaterPhone"
         consent: { type: boolean, const: true }
         idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
         consentVersion: { type: string, maxLength: 40, default: instant-water-check-v1 }
@@ -2434,7 +2572,7 @@ components:
         firstName:
           $ref: "#/components/schemas/InstantWaterFirstName"
         phone:
-          $ref: "#/components/schemas/InstantWaterKenyanPhone"
+          $ref: "#/components/schemas/InstantWaterPhone"
 
     InstantWaterFirstName:
       type: string
@@ -2454,24 +2592,21 @@ components:
         prefilter; x-uc-validator is authoritative when the exact Unicode and
         repetition semantics cannot be represented by standard OpenAPI.
 
-    InstantWaterKenyanPhone:
+    InstantWaterPhone:
       type: string
       minLength: 7
       maxLength: 40
-      pattern: '^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$'
-      x-uc-validator: instant-water-kenyan-phone@1
+      pattern: '^\+?[ () .-]*[0-9](?:[ () .-]*[0-9]){6,38}$'
+      x-uc-validator: instant-water-phone@1
       description: |
-        Authoritative identity policy: trim the value, then accept only a Kenyan
-        mobile number with local 0[17]XXXXXXXX or international 254[17]XXXXXXXX
-        (optionally prefixed with +) digits. Spaces, parentheses, periods, and
-        hyphens may format the number, but the value must contain only allowed
-        phone characters, start with +, a digit, or (, end with a digit, contain
-        no repeated space/period/hyphen separators, and have balanced,
-        correctly ordered parentheses. Reject formatted values whose compact
-        digits are not one of those Kenyan mobile forms. Normalize accepted
-        values to +254XXXXXXXXX. The portable pattern above is only a coarse
-        Kenyan-prefix/length prefilter; x-uc-validator is authoritative for
-        separator and formatting semantics.
+         Authoritative identity policy: trim the value and normalize it to E.164
+         using the selected answers.country. International values identify their
+         country from the calling code; local values are interpreted in the
+         selected country. Accept only possible, valid numbers for that country,
+         allowing formatting characters but rejecting repeated separators,
+         malformed parentheses, and mismatched country calling codes. The
+         portable pattern above is only a coarse prefilter;
+         x-uc-validator is authoritative.
 
     InstantWaterBands:
       type: object
@@ -2505,7 +2640,7 @@ components:
     PublicInstantWaterAssessmentResult:
       type: object
       required:
-        [reference, rulesVersion, bands, summary, recommendation, disclaimer, serviceAvailable]
+        [reference, rulesVersion, bands, summary, recommendation, disclaimer, provenance, serviceAvailable]
       properties:
         reference: { type: string }
         rulesVersion: { type: string, enum: [instant-water-check-v1] }
@@ -2521,6 +2656,9 @@ components:
             name: { type: string }
             explanation: { type: string }
         disclaimer: { type: string }
+        provenance:
+          type: string
+          enum: [general_indicative, reviewed_regional_guidance]
         serviceAvailable: { type: boolean }
         physicalTestStatus: { type: string }
 
@@ -3739,10 +3877,10 @@ components:
 
     UcLocation:
       type: object
-      required: [id, type, name, address, lat, lng, hours, active, verified]
+      required: [id, type, name, address, lat, lng, hours, active, verified, countryIso]
       properties:
         id: { type: string }
-        type: { type: string, enum: [experience_centre, refill_atm, vendor] }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor, water_atm, refill_station, city_tap] }
         name: { type: string }
         address: { type: string }
         lat: { type: number, minimum: -90, maximum: 90 }
@@ -3750,14 +3888,54 @@ components:
         hours: { type: string }
         phone: { type: [string, "null"] }
         vendorName: { type: [string, "null"] }
+        countryIso: { type: string, pattern: "^[A-Z]{2}$" }
+        city: { type: [string, "null"], maxLength: 120 }
+        accessNotes: { type: [string, "null"], maxLength: 1000 }
+        municipal: { type: [string, "null"], maxLength: 200 }
+        sourceAttribution: { type: [string, "null"], maxLength: 500 }
         active: { type: boolean }
         verified: { type: boolean }
+
+    UcLocationRatingInput:
+      type: object
+      required: [waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence]
+      properties:
+        waterQuality: { type: integer, minimum: 1, maximum: 5 }
+        cleanliness: { type: integer, minimum: 1, maximum: 5 }
+        equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+        serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+        safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: [string, "null"], maxLength: 1000 }
+    UcLocationRatingAggregate:
+      type: object
+      required: [locationId, page, limit, count, averages, ratings]
+      properties:
+        locationId: { type: string }
+        page: { type: integer }
+        limit: { type: integer }
+        count: { type: integer }
+        averages: { type: object, additionalProperties: { type: number } }
+        ratings:
+          type: array
+          items:
+            type: object
+            required: [id, waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence, createdAt, updatedAt]
+            properties:
+              id: { type: string }
+              waterQuality: { type: integer, minimum: 1, maximum: 5 }
+              cleanliness: { type: integer, minimum: 1, maximum: 5 }
+              equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+              serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+              safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+              comment: { type: [string, "null"], maxLength: 1000 }
+              createdAt: { type: string, format: date-time }
+              updatedAt: { type: string, format: date-time }
 
     UcLocationInput:
       type: object
       required: [type, name, address, latitude, longitude, hours]
       properties:
-        type: { type: string, enum: [experience_centre, refill_atm, vendor] }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor, water_atm, refill_station, city_tap] }
         name: { type: string, minLength: 1 }
         address: { type: string, minLength: 1 }
         latitude: { type: number, minimum: -90, maximum: 90 }
@@ -3765,6 +3943,44 @@ components:
         hours: { type: string, minLength: 1 }
         phone: { type: [string, "null"] }
         vendorName: { type: [string, "null"] }
+        countryIso: { type: string, pattern: "^[A-Z]{2}$" }
+        city: { type: [string, "null"], maxLength: 120 }
+        accessNotes: { type: [string, "null"], maxLength: 1000 }
+        municipal: { type: [string, "null"], maxLength: 200 }
+        sourceAttribution: { type: [string, "null"], maxLength: 500 }
+
+    UcLocationAssessmentInput:
+      type: object
+      required: [waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence]
+      properties:
+        waterQuality: { type: integer, minimum: 1, maximum: 5 }
+        cleanliness: { type: integer, minimum: 1, maximum: 5 }
+        equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+        serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+        safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+        checks:
+          type: object
+          additionalProperties: {}
+        notes: { type: string, nullable: true, maxLength: 2000 }
+
+    UcLocationAssessment:
+      type: object
+      required: [id, locationId, assessorId, waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence, checks, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        locationId: { type: string }
+        assessorId: { type: string }
+        waterQuality: { type: integer, minimum: 1, maximum: 5 }
+        cleanliness: { type: integer, minimum: 1, maximum: 5 }
+        equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+        serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+        safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+        checks: { type: string }
+        notes: { type: string, nullable: true }
+        status: { type: string }
+        verifiedAt: { type: string, nullable: true }
+        createdAt: { type: string }
+        updatedAt: { type: string }
 
     UcLocationUpdateInput:
       type: object
@@ -3772,7 +3988,7 @@ components:
       additionalProperties: false
       properties:
         active: { type: boolean }
-        type: { type: string, enum: [experience_centre, refill_atm, vendor] }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor, water_atm, refill_station, city_tap] }
         name: { type: string, minLength: 1 }
         address: { type: string, minLength: 1 }
         latitude: { type: number, minimum: -90, maximum: 90 }
@@ -3780,6 +3996,11 @@ components:
         hours: { type: string, minLength: 1 }
         phone: { type: [string, "null"] }
         vendorName: { type: [string, "null"] }
+        countryIso: { type: string, pattern: "^[A-Z]{2}$" }
+        city: { type: [string, "null"], maxLength: 120 }
+        accessNotes: { type: [string, "null"], maxLength: 1000 }
+        municipal: { type: [string, "null"], maxLength: 200 }
+        sourceAttribution: { type: [string, "null"], maxLength: 500 }
 
     UnsyncedRegistration:
       type: object

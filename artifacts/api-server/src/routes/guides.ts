@@ -16,6 +16,19 @@ function isCanonicalGuidePath(value: string): boolean {
     part.length > 0 && part !== "." && part !== ".." && !part.includes("..") && !part.includes("\\"));
 }
 
+/** Duration must come from authoritative object metadata, never request JSON or DB. */
+export function validateAuthoritativeVideoDuration(metadata: unknown): { ok: true; seconds: number } | { ok: false; error: string } {
+  const raw = (metadata as { metadata?: Record<string, unknown> } | null)?.metadata?.durationSeconds;
+  const seconds = typeof raw === "number"
+    ? raw
+    : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return { ok: false, error: "Video object metadata must include a finite nonnegative durationSeconds" };
+  }
+  if (seconds > MAX_VIDEO_SECONDS) return { ok: false, error: "Video object metadata durationSeconds exceeds the 90 second limit" };
+  return { ok: true, seconds };
+}
+
 type MediaInput = {
   id?: string; kind: "image" | "animation" | "video"; url: string; objectPath?: string;
   mimeType: string; altText: string; caption?: string; posterUrl?: string;
@@ -281,9 +294,11 @@ router.post("/uc/admin/guides/:id/publish", requireTeamAdmin, async (req, res): 
         if (actualType !== String(row.mime_type).toLowerCase() || !actualSize || actualSize > (row.kind === "animation" ? MAX_ANIMATION_BYTES : row.kind === "video" ? MAX_VIDEO_BYTES : Number.MAX_SAFE_INTEGER)) {
           await client.query("ROLLBACK"); fail(res, 400, "Guide media object metadata does not match the declared type or size"); return;
         }
-        const duration = Number((metadata as Record<string, unknown>).metadata && ((metadata as Record<string, any>).metadata as Record<string, unknown>).durationSeconds);
-        if (row.kind === "video" && Number.isFinite(duration) && duration > MAX_VIDEO_SECONDS) {
-          await client.query("ROLLBACK"); fail(res, 400, "Guide video exceeds the 90 second limit"); return;
+        if (row.kind === "video") {
+          const duration = validateAuthoritativeVideoDuration(metadata);
+          if (!duration.ok) {
+            await client.query("ROLLBACK"); fail(res, 400, duration.error); return;
+          }
         }
       } catch {
         await client.query("ROLLBACK"); fail(res, 400, "Guide media object could not be verified in storage"); return;

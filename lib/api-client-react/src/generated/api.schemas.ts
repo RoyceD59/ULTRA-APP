@@ -205,26 +205,23 @@ export type PublicInstantWaterAssessmentInputSourceAttribution = {
 export type InstantWaterFirstName = string;
 
 /**
- * Authoritative identity policy: trim the value, then accept only a Kenyan
- * mobile number with local 0[17]XXXXXXXX or international 254[17]XXXXXXXX
- * (optionally prefixed with +) digits. Spaces, parentheses, periods, and
- * hyphens may format the number, but the value must contain only allowed
- * phone characters, start with +, a digit, or (, end with a digit, contain
- * no repeated space/period/hyphen separators, and have balanced,
- * correctly ordered parentheses. Reject formatted values whose compact
- * digits are not one of those Kenyan mobile forms. Normalize accepted
- * values to +254XXXXXXXXX. The portable pattern above is only a coarse
- * Kenyan-prefix/length prefilter; x-uc-validator is authoritative for
- * separator and formatting semantics.
+ * Authoritative identity policy: trim the value and normalize it to E.164
+ * using the selected answers.country. International values identify their
+ * country from the calling code; local values are interpreted in the
+ * selected country. Accept only possible, valid numbers for that country,
+ * allowing formatting characters but rejecting repeated separators,
+ * malformed parentheses, and mismatched country calling codes. The
+ * portable pattern above is only a coarse prefilter;
+ * x-uc-validator is authoritative.
  * @minLength 7
  * @maxLength 40
- * @pattern ^(?:0[ () .-]*[17](?:[ () .-]*[0-9]){8}|\+?[ () .-]*2[ () .-]*5[ () .-]*4[ () .-]*[17](?:[ () .-]*[0-9]){8})$
+ * @pattern ^\+?[ () .-]*[0-9](?:[ () .-]*[0-9]){6,38}$
  */
-export type InstantWaterKenyanPhone = string;
+export type InstantWaterPhone = string;
 
 export interface PublicInstantWaterAssessmentInput {
   firstName: InstantWaterFirstName;
-  phone: InstantWaterKenyanPhone;
+  phone: InstantWaterPhone;
   consent: true;
   /**
      * @minLength 8
@@ -245,7 +242,7 @@ export interface AuthenticatedInstantWaterAssessmentInput {
   idempotencyKey: string;
   answers: InstantWaterAssessmentAnswers;
   firstName: InstantWaterFirstName;
-  phone: InstantWaterKenyanPhone;
+  phone: InstantWaterPhone;
 }
 
 export type InstantWaterBandsHardness = typeof InstantWaterBandsHardness[keyof typeof InstantWaterBandsHardness];
@@ -307,6 +304,14 @@ export const PublicInstantWaterAssessmentResultAreaFlag = {
   rift_valley_fluoride: 'rift_valley_fluoride',
 } as const;
 
+export type PublicInstantWaterAssessmentResultProvenance = typeof PublicInstantWaterAssessmentResultProvenance[keyof typeof PublicInstantWaterAssessmentResultProvenance];
+
+
+export const PublicInstantWaterAssessmentResultProvenance = {
+  general_indicative: 'general_indicative',
+  reviewed_regional_guidance: 'reviewed_regional_guidance',
+} as const;
+
 export type PublicInstantWaterAssessmentResultRecommendation = {
   name: string;
   explanation: string;
@@ -320,6 +325,7 @@ export interface PublicInstantWaterAssessmentResult {
   areaFlag?: PublicInstantWaterAssessmentResultAreaFlag;
   recommendation: PublicInstantWaterAssessmentResultRecommendation;
   disclaimer: string;
+  provenance: PublicInstantWaterAssessmentResultProvenance;
   serviceAvailable: boolean;
   physicalTestStatus?: string;
 }
@@ -1415,6 +1421,9 @@ export const UcLocationType = {
   experience_centre: 'experience_centre',
   refill_atm: 'refill_atm',
   vendor: 'vendor',
+  water_atm: 'water_atm',
+  refill_station: 'refill_station',
+  city_tap: 'city_tap',
 } as const;
 
 export interface UcLocation {
@@ -1437,8 +1446,110 @@ export interface UcLocation {
   phone?: string | null;
   /** @nullable */
   vendorName?: string | null;
+  /** @pattern ^[A-Z]{2}$ */
+  countryIso: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  city?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  accessNotes?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  municipal?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  sourceAttribution?: string | null;
   active: boolean;
   verified: boolean;
+}
+
+export interface UcLocationRatingInput {
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  waterQuality: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  cleanliness: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  equipmentCondition: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  serviceReliability: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  safetyConfidence: number;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  comment?: string | null;
+}
+
+export type UcLocationRatingAggregateAverages = {[key: string]: number};
+
+export type UcLocationRatingAggregateRatingsItem = {
+  id: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  waterQuality: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  cleanliness: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  equipmentCondition: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  serviceReliability: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  safetyConfidence: number;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  comment?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export interface UcLocationRatingAggregate {
+  locationId: string;
+  page: number;
+  limit: number;
+  count: number;
+  averages: UcLocationRatingAggregateAverages;
+  ratings: UcLocationRatingAggregateRatingsItem[];
 }
 
 export type UcLocationInputType = typeof UcLocationInputType[keyof typeof UcLocationInputType];
@@ -1448,6 +1559,9 @@ export const UcLocationInputType = {
   experience_centre: 'experience_centre',
   refill_atm: 'refill_atm',
   vendor: 'vendor',
+  water_atm: 'water_atm',
+  refill_station: 'refill_station',
+  city_tap: 'city_tap',
 } as const;
 
 export interface UcLocationInput {
@@ -1472,6 +1586,98 @@ export interface UcLocationInput {
   phone?: string | null;
   /** @nullable */
   vendorName?: string | null;
+  /** @pattern ^[A-Z]{2}$ */
+  countryIso?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  city?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  accessNotes?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  municipal?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  sourceAttribution?: string | null;
+}
+
+export type UcLocationAssessmentInputChecks = {[key: string]: unknown};
+
+export interface UcLocationAssessmentInput {
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  waterQuality: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  cleanliness: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  equipmentCondition: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  serviceReliability: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  safetyConfidence: number;
+  checks?: UcLocationAssessmentInputChecks;
+  /** @maxLength 2000 */
+  notes?: string | null;
+}
+
+export interface UcLocationAssessment {
+  id: string;
+  locationId: string;
+  assessorId: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  waterQuality: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  cleanliness: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  equipmentCondition: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  serviceReliability: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  safetyConfidence: number;
+  checks: string;
+  notes?: string | null;
+  status: string;
+  verifiedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type UcLocationUpdateInputType = typeof UcLocationUpdateInputType[keyof typeof UcLocationUpdateInputType];
@@ -1481,6 +1687,9 @@ export const UcLocationUpdateInputType = {
   experience_centre: 'experience_centre',
   refill_atm: 'refill_atm',
   vendor: 'vendor',
+  water_atm: 'water_atm',
+  refill_station: 'refill_station',
+  city_tap: 'city_tap',
 } as const;
 
 export interface UcLocationUpdateInput {
@@ -1506,6 +1715,28 @@ export interface UcLocationUpdateInput {
   phone?: string | null;
   /** @nullable */
   vendorName?: string | null;
+  /** @pattern ^[A-Z]{2}$ */
+  countryIso?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  city?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  accessNotes?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  municipal?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  sourceAttribution?: string | null;
 }
 
 export type UnsyncedRegistrationRecoveryStatus = typeof UnsyncedRegistrationRecoveryStatus[keyof typeof UnsyncedRegistrationRecoveryStatus];
@@ -1847,9 +2078,65 @@ export type CreateUcAdminLocation201 = {
   location?: UcLocation;
 };
 
+export type GetUcLocationRatingAggregateParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+};
+
 export type UpdateUcAdminLocation200 = {
   location?: UcLocation;
   verificationReset?: boolean;
+};
+
+export type ListLocationRatingReports200ReportsItem = {
+  id: string;
+  ratingId: string;
+  reporterUserId: number;
+  reason: string;
+  detail?: string | null;
+  createdAt: string;
+};
+
+export type ListLocationRatingReports200 = {
+  reports: ListLocationRatingReports200ReportsItem[];
+};
+
+export type ModerateLocationRatingBodyStatus = typeof ModerateLocationRatingBodyStatus[keyof typeof ModerateLocationRatingBodyStatus];
+
+
+export const ModerateLocationRatingBodyStatus = {
+  published: 'published',
+  hidden: 'hidden',
+  removed: 'removed',
+} as const;
+
+export type ModerateLocationRatingBody = {
+  status: ModerateLocationRatingBodyStatus;
+};
+
+export type ModerateLocationRating200Rating = {
+  id: string;
+  status: string;
+  updatedAt: string;
+};
+
+export type ModerateLocationRating200 = {
+  rating?: ModerateLocationRating200Rating;
+};
+
+export type GetLocationAssessment200 = {
+  assessment?: UcLocationAssessment;
+};
+
+export type UpdateLocationAssessment200 = {
+  assessment?: UcLocationAssessment;
 };
 
 export type ListUnsyncedRegistrations200 = {

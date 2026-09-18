@@ -7,7 +7,7 @@
  */
 import type { InstantWaterAssessmentAnswers } from './instantWaterAssessmentAnswers';
 import type { InstantWaterFirstName } from './instantWaterFirstName';
-import type { InstantWaterKenyanPhone } from './instantWaterKenyanPhone';
+import type { InstantWaterPhone } from './instantWaterPhone';
 
 export interface AuthenticatedInstantWaterAssessmentInput {
   /**
@@ -17,5 +17,5 @@ export interface AuthenticatedInstantWaterAssessmentInput {
   idempotencyKey: string;
   answers: InstantWaterAssessmentAnswers;
   firstName: InstantWaterFirstName;
-  phone: InstantWaterKenyanPhone;
+  phone: InstantWaterPhone;
 }
