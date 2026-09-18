@@ -7622,8 +7622,15 @@ router.patch("/uc/admin/locations/:id", async (req: Request, res: Response): Pro
     res.status(400).json({ code: "LOCATION_CITY_TAP_METADATA_REQUIRED", error: "city_tap requires countryIso, city, accessNotes, municipal, and sourceAttribution." });
     return;
   }
-  const identityChanged = ["type", "name", "address", "latitude", "lat", "longitude", "lng", "vendorName"]
-    .some((key) => source[key] !== undefined);
+  const identityChanged =
+    (source["type"] !== undefined && input.type !== existing[0].type) ||
+    (source["name"] !== undefined && input.name !== existing[0].name) ||
+    (source["address"] !== undefined && input.address !== existing[0].address) ||
+    (source["vendorName"] !== undefined && input.vendorName !== existing[0].vendorName) ||
+    ((source["latitude"] !== undefined || source["lat"] !== undefined) &&
+      input.latitude !== Number(existing[0].latitude)) ||
+    ((source["longitude"] !== undefined || source["lng"] !== undefined) &&
+      input.longitude !== Number(existing[0].longitude));
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (source["type"] !== undefined) updates["type"] = input.type;
   if (source["name"] !== undefined) updates["name"] = input.name;

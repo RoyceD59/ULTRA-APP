@@ -114,6 +114,37 @@ describe("reviewed starter tap customer journey", () => {
     );
   });
 
+  it("keeps an unchanged reviewed tap published when staff save its identity details", async () => {
+    const firstReview = await supertest(app)
+      .post(`/api/uc/admin/locations/${LOCATION_ID}/verify`)
+      .set("Authorization", bearer(adminToken));
+    assert.equal(firstReview.status, 200);
+
+    const unchanged = await supertest(app)
+      .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
+      .set("Authorization", bearer(adminToken))
+      .send({
+        type: " city_tap ",
+        name: " Reviewed Starter Tap ",
+        address: " Market Road ",
+        latitude: "-1.286400",
+        longitude: "36.817200",
+        vendorName: "",
+      });
+    assert.equal(unchanged.status, 200);
+    assert.equal(unchanged.body.verificationReset, false);
+    assert.equal(unchanged.body.location.verified, true);
+    assert.equal(unchanged.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.equal(unchanged.body.location.verifiedAt, firstReview.body.location.verifiedAt);
+
+    const stillPublished = await supertest(app).get("/api/uc/locations");
+    assert.equal(stillPublished.status, 200);
+    assert.equal(
+      stillPublished.body.filter((location: { id: string }) => location.id === LOCATION_ID).length,
+      1,
+    );
+  });
+
   const identityEdits = [
     { label: "name", patch: { name: "Reviewed Starter Tap - Updated" }, expected: { name: "Reviewed Starter Tap - Updated" } },
     { label: "address", patch: { address: "New Market Road" }, expected: { address: "New Market Road" } },
