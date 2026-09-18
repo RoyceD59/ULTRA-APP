@@ -46,7 +46,7 @@ after(async () => {
 });
 
 describe("reviewed starter tap customer journey", () => {
-  it("hides edited tap details from customer maps until a second administrator review", async () => {
+  it("hides a deactivated reviewed tap and edited details from customer maps", async () => {
     const pending = await supertest(app).get("/api/uc/locations");
     assert.equal(pending.status, 200);
     assert.equal(pending.body.some((location: { id: string }) => location.id === LOCATION_ID), false);
@@ -65,6 +65,31 @@ describe("reviewed starter tap customer journey", () => {
       initiallyPublished.body.filter((location: { id: string }) => location.id === LOCATION_ID).length,
       1,
     );
+
+    const deactivated = await supertest(app)
+      .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
+      .set("Authorization", bearer(adminToken))
+      .send({ active: false });
+    assert.equal(deactivated.status, 200);
+    assert.equal(deactivated.body.location.active, false);
+    assert.equal(deactivated.body.location.verified, true);
+    assert.equal(deactivated.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.ok(deactivated.body.location.verifiedAt);
+
+    const hiddenAfterDeactivation = await supertest(app).get("/api/uc/locations");
+    assert.equal(hiddenAfterDeactivation.status, 200);
+    assert.equal(
+      hiddenAfterDeactivation.body.some((location: { id: string }) => location.id === LOCATION_ID),
+      false,
+    );
+
+    const reactivated = await supertest(app)
+      .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
+      .set("Authorization", bearer(adminToken))
+      .send({ active: true });
+    assert.equal(reactivated.status, 200);
+    assert.equal(reactivated.body.location.active, true);
+    assert.equal(reactivated.body.location.verified, true);
 
     const edited = await supertest(app)
       .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
@@ -119,5 +144,6 @@ describe("reviewed starter tap customer journey", () => {
       municipal: "Nairobi City Water",
       sourceAttribution: "Starter tap field survey",
     });
+
   });
 });
