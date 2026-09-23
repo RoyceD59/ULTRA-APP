@@ -27,7 +27,12 @@ process.env["PROJECTHUB_WEBHOOK_SECRET"] = "test-echo-secret";
 
 import { issueToken } from "../lib/jwt.js";
 import app from "../app.js";
-import { db, aiReportsTable, aiPushEventsTable } from "@workspace/db";
+import {
+  db,
+  aiReportsTable,
+  aiPushEventsTable,
+  ucNotificationLogTable,
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   setLatestReport,
@@ -352,6 +357,74 @@ describe("echo signature enforcement", () => {
         .where(eq(aiPushEventsTable.id, pushId));
       assert.equal(row.status, status);
       assert.equal(row.statusDetail, `Now ${status}`);
+    }
+  });
+
+  it("alerts once when a signed echo reports failure", async () => {
+    const [seeded] = await db
+      .insert(aiPushEventsTable)
+      .values({
+        payloadType: "project_status_report",
+        trigger: "manual",
+        target: "http://example.com/orchestrator",
+        outboundOk: true,
+        status: "sent",
+      })
+      .returning({ id: aiPushEventsTable.id });
+
+    const alerts: Array<Record<string, unknown>> = [];
+    const resendServer = http.createServer((req, res) => {
+      let data = "";
+      req.on("data", (chunk: Buffer) => (data += chunk.toString()));
+      req.on("end", () => {
+        alerts.push(JSON.parse(data) as Record<string, unknown>);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ id: "push-failure-alert-echo" }));
+      });
+    });
+    await new Promise<void>((resolve) => resendServer.listen(0, "127.0.0.1", resolve));
+    const { port } = resendServer.address() as { port: number };
+    process.env["RESEND_BASE_URL"] = `http://127.0.0.1:${port}`;
+
+    try {
+      const body = JSON.stringify({
+        pushId: seeded.id,
+        status: "failed",
+        message: "Orchestrator rejected the report",
+      });
+
+      const first = await postEcho(body, sign(body));
+      assert.equal(first.status, 200);
+      const repeated = await postEcho(body, sign(body));
+      assert.equal(repeated.status, 200);
+
+      assert.equal(alerts.length, 1, "repeated failed echoes must not send duplicate alerts");
+      assert.equal(alerts[0].to, "info@ucfilters.com");
+      assert.equal(
+        alerts[0].subject,
+        `⚠️ AI orchestrator reported a failure for push ${seeded.id}`,
+      );
+      assert.match(
+        String(alerts[0].text),
+        /The AI orchestrator reported a failure for a previously delivered push\./,
+      );
+      assert.match(String(alerts[0].text), /Error:\s+Orchestrator rejected the report/);
+
+      const alertLogs = await db
+        .select()
+        .from(ucNotificationLogTable)
+        .where(eq(ucNotificationLogTable.resendMessageId, "push-failure-alert-echo"));
+      assert.equal(alertLogs.length, 1, "repeated failed echoes must create one alert log");
+      assert.equal(alertLogs[0].template, "push_failure_alert");
+    } finally {
+      delete process.env["RESEND_BASE_URL"];
+      await db
+        .delete(ucNotificationLogTable)
+        .where(eq(ucNotificationLogTable.resendMessageId, "push-failure-alert-echo"));
+      await db.delete(aiPushEventsTable).where(eq(aiPushEventsTable.id, seeded.id));
+      await new Promise<void>((resolve, reject) =>
+        resendServer.close((error) => (error ? reject(error) : resolve())),
+      );
     }
   });
 });

@@ -8,7 +8,8 @@
  *   4. Not configured — 503 when AI_ORCHESTRATOR_WEBHOOK_URL is unset
  *   5. Task not found — 404 for an unknown taskId
  *   6. Successful dispatch — 200 + ai_push_events row + outbound HMAC signature
- *   7. Failed dispatch — durable failed row remains visible on the Push Board
+ *   7. Failed dispatch — durable failed row remains visible and alerts the team
+ *   8. Network failure — alerts the team when the orchestrator cannot be reached
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
@@ -16,7 +17,13 @@ import { describe, it, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { createHmac } from "node:crypto";
-import { db, projectsTable, tasksTable, aiPushEventsTable } from "@workspace/db";
+import {
+  db,
+  projectsTable,
+  tasksTable,
+  aiPushEventsTable,
+  ucNotificationLogTable,
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { issueToken } from "../lib/jwt.js";
 
@@ -231,6 +238,16 @@ describe("POST /api/ai/push-task", () => {
     const { port } = mockServer.address() as { port: number };
     process.env["AI_ORCHESTRATOR_WEBHOOK_URL"] = `http://127.0.0.1:${port}`;
 
+    let alertRequests = 0;
+    const resendServer = http.createServer((_req, res) => {
+      alertRequests += 1;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ id: "unexpected-alert" }));
+    });
+    await new Promise<void>((resolve) => resendServer.listen(0, "127.0.0.1", resolve));
+    const { port: resendPort } = resendServer.address() as { port: number };
+    process.env["RESEND_BASE_URL"] = `http://127.0.0.1:${resendPort}`;
+
     try {
       const r = await apiFetch("/api/ai/push-task", {
         server,
@@ -272,6 +289,7 @@ describe("POST /api/ai/push-task", () => {
       const expectedSig =
         "sha256=" + createHmac("sha256", secret).update(capturedBody).digest("hex");
       assert.equal(capturedSignature, expectedSig, "HMAC signature must match body");
+      assert.equal(alertRequests, 0, "successful dispatch must not send a push-failure alert");
 
       // Clean up the event row
       await db
@@ -280,8 +298,12 @@ describe("POST /api/ai/push-task", () => {
     } finally {
       delete process.env["AI_ORCHESTRATOR_WEBHOOK_URL"];
       delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
+      delete process.env["RESEND_BASE_URL"];
       await new Promise<void>((resolve, reject) =>
         mockServer.close((e) => (e ? reject(e) : resolve())),
+      );
+      await new Promise<void>((resolve, reject) =>
+        resendServer.close((e) => (e ? reject(e) : resolve())),
       );
     }
   });
@@ -291,12 +313,26 @@ describe("POST /api/ai/push-task", () => {
     process.env["PROJECTHUB_WEBHOOK_SECRET"] = secret;
 
     const mockServer = http.createServer((_req, res) => {
-      res.writeHead(503, { "Content-Type": "text/plain" });
-      res.end("orchestrator unavailable");
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("wrong orchestrator URL");
     });
     await new Promise<void>((resolve) => mockServer.listen(0, "127.0.0.1", resolve));
     const { port } = mockServer.address() as { port: number };
     process.env["AI_ORCHESTRATOR_WEBHOOK_URL"] = `http://127.0.0.1:${port}`;
+
+    const alertPayloads: Array<Record<string, unknown>> = [];
+    const resendServer = http.createServer((req, res) => {
+      let data = "";
+      req.on("data", (chunk: Buffer) => (data += chunk.toString()));
+      req.on("end", () => {
+        alertPayloads.push(JSON.parse(data) as Record<string, unknown>);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ id: "push-failure-alert-404" }));
+      });
+    });
+    await new Promise<void>((resolve) => resendServer.listen(0, "127.0.0.1", resolve));
+    const { port: resendPort } = resendServer.address() as { port: number };
+    process.env["RESEND_BASE_URL"] = `http://127.0.0.1:${resendPort}`;
 
     let pushId: string | undefined;
     try {
@@ -337,14 +373,98 @@ describe("POST /api/ai/push-task", () => {
       assert.equal(matchingPush.status, "failed");
       assert.equal(matchingPush.id, pushId);
       assert.equal(matchingPush.outboundOk, false);
+
+      assert.equal(alertPayloads.length, 1, "failed dispatch must send exactly one team alert");
+      const alert = alertPayloads[0];
+      assert.equal(alert.to, "info@ucfilters.com");
+      assert.equal(alert.subject, "⚠️ AI orchestrator push failed — outbound delivery error");
+      assert.match(String(alert.text), /Payload:\s+task_dispatch/);
+      assert.match(String(alert.text), /Webhook returned 404: wrong orchestrator URL/);
+      const [alertLog] = await db
+        .select()
+        .from(ucNotificationLogTable)
+        .where(eq(ucNotificationLogTable.resendMessageId, "push-failure-alert-404"))
+        .limit(1);
+      assert.equal(alertLog?.template, "push_failure_alert");
     } finally {
       delete process.env["AI_ORCHESTRATOR_WEBHOOK_URL"];
       delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
+      delete process.env["RESEND_BASE_URL"];
       if (pushId) {
         await db.delete(aiPushEventsTable).where(eq(aiPushEventsTable.id, pushId));
       }
+      await db
+        .delete(ucNotificationLogTable)
+        .where(eq(ucNotificationLogTable.resendMessageId, "push-failure-alert-404"));
       await new Promise<void>((resolve, reject) =>
         mockServer.close((e) => (e ? reject(e) : resolve())),
+      );
+      await new Promise<void>((resolve, reject) =>
+        resendServer.close((e) => (e ? reject(e) : resolve())),
+      );
+    }
+  });
+
+  it("alerts the team when a report push to the orchestrator throws", async () => {
+    process.env["PROJECTHUB_WEBHOOK_SECRET"] = "test-webhook-secret-network-failure";
+    process.env["AI_ORCHESTRATOR_WEBHOOK_URL"] = "http://127.0.0.1:1/wrong-orchestrator";
+
+    const alertPayloads: Array<Record<string, unknown>> = [];
+    const resendServer = http.createServer((req, res) => {
+      let data = "";
+      req.on("data", (chunk: Buffer) => (data += chunk.toString()));
+      req.on("end", () => {
+        alertPayloads.push(JSON.parse(data) as Record<string, unknown>);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ id: "push-failure-alert-network" }));
+      });
+    });
+    await new Promise<void>((resolve) => resendServer.listen(0, "127.0.0.1", resolve));
+    const { port } = resendServer.address() as { port: number };
+    process.env["RESEND_BASE_URL"] = `http://127.0.0.1:${port}`;
+
+    let pushId: string | undefined;
+    try {
+      const { pushReportToOrchestrator } = await import("../routes/ai/monitor.js");
+      const outcome = await pushReportToOrchestrator({
+        report: {
+          summary: "Network failure alert test",
+          highlights: [],
+          risks: [],
+          generatedAt: new Date(),
+        },
+        trigger: "manual",
+        payloadType: "project_status_report",
+      });
+
+      assert.equal(outcome.success, false);
+      assert.ok(typeof outcome.pushId === "string");
+      pushId = outcome.pushId;
+      assert.equal(alertPayloads.length, 1, "network failure must send exactly one team alert");
+      assert.equal(
+        alertPayloads[0].subject,
+        "⚠️ AI orchestrator push failed — outbound delivery error",
+      );
+      assert.match(String(alertPayloads[0].text), /Payload:\s+project_status_report/);
+      assert.match(String(alertPayloads[0].text), /Error:\s+fetch failed/);
+      const [alertLog] = await db
+        .select()
+        .from(ucNotificationLogTable)
+        .where(eq(ucNotificationLogTable.resendMessageId, "push-failure-alert-network"))
+        .limit(1);
+      assert.equal(alertLog?.template, "push_failure_alert");
+    } finally {
+      delete process.env["AI_ORCHESTRATOR_WEBHOOK_URL"];
+      delete process.env["PROJECTHUB_WEBHOOK_SECRET"];
+      delete process.env["RESEND_BASE_URL"];
+      if (pushId) {
+        await db.delete(aiPushEventsTable).where(eq(aiPushEventsTable.id, pushId));
+      }
+      await db
+        .delete(ucNotificationLogTable)
+        .where(eq(ucNotificationLogTable.resendMessageId, "push-failure-alert-network"));
+      await new Promise<void>((resolve, reject) =>
+        resendServer.close((e) => (e ? reject(e) : resolve())),
       );
     }
   });
