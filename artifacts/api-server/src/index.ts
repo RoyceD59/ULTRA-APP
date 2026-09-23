@@ -414,6 +414,16 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: team_settings.low_stock_threshold column ensured");
 
+  // Most recent successful low-stock email per WooCommerce product. The daily
+  // digest suppresses products already shown to the team within the last 24 h.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_low_stock_alerts (
+      product_id integer     PRIMARY KEY,
+      alerted_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  logger.info("Startup migration: uc_low_stock_alerts table ensured");
+
   await pool.query(`
     ALTER TABLE team_settings
       ADD COLUMN IF NOT EXISTS restock_demand_threshold integer;

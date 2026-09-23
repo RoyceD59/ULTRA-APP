@@ -8556,18 +8556,12 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
     const confirmedQty: number =
       typeof data["stock_quantity"] === "number" ? data["stock_quantity"] : stockQuantity;
 
-    res.json({
-      ok: true,
-      productId,
-      stockQuantity: confirmedQty,
-      source: "woocommerce",
-    });
-
     // ── Immediate low-stock alert ─────────────────────────────────────────
     // Fire an email when the newly confirmed quantity is at or below the
     // configured threshold so the team is notified without waiting for the
-    // nightly scheduled check. Runs async — never blocks the response.
-    (async () => {
+    // nightly scheduled check. Await it so a shutdown after the response
+    // cannot discard the urgent send or its dedupe timestamp.
+    await (async () => {
       try {
         let threshold = 5;
         try {
@@ -8604,7 +8598,7 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
           "You can adjust the alert threshold from ProjectHub → Admin → Inventory → Settings.",
         ].join("\n");
 
-        await sendViaResend({
+        const emailOk = await sendViaResend({
           from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
           to:      "info@ucfilters.com",
           subject,
@@ -8612,14 +8606,43 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
           meta:    { template: "low_stock_alert" },
         });
 
-        logger.info(
-          { productId, productName, confirmedQty, threshold },
-          "[inventory] Immediate low-stock alert sent",
-        );
+        if (emailOk) {
+          try {
+            await pool.query(
+              `INSERT INTO uc_low_stock_alerts (product_id, alerted_at)
+               VALUES ($1, now())
+               ON CONFLICT (product_id)
+               DO UPDATE SET alerted_at =
+                 GREATEST(uc_low_stock_alerts.alerted_at, EXCLUDED.alerted_at)`,
+              [productId],
+            );
+          } catch (historyErr) {
+            logger.error(
+              { historyErr, productId },
+              "[inventory] Immediate low-stock email sent but alert history could not be recorded",
+            );
+          }
+          logger.info(
+            { productId, productName, confirmedQty, threshold },
+            "[inventory] Immediate low-stock alert sent",
+          );
+        } else {
+          logger.warn(
+            { productId, productName, confirmedQty, threshold },
+            "[inventory] Immediate low-stock alert failed",
+          );
+        }
       } catch (alertErr) {
         logger.error({ alertErr, productId }, "[inventory] Failed to send immediate low-stock alert");
       }
     })();
+
+    res.json({
+      ok: true,
+      productId,
+      stockQuantity: confirmedQty,
+      source: "woocommerce",
+    });
   } catch (err) {
     logger.error({ err, productId }, "[inventory] WooCommerce PATCH error");
     res.status(502).json({ error: "Failed to reach WooCommerce" });

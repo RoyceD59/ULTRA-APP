@@ -41,3 +41,4 @@
 - [Expo web routing and previews](expo-static-production-routing.md) — SDK 57 asset URLs need rewriting; web root must flex; verify slow Metro previews in a real browser.
 - [Canonical lifecycle program](canonical-lifecycle-program.md) — unify identity, purchases, registrations, maintenance, and impact; unmatched legacy purchases require staff review.
 - [Parallel dispatcher tests](parallel-dispatcher-tests.md) — inject providers, shared configuration, and recipient scope; a shared test DB alone does not isolate broad dispatch scans.
+- [Cross-path alert timestamps](cross-path-alert-timestamps.md) — when manual and scheduled sends share dedupe state, timestamp upserts must be monotonic and occur only after successful delivery.

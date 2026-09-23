@@ -357,6 +357,14 @@ await pool.query(`
     ADD COLUMN IF NOT EXISTS resolved_at timestamptz;
 `);
 
+// uc_low_stock_alerts
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS uc_low_stock_alerts (
+    product_id integer     PRIMARY KEY,
+    alerted_at timestamptz NOT NULL DEFAULT now()
+  );
+`);
+
 // mpesa_stk_initiations.callback_token
 await pool.query(`
   ALTER TABLE mpesa_stk_initiations

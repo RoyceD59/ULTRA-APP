@@ -8,8 +8,8 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateAndStoreReport, pushReportToOrchestrator } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, aiPushEventsTable, ucWishlistTable, ucRestockDemandAlertsTable } from "@workspace/db";
-import { lt, lte, desc, eq, and, or, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, ucLowStockAlertsTable, aiPushEventsTable, ucWishlistTable, ucRestockDemandAlertsTable } from "@workspace/db";
+import { lt, lte, gt, desc, eq, and, or, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
   hasWCCredentials,
@@ -541,9 +541,8 @@ export function startScheduler() {
  * - Skips silently when WooCommerce credentials are absent.
  * - Aborts when the store is unreachable (partial catalogue must never send
  *   a misleadingly short list).
- * - No deduplication: the daily digest always fires so the team can track
- *   whether stock is being replenished. Immediate post-edit alerts (PATCH
- *   /uc/admin/inventory/:id) use the same function with `skipIfEmpty=true`.
+ * - Excludes products successfully emailed within the preceding 24 hours.
+ * - Records included products only after the email provider accepts the digest.
  *
  * @internal — exported for the scheduler cron job and inventory PATCH handler.
  */
@@ -557,12 +556,42 @@ export async function runLowStockAlert(
     threshold?: number;
     /** When true, returns immediately without sending if nothing is flagged. */
     skipIfEmpty?: boolean;
+    /** Test seam: return product IDs successfully alerted since the cutoff. */
+    getRecentlyAlertedProductIds?: (productIds: number[], cutoff: Date) => Promise<Set<number>>;
+    /** Test seam: record successful alert timestamps for included products. */
+    recordAlertedProductIds?: (productIds: number[], alertedAt: Date) => Promise<void>;
+    /** Test seam: deterministic 24-hour cutoff and recorded timestamp. */
+    now?: Date;
   } = {},
 ): Promise<{ outOfStock: number; lowStock: number; emailed: boolean }> {
   const fetchProducts = deps.fetchProducts ?? fetchAllPublishedProducts;
   const sendEmail     = deps.sendEmail     ?? sendViaResend;
   const isWcConfigured = deps.isWcConfigured ?? hasWCCredentials;
   const skipIfEmpty   = deps.skipIfEmpty   ?? true;
+  const checkTime = deps.now ?? new Date();
+  const getRecentlyAlertedProductIds = deps.getRecentlyAlertedProductIds ?? (async (productIds, cutoff) => {
+    if (productIds.length === 0) return new Set<number>();
+    const rows = await db
+      .select({ productId: ucLowStockAlertsTable.productId })
+      .from(ucLowStockAlertsTable)
+      .where(and(
+        inArray(ucLowStockAlertsTable.productId, productIds),
+        gt(ucLowStockAlertsTable.alertedAt, cutoff),
+      ));
+    return new Set(rows.map((row) => row.productId));
+  });
+  const recordAlertedProductIds = deps.recordAlertedProductIds ?? (async (productIds, alertedAt) => {
+    if (productIds.length === 0) return;
+    await db
+      .insert(ucLowStockAlertsTable)
+      .values(productIds.map((productId) => ({ productId, alertedAt })))
+      .onConflictDoUpdate({
+        target: ucLowStockAlertsTable.productId,
+        set: {
+          alertedAt: sql`GREATEST(${ucLowStockAlertsTable.alertedAt}, ${alertedAt})`,
+        },
+      });
+  });
 
   if (!isWcConfigured()) {
     logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
@@ -633,6 +662,29 @@ export async function runLowStockAlert(
     else           lowStockItems.push(item);
   }
 
+  const flaggedIds = [...outOfStockItems, ...lowStockItems].map((item) => item.id);
+  if (flaggedIds.length > 0) {
+    const cutoff = new Date(checkTime.getTime() - 24 * 60 * 60 * 1000);
+    try {
+      const recentIds = await getRecentlyAlertedProductIds(flaggedIds, cutoff);
+      if (recentIds.size > 0) {
+        const keepUnalerted = (item: StockItem) => !recentIds.has(item.id);
+        const skipped = outOfStockItems.length + lowStockItems.length;
+        const filteredOutOfStock = outOfStockItems.filter(keepUnalerted);
+        const filteredLowStock = lowStockItems.filter(keepUnalerted);
+        outOfStockItems.splice(0, outOfStockItems.length, ...filteredOutOfStock);
+        lowStockItems.splice(0, lowStockItems.length, ...filteredLowStock);
+        logger.info(
+          { skipped: skipped - filteredOutOfStock.length - filteredLowStock.length },
+          "Low-stock alert: skipped products alerted within the last 24 hours",
+        );
+      }
+    } catch (err) {
+      logger.error({ err }, "Low-stock alert: could not read alert history — aborting");
+      return { outOfStock: 0, lowStock: 0, emailed: false };
+    }
+  }
+
   if (outOfStockItems.length === 0 && lowStockItems.length === 0) {
     if (skipIfEmpty) {
       logger.info("Low-stock alert: all products above threshold — no email");
@@ -695,6 +747,13 @@ export async function runLowStockAlert(
   });
 
   if (emailOk) {
+    const alertedProductIds = [...outOfStockItems, ...lowStockItems].map((item) => item.id);
+    const alertedAt = deps.now ?? new Date();
+    try {
+      await recordAlertedProductIds(alertedProductIds, alertedAt);
+    } catch (err) {
+      logger.error({ err, alertedProductIds }, "Low-stock alert: email sent but alert history could not be recorded");
+    }
     logger.info(
       { outOfStock: outOfStockItems.length, lowStock: lowStockItems.length, threshold },
       "Scheduler: low-stock alert email sent",

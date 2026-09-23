@@ -39,6 +39,7 @@ export * from "./uc-ai-feedback";
 export * from "./uc-offline-clients";
 export * from "./uc-notification-log";
 export * from "./uc-lifespan-alerts";
+export * from "./uc-low-stock-alerts";
 export * from "./uc-filter-reminders";
 export * from "./uc-return-requests";
 // Team Horizon schemas
