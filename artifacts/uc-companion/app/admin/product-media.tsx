@@ -133,7 +133,10 @@ export default function ProductMediaAdminScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 22, paddingBottom: Platform.OS === 'web' ? 34 : 48 }}
+      contentContainerStyle={{
+        padding: 16, gap: 22, paddingBottom: Platform.OS === 'web' ? 34 : 48,
+        width: '100%', maxWidth: 800, alignSelf: 'center'
+      }}
     >
       {productName ? (
         <Text style={[s.subhead, { color: colors.mutedForeground }]}>

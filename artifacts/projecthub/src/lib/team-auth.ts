@@ -181,7 +181,7 @@ export function handleUnauthorizedResponse(): void {
 
 // ─── Auth API helpers ─────────────────────────────────────────────────────────
 
-async function apiFetch<T = unknown>(
+export async function apiFetch<T = unknown>(
   path: string,
   opts: RequestInit = {},
 ): Promise<T> {

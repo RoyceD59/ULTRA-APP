@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import {
-  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing, Search,
+  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing, Search, Tag, Pencil
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { isTeamAdmin, getAuthHeaders } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import { useProducts, useUpdateProduct } from "@/hooks/use-products";
 
 const BASE = API_ORIGIN;
 
@@ -142,6 +144,153 @@ function StockStatusBadge({ status, qty, threshold }: { status: string; qty: num
 }
 
 // ─── Inline stock editor ──────────────────────────────────────────────────────
+
+function InlinePriceEditor({
+  productId,
+  productName,
+  field,
+  currentValue,
+}: {
+  productId: number;
+  productName: string;
+  field: "regularPrice" | "salePrice";
+  currentValue: string;
+}) {
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentValue || "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const updateProduct = useUpdateProduct();
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2 group">
+        <span className="font-mono text-sm">{currentValue || "—"}</span>
+        <button
+          onClick={() => { setValue(currentValue || ""); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+          title={`Edit ${field}`}
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-7 w-20 font-mono text-sm"
+        disabled={updateProduct.isPending}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !updateProduct.isPending) {
+            updateProduct.mutate({ id: productId, data: { [field]: value } }, {
+              onSuccess: () => {
+                toast({ title: "Price updated", description: `${productName}: ${field} set to ${value || "empty"}.` });
+                setEditing(false);
+              },
+              onError: (err: Error) => {
+                toast({ title: "Update failed", description: err.message, variant: "destructive" });
+              }
+            });
+          }
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        disabled={updateProduct.isPending}
+        onClick={() => {
+          updateProduct.mutate({ id: productId, data: { [field]: value } }, {
+            onSuccess: () => {
+              toast({ title: "Price updated", description: `${productName}: ${field} set to ${value || "empty"}.` });
+              setEditing(false);
+            },
+            onError: (err: Error) => {
+              toast({ title: "Update failed", description: err.message, variant: "destructive" });
+            }
+          });
+        }}
+      >
+        {updateProduct.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        disabled={updateProduct.isPending}
+        onClick={() => setEditing(false)}
+      >
+        <X className="w-3.5 h-3.5 text-destructive" />
+      </Button>
+    </div>
+  );
+}
+
+function InlineStockStatusEditor({
+  productId,
+  productName,
+  currentStatus,
+}: {
+  productId: number;
+  productName: string;
+  currentStatus: string;
+}) {
+  const { toast } = useToast();
+  const updateProduct = useUpdateProduct();
+  const [editing, setEditing] = useState(false);
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2 group">
+        <span className="text-sm">{currentStatus}</span>
+        <button
+          onClick={() => setEditing(true)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+          title="Edit stock status"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  const handleUpdate = (status: "instock" | "outofstock" | "onbackorder") => {
+    updateProduct.mutate({ id: productId, data: { stockStatus: status } }, {
+      onSuccess: () => {
+        toast({ title: "Status updated", description: `${productName}: stock status set to ${status}.` });
+        setEditing(false);
+      },
+      onError: (err: Error) => {
+        toast({ title: "Update failed", description: err.message, variant: "destructive" });
+        setEditing(false);
+      }
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        className="h-7 px-1 text-sm border rounded"
+        value={currentStatus}
+        onChange={(e) => handleUpdate(e.target.value as "instock" | "outofstock" | "onbackorder")}
+        disabled={updateProduct.isPending}
+        onBlur={() => setEditing(false)}
+      >
+        <option value="instock">In stock</option>
+        <option value="outofstock">Out of stock</option>
+        <option value="onbackorder">On backorder</option>
+      </select>
+      {updateProduct.isPending && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+    </div>
+  );
+}
 
 function InlineStockEditor({
   product,
@@ -398,6 +547,10 @@ export default function AdminInventoryPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const { data: fullProductsData } = useProducts();
+  const fullProducts = fullProductsData ?? [];
+  const fullProductMap = new Map(fullProducts.map(p => [p.id, p]));
 
   const { data, isLoading, error, dataUpdatedAt } = useQuery({
     queryKey: ["uc-inventory"],
@@ -693,13 +846,17 @@ export default function AdminInventoryPage() {
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead>SKU</TableHead>
+                <TableHead>Regular Price</TableHead>
+                <TableHead>Sale Price</TableHead>
                 <TableHead>Stock qty</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">WooCommerce</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product) => {
+                const fullProduct = fullProductMap.get(product.id);
+                return (
                 <TableRow
                   key={product.id}
                   className={
@@ -718,29 +875,70 @@ export default function AdminInventoryPage() {
                     {product.sku || "—"}
                   </TableCell>
                   <TableCell>
+                    {fullProduct ? (
+                      <InlinePriceEditor
+                        productId={product.id}
+                        productName={product.name}
+                        field="regularPrice"
+                        currentValue={fullProduct.regularPrice}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {fullProduct ? (
+                      <InlinePriceEditor
+                        productId={product.id}
+                        productName={product.name}
+                        field="salePrice"
+                        currentValue={fullProduct.salePrice}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <InlineStockEditor
                       product={product}
-                      onSaved={() => void qc.invalidateQueries({ queryKey: ["uc-inventory"] })}
+                      onSaved={() => {
+                        void qc.invalidateQueries({ queryKey: ["uc-inventory"] });
+                        void qc.invalidateQueries({ queryKey: ["uc-products"] });
+                      }}
                     />
                   </TableCell>
                   <TableCell>
-                    <StockStatusBadge status={product.stockStatus} qty={product.stockQuantity} threshold={threshold} />
+                    <div className="flex flex-col gap-1 items-start">
+                      <StockStatusBadge status={fullProduct?.stockStatus || product.stockStatus} qty={product.stockQuantity} threshold={threshold} />
+                      <InlineStockStatusEditor
+                        productId={product.id}
+                        productName={product.name}
+                        currentStatus={fullProduct?.stockStatus || product.stockStatus}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <a
-                      href={wcAdminUrl(product.id, product.permalink)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      Edit <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="ghost" size="sm" asChild className="h-8 text-xs">
+                        <Link href={`/admin/products/${product.id}`}>
+                          <Pencil className="w-3 h-3 mr-1" />
+                          Edit
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-muted-foreground" title="View in WooCommerce">
+                        <a href={wcAdminUrl(product.id, product.permalink)} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="w-3 h-3" />
+                          <span className="sr-only">View in WooCommerce</span>
+                        </a>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
               {filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                     {products.length === 0
                       ? "No products found."
                       : "No products match the selected filters."}

@@ -66,8 +66,14 @@ router.post("/whatsapp/connect", requireTeamAuth, async (_req, res): Promise<voi
  * Logs out the current session and wipes stored credentials.
  */
 router.post("/whatsapp/disconnect", requireTeamAuth, async (_req, res): Promise<void> => {
-  await disconnectWhatsApp();
-  res.json({ ok: true, state: "disconnected" });
+  try {
+    await disconnectWhatsApp();
+    res.json({ ok: true, state: "disconnected" });
+  } catch {
+    res.status(503).json({
+      error: "WhatsApp disconnected, but stored session cleanup failed. Retry before pairing another number.",
+    });
+  }
 });
 
 /**

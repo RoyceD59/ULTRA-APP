@@ -304,7 +304,7 @@ describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
         name: "Renamed Filter",
         shortDescription: "Short blurb",
         regularPrice: "19.99",
-        stockStatus: "outofstock",
+        stockStatus: "onbackorder",
       },
       adminAuth(),
     );
@@ -314,7 +314,7 @@ describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
       name: "Renamed Filter",
       short_description: "Short blurb",
       regular_price: "19.99",
-      stock_status: "outofstock",
+      stock_status: "onbackorder",
     });
   });
 

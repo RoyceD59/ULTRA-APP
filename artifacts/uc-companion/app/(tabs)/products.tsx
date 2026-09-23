@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Platform,
   ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -93,6 +94,12 @@ export default function ProductsScreen() {
 function ProductsScreenContent() {
   const colors = useColors();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const MAX_WIDTH = 1200;
+  const contentBound = { width: '100%' as const, maxWidth: MAX_WIDTH, alignSelf: 'center' as const };
+  const numColumns = width >= 1440 ? 5 : width >= 1024 ? 4 : width >= 768 ? 3 : 2;
+  const cardMaxWidth = `${100 / numColumns}%` as const;
+
   const { category: categoryParam } = useLocalSearchParams<{ category?: string }>();
   const api = useApi();
   const queryClient = useQueryClient();
@@ -269,8 +276,6 @@ function ProductsScreenContent() {
       }
     }
   }, [token, user, router, wishlist, wishlistPendingMap, api, queryClient]);
-
-  const numColumns = 2;
 
   // ── Add-Ons section ──────────────────────────────────────────────────────────
 
@@ -454,31 +459,34 @@ function ProductsScreenContent() {
 
       {/* ── Branded header bar ── */}
       <View style={[styles.brandHeader, { paddingTop: headerTop }]}>
-        <Image
-          source={require('@/assets/images/logo-lockup-white.png')}
-          style={styles.brandLogo}
-          contentFit="contain"
-        />
-        <TouchableOpacity
-          onPress={() => router.push('/cart' as never)}
-          activeOpacity={0.8}
-          style={styles.cartIconBtn}
-          accessibilityLabel={`Cart, ${items.length} items`}>
-          <Ionicons name="cart-outline" size={24} color="#fff" />
-          {cartHydrated && totalItems > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{totalItems > 9 ? '9+' : totalItems}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={[styles.brandHeaderInner, contentBound]}>
+          <Image
+            source={require('@/assets/images/logo-lockup-white.png')}
+            style={styles.brandLogo}
+            contentFit="contain"
+          />
+          <TouchableOpacity
+            onPress={() => router.push('/cart' as never)}
+            activeOpacity={0.8}
+            style={styles.cartIconBtn}
+            accessibilityLabel={`Cart, ${items.length} items`}>
+            <Ionicons name="cart-outline" size={24} color="#fff" />
+            {cartHydrated && totalItems > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{totalItems > 9 ? '9+' : totalItems}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Sticky search + category chips ── */}
       <View style={[styles.stickyControls, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        {/* Search */}
-        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
-          <TextInput
+        <View style={contentBound}>
+          {/* Search */}
+          <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
+            <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search filters, systems…"
@@ -500,6 +508,7 @@ function ProductsScreenContent() {
             <FilterChip key={cat} label={cat} active={category === cat} onPress={() => selectCategory(cat)} />
           ))}
         </ScrollView>
+        </View>
       </View>
 
       {/* ── Scrollable content ── */}
@@ -507,7 +516,7 @@ function ProductsScreenContent() {
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
+        contentContainerStyle={[{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }, contentBound]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}>
 
         {/* Empty state (basket empty) or Add-Ons section (basket has items).
@@ -561,7 +570,7 @@ function ProductsScreenContent() {
                           const pendingState = wishlistPendingMap[product.id];
                           const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
                           return (
-                            <View key={product.id} style={styles.cardWrap}>
+                            <View key={product.id} style={[styles.cardWrap, { maxWidth: cardMaxWidth }]}>
                               <ProductCard
                                 product={product}
                                 isWishlisted={isWishlisted}
@@ -599,7 +608,7 @@ function ProductsScreenContent() {
                 const pendingState = wishlistPendingMap[item.id];
                 const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
                 return (
-                  <View style={styles.cardWrap}>
+                  <View style={[styles.cardWrap, { maxWidth: cardMaxWidth }]}>
                     <ProductCard
                       product={item}
                       isWishlisted={isWishlisted}
@@ -629,11 +638,13 @@ const styles = StyleSheet.create({
   // ── Branded header ────────────────────────────────────────────────────────────
   brandHeader: {
     backgroundColor: '#005d8f',
+    paddingBottom: 10,
+  },
+  brandHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 10,
   },
   brandLogo: {
     width: 120,

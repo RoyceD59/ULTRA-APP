@@ -45,6 +45,15 @@ export default function ProductDetailScreen() {
   const pid = parseInt(id ?? '');
   const queryClient = useQueryClient();
   const [slideIndex, setSlideIndex] = useState(0);
+
+  const MAX_WIDTH = 1200;
+  const isDesktop = width >= 1024;
+  const boundedWidth = Math.min(width, MAX_WIDTH);
+  const paddingH = isDesktop ? 24 : 0;
+  const availableWidth = boundedWidth - (paddingH * 2);
+  const gap = 32;
+  const galleryContainerWidth = isDesktop ? (availableWidth - gap) / 2 : width;
+
   const [viewerItem, setViewerItem] = useState<UCReviewMedia | null>(null);
   // Optimistic wishlist toggle state: null = use server data
   const [wishlistPending, setWishlistPending] = useState<boolean | null>(null);
@@ -57,10 +66,10 @@ export default function ProductDetailScreen() {
   useEffect(() => {
     const cell = THUMB_SIZE + 8; // thumb width + strip gap
     thumbStripRef.current?.scrollTo({
-      x: Math.max(0, slideIndex * cell - width / 2 + cell / 2),
+      x: Math.max(0, slideIndex * cell - galleryContainerWidth / 2 + cell / 2),
       animated: true,
     });
-  }, [slideIndex, width]);
+  }, [slideIndex, galleryContainerWidth]);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -160,21 +169,118 @@ export default function ProductDetailScreen() {
   ];
 
   function goToSlide(i: number) {
-    galleryRef.current?.scrollTo({ x: i * width, animated: true });
+    galleryRef.current?.scrollTo({ x: i * galleryContainerWidth, animated: true });
     setSlideIndex(i);
   }
 
   const myReview = reviewData?.reviews.find((r) => r.mine);
   const reviewParams = { productId: String(product.id), productName: product.name };
 
+  const ctaContent = (
+    <View style={[styles.footer, isDesktop && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      {isEnquiryOnly ? (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            router.push(`/enquiry?productId=${product.id}&productName=${encodeURIComponent(product.name)}`);
+          }}
+          style={[styles.addBtn, { backgroundColor: colors.primary }]}
+          activeOpacity={0.85}>
+          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
+          <Text style={[styles.addBtnText, { color: '#fff' }]}>Enquire About This Product</Text>
+        </TouchableOpacity>
+      ) : (
+        <>
+          <TouchableOpacity onPress={() => router.push('/cart')} activeOpacity={0.8}
+            style={[styles.cartIcon, { borderColor: colors.border }]}>
+            <Ionicons name="cart-outline" size={22} color={colors.primary} />
+            {/* Hydration-gated: never render a badge state derived from the pre-hydration default */}
+            {cartHydrated && totalItems > 0 && (
+              <View style={styles.badge}><Text style={styles.badgeText}>{totalItems}</Text></View>
+            )}
+          </TouchableOpacity>
+          {inStock ? (
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  price: parseFloat(displayPrice),
+                  quantity: 1,
+                  image: resolveMediaUrl(product.images[0]?.src ?? ''),
+                  sku: product.sku,
+                });
+                router.push('/cart');
+              }}
+              style={[styles.addBtn, { backgroundColor: colors.primary }]}
+              activeOpacity={0.85}>
+              <Ionicons name="cart-outline" size={20} color="#fff" />
+              <Text style={[styles.addBtnText, { color: '#fff' }]}>Add to Cart</Text>
+            </TouchableOpacity>
+          ) : (
+            /* Out of stock — show wishlist toggle so the user can be notified on restock */
+            <TouchableOpacity
+              onPress={() => {
+                if (!token) { router.push('/auth/login'); return; }
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                toggleWishlist();
+              }}
+              activeOpacity={0.85}
+              style={[
+                styles.addBtn,
+                isWishlisted
+                  ? { backgroundColor: '#FFF0F0', borderWidth: 1.5, borderColor: colors.destructive }
+                  : { backgroundColor: colors.primaryLight, borderWidth: 1.5, borderColor: colors.primary },
+              ]}>
+              <Ionicons
+                name={isWishlisted ? 'heart' : 'heart-outline'}
+                size={20}
+                color={isWishlisted ? colors.destructive : colors.primary}
+              />
+              <Text style={[styles.addBtnText, { color: isWishlisted ? colors.destructive : colors.primary }]}>
+                {isWishlisted ? 'Remove from Wishlist' : 'Notify When Back in Stock'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: isDesktop ? 40 : 120, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: paddingH }} showsVerticalScrollIndicator={false}>
 
-        {/* ── Gallery ─────────────────────────────────────────────────── */}
-        <View style={{ backgroundColor: '#0d0d0d' }}>
+        {isDesktop && (
           <TouchableOpacity
             onPress={() => {
+              if (returnCategory) {
+                router.replace({
+                  pathname: '/(tabs)/products',
+                  params: { category: returnCategory },
+                } as never);
+              } else {
+                router.back();
+              }
+            }}
+            style={[styles.desktopBackBtn, { marginBottom: 16 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Back to products"
+          >
+            <Ionicons name="chevron-back" size={20} color={colors.text} />
+            <Text style={[styles.desktopBackBtnText, { color: colors.text }]}>Products</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? gap : 0, alignItems: 'flex-start' }}>
+          <View style={{ width: isDesktop ? galleryContainerWidth : '100%' }}>
+
+            {/* ── Gallery ─────────────────────────────────────────────────── */}
+            <View style={{ backgroundColor: '#0d0d0d', borderRadius: isDesktop ? 16 : 0, overflow: 'hidden' }}>
+              {!isDesktop && (
+                <TouchableOpacity
+                  onPress={() => {
               if (returnCategory) {
                 router.replace({
                   pathname: '/(tabs)/products',
@@ -191,6 +297,7 @@ export default function ProductDetailScreen() {
             <Ionicons name="chevron-back" size={22} color="#fff" />
             <Text style={styles.backBtnText}>Products</Text>
           </TouchableOpacity>
+          )}
 
           {/* Main slide area */}
           <View style={{ height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
@@ -205,28 +312,25 @@ export default function ProductDetailScreen() {
                 decelerationRate="fast"
                 disableIntervalMomentum
                 showsHorizontalScrollIndicator={false}
-                // Track the index continuously via onScroll (not just
-                // onMomentumScrollEnd, which never fires on web) so the
-                // counter and thumbnails always stay in sync with the swipe.
                 scrollEventThrottle={16}
                 onScroll={(e) => {
-                  const w = e.nativeEvent.layoutMeasurement.width || width;
+                  const w = e.nativeEvent.layoutMeasurement.width || galleryContainerWidth;
                   const i = Math.max(0, Math.min(slides.length - 1, Math.round(e.nativeEvent.contentOffset.x / w)));
                   setSlideIndex(prev => (prev === i ? prev : i));
                 }}
                 style={{ height: GALLERY_H }}
               >
                 {slides.map((slide, i) => (
-                  <View key={i} style={{ width, height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
+                  <View key={i} style={{ width: galleryContainerWidth, height: GALLERY_H, alignItems: 'center', justifyContent: 'center' }}>
                     {slide.kind === 'photo' ? (
                       <Image
-                        source={{ uri: resizedImageUrl(slide.src, width) }}
-                        style={{ width, height: GALLERY_H }}
+                        source={{ uri: resizedImageUrl(slide.src, galleryContainerWidth) }}
+                        style={{ width: galleryContainerWidth, height: GALLERY_H }}
                         contentFit="contain"
                         transition={150}
                       />
                     ) : (
-                      <View style={{ width, height: GALLERY_H }}>
+                      <View style={{ width: galleryContainerWidth, height: GALLERY_H }}>
                         <VideoView
                           player={player}
                           style={{ width: '100%', height: '100%' }}
@@ -333,9 +437,11 @@ export default function ProductDetailScreen() {
           )}
         </View>
         {/* ── /Gallery ─────────────────────────────────────────────────── */}
+        </View>
 
-        <View style={styles.body}>
-          {/* Categories are navigation controls, not passive metadata. */}
+        <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '100%' }}>
+          <View style={[styles.body, isDesktop && { padding: 0, paddingBottom: 40 }]}>
+            {/* Categories are navigation controls, not passive metadata. */}
           {product.categories.length > 0 && (
             <View style={styles.categoryChips}>
               {product.categories.map(category => {
@@ -520,78 +626,13 @@ export default function ProductDetailScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {isDesktop && ctaContent}
+        </View>
+      </View>
       </ScrollView>
 
-      {/* Bottom CTA */}
-      <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-        {isEnquiryOnly ? (
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push(`/enquiry?productId=${product.id}&productName=${encodeURIComponent(product.name)}`);
-            }}
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            activeOpacity={0.85}>
-            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
-            <Text style={[styles.addBtnText, { color: '#fff' }]}>Enquire About This Product</Text>
-          </TouchableOpacity>
-        ) : (
-          <>
-            <TouchableOpacity onPress={() => router.push('/cart')} activeOpacity={0.8}
-              style={[styles.cartIcon, { borderColor: colors.border }]}>
-              <Ionicons name="cart-outline" size={22} color={colors.primary} />
-              {/* Hydration-gated: never render a badge state derived from the pre-hydration default */}
-              {cartHydrated && totalItems > 0 && (
-                <View style={styles.badge}><Text style={styles.badgeText}>{totalItems}</Text></View>
-              )}
-            </TouchableOpacity>
-            {inStock ? (
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  addItem({
-                    id: product.id,
-                    name: product.name,
-                    price: parseFloat(displayPrice),
-                    quantity: 1,
-                    image: resolveMediaUrl(product.images[0]?.src ?? ''),
-                    sku: product.sku,
-                  });
-                  router.push('/cart');
-                }}
-                style={[styles.addBtn, { backgroundColor: colors.primary }]}
-                activeOpacity={0.85}>
-                <Ionicons name="cart-outline" size={20} color="#fff" />
-                <Text style={[styles.addBtnText, { color: '#fff' }]}>Add to Cart</Text>
-              </TouchableOpacity>
-            ) : (
-              /* Out of stock — show wishlist toggle so the user can be notified on restock */
-              <TouchableOpacity
-                onPress={() => {
-                  if (!token) { router.push('/auth/login'); return; }
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  toggleWishlist();
-                }}
-                activeOpacity={0.85}
-                style={[
-                  styles.addBtn,
-                  isWishlisted
-                    ? { backgroundColor: '#FFF0F0', borderWidth: 1.5, borderColor: colors.destructive }
-                    : { backgroundColor: colors.primaryLight, borderWidth: 1.5, borderColor: colors.primary },
-                ]}>
-                <Ionicons
-                  name={isWishlisted ? 'heart' : 'heart-outline'}
-                  size={20}
-                  color={isWishlisted ? colors.destructive : colors.primary}
-                />
-                <Text style={[styles.addBtnText, { color: isWishlisted ? colors.destructive : colors.primary }]}>
-                  {isWishlisted ? 'Remove from Wishlist' : 'Notify When Back in Stock'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
-      </View>
+      {!isDesktop && ctaContent}
 
       <MediaViewer item={viewerItem} onClose={() => setViewerItem(null)} />
     </View>
@@ -601,6 +642,13 @@ export default function ProductDetailScreen() {
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
+  desktopBackBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 12, alignSelf: 'flex-start',
+  },
+  desktopBackBtnText: {
+    fontSize: 15, fontWeight: '700' as const,
+  },
   // Gallery
   backBtn: {
     position: 'absolute', top: 12, left: 12, zIndex: 3,
@@ -694,6 +742,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', gap: 12, padding: 16,
     paddingBottom: Platform.OS === 'web' ? 34 : 16,
     borderTopWidth: 1,
+  },
+  footerDesktop: {
+    position: 'relative',
+    borderTopWidth: 0,
+    padding: 0,
+    marginTop: 20,
+    width: '100%',
   },
   cartIcon: { width: 50, height: 50, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center' },

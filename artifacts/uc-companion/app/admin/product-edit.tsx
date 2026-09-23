@@ -144,7 +144,10 @@ export default function ProductEditAdminScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 40 : 60 }}
+      contentContainerStyle={{
+        padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 40 : 60,
+        width: '100%', maxWidth: 800, alignSelf: 'center'
+      }}
       keyboardShouldPersistTaps="handled"
     >
       <Text style={[s.subhead, { color: colors.mutedForeground }]}>

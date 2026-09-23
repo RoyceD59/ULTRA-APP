@@ -268,7 +268,10 @@ const baileysLogger = pino({ level: "silent" });
 // ─── Module-level state ───────────────────────────────────────────────────────
 
 export type WaState = "disconnected" | "connecting" | "qr" | "connected" | "error";
-export type WaErrorCode = "QR_GENERATION_FAILED" | "WHATSAPP_INIT_FAILED";
+export type WaErrorCode =
+  | "QR_GENERATION_FAILED"
+  | "QR_EXPIRED"
+  | "WHATSAPP_INIT_FAILED";
 export interface WaError {
   code: WaErrorCode;
   message: string;
@@ -280,6 +283,8 @@ let connectionState: WaState = "disconnected";
 let currentError: WaError | null = null;
 let isInitializing = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let qrExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+let sessionSyncQueue: Promise<void> = Promise.resolve();
 // Invalidated by disconnect (and by a manual retry) so work belonging to an
 // old socket cannot install a session or change the state of a newer socket.
 let lifecycleGeneration = 0;
@@ -310,6 +315,51 @@ function closeSocketWithoutLogout(socket: WASocket | null): void {
   void socket.end(undefined).catch(() => {
     // The socket may already be closed while a retry is being started.
   });
+}
+
+/** Remove all locally persisted pairing material. Never return or log file contents. */
+async function clearLocalSession(): Promise<void> {
+  try {
+    await rm(AUTH_DIR, { recursive: true, force: true });
+  } catch (err) {
+    console.error("[whatsapp] Failed to clear local session state:", err instanceof Error ? err.message : "unknown error");
+    throw new Error("WhatsApp local session cleanup failed");
+  }
+}
+
+/** Remove the server-side object-storage copy so a later connect cannot restore it. */
+async function clearStoredSession(): Promise<void> {
+  if (!SESSION_BUCKET_PATH) return;
+  try {
+    const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
+    // Refuse to wipe a bucket root: the session must have an isolated prefix
+    // so disconnect can never delete unrelated application objects.
+    if (!bucketName || !prefix) return;
+    const dirPrefix = prefix ? `${prefix}/` : "";
+    const [files] = await objectStorageClient.bucket(bucketName).getFiles({
+      prefix: dirPrefix || undefined,
+    });
+    await Promise.all(
+      files
+        .filter((file) => {
+          const name = file.name.slice(dirPrefix.length);
+          return Boolean(name) && !name.includes("/") && !name.includes("\\");
+        })
+        .map((file) => file.delete()),
+    );
+  } catch (err) {
+    // A failed remote cleanup must be visible to operators, but must not expose
+    // bucket names, paths, or credential contents in the response.
+    console.error("[whatsapp] Failed to clear stored session state:", err instanceof Error ? err.message : "unknown error");
+    throw new Error("WhatsApp stored session cleanup failed");
+  }
+}
+
+function clearQrExpiryTimer(): void {
+  if (qrExpiryTimer) {
+    clearTimeout(qrExpiryTimer);
+    qrExpiryTimer = null;
+  }
 }
 
 // Alert deduplication: track whether we have already fired an alert for the
@@ -541,7 +591,17 @@ export async function initWhatsApp(): Promise<void> {
       if (generation !== lifecycleGeneration) return;
       await saveCreds();
       if (generation !== lifecycleGeneration) return;
-      void syncToObjectStorage();
+      sessionSyncQueue = sessionSyncQueue
+        .then(async () => {
+          if (generation !== lifecycleGeneration) return;
+          await syncToObjectStorage();
+        })
+        .catch((err) => {
+          console.error(
+            "[whatsapp] Session sync queue failed:",
+            err instanceof Error ? err.message : "unknown error",
+          );
+        });
     };
 
     const nextSock = makeWASocket({
@@ -568,6 +628,7 @@ export async function initWhatsApp(): Promise<void> {
 
       if (qr) {
         const qrSequence = ++latestQrSequence;
+        clearQrExpiryTimer();
         try {
           const qrDataUri = await toDataURL(qr, { errorCorrectionLevel: "M", margin: 2 });
           if (
@@ -584,6 +645,24 @@ export async function initWhatsApp(): Promise<void> {
           currentError = null;
           connectionState = "qr";
           isInitializing = false;
+          // Baileys rotates QR codes, but some versions do not emit an
+          // explicit expiry event. Surface an actionable terminal state
+          // rather than leaving ProjectHub with a stale QR forever.
+          qrExpiryTimer = setTimeout(() => {
+            if (
+              generation !== lifecycleGeneration ||
+              qrSequence !== latestQrSequence ||
+              connectionState !== "qr"
+            ) return;
+            currentQrDataUri = null;
+            currentError = {
+              code: "QR_EXPIRED",
+              message: "This WhatsApp QR code expired. Retry to generate a new code.",
+            };
+            connectionState = "error";
+            isInitializing = false;
+            qrExpiryTimer = null;
+          }, 60_000);
 
           // Alert admins immediately: a QR state means the session has ended
           // and someone must physically scan the code to restore service.
@@ -632,6 +711,7 @@ export async function initWhatsApp(): Promise<void> {
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
         sock = null;
+        clearQrExpiryTimer();
         currentQrDataUri = null;
         isInitializing = false;
 
@@ -678,6 +758,7 @@ export async function initWhatsApp(): Promise<void> {
           reconnectTimer = null;
         }
         currentQrDataUri = null;
+        clearQrExpiryTimer();
         currentError = null;
         connectionState = "connected";
         isInitializing = false;
@@ -727,6 +808,7 @@ export async function disconnectWhatsApp(): Promise<void> {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  clearQrExpiryTimer();
   if (disconnectAlertTimer) {
     clearTimeout(disconnectAlertTimer);
     disconnectAlertTimer = null;
@@ -743,7 +825,15 @@ export async function disconnectWhatsApp(): Promise<void> {
       // Ignore — socket may already be closed
     }
   }
+  // Let any credential write that started before invalidation finish, then
+  // delete both copies. This ordering prevents a late Object Storage upload
+  // from restoring the old number after disconnect reports success.
+  await sessionSyncQueue.catch(() => undefined);
+  const cleanup = await Promise.allSettled([clearLocalSession(), clearStoredSession()]);
   currentQrDataUri = null;
   connectionState = "disconnected";
   isInitializing = false;
+  if (cleanup.some((result) => result.status === "rejected")) {
+    throw new Error("WhatsApp session cleanup failed");
+  }
 }

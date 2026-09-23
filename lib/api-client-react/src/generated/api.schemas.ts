@@ -1210,6 +1210,152 @@ export interface InventoryProduct {
   syncedAt: string;
 }
 
+export interface UcProductImage {
+  src: string;
+  alt: string;
+}
+
+export interface UcProductCategory {
+  name?: string;
+  [key: string]: unknown;
+ }
+
+export type UcProductTagsItem = { [key: string]: unknown };
+
+export interface UcProduct {
+  id: number;
+  name: string;
+  price: string;
+  /** @nullable */
+  regularPrice: string | null;
+  /** @nullable */
+  salePrice: string | null;
+  description: string;
+  /** @nullable */
+  shortDescription: string | null;
+  /** @nullable */
+  tagline: string | null;
+  categories: UcProductCategory[];
+  images: UcProductImage[];
+  /** @nullable */
+  sku: string | null;
+  /** @nullable */
+  stockStatus: string | null;
+  /** @nullable */
+  stockQuantity: number | null;
+  tags: UcProductTagsItem[];
+  lifespanDays: number;
+  filterCapacityLitres: number;
+  enquiryOnly: boolean;
+  totalSales: number;
+  /** @nullable */
+  videoUrl: string | null;
+}
+
+export type UcProductUpdateStockStatus = typeof UcProductUpdateStockStatus[keyof typeof UcProductUpdateStockStatus];
+
+
+export const UcProductUpdateStockStatus = {
+  instock: 'instock',
+  outofstock: 'outofstock',
+  onbackorder: 'onbackorder',
+} as const;
+
+export interface UcProductUpdate {
+  /** @minLength 1 */
+  name?: string;
+  description?: string;
+  shortDescription?: string;
+  /** @minimum 0 */
+  regularPrice?: string | number;
+  /** @minimum 0 */
+  salePrice?: string | number;
+  stockStatus?: UcProductUpdateStockStatus;
+  /** @minimum 0 */
+  stockQuantity?: number;
+}
+
+export type UcProductUpdateResultSource = typeof UcProductUpdateResultSource[keyof typeof UcProductUpdateResultSource];
+
+
+export const UcProductUpdateResultSource = {
+  woocommerce: 'woocommerce',
+  mock: 'mock',
+} as const;
+
+export interface UcProductUpdateResult {
+  ok: boolean;
+  productId: number;
+  updated: string[];
+  source: UcProductUpdateResultSource;
+}
+
+export type UcProductMediaType = typeof UcProductMediaType[keyof typeof UcProductMediaType];
+
+
+export const UcProductMediaType = {
+  photo: 'photo',
+  video: 'video',
+} as const;
+
+export interface UcProductMedia {
+  id: number;
+  productId: number;
+  type: UcProductMediaType;
+  /** @maxLength 2048 */
+  url: string;
+  alt: string;
+  position: number;
+  createdAt: string;
+}
+
+export type UcProductMediaInputType = typeof UcProductMediaInputType[keyof typeof UcProductMediaInputType];
+
+
+export const UcProductMediaInputType = {
+  photo: 'photo',
+  video: 'video',
+} as const;
+
+export interface UcProductMediaInput {
+  /**
+     * Absolute URL, /objects/... path, or API storage/product-image path.
+     * @minLength 1
+     * @maxLength 2048
+     */
+  url: string;
+  type: UcProductMediaInputType;
+  alt?: string;
+  position?: number;
+}
+
+export interface UcUploadRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @exclusiveMinimum 0 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+  assessmentId?: string;
+  actionToken?: string;
+}
+
+export type UcUploadResponseKind = typeof UcUploadResponseKind[keyof typeof UcUploadResponseKind];
+
+
+export const UcUploadResponseKind = {
+  photo: 'photo',
+  video: 'video',
+  document: 'document',
+} as const;
+
+export interface UcUploadResponse {
+  /** Presigned PUT URL */
+  uploadURL: string;
+  objectPath: string;
+  kind: UcUploadResponseKind;
+}
+
 export type InventoryListSource = typeof InventoryListSource[keyof typeof InventoryListSource];
 
 
@@ -2611,6 +2757,11 @@ limit?: number;
  * @minimum 1
  */
 customerId?: number;
+};
+
+export type ListUcProductsParams = {
+category?: string;
+search?: string;
 };
 
 export type ListUcCustomersParams = {

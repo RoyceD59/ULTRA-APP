@@ -8460,8 +8460,8 @@ router.patch("/uc/admin/products/:id", async (req, res): Promise<void> => {
     wcPayload["sale_price"] = p;
   }
   if (body.stockStatus !== undefined) {
-    if (body.stockStatus !== "instock" && body.stockStatus !== "outofstock") {
-      res.status(400).json({ error: "stockStatus must be 'instock' or 'outofstock'" }); return;
+    if (!["instock", "outofstock", "onbackorder"].includes(String(body.stockStatus))) {
+      res.status(400).json({ error: "stockStatus must be 'instock', 'outofstock', or 'onbackorder'" }); return;
     }
     wcPayload["stock_status"] = body.stockStatus;
   }

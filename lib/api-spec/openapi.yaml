@@ -413,6 +413,167 @@ paths:
         "401":
           description: Unauthorized
 
+  /uc/products:
+    get:
+      operationId: listUcProducts
+      tags: [uc-admin]
+      summary: List customer-facing products
+      description: Public catalogue list; optional category and name/SKU search filters.
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customer-facing catalogue
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UcProduct" }
+        "502": { description: WooCommerce catalogue temporarily unavailable }
+        "500": { description: Failed to fetch products }
+
+  /uc/products/{id}:
+    get:
+      operationId: getUcProduct
+      tags: [uc-admin]
+      summary: Read one customer-facing product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Customer-facing product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProduct" }
+        "404": { description: Product not found }
+        "500": { description: Failed to fetch product }
+
+  /uc/admin/products/{id}:
+    patch:
+      operationId: updateUcProduct
+      tags: [uc-admin]
+      summary: Update administrator-editable product fields
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcProductUpdate" }
+      responses:
+        "200":
+          description: Product fields accepted by WooCommerce
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProductUpdateResult" }
+        "400": { description: Invalid product id or update field }
+        "401": { description: Unauthorized }
+        "502": { description: WooCommerce update failed or unreachable }
+
+  /uc/admin/products/{id}/media:
+    get:
+      operationId: listUcProductMedia
+      tags: [uc-admin]
+      summary: List team-managed media for a product
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Ordered team-managed media
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UcProductMedia" }
+        "400": { description: Invalid product id }
+        "403": { description: Admin access required }
+        "500": { description: Failed to load product media }
+    post:
+      operationId: attachUcProductMedia
+      tags: [uc-admin]
+      summary: Attach uploaded media to a product
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcProductMediaInput" }
+      responses:
+        "201":
+          description: Media attached
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProductMedia" }
+        "400": { description: "Invalid media URL, type, or uploaded object" }
+        "403": { description: Admin access required }
+        "500": { description: Failed to add product media }
+
+  /uc/admin/media/{mediaId}:
+    delete:
+      operationId: deleteUcProductMedia
+      tags: [uc-admin]
+      summary: Remove team-managed product media
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Media removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400": { description: Invalid media id }
+        "403": { description: Admin access required }
+        "404": { description: Media not found }
+        "500": { description: Failed to delete product media }
+
+  /uc/uploads/request-url:
+    post:
+      operationId: requestUcUploadUrl
+      tags: [uc-admin]
+      summary: Request a presigned upload URL
+      description: Requires a bearer token, except for a valid water-test action token and assessment id.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcUploadRequest" }
+      responses:
+        "200":
+          description: Presigned upload details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcUploadResponse" }
+        "400": { description: "Missing, unsupported, or oversized file metadata" }
+        "401": { description: Authentication or assessment action token required }
+        "403": { description: Assessment owner required }
+        "500": { description: Failed to generate upload URL }
+
   /uc/admin/inventory/wishlist-demand:
     get:
       operationId: listUcInventoryWishlistDemand
@@ -3868,6 +4029,116 @@ components:
         stockStatus:   { type: string }
         permalink:     { type: ["string", "null"] }
         syncedAt:      { type: string, format: date-time }
+
+    UcProductImage:
+      type: object
+      required: [src, alt]
+      properties:
+        src: { type: string }
+        alt: { type: string }
+
+    UcProductCategory:
+      type: object
+      additionalProperties: true
+      properties:
+        name: { type: string }
+
+    UcProduct:
+      type: object
+      required: [id, name, price, regularPrice, salePrice, description, shortDescription, tagline, categories, images, sku, stockStatus, stockQuantity, tags, lifespanDays, filterCapacityLitres, enquiryOnly, totalSales, videoUrl]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: string }
+        regularPrice: { type: ["string", "null"] }
+        salePrice: { type: ["string", "null"] }
+        description: { type: string }
+        shortDescription: { type: ["string", "null"] }
+        tagline: { type: ["string", "null"] }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/UcProductCategory" }
+        images:
+          type: array
+          items: { $ref: "#/components/schemas/UcProductImage" }
+        sku: { type: ["string", "null"] }
+        stockStatus: { type: ["string", "null"] }
+        stockQuantity: { type: ["integer", "null"] }
+        tags:
+          type: array
+          items: { type: object, additionalProperties: true }
+        lifespanDays: { type: integer }
+        filterCapacityLitres: { type: number }
+        enquiryOnly: { type: boolean }
+        totalSales: { type: integer }
+        videoUrl: { type: ["string", "null"] }
+
+    UcProductUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        shortDescription: { type: string }
+        regularPrice: { type: [string, number], minimum: 0 }
+        # Omit salePrice to leave it unchanged; send "" explicitly to remove it.
+        salePrice: { type: [string, number], minimum: 0 }
+        stockStatus: { type: string, enum: [instock, outofstock, onbackorder] }
+        stockQuantity: { type: integer, minimum: 0 }
+
+    UcProductUpdateResult:
+      type: object
+      required: [ok, productId, updated, source]
+      properties:
+        ok: { type: boolean }
+        productId: { type: integer }
+        updated:
+          type: array
+          items: { type: string }
+        source: { type: string, enum: [woocommerce, mock] }
+
+    UcProductMedia:
+      type: object
+      required: [id, productId, type, url, alt, position, createdAt]
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        type: { type: string, enum: [photo, video] }
+        url: { type: string, maxLength: 2048 }
+        alt: { type: string }
+        position: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    UcProductMediaInput:
+      type: object
+      required: [url, type]
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Absolute URL, /objects/... path, or API storage/product-image path.
+        type: { type: string, enum: [photo, video] }
+        alt: { type: string }
+        position: { type: integer }
+
+    UcUploadRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: number, exclusiveMinimum: 0 }
+        contentType: { type: string, minLength: 1 }
+        assessmentId: { type: string }
+        actionToken: { type: string }
+
+    UcUploadResponse:
+      type: object
+      required: [uploadURL, objectPath, kind]
+      properties:
+        uploadURL: { type: string, description: Presigned PUT URL }
+        objectPath: { type: string }
+        kind: { type: string, enum: [photo, video, document] }
 
     InventoryList:
       type: object

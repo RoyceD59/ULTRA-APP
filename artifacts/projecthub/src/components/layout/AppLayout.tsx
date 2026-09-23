@@ -3,7 +3,7 @@ import {
   Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets, MapPin, Tag,
   FolderKanban, Gauge, Gift, LayoutDashboard, Leaf, Link2, LogOut,
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
-  AlertTriangle, BellRing, Menu, WifiOff, X, FileText,
+  AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,7 @@ const ADMIN_NAVIGATION = [
   ["User Management", "/admin/users", UserCog],
   ["Payment Settings", "/admin/payment-settings", CreditCard],
   ["Notification Settings", "/admin/notification-settings", Bell],
+  ["Products", "/admin/products", PackageSearch],
   ["Inventory", "/admin/inventory", Package],
   ["Integrations", "/admin/integrations", Link2],
   ["Rewards", "/admin/rewards", Gift],

@@ -107,6 +107,7 @@ import type {
   ListUcAdminLocations200,
   ListUcCustomersParams,
   ListUcOfflineClients200,
+  ListUcProductsParams,
   ListUnsyncedRegistrations200,
   LocationTierAnalyticsInput,
   Member,
@@ -163,9 +164,16 @@ import type {
   UcOrderCustomerStageInput,
   UcPasswordChangeResult,
   UcPermanentPasswordInput,
+  UcProduct,
+  UcProductMedia,
+  UcProductMediaInput,
+  UcProductUpdate,
+  UcProductUpdateResult,
   UcReferralSnapshot,
   UcTemporaryPasswordInput,
   UcTemporaryPasswordResult,
+  UcUploadRequest,
+  UcUploadResponse,
   UcWaterTestCustomerStageInput,
   UnsyncedRegistrationRecoveryInput,
   UpdateLocationAssessment200,
@@ -1392,6 +1400,532 @@ export function useListUcInventory<TData = Awaited<ReturnType<typeof listUcInven
 
 
 
+
+export const getListUcProductsUrl = (params?: ListUcProductsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/products?${stringifiedParams}` : `/api/uc/products`
+}
+
+/**
+ * Public catalogue list; optional category and name/SKU search filters.
+ * @summary List customer-facing products
+ */
+export const listUcProducts = async (params?: ListUcProductsParams, options?: RequestInit): Promise<UcProduct[]> => {
+
+  return customFetch<UcProduct[]>(getListUcProductsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcProductsQueryKey = (params?: ListUcProductsParams,) => {
+    return [
+    `/api/uc/products`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListUcProductsQueryOptions = <TData = Awaited<ReturnType<typeof listUcProducts>>, TError = ErrorType<void>>(params?: ListUcProductsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcProductsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcProducts>>> = ({ signal }) => listUcProducts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcProducts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listUcProducts>>>
+export type ListUcProductsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List customer-facing products
+ */
+
+export function useListUcProducts<TData = Awaited<ReturnType<typeof listUcProducts>>, TError = ErrorType<void>>(
+ params?: ListUcProductsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcProductsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUcProductUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/products/${id}`
+}
+
+/**
+ * @summary Read one customer-facing product
+ */
+export const getUcProduct = async (id: number, options?: RequestInit): Promise<UcProduct> => {
+
+  return customFetch<UcProduct>(getGetUcProductUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcProductQueryKey = (id: number,) => {
+    return [
+    `/api/uc/products/${id}`
+    ] as const;
+    }
+
+
+export const getGetUcProductQueryOptions = <TData = Awaited<ReturnType<typeof getUcProduct>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcProductQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcProduct>>> = ({ signal }) => getUcProduct(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcProductQueryResult = NonNullable<Awaited<ReturnType<typeof getUcProduct>>>
+export type GetUcProductQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read one customer-facing product
+ */
+
+export function useGetUcProduct<TData = Awaited<ReturnType<typeof getUcProduct>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcProductQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateUcProductUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/products/${id}`
+}
+
+/**
+ * @summary Update administrator-editable product fields
+ */
+export const updateUcProduct = async (id: number,
+    ucProductUpdate: UcProductUpdate, options?: RequestInit): Promise<UcProductUpdateResult> => {
+
+  return customFetch<UcProductUpdateResult>(getUpdateUcProductUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucProductUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcProductMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcProduct>>, TError,{id: number;data: BodyType<UcProductUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcProduct>>, TError,{id: number;data: BodyType<UcProductUpdate>}, TContext> => {
+
+const mutationKey = ['updateUcProduct'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcProduct>>, {id: number;data: BodyType<UcProductUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcProduct(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcProductMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcProduct>>>
+    export type UpdateUcProductMutationBody = BodyType<UcProductUpdate>
+    export type UpdateUcProductMutationError = ErrorType<void>
+
+    /**
+ * @summary Update administrator-editable product fields
+ */
+export const useUpdateUcProduct = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcProduct>>, TError,{id: number;data: BodyType<UcProductUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcProduct>>,
+        TError,
+        {id: number;data: BodyType<UcProductUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcProductMutationOptions(options));
+    }
+
+export const getListUcProductMediaUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/products/${id}/media`
+}
+
+/**
+ * @summary List team-managed media for a product
+ */
+export const listUcProductMedia = async (id: number, options?: RequestInit): Promise<UcProductMedia[]> => {
+
+  return customFetch<UcProductMedia[]>(getListUcProductMediaUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcProductMediaQueryKey = (id: number,) => {
+    return [
+    `/api/uc/admin/products/${id}/media`
+    ] as const;
+    }
+
+
+export const getListUcProductMediaQueryOptions = <TData = Awaited<ReturnType<typeof listUcProductMedia>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcProductMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcProductMediaQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcProductMedia>>> = ({ signal }) => listUcProductMedia(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcProductMedia>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcProductMediaQueryResult = NonNullable<Awaited<ReturnType<typeof listUcProductMedia>>>
+export type ListUcProductMediaQueryError = ErrorType<void>
+
+
+/**
+ * @summary List team-managed media for a product
+ */
+
+export function useListUcProductMedia<TData = Awaited<ReturnType<typeof listUcProductMedia>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcProductMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcProductMediaQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAttachUcProductMediaUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/products/${id}/media`
+}
+
+/**
+ * @summary Attach uploaded media to a product
+ */
+export const attachUcProductMedia = async (id: number,
+    ucProductMediaInput: UcProductMediaInput, options?: RequestInit): Promise<UcProductMedia> => {
+
+  return customFetch<UcProductMedia>(getAttachUcProductMediaUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucProductMediaInput)
+  }
+);}
+
+
+
+
+
+export const getAttachUcProductMediaMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachUcProductMedia>>, TError,{id: number;data: BodyType<UcProductMediaInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof attachUcProductMedia>>, TError,{id: number;data: BodyType<UcProductMediaInput>}, TContext> => {
+
+const mutationKey = ['attachUcProductMedia'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof attachUcProductMedia>>, {id: number;data: BodyType<UcProductMediaInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  attachUcProductMedia(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AttachUcProductMediaMutationResult = NonNullable<Awaited<ReturnType<typeof attachUcProductMedia>>>
+    export type AttachUcProductMediaMutationBody = BodyType<UcProductMediaInput>
+    export type AttachUcProductMediaMutationError = ErrorType<void>
+
+    /**
+ * @summary Attach uploaded media to a product
+ */
+export const useAttachUcProductMedia = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachUcProductMedia>>, TError,{id: number;data: BodyType<UcProductMediaInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof attachUcProductMedia>>,
+        TError,
+        {id: number;data: BodyType<UcProductMediaInput>},
+        TContext
+      > => {
+      return useMutation(getAttachUcProductMediaMutationOptions(options));
+    }
+
+export const getDeleteUcProductMediaUrl = (mediaId: number,) => {
+
+
+
+
+  return `/api/uc/admin/media/${mediaId}`
+}
+
+/**
+ * @summary Remove team-managed product media
+ */
+export const deleteUcProductMedia = async (mediaId: number, options?: RequestInit): Promise<OkResponse> => {
+
+  return customFetch<OkResponse>(getDeleteUcProductMediaUrl(mediaId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteUcProductMediaMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUcProductMedia>>, TError,{mediaId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUcProductMedia>>, TError,{mediaId: number}, TContext> => {
+
+const mutationKey = ['deleteUcProductMedia'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUcProductMedia>>, {mediaId: number}> = (props) => {
+          const {mediaId} = props ?? {};
+
+          return  deleteUcProductMedia(mediaId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUcProductMediaMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUcProductMedia>>>
+
+    export type DeleteUcProductMediaMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove team-managed product media
+ */
+export const useDeleteUcProductMedia = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUcProductMedia>>, TError,{mediaId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUcProductMedia>>,
+        TError,
+        {mediaId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteUcProductMediaMutationOptions(options));
+    }
+
+export const getRequestUcUploadUrlUrl = () => {
+
+
+
+
+  return `/api/uc/uploads/request-url`
+}
+
+/**
+ * Requires a bearer token, except for a valid water-test action token and assessment id.
+ * @summary Request a presigned upload URL
+ */
+export const requestUcUploadUrl = async (ucUploadRequest: UcUploadRequest, options?: RequestInit): Promise<UcUploadResponse> => {
+
+  return customFetch<UcUploadResponse>(getRequestUcUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucUploadRequest)
+  }
+);}
+
+
+
+
+
+export const getRequestUcUploadUrlMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestUcUploadUrl>>, TError,{data: BodyType<UcUploadRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestUcUploadUrl>>, TError,{data: BodyType<UcUploadRequest>}, TContext> => {
+
+const mutationKey = ['requestUcUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestUcUploadUrl>>, {data: BodyType<UcUploadRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestUcUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestUcUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof requestUcUploadUrl>>>
+    export type RequestUcUploadUrlMutationBody = BodyType<UcUploadRequest>
+    export type RequestUcUploadUrlMutationError = ErrorType<void>
+
+    /**
+ * @summary Request a presigned upload URL
+ */
+export const useRequestUcUploadUrl = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestUcUploadUrl>>, TError,{data: BodyType<UcUploadRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestUcUploadUrl>>,
+        TError,
+        {data: BodyType<UcUploadRequest>},
+        TContext
+      > => {
+      return useMutation(getRequestUcUploadUrlMutationOptions(options));
+    }
 
 export const getListUcInventoryWishlistDemandUrl = () => {
 

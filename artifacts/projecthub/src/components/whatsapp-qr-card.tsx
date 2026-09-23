@@ -80,10 +80,14 @@ export function WhatsAppQrCard() {
     enabled: authed,
   });
 
-  // Stop aggressive polling once connected; resume if disconnected
+  // Stop polling for terminal states. Connecting/QR remain live so a newly
+  // emitted QR or successful pairing appears without a page reload.
   useEffect(() => {
-    if (data?.state === "connected") setPollEnabled(false);
-    else setPollEnabled(true);
+    if (data?.state === "connected" || data?.state === "error" || data?.state === "disconnected") {
+      setPollEnabled(false);
+    } else {
+      setPollEnabled(true);
+    }
   }, [data?.state]);
 
   useEffect(() => {
@@ -260,6 +264,18 @@ export function WhatsAppQrCard() {
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                  <RefreshCw className="w-3 h-3" /> Refreshes automatically every 3 s
               </p>
+            </div>
+          )}
+
+          {authed && !isLoading && state === "qr" && !qr && !requestError && (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <AlertCircle className="h-8 w-8 text-amber-500" />
+              <p className="text-sm text-muted-foreground">
+                WhatsApp is waiting for a QR code. Retry if one does not appear shortly.
+              </p>
+              <Button type="button" variant="outline" onClick={retryConnection} disabled={connectMut.isPending}>
+                Retry connection
+              </Button>
             </div>
           )}
 

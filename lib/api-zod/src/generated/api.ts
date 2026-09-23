@@ -572,6 +572,225 @@ export const ListUcInventoryResponse = zod.object({
 
 
 /**
+ * Public catalogue list; optional category and name/SKU search filters.
+ * @summary List customer-facing products
+ */
+export const ListUcProductsQueryParams = zod.object({
+  "category": zod.coerce.string().optional(),
+  "search": zod.coerce.string().optional()
+})
+
+export const ListUcProductsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.string(),
+  "regularPrice": zod.string().nullable(),
+  "salePrice": zod.string().nullable(),
+  "description": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "tagline": zod.string().nullable(),
+  "categories": zod.array(zod.object({
+  "name": zod.string().optional()
+})),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "sku": zod.string().nullable(),
+  "stockStatus": zod.string().nullable(),
+  "stockQuantity": zod.number().nullable(),
+  "tags": zod.array(zod.record(zod.string(), zod.unknown())),
+  "lifespanDays": zod.number(),
+  "filterCapacityLitres": zod.number(),
+  "enquiryOnly": zod.boolean(),
+  "totalSales": zod.number(),
+  "videoUrl": zod.string().nullable()
+})
+export const ListUcProductsResponse = zod.array(ListUcProductsResponseItem)
+
+
+/**
+ * @summary Read one customer-facing product
+ */
+
+
+
+export const GetUcProductParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetUcProductResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.string(),
+  "regularPrice": zod.string().nullable(),
+  "salePrice": zod.string().nullable(),
+  "description": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "tagline": zod.string().nullable(),
+  "categories": zod.array(zod.object({
+  "name": zod.string().optional()
+})),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "sku": zod.string().nullable(),
+  "stockStatus": zod.string().nullable(),
+  "stockQuantity": zod.number().nullable(),
+  "tags": zod.array(zod.record(zod.string(), zod.unknown())),
+  "lifespanDays": zod.number(),
+  "filterCapacityLitres": zod.number(),
+  "enquiryOnly": zod.boolean(),
+  "totalSales": zod.number(),
+  "videoUrl": zod.string().nullable()
+})
+
+
+/**
+ * @summary Update administrator-editable product fields
+ */
+
+
+
+export const UpdateUcProductParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+
+export const updateUcProductBodyRegularPriceMinOne = 0;
+
+export const updateUcProductBodyRegularPriceMinTwo = 0;
+
+export const updateUcProductBodySalePriceMinOne = 0;
+
+export const updateUcProductBodySalePriceMinTwo = 0;
+
+export const updateUcProductBodyStockQuantityMin = 0;
+
+
+
+export const UpdateUcProductBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "description": zod.string().optional(),
+  "shortDescription": zod.string().optional(),
+  "regularPrice": zod.union([zod.string().min(updateUcProductBodyRegularPriceMinOne),zod.number().min(updateUcProductBodyRegularPriceMinTwo)]).optional(),
+  "salePrice": zod.union([zod.string().min(updateUcProductBodySalePriceMinOne),zod.number().min(updateUcProductBodySalePriceMinTwo)]).optional(),
+  "stockStatus": zod.enum(['instock', 'outofstock', 'onbackorder']).optional(),
+  "stockQuantity": zod.number().min(updateUcProductBodyStockQuantityMin).optional()
+})
+
+export const UpdateUcProductResponse = zod.object({
+  "ok": zod.boolean(),
+  "productId": zod.number(),
+  "updated": zod.array(zod.string()),
+  "source": zod.enum(['woocommerce', 'mock'])
+})
+
+
+/**
+ * @summary List team-managed media for a product
+ */
+
+
+
+export const ListUcProductMediaParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const listUcProductMediaResponseUrlMax = 2048;
+
+
+
+export const ListUcProductMediaResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "type": zod.enum(['photo', 'video']),
+  "url": zod.string().max(listUcProductMediaResponseUrlMax),
+  "alt": zod.string(),
+  "position": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListUcProductMediaResponse = zod.array(ListUcProductMediaResponseItem)
+
+
+/**
+ * @summary Attach uploaded media to a product
+ */
+
+
+
+export const AttachUcProductMediaParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const attachUcProductMediaBodyUrlMax = 2048;
+
+
+
+export const AttachUcProductMediaBody = zod.object({
+  "url": zod.string().min(1).max(attachUcProductMediaBodyUrlMax).describe('Absolute URL, \/objects\/... path, or API storage\/product-image path.'),
+  "type": zod.enum(['photo', 'video']),
+  "alt": zod.string().optional(),
+  "position": zod.number().optional()
+})
+
+export const attachUcProductMediaResponseUrlMax = 2048;
+
+
+
+export const AttachUcProductMediaResponse = zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "type": zod.enum(['photo', 'video']),
+  "url": zod.string().max(attachUcProductMediaResponseUrlMax),
+  "alt": zod.string(),
+  "position": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove team-managed product media
+ */
+
+
+
+export const DeleteUcProductMediaParams = zod.object({
+  "mediaId": zod.coerce.number().min(1)
+})
+
+export const DeleteUcProductMediaResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * Requires a bearer token, except for a valid water-test action token and assessment id.
+ * @summary Request a presigned upload URL
+ */
+
+export const requestUcUploadUrlBodySizeExclusiveMin = 0;
+
+
+
+
+export const RequestUcUploadUrlBody = zod.object({
+  "name": zod.string().min(1),
+  "size": zod.number().gt(requestUcUploadUrlBodySizeExclusiveMin),
+  "contentType": zod.string().min(1),
+  "assessmentId": zod.string().optional(),
+  "actionToken": zod.string().optional()
+})
+
+export const RequestUcUploadUrlResponse = zod.object({
+  "uploadURL": zod.string().describe('Presigned PUT URL'),
+  "objectPath": zod.string(),
+  "kind": zod.enum(['photo', 'video', 'document'])
+})
+
+
+/**
  * @summary List product demand from active restock wishlist entries
  */
 export const ListUcInventoryWishlistDemandResponseItem = zod.object({
