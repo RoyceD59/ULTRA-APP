@@ -664,6 +664,8 @@ export function useApi() {
     /** Send a message to the UC AI water quality assistant. */
     waterAiChat: (
       messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+      conversationId: string,
+      turnId: string,
       filterContext?: {
         productName?:   string;
         daysRemaining?: number;
@@ -672,7 +674,9 @@ export function useApi() {
         cleanCount?:    number;
       },
       isRetry?: boolean,
-    ) => post<{ reply: string; suggestions: string[] }>('/api/uc/ai/water-chat', { messages, filterContext, isRetry }),
+    ) => post<{ reply: string; suggestions: string[] }>('/api/uc/ai/water-chat', {
+      messages, conversationId, turnId, filterContext, isRetry,
+    }),
 
     /** Fetch the live UC environmental impact stats. */
     getImpact: () =>

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
-import { db, agentOauthAuditTable, agentOauthClientsTable, agentOauthTokensTable, conversations, ucAiFeedbackTable, ucUsersTable } from "@workspace/db";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
+import { db, agentOauthAuditTable, agentOauthClientsTable, agentOauthTokensTable, conversations, ucAiFeedbackTable, ucAlisonConversationsTable, ucAlisonTurnsTable, ucUsersTable } from "@workspace/db";
 import { requireTeamAdmin } from "./auth.js";
 
 export const AGENT_SCOPES = [
@@ -211,6 +211,76 @@ router.get("/integrations/v1/alison/feedback", requireAgent, async (req, res): P
   const rows = await db.select({ id: ucAiFeedbackTable.id, rating: ucAiFeedbackTable.rating, createdAt: ucAiFeedbackTable.createdAt })
     .from(ucAiFeedbackTable).orderBy(desc(ucAiFeedbackTable.createdAt)).limit(limit);
   res.json({ feedback: rows });
+});
+
+type AlisonCursor = { createdAt: string; id: string };
+function encodeAlisonCursor(cursor: AlisonCursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+function decodeAlisonCursor(value: unknown): AlisonCursor | null | "invalid" {
+  if (value === undefined) return null;
+  if (typeof value !== "string") return "invalid";
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<AlisonCursor>;
+    const date = new Date(parsed.createdAt ?? "");
+    if (!parsed.id || Number.isNaN(date.getTime())) return "invalid";
+    return { id: parsed.id, createdAt: date.toISOString() };
+  } catch {
+    return "invalid";
+  }
+}
+
+router.get("/integrations/v1/alison/chats", requireAgent, async (req, res): Promise<void> => {
+  if (!(await authorizeScope(req, res, "alison.read"))) return;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+  const cursor = decodeAlisonCursor(req.query.cursor);
+  if (cursor === "invalid") {
+    res.status(400).json({ error: "invalid_cursor" });
+    return;
+  }
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const cursorDate = cursor ? new Date(cursor.createdAt) : null;
+  const cursorId = cursor?.id;
+  const rows = await db.select({
+    id: ucAlisonConversationsTable.id,
+    createdAt: ucAlisonConversationsTable.createdAt,
+    updatedAt: ucAlisonConversationsTable.updatedAt,
+  }).from(ucAlisonConversationsTable)
+    .where(and(
+      gt(ucAlisonConversationsTable.createdAt, cutoff),
+      cursorDate && cursorId ? or(
+        lt(ucAlisonConversationsTable.createdAt, cursorDate),
+        and(eq(ucAlisonConversationsTable.createdAt, cursorDate), lt(ucAlisonConversationsTable.id, cursorId)),
+      ) : undefined,
+    ))
+    .orderBy(desc(ucAlisonConversationsTable.createdAt), desc(ucAlisonConversationsTable.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const turns = page.length ? await db.select({
+    conversationId: ucAlisonTurnsTable.conversationId,
+    turnId: ucAlisonTurnsTable.turnId,
+    userMessage: ucAlisonTurnsTable.userMessage,
+    assistantMessage: ucAlisonTurnsTable.assistantMessage,
+    createdAt: ucAlisonTurnsTable.createdAt,
+  }).from(ucAlisonTurnsTable)
+    .where(inArray(ucAlisonTurnsTable.conversationId, page.map((chat) => chat.id)))
+    .orderBy(asc(ucAlisonTurnsTable.createdAt), asc(ucAlisonTurnsTable.turnId)) : [];
+  const chats = page.map((chat) => ({
+    conversationId: chat.id,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+    messages: turns.filter((turn) => turn.conversationId === chat.id).flatMap((turn) => [
+      { role: "user" as const, content: turn.userMessage, createdAt: turn.createdAt },
+      { role: "assistant" as const, content: turn.assistantMessage, createdAt: turn.createdAt },
+    ]),
+  }));
+  const last = page.at(-1);
+  res.json({
+    chats,
+    nextCursor: rows.length > limit && last
+      ? encodeAlisonCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+      : null,
+  });
 });
 
 export default router;

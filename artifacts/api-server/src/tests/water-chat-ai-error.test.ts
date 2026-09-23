@@ -117,7 +117,11 @@ describe("water-chat — Anthropic service-down handling", () => {
     return `Bearer ${issueToken({ id: userId, email })}`;
   }
 
-  const VALID_BODY = { messages: [{ role: "user", content: "Hello" }] };
+  const VALID_BODY = {
+    messages: [{ role: "user", content: "Hello" }],
+    conversationId: "conversation-test-0001",
+    turnId: "turn-test-00000001",
+  };
 
   // ── test cases ───────────────────────────────────────────────────────────
 

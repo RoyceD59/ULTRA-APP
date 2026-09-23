@@ -31,6 +31,9 @@ import type {
   AiQueryAnswer,
   AiQueryInput,
   AiReport,
+  AlisonChatPage,
+  AlisonTurnInput,
+  AlisonTurnResponse,
   AnthropicConversation,
   AnthropicConversationInput,
   AnthropicConversationWithMessages,
@@ -95,6 +98,7 @@ import type {
   LegacyRegistrationStatus,
   LegacyRegistrationSubmissionInput,
   LegacyReviewDecisionInput,
+  ListAgentAlisonChatsParams,
   ListCustomerLifecycleAuditEventsParams,
   ListLifecycleReconciliationConflictsParams,
   ListLifecycleRegistrationReviewsParams,
@@ -8240,6 +8244,78 @@ export const useIssueAgentClientToken = <TError = ErrorType<void>,
       return useMutation(getIssueAgentClientTokenMutationOptions(options));
     }
 
+export const getCreateUcAlisonTurnUrl = () => {
+
+
+
+
+  return `/api/uc/ai/water-chat`
+}
+
+/**
+ * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+ * @summary Generate and persist one anonymous Alison turn
+ */
+export const createUcAlisonTurn = async (alisonTurnInput: AlisonTurnInput, options?: RequestInit): Promise<AlisonTurnResponse> => {
+
+  return customFetch<AlisonTurnResponse>(getCreateUcAlisonTurnUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(alisonTurnInput)
+  }
+);}
+
+
+
+
+
+export const getCreateUcAlisonTurnMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcAlisonTurn>>, TError,{data: BodyType<AlisonTurnInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUcAlisonTurn>>, TError,{data: BodyType<AlisonTurnInput>}, TContext> => {
+
+const mutationKey = ['createUcAlisonTurn'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUcAlisonTurn>>, {data: BodyType<AlisonTurnInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUcAlisonTurn(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUcAlisonTurnMutationResult = NonNullable<Awaited<ReturnType<typeof createUcAlisonTurn>>>
+    export type CreateUcAlisonTurnMutationBody = BodyType<AlisonTurnInput>
+    export type CreateUcAlisonTurnMutationError = ErrorType<void>
+
+    /**
+ * @summary Generate and persist one anonymous Alison turn
+ */
+export const useCreateUcAlisonTurn = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUcAlisonTurn>>, TError,{data: BodyType<AlisonTurnInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUcAlisonTurn>>,
+        TError,
+        {data: BodyType<AlisonTurnInput>},
+        TContext
+      > => {
+      return useMutation(getCreateUcAlisonTurnMutationOptions(options));
+    }
+
 export const getListAgentOauthClientsUrl = () => {
 
 
@@ -8850,6 +8926,91 @@ export function useListAgentAlisonFeedback<TData = Awaited<ReturnType<typeof lis
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAgentAlisonFeedbackQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAgentAlisonChatsUrl = (params?: ListAgentAlisonChatsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/integrations/v1/alison/chats?${stringifiedParams}` : `/api/integrations/v1/alison/chats`
+}
+
+/**
+ * Requires an opaque machine access token in the Authorization header and the alison.read scope. Chats are retained for 30 days.
+ * @summary List anonymous Alison chat transcripts
+ */
+export const listAgentAlisonChats = async (params?: ListAgentAlisonChatsParams, options?: RequestInit): Promise<AlisonChatPage> => {
+
+  return customFetch<AlisonChatPage>(getListAgentAlisonChatsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentAlisonChatsQueryKey = (params?: ListAgentAlisonChatsParams,) => {
+    return [
+    `/api/integrations/v1/alison/chats`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAgentAlisonChatsQueryOptions = <TData = Awaited<ReturnType<typeof listAgentAlisonChats>>, TError = ErrorType<void>>(params?: ListAgentAlisonChatsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentAlisonChats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentAlisonChatsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentAlisonChats>>> = ({ signal }) => listAgentAlisonChats(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentAlisonChats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentAlisonChatsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentAlisonChats>>>
+export type ListAgentAlisonChatsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List anonymous Alison chat transcripts
+ */
+
+export function useListAgentAlisonChats<TData = Awaited<ReturnType<typeof listAgentAlisonChats>>, TError = ErrorType<void>>(
+ params?: ListAgentAlisonChatsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentAlisonChats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentAlisonChatsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

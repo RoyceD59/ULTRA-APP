@@ -8,7 +8,7 @@
 import cron from "node-cron";
 import { logger } from "./logger";
 import { generateAndStoreReport, pushReportToOrchestrator } from "../routes/ai/monitor";
-import { db, ucAiFeedbackTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, ucLowStockAlertsTable, aiPushEventsTable, ucWishlistTable, ucRestockDemandAlertsTable } from "@workspace/db";
+import { db, ucAiFeedbackTable, ucAlisonConversationsTable, ucNotificationLogTable, sheetSyncsTable, membersTable, ucOrdersTable, teamSettingsTable, ucLifespanAlertsTable, ucLowStockAlertsTable, aiPushEventsTable, ucWishlistTable, ucRestockDemandAlertsTable } from "@workspace/db";
 import { lt, lte, gt, desc, eq, and, or, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
@@ -403,6 +403,15 @@ export function startScheduler() {
   logger.info(
     "Scheduler: daily AI feedback pruning job registered (02:00 UTC, default 90-day retention)",
   );
+
+  cron.schedule("30 2 * * *", async () => {
+    try {
+      await pruneAlisonChats();
+    } catch (err) {
+      logger.error({ err }, "Scheduler: Alison transcript pruning failed");
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: daily Alison transcript pruning registered (02:30 UTC, 30-day retention)");
 
   // ─── Daily 03:00 UTC: prune old notification log rows ────────────────────
   // Successful sends are pruned after UC_NOTIFICATION_LOG_SUCCESS_RETENTION_DAYS
@@ -1163,6 +1172,14 @@ export async function runAiPushEventsPruning(): Promise<{ deleted: number }> {
     logger.error({ err }, "Scheduler: AI push-events pruning failed");
     throw err;
   }
+}
+
+export async function pruneAlisonChats(now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const deleted = await db.delete(ucAlisonConversationsTable)
+    .where(lt(ucAlisonConversationsTable.createdAt, cutoff))
+    .returning({ id: ucAlisonConversationsTable.id });
+  return deleted.length;
 }
 
 const staleRecoveryDigestClaims = new Set<string>();

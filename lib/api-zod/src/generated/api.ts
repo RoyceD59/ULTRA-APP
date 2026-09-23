@@ -2845,6 +2845,40 @@ export const IssueAgentClientTokenResponse = zod.object({
 })
 
 
+/**
+ * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+ * @summary Generate and persist one anonymous Alison turn
+ */
+export const createUcAlisonTurnBodyConversationIdMin = 16;
+export const createUcAlisonTurnBodyConversationIdMax = 128;
+
+
+export const createUcAlisonTurnBodyConversationIdRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const createUcAlisonTurnBodyTurnIdMin = 16;
+export const createUcAlisonTurnBodyTurnIdMax = 128;
+
+
+export const createUcAlisonTurnBodyTurnIdRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+
+
+export const createUcAlisonTurnBodyIsRetryDefault = false;
+
+export const CreateUcAlisonTurnBody = zod.object({
+  "conversationId": zod.string().min(createUcAlisonTurnBodyConversationIdMin).max(createUcAlisonTurnBodyConversationIdMax).regex(createUcAlisonTurnBodyConversationIdRegExp),
+  "turnId": zod.string().min(createUcAlisonTurnBodyTurnIdMin).max(createUcAlisonTurnBodyTurnIdMax).regex(createUcAlisonTurnBodyTurnIdRegExp),
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1)
+})).min(1),
+  "isRetry": zod.boolean().default(createUcAlisonTurnBodyIsRetryDefault)
+})
+
+export const CreateUcAlisonTurnResponse = zod.object({
+  "reply": zod.string(),
+  "suggestions": zod.array(zod.string())
+})
+
+
 export const ListAgentOauthClientsResponse = zod.object({
   "clients": zod.array(zod.object({
   "id": zod.string(),
@@ -2902,6 +2936,35 @@ export const ListAgentInteractionsResponse = zod.unknown()
 
 
 export const ListAgentAlisonFeedbackResponse = zod.unknown()
+
+
+/**
+ * Requires an opaque machine access token in the Authorization header and the alison.read scope. Chats are retained for 30 days.
+ * @summary List anonymous Alison chat transcripts
+ */
+export const listAgentAlisonChatsQueryLimitDefault = 50;
+export const listAgentAlisonChatsQueryLimitMax = 100;
+
+
+
+export const ListAgentAlisonChatsQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listAgentAlisonChatsQueryLimitMax).default(listAgentAlisonChatsQueryLimitDefault),
+  "cursor": zod.coerce.string().optional().describe('Opaque cursor returned as nextCursor by the previous page.')
+})
+
+export const ListAgentAlisonChatsResponse = zod.object({
+  "chats": zod.array(zod.object({
+  "conversationId": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})),
+  "nextCursor": zod.string().nullable()
+})
 
 
 /**

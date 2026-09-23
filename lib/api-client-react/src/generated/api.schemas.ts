@@ -5,6 +5,70 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type AlisonTurnInputMessagesItemRole = typeof AlisonTurnInputMessagesItemRole[keyof typeof AlisonTurnInputMessagesItemRole];
+
+
+export const AlisonTurnInputMessagesItemRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export type AlisonTurnInputMessagesItem = {
+  role: AlisonTurnInputMessagesItemRole;
+  /** @minLength 1 */
+  content: string;
+};
+
+export interface AlisonTurnInput {
+  /**
+     * @minLength 16
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  conversationId: string;
+  /**
+     * @minLength 16
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  turnId: string;
+  /** @minItems 1 */
+  messages: AlisonTurnInputMessagesItem[];
+  isRetry?: boolean;
+}
+
+export interface AlisonTurnResponse {
+  reply: string;
+  suggestions: string[];
+}
+
+export type AlisonTranscriptMessageRole = typeof AlisonTranscriptMessageRole[keyof typeof AlisonTranscriptMessageRole];
+
+
+export const AlisonTranscriptMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface AlisonTranscriptMessage {
+  role: AlisonTranscriptMessageRole;
+  content: string;
+  createdAt: string;
+}
+
+export interface AlisonChat {
+  conversationId: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: AlisonTranscriptMessage[];
+}
+
+export interface AlisonChatPage {
+  chats: AlisonChat[];
+  /** @nullable */
+  nextCursor: string | null;
+}
+
 export type AgentTokenTokenType = typeof AgentTokenTokenType[keyof typeof AgentTokenTokenType];
 
 
@@ -2947,6 +3011,18 @@ export const SuspendAgentOauthClientBodyStatus = {
 
 export type SuspendAgentOauthClientBody = {
   status?: SuspendAgentOauthClientBodyStatus;
+};
+
+export type ListAgentAlisonChatsParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * Opaque cursor returned as nextCursor by the previous page.
+ */
+cursor?: string;
 };
 
 export type ListPublishedUcGuides200 = {

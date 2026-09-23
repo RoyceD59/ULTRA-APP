@@ -14,7 +14,7 @@ import { Router, type Request, type Response, type IRouter } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { verifyToken } from "../lib/jwt.js";
 import { isAdminRequest as sharedIsAdminRequest } from "../lib/adminAuth.js";
-import { db, ucUsersTable, ucAiFeedbackTable } from "@workspace/db";
+import { db, ucUsersTable, ucAiFeedbackTable, ucAlisonConversationsTable, ucAlisonTurnsTable } from "@workspace/db";
 import { eq, desc, gte, lte, and, ilike } from "drizzle-orm";
 import { buildInstantAssessmentAiContext, latestOwnedAssessmentSummary } from "../lib/instant-water-check-service.js";
 
@@ -305,8 +305,10 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
     return;
   }
 
-  const { messages, isRetry } = req.body as {
+  const { messages, isRetry, conversationId, turnId } = req.body as {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
+    conversationId?: string;
+    turnId?: string;
     filterContext?: {
       productName?:   string;
       daysRemaining?: number;
@@ -316,6 +318,13 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
     };
     isRetry?: boolean;
   };
+
+  const opaqueId = /^[A-Za-z0-9_-]{16,128}$/;
+  if (typeof conversationId !== "string" || !opaqueId.test(conversationId)
+      || typeof turnId !== "string" || !opaqueId.test(turnId)) {
+    res.status(400).json({ error: "Valid conversationId and turnId are required" });
+    return;
+  }
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "messages array is required" });
@@ -335,6 +344,21 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
 
   if (messages[0]?.role !== "user") {
     res.status(400).json({ error: "First message must have role 'user'" });
+    return;
+  }
+  const submittedUserMessage = [...messages].reverse().find((message) => message.role === "user")?.content;
+  if (!submittedUserMessage) {
+    res.status(400).json({ error: "A user message is required" });
+    return;
+  }
+  const [existingTurn] = await db.select({ reply: ucAlisonTurnsTable.assistantMessage })
+    .from(ucAlisonTurnsTable)
+    .where(and(
+      eq(ucAlisonTurnsTable.conversationId, conversationId),
+      eq(ucAlisonTurnsTable.turnId, turnId),
+    )).limit(1);
+  if (existingTurn) {
+    res.json({ reply: existingTurn.reply, suggestions: [] });
     return;
   }
 
@@ -389,7 +413,30 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
     })();
 
     const { reply, suggestions } = parseSuggestions(rawText);
-    res.json({ reply, suggestions });
+    const persistedReply = await db.transaction(async (tx) => {
+      await tx.insert(ucAlisonConversationsTable).values({ id: conversationId }).onConflictDoNothing();
+      const inserted = await tx.insert(ucAlisonTurnsTable).values({
+        conversationId,
+        turnId,
+        userMessage: submittedUserMessage,
+        assistantMessage: reply,
+      }).onConflictDoNothing().returning({ reply: ucAlisonTurnsTable.assistantMessage });
+      if (inserted[0]) {
+        await tx.update(ucAlisonConversationsTable)
+          .set({ updatedAt: new Date() })
+          .where(eq(ucAlisonConversationsTable.id, conversationId));
+        return inserted[0].reply;
+      }
+      const [winner] = await tx.select({ reply: ucAlisonTurnsTable.assistantMessage })
+        .from(ucAlisonTurnsTable)
+        .where(and(
+          eq(ucAlisonTurnsTable.conversationId, conversationId),
+          eq(ucAlisonTurnsTable.turnId, turnId),
+        )).limit(1);
+      if (!winner) throw new Error("Alison turn idempotency conflict could not be resolved");
+      return winner.reply;
+    });
+    res.json({ reply: persistedReply, suggestions: persistedReply === reply ? suggestions : [] });
   } catch (err) {
     console.error("[uc/ai/water-chat] AI error:", err);
     res.status(502).json({

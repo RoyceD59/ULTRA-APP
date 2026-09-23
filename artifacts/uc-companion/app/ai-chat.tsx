@@ -23,6 +23,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useApi } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
+import * as Crypto from 'expo-crypto';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -222,6 +223,7 @@ export default function AiChatScreen() {
   const [sending, setSending] = useState(false);
   // Track which message id is currently being retried (shows "Trying again…" state)
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const conversationId = useRef(Crypto.randomUUID()).current;
 
   const listRef = useRef<FlatList<Message>>(null);
   const scrollToBottom = useCallback(() => {
@@ -257,7 +259,9 @@ export default function AiChatScreen() {
       .map(m => ({ role: m.role, content: m.content }));
 
     try {
-      const { reply, suggestions } = await api.waterAiChat(history, filterContext);
+      const { reply, suggestions } = await api.waterAiChat(
+        history, conversationId, Crypto.randomUUID(), filterContext,
+      );
       setMessages(prev => [...prev, {
         id:          `a-${Date.now()}`,
         role:        'assistant',
@@ -295,7 +299,9 @@ export default function AiChatScreen() {
     const history = historySlice.slice(0, historySlice.length - lastUserIdx);
 
     try {
-      const { reply, suggestions } = await api.waterAiChat(history, filterContext, true);
+      const { reply, suggestions } = await api.waterAiChat(
+        history, conversationId, Crypto.randomUUID(), filterContext, true,
+      );
       setMessages(prev => [...prev, {
         id:          `a-retry-${Date.now()}`,
         role:        'assistant',
