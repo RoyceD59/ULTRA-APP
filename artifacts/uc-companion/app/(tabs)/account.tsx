@@ -648,7 +648,16 @@ function AccountScreenContent() {
 
   useEffect(() => {
     refreshNotifStatus();
-    if (user) getFilterActivation(user.id).then(setFilterActivation);
+    let active = true;
+    // Never leave the previous account's filter visible while the newly
+    // authenticated account's scoped record is loading.
+    setFilterActivation(null);
+    if (user) {
+      getFilterActivation(user.id).then(activation => {
+        if (active) setFilterActivation(activation);
+      });
+    }
+    return () => { active = false; };
   }, [refreshNotifStatus, user]);
 
   async function enableNotifications() {

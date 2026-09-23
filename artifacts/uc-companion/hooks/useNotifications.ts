@@ -507,8 +507,7 @@ export async function syncReminderToServer(
   }
 }
 
-// ── Filter activation state ───────────────────────────────────────────────────
-
+let legacyFilterMigrationChain: Promise<unknown> = Promise.resolve();
 /**
  * Load the filter activation for a specific user account.
  *
@@ -525,22 +524,28 @@ export async function getFilterActivation(userId: number): Promise<FilterActivat
     // account-scoped migration to perform in that case.
     if (!Number.isSafeInteger(userId) || userId <= 0) return null;
 
-    // ── One-time migration from the legacy unscoped key ──────────────────────
-    const legacy = await AsyncStorage.getItem(FILTER_ACTIVATION_KEY_LEGACY);
-    if (!legacy) return null;
+    return await enqueueLegacyFilterMigration(async () => {
+      // Another account load may have completed while this one was queued.
+      const scoped = await AsyncStorage.getItem(key);
+      if (scoped) return JSON.parse(scoped) as FilterActivation;
 
-    // Migrate activation record
-    await AsyncStorage.setItem(key, legacy);
-    await AsyncStorage.removeItem(FILTER_ACTIVATION_KEY_LEGACY);
+      // ── One-time migration from the legacy unscoped key ────────────────────
+      const legacy = await AsyncStorage.getItem(FILTER_ACTIVATION_KEY_LEGACY);
+      if (!legacy) return null;
 
-    // Migrate companion timestamp key if present
-    const lastChanged = await AsyncStorage.getItem(FILTER_LAST_CHANGED_KEY_LEGACY);
-    if (lastChanged) {
-      await AsyncStorage.setItem(filterLastChangedKey(userId), lastChanged);
-      await AsyncStorage.removeItem(FILTER_LAST_CHANGED_KEY_LEGACY);
-    }
+      // Migrate activation record
+      await AsyncStorage.setItem(key, legacy);
+      await AsyncStorage.removeItem(FILTER_ACTIVATION_KEY_LEGACY);
 
-    return JSON.parse(legacy) as FilterActivation;
+      // Migrate companion timestamp key if present
+      const lastChanged = await AsyncStorage.getItem(FILTER_LAST_CHANGED_KEY_LEGACY);
+      if (lastChanged) {
+        await AsyncStorage.setItem(filterLastChangedKey(userId), lastChanged);
+        await AsyncStorage.removeItem(FILTER_LAST_CHANGED_KEY_LEGACY);
+      }
+
+      return JSON.parse(legacy) as FilterActivation;
+    });
   } catch { return null; }
 }
 
@@ -919,4 +924,10 @@ export async function recordFilterClean(userId: number): Promise<FilterActivatio
   } catch {
     return null;
   }
+}
+
+function enqueueLegacyFilterMigration<T>(fn: () => Promise<T>): Promise<T> {
+  const next = legacyFilterMigrationChain.then(fn, fn);
+  legacyFilterMigrationChain = next.then(() => undefined, () => undefined);
+  return next;
 }
