@@ -2204,6 +2204,15 @@ if (Number.isNaN(port) || port <= 0) {
 
 applyStartupMigrations()
   .then(async () => {
+    // Post-merge setup runs this process before drizzle-kit compares the
+    // declared schema with the development database. Creating idempotent
+    // startup-DDL tables first prevents Drizzle from guessing that an
+    // unrelated existing table should be renamed to a newly declared one.
+    if (process.env["STARTUP_MIGRATIONS_ONLY"] === "1") {
+      logger.info("Startup migrations completed in migration-only mode");
+      process.exit(0);
+    }
+
     // Fire-and-forget — a failure here must not prevent the server from starting.
     checkProductionSecurityConfig().catch((err) => {
       logger.error({ err }, "Security config check failed");

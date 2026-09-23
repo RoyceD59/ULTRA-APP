@@ -2,6 +2,13 @@
 set -e
 pnpm install --frozen-lockfile
 
+# Apply the API's idempotent startup DDL before asking Drizzle to compare
+# schemas. Otherwise a newly declared table may be mistaken for a rename and
+# trigger an interactive prompt that cannot run in post-merge setup.
+pnpm --filter @workspace/api-server run build
+STARTUP_MIGRATIONS_ONLY=1 PORT=1 NODE_ENV=development \
+  pnpm --filter @workspace/api-server run start
+
 set +e
 db_push_output="$(pnpm --filter @workspace/db run push-force 2>&1)"
 db_push_status=$?
