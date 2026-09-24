@@ -63,6 +63,7 @@ import {
   ObjectNotFoundError,
   ObjectStorageService,
 } from "../lib/objectStorage";
+import { detectReviewMediaMime, mediaMimeFamily } from "../lib/review-media-signature.js";
 import { creditQualifyingProductPoints } from "../lib/reminder-dispatch.js";
 import { sendPushToUser, getPushTokenRow, callExpoPushApi, removePushToken } from "../lib/push.js";
 import {
@@ -1578,8 +1579,39 @@ async function verifyUploadedMediaItems(items: ReviewMediaItem[]): Promise<strin
     try {
       const file = await objectStorage.getObjectEntityFile(objectPath);
       const [metadata] = await file.getMetadata();
-      const contentType = String(metadata.contentType ?? "");
+      let contentType = String(metadata.contentType ?? "").toLowerCase();
       const size = Number(metadata.size ?? 0);
+      if (!contentType || contentType === "application/octet-stream") {
+        const uploadResult = await pool.query(
+          `SELECT declared_type, declared_size
+             FROM instant_water_media_uploads
+            WHERE object_path = $1 AND expires_at > now()
+            LIMIT 1`,
+          [objectPath],
+        );
+        const upload = uploadResult.rows[0] as {
+          declared_type?: string;
+          declared_size?: number | string;
+        } | undefined;
+        const declaredType = String(upload?.declared_type ?? "").toLowerCase();
+        const declaredSize = Number(upload?.declared_size ?? 0);
+        if (mediaMimeFamily(declaredType) !== item.type || declaredSize !== size) {
+          return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
+        }
+        const header = await new Promise<Buffer>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          const stream = file.createReadStream({ start: 0, end: 63 });
+          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+          stream.on("end", () => resolve(Buffer.concat(chunks)));
+          stream.on("error", reject);
+        });
+        const detectedType = detectReviewMediaMime(header);
+        if (!detectedType || mediaMimeFamily(detectedType) !== item.type) {
+          return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
+        }
+        contentType = detectedType;
+        await file.setMetadata({ contentType: detectedType });
+      }
       if (item.type === "photo" && !contentType.startsWith("image/")) return "Attachment is not an image";
       if (item.type === "video" && !contentType.startsWith("video/")) return "Attachment is not a video";
       const cap = item.type === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;

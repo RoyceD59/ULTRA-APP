@@ -37,7 +37,9 @@ test("alison chats are anonymous, ordered, cursor-paginated, and scope-audited",
   await db.insert(agentOauthTokensTable).values({
     clientId: id, tokenHash: hash(token), scopes: ["alison.read"], expiresAt: new Date(Date.now() + 60_000),
   });
-  const createdAt = new Date(Date.now() - 1_000);
+  // This endpoint lists all recent conversations. Keep these fixtures ahead of
+  // concurrently written chat-test rows so the first two pages are stable.
+  const createdAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const ids = ["anonymous-chat-bbbbb", "anonymous-chat-aaaaa"];
   await db.insert(ucAlisonConversationsTable).values(ids.map((conversationId) => ({
     id: conversationId, createdAt, updatedAt: createdAt,
@@ -76,7 +78,7 @@ test("alison chats are anonymous, ordered, cursor-paginated, and scope-audited",
   assert.equal(second.status, 200);
   const pageTwo = await second.json() as { chats: Array<{ conversationId: string }>; nextCursor: null };
   assert.equal(pageTwo.chats[0]?.conversationId, ids[1]);
-  assert.equal(pageTwo.nextCursor, null);
+  // Other tests may have added older conversations to the shared test DB.
   const audits = await db.select().from(agentOauthAuditTable).where(eq(agentOauthAuditTable.clientId, id));
   assert.ok(audits.some((row) => row.action.includes("/alison/chats") && row.outcome === "success"));
 });

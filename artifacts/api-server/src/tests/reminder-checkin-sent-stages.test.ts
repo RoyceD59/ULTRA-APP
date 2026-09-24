@@ -232,7 +232,9 @@ after(() => {
 });
 
 function makeUserToken(userId = 42): string {
-  return `Bearer ${issueToken({ id: userId, type: "uc-user" })}`;
+  // Use a synthetic ID outside the DB-anchored range. Other suites may create
+  // or delete low-numbered users in the shared test database.
+  return `Bearer ${issueToken({ id: userId + 1_000_000_000, type: "uc-user" })}`;
 }
 
 async function putSync(body: Record<string, unknown>, userId = 42): Promise<{ status: number; json: Record<string, unknown> }> {

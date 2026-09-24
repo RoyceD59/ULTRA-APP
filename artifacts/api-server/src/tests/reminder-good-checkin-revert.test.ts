@@ -112,7 +112,8 @@ after(() => {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeUserToken(userId = 42): string {
-  return `Bearer ${issueToken({ id: userId, type: "uc-user" })}`;
+  // These mocked users must not collide with real rows from other test suites.
+  return `Bearer ${issueToken({ id: userId + 1_000_000_000, type: "uc-user" })}`;
 }
 
 async function putSync(

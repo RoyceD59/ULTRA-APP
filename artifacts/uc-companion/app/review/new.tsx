@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useApi } from '@/hooks/useApi';
+import { resolveMediaUrl, useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import StarRating from '@/components/StarRating';
 import MediaPicker, { type MediaItem } from '@/components/MediaPicker';
@@ -70,6 +70,11 @@ function NewReviewScreenContent() {
     if (mine) {
       setRating(mine.rating);
       setBody(mine.body);
+      setMedia(mine.media.map((item) => ({
+        uri: resolveMediaUrl(item.url),
+        storedUrl: item.url,
+        type: item.type,
+      })));
     }
     setPrefilled(true);
   }, [existing, prefilled]);

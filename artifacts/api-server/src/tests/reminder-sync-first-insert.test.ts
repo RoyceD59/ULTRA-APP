@@ -107,7 +107,8 @@ after(() => {
 
 function makeUserToken(userId = 42): string {
   // Route reads claims.id (numeric) and rejects non-digit strings.
-  return `Bearer ${issueToken({ id: userId, type: "uc-user" })}`;
+  // Keep synthetic IDs outside the DB-anchored range used by other suites.
+  return `Bearer ${issueToken({ id: userId + 1_000_000_000, type: "uc-user" })}`;
 }
 
 async function putSync(

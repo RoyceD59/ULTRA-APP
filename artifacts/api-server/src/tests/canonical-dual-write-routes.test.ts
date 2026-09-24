@@ -539,10 +539,11 @@ describe("canonical dual-write HTTP integration", { concurrency: false }, () => 
         postOrders(payload, user.jwt),
       ]);
       assert.equal(wcPostCalls, 1);
-      assert.equal(creator.response.status, 200);
-      assert.ok(follower.response.status === 200 || follower.response.status === 503);
-      if (follower.response.status !== 200) {
-        const text = JSON.stringify(follower.body);
+      // Either request can win the server-side lock, regardless of Promise order.
+      assert.ok([creator, follower].some((result) => result.response.status === 200));
+      assert.ok([creator, follower].every((result) => result.response.status === 200 || result.response.status === 503));
+      for (const result of [creator, follower].filter((entry) => entry.response.status === 503)) {
+        const text = JSON.stringify(result.body);
         assert.ok(!text.includes(String(wcOrderId)));
       }
       const primary = await pool.query(

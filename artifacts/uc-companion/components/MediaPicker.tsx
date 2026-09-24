@@ -12,6 +12,8 @@ import * as Haptics from 'expo-haptics';
 export interface MediaItem {
   uri: string;
   type: 'photo' | 'video';
+  /** Existing server reference when reopening an already-saved attachment. */
+  storedUrl?: string;
   duration?: number; // seconds
   mimeType?: string;
   fileName?: string;
