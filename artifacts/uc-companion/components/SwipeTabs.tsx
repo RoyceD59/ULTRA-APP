@@ -135,6 +135,10 @@ export default function SwipeTabs({ tab, children }: { tab: SwipeTab; children: 
     transform: [{ translateX: drag.value }],
   }));
 
+  // On web the browser's touch/scroll handlers already arbitrate gestures.
+  // The native pan recognizer can swallow clicks on links and product cards.
+  if (Platform.OS === 'web') return <>{children}</>;
+
   return (
     <CarouselRegisterContext.Provider value={register}>
       <GestureDetector gesture={pan}>

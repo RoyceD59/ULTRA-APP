@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
 import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const DELIVERY_FEE = 500;
 
@@ -20,6 +21,7 @@ export default function CartScreen() {
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
+  const insets = useSafeAreaInsets();
   const { items, removeItem, updateQty, totalPrice, addItem, cartHydrated, cartLoadError, refreshCart } = useCart();
 
   const total = totalPrice + (items.length > 0 ? DELIVERY_FEE : 0);
@@ -161,7 +163,7 @@ export default function CartScreen() {
       <FlatList
         data={items}
         keyExtractor={i => String(i.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.cartHeader}>
@@ -282,7 +284,8 @@ export default function CartScreen() {
       />
 
       {/* Checkout button */}
-      <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border,
+        paddingBottom: Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.footerTotal, { color: colors.mutedForeground }]}>Total</Text>
           <Text style={[styles.footerAmount, { color: colors.primary }]}>KES {total.toLocaleString('en-KE')}</Text>
@@ -305,7 +308,7 @@ const styles = StyleSheet.create({
   shopBtn: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12, marginTop: 8 },
   shopBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' as const },
   list: { padding: 16, gap: 12, paddingBottom: 120 },
-  cartHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 },
+  cartHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 },
   cartTitle: { fontSize: 20, fontWeight: '700' as const },
   cartSubtitle: { fontSize: 12, marginTop: 2 },
   continueLink: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7 },
@@ -320,16 +323,16 @@ const styles = StyleSheet.create({
   recImage: { width: 44, height: 44 },
   recName: { fontSize: 12.5, fontWeight: '600' as const, lineHeight: 17 },
   recPrice: { fontSize: 13.5, fontWeight: '700' as const, marginTop: 2 },
-  recAddBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  item: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
+  recAddBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  item: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
   itemImage: { width: 60, height: 60, borderRadius: 8, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   itemImageAsset: { width: 54, height: 54 },
   itemName: { fontSize: 13, fontWeight: '600' as const, lineHeight: 18 },
   itemPrice: { fontSize: 15, fontWeight: '700' as const, marginTop: 4 },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  qtyBtn: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
+  qtyBtn: { width: 44, height: 44, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   qty: { fontSize: 15, fontWeight: '600' as const, minWidth: 24, textAlign: 'center' },
-  removeBtn: { padding: 4 },
+  removeBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   summary: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
   sumRow: { flexDirection: 'row', justifyContent: 'space-between' },
   sumLabel: { fontSize: 14 },

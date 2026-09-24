@@ -32,3 +32,9 @@ Replit's static screenshot helper can capture an all-white Expo web page before 
 **Why:** The Companion's direct deep route repeatedly looked blank in static captures while a real browser, after the bundle was warm, showed a populated non-zero root and the complete screen.
 
 **How to apply:** Before treating a blank Expo screenshot as an app failure, confirm the generated entry-bundle URL returns JavaScript, check for the `Running application "main"` log, and use a real browser test to inspect the DOM and computed root dimensions.
+
+When manually rebuilding the committed static bundle, use the production artifact's entire build environment, including its route prefix, rather than a development-domain substitute.
+
+**Why:** A build can succeed and remove stale UI strings while embedding development API/asset origins or missing the production path prefix, leaving its checked-in output unusable after publishing.
+
+**How to apply:** Read the validated artifact production build settings before a manual regeneration, then confirm generated web/native bundles use the intended API origin and prefixed asset URLs.

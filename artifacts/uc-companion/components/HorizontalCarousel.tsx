@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { FlatList, type FlatListProps } from 'react-native';
+import { FlatList, Platform, type FlatListProps } from 'react-native';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRegisterAsCarousel } from './SwipeTabsContext';
 
@@ -25,6 +25,8 @@ function HorizontalCarousel<T>(props: FlatListProps<T>) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ref = useRef<any>(null);
   useRegisterAsCarousel(ref);
+
+  if (Platform.OS === 'web') return <FlatList {...props} horizontal />;
 
   return (
     <NativeViewGestureHandler ref={ref}>

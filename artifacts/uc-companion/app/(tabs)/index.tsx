@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
@@ -17,6 +17,7 @@ import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import { catalogueQueryKey } from '@/lib/catalogueQuery';
+import { featuredState } from '@/lib/customerScreenState';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -73,19 +74,21 @@ function HomeScreenContent() {
   const [filterAdjusted, setFilterAdjusted] = useState(false);
   const topPad = Platform.OS === 'web' ? 67 : 0;
 
-  const { data: products, isLoading } = useQuery({
+  const { data: products, isLoading, isError, refetch: retryProducts } = useQuery({
     queryKey: catalogueQueryKey(),
     queryFn: ({ signal }) => api.getProducts(undefined, signal),
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: promotions } = useQuery({
+  const { data: promotions, isError: promotionsError, refetch: retryPromotions } = useQuery({
     queryKey: ['promotions'],
-    queryFn: () => api.getPromotions(),
+    queryFn: ({ signal }) => api.getPromotions(signal),
     staleTime: 2 * 60 * 1000,
   });
 
   const refreshFilterStatus = useCallback(() => {
+    setFilterDays(null);
+    setFilterAdjusted(false);
     if (!user) return;
     // Primary: use the structured FilterActivation record (product-specific lifespan)
     getFilterActivation(user.id).then(activation => {
@@ -111,15 +114,16 @@ function HomeScreenContent() {
             const elapsed = Math.floor((Date.now() - parseInt(lv)) / 86_400_000);
             setFilterDays(180 - elapsed);
           }
-        });
-      });
-    });
+        }).catch(() => {});
+      }).catch(() => {});
+    }).catch(() => {});
   }, [user]);
 
   useEffect(() => { refreshFilterStatus(); }, [refreshFilterStatus]);
 
   const cartBarInset = useCartBarInset();
   const featured = products?.slice(0, 6) ?? [];
+  const productState = featuredState(isLoading, isError, featured.length);
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]}
@@ -141,9 +145,11 @@ function HomeScreenContent() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.body}>
+       <View style={styles.body}>
         {/* Filter Health */}
-        <View style={[styles.filterCard, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warningLight : colors.primaryLight, borderColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={filterDays !== null ? 'View filter status' : 'Register your filter'}
+          onPress={() => router.push('/(tabs)/account' as never)} activeOpacity={0.8}
+          style={[styles.filterCard, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warningLight : colors.primaryLight, borderColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
           <View style={[styles.filterIcon, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
             <Ionicons name="water" size={20} color="#fff" />
           </View>
@@ -165,7 +171,7 @@ function HomeScreenContent() {
             )}
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-        </View>
+        </TouchableOpacity>
 
         {/* Nudge: bought a trackable filter but never registered it */}
         <RegisterFilterPrompt onRegistered={refreshFilterStatus} />
@@ -190,6 +196,11 @@ function HomeScreenContent() {
             />
           </View>
         )}
+        {promotionsError && (
+          <TouchableOpacity onPress={() => retryPromotions()} accessibilityRole="button" style={styles.statusAction}>
+            <Text style={{ color: colors.mutedForeground }}>Promotions unavailable. Tap to retry.</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -210,13 +221,21 @@ function HomeScreenContent() {
         {/* Featured Products */}
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Shop Products</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/products')}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/products')} style={styles.statusAction}>
             <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
           </TouchableOpacity>
         </View>
 
-        {isLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
+        {productState === 'loading' ? (
+          <View style={styles.statusAction}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.mutedForeground }}>Loading products…</Text></View>
+        ) : productState === 'error' ? (
+          <TouchableOpacity onPress={() => retryProducts()} accessibilityRole="button" style={styles.statusAction}>
+            <Text style={{ color: colors.text }}>Products couldn't load. Tap to retry.</Text>
+          </TouchableOpacity>
+        ) : productState === 'empty' ? (
+          <TouchableOpacity onPress={() => router.push('/(tabs)/products')} accessibilityRole="button" style={styles.statusAction}>
+            <Text style={{ color: colors.mutedForeground }}>No featured products yet. Browse the shop.</Text>
+          </TouchableOpacity>
         ) : (
           <HorizontalCarousel
             data={featured}
@@ -252,7 +271,7 @@ const styles = StyleSheet.create({
   cartBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   cartBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#EF4444', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   cartBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' as const, paddingHorizontal: 2 },
-  body: { padding: 16, gap: 20 },
+  body: { padding: 16, gap: 20, width: '100%', maxWidth: 1200, alignSelf: 'center' },
   filterCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14 },
   filterIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   filterTitle: { fontSize: 14, fontWeight: '600' as const },
@@ -261,6 +280,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '700' as const },
   seeAll: { fontSize: 14, fontWeight: '500' as const },
+  statusAction: { minHeight: 44, justifyContent: 'center', alignItems: 'center', gap: 8 },
   grid2: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   actionCard: { flex: 1, minWidth: '45%', borderRadius: 14, borderWidth: 1, padding: 16, alignItems: 'center', gap: 10 },
   actionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },

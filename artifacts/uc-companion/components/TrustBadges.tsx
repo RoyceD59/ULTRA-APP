@@ -5,7 +5,6 @@ import { useColors } from '@/hooks/useColors';
 
 const CERTIFIED = [
   { label: 'Your Neighborhood\nRated', icon: 'people-circle-outline', color: '#1B3A6B' },
-  { label: 'WHO\nCompliant',         icon: 'shield-checkmark-outline', color: '#006FB7' },
   { label: 'Dermatologist\nTested',  icon: 'medical-outline',          color: '#00857C' },
   { label: 'ISO 9001\nCertified',    icon: 'star-outline',             color: '#F4A100' },
   { label: 'BPA\nFree',              icon: 'water-outline',            color: '#0097A7' },
@@ -13,7 +12,6 @@ const CERTIFIED = [
 ] as const;
 
 const PATRONS = [
-  { label: 'Ghana\nOlympics',        icon: 'trophy-outline',  color: '#FFD700' },
   { label: 'Volunteers\nNetwork',    icon: 'people-outline',  color: '#7B1FA2' },
   { label: 'Youth\nAlliance',        icon: 'heart-outline',   color: '#E53935' },
 ] as const;

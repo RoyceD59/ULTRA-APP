@@ -22,6 +22,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useApi } from '@/hooks/useApi';
+import { useAuth } from '@/context/AuthContext';
+import { chatFailureMessage, completedChatHistory } from '@/lib/chatTurn';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 
@@ -197,6 +199,7 @@ export default function AiChatScreen() {
   const colors = useColors();
   const router = useRouter();
   const api    = useApi();
+  const { token, isLoading: authLoading } = useAuth();
   const handleLink = useLinkHandler();
 
   const params = useLocalSearchParams<{
@@ -221,9 +224,18 @@ export default function AiChatScreen() {
   ]);
   const [input,   setInput]   = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const [failedTurn, setFailedTurn] = useState<{
+    history: Array<{ role: 'user' | 'assistant'; content: string }>;
+    turnId: string;
+    message: string;
+    rateLimited: boolean;
+  } | null>(null);
   // Track which message id is currently being retried (shows "Trying again…" state)
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const conversationId = useRef(Crypto.randomUUID()).current;
+  const requestRef = useRef<AbortController | null>(null);
+  useEffect(() => () => requestRef.current?.abort(), []);
 
   const listRef = useRef<FlatList<Message>>(null);
   const scrollToBottom = useCallback(() => {
@@ -241,56 +253,82 @@ export default function AiChatScreen() {
 
   // ── Send ──────────────────────────────────────────────────────────────────
 
+  async function requestReply(
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    turnId: string,
+    isRetry = false,
+  ) {
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const deadline = setTimeout(() => controller.abort(), 25_000);
+    try {
+      const { reply, suggestions } = await api.waterAiChat(
+        history, conversationId, turnId, filterContext, isRetry, controller.signal,
+      );
+      setMessages(prev => [...prev, {
+        id: `a-${Crypto.randomUUID()}`, role: 'assistant', content: reply,
+        suggestions: suggestions?.length ? suggestions : undefined,
+      }]);
+      setFailedTurn(null);
+    } catch (error) {
+      if (!controller.signal.aborted || requestRef.current === controller) {
+        setFailedTurn({ history, turnId, message: chatFailureMessage(error),
+          rateLimited: !!(error && typeof error === 'object' && 'status' in error && error.status === 429) });
+      }
+    } finally {
+      clearTimeout(deadline);
+      if (requestRef.current === controller) requestRef.current = null;
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }
+
   async function handleSend(textOverride?: string) {
     const text = (textOverride ?? input).trim();
-    if (!text || sending) return;
+    if (!text || sendingRef.current || failedTurn || !token || authLoading) return;
+    sendingRef.current = true;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
+    const userMsg: Message = { id: `u-${Crypto.randomUUID()}`, role: 'user', content: text };
+    setMessages(prev => [...prev, userMsg]);
     if (!textOverride) setInput('');
     setSending(true);
+    setFailedTurn(null);
     scrollToBottom();
 
-    const history = updated
-      .filter(m => m.id !== 'greeting')
-      .map(m => ({ role: m.role, content: m.content }));
+    const history = [...completedChatHistory(messages), { role: 'user' as const, content: text }];
+    await requestReply(history, Crypto.randomUUID());
+  }
 
-    try {
-      const { reply, suggestions } = await api.waterAiChat(
-        history, conversationId, Crypto.randomUUID(), filterContext,
-      );
-      setMessages(prev => [...prev, {
-        id:          `a-${Date.now()}`,
-        role:        'assistant',
-        content:     reply,
-        suggestions: suggestions?.length ? suggestions : undefined,
-      }]);
-    } catch {
-      setMessages(prev => [...prev, {
-        id:       `err-${Date.now()}`,
-        role:     'assistant',
-        content:  "I'm having a little trouble connecting right now. Please try again in a moment, or reach UCFilters support at 0717774049.",
-        noRating: true,
-      }]);
-    } finally {
-      setSending(false);
-    }
+  async function retryFailedTurn() {
+    if (!failedTurn || sendingRef.current || !token) return;
+    sendingRef.current = true;
+    setSending(true);
+    const { history, turnId } = failedTurn;
+    setFailedTurn(null);
+    await requestReply(history, turnId);
+  }
+
+  function editFailedTurn() {
+    if (!failedTurn || sendingRef.current) return;
+    const lastQuestion = failedTurn.history.at(-1)?.content ?? '';
+    setMessages(prev => prev.slice(0, -1));
+    setInput(lastQuestion);
+    setFailedTurn(null);
   }
 
   // ── Retry (after thumbs-down) ─────────────────────────────────────────────
 
   async function handleRetry(ratedMsgId: string) {
-    if (sending || retryingId) return;
+    if (sendingRef.current || retryingId || !token) return;
     setRetryingId(ratedMsgId);
 
     // Build history up to (and including) the last user message before the rated reply
     const idx = messages.findIndex(m => m.id === ratedMsgId);
     const historySlice = messages
       .slice(0, idx)
-      .filter(m => m.id !== 'greeting')
+      .filter(m => m.id !== 'greeting' && !m.noRating)
       .map(m => ({ role: m.role, content: m.content }));
 
     // historySlice must end with a user message — find the last one
@@ -299,9 +337,17 @@ export default function AiChatScreen() {
     const history = historySlice.slice(0, historySlice.length - lastUserIdx);
 
     try {
-      const { reply, suggestions } = await api.waterAiChat(
-        history, conversationId, Crypto.randomUUID(), filterContext, true,
-      );
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25_000);
+      let result: Awaited<ReturnType<typeof api.waterAiChat>>;
+      try {
+        result = await api.waterAiChat(
+          history, conversationId, Crypto.randomUUID(), filterContext, true, controller.signal,
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
+      const { reply, suggestions } = result;
       setMessages(prev => [...prev, {
         id:          `a-retry-${Date.now()}`,
         role:        'assistant',
@@ -309,11 +355,11 @@ export default function AiChatScreen() {
         suggestions: suggestions?.length ? suggestions : undefined,
         retryOf:     ratedMsgId,
       }]);
-    } catch {
+    } catch (error) {
       setMessages(prev => [...prev, {
         id:       `err-retry-${Date.now()}`,
         role:     'assistant',
-        content:  "Still having trouble. Please try again or contact UCFilters support.",
+         content:  chatFailureMessage(error),
         noRating: true,
       }]);
     } finally {
@@ -421,7 +467,7 @@ export default function AiChatScreen() {
         {/* ── Follow-up / quick-reply chips ────────────────────────────── */}
         {/* Only shown on the MOST RECENT assistant message so old chips
             cannot redirect an in-progress thread. */}
-        {!isUser && !isRetryingThis && !sending &&
+         {!isUser && !isRetryingThis && !sending && !failedTurn && !!token &&
          item.suggestions && item.suggestions.length > 0 &&
          messages.filter(m => m.role === 'assistant').at(-1)?.id === item.id && (
           <View style={[styles.chipRow, { marginLeft: 36 }]}>
@@ -485,6 +531,7 @@ export default function AiChatScreen() {
           renderItem={renderMessage}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={scrollToBottom}
           ListFooterComponent={
             (sending && !retryingId) ? (
@@ -501,6 +548,27 @@ export default function AiChatScreen() {
             ) : null
           }
         />
+
+        {!authLoading && !token && (
+          <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/auth/login')}
+            style={[styles.notice, { backgroundColor: colors.primaryLight }]}>
+            <Text style={{ color: colors.text, flex: 1 }}>Sign in to ask Alison a question.</Text>
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>Sign in</Text>
+          </TouchableOpacity>
+        )}
+        {failedTurn && (
+          <View style={[styles.notice, { backgroundColor: colors.primaryLight }]}>
+            <Text style={{ color: colors.text, flex: 1 }}>{failedTurn.message}</Text>
+            {!failedTurn.rateLimited && !!token && (
+              <TouchableOpacity onPress={retryFailedTurn} accessibilityRole="button" style={styles.retryBtn}>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>Retry</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={editFailedTurn} accessibilityRole="button" style={styles.retryBtn}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ── Autocomplete strip ──────────────────────────────────────────── */}
         {autocomplete.length > 0 && (
@@ -533,11 +601,11 @@ export default function AiChatScreen() {
           />
           <TouchableOpacity
             onPress={() => handleSend()}
-            disabled={!input.trim() || sending || !!retryingId}
+            disabled={!input.trim() || sending || !!retryingId || !token || authLoading || !!failedTurn}
             activeOpacity={0.8}
             style={[
               styles.sendBtn,
-              { backgroundColor: input.trim() && !sending && !retryingId ? colors.primary : colors.border },
+              { backgroundColor: input.trim() && !sending && !retryingId && !!token && !failedTurn ? colors.primary : colors.border },
             ]}>
             <Ionicons name="send" size={17} color="#fff" />
           </TouchableOpacity>
@@ -551,6 +619,8 @@ export default function AiChatScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 },
+  retryBtn: { minWidth: 48, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
 
   header:           { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1 },
   backBtn:          { padding: 2 },

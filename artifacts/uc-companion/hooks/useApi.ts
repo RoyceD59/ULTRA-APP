@@ -417,19 +417,30 @@ export function useApi() {
     throw new ApiError(String(body['error'] ?? res.status), res.status, body);
   }, [token]);
 
-  const get = useCallback(async <T>(path: string, signal?: AbortSignal): Promise<T> => {
-    const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders(), signal });
-    if (!res.ok) {
-      return throwResponseError(res);
+  const get = useCallback(async <T>(path: string, signal?: AbortSignal, deadlineMs?: number): Promise<T> => {
+    const controller = deadlineMs ? new AbortController() : null;
+    const abort = () => controller?.abort();
+    if (controller && signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener('abort', abort, { once: true });
     }
-    return res.json() as Promise<T>;
+    const timer = controller ? setTimeout(abort, deadlineMs) : null;
+    try {
+      const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders(), signal: controller?.signal ?? signal });
+      if (!res.ok) return throwResponseError(res);
+      return res.json() as Promise<T>;
+    } finally {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    }
   }, [authHeaders, throwResponseError]);
 
-  const post = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
+  const post = useCallback(async <T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> => {
     const res = await fetch(`${getApiBase()}${path}`, {
       method: 'POST',
       headers: authHeaders(),
       body: body ? JSON.stringify(body) : undefined,
+      signal,
     });
     if (!res.ok) {
       return throwResponseError(res);
@@ -466,7 +477,7 @@ export function useApi() {
       const qs = new URLSearchParams();
       if (params?.category) qs.set('category', params.category);
       if (params?.search) qs.set('search', params.search);
-      return get<UCProduct[]>(`/api/uc/products?${qs}`, signal);
+      return get<UCProduct[]>(`/api/uc/products?${qs}`, signal, 15_000);
     },
     getProduct: (id: number) => get<UCProduct>(`/api/uc/products/${id}`),
     getCompatibilityProducts: (skus: string) =>
@@ -549,7 +560,7 @@ export function useApi() {
     getMyReferral: () => get<UCReferralInfo>('/api/uc/referrals/my-code'),
     validateCode: (code: string) =>
       post<CodeValidationResult>('/api/uc/referrals/validate', { code }),
-    getPromotions: () => get<UCPromotion[]>('/api/uc/promotions'),
+    getPromotions: (signal?: AbortSignal) => get<UCPromotion[]>('/api/uc/promotions', signal, 12_000),
     /** Update the authenticated user's profile details (name / phone / address). */
     updateProfile: (data: { firstName?: string; lastName?: string; phone?: string; address?: string }) =>
       patch<UCCustomer>('/api/uc/customer/profile', data),
@@ -674,9 +685,10 @@ export function useApi() {
         cleanCount?:    number;
       },
       isRetry?: boolean,
+      signal?: AbortSignal,
     ) => post<{ reply: string; suggestions: string[] }>('/api/uc/ai/water-chat', {
       messages, conversationId, turnId, filterContext, isRetry,
-    }),
+    }, signal),
 
     /** Fetch the live UC environmental impact stats. */
     getImpact: () =>

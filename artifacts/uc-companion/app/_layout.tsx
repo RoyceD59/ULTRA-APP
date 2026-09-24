@@ -12,6 +12,8 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { Stack, useRouter } from 'expo-router';
+import { TouchableOpacity, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
@@ -22,6 +24,7 @@ import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
 import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
+import { cartBackDestination } from '@/lib/customerScreenState';
 
 // Set API base URL before any component renders
 const apiBase = getApiBase();
@@ -94,7 +97,17 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back', headerTintColor: '#0054A6' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="product/[id]" options={{ title: 'Product Details', headerBackTitle: 'Back' }} />
-      <Stack.Screen name="cart" options={{ title: 'My Cart' }} />
+      <Stack.Screen name="cart" options={{
+        title: 'My Cart',
+        headerLeft: () => (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to previous screen or shop"
+            onPress={() => cartBackDestination(router.canGoBack()) === 'back' ? router.back() : router.replace('/(tabs)/products')}
+            style={{ minWidth: 72, minHeight: 44, flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="chevron-back" size={22} color="#0054A6" />
+            <Text style={{ color: '#0054A6', fontSize: 16 }}>Back</Text>
+          </TouchableOpacity>
+        ),
+      }} />
       <Stack.Screen name="checkout" options={{ title: 'Checkout' }} />
       <Stack.Screen name="order/[id]" options={{ title: 'Order Details' }} />
       <Stack.Screen name="ticket/new" options={{ title: 'New Ticket' }} />

@@ -18,6 +18,7 @@ import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 const GALLERY_H = 310;
@@ -41,6 +42,12 @@ export default function ProductDetailScreen() {
   const { addItem, totalItems, cartHydrated } = useCart();
   const { token, user } = useAuth();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const goBackToProducts = () => {
+    if (returnCategory) router.replace({ pathname: '/(tabs)/products', params: { category: returnCategory } } as never);
+    else if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/products');
+  };
 
   const pid = parseInt(id ?? '');
   const queryClient = useQueryClient();
@@ -71,7 +78,7 @@ export default function ProductDetailScreen() {
     });
   }, [slideIndex, galleryContainerWidth]);
 
-  const { data: product, isLoading } = useQuery({
+  const { data: product, isLoading, isError, refetch: retryProduct } = useQuery({
     queryKey: ['product', id],
     queryFn: () => api.getProduct(pid),
     enabled: !!id,
@@ -147,7 +154,11 @@ export default function ProductDetailScreen() {
 
   if (!product) return (
     <View style={[styles.loading, { backgroundColor: colors.background }]}>
-      <Text style={{ color: colors.mutedForeground }}>Product not found</Text>
+      <Text style={{ color: colors.mutedForeground }}>{isError ? "Couldn't load this product" : 'Product not found'}</Text>
+      <TouchableOpacity onPress={isError ? () => retryProduct() : goBackToProducts} accessibilityRole="button"
+        style={{ minHeight: 44, justifyContent: 'center' }}>
+        <Text style={{ color: colors.primary }}>{isError ? 'Retry' : 'Browse products'}</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -177,7 +188,8 @@ export default function ProductDetailScreen() {
   const reviewParams = { productId: String(product.id), productName: product.name };
 
   const ctaContent = (
-    <View style={[styles.footer, isDesktop && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border }]}>
+    <View style={[styles.footer, isDesktop && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border,
+      paddingBottom: isDesktop ? 0 : Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
       {isEnquiryOnly ? (
         <TouchableOpacity
           onPress={() => {
@@ -250,20 +262,11 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: isDesktop ? 40 : 120, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: paddingH }} showsVerticalScrollIndicator={false}>
+       <ScrollView contentContainerStyle={{ paddingBottom: isDesktop ? 40 : 140 + insets.bottom, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: paddingH }} showsVerticalScrollIndicator={false}>
 
         {isDesktop && (
           <TouchableOpacity
-            onPress={() => {
-              if (returnCategory) {
-                router.replace({
-                  pathname: '/(tabs)/products',
-                  params: { category: returnCategory },
-                } as never);
-              } else {
-                router.back();
-              }
-            }}
+             onPress={goBackToProducts}
             style={[styles.desktopBackBtn, { marginBottom: 16 }]}
             accessibilityRole="button"
             accessibilityLabel="Back to products"
@@ -280,16 +283,7 @@ export default function ProductDetailScreen() {
             <View style={{ backgroundColor: '#0d0d0d', borderRadius: isDesktop ? 16 : 0, overflow: 'hidden' }}>
               {!isDesktop && (
                 <TouchableOpacity
-                  onPress={() => {
-              if (returnCategory) {
-                router.replace({
-                  pathname: '/(tabs)/products',
-                  params: { category: returnCategory },
-                } as never);
-              } else {
-                router.back();
-              }
-            }}
+                   onPress={goBackToProducts}
             style={styles.backBtn}
             accessibilityRole="button"
             accessibilityLabel="Back to products"

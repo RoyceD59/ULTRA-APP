@@ -4,6 +4,7 @@ import {
   Modal, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
@@ -120,6 +121,7 @@ const ADDRESS_FIELDS: FieldDef[] = [
 ];
 
 export default function CheckoutScreen() {
+  const insets = useSafeAreaInsets();
   const colors = useColors();
   const router = useRouter();
   const { items, totalPrice, clearCart, cartHydrated, cartLoadError, refreshCart } = useCart();
@@ -858,7 +860,7 @@ export default function CheckoutScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Address</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.field}>
@@ -995,7 +997,8 @@ export default function CheckoutScreen() {
       {/* Alison chat bubble — greets on arrival, collapses after 2 s */}
       <AlisonBubble message={alisonGreeting} bottomOffset={110} />
 
-      <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border,
+        paddingBottom: Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
         <TouchableOpacity onPress={handleConfirm} disabled={processing}
           style={[styles.confirmBtn, { backgroundColor: processing ? colors.muted : colors.primary }]}>
           {processing ? <ActivityIndicator color="#fff" size="small" /> : (
