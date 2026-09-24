@@ -35,6 +35,7 @@ import {
   retryReferralSettlements,
 } from "../routes/referrals.js";
 import { processOrderNotificationOutbox, reconcileWooOrderStatuses } from "./order-status-pipeline.js";
+import { queueBlogRun, resumeQueuedBlogRuns, weeklyBlogRunKey } from "./blog-editorial.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -252,6 +253,28 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  void resumeQueuedBlogRuns()
+    .then((resumed) => {
+      if (resumed) logger.info({ resumed }, "Scheduler: resuming queued Companion editorial runs");
+    })
+    .catch((err) => logger.error({ err }, "Scheduler: failed to resume Companion editorial runs"));
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      const resumed = await resumeQueuedBlogRuns();
+      if (resumed) logger.info({ resumed }, "Scheduler: resumed pending Companion editorial runs");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: failed to recover Companion editorial runs");
+    }
+  }, { timezone: "UTC" });
+  cron.schedule("0 9 * * 1", async () => {
+    try {
+      const queued = await queueBlogRun("weekly", weeklyBlogRunKey(), null);
+      if (queued.created) logger.info({ runId: queued.run.id }, "Scheduler: weekly Companion editorial run queued");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: weekly Companion editorial run could not be queued");
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: weekly Companion editorial run registered (Monday 09:00 UTC)");
   cron.schedule("* * * * *", async () => {
     try {
       const processed = await processLeadDeliveryOutbox();

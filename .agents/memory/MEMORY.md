@@ -42,3 +42,4 @@
 - [Canonical lifecycle program](canonical-lifecycle-program.md) — unify identity, purchases, registrations, maintenance, and impact; unmatched legacy purchases require staff review.
 - [Parallel dispatcher tests](parallel-dispatcher-tests.md) — inject providers, shared configuration, and recipient scope; a shared test DB alone does not isolate broad dispatch scans.
 - [Cross-path alert timestamps](cross-path-alert-timestamps.md) — when manual and scheduled sends share dedupe state, timestamp upserts must be monotonic and occur only after successful delivery.
+- [OpenAPI URI codegen compatibility](openapi-uri-codegen.md) — generated standalone zod.url() can break runtime imports with the installed Zod; verify URI schemas after codegen.

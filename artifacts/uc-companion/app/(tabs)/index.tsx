@@ -18,6 +18,7 @@ import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import { catalogueQueryKey } from '@/lib/catalogueQuery';
 import { featuredState } from '@/lib/customerScreenState';
+import { fetchBlogPage } from '@/lib/blogContent';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -84,6 +85,19 @@ function HomeScreenContent() {
     queryKey: ['promotions'],
     queryFn: ({ signal }) => api.getPromotions(signal),
     staleTime: 2 * 60 * 1000,
+  });
+
+  // The editorial feed is an independent query: blog network delays or errors
+  // never hold up the Home screen or any of its existing data.
+  const { data: latestBlog, isError: latestBlogError, refetch: retryBlog } = useQuery({
+    queryKey: ['companion', 'blog', { homeLatest: true, limit: 3 }],
+    queryFn: ({ signal }) => fetchBlogPage(
+      (requestSignal) => api.getBlogArticles({ limit: 3 }, requestSignal),
+      { limit: 3 },
+      signal,
+    ),
+    staleTime: 3 * 60 * 1000,
+    retry: false,
   });
 
   const refreshFilterStatus = useCallback(() => {
@@ -202,6 +216,49 @@ function HomeScreenContent() {
           </TouchableOpacity>
         )}
 
+        {/* Latest Blog reads — this request is intentionally separate from
+            Home's primary catalogue and account content. */}
+        <View style={styles.blogSection}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Latest from the blog</Text>
+              {latestBlog?.fromCache ? (
+                <Text style={[styles.blogOffline, { color: colors.mutedForeground }]}>Saved articles · reconnect to refresh</Text>
+              ) : null}
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/blog' as never)} accessibilityRole="button">
+              <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          {latestBlog?.articles.length ? (
+            latestBlog.articles.slice(0, 3).map((article) => (
+              <TouchableOpacity key={article.id} accessibilityRole="button"
+                accessibilityLabel={`Read ${article.title}`}
+                onPress={() => router.push(`/blog/${encodeURIComponent(article.slug)}` as never)}
+                style={[styles.blogCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.blogCardText}>
+                  <Text style={[styles.blogCategory, { color: colors.primary }]} numberOfLines={1}>{article.category}</Text>
+                  <Text style={[styles.blogTitle, { color: colors.text }]} numberOfLines={2}>{article.title}</Text>
+                  <Text style={[styles.blogSummary, { color: colors.mutedForeground }]} numberOfLines={2}>{article.summary}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            ))
+          ) : latestBlogError ? (
+            <TouchableOpacity accessibilityRole="button" onPress={() => { void retryBlog(); }} style={styles.statusAction}>
+              <Text style={{ color: colors.mutedForeground }}>Blog articles unavailable. Tap to retry.</Text>
+            </TouchableOpacity>
+          ) : latestBlog ? (
+            <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/(tabs)/blog' as never)} style={styles.statusAction}>
+              <Text style={{ color: colors.mutedForeground }}>No articles yet. Explore the blog.</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/(tabs)/blog' as never)} style={styles.statusAction}>
+              <Text style={{ color: colors.mutedForeground }}>Explore practical water and filtration advice.</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Quick Actions */}
         <View style={styles.section}>
           <View style={styles.grid2}>
@@ -288,6 +345,13 @@ const styles = StyleSheet.create({
   trustSection: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 },
   trustTitle: { fontSize: 11, fontWeight: '700' as const, letterSpacing: 1 },
   promosSection: { gap: 10 },
+  blogSection: { gap: 9 },
+  blogCard: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 13, padding: 12 },
+  blogCardText: { flex: 1, gap: 3 },
+  blogCategory: { fontSize: 10, fontWeight: '700' as const, letterSpacing: 0.4, textTransform: 'uppercase' },
+  blogTitle: { fontSize: 14, lineHeight: 19, fontWeight: '700' as const },
+  blogSummary: { fontSize: 11, lineHeight: 16 },
+  blogOffline: { fontSize: 10, marginTop: 2 },
   promoBannerCard: {
     width: 240, backgroundColor: UC_DEEP, borderRadius: 14,
     padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10,

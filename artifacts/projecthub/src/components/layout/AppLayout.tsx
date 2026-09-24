@@ -3,7 +3,7 @@ import {
   Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets, MapPin, Tag,
   FolderKanban, Gauge, Gift, LayoutDashboard, Leaf, Link2, LogOut,
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
-  AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch, MessagesSquare
+  AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch, MessagesSquare, Newspaper
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ const NAVIGATION = [
   ["Water Tests", "/water-tests", "water-tests", Droplets],
   ["Notif. Failures", "/uc-notifications", "uc-notifications", BellOff],
   ["Library", "/library", "library", Package],
+  ["Companion Blog", "/blog", "blog", Newspaper],
 ] as const satisfies readonly [string, string, PageSlug, typeof LayoutDashboard][];
 
 const ADMIN_NAVIGATION = [

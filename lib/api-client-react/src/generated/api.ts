@@ -43,6 +43,14 @@ import type {
   AuditEventPage,
   AuthenticatedInstantWaterAssessmentCreated,
   AuthenticatedInstantWaterAssessmentInput,
+  BlogArticleInput,
+  BlogArticlePage,
+  BlogArticleUpdate,
+  BlogBriefInput,
+  BlogMachineDraftsInput,
+  BlogRejectionInput,
+  BlogRunResponse,
+  BlogTopicProposalsInput,
   CanonicalCustomerHistory,
   CanonicalFilterRegistration,
   ChangePasscodeInput,
@@ -56,6 +64,7 @@ import type {
   ContactMethodUpdate,
   ContactUpdate,
   ContactWithMethods,
+  CreateEditorialBlogArticle201,
   CreateUcAdminGuide201,
   CreateUcAdminLocation201,
   CustomerLifecycleFeatureConfig,
@@ -66,7 +75,9 @@ import type {
   ExportUcCustomersParams,
   GetCustomerLifecycleTimelineParams,
   GetDashboardActivityParams,
+  GetEditorialBlogArticle200,
   GetLocationAssessment200,
+  GetPublishedCompanionBlogArticle200,
   GetPublishedUcGuide200,
   GetUcAdminGuide200,
   GetUcLocationRatingAggregateParams,
@@ -99,12 +110,16 @@ import type {
   LegacyRegistrationSubmissionInput,
   LegacyReviewDecisionInput,
   ListAgentAlisonChatsParams,
+  ListCompanionBlogEditorialRuns200,
   ListCustomerLifecycleAuditEventsParams,
+  ListEditorialBlogArticles200,
+  ListEditorialBlogArticlesParams,
   ListLifecycleReconciliationConflictsParams,
   ListLifecycleRegistrationReviewsParams,
   ListLocationRatingReports200,
   ListNotificationLogsParams,
   ListProjectHubInstantWaterAssessmentsParams,
+  ListPublishedCompanionBlogArticlesParams,
   ListPublishedUcGuides200,
   ListTasksParams,
   ListUcAdminGuides200,
@@ -136,6 +151,7 @@ import type {
   PublicActionableError,
   PublicInstantWaterAssessmentInput,
   PublicInstantWaterAssessmentResult,
+  PublishEditorialBlogArticle200,
   ReconciliationConflictQueue,
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
@@ -180,6 +196,7 @@ import type {
   UcUploadResponse,
   UcWaterTestCustomerStageInput,
   UnsyncedRegistrationRecoveryInput,
+  UpdateEditorialBlogArticle200,
   UpdateLocationAssessment200,
   UpdateUcAdminLocation200,
   ValidateUcReferralOrPromotionCodeBody,
@@ -9176,6 +9193,975 @@ export function useGetPublishedUcGuide<TData = Awaited<ReturnType<typeof getPubl
 
 
 
+
+export const getListPublishedCompanionBlogArticlesUrl = (params?: ListPublishedCompanionBlogArticlesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/blog?${stringifiedParams}` : `/api/uc/blog`
+}
+
+/**
+ * @summary List published Companion blog articles
+ */
+export const listPublishedCompanionBlogArticles = async (params?: ListPublishedCompanionBlogArticlesParams, options?: RequestInit): Promise<BlogArticlePage> => {
+
+  return customFetch<BlogArticlePage>(getListPublishedCompanionBlogArticlesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPublishedCompanionBlogArticlesQueryKey = (params?: ListPublishedCompanionBlogArticlesParams,) => {
+    return [
+    `/api/uc/blog`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPublishedCompanionBlogArticlesQueryOptions = <TData = Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>, TError = ErrorType<void>>(params?: ListPublishedCompanionBlogArticlesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPublishedCompanionBlogArticlesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>> = ({ signal }) => listPublishedCompanionBlogArticles(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPublishedCompanionBlogArticlesQueryResult = NonNullable<Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>>
+export type ListPublishedCompanionBlogArticlesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List published Companion blog articles
+ */
+
+export function useListPublishedCompanionBlogArticles<TData = Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>, TError = ErrorType<void>>(
+ params?: ListPublishedCompanionBlogArticlesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPublishedCompanionBlogArticles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPublishedCompanionBlogArticlesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPublishedCompanionBlogArticleUrl = (slug: string,) => {
+
+
+
+
+  return `/api/uc/blog/${slug}`
+}
+
+/**
+ * @summary Get a published Companion blog article by slug
+ */
+export const getPublishedCompanionBlogArticle = async (slug: string, options?: RequestInit): Promise<GetPublishedCompanionBlogArticle200> => {
+
+  return customFetch<GetPublishedCompanionBlogArticle200>(getGetPublishedCompanionBlogArticleUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublishedCompanionBlogArticleQueryKey = (slug: string,) => {
+    return [
+    `/api/uc/blog/${slug}`
+    ] as const;
+    }
+
+
+export const getGetPublishedCompanionBlogArticleQueryOptions = <TData = Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>, TError = ErrorType<void>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublishedCompanionBlogArticleQueryKey(slug);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>> = ({ signal }) => getPublishedCompanionBlogArticle(slug, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: slug !== null && slug !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublishedCompanionBlogArticleQueryResult = NonNullable<Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>>
+export type GetPublishedCompanionBlogArticleQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a published Companion blog article by slug
+ */
+
+export function useGetPublishedCompanionBlogArticle<TData = Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>, TError = ErrorType<void>>(
+ slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublishedCompanionBlogArticle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublishedCompanionBlogArticleQueryOptions(slug,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListEditorialBlogArticlesUrl = (params?: ListEditorialBlogArticlesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/editor/blog?${stringifiedParams}` : `/api/uc/editor/blog`
+}
+
+/**
+ * @summary List editorial drafts, rejected articles, and published entries
+ */
+export const listEditorialBlogArticles = async (params?: ListEditorialBlogArticlesParams, options?: RequestInit): Promise<ListEditorialBlogArticles200> => {
+
+  return customFetch<ListEditorialBlogArticles200>(getListEditorialBlogArticlesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEditorialBlogArticlesQueryKey = (params?: ListEditorialBlogArticlesParams,) => {
+    return [
+    `/api/uc/editor/blog`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListEditorialBlogArticlesQueryOptions = <TData = Awaited<ReturnType<typeof listEditorialBlogArticles>>, TError = ErrorType<void>>(params?: ListEditorialBlogArticlesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEditorialBlogArticles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEditorialBlogArticlesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEditorialBlogArticles>>> = ({ signal }) => listEditorialBlogArticles(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEditorialBlogArticles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEditorialBlogArticlesQueryResult = NonNullable<Awaited<ReturnType<typeof listEditorialBlogArticles>>>
+export type ListEditorialBlogArticlesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List editorial drafts, rejected articles, and published entries
+ */
+
+export function useListEditorialBlogArticles<TData = Awaited<ReturnType<typeof listEditorialBlogArticles>>, TError = ErrorType<void>>(
+ params?: ListEditorialBlogArticlesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEditorialBlogArticles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEditorialBlogArticlesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateEditorialBlogArticleUrl = () => {
+
+
+
+
+  return `/api/uc/editor/blog`
+}
+
+/**
+ * @summary Create a human article draft or import a .txt, .md, or .docx file
+ */
+export const createEditorialBlogArticle = async (blogArticleInput: BlogArticleInput, options?: RequestInit): Promise<CreateEditorialBlogArticle201> => {
+
+  return customFetch<CreateEditorialBlogArticle201>(getCreateEditorialBlogArticleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(blogArticleInput)
+  }
+);}
+
+
+
+
+
+export const getCreateEditorialBlogArticleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEditorialBlogArticle>>, TError,{data: BodyType<BlogArticleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEditorialBlogArticle>>, TError,{data: BodyType<BlogArticleInput>}, TContext> => {
+
+const mutationKey = ['createEditorialBlogArticle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEditorialBlogArticle>>, {data: BodyType<BlogArticleInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEditorialBlogArticle(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEditorialBlogArticleMutationResult = NonNullable<Awaited<ReturnType<typeof createEditorialBlogArticle>>>
+    export type CreateEditorialBlogArticleMutationBody = BodyType<BlogArticleInput>
+    export type CreateEditorialBlogArticleMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a human article draft or import a .txt, .md, or .docx file
+ */
+export const useCreateEditorialBlogArticle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEditorialBlogArticle>>, TError,{data: BodyType<BlogArticleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEditorialBlogArticle>>,
+        TError,
+        {data: BodyType<BlogArticleInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEditorialBlogArticleMutationOptions(options));
+    }
+
+export const getGetEditorialBlogArticleUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/editor/blog/${id}`
+}
+
+/**
+ * @summary Read one editorial article and its history
+ */
+export const getEditorialBlogArticle = async (id: string, options?: RequestInit): Promise<GetEditorialBlogArticle200> => {
+
+  return customFetch<GetEditorialBlogArticle200>(getGetEditorialBlogArticleUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEditorialBlogArticleQueryKey = (id: string,) => {
+    return [
+    `/api/uc/editor/blog/${id}`
+    ] as const;
+    }
+
+
+export const getGetEditorialBlogArticleQueryOptions = <TData = Awaited<ReturnType<typeof getEditorialBlogArticle>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEditorialBlogArticle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEditorialBlogArticleQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEditorialBlogArticle>>> = ({ signal }) => getEditorialBlogArticle(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEditorialBlogArticle>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEditorialBlogArticleQueryResult = NonNullable<Awaited<ReturnType<typeof getEditorialBlogArticle>>>
+export type GetEditorialBlogArticleQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read one editorial article and its history
+ */
+
+export function useGetEditorialBlogArticle<TData = Awaited<ReturnType<typeof getEditorialBlogArticle>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEditorialBlogArticle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEditorialBlogArticleQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateEditorialBlogArticleUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/editor/blog/${id}`
+}
+
+/**
+ * @summary Save an editorial revision without changing the published snapshot
+ */
+export const updateEditorialBlogArticle = async (id: string,
+    blogArticleUpdate: BlogArticleUpdate, options?: RequestInit): Promise<UpdateEditorialBlogArticle200> => {
+
+  return customFetch<UpdateEditorialBlogArticle200>(getUpdateEditorialBlogArticleUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(blogArticleUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateEditorialBlogArticleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEditorialBlogArticle>>, TError,{id: string;data: BodyType<BlogArticleUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEditorialBlogArticle>>, TError,{id: string;data: BodyType<BlogArticleUpdate>}, TContext> => {
+
+const mutationKey = ['updateEditorialBlogArticle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEditorialBlogArticle>>, {id: string;data: BodyType<BlogArticleUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateEditorialBlogArticle(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEditorialBlogArticleMutationResult = NonNullable<Awaited<ReturnType<typeof updateEditorialBlogArticle>>>
+    export type UpdateEditorialBlogArticleMutationBody = BodyType<BlogArticleUpdate>
+    export type UpdateEditorialBlogArticleMutationError = ErrorType<void>
+
+    /**
+ * @summary Save an editorial revision without changing the published snapshot
+ */
+export const useUpdateEditorialBlogArticle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEditorialBlogArticle>>, TError,{id: string;data: BodyType<BlogArticleUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEditorialBlogArticle>>,
+        TError,
+        {id: string;data: BodyType<BlogArticleUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateEditorialBlogArticleMutationOptions(options));
+    }
+
+export const getPublishEditorialBlogArticleUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/editor/blog/${id}/publish`
+}
+
+/**
+ * @summary Approve the latest article revision and publish its snapshot
+ */
+export const publishEditorialBlogArticle = async (id: string, options?: RequestInit): Promise<PublishEditorialBlogArticle200> => {
+
+  return customFetch<PublishEditorialBlogArticle200>(getPublishEditorialBlogArticleUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPublishEditorialBlogArticleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishEditorialBlogArticle>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishEditorialBlogArticle>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['publishEditorialBlogArticle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishEditorialBlogArticle>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  publishEditorialBlogArticle(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishEditorialBlogArticleMutationResult = NonNullable<Awaited<ReturnType<typeof publishEditorialBlogArticle>>>
+
+    export type PublishEditorialBlogArticleMutationError = ErrorType<void>
+
+    /**
+ * @summary Approve the latest article revision and publish its snapshot
+ */
+export const usePublishEditorialBlogArticle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishEditorialBlogArticle>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishEditorialBlogArticle>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPublishEditorialBlogArticleMutationOptions(options));
+    }
+
+export const getRejectEditorialBlogArticleUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/editor/blog/${id}/reject`
+}
+
+/**
+ * @summary Reject an article and record actionable reviewer feedback
+ */
+export const rejectEditorialBlogArticle = async (id: string,
+    blogRejectionInput: BlogRejectionInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRejectEditorialBlogArticleUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(blogRejectionInput)
+  }
+);}
+
+
+
+
+
+export const getRejectEditorialBlogArticleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectEditorialBlogArticle>>, TError,{id: string;data: BodyType<BlogRejectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectEditorialBlogArticle>>, TError,{id: string;data: BodyType<BlogRejectionInput>}, TContext> => {
+
+const mutationKey = ['rejectEditorialBlogArticle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectEditorialBlogArticle>>, {id: string;data: BodyType<BlogRejectionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  rejectEditorialBlogArticle(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectEditorialBlogArticleMutationResult = NonNullable<Awaited<ReturnType<typeof rejectEditorialBlogArticle>>>
+    export type RejectEditorialBlogArticleMutationBody = BodyType<BlogRejectionInput>
+    export type RejectEditorialBlogArticleMutationError = ErrorType<void>
+
+    /**
+ * @summary Reject an article and record actionable reviewer feedback
+ */
+export const useRejectEditorialBlogArticle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectEditorialBlogArticle>>, TError,{id: string;data: BodyType<BlogRejectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectEditorialBlogArticle>>,
+        TError,
+        {id: string;data: BodyType<BlogRejectionInput>},
+        TContext
+      > => {
+      return useMutation(getRejectEditorialBlogArticleMutationOptions(options));
+    }
+
+export const getUnpublishEditorialBlogArticleUrl = (id: string,) => {
+
+
+
+
+  return `/api/uc/editor/blog/${id}/unpublish`
+}
+
+/**
+ * @summary Remove a published article from the public feed
+ */
+export const unpublishEditorialBlogArticle = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUnpublishEditorialBlogArticleUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnpublishEditorialBlogArticleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpublishEditorialBlogArticle>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unpublishEditorialBlogArticle>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['unpublishEditorialBlogArticle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unpublishEditorialBlogArticle>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unpublishEditorialBlogArticle(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnpublishEditorialBlogArticleMutationResult = NonNullable<Awaited<ReturnType<typeof unpublishEditorialBlogArticle>>>
+
+    export type UnpublishEditorialBlogArticleMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove a published article from the public feed
+ */
+export const useUnpublishEditorialBlogArticle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpublishEditorialBlogArticle>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unpublishEditorialBlogArticle>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getUnpublishEditorialBlogArticleMutationOptions(options));
+    }
+
+export const getRequestCompanionBlogDraftFromBriefUrl = () => {
+
+
+
+
+  return `/api/uc/editor/blog/draft-from-brief`
+}
+
+/**
+ * @summary Queue sourced draft generation from a ProjectHub brief
+ */
+export const requestCompanionBlogDraftFromBrief = async (blogBriefInput: BlogBriefInput, options?: RequestInit): Promise<BlogRunResponse> => {
+
+  return customFetch<BlogRunResponse>(getRequestCompanionBlogDraftFromBriefUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(blogBriefInput)
+  }
+);}
+
+
+
+
+
+export const getRequestCompanionBlogDraftFromBriefMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestCompanionBlogDraftFromBrief>>, TError,{data: BodyType<BlogBriefInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestCompanionBlogDraftFromBrief>>, TError,{data: BodyType<BlogBriefInput>}, TContext> => {
+
+const mutationKey = ['requestCompanionBlogDraftFromBrief'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestCompanionBlogDraftFromBrief>>, {data: BodyType<BlogBriefInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestCompanionBlogDraftFromBrief(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestCompanionBlogDraftFromBriefMutationResult = NonNullable<Awaited<ReturnType<typeof requestCompanionBlogDraftFromBrief>>>
+    export type RequestCompanionBlogDraftFromBriefMutationBody = BodyType<BlogBriefInput>
+    export type RequestCompanionBlogDraftFromBriefMutationError = ErrorType<void>
+
+    /**
+ * @summary Queue sourced draft generation from a ProjectHub brief
+ */
+export const useRequestCompanionBlogDraftFromBrief = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestCompanionBlogDraftFromBrief>>, TError,{data: BodyType<BlogBriefInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestCompanionBlogDraftFromBrief>>,
+        TError,
+        {data: BodyType<BlogBriefInput>},
+        TContext
+      > => {
+      return useMutation(getRequestCompanionBlogDraftFromBriefMutationOptions(options));
+    }
+
+export const getListCompanionBlogEditorialRunsUrl = () => {
+
+
+
+
+  return `/api/uc/editor/blog/runs`
+}
+
+/**
+ * @summary List weekly and on-demand editorial research and generation runs
+ */
+export const listCompanionBlogEditorialRuns = async ( options?: RequestInit): Promise<ListCompanionBlogEditorialRuns200> => {
+
+  return customFetch<ListCompanionBlogEditorialRuns200>(getListCompanionBlogEditorialRunsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCompanionBlogEditorialRunsQueryKey = () => {
+    return [
+    `/api/uc/editor/blog/runs`
+    ] as const;
+    }
+
+
+export const getListCompanionBlogEditorialRunsQueryOptions = <TData = Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCompanionBlogEditorialRunsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>> = ({ signal }) => listCompanionBlogEditorialRuns({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCompanionBlogEditorialRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>>
+export type ListCompanionBlogEditorialRunsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List weekly and on-demand editorial research and generation runs
+ */
+
+export function useListCompanionBlogEditorialRuns<TData = Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanionBlogEditorialRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCompanionBlogEditorialRunsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitCompanionBlogTopicProposalsUrl = () => {
+
+
+
+
+  return `/api/integrations/v1/blog/topics`
+}
+
+/**
+ * @summary Submit bounded topic proposals for human review
+ */
+export const submitCompanionBlogTopicProposals = async (blogTopicProposalsInput: BlogTopicProposalsInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getSubmitCompanionBlogTopicProposalsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(blogTopicProposalsInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitCompanionBlogTopicProposalsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCompanionBlogTopicProposals>>, TError,{data: BodyType<BlogTopicProposalsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitCompanionBlogTopicProposals>>, TError,{data: BodyType<BlogTopicProposalsInput>}, TContext> => {
+
+const mutationKey = ['submitCompanionBlogTopicProposals'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitCompanionBlogTopicProposals>>, {data: BodyType<BlogTopicProposalsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitCompanionBlogTopicProposals(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitCompanionBlogTopicProposalsMutationResult = NonNullable<Awaited<ReturnType<typeof submitCompanionBlogTopicProposals>>>
+    export type SubmitCompanionBlogTopicProposalsMutationBody = BodyType<BlogTopicProposalsInput>
+    export type SubmitCompanionBlogTopicProposalsMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit bounded topic proposals for human review
+ */
+export const useSubmitCompanionBlogTopicProposals = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCompanionBlogTopicProposals>>, TError,{data: BodyType<BlogTopicProposalsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitCompanionBlogTopicProposals>>,
+        TError,
+        {data: BodyType<BlogTopicProposalsInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitCompanionBlogTopicProposalsMutationOptions(options));
+    }
+
+export const getSubmitCompanionBlogDraftsUrl = () => {
+
+
+
+
+  return `/api/integrations/v1/blog/drafts`
+}
+
+/**
+ * @summary Submit sourced drafts into the human review queue
+ */
+export const submitCompanionBlogDrafts = async (blogMachineDraftsInput: BlogMachineDraftsInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getSubmitCompanionBlogDraftsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(blogMachineDraftsInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitCompanionBlogDraftsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCompanionBlogDrafts>>, TError,{data: BodyType<BlogMachineDraftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitCompanionBlogDrafts>>, TError,{data: BodyType<BlogMachineDraftsInput>}, TContext> => {
+
+const mutationKey = ['submitCompanionBlogDrafts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitCompanionBlogDrafts>>, {data: BodyType<BlogMachineDraftsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitCompanionBlogDrafts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitCompanionBlogDraftsMutationResult = NonNullable<Awaited<ReturnType<typeof submitCompanionBlogDrafts>>>
+    export type SubmitCompanionBlogDraftsMutationBody = BodyType<BlogMachineDraftsInput>
+    export type SubmitCompanionBlogDraftsMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit sourced drafts into the human review queue
+ */
+export const useSubmitCompanionBlogDrafts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCompanionBlogDrafts>>, TError,{data: BodyType<BlogMachineDraftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitCompanionBlogDrafts>>,
+        TError,
+        {data: BodyType<BlogMachineDraftsInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitCompanionBlogDraftsMutationOptions(options));
+    }
 
 export const getListUcAdminGuidesUrl = () => {
 

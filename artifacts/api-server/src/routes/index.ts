@@ -37,6 +37,7 @@ import instantWaterCheckRouter from "./instant-water-check.js";
 import orderStatusWebhookRouter from "./order-status-webhook.js";
 import agentOauthRouter from "./agent-oauth.js";
 import guidesRouter from "./guides.js";
+import blogRouter from "./blog.js";
 
 const router: IRouter = Router();
 
@@ -76,6 +77,7 @@ router.use(dashboardRouter);
 router.use(anthropicRouter);
 router.use(agentOauthRouter);
 router.use(guidesRouter);
+router.use(blogRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);

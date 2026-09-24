@@ -37,6 +37,7 @@ export * from "./uc-reviews";
 export * from "./uc-product-media";
 export * from "./uc-ai-feedback";
 export * from "./uc-alison-chats";
+export * from "./uc-blog";
 export * from "./uc-offline-clients";
 export * from "./uc-notification-log";
 export * from "./uc-lifespan-alerts";

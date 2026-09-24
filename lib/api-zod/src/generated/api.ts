@@ -3036,6 +3036,686 @@ export const GetPublishedUcGuideResponse = zod.object({
 })
 
 
+/**
+ * @summary List published Companion blog articles
+ */
+export const listPublishedCompanionBlogArticlesQueryLimitDefault = 10;
+export const listPublishedCompanionBlogArticlesQueryLimitMax = 20;
+
+export const listPublishedCompanionBlogArticlesQuerySearchMax = 120;
+
+export const listPublishedCompanionBlogArticlesQueryCategoryMax = 80;
+
+
+
+export const ListPublishedCompanionBlogArticlesQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listPublishedCompanionBlogArticlesQueryLimitMax).default(listPublishedCompanionBlogArticlesQueryLimitDefault),
+  "cursor": zod.coerce.string().optional(),
+  "search": zod.coerce.string().max(listPublishedCompanionBlogArticlesQuerySearchMax).optional(),
+  "category": zod.coerce.string().max(listPublishedCompanionBlogArticlesQueryCategoryMax).optional()
+})
+
+export const ListPublishedCompanionBlogArticlesResponse = zod.object({
+  "articles": zod.array(zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+})),
+  "nextCursor": zod.string().nullable()
+})
+
+
+/**
+ * @summary Get a published Companion blog article by slug
+ */
+export const GetPublishedCompanionBlogArticleParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const getPublishedCompanionBlogArticleResponseArticleSourcesItemTitleMax = 200;
+
+export const getPublishedCompanionBlogArticleResponseArticleSourcesItemPublisherMax = 120;
+
+export const getPublishedCompanionBlogArticleResponseArticleSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+
+
+export const GetPublishedCompanionBlogArticleResponse = zod.object({
+  "article": zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(getPublishedCompanionBlogArticleResponseArticleSourcesItemTitleMax),
+  "publisher": zod.string().max(getPublishedCompanionBlogArticleResponseArticleSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(getPublishedCompanionBlogArticleResponseArticleSourcesItemUrlRegExp)
+})),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+})
+})
+
+
+/**
+ * @summary List editorial drafts, rejected articles, and published entries
+ */
+export const ListEditorialBlogArticlesQueryParams = zod.object({
+  "status": zod.enum(['draft', 'rejected', 'published']).optional()
+})
+
+export const listEditorialBlogArticlesResponseArticlesItemSourcesItemTitleMax = 200;
+
+export const listEditorialBlogArticlesResponseArticlesItemSourcesItemPublisherMax = 120;
+
+export const listEditorialBlogArticlesResponseArticlesItemSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const listEditorialBlogArticlesResponseArticlesItemPublishedSnapshotOneSourcesItemTitleMax = 200;
+
+export const listEditorialBlogArticlesResponseArticlesItemPublishedSnapshotOneSourcesItemPublisherMax = 120;
+
+export const listEditorialBlogArticlesResponseArticlesItemPublishedSnapshotOneSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+
+
+export const ListEditorialBlogArticlesResponse = zod.object({
+  "articles": zod.array(zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "content": zod.string().describe('ProjectHub editor alias for body'),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(listEditorialBlogArticlesResponseArticlesItemSourcesItemTitleMax),
+  "publisher": zod.string().max(listEditorialBlogArticlesResponseArticlesItemSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(listEditorialBlogArticlesResponseArticlesItemSourcesItemUrlRegExp)
+})),
+  "origin": zod.enum(['human', 'upload', 'brief', 'weekly', 'agent']),
+  "status": zod.enum(['draft', 'rejected', 'published']),
+  "rationale": zod.string().nullable(),
+  "rejectionFeedback": zod.string().nullable(),
+  "createdBy": zod.string(),
+  "updatedBy": zod.string(),
+  "version": zod.string(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "publishedSnapshot": zod.union([zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(listEditorialBlogArticlesResponseArticlesItemPublishedSnapshotOneSourcesItemTitleMax),
+  "publisher": zod.string().max(listEditorialBlogArticlesResponseArticlesItemPublishedSnapshotOneSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(listEditorialBlogArticlesResponseArticlesItemPublishedSnapshotOneSourcesItemUrlRegExp)
+})),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+}),zod.null()]),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a human article draft or import a .txt, .md, or .docx file
+ */
+export const createEditorialBlogArticleBodySlugMax = 120;
+
+export const createEditorialBlogArticleBodyTitleMax = 200;
+
+export const createEditorialBlogArticleBodySummaryMax = 500;
+
+export const createEditorialBlogArticleBodyBodyMax = 50000;
+
+export const createEditorialBlogArticleBodyContentMax = 50000;
+
+export const createEditorialBlogArticleBodyCategoryMax = 80;
+
+export const createEditorialBlogArticleBodyTagsItemMax = 40;
+
+export const createEditorialBlogArticleBodyTagsMax = 12;
+
+export const createEditorialBlogArticleBodySourcesItemTitleMax = 200;
+
+export const createEditorialBlogArticleBodySourcesItemPublisherMax = 120;
+
+export const createEditorialBlogArticleBodySourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const createEditorialBlogArticleBodySourcesMax = 8;
+
+export const createEditorialBlogArticleBodyRationaleMax = 1000;
+
+export const createEditorialBlogArticleBodyFilenameMax = 255;
+
+export const createEditorialBlogArticleBodyBase64ContentMax = 6000000;
+
+
+
+export const CreateEditorialBlogArticleBody = zod.object({
+  "slug": zod.string().max(createEditorialBlogArticleBodySlugMax).optional(),
+  "title": zod.string().max(createEditorialBlogArticleBodyTitleMax).optional(),
+  "summary": zod.string().max(createEditorialBlogArticleBodySummaryMax).optional(),
+  "body": zod.string().max(createEditorialBlogArticleBodyBodyMax).optional(),
+  "content": zod.string().max(createEditorialBlogArticleBodyContentMax).optional().describe('ProjectHub editor alias for body'),
+  "category": zod.string().max(createEditorialBlogArticleBodyCategoryMax).optional(),
+  "tags": zod.array(zod.string().max(createEditorialBlogArticleBodyTagsItemMax)).max(createEditorialBlogArticleBodyTagsMax).optional(),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(createEditorialBlogArticleBodySourcesItemTitleMax),
+  "publisher": zod.string().max(createEditorialBlogArticleBodySourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(createEditorialBlogArticleBodySourcesItemUrlRegExp)
+})).max(createEditorialBlogArticleBodySourcesMax).optional(),
+  "rationale": zod.string().max(createEditorialBlogArticleBodyRationaleMax).optional(),
+  "directPublish": zod.boolean().optional(),
+  "filename": zod.string().max(createEditorialBlogArticleBodyFilenameMax).optional(),
+  "base64Content": zod.string().max(createEditorialBlogArticleBodyBase64ContentMax).optional()
+})
+
+export const createEditorialBlogArticleResponseArticleSourcesItemTitleMax = 200;
+
+export const createEditorialBlogArticleResponseArticleSourcesItemPublisherMax = 120;
+
+export const createEditorialBlogArticleResponseArticleSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const createEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax = 200;
+
+export const createEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax = 120;
+
+export const createEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+
+
+export const CreateEditorialBlogArticleResponse = zod.object({
+  "article": zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "content": zod.string().describe('ProjectHub editor alias for body'),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(createEditorialBlogArticleResponseArticleSourcesItemTitleMax),
+  "publisher": zod.string().max(createEditorialBlogArticleResponseArticleSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(createEditorialBlogArticleResponseArticleSourcesItemUrlRegExp)
+})),
+  "origin": zod.enum(['human', 'upload', 'brief', 'weekly', 'agent']),
+  "status": zod.enum(['draft', 'rejected', 'published']),
+  "rationale": zod.string().nullable(),
+  "rejectionFeedback": zod.string().nullable(),
+  "createdBy": zod.string(),
+  "updatedBy": zod.string(),
+  "version": zod.string(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "publishedSnapshot": zod.union([zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(createEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax),
+  "publisher": zod.string().max(createEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(createEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp)
+})),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+}),zod.null()]),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Read one editorial article and its history
+ */
+export const GetEditorialBlogArticleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getEditorialBlogArticleResponseArticleSourcesItemTitleMax = 200;
+
+export const getEditorialBlogArticleResponseArticleSourcesItemPublisherMax = 120;
+
+export const getEditorialBlogArticleResponseArticleSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const getEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax = 200;
+
+export const getEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax = 120;
+
+export const getEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+
+
+export const GetEditorialBlogArticleResponse = zod.object({
+  "article": zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "content": zod.string().describe('ProjectHub editor alias for body'),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(getEditorialBlogArticleResponseArticleSourcesItemTitleMax),
+  "publisher": zod.string().max(getEditorialBlogArticleResponseArticleSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(getEditorialBlogArticleResponseArticleSourcesItemUrlRegExp)
+})),
+  "origin": zod.enum(['human', 'upload', 'brief', 'weekly', 'agent']),
+  "status": zod.enum(['draft', 'rejected', 'published']),
+  "rationale": zod.string().nullable(),
+  "rejectionFeedback": zod.string().nullable(),
+  "createdBy": zod.string(),
+  "updatedBy": zod.string(),
+  "version": zod.string(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "publishedSnapshot": zod.union([zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(getEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax),
+  "publisher": zod.string().max(getEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(getEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp)
+})),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+}),zod.null()]),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "history": zod.array(zod.object({
+  "id": zod.string(),
+  "actorId": zod.string(),
+  "action": zod.string(),
+  "rationale": zod.string().nullable(),
+  "snapshot": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Save an editorial revision without changing the published snapshot
+ */
+export const UpdateEditorialBlogArticleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateEditorialBlogArticleBodySlugMax = 120;
+
+export const updateEditorialBlogArticleBodyTitleMax = 200;
+
+export const updateEditorialBlogArticleBodySummaryMax = 500;
+
+export const updateEditorialBlogArticleBodyBodyMax = 50000;
+
+export const updateEditorialBlogArticleBodyContentMax = 50000;
+
+export const updateEditorialBlogArticleBodyCategoryMax = 80;
+
+export const updateEditorialBlogArticleBodyTagsItemMax = 40;
+
+export const updateEditorialBlogArticleBodyTagsMax = 12;
+
+export const updateEditorialBlogArticleBodySourcesItemTitleMax = 200;
+
+export const updateEditorialBlogArticleBodySourcesItemPublisherMax = 120;
+
+export const updateEditorialBlogArticleBodySourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const updateEditorialBlogArticleBodySourcesMax = 8;
+
+export const updateEditorialBlogArticleBodyRationaleMax = 1000;
+
+
+
+export const UpdateEditorialBlogArticleBody = zod.object({
+  "slug": zod.string().max(updateEditorialBlogArticleBodySlugMax).optional(),
+  "title": zod.string().min(1).max(updateEditorialBlogArticleBodyTitleMax),
+  "summary": zod.string().max(updateEditorialBlogArticleBodySummaryMax).optional(),
+  "body": zod.string().min(1).max(updateEditorialBlogArticleBodyBodyMax).optional(),
+  "content": zod.string().min(1).max(updateEditorialBlogArticleBodyContentMax).optional().describe('ProjectHub editor alias for body'),
+  "category": zod.string().max(updateEditorialBlogArticleBodyCategoryMax).optional(),
+  "tags": zod.array(zod.string().max(updateEditorialBlogArticleBodyTagsItemMax)).max(updateEditorialBlogArticleBodyTagsMax).optional(),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(updateEditorialBlogArticleBodySourcesItemTitleMax),
+  "publisher": zod.string().max(updateEditorialBlogArticleBodySourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(updateEditorialBlogArticleBodySourcesItemUrlRegExp)
+})).max(updateEditorialBlogArticleBodySourcesMax).optional(),
+  "rationale": zod.string().max(updateEditorialBlogArticleBodyRationaleMax).optional()
+})
+
+export const updateEditorialBlogArticleResponseArticleSourcesItemTitleMax = 200;
+
+export const updateEditorialBlogArticleResponseArticleSourcesItemPublisherMax = 120;
+
+export const updateEditorialBlogArticleResponseArticleSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const updateEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax = 200;
+
+export const updateEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax = 120;
+
+export const updateEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+
+
+export const UpdateEditorialBlogArticleResponse = zod.object({
+  "article": zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "content": zod.string().describe('ProjectHub editor alias for body'),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(updateEditorialBlogArticleResponseArticleSourcesItemTitleMax),
+  "publisher": zod.string().max(updateEditorialBlogArticleResponseArticleSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(updateEditorialBlogArticleResponseArticleSourcesItemUrlRegExp)
+})),
+  "origin": zod.enum(['human', 'upload', 'brief', 'weekly', 'agent']),
+  "status": zod.enum(['draft', 'rejected', 'published']),
+  "rationale": zod.string().nullable(),
+  "rejectionFeedback": zod.string().nullable(),
+  "createdBy": zod.string(),
+  "updatedBy": zod.string(),
+  "version": zod.string(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "publishedSnapshot": zod.union([zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(updateEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax),
+  "publisher": zod.string().max(updateEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(updateEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp)
+})),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+}),zod.null()]),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Approve the latest article revision and publish its snapshot
+ */
+export const PublishEditorialBlogArticleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const publishEditorialBlogArticleResponseArticleSourcesItemTitleMax = 200;
+
+export const publishEditorialBlogArticleResponseArticleSourcesItemPublisherMax = 120;
+
+export const publishEditorialBlogArticleResponseArticleSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const publishEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax = 200;
+
+export const publishEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax = 120;
+
+export const publishEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+
+
+export const PublishEditorialBlogArticleResponse = zod.object({
+  "article": zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "content": zod.string().describe('ProjectHub editor alias for body'),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(publishEditorialBlogArticleResponseArticleSourcesItemTitleMax),
+  "publisher": zod.string().max(publishEditorialBlogArticleResponseArticleSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(publishEditorialBlogArticleResponseArticleSourcesItemUrlRegExp)
+})),
+  "origin": zod.enum(['human', 'upload', 'brief', 'weekly', 'agent']),
+  "status": zod.enum(['draft', 'rejected', 'published']),
+  "rationale": zod.string().nullable(),
+  "rejectionFeedback": zod.string().nullable(),
+  "createdBy": zod.string(),
+  "updatedBy": zod.string(),
+  "version": zod.string(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "publishedSnapshot": zod.union([zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "body": zod.string(),
+  "category": zod.string(),
+  "tags": zod.array(zod.string()),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(publishEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemTitleMax),
+  "publisher": zod.string().max(publishEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(publishEditorialBlogArticleResponseArticlePublishedSnapshotOneSourcesItemUrlRegExp)
+})),
+  "publishedAt": zod.coerce.date(),
+  "version": zod.string()
+}),zod.null()]),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Reject an article and record actionable reviewer feedback
+ */
+export const RejectEditorialBlogArticleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const rejectEditorialBlogArticleBodyFeedbackMax = 1000;
+
+
+
+export const RejectEditorialBlogArticleBody = zod.object({
+  "feedback": zod.string().min(1).max(rejectEditorialBlogArticleBodyFeedbackMax)
+})
+
+export const RejectEditorialBlogArticleResponse = zod.unknown()
+
+
+/**
+ * @summary Remove a published article from the public feed
+ */
+export const UnpublishEditorialBlogArticleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnpublishEditorialBlogArticleResponse = zod.unknown()
+
+
+/**
+ * @summary Queue sourced draft generation from a ProjectHub brief
+ */
+export const requestCompanionBlogDraftFromBriefBodyBriefMin = 10;
+export const requestCompanionBlogDraftFromBriefBodyBriefMax = 1000;
+
+export const requestCompanionBlogDraftFromBriefBodyIdempotencyKeyMax = 120;
+
+
+
+export const RequestCompanionBlogDraftFromBriefBody = zod.object({
+  "brief": zod.string().min(requestCompanionBlogDraftFromBriefBodyBriefMin).max(requestCompanionBlogDraftFromBriefBodyBriefMax),
+  "idempotencyKey": zod.string().max(requestCompanionBlogDraftFromBriefBodyIdempotencyKeyMax).optional()
+})
+
+export const RequestCompanionBlogDraftFromBriefResponse = zod.object({
+  "run": zod.object({
+  "id": zod.string(),
+  "runKey": zod.string(),
+  "runType": zod.enum(['weekly', 'brief']),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "requestedBy": zod.string().nullable(),
+  "brief": zod.string().nullable(),
+  "resultSummary": zod.string().nullable(),
+  "error": zod.string().nullable(),
+  "topics": zod.array(zod.record(zod.string(), zod.unknown())),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}),
+  "reused": zod.boolean()
+})
+
+
+/**
+ * @summary List weekly and on-demand editorial research and generation runs
+ */
+export const ListCompanionBlogEditorialRunsResponse = zod.object({
+  "runs": zod.array(zod.object({
+  "id": zod.string(),
+  "runKey": zod.string(),
+  "runType": zod.enum(['weekly', 'brief']),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "requestedBy": zod.string().nullable(),
+  "brief": zod.string().nullable(),
+  "resultSummary": zod.string().nullable(),
+  "error": zod.string().nullable(),
+  "topics": zod.array(zod.record(zod.string(), zod.unknown())),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Submit bounded topic proposals for human review
+ */
+export const submitCompanionBlogTopicProposalsBodyTopicsItemTopicMax = 160;
+
+export const submitCompanionBlogTopicProposalsBodyTopicsItemRationaleMax = 1000;
+
+export const submitCompanionBlogTopicProposalsBodyTopicsItemSourcesItemTitleMax = 200;
+
+export const submitCompanionBlogTopicProposalsBodyTopicsItemSourcesItemPublisherMax = 120;
+
+export const submitCompanionBlogTopicProposalsBodyTopicsItemSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const submitCompanionBlogTopicProposalsBodyTopicsItemSourcesMax = 8;
+
+export const submitCompanionBlogTopicProposalsBodyTopicsMax = 10;
+
+
+
+export const SubmitCompanionBlogTopicProposalsBody = zod.object({
+  "topics": zod.array(zod.object({
+  "topic": zod.string().min(1).max(submitCompanionBlogTopicProposalsBodyTopicsItemTopicMax),
+  "rationale": zod.string().min(1).max(submitCompanionBlogTopicProposalsBodyTopicsItemRationaleMax),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(submitCompanionBlogTopicProposalsBodyTopicsItemSourcesItemTitleMax),
+  "publisher": zod.string().max(submitCompanionBlogTopicProposalsBodyTopicsItemSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(submitCompanionBlogTopicProposalsBodyTopicsItemSourcesItemUrlRegExp)
+})).min(1).max(submitCompanionBlogTopicProposalsBodyTopicsItemSourcesMax)
+})).min(1).max(submitCompanionBlogTopicProposalsBodyTopicsMax)
+})
+
+export const SubmitCompanionBlogTopicProposalsResponse = zod.void()
+
+
+/**
+ * @summary Submit sourced drafts into the human review queue
+ */
+export const submitCompanionBlogDraftsBodyArticlesItemOneSlugMax = 120;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneTitleMax = 200;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneSummaryMax = 500;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneBodyMax = 50000;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneContentMax = 50000;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneCategoryMax = 80;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneTagsItemMax = 40;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneTagsMax = 12;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneSourcesItemTitleMax = 200;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneSourcesItemPublisherMax = 120;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const submitCompanionBlogDraftsBodyArticlesItemOneSourcesMax = 8;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneRationaleMax = 1000;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneFilenameMax = 255;
+
+export const submitCompanionBlogDraftsBodyArticlesItemOneBase64ContentMax = 6000000;
+
+export const submitCompanionBlogDraftsBodyArticlesItemTwoTitleMax = 200;
+
+export const submitCompanionBlogDraftsBodyArticlesItemTwoBodyMax = 50000;
+
+export const submitCompanionBlogDraftsBodyArticlesItemTwoSourcesItemTitleMax = 200;
+
+export const submitCompanionBlogDraftsBodyArticlesItemTwoSourcesItemPublisherMax = 120;
+
+export const submitCompanionBlogDraftsBodyArticlesItemTwoSourcesItemUrlRegExp = new RegExp('^https:\\x2f\\x2f.+$');
+export const submitCompanionBlogDraftsBodyArticlesItemTwoSourcesMax = 8;
+
+export const submitCompanionBlogDraftsBodyArticlesMax = 3;
+
+
+
+export const SubmitCompanionBlogDraftsBody = zod.object({
+  "articles": zod.array(zod.object({
+  "slug": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneSlugMax).optional(),
+  "title": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneTitleMax),
+  "summary": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneSummaryMax).optional(),
+  "body": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneBodyMax),
+  "content": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneContentMax).optional().describe('ProjectHub editor alias for body'),
+  "category": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneCategoryMax).optional(),
+  "tags": zod.array(zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneTagsItemMax)).max(submitCompanionBlogDraftsBodyArticlesItemOneTagsMax).optional(),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(submitCompanionBlogDraftsBodyArticlesItemOneSourcesItemTitleMax),
+  "publisher": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(submitCompanionBlogDraftsBodyArticlesItemOneSourcesItemUrlRegExp)
+})).max(submitCompanionBlogDraftsBodyArticlesItemOneSourcesMax),
+  "rationale": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneRationaleMax).optional(),
+  "directPublish": zod.boolean().optional(),
+  "filename": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneFilenameMax).optional(),
+  "base64Content": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneBase64ContentMax).optional()
+}).and(zod.object({
+  "title": zod.string().min(1).max(submitCompanionBlogDraftsBodyArticlesItemTwoTitleMax),
+  "body": zod.string().min(1).max(submitCompanionBlogDraftsBodyArticlesItemTwoBodyMax),
+  "sources": zod.array(zod.object({
+  "title": zod.string().min(1).max(submitCompanionBlogDraftsBodyArticlesItemTwoSourcesItemTitleMax),
+  "publisher": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemTwoSourcesItemPublisherMax).optional(),
+  "url": zod.string().regex(submitCompanionBlogDraftsBodyArticlesItemTwoSourcesItemUrlRegExp)
+})).min(1).max(submitCompanionBlogDraftsBodyArticlesItemTwoSourcesMax)
+}))).min(1).max(submitCompanionBlogDraftsBodyArticlesMax)
+})
+
+export const SubmitCompanionBlogDraftsResponse = zod.void()
+
+
 export const ListUcAdminGuidesResponse = zod.object({
   "guides": zod.array(zod.object({
   "slug": zod.string(),

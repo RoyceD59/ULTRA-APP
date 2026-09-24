@@ -40,6 +40,8 @@ tags:
     description: Private ProjectHub administrator-managed machine-agent access
   - name: customer-lifecycle
     description: Canonical customer identity, filter lifecycle, impact, and mission control contracts
+  - name: companion-blog
+    description: Public Companion articles and human-reviewed editorial workflow
 paths:
   /water-check/assessments:
     post:
@@ -2539,6 +2541,250 @@ paths:
                   guide: { $ref: "#/components/schemas/UcGuide" }
         "304": { description: Not modified }
         "404": { description: Guide not found }
+  /uc/blog:
+    get:
+      operationId: listPublishedCompanionBlogArticles
+      tags: [companion-blog]
+      summary: List published Companion blog articles
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 10 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: category, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        "200":
+          description: Latest-first published article summaries and next-page cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlogArticlePage" }
+        "400": { description: Invalid pagination cursor }
+  /uc/blog/{slug}:
+    get:
+      operationId: getPublishedCompanionBlogArticle
+      tags: [companion-blog]
+      summary: Get a published Companion blog article by slug
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Immutable published article snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogArticle" }
+        "404": { description: Article not found or not published }
+  /uc/editor/blog:
+    get:
+      operationId: listEditorialBlogArticles
+      tags: [companion-blog]
+      summary: List editorial drafts, rejected articles, and published entries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, rejected, published] } }
+      responses:
+        "200":
+          description: Editorial queue
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [articles]
+                properties:
+                  articles:
+                    type: array
+                    items: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "401": { description: Active ProjectHub team session required }
+    post:
+      operationId: createEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Create a human article draft or import a .txt, .md, or .docx file
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogArticleInput" }
+      responses:
+        "201":
+          description: Editorial draft created; direct publication requires a live admin account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "400": { description: Invalid article or unsupported upload }
+        "401": { description: Active ProjectHub team session required }
+        "403": { description: Admin access required for direct publication }
+  /uc/editor/blog/{id}:
+    get:
+      operationId: getEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Read one editorial article and its history
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Editorial article and immutable action history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article, history]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+                  history: { type: array, items: { $ref: "#/components/schemas/BlogHistoryEntry" } }
+        "401": { description: Active ProjectHub team session required }
+        "404": { description: Article not found }
+    patch:
+      operationId: updateEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Save an editorial revision without changing the published snapshot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogArticleUpdate" }
+      responses:
+        "200":
+          description: Article revision saved for review
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "400": { description: Invalid article or sources }
+        "401": { description: Active ProjectHub team session required }
+        "404": { description: Article not found }
+  /uc/editor/blog/{id}/publish:
+    post:
+      operationId: publishEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Approve the latest article revision and publish its snapshot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Article revision published
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "400": { description: Article lacks publishable content or sources }
+        "401": { description: Admin authentication required }
+        "404": { description: Article not found }
+  /uc/editor/blog/{id}/reject:
+    post:
+      operationId: rejectEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Reject an article and record actionable reviewer feedback
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogRejectionInput" }
+      responses:
+        "200": { description: Article rejected with reviewer feedback }
+        "400": { description: Feedback is required }
+        "401": { description: Admin authentication required }
+        "404": { description: Article not found }
+  /uc/editor/blog/{id}/unpublish:
+    post:
+      operationId: unpublishEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Remove a published article from the public feed
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Article unpublished }
+        "401": { description: Admin authentication required }
+        "404": { description: Article not found }
+  /uc/editor/blog/draft-from-brief:
+    post:
+      operationId: requestCompanionBlogDraftFromBrief
+      tags: [companion-blog]
+      summary: Queue sourced draft generation from a ProjectHub brief
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogBriefInput" }
+      responses:
+        "202":
+          description: Generation run queued; poll GET /uc/editor/blog/runs for completion or actionable errors
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlogRunResponse" }
+        "400": { description: Brief is invalid }
+        "401": { description: Active ProjectHub team session required }
+  /uc/editor/blog/runs:
+    get:
+      operationId: listCompanionBlogEditorialRuns
+      tags: [companion-blog]
+      summary: List weekly and on-demand editorial research and generation runs
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Latest run status and actionable failures
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs: { type: array, items: { $ref: "#/components/schemas/BlogRun" } }
+        "401": { description: Active ProjectHub team session required }
+  /integrations/v1/blog/topics:
+    post:
+      operationId: submitCompanionBlogTopicProposals
+      tags: [companion-blog]
+      summary: Submit bounded topic proposals for human review
+      security: [{ agentBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogTopicProposalsInput" }
+      responses:
+        "201": { description: Topic proposals recorded; agents cannot approve or publish }
+        "400": { description: Invalid topic proposals or source URLs }
+        "401": { description: Invalid agent token }
+        "403": { description: blog.submit scope required }
+  /integrations/v1/blog/drafts:
+    post:
+      operationId: submitCompanionBlogDrafts
+      tags: [companion-blog]
+      summary: Submit sourced drafts into the human review queue
+      security: [{ agentBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogMachineDraftsInput" }
+      responses:
+        "201": { description: Drafts recorded for human review only }
+        "400": { description: Invalid or unsourced article draft }
+        "401": { description: Invalid agent token }
+        "403": { description: blog.submit scope required }
   /uc/admin/guides:
     get:
       operationId: listUcAdminGuides
@@ -2947,6 +3193,182 @@ components:
       bearerFormat: opaque
 
   schemas:
+    BlogSource:
+      type: object
+      required: [title, url]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        publisher: { type: string, maxLength: 120 }
+        url: { type: string, pattern: '^https:\x2f\x2f.+$' }
+
+    BlogArticle:
+      type: object
+      required: [id, slug, title, summary, body, category, tags, sources, publishedAt, version]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        body: { type: string }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        sources: { type: array, items: { $ref: "#/components/schemas/BlogSource" } }
+        publishedAt: { type: string, format: date-time }
+        version: { type: string }
+
+    BlogArticleSummary:
+      type: object
+      required: [id, slug, title, summary, category, tags, publishedAt, version]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        publishedAt: { type: string, format: date-time }
+        version: { type: string }
+
+    BlogArticlePage:
+      type: object
+      required: [articles, nextCursor]
+      properties:
+        articles: { type: array, items: { $ref: "#/components/schemas/BlogArticleSummary" } }
+        nextCursor: { type: ["string", "null"] }
+
+    BlogEditorialArticle:
+      type: object
+      required: [id, slug, title, summary, body, content, category, tags, sources, origin, status, rationale, rejectionFeedback, createdBy, updatedBy, version, publishedAt, publishedSnapshot, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        body: { type: string }
+        content: { type: string, description: "ProjectHub editor alias for body" }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        sources: { type: array, items: { $ref: "#/components/schemas/BlogSource" } }
+        origin: { type: string, enum: [human, upload, brief, weekly, agent] }
+        status: { type: string, enum: [draft, rejected, published] }
+        rationale: { type: ["string", "null"] }
+        rejectionFeedback: { type: ["string", "null"] }
+        createdBy: { type: string }
+        updatedBy: { type: string }
+        version: { type: string }
+        publishedAt: { type: ["string", "null"], format: date-time }
+        publishedSnapshot: { oneOf: [{ $ref: "#/components/schemas/BlogArticle" }, { type: "null" }] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BlogArticleInput:
+      type: object
+      properties:
+        slug: { type: string, maxLength: 120 }
+        title: { type: string, maxLength: 200 }
+        summary: { type: string, maxLength: 500 }
+        body: { type: string, maxLength: 50000 }
+        content: { type: string, maxLength: 50000, description: "ProjectHub editor alias for body" }
+        category: { type: string, maxLength: 80 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        sources: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+        rationale: { type: string, maxLength: 1000 }
+        directPublish: { type: boolean }
+        filename: { type: string, maxLength: 255 }
+        base64Content: { type: string, maxLength: 6000000 }
+
+    BlogArticleUpdate:
+      type: object
+      required: [title]
+      properties:
+        slug: { type: string, maxLength: 120 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, maxLength: 500 }
+        body: { type: string, minLength: 1, maxLength: 50000 }
+        content: { type: string, minLength: 1, maxLength: 50000, description: "ProjectHub editor alias for body" }
+        category: { type: string, maxLength: 80 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        sources: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+        rationale: { type: string, maxLength: 1000 }
+
+    BlogHistoryEntry:
+      type: object
+      required: [id, actorId, action, rationale, snapshot, createdAt]
+      properties:
+        id: { type: string }
+        actorId: { type: string }
+        action: { type: string }
+        rationale: { type: ["string", "null"] }
+        snapshot: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    BlogRejectionInput:
+      type: object
+      required: [feedback]
+      properties:
+        feedback: { type: string, minLength: 1, maxLength: 1000 }
+
+    BlogBriefInput:
+      type: object
+      required: [brief]
+      properties:
+        brief: { type: string, minLength: 10, maxLength: 1000 }
+        idempotencyKey: { type: string, maxLength: 120 }
+
+    BlogRun:
+      type: object
+      required: [id, runKey, runType, status, requestedBy, brief, resultSummary, error, topics, createdAt, startedAt, completedAt]
+      properties:
+        id: { type: string }
+        runKey: { type: string }
+        runType: { type: string, enum: [weekly, brief] }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        requestedBy: { type: ["string", "null"] }
+        brief: { type: ["string", "null"] }
+        resultSummary: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+        topics: { type: array, items: { type: object, additionalProperties: true } }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+
+    BlogRunResponse:
+      type: object
+      required: [run, reused]
+      properties:
+        run: { $ref: "#/components/schemas/BlogRun" }
+        reused: { type: boolean }
+
+    BlogTopicProposal:
+      type: object
+      required: [topic, rationale, sources]
+      properties:
+        topic: { type: string, minLength: 1, maxLength: 160 }
+        rationale: { type: string, minLength: 1, maxLength: 1000 }
+        sources: { type: array, minItems: 1, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+
+    BlogTopicProposalsInput:
+      type: object
+      required: [topics]
+      properties:
+        topics: { type: array, minItems: 1, maxItems: 10, items: { $ref: "#/components/schemas/BlogTopicProposal" } }
+
+    BlogMachineArticleInput:
+      allOf:
+        - { $ref: "#/components/schemas/BlogArticleInput" }
+        - type: object
+          required: [title, body, sources]
+          properties:
+            title: { type: string, minLength: 1, maxLength: 200 }
+            body: { type: string, minLength: 1, maxLength: 50000 }
+            sources: { type: array, minItems: 1, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+
+    BlogMachineDraftsInput:
+      type: object
+      required: [articles]
+      properties:
+        articles: { type: array, minItems: 1, maxItems: 3, items: { $ref: "#/components/schemas/BlogMachineArticleInput" } }
+
     AlisonTurnInput:
       type: object
       required: [messages, conversationId, turnId]

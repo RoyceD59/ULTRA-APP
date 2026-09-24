@@ -5,6 +5,289 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface BlogSource {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /** @maxLength 120 */
+  publisher?: string;
+  /** @pattern ^https:\x2f\x2f.+$ */
+  url: string;
+}
+
+export interface BlogArticle {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  category: string;
+  tags: string[];
+  sources: BlogSource[];
+  publishedAt: string;
+  version: string;
+}
+
+export interface BlogArticleSummary {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  tags: string[];
+  publishedAt: string;
+  version: string;
+}
+
+export interface BlogArticlePage {
+  articles: BlogArticleSummary[];
+  /** @nullable */
+  nextCursor: string | null;
+}
+
+export type BlogEditorialArticleOrigin = typeof BlogEditorialArticleOrigin[keyof typeof BlogEditorialArticleOrigin];
+
+
+export const BlogEditorialArticleOrigin = {
+  human: 'human',
+  upload: 'upload',
+  brief: 'brief',
+  weekly: 'weekly',
+  agent: 'agent',
+} as const;
+
+export type BlogEditorialArticleStatus = typeof BlogEditorialArticleStatus[keyof typeof BlogEditorialArticleStatus];
+
+
+export const BlogEditorialArticleStatus = {
+  draft: 'draft',
+  rejected: 'rejected',
+  published: 'published',
+} as const;
+
+export interface BlogEditorialArticle {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  /** ProjectHub editor alias for body */
+  content: string;
+  category: string;
+  tags: string[];
+  sources: BlogSource[];
+  origin: BlogEditorialArticleOrigin;
+  status: BlogEditorialArticleStatus;
+  /** @nullable */
+  rationale: string | null;
+  /** @nullable */
+  rejectionFeedback: string | null;
+  createdBy: string;
+  updatedBy: string;
+  version: string;
+  /** @nullable */
+  publishedAt: string | null;
+  publishedSnapshot: BlogArticle | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BlogArticleInput {
+  /** @maxLength 120 */
+  slug?: string;
+  /** @maxLength 200 */
+  title?: string;
+  /** @maxLength 500 */
+  summary?: string;
+  /** @maxLength 50000 */
+  body?: string;
+  /**
+     * ProjectHub editor alias for body
+     * @maxLength 50000
+     */
+  content?: string;
+  /** @maxLength 80 */
+  category?: string;
+  /**
+     * @maxItems 12
+     * @items.maxLength 40
+     */
+  tags?: string[];
+  /** @maxItems 8 */
+  sources?: BlogSource[];
+  /** @maxLength 1000 */
+  rationale?: string;
+  directPublish?: boolean;
+  /** @maxLength 255 */
+  filename?: string;
+  /** @maxLength 6000000 */
+  base64Content?: string;
+}
+
+export interface BlogArticleUpdate {
+  /** @maxLength 120 */
+  slug?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /** @maxLength 500 */
+  summary?: string;
+  /**
+     * @minLength 1
+     * @maxLength 50000
+     */
+  body?: string;
+  /**
+     * ProjectHub editor alias for body
+     * @minLength 1
+     * @maxLength 50000
+     */
+  content?: string;
+  /** @maxLength 80 */
+  category?: string;
+  /**
+     * @maxItems 12
+     * @items.maxLength 40
+     */
+  tags?: string[];
+  /** @maxItems 8 */
+  sources?: BlogSource[];
+  /** @maxLength 1000 */
+  rationale?: string;
+}
+
+export type BlogHistoryEntrySnapshot = { [key: string]: unknown };
+
+export interface BlogHistoryEntry {
+  id: string;
+  actorId: string;
+  action: string;
+  /** @nullable */
+  rationale: string | null;
+  snapshot: BlogHistoryEntrySnapshot;
+  createdAt: string;
+}
+
+export interface BlogRejectionInput {
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  feedback: string;
+}
+
+export interface BlogBriefInput {
+  /**
+     * @minLength 10
+     * @maxLength 1000
+     */
+  brief: string;
+  /** @maxLength 120 */
+  idempotencyKey?: string;
+}
+
+export type BlogRunRunType = typeof BlogRunRunType[keyof typeof BlogRunRunType];
+
+
+export const BlogRunRunType = {
+  weekly: 'weekly',
+  brief: 'brief',
+} as const;
+
+export type BlogRunStatus = typeof BlogRunStatus[keyof typeof BlogRunStatus];
+
+
+export const BlogRunStatus = {
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type BlogRunTopicsItem = { [key: string]: unknown };
+
+export interface BlogRun {
+  id: string;
+  runKey: string;
+  runType: BlogRunRunType;
+  status: BlogRunStatus;
+  /** @nullable */
+  requestedBy: string | null;
+  /** @nullable */
+  brief: string | null;
+  /** @nullable */
+  resultSummary: string | null;
+  /** @nullable */
+  error: string | null;
+  topics: BlogRunTopicsItem[];
+  createdAt: string;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+}
+
+export interface BlogRunResponse {
+  run: BlogRun;
+  reused: boolean;
+}
+
+export interface BlogTopicProposal {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  topic: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  rationale: string;
+  /**
+     * @minItems 1
+     * @maxItems 8
+     */
+  sources: BlogSource[];
+}
+
+export interface BlogTopicProposalsInput {
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  topics: BlogTopicProposal[];
+}
+
+export type BlogMachineArticleInput = BlogArticleInput & {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 50000
+     */
+  body: string;
+  /**
+     * @minItems 1
+     * @maxItems 8
+     */
+  sources: BlogSource[];
+};
+
+export interface BlogMachineDraftsInput {
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  articles: BlogMachineArticleInput[];
+}
+
 export type AlisonTurnInputMessagesItemRole = typeof AlisonTurnInputMessagesItemRole[keyof typeof AlisonTurnInputMessagesItemRole];
 
 
@@ -3031,6 +3314,65 @@ export type ListPublishedUcGuides200 = {
 
 export type GetPublishedUcGuide200 = {
   guide: UcGuide;
+};
+
+export type ListPublishedCompanionBlogArticlesParams = {
+/**
+ * @minimum 1
+ * @maximum 20
+ */
+limit?: number;
+cursor?: string;
+/**
+ * @maxLength 120
+ */
+search?: string;
+/**
+ * @maxLength 80
+ */
+category?: string;
+};
+
+export type GetPublishedCompanionBlogArticle200 = {
+  article: BlogArticle;
+};
+
+export type ListEditorialBlogArticlesParams = {
+status?: ListEditorialBlogArticlesStatus;
+};
+
+export type ListEditorialBlogArticlesStatus = typeof ListEditorialBlogArticlesStatus[keyof typeof ListEditorialBlogArticlesStatus];
+
+
+export const ListEditorialBlogArticlesStatus = {
+  draft: 'draft',
+  rejected: 'rejected',
+  published: 'published',
+} as const;
+
+export type ListEditorialBlogArticles200 = {
+  articles: BlogEditorialArticle[];
+};
+
+export type CreateEditorialBlogArticle201 = {
+  article: BlogEditorialArticle;
+};
+
+export type GetEditorialBlogArticle200 = {
+  article: BlogEditorialArticle;
+  history: BlogHistoryEntry[];
+};
+
+export type UpdateEditorialBlogArticle200 = {
+  article: BlogEditorialArticle;
+};
+
+export type PublishEditorialBlogArticle200 = {
+  article: BlogEditorialArticle;
+};
+
+export type ListCompanionBlogEditorialRuns200 = {
+  runs: BlogRun[];
 };
 
 export type ListUcAdminGuides200 = {

@@ -104,6 +104,10 @@ function NativeTabLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
         <NativeTabs.Trigger.Label>Products</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="blog">
+        <NativeTabs.Trigger.Icon sf={{ default: 'book', selected: 'book.fill' }} />
+        <NativeTabs.Trigger.Label>Blog</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="support">
         <NativeTabs.Trigger.Icon sf={{ default: 'questionmark.circle', selected: 'questionmark.circle.fill' }} />
         <NativeTabs.Trigger.Label>Support</NativeTabs.Trigger.Label>
@@ -173,6 +177,14 @@ function ClassicTabLayout() {
             isIOS ? <SymbolView name="cart" tintColor={color} size={24} /> : <Ionicons name="cart-outline" size={22} color={color} />,
           // Hydration-gated: never show a (stale-zero-derived) badge state pre-hydration
           tabBarBadge: cartHydrated && totalItems > 0 ? totalItems : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="blog"
+        options={{
+          title: 'Blog',
+          tabBarIcon: ({ color }) =>
+            isIOS ? <SymbolView name="book" tintColor={color} size={24} /> : <Ionicons name="book-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -46,6 +46,7 @@ import AdminProductEditorPage from '@/pages/admin/products/editor';
 import AdminLocationsPage from '@/pages/admin/locations';
 import AgentOperationsPage from '@/pages/admin/agent-operations';
 import AdminGuidesPage from '@/pages/admin/guides';
+import CompanionBlogPage from '@/pages/blog';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -120,6 +121,7 @@ function Router() {
               <Route path="/water-tests"><PageGuard page="water-tests"><WaterTestsPage /></PageGuard></Route>
               <Route path="/uc-notifications"><PageGuard page="uc-notifications"><UcNotificationFailuresPage /></PageGuard></Route>
               <Route path="/library"><PageGuard page="library"><LibraryPage /></PageGuard></Route>
+              <Route path="/blog"><PageGuard page="blog"><CompanionBlogPage /></PageGuard></Route>
               <Route path="/admin/users"><AdminGuard><AdminUsersPage /></AdminGuard></Route>
               <Route path="/admin/payment-settings"><AdminGuard><AdminPaymentSettingsPage /></AdminGuard></Route>
               <Route path="/admin/notification-settings"><AdminGuard><AdminNotificationSettingsPage /></AdminGuard></Route>

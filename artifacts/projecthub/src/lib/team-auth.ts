@@ -35,6 +35,7 @@ export const PAGES = [
   { slug: "water-tests",      label: "Water Tests" },
   { slug: "uc-notifications", label: "Notification Failures" },
   { slug: "library",          label: "Library" },
+  { slug: "blog",             label: "Companion Blog" },
 ] as const;
 
 export type PageSlug = typeof PAGES[number]["slug"];

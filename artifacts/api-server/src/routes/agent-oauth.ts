@@ -3,12 +3,14 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
 import { db, agentOauthAuditTable, agentOauthClientsTable, agentOauthTokensTable, conversations, ucAiFeedbackTable, ucAlisonConversationsTable, ucAlisonTurnsTable, ucUsersTable } from "@workspace/db";
 import { requireTeamAdmin } from "./auth.js";
+import { saveMachineDrafts, saveMachineTopics } from "../lib/blog-editorial.js";
 
 export const AGENT_SCOPES = [
   "companion.monitor.read",
   "companion.users.read",
   "interactions.read",
   "alison.read",
+  "blog.submit",
 ] as const;
 type AgentScope = typeof AGENT_SCOPES[number];
 const TOKEN_TTL_SECONDS = 15 * 60;
@@ -281,6 +283,36 @@ router.get("/integrations/v1/alison/chats", requireAgent, async (req, res): Prom
       ? encodeAlisonCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
       : null,
   });
+});
+
+router.post("/integrations/v1/blog/topics", requireAgent, async (req, res): Promise<void> => {
+  if (!(await authorizeScope(req, res, "blog.submit"))) return;
+  const topics = req.body?.topics;
+  if (!Array.isArray(topics) || topics.length < 1 || topics.length > 10) {
+    res.status(400).json({ error: "topics must contain between 1 and 10 proposals" });
+    return;
+  }
+  try {
+    const saved = await saveMachineTopics(topics);
+    res.status(201).json({ topics: saved });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Topic proposals were invalid" });
+  }
+});
+
+router.post("/integrations/v1/blog/drafts", requireAgent, async (req, res): Promise<void> => {
+  if (!(await authorizeScope(req, res, "blog.submit"))) return;
+  const articles = req.body?.articles;
+  if (!Array.isArray(articles) || articles.length < 1 || articles.length > 3) {
+    res.status(400).json({ error: "articles must contain between 1 and 3 sourced drafts" });
+    return;
+  }
+  try {
+    const saved = await saveMachineDrafts(articles);
+    res.status(201).json({ articles: saved, publicationRequiresAdminReview: true });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Agent article draft was invalid" });
+  }
 });
 
 export default router;

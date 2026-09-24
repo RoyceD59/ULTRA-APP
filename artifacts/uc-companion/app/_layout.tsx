@@ -96,6 +96,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerTintColor: '#0054A6' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="blog/[slug]" options={{ headerShown: false }} />
       <Stack.Screen name="product/[id]" options={{ title: 'Product Details', headerBackTitle: 'Back' }} />
       <Stack.Screen name="cart" options={{
         title: 'My Cart',

@@ -318,6 +318,30 @@ export interface UCPromotion {
   createdAt: string;
 }
 
+export interface UCBlogSource {
+  title: string;
+  url: string;
+}
+
+export interface UCBlogArticleSummary {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  publishedAt: string;
+}
+
+export interface UCBlogArticle extends UCBlogArticleSummary {
+  body: string;
+  sources: UCBlogSource[];
+}
+
+export interface UCBlogPage {
+  articles: UCBlogArticleSummary[];
+  nextCursor: string | null;
+}
+
 export interface RegisterPurchaseItem {
   productId:    number;
   name:         string;
@@ -561,6 +585,17 @@ export function useApi() {
     validateCode: (code: string) =>
       post<CodeValidationResult>('/api/uc/referrals/validate', { code }),
     getPromotions: (signal?: AbortSignal) => get<UCPromotion[]>('/api/uc/promotions', signal, 12_000),
+    /** Published Companion Blog content is public and independently cancellable. */
+    getBlogArticles: (params?: { search?: string; category?: string; cursor?: string; limit?: number }, signal?: AbortSignal) => {
+      const qs = new URLSearchParams();
+      if (params?.search) qs.set('search', params.search);
+      if (params?.category) qs.set('category', params.category);
+      if (params?.cursor) qs.set('cursor', params.cursor);
+      qs.set('limit', String(params?.limit ?? 12));
+      return get<UCBlogPage>(`/api/uc/blog?${qs}`, signal, 12_000);
+    },
+    getBlogArticle: (slug: string, signal?: AbortSignal) =>
+      get<{ article: UCBlogArticle }>(`/api/uc/blog/${encodeURIComponent(slug)}`, signal, 12_000),
     /** Update the authenticated user's profile details (name / phone / address). */
     updateProfile: (data: { firstName?: string; lastName?: string; phone?: string; address?: string }) =>
       patch<UCCustomer>('/api/uc/customer/profile', data),
