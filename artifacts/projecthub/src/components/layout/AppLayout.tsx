@@ -3,7 +3,7 @@ import {
   Activity, Bell, BellOff, Bot, CheckSquare, Contact2, CreditCard, Droplets, MapPin, Tag,
   FolderKanban, Gauge, Gift, LayoutDashboard, Leaf, Link2, LogOut,
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
-  AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch
+  AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch, MessagesSquare
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ const NAVIGATION = [
   ["AI Monitor", "/ai-monitor", "ai-monitor", Bot],
   ["UC Impact", "/impact", "impact", Leaf],
   ["Alison Feedback", "/alison-feedback", "alison-feedback", MessageSquareOff],
+  ["Alison Conversations", "/alison-conversations", "alison-feedback", MessagesSquare],
   ["Contacts", "/contacts", "contacts", Contact2],
   ["Notifications", "/notifications", "notifications", Bell],
   ["System Status", "/system", "system", Activity],

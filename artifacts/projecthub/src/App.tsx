@@ -20,6 +20,7 @@ import Team from '@/pages/team';
 import AiMonitor from '@/pages/ai-monitor';
 import ImpactPage from '@/pages/impact';
 import AlisonFeedbackPage from '@/pages/alison-feedback';
+import AlisonConversationsPage from '@/pages/alison-conversations';
 import Contacts from '@/pages/contacts';
 import Notifications from '@/pages/notifications';
 import SystemStatus from '@/pages/system-status';
@@ -108,6 +109,7 @@ function Router() {
               <Route path="/ai-monitor"><PageGuard page="ai-monitor"><AiMonitor /></PageGuard></Route>
               <Route path="/impact"><PageGuard page="impact"><ImpactPage /></PageGuard></Route>
               <Route path="/alison-feedback"><PageGuard page="alison-feedback"><AlisonFeedbackPage /></PageGuard></Route>
+              <Route path="/alison-conversations"><PageGuard page="alison-feedback"><AlisonConversationsPage /></PageGuard></Route>
               <Route path="/contacts"><PageGuard page="contacts"><Contacts /></PageGuard></Route>
               <Route path="/notifications"><PageGuard page="notifications"><Notifications /></PageGuard></Route>
               <Route path="/system"><PageGuard page="system"><SystemStatus /></PageGuard></Route>
