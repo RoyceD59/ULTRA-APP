@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<"password" | "confirm" | null>(null);
   const [isConflict, setIsConflict] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,9 +35,10 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !password || !confirm) return;
-    if (password !== confirm) { setError("Passwords do not match."); return; }
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (password !== confirm) { setErrorField("confirm"); setError("Passwords do not match."); return; }
+    if (password.length < 8) { setErrorField("password"); setError("Password must be at least 8 characters."); return; }
     setError(null);
+    setErrorField(null);
     setIsConflict(false);
     setIsExpired(false);
     setLoading(true);
@@ -55,6 +57,7 @@ export default function RegisterPage() {
         setIsExpired(true);
         setError(null);
       } else {
+        setErrorField(null);
         setError(msg);
       }
     } finally {
@@ -66,14 +69,12 @@ export default function RegisterPage() {
   if (isConflict) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center space-y-3 max-w-sm">
+        <div role="alert" className="text-center space-y-3 max-w-sm">
           <p className="text-lg font-semibold">You already have an account</p>
           <p className="text-sm text-muted-foreground">
             This email address is already registered.
           </p>
-          <Link href="/login">
-            <Button className="w-full mt-2">Sign in instead</Button>
-          </Link>
+          <Button asChild className="w-full mt-2"><Link href="/login">Sign in instead</Link></Button>
         </div>
       </div>
     );
@@ -83,7 +84,7 @@ export default function RegisterPage() {
   if (isExpired) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center space-y-3 max-w-sm">
+        <div role="alert" className="text-center space-y-3 max-w-sm">
           <p className="text-lg font-semibold">This invite has expired or was already used</p>
           <p className="text-sm text-muted-foreground">
             Ask your admin to send a new invite link.
@@ -122,13 +123,13 @@ export default function RegisterPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loading} autoComplete="new-password" />
+                <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loading} autoComplete="new-password" aria-invalid={errorField === "password"} aria-describedby={errorField === "password" ? "register-error" : undefined} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirm password</Label>
-                <Input id="confirm" type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={loading} autoComplete="new-password" />
+                <Input id="confirm" type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={loading} autoComplete="new-password" aria-invalid={errorField === "confirm"} aria-describedby={errorField === "confirm" ? "register-error" : undefined} />
                 {error && (
-                  <p className="text-xs text-destructive">
+                  <p id="register-error" role="alert" className="text-xs text-destructive">
                     {error}{" "}
                     <span className="text-muted-foreground">Ask your admin to send a new invite link.</span>
                   </p>

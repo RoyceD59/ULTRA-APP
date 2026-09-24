@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Loader2, KeyRound, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,12 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<"new-password" | "confirm" | null>(null);
+  const successHeading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (done) successHeading.current?.focus();
+  }, [done]);
 
   if (!token) {
     return (
@@ -23,7 +29,7 @@ export default function ResetPasswordPage() {
         <div className="text-center space-y-3">
           <p className="text-lg font-semibold">Invalid reset link</p>
           <p className="text-sm text-muted-foreground">This link is missing a token.</p>
-          <Link href="/forgot-password"><Button variant="outline">Request a new link</Button></Link>
+          <Button asChild variant="outline"><Link href="/forgot-password">Request a new link</Link></Button>
         </div>
       </div>
     );
@@ -32,9 +38,10 @@ export default function ResetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!newPassword || !confirm) return;
-    if (newPassword !== confirm) { setError("Passwords do not match."); return; }
-    if (newPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (newPassword !== confirm) { setErrorField("confirm"); setError("Passwords do not match."); return; }
+    if (newPassword.length < 8) { setErrorField("new-password"); setError("Password must be at least 8 characters."); return; }
     setError(null);
+    setErrorField(null);
     setLoading(true);
     try {
       await resetPassword(token, newPassword);
@@ -60,14 +67,14 @@ export default function ResetPasswordPage() {
           {done ? (
             <>
               <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-base">
+                <h2 ref={successHeading} tabIndex={-1} className="font-semibold leading-none tracking-tight flex items-center gap-2 text-base">
                   <CheckCircle2 className="w-4 h-4 text-green-600" />
                   Password updated
-                </CardTitle>
-                <CardDescription>Your password has been changed. You can now sign in.</CardDescription>
+                </h2>
+                <CardDescription role="status">Your password has been changed. You can now sign in.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Link href="/login"><Button className="w-full">Sign in</Button></Link>
+                <Button asChild className="w-full"><Link href="/login">Sign in</Link></Button>
               </CardContent>
             </>
           ) : (
@@ -83,12 +90,12 @@ export default function ResetPasswordPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="new-password">New password</Label>
-                    <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={loading} autoFocus autoComplete="new-password" />
+                    <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={loading} autoFocus autoComplete="new-password" aria-invalid={errorField === "new-password"} aria-describedby={errorField === "new-password" ? "reset-error" : undefined} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirm">Confirm password</Label>
-                    <Input id="confirm" type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={loading} autoComplete="new-password" />
-                    {error && <p className="text-xs text-destructive">{error}</p>}
+                    <Input id="confirm" type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={loading} autoComplete="new-password" aria-invalid={errorField === "confirm"} aria-describedby={errorField === "confirm" ? "reset-error" : undefined} />
+                    {error && <p id="reset-error" role="alert" className="text-xs text-destructive">{error}</p>}
                   </div>
                   <Button type="submit" className="w-full" disabled={loading || !newPassword || !confirm}>
                     {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Updating…</> : "Update password"}

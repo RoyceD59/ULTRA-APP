@@ -80,7 +80,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                 />
                 {error && (
-                  <p className="text-xs text-destructive flex items-center gap-1">
+                  <p role="alert" className="text-xs text-destructive flex items-center gap-1">
                     <KeyRound className="w-3 h-3" />
                     {error}
                   </p>
