@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /register
+Disallow: /reset-password

@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "ProjectHub"
+version = "1.0.0"
+id = "artifacts/projecthub"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20100
+
+[services.development]
+run = "pnpm --filter @workspace/projecthub run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/projecthub", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/projecthub/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20100"
+BASE_PATH = "/"

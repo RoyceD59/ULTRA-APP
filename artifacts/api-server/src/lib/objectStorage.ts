@@ -1,0 +1,364 @@
+import { randomUUID } from 'crypto';
+import { Readable } from 'stream';
+import { File, Storage } from '@google-cloud/storage';
+
+import {
+  canAccessObject,
+  getObjectAclPolicy,
+  ObjectAclPolicy,
+  ObjectPermission,
+  setObjectAclPolicy,
+} from './objectAcl';
+
+const REPLIT_SIDECAR_ENDPOINT = 'http://127.0.0.1:1106';
+
+export const objectStorageClient = new Storage({
+  credentials: {
+    audience: 'replit',
+    subject_token_type: 'access_token',
+    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+    type: 'external_account',
+    credential_source: {
+      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+      format: {
+        type: 'json',
+        subject_token_field_name: 'access_token',
+      },
+    },
+    universe_domain: 'googleapis.com',
+  },
+  projectId: '',
+});
+
+export class ObjectNotFoundError extends Error {
+  constructor() {
+    super('Object not found');
+    this.name = 'ObjectNotFoundError';
+    Object.setPrototypeOf(this, ObjectNotFoundError.prototype);
+  }
+}
+
+/** Upload caps shared by the presign endpoint (routes/storage.ts) and the
+ *  attach-time metadata verification in routes/uc.ts. Presigned PUT URLs
+ *  cannot bind size/content-type, so both ends must enforce these. */
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+export const MAX_VIDEO_BYTES = 60 * 1024 * 1024; // 60 MB
+
+export class ObjectStorageService {
+  constructor() {}
+
+  getPublicObjectSearchPaths(): Array<string> {
+    const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || '';
+    const paths = Array.from(
+      new Set(
+        pathsStr
+          .split(',')
+          .map((path) => path.trim())
+          .filter((path) => path.length > 0),
+      ),
+    );
+    if (paths.length === 0) {
+      throw new Error(
+        "PUBLIC_OBJECT_SEARCH_PATHS not set. Create a bucket in 'Object Storage' " +
+          'tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths).',
+      );
+    }
+    return paths;
+  }
+
+  getPrivateObjectDir(): string {
+    const dir = process.env.PRIVATE_OBJECT_DIR || '';
+    if (!dir) {
+      throw new Error(
+        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
+          'tool and set PRIVATE_OBJECT_DIR env var.',
+      );
+    }
+    return dir;
+  }
+
+  async searchPublicObject(filePath: string): Promise<File | null> {
+    for (const searchPath of this.getPublicObjectSearchPaths()) {
+      const fullPath = `${searchPath}/${filePath}`;
+
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      const [exists] = await file.exists();
+      if (exists) {
+        return file;
+      }
+    }
+
+    return null;
+  }
+
+  async downloadObject(
+    file: File,
+    cacheTtlSec: number = 3600,
+  ): Promise<Response> {
+    const [metadata] = await file.getMetadata();
+    const aclPolicy = await getObjectAclPolicy(file);
+    const isPublic = aclPolicy?.visibility === 'public';
+
+    const nodeStream = file.createReadStream();
+    const webStream = Readable.toWeb(nodeStream) as ReadableStream;
+
+    const headers: Record<string, string> = {
+      'Content-Type':
+        (metadata.contentType as string) || 'application/octet-stream',
+      'Cache-Control': `${isPublic ? 'public' : 'private'}, max-age=${cacheTtlSec}`,
+    };
+    if (metadata.size) {
+      headers['Content-Length'] = String(metadata.size);
+    }
+
+    return new Response(webStream, { headers });
+  }
+
+  async getObjectEntityUploadURL(): Promise<string> {
+    return this.getPrivateUploadURL("uploads");
+  }
+
+  async getPrivateUploadURL(namespace: string): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    if (!privateObjectDir) {
+      throw new Error(
+        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
+          'tool and set PRIVATE_OBJECT_DIR env var.',
+      );
+    }
+
+    const objectId = randomUUID();
+    if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(namespace)) {
+      throw new Error("Invalid private object namespace");
+    }
+    const fullPath = `${privateObjectDir}/${namespace}/${objectId}`;
+
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+
+    return signObjectURL({
+      bucketName,
+      objectName,
+      method: 'PUT',
+      ttlSec: 900,
+    });
+  }
+
+  /**
+   * Presigns a GCS PUT URL for a Team Library document.
+   * Library objects are stored under a dedicated `library/` sub-prefix so they
+   * can be distinguished from other application objects at the storage layer.
+   */
+  async getLibraryUploadURL(): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const objectId = randomUUID();
+    const fullPath = `${privateObjectDir}/library/${objectId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    return signObjectURL({ bucketName, objectName, method: 'PUT', ttlSec: 900 });
+  }
+
+  /** Returns a GCS File reference for objectPath — throws if it doesn't exist. */
+  async getObjectEntityFile(objectPath: string): Promise<File> {
+    const ref = this._getObjectEntityRef(objectPath);
+    const [exists] = await ref.exists();
+    if (!exists) throw new ObjectNotFoundError();
+    return ref;
+  }
+
+  /**
+   * Returns a GCS File reference WITHOUT checking existence.
+   * Used for copy destinations and other write operations where the object
+   * does not yet exist.
+   */
+  private _getObjectEntityRef(objectPath: string): File {
+    if (!objectPath.startsWith('/objects/')) throw new ObjectNotFoundError();
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) throw new ObjectNotFoundError();
+    const entityId = parts.slice(1).join('/');
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) entityDir = `${entityDir}/`;
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    return objectStorageClient.bucket(bucketName).file(objectName);
+  }
+
+  /**
+   * Like _getObjectEntityRef but pins the returned File reference to a specific
+   * GCS object generation.  When this reference is used as the source of a copy,
+   * GCS encodes the generation in the copy request URL.  If the staging object
+   * has been overwritten (new generation) since we read the metadata, GCS
+   * returns 404/412 and the copy fails — which is exactly the TOCTOU guard we
+   * want.
+   *
+   * Note: this is the correct GCS SDK mechanism for source-generation
+   * enforcement during copy.  There is no `ifSourceGenerationMatch` option in
+   * CopyOptions — generation must be baked into the source File reference.
+   */
+  _getObjectEntityRefWithGeneration(objectPath: string, generation: number): File {
+    if (!objectPath.startsWith('/objects/')) throw new ObjectNotFoundError();
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) throw new ObjectNotFoundError();
+    const entityId = parts.slice(1).join('/');
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) entityDir = `${entityDir}/`;
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    // Passing { generation } to bucket.file() pins the reference to that exact
+    // GCS generation.  Any copy/read of this reference will include the
+    // generation number in the request, so a post-validation overwrite of the
+    // staging object is detected before the content reaches the library store.
+    return objectStorageClient.bucket(bucketName).file(objectName, { generation });
+  }
+
+  /**
+   * Copies a library staging object to a permanent finalised path with a
+   * source-generation precondition.
+   *
+   * HOW THE TOCTOU GUARD WORKS
+   * ──────────────────────────
+   * 1. `sourceGeneration` is the GCS generation number read from object metadata
+   *    before magic-byte and MIME validation.
+   * 2. We create the source File reference with that generation baked in via
+   *    `_getObjectEntityRefWithGeneration`.  GCS encodes the generation in the
+   *    copy request URL (`?sourceGeneration=N`).
+   * 3. If an attacker re-uploads to the staging path (via the still-valid
+   *    presigned PUT URL) between validation and this copy, the staging object
+   *    gets a new generation number.  GCS therefore returns 404 (generation not
+   *    found) and the copy fails.
+   * 4. `preconditionOpts: { ifGenerationMatch: 0 }` on the destination ensures
+   *    the finalised path does not already exist, preventing clobber.
+   * 5. Any failure returns false → the route returns 409 to the client.
+   */
+  async copyLibraryFileWithGenerationCheck(
+    sourcePath: string,
+    destPath: string,
+    sourceGeneration: number,
+  ): Promise<boolean> {
+    try {
+      // Source is pinned to the validated generation — overwrite = 404 from GCS.
+      const srcFile  = this._getObjectEntityRefWithGeneration(sourcePath, sourceGeneration);
+      // Destination must not exist yet (ifGenerationMatch: 0 = "object must have
+      // generation 0", i.e. must not exist).
+      const destFile = this._getObjectEntityRef(destPath);
+      await srcFile.copy(destFile, { preconditionOpts: { ifGenerationMatch: 0 } });
+      return true;
+    } catch {
+      return false; // generation mismatch, dest already exists, or network error → caller returns 409
+    }
+  }
+
+  normalizeObjectEntityPath(rawPath: string): string {
+    if (!rawPath.startsWith('https://storage.googleapis.com/')) {
+      return rawPath;
+    }
+
+    const url = new URL(rawPath);
+    const rawObjectPath = url.pathname;
+
+    let objectEntityDir = this.getPrivateObjectDir();
+    if (!objectEntityDir.endsWith('/')) {
+      objectEntityDir = `${objectEntityDir}/`;
+    }
+
+    if (!rawObjectPath.startsWith(objectEntityDir)) {
+      return rawObjectPath;
+    }
+
+    const entityId = rawObjectPath.slice(objectEntityDir.length);
+    return `/objects/${entityId}`;
+  }
+
+  async trySetObjectEntityAclPolicy(
+    rawPath: string,
+    aclPolicy: ObjectAclPolicy,
+  ): Promise<string> {
+    const normalizedPath = this.normalizeObjectEntityPath(rawPath);
+    if (!normalizedPath.startsWith('/')) {
+      return normalizedPath;
+    }
+
+    const objectFile = await this.getObjectEntityFile(normalizedPath);
+    await setObjectAclPolicy(objectFile, aclPolicy);
+    return normalizedPath;
+  }
+
+  async canAccessObjectEntity({
+    userId,
+    objectFile,
+    requestedPermission,
+  }: {
+    userId?: string;
+    objectFile: File;
+    requestedPermission?: ObjectPermission;
+  }): Promise<boolean> {
+    return canAccessObject({
+      userId,
+      objectFile,
+      requestedPermission: requestedPermission ?? ObjectPermission.READ,
+    });
+  }
+}
+
+function parseObjectPath(path: string): {
+  bucketName: string;
+  objectName: string;
+} {
+  if (!path.startsWith('/')) {
+    path = `/${path}`;
+  }
+  const pathParts = path.split('/');
+  if (pathParts.length < 3) {
+    throw new Error('Invalid path: must contain at least a bucket name');
+  }
+
+  const bucketName = pathParts[1];
+  const objectName = pathParts.slice(2).join('/');
+
+  return {
+    bucketName,
+    objectName,
+  };
+}
+
+async function signObjectURL({
+  bucketName,
+  objectName,
+  method,
+  ttlSec,
+}: {
+  bucketName: string;
+  objectName: string;
+  method: 'GET' | 'PUT' | 'DELETE' | 'HEAD';
+  ttlSec: number;
+}): Promise<string> {
+  const request = {
+    bucket_name: bucketName,
+    object_name: objectName,
+    method,
+    expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
+  };
+  const response = await fetch(
+    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Failed to sign object URL, errorcode: ${response.status}, ` +
+        `make sure you're running on Replit`,
+    );
+  }
+
+  const { signed_url: signedURL } = (await response.json()) as {
+    signed_url: string;
+  };
+  return signedURL;
+}

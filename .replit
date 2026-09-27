@@ -1,0 +1,130 @@
+modules = ["nodejs-24", "python-base-3.13", "postgresql-16"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-projecthub"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-uc-companion"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-api-server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck-libs"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "expo-doctor-uc-companion"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "api-tests"
+
+[[workflows.workflow]]
+name = "typecheck-projecthub"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/projecthub && pnpm exec tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck-uc-companion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/uc-companion && pnpm exec tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck-api-server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/api-server && pnpm exec tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck-libs"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "expo-doctor-uc-companion"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/uc-companion && npx expo-doctor"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "api-tests"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/api-server && pnpm test"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+AI_ORCHESTRATOR_WEBHOOK_URL = "https://team-horizon--jerryaroyce.replit.app/webhook/projecthub"
+MPESA_ENV = "sandbox"
+WHATSAPP_SESSION_BUCKET_PATH = "/replit-objstore-83ddc91a-d087-49a2-9cbf-3f91d91008cd/whatsapp-session"
+WC_BASE_URL = "https://www.ucfilters.com"
+STRIPE_ENABLED = "false"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-83ddc91a-d087-49a2-9cbf-3f91d91008cd"

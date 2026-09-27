@@ -1,0 +1,44 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "react":                                     ["./__mocks__/react.ts"],
+      "react/jsx-runtime":                         ["./__mocks__/react-jsx-runtime.ts"],
+      "react-native":                              ["./__mocks__/react-native.ts"],
+      "@expo/vector-icons":                        ["./__mocks__/@expo-vector-icons.ts"],
+      "expo-constants":                            ["./__mocks__/expo-constants.ts"],
+      "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
+      "expo-linking":                              ["./__mocks__/expo-linking.ts"],
+      "@react-native-async-storage/async-storage": ["./__mocks__/@react-native-async-storage/async-storage.ts"],
+      "expo-file-system":                          ["./__mocks__/expo-file-system.ts"]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "hooks/__tests__/**/*.mts",
+    "lib/__tests__/**/*.test.mts",
+    "hooks/useNotifications.ts",
+    "hooks/useWaterTestHandoff.ts",
+    "hooks/mpesaStatusClassifier.ts",
+    "hooks/mpesaRetryGuard.ts",
+    "hooks/checkoutOrderIdentity.ts",
+    "hooks/reminderOptInStorage.ts",
+    "hooks/reminderOptInFlow.ts",
+    "context/cartStorage.ts",
+    "context/CartContext.tsx",
+    "lib/formDrafts.ts",
+    "lib/profileDraft.ts",
+    "lib/authReturn.ts",
+    "lib/authSessionRedirect.ts",
+    "lib/passwordReset.ts",
+    "lib/locationRefresh.ts",
+    "context/AuthContext.tsx",
+    "components/ExpiredSessionNotice.tsx",
+    "components/RegistrationErrorNotice.tsx",
+    "lib/catalogueQuery.ts",
+    "components/MediaPicker.tsx",
+    "__mocks__/expo-file-system.ts",
+    "__mocks__/expo-constants.ts"
+  ]
+}

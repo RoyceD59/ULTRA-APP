@@ -1,0 +1,1480 @@
+/**
+ * UC Impact Admin — ProjectHub page
+ *
+ * Admin-gated page. A ProjectHub team admin who is already signed in goes
+ * straight to the dashboard using their team session token (the API
+ * re-verifies the admin role against the team_users row). The UC Companion
+ * credentials form remains as a fallback for UCFilters admins whose email is
+ * on the UC admin allowlist; that token is stored in sessionStorage.
+ *
+ * Shows live impact stats and lets the team log individual offline client
+ * purchases that count toward Litres Filtered, Customers Served, and
+ * Plastics Avoided automatically.
+ */
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Leaf, Droplets, Trash2, Users, RefreshCw, Save, Info,
+  PlusCircle, Pencil, X, ChevronDown, ChevronRight, AlertCircle, Lock, LogOut, Search, Loader2, ChevronLeft,
+} from 'lucide-react';
+import { getTeamToken, isTeamAdmin, isTeamAuthenticated, canView, canEdit, refreshTeamUser } from '@/lib/team-auth';
+import { API_ORIGIN } from '@/lib/api-base';
+
+const BASE      = API_ORIGIN;
+const TOKEN_KEY = 'uc_impact_admin_token';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface OfflineProduct {
+  productId?:     number;
+  productName:    string;
+  quantity:       number;
+  litresPerUnit?: number;
+}
+
+interface OfflineClient {
+  id:        number;
+  clientRef: string;
+  phone:     string | null;
+  email:     string | null;
+  products:  OfflineProduct[];
+  saleDate:  string;
+  notes:     string;
+  createdAt: string;
+  companionUserId?: number | null;
+  accountSetupStatus?: 'pending' | 'created' | 'linked-existing' | 'conflict' | 'failed';
+  deliveryChannel?: 'email' | 'whatsapp' | null;
+  deliveryStatus?: 'pending' | 'sending' | 'sent' | 'failed' | 'not_applicable';
+  deliveryMetadata?: Record<string, unknown>;
+  deliveryError?: string | null;
+  conflictReason?: string | null;
+}
+
+interface ImpactData {
+  totalUsers:      number;
+  litresFiltered:  number;
+  plasticsAvoided: number;
+  autoStats: {
+    totalUsers:     number;
+    litresFiltered: number;
+  };
+  offlineStats: {
+    clientCount:    number;
+    litresFiltered: number;
+  };
+  override: {
+    litresOffset:  number;
+    usersOffset:   number;
+    lastUpdatedBy: string;
+    lastUpdatedAt: string;
+  };
+  lastUpdated: string;
+}
+
+// ─── Known products list (mirrors PRODUCT_LITRES on server) ───────────────────
+
+const KNOWN_PRODUCTS: { id: number; name: string; litres: number }[] = [
+  { id: 1,  name: 'Hydra Flux bottle',         litres: 150   },
+  { id: 2,  name: 'Truva Go bottle',           litres: 150   },
+  { id: 3,  name: 'Viva Drop bottle',          litres: 150   },
+  { id: 4,  name: 'Flex bottle',               litres: 150   },
+  { id: 5,  name: 'Timbo bottle',              litres: 150   },
+  { id: 6,  name: 'Gym Buddy bottle',          litres: 150   },
+  { id: 7,  name: 'Survivor Straw',            litres: 400   },
+  { id: 8,  name: 'Breeze bottle',             litres: 150   },
+  { id: 9,  name: 'EcoSmart Elite',            litres: 400   },
+  { id: 11, name: 'Sweet Home faucet',         litres: 1750  },
+  { id: 12, name: 'Counter Reverse Osmosis',   litres: 1500  },
+  { id: 13, name: 'Electric Pitcher',          litres: 400   },
+  { id: 14, name: 'RO Home System',            litres: 10000 },
+  { id: 20, name: 'Gift & Bundle',             litres: 300   },
+  { id: 22, name: 'Bottle Filter Cartridge',   litres: 150   },
+  { id: 23, name: 'Faucet Filter Cartridge',   litres: 1750  },
+  { id: 26, name: 'Survivor Straw Cartridge',  litres: 400   },
+  { id: 29, name: 'Aqua Stream 1200',          litres: 50000 },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function calcOfflineLitres(products: OfflineProduct[]): number {
+  let total = 0;
+  for (const p of products) {
+    const cap = p.litresPerUnit ??
+      (p.productId !== undefined ? (KNOWN_PRODUCTS.find(k => k.id === p.productId)?.litres ?? 0) : 0);
+    total += cap * p.quantity;
+  }
+  return total;
+}
+
+function productSummary(products: OfflineProduct[]): string {
+  return products.map(p => `${p.productName} ×${p.quantity}`).join(', ');
+}
+
+function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `offline-sale-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * A reference is only treated as a person's name when it is exactly two
+ * alphabetic words. References such as "WS-001", email addresses, and
+ * multi-part names are deliberately left to the server/customer record.
+ */
+function inferNameFromClientRef(clientRef: string): { firstName: string; lastName: string } | null {
+  const words = clientRef.trim().split(/\s+/);
+  const nameWord = /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿ]+)*$/;
+  if (words.length !== 2 || !words.every(word => nameWord.test(word))) return null;
+  return { firstName: words[0], lastName: words[1] };
+}
+
+function accountSetupLabel(status: OfflineClient['accountSetupStatus']): string {
+  switch (status) {
+    case 'created': return 'Account created';
+    case 'linked-existing': return 'Linked existing';
+    case 'conflict': return 'Account conflict';
+    case 'failed': return 'Setup failed';
+    case 'pending': return 'Setup pending';
+    default: return 'Not available';
+  }
+}
+
+function deliveryLabel(status: OfflineClient['deliveryStatus']): string {
+  switch (status) {
+    case 'sent': return 'Sent';
+    case 'failed': return 'Delivery failed';
+    case 'pending': return 'Delivery pending';
+    case 'sending': return 'Sending';
+    case 'not_applicable': return 'Not applicable';
+    default: return 'Not available';
+  }
+}
+
+function deliveryTone(status: OfflineClient['deliveryStatus']): string {
+  switch (status) {
+    case 'sent': return 'text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/30';
+    case 'failed': return 'text-destructive border-destructive/40 bg-destructive/10';
+    case 'pending': return 'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30';
+    case 'sending': return 'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30';
+    default: return 'text-muted-foreground';
+  }
+}
+
+function safeDeliveryFailureReason(client: OfflineClient): string | null {
+  if (client.deliveryStatus !== 'failed' && client.deliveryStatus !== 'pending') return null;
+  const metadata = client.deliveryMetadata;
+  const value = client.deliveryError ?? metadata?.failureReason ?? metadata?.errorMessage ?? metadata?.error ?? metadata?.reason;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  // Delivery metadata is server-redacted, but keep credential-like values out
+  // of the UI even if an older server sends an overly detailed error.
+  if (/password|credential|secret|token/i.test(value)) {
+    return 'Delivery failed. Credential details are hidden for safety.';
+  }
+  return value.trim();
+}
+
+function withUpdatedOfflineClient(clients: OfflineClient[], updated: OfflineClient): OfflineClient[] {
+  const existing = clients.some(client => client.id === updated.id);
+  return existing
+    ? clients.map(client => client.id === updated.id ? updated : client)
+    : [updated, ...clients];
+}
+
+function accountSetupTone(status: OfflineClient['accountSetupStatus']): string {
+  switch (status) {
+    case 'created':
+    case 'linked-existing':
+      return 'text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/30';
+    case 'conflict':
+    case 'failed':
+      return 'text-destructive border-destructive/40 bg-destructive/10';
+    case 'pending':
+      return 'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30';
+    default:
+      return 'text-muted-foreground';
+  }
+}
+
+function StatusBadge({ label, className }: { label: string; className?: string }) {
+  return <Badge variant="outline" className={`text-xs whitespace-nowrap ${className ?? ''}`}>{label}</Badge>;
+}
+
+// ─── Login Gate ───────────────────────────────────────────────────────────────
+
+function LoginGate({ onToken, teamDenied }: { onToken: (t: string) => void; teamDenied?: boolean }) {
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [error,    setError]    = useState('');
+  const [busy,     setBusy]     = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setBusy(true); setError('');
+    try {
+      const loginRes = await fetch(`${BASE}/api/uc/auth/login`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: email.trim(), password }),
+      });
+      if (loginRes.status === 401) { setError('Incorrect email or password.'); return; }
+      if (!loginRes.ok) { setError(`Login failed (${loginRes.status}). Try again.`); return; }
+
+      const { token } = await loginRes.json() as { token: string };
+      if (!token) { setError('No token returned. Please try again.'); return; }
+
+      // Verify admin access by hitting a protected endpoint
+      const checkRes = await fetch(`${BASE}/api/uc/offline-clients`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (checkRes.status === 401 || checkRes.status === 403) {
+        setError('This account is not on the UC Impact admin list. Ask the team to add your email to UC_ADMIN_EMAILS, or sign in to ProjectHub as a team admin.');
+        return;
+      }
+      if (!checkRes.ok) { setError(`Server error (${checkRes.status}). Try again.`); return; }
+
+      sessionStorage.setItem(TOKEN_KEY, token);
+      onToken(token);
+    } catch {
+      setError('Could not reach the server. Is the API running?');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="text-center pb-4">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+            <Lock className="w-6 h-6 text-primary" />
+          </div>
+          <CardTitle className="text-xl">Sign in to UC Impact</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Use your UCFilters admin account (same credentials as the Companion app).
+            ProjectHub team admins are signed in automatically.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {teamDenied && (
+            <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-md p-3 mb-4">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              Your ProjectHub session was not accepted for UC Impact admin (it may have expired
+              or your admin role may have changed). Sign in below with UCFilters admin
+              credentials, or sign back into ProjectHub as a team admin.
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email" type="email" autoComplete="email"
+                placeholder="you@ucfilters.com"
+                value={email} onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password" type="password" autoComplete="current-password"
+                placeholder="••••••••"
+                value={password} onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+            {error && (
+              <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 rounded-md p-3">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                {error}
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={!email.trim() || !password || busy}>
+              {busy ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── StatCard ─────────────────────────────────────────────────────────────────
+
+function StatCard({
+  icon: Icon, color, label, auto, offline, legacy, total,
+}: {
+  icon: React.ElementType; color: string; label: string;
+  auto: number; offline: number; legacy: number; total: number;
+}) {
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+        <Icon className={`w-4 h-4 ${color}`} />
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="text-3xl font-bold text-foreground">{fmt(total)}</div>
+        <div className="text-xs space-y-0.5">
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">{fmt(auto)}</span> from app orders
+          </p>
+          {offline > 0 && (
+            <p className="text-emerald-600 font-medium">+{fmt(offline)} from offline sales</p>
+          )}
+          {legacy !== 0 && (
+            <p className="text-amber-600">{legacy > 0 ? '+' : ''}{fmt(legacy)} legacy offset</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── FormProductRow ───────────────────────────────────────────────────────────
+
+function FormProductRow({
+  product, index, onChange, onRemove,
+}: {
+  product:  OfflineProduct;
+  index:    number;
+  onChange: (index: number, updated: OfflineProduct) => void;
+  onRemove: (index: number) => void;
+}) {
+  const isCustom    = product.productId === undefined;
+  const selectedKnown = KNOWN_PRODUCTS.find(k => k.id === product.productId);
+
+  function handleSelect(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    if (val === 'custom') {
+      onChange(index, { productName: product.productName || '', quantity: product.quantity, litresPerUnit: product.litresPerUnit ?? 0 });
+    } else {
+      const known = KNOWN_PRODUCTS.find(k => String(k.id) === val);
+      if (known) onChange(index, { productId: known.id, productName: known.name, quantity: product.quantity });
+    }
+  }
+
+  const litresEach  = isCustom ? (product.litresPerUnit ?? 0) : (selectedKnown?.litres ?? 0);
+  const litresTotal = litresEach * product.quantity;
+
+  return (
+    <div className="flex items-start gap-2 p-3 rounded-lg border bg-muted/30">
+      <div className="flex-1 space-y-2">
+        <select
+          className="w-full text-sm border rounded-md px-3 py-2 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          value={isCustom ? 'custom' : String(product.productId ?? '')}
+          onChange={handleSelect}
+        >
+          <option value="">— Select product —</option>
+          {KNOWN_PRODUCTS.map(k => (
+            <option key={k.id} value={String(k.id)}>
+              {k.name} ({k.litres.toLocaleString()} L/unit)
+            </option>
+          ))}
+          <option value="custom">Custom / other product…</option>
+        </select>
+
+        {isCustom && (
+          <Input
+            placeholder="Product name"
+            value={product.productName}
+            onChange={e => onChange(index, { ...product, productName: e.target.value })}
+            className="text-sm"
+          />
+        )}
+
+        <div className="flex items-center gap-2">
+          <div className="w-28">
+            <Input
+              type="number" min="1" step="1" placeholder="Qty"
+              value={product.quantity || ''}
+              onChange={e => onChange(index, { ...product, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+              className="text-sm font-mono"
+            />
+          </div>
+          {isCustom && (
+            <div className="flex-1">
+              <Input
+                type="number" min="0" step="1" placeholder="Litres per unit"
+                value={product.litresPerUnit ?? ''}
+                onChange={e => onChange(index, { ...product, litresPerUnit: parseFloat(e.target.value) || 0 })}
+                className="text-sm font-mono"
+              />
+            </div>
+          )}
+          {litresTotal > 0 && (
+            <span className="text-xs text-emerald-600 font-medium whitespace-nowrap">= {fmt(litresTotal)} L</span>
+          )}
+        </div>
+      </div>
+      <button
+        type="button" onClick={() => onRemove(index)}
+        className="mt-1 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function ImpactPage() {
+  const [ucToken, setUcToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
+  // Set once the ProjectHub session has been tried and rejected by the API
+  // (or explicitly signed out of this page) — fall back to the UC-credentials
+  // form instead of retrying the same token in a loop.
+  const [teamDenied, setTeamDenied] = useState(false);
+  const [permissionRevision, setPermissionRevision] = useState(0);
+
+  // Any authenticated team member with at least "view" on the impact page gets
+  // straight in with their team session. Admins always pass (canView returns
+  // true for them). Members with no permission still hit the login gate.
+  const teamToken = !teamDenied && isTeamAuthenticated() && canView('impact') ? getTeamToken() : null;
+  const token = ucToken ?? teamToken;
+  const usingTeamSession = !ucToken && !!teamToken;
+
+  // Read-only when using a team session AND the member only has "view"
+  // (not "edit") on the impact page. UC-credential logins are always admins.
+  const isReadOnly = usingTeamSession && !isTeamAdmin() && !canEdit('impact');
+
+  function handleToken(t: string) { setUcToken(t); }
+  function handleSignOut() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    setUcToken(null);
+    // Never clear the ProjectHub session itself — just stop using it here.
+    if (usingTeamSession) setTeamDenied(true);
+  }
+
+  if (!token) return <LoginGate onToken={handleToken} teamDenied={teamDenied} />;
+  return (
+    <ImpactDashboard
+      token={token}
+      onSignOut={handleSignOut}
+      isReadOnly={isReadOnly}
+      onPermissionsChanged={() => setPermissionRevision(revision => revision + 1)}
+    />
+  );
+}
+
+// ─── ImpactDashboard (authenticated) ─────────────────────────────────────────
+
+export function ImpactDashboard({
+  token,
+  onSignOut,
+  isReadOnly = false,
+  onPermissionsChanged,
+}: {
+  token: string;
+  onSignOut: () => void;
+  isReadOnly?: boolean;
+  onPermissionsChanged: () => void;
+}) {
+  const [data,    setData]    = useState<ImpactData | null>(null);
+  const [clients, setClients] = useState<OfflineClient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [permissionMessage, setPermissionMessage] = useState('');
+
+  // Registered app-user count — fetched with the team session token (if present).
+  // Silently skipped when only a UC-credentials token is in use.
+  const [registeredCount, setRegisteredCount] = useState<number | null>(null);
+  const teamToken = useMemo(() => getTeamToken(), []);
+  useEffect(() => {
+    if (!teamToken) return;
+    const base = API_ORIGIN;
+    fetch(`${base}/api/uc/admin/customers/count`, {
+      headers: { Authorization: `Bearer ${teamToken}` },
+    })
+      .then(r => r.ok ? r.json() as Promise<{ count: number }> : Promise.resolve(null))
+      .then(d => { if (d) setRegisteredCount(d.count); })
+      .catch(() => { /* non-critical */ });
+  }, [teamToken]);
+
+  // Legacy offset form
+  const [litresOffset, setLitresOffset] = useState('');
+  const [usersOffset,  setUsersOffset]  = useState('');
+  const [legacySaving, setLegacySaving] = useState(false);
+  const [legacyMsg,    setLegacyMsg]    = useState('');
+  const [legacyError,  setLegacyError]  = useState('');
+  const [showLegacy,   setShowLegacy]   = useState(false);
+
+  // Offline client form dialog
+  const [dialogOpen,    setDialogOpen]    = useState(false);
+  const [editingClient, setEditingClient] = useState<OfflineClient | null>(null);
+  const [formRef,       setFormRef]       = useState('');
+  const [formPhone,     setFormPhone]     = useState('');
+  const [formEmail,     setFormEmail]     = useState('');
+  const [formDate,      setFormDate]      = useState('');
+  const [formNotes,     setFormNotes]     = useState('');
+  const [formProducts,  setFormProducts]  = useState<OfflineProduct[]>([]);
+  const [formSaving,    setFormSaving]    = useState(false);
+  const [formError,     setFormError]     = useState('');
+  // Generated once when Add opens and retained across failed submissions so a
+  // double-click or a retry cannot create another sale/account.
+  const [addIdempotencyKey, setAddIdempotencyKey] = useState<string | null>(null);
+
+  // Delete confirm
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [retryingDeliveryId, setRetryingDeliveryId] = useState<number | null>(null);
+  const [deliveryActionError, setDeliveryActionError] = useState('');
+
+  // Search / filter
+  const [clientSearch, setClientSearch] = useState('');
+
+  const loadRef = useRef(false);
+
+  const load = useCallback(async () => {
+    if (loadRef.current) return;
+    loadRef.current = true;
+    setLoading(true); setError('');
+    try {
+      const hdrs = { Authorization: `Bearer ${token}` };
+      const [impactRes, clientsRes] = await Promise.all([
+        fetch(`${BASE}/api/uc/impact`),
+        fetch(`${BASE}/api/uc/offline-clients`, { headers: hdrs }),
+      ]);
+      if (impactRes.status === 401 || clientsRes.status === 401) { onSignOut(); return; }
+      if (!impactRes.ok)  throw new Error(`Impact API: ${impactRes.status}`);
+      if (!clientsRes.ok) throw new Error(`Clients API: ${clientsRes.status}`);
+      const d = await impactRes.json()  as ImpactData;
+      const c = await clientsRes.json() as { clients: OfflineClient[] };
+      setData(d);
+      setClients(c.clients);
+      setLitresOffset(String(d.override.litresOffset));
+      setUsersOffset(String(d.override.usersOffset));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load. Is the API server running?');
+    } finally {
+      setLoading(false);
+      loadRef.current = false;
+    }
+  }, [token, onSignOut]);
+
+  const refresh = useCallback(async () => { loadRef.current = false; await load(); }, [load]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleLostEditAccess() {
+    setDialogOpen(false);
+    setDeletingId(null);
+    setPermissionMessage('Your UC Impact edit access changed while this page was open. Your ProjectHub session is still active, and this page is now read-only.');
+    try {
+      await refreshTeamUser();
+      onPermissionsChanged();
+    } catch {
+      setPermissionMessage('Your UC Impact edit access changed while this page was open. You are still signed in to ProjectHub. Refresh the page to load your latest permissions.');
+    }
+  }
+
+  // ── Legacy offset save ────────────────────────────────────────────────────
+
+  async function saveLegacyOffset() {
+    setLegacySaving(true); setLegacyError(''); setLegacyMsg('');
+    try {
+      const litres = parseFloat(litresOffset) || 0;
+      const users  = parseFloat(usersOffset)  || 0;
+      const res = await fetch(`${BASE}/api/uc/impact/override`, {
+        method:  'POST',
+        headers: authHeaders(token),
+        body:    JSON.stringify({ litresOffset: litres, usersOffset: users, updatedBy: 'admin' }),
+      });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
+      if (res.status === 401) { onSignOut(); return; }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as Record<string, unknown>)) as { error?: string };
+        throw new Error(err.error ?? String(res.status));
+      }
+      setLegacyMsg('Saved. Refreshing…');
+      await refresh();
+    } catch (e) {
+      setLegacyError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setLegacySaving(false);
+    }
+  }
+
+  // ── Dialog helpers ────────────────────────────────────────────────────────
+
+  function openAdd() {
+    setEditingClient(null);
+    setFormRef(''); setFormPhone(''); setFormEmail('');
+    setFormDate(new Date().toISOString().slice(0, 10));
+    setFormNotes(''); setFormProducts([{ productName: '', quantity: 1 }]);
+    setFormError(''); setAddIdempotencyKey(newIdempotencyKey()); setDialogOpen(true);
+  }
+
+  function openEdit(c: OfflineClient) {
+    setEditingClient(c); setFormRef(c.clientRef);
+    setFormPhone(c.phone ?? ''); setFormEmail(c.email ?? '');
+    setFormDate(c.saleDate);
+    setFormNotes(c.notes);
+    setFormProducts(c.products.length > 0 ? [...c.products] : [{ productName: '', quantity: 1 }]);
+    setFormError(''); setAddIdempotencyKey(null); setDialogOpen(true);
+  }
+
+  function addProductRow()                                       { setFormProducts(prev => [...prev, { productName: '', quantity: 1 }]); }
+  function updateProductRow(i: number, updated: OfflineProduct) { setFormProducts(prev => prev.map((p, j) => j === i ? updated : p)); }
+  function removeProductRow(i: number)                          { setFormProducts(prev => prev.filter((_, j) => j !== i)); }
+
+  async function saveClient() {
+    if (!editingClient && !formPhone.trim() && !formEmail.trim()) {
+      setFormError('Enter at least an email address or phone number so the Companion account can be linked or created.');
+      return;
+    }
+    const validProducts = formProducts.filter(p => p.productName.trim() !== '' && p.quantity >= 1);
+    if (validProducts.length === 0) { setFormError('Add at least one product with a name and quantity.'); return; }
+    if (!formDate)                  { setFormError('Please enter the sale date.'); return; }
+    setFormError(''); setFormSaving(true);
+    try {
+      const url  = editingClient ? `${BASE}/api/uc/offline-clients/${editingClient.id}` : `${BASE}/api/uc/offline-clients`;
+      const payload: Record<string, unknown> = {
+        clientRef: formRef.trim(),
+        phone: formPhone.trim() || null,
+        email: formEmail.trim() || null,
+        products: validProducts,
+        saleDate: formDate,
+        notes: formNotes.trim(),
+      };
+      if (!editingClient) {
+        // The server owns identity matching. Names are sent only for the
+        // conservative two-word case; references are not guessed as names.
+        const inferredName = inferNameFromClientRef(formRef);
+        if (inferredName) Object.assign(payload, inferredName);
+        const idempotencyKey = addIdempotencyKey ?? newIdempotencyKey();
+        if (!addIdempotencyKey) setAddIdempotencyKey(idempotencyKey);
+        payload.idempotencyKey = idempotencyKey;
+      }
+      const res  = await fetch(url, {
+        method:  editingClient ? 'PUT' : 'POST',
+        headers: authHeaders(token),
+        body:    JSON.stringify(payload),
+      });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
+      if (res.status === 401) { onSignOut(); return; }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as Record<string, unknown>)) as { error?: string };
+        throw new Error(err.error ?? String(res.status));
+      }
+      const result = await res.json().catch(() => null) as { client?: OfflineClient } | null;
+      // Use the returned provisioning state immediately; the follow-up load
+      // keeps the list fresh but should never be the first place it appears.
+      if (result?.client) {
+        setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+      }
+      setDialogOpen(false);
+      await refresh();
+      // Do not let a briefly stale list response clobber the provisioning
+      // status returned by the mutation.
+      if (result?.client) setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setFormSaving(false);
+    }
+  }
+
+  async function retryDelivery(client: OfflineClient) {
+    if (isReadOnly) return;
+    setRetryingDeliveryId(client.id);
+    setDeliveryActionError('');
+    try {
+      const res = await fetch(`${BASE}/api/uc/offline-clients/${client.id}/delivery-retry`, {
+        method: 'POST',
+        headers: authHeaders(token),
+      });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string; error?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
+      if (res.status === 401) { onSignOut(); return; }
+      if (!res.ok) throw new Error(responseError.error ?? `Retry failed (${res.status})`);
+      const result = await res.json().catch(() => null) as { client?: OfflineClient } | null;
+      if (result?.client) {
+        setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+      }
+      await refresh();
+      if (result?.client) setClients(prev => withUpdatedOfflineClient(prev, result.client!));
+    } catch (e) {
+      setDeliveryActionError(e instanceof Error ? e.message : 'Could not retry delivery.');
+    } finally {
+      setRetryingDeliveryId(null);
+    }
+  }
+
+  async function deleteClient(id: number) {
+    try {
+      const res = await fetch(`${BASE}/api/uc/offline-clients/${id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
+      if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
+        await handleLostEditAccess();
+        return;
+      }
+      if (res.status === 401) { onSignOut(); return; }
+      if (!res.ok) throw new Error(`${res.status}`);
+      setDeletingId(null);
+      await refresh();
+    } catch (e) { console.error('Delete failed', e); }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const offlineLitres = data?.offlineStats.litresFiltered ?? 0;
+  const offlineCount  = data?.offlineStats.clientCount    ?? 0;
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter(c =>
+      c.clientRef.toLowerCase().includes(q) ||
+      (c.phone  ?? '').toLowerCase().includes(q) ||
+      (c.email  ?? '').toLowerCase().includes(q),
+    );
+  }, [clients, clientSearch]);
+
+  return (
+    <div className="space-y-8 animate-in-up">
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Leaf className="w-7 h-7 text-green-500" />
+            UC Impact Metrics
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Auto-calculated from app orders, plus offline client entries you log here.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+          <Button variant="outline" size="sm" onClick={refresh} disabled={loading} className="gap-2">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onSignOut} className="gap-2 text-muted-foreground">
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </Button>
+        </div>
+      </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {permissionMessage && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          {permissionMessage}
+        </div>
+      )}
+
+      {deliveryActionError && (
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          {deliveryActionError}
+        </div>
+      )}
+
+      {/* Live Stat Cards */}
+      {loading && !data ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1,2,3].map(i => <div key={i} className="h-36 bg-muted rounded-lg animate-pulse" />)}
+        </div>
+      ) : data ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StatCard
+              icon={Users}    color="text-blue-500"    label="Customers Served"
+              auto={data.autoStats.totalUsers}      offline={offlineCount}
+              legacy={data.override.usersOffset}    total={data.totalUsers}
+            />
+            <StatCard
+              icon={Droplets} color="text-emerald-500" label="Litres Filtered"
+              auto={data.autoStats.litresFiltered}  offline={offlineLitres}
+              legacy={data.override.litresOffset}   total={data.litresFiltered}
+            />
+            <StatCard
+              icon={Trash2}   color="text-orange-500"  label="Plastic Bottles Avoided (500 ml)"
+              auto={data.autoStats.litresFiltered * 2} offline={offlineLitres * 2}
+              legacy={data.override.litresOffset * 2}  total={data.plasticsAvoided}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>Last calculated: {new Date(data.lastUpdated).toLocaleString()}</span>
+            {registeredCount !== null && (
+              <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                <Users className="w-3 h-3" />
+                {registeredCount.toLocaleString()} registered in app
+              </span>
+            )}
+          </p>
+        </>
+      ) : null}
+
+      {/* ── Tabs for Offline & App Users ─────────────────────────────────────────── */}
+      <Tabs defaultValue="offline" className="space-y-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:w-auto">
+          <TabsTrigger value="offline">Offline Client Sales</TabsTrigger>
+          <TabsTrigger value="app">Companion App Users</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="offline" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">Offline Client Sales</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Log clients who purchased from the sales team and never registered in the app.
+              {offlineCount > 0 && (
+                <span className="ml-1 font-medium text-emerald-600">
+                  {offlineCount} {offlineCount === 1 ? 'entry' : 'entries'} · {fmt(offlineLitres)} L counted
+                </span>
+              )}
+            </p>
+          </div>
+          {!isReadOnly && (
+            <Button onClick={openAdd} className="gap-2">
+              <PlusCircle className="w-4 h-4" />
+              Add offline sale
+            </Button>
+          )}
+        </div>
+
+        {clients.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+            <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No offline client entries yet.</p>
+            <p className="text-xs mt-1">Add one for every sale made outside the app.</p>
+          </div>
+        ) : (
+          <>
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search by name, phone, or email…"
+                value={clientSearch}
+                onChange={e => setClientSearch(e.target.value)}
+                className="pl-9 pr-8"
+              />
+              {clientSearch && (
+                <button
+                  type="button"
+                  onClick={() => setClientSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Match count */}
+            {clientSearch.trim() && (
+              <p className="text-xs text-muted-foreground -mt-1">
+                {filteredClients.length === 0
+                  ? 'No entries match.'
+                  : `${filteredClients.length} of ${clients.length} ${clients.length === 1 ? 'entry' : 'entries'} match`}
+              </p>
+            )}
+
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto overscroll-x-contain" role="region" aria-label="Offline client sales table" tabIndex={0}>
+                <table className="w-full min-w-[1160px] text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Client / Ref</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phone</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Products</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Litres</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Notes</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Companion account</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Credential delivery</th>
+                      {!isReadOnly && <th className="px-4 py-3" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredClients.length === 0 ? (
+                      <tr>
+                        <td colSpan={isReadOnly ? 9 : 10} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          No entries match "{clientSearch}".
+                        </td>
+                      </tr>
+                    ) : filteredClients.map((c, i) => {
+                      const litres = calcOfflineLitres(c.products);
+                      return (
+                        <tr key={c.id} className={`border-b last:border-0 ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
+                          <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{c.saleDate}</td>
+                          <td className="px-4 py-3">
+                            {c.clientRef
+                              ? <span className="font-medium text-foreground">{c.clientRef}</span>
+                              : <span className="text-muted-foreground italic">—</span>}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {c.phone
+                              ? <a href={`tel:${c.phone}`} className="text-foreground text-xs font-mono hover:underline">{c.phone}</a>
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          <td className="px-4 py-3 max-w-[180px]">
+                            {c.email
+                              ? <a href={`mailto:${c.email}`} className="text-foreground text-xs truncate block hover:underline">{c.email}</a>
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          <td className="px-4 py-3 max-w-xs">
+                            <span className="text-foreground">{productSummary(c.products)}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-emerald-600 font-medium">
+                            {litres > 0 ? fmt(litres) : '—'}
+                          </td>
+                          <td className="px-4 py-3 max-w-xs">
+                            {c.notes
+                              ? <span className="text-muted-foreground text-xs">{c.notes}</span>
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                           <td className="px-4 py-3 align-top">
+                             <StatusBadge
+                               label={accountSetupLabel(c.accountSetupStatus)}
+                               className={accountSetupTone(c.accountSetupStatus)}
+                             />
+                             {c.conflictReason && (
+                               <p className="mt-1 max-w-[220px] text-xs text-destructive">{c.conflictReason}</p>
+                             )}
+                           </td>
+                           <td className="px-4 py-3 align-top">
+                             <div className="flex flex-wrap items-center gap-1.5">
+                               <StatusBadge
+                                 label={deliveryLabel(c.deliveryStatus)}
+                                 className={deliveryTone(c.deliveryStatus)}
+                               />
+                               {c.deliveryChannel && (
+                                 <span className="text-xs text-muted-foreground">
+                                   via {c.deliveryChannel === 'whatsapp' ? 'WhatsApp' : 'email'}
+                                 </span>
+                               )}
+                             </div>
+                             {c.deliveryStatus === 'failed' && (
+                               <p className="mt-1 max-w-[220px] text-xs text-destructive">
+                                 {safeDeliveryFailureReason(c) ?? 'Delivery failed. Retry to issue a fresh one-time credential.'}
+                               </p>
+                             )}
+                           </td>
+                          {!isReadOnly && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1 justify-end">
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(c)} className="h-7 w-7 p-0">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                {/* Pending/sending jobs are already in flight; the API authorizes a fresh
+                                    credential retry only after a terminal failure. */}
+                                {c.deliveryStatus === 'failed' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => retryDelivery(c)}
+                                    disabled={retryingDeliveryId === c.id}
+                                    className="h-7 gap-1 px-2 text-xs"
+                                  >
+                                    <RefreshCw className={`w-3 h-3 ${retryingDeliveryId === c.id ? 'animate-spin' : ''}`} />
+                                    {retryingDeliveryId === c.id ? 'Retrying…' : 'Retry delivery'}
+                                  </Button>
+                                )}
+                                {deletingId === c.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button variant="destructive" size="sm" onClick={() => deleteClient(c.id)} className="h-7 text-xs px-2">Confirm</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)} className="h-7 w-7 p-0"><X className="w-3.5 h-3.5" /></Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="sm" onClick={() => setDeletingId(c.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
+
+      {/* ── Legacy Bulk Offset ───────────────────────────────────────────────── */}
+      <Card className="border-dashed">
+        <CardHeader className="cursor-pointer select-none" onClick={() => setShowLegacy(v => !v)}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-muted-foreground" />
+              <CardTitle className="text-sm text-muted-foreground font-medium">Legacy Bulk Adjustment</CardTitle>
+              {(data?.override.litresOffset || data?.override.usersOffset) ? (
+                <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">active</Badge>
+              ) : null}
+            </div>
+            {showLegacy ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+          </div>
+          <CardDescription className="text-xs">
+            For pre-system historical data that can't be entered as individual clients. Use the Offline Clients section above for ongoing sales.
+          </CardDescription>
+        </CardHeader>
+
+        {showLegacy && (
+          <CardContent className="space-y-4 pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="litresOffset" className="flex items-center gap-2 text-sm">
+                  <Droplets className="w-4 h-4 text-emerald-500" />
+                  Additional Litres (bulk)
+                </Label>
+                {isReadOnly
+                  ? <p className="font-mono text-sm text-foreground px-1">{litresOffset || '0'}</p>
+                  : <Input id="litresOffset" type="number" step="1" value={litresOffset}
+                      onChange={e => setLitresOffset(e.target.value)} placeholder="e.g. 250000" className="font-mono" />}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="usersOffset" className="flex items-center gap-2 text-sm">
+                  <Users className="w-4 h-4 text-blue-500" />
+                  Additional Users (bulk)
+                </Label>
+                {isReadOnly
+                  ? <p className="font-mono text-sm text-foreground px-1">{usersOffset || '0'}</p>
+                  : <Input id="usersOffset" type="number" step="1" value={usersOffset}
+                      onChange={e => setUsersOffset(e.target.value)} placeholder="e.g. 500" className="font-mono" />}
+              </div>
+            </div>
+            {!isReadOnly && (
+              <>
+                {legacyError && <p className="text-sm text-destructive">{legacyError}</p>}
+                {legacyMsg   && <p className="text-sm text-green-600">{legacyMsg}</p>}
+                <Button onClick={saveLegacyOffset} disabled={legacySaving} size="sm" className="gap-2">
+                  <Save className="w-4 h-4" />
+                  {legacySaving ? 'Saving…' : 'Save bulk adjustment'}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ── How it's calculated ─────────────────────────────────────────────── */}
+      <Card className="border-dashed">
+        <CardHeader>
+          <CardTitle className="text-sm text-muted-foreground">How litres are calculated</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p>For each completed app order and each offline client entry:</p>
+            <p className="font-mono text-xs bg-muted rounded px-3 py-2">litres += quantity × product_capacity</p>
+          <div className="grid grid-cols-1 min-[390px]:grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+              {[
+                ['Bottle filters', '150 L'], ['Survivor Straw', '400 L'],
+                ['EcoSmart Elite', '400 L'], ['Electric Pitcher', '400 L'],
+                ['Sweet Home faucet', '1,750 L'], ['Counter RO', '1,500 L'],
+                ['RO Home System', '10,000 L'], ['Aqua Stream 1200', '50,000 L'],
+              ].map(([name, cap]) => (
+                <div key={name} className="text-xs border rounded p-2">
+                  <div className="font-medium text-foreground">{name}</div>
+                  <div className="text-muted-foreground">{cap} / unit</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Add / Edit Dialog ───────────────────────────────────────────────── */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingClient ? 'Edit offline sale' : 'Add offline sale'}</DialogTitle>
+            <DialogDescription>
+              Log a client who purchased directly from the sales team.
+              Their products will count toward the UC Impact metrics automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {!editingClient && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-200">
+                <p className="font-medium">Companion account setup</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  We will match this sale by email or phone and safely link an existing Companion
+                  account, or create one when there is no match. New accounts receive a one-time
+                  credential by email (or WhatsApp for phone-only customers), valid for 14 days,
+                  and must choose a permanent password on first sign-in. Existing passwords are
+                  never replaced, and the temporary password is not shown in ProjectHub.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="clientRef">Client name / reference <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input id="clientRef" placeholder="e.g. Jane Kamau, WS-001"
+                value={formRef} onChange={e => setFormRef(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="formPhone">Phone number {!editingClient && <span className="text-muted-foreground font-normal">(email or phone required)</span>}</Label>
+                <Input id="formPhone" type="tel" placeholder="e.g. +254 712 345 678"
+                  value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="formEmail">Email address {!editingClient && <span className="text-muted-foreground font-normal">(email or phone required)</span>}</Label>
+                <Input id="formEmail" type="email" placeholder="e.g. jane@example.com"
+                  value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+              </div>
+            </div>
+            {!editingClient && (
+              <p className="-mt-2 text-xs text-muted-foreground">
+                At least one contact is required. Email is used for delivery when supplied;
+                phone-only customers receive the credential through WhatsApp.
+              </p>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="saleDate">Sale date <span className="text-destructive">*</span></Label>
+              <Input id="saleDate" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Products <span className="text-destructive">*</span></Label>
+              <div className="space-y-2">
+                {formProducts.map((p, i) => (
+                  <FormProductRow key={i} product={p} index={i} onChange={updateProductRow} onRemove={removeProductRow} />
+                ))}
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={addProductRow} className="gap-1.5 mt-1">
+                <PlusCircle className="w-3.5 h-3.5" />
+                Add product
+              </Button>
+              {(() => {
+                const total = calcOfflineLitres(formProducts.filter(p => p.productName.trim()));
+                return total > 0 ? (
+                  <p className="text-xs text-emerald-600 font-medium">Total: {fmt(total)} litres filtered</p>
+                ) : null;
+              })()}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input id="notes" placeholder="e.g. Paid via M-Pesa, delivered to Westlands"
+                value={formNotes} onChange={e => setFormNotes(e.target.value)} />
+            </div>
+
+            {formError && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {formError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={formSaving}>Cancel</Button>
+            <Button onClick={saveClient} disabled={formSaving} className="gap-2">
+              <Save className="w-4 h-4" />
+              {formSaving ? 'Saving…' : editingClient ? 'Save changes' : 'Add entry'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+        </TabsContent>
+
+        <TabsContent value="app">
+          <CompanionUsersImpact token={token} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+interface AppImpactResponse {
+  overallTotalLitres: number;
+  page: number;
+  pageSize: number;
+  totalCustomers: number;
+  customers: {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    total_litres: number;
+    entry_count: number;
+  }[];
+}
+
+export function CompanionUsersImpact({ token }: { token: string }) {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+
+  const { data, isLoading, isError } = useQuery<AppImpactResponse>({
+    queryKey: ["admin-impact-app", page, search],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/rewards/impact?page=${page}&search=${encodeURIComponent(search)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch app impact data");
+      return res.json();
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">App Users Impact</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Registered Companion app users who have contributed to the impact metrics.
+            {data && (
+              <span className="ml-1 font-medium text-blue-600 dark:text-blue-400">
+                {data.totalCustomers.toLocaleString()} users · {(data.overallTotalLitres).toLocaleString()} L total
+              </span>
+            )}
+          </p>
+        </div>
+        <form onSubmit={handleSearch} className="relative max-w-sm w-full sm:w-auto flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by name or email…"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+          <Button type="submit" size="sm" variant="secondary" className="h-9">Search</Button>
+        </form>
+      </div>
+
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer</TableHead>
+              <TableHead>Total Litres</TableHead>
+              <TableHead>Entries</TableHead>
+              <TableHead className="w-16"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && !data ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-destructive">
+                  Failed to load app users.
+                </TableCell>
+              </TableRow>
+            ) : data?.customers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  No users found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              data?.customers.map(c => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <p className="font-medium">{c.first_name} {c.last_name}</p>
+                    <p className="text-xs text-muted-foreground">{c.email}</p>
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                      <Droplets className="w-3.5 h-3.5" />
+                      {c.total_litres.toLocaleString()} L
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{c.entry_count}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(c.id)}>
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        {data && data.totalCustomers > data.pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+            <span className="text-sm text-muted-foreground">
+              Page {data.page} of {Math.ceil(data.totalCustomers / data.pageSize)}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={data.page <= 1}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+              </Button>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setPage(p => p + 1)}
+                disabled={data.page >= Math.ceil(data.totalCustomers / data.pageSize)}
+              >
+                Next <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <UserImpactDrawer
+        userId={selectedUserId}
+        token={token}
+        onClose={() => setSelectedUserId(null)}
+      />
+    </div>
+  );
+}
+
+function UserImpactDrawer({ userId, token, onClose }: { userId: number | null; token: string; onClose: () => void }) {
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["admin-impact-user", userId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/uc/admin/rewards/impact/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load user impact");
+      return res.json();
+    },
+    enabled: !!userId,
+  });
+
+  return (
+    <Sheet open={!!userId} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-full max-w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>App User Impact Details</SheetTitle>
+          <SheetDescription>
+            Detailed view of this user's contributions and history.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6">
+          {isLoading ? (
+            <div className="py-12 flex justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : data ? (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 border-b pb-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-lg font-bold text-primary">
+                    {(data.customer.firstName?.[0] || "") + (data.customer.lastName?.[0] || "")}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">{data.customer.firstName} {data.customer.lastName}</h3>
+                  <p className="text-sm text-muted-foreground">{data.customer.email}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border p-4 bg-muted/10">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Litres</p>
+                  <p className="text-2xl font-bold text-emerald-600">{data.impact.totalLitres.toLocaleString()} L</p>
+                </div>
+                <div className="rounded-lg border p-4 bg-muted/10">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Star Level</p>
+                  <p className="text-2xl font-bold text-amber-500">Level {data.impact.starLevel}</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wider mb-3">Impact History</h4>
+                {data.impact.history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic bg-muted/30 p-4 rounded-md text-center">No impact history entries.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {data.impact.history.map((h: any) => (
+                      <div key={h.id} className="flex gap-3 text-sm p-3 rounded-md border border-border/50 bg-card">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Droplets className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 space-y-0.5">
+                          <div className="flex justify-between items-start">
+                            <span className="font-medium text-foreground">
+                              {h.litres > 0 ? "+" : ""}{h.litres.toLocaleString()} Litres
+                            </span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(h.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground">{h.reason}</p>
+                          <div className="flex items-center justify-between text-xs mt-1 pt-1 border-t border-border/40">
+                            <span className="text-muted-foreground/80">{h.productName}</span>
+                            <span className="text-muted-foreground/80">by {h.actor}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-destructive">Failed to load details.</p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}

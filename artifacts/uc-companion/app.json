@@ -1,0 +1,109 @@
+{
+  "expo": {
+    "name": "Ultra-Clear Companion",
+    "slug": "uc-companion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "uc-companion",
+    "userInterfaceStyle": "automatic",
+    "updates": {
+      "enabled": false,
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD",
+      "url": "https://u.expo.dev/REPLACE_AFTER_EAS_PROJECT_INIT"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ultraclean.companion",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Ultra-Clear uses your location to show nearby experience centres and water refill ATMs.",
+        "NSCameraUsageDescription": "Ultra-Clear uses your camera to take photos and record short videos for maintenance tickets.",
+        "NSMicrophoneUsageDescription": "Ultra-Clear uses your microphone to record audio with videos attached to maintenance tickets.",
+        "NSPhotoLibraryUsageDescription": "Ultra-Clear accesses your photo library to attach photos and videos to maintenance tickets.",
+        "NSContactsUsageDescription": "Ultra-Clear reads your contacts so you can invite friends to join and earn referral rewards."
+      }
+    },
+    "android": {
+      "package": "com.ultraclean.companion",
+      "config": {
+        "googleMaps": {
+          "apiKey": "$GOOGLE_MAPS_ANDROID_KEY"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "READ_CONTACTS",
+        "SEND_SMS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#005d8f",
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Ultra-Clear to access your contacts to invite friends and earn referral rewards."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Show current location on the map."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Ultra-Clear to access your photos and videos for maintenance tickets.",
+          "cameraPermission": "Allow Ultra-Clear to take photos and record short videos for maintenance tickets.",
+          "microphonePermission": "Allow Ultra-Clear to record audio with videos attached to maintenance tickets."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0054A6",
+          "defaultChannel": "uc-default",
+          "androidMode": "default",
+          "androidCollapsedTitle": "Ultra-Clear"
+        }
+      ],
+      "expo-video",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

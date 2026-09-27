@@ -1,0 +1,5622 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: uc-admin
+    description: UC companion admin operations
+  - name: members
+    description: Team member operations
+  - name: projects
+    description: Project operations
+  - name: tasks
+    description: Task operations
+  - name: dashboard
+    description: Cross-project dashboard operations
+  - name: anthropic
+    description: Anthropic AI chat operations
+  - name: ai-monitor
+    description: AI project monitoring and Ultra Clear AI integration
+  - name: contacts
+    description: Unified contact ledger
+  - name: system
+    description: System status and connectivity watchdog
+  - name: notifications
+    description: Notification engine and logs
+  - name: webhook
+    description: External webhook ingestion
+  - name: whatsapp
+    description: WhatsApp session management and messaging
+  - name: instant-water-check
+    description: Instant water assessment and physical-test lead flow
+  - name: agent-oauth
+    description: Private ProjectHub administrator-managed machine-agent access
+  - name: customer-lifecycle
+    description: Canonical customer identity, filter lifecycle, impact, and mission control contracts
+  - name: companion-blog
+    description: Public Companion articles and human-reviewed editorial workflow
+paths:
+  /water-check/assessments:
+    post:
+      operationId: createPublicInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Create a public instant water assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicInstantWaterAssessmentInput"
+      responses:
+        "201":
+          description: Assessment and redacted result token created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessmentCreated"
+        "400": { description: Invalid controlled answer or consent }
+        "409": { description: Idempotency key was reused with another payload }
+        "429": { description: Rate limit exceeded }
+
+  /uc/water-check/assessments:
+    post:
+      operationId: createAuthenticatedInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Create an instant water assessment for the authenticated customer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticatedInstantWaterAssessmentInput"
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedInstantWaterAssessmentCreated"
+        "400": { description: Invalid controlled answer }
+        "401": { description: Authentication required }
+        "409": { description: Idempotency key was reused with another payload }
+
+  /water-check/results/{token}:
+    get:
+      operationId: getPublicInstantWaterAssessmentResult
+      tags: [instant-water-check]
+      summary: Fetch a redacted instant water result by its public token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 256 }
+      responses:
+        "200":
+          description: Redacted result (contains no contact or ownership data)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicInstantWaterAssessmentResult"
+        "404":
+          description: "Result token is unknown, expired, or revoked"
+        "429": { description: Rate limit exceeded }
+
+  /water-check/assessments/{assessmentId}/verification/request:
+    post:
+      operationId: requestInstantWaterAssessmentVerification
+      tags: [instant-water-check]
+      summary: Request a phone verification code for one assessment
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterVerificationRequestInput"
+      responses:
+        "202":
+          description: Verification request accepted without account-existence disclosure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterVerificationRequested"
+        "400": { description: Invalid channel or explicit SMS consent missing }
+        "404": { description: Assessment not found }
+        "429": { description: Rate limit exceeded }
+        "409": { description: Delivery is already in progress for this idempotent request }
+        "503": { description: Verification provider delivery failed; retry the same idempotency key }
+
+  /water-check/assessments/{assessmentId}/verification/confirm:
+    post:
+      operationId: confirmInstantWaterAssessmentVerification
+      tags: [instant-water-check]
+      summary: Confirm the short-lived phone verification code
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterVerificationConfirmInput"
+      responses:
+        "200":
+          description: Verification accepted and scoped action token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterVerificationConfirmed"
+        "400": { description: Invalid or expired code }
+        "404": { description: Assessment not found }
+        "429": { description: Too many attempts }
+
+  /water-check/handoff/consume:
+    post:
+      operationId: consumeInstantWaterAssessmentHandoff
+      tags: [instant-water-check]
+      summary: Securely attach a verified unmatched assessment to the signed-in customer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterAssessmentHandoffConsumeInput"
+      responses:
+        "200":
+          description: Assessment attached to the authenticated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessment"
+        "400": { description: Invalid handoff token input }
+        "401": { description: Authentication required }
+        "403": { description: "Invalid, expired, revoked, consumed, mismatched, or already attached handoff" }
+
+  /uc/water-check/assessments/{assessmentId}/attach:
+    post:
+      operationId: attachInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Attach one verified public assessment to the signed-in customer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterAssessmentAttachInput"
+      responses:
+        "200":
+          description: Assessment attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessment"
+        "401": { description: Authentication required }
+        "403": { description: Verification or ownership proof required }
+        "404": { description: Assessment not found }
+        "409": { description: Assessment has an ambiguous or newer account state }
+
+  /uc/water-check/assessments/{assessmentId}/physical-test:
+    post:
+      operationId: requestInstantWaterPhysicalTest
+      tags: [instant-water-check]
+      summary: Request the physical-test stage on the existing assessment ticket
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstantWaterPhysicalTestRequestInput"
+      responses:
+        "200":
+          description: Existing assessment and ticket transitioned atomically
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterPhysicalTestResponse"
+        "400": { description: Invalid service details or media reference }
+        "401": { description: Authentication or assessment action token required }
+        "404": { description: Assessment not found }
+        "409": { description: Stale transition or market unavailable }
+
+  /uc/me/water-check/assessments:
+    get:
+      operationId: listAuthenticatedInstantWaterAssessments
+      tags: [instant-water-check]
+      summary: List assessments owned by the authenticated customer
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer-owned assessment history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterAssessmentHistory"
+        "401": { description: Authentication required }
+
+  /uc/me/water-check/latest:
+    get:
+      operationId: getAuthenticatedLatestInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Get the latest owned assessment summary for Companion chat context
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Latest customer-owned assessment summary, if present
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstantWaterLatestSummary"
+        "401": { description: Authentication required }
+
+  /uc/admin/water-checks:
+    get:
+      operationId: listProjectHubInstantWaterAssessments
+      tags: [instant-water-check]
+      summary: List instant water assessments for ProjectHub
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: customerId
+          in: query
+          description: Filter to assessments attached to this customer account.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Water-check queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectHubInstantWaterList"
+        "401": { description: Authentication required }
+        "403": { description: water_tests permission required }
+
+  /uc/admin/water-checks/{assessmentId}:
+    get:
+      operationId: getProjectHubInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: View one instant water assessment and its ticket in ProjectHub
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectHubInstantWaterDetail"
+        "403": { description: water_tests permission required }
+        "404": { description: Assessment not found }
+    patch:
+      operationId: updateProjectHubInstantWaterAssessment
+      tags: [instant-water-check]
+      summary: Update an authorized operational water-test state
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectHubInstantWaterUpdateInput"
+      responses:
+        "200":
+          description: Assessment state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectHubInstantWaterDetail"
+        "403": { description: Permission or administrator access required }
+        "404": { description: Assessment not found }
+        "409": { description: Stale transition }
+
+  /uc/admin/orders/{id}/customer-stage:
+    patch:
+      operationId: updateUcOrderCustomerStage
+      tags: [uc-admin]
+      summary: Advance an order's customer-visible status and send one audited push
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcOrderCustomerStageInput"
+      responses:
+        "200": { description: Stage saved (possibly idempotent repeat) }
+        "400": { description: Invalid input }
+        "403": { description: Admin access required }
+        "404": { description: Order not found }
+        "409": { description: Invalid forward transition }
+  /uc/admin/water-tests/{id}/customer-stage:
+    patch:
+      operationId: updateUcWaterTestCustomerStage
+      tags: [uc-admin]
+      summary: Advance a water-test customer stage and send one audited push
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcWaterTestCustomerStageInput"
+      responses:
+        "200": { description: Stage saved (possibly idempotent repeat) }
+        "400": { description: Invalid input or missing result delivery reference }
+        "403": { description: Admin access required }
+        "404": { description: Water test not found }
+        "409": { description: Invalid forward transition }
+  /uc/admin/inventory:
+    get:
+      operationId: listUcInventory
+      tags: [uc-admin]
+      summary: List all UC products with live stock from WooCommerce
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryList"
+        "401":
+          description: Unauthorized
+
+  /uc/products:
+    get:
+      operationId: listUcProducts
+      tags: [uc-admin]
+      summary: List customer-facing products
+      description: Public catalogue list; optional category and name/SKU search filters.
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customer-facing catalogue
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UcProduct" }
+        "502": { description: WooCommerce catalogue temporarily unavailable }
+        "500": { description: Failed to fetch products }
+
+  /uc/products/{id}:
+    get:
+      operationId: getUcProduct
+      tags: [uc-admin]
+      summary: Read one customer-facing product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Customer-facing product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProduct" }
+        "404": { description: Product not found }
+        "500": { description: Failed to fetch product }
+
+  /uc/admin/products/{id}:
+    patch:
+      operationId: updateUcProduct
+      tags: [uc-admin]
+      summary: Update administrator-editable product fields
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcProductUpdate" }
+      responses:
+        "200":
+          description: Product fields accepted by WooCommerce
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProductUpdateResult" }
+        "400": { description: Invalid product id or update field }
+        "401": { description: Unauthorized }
+        "502": { description: WooCommerce update failed or unreachable }
+
+  /uc/admin/products/{id}/media:
+    get:
+      operationId: listUcProductMedia
+      tags: [uc-admin]
+      summary: List team-managed media for a product
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Ordered team-managed media
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UcProductMedia" }
+        "400": { description: Invalid product id }
+        "403": { description: Admin access required }
+        "500": { description: Failed to load product media }
+    post:
+      operationId: attachUcProductMedia
+      tags: [uc-admin]
+      summary: Attach uploaded media to a product
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcProductMediaInput" }
+      responses:
+        "201":
+          description: Media attached
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProductMedia" }
+        "400": { description: "Invalid media URL, type, or uploaded object" }
+        "403": { description: Admin access required }
+        "500": { description: Failed to add product media }
+
+  /uc/admin/media/{mediaId}:
+    delete:
+      operationId: deleteUcProductMedia
+      tags: [uc-admin]
+      summary: Remove team-managed product media
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Media removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "400": { description: Invalid media id }
+        "403": { description: Admin access required }
+        "404": { description: Media not found }
+        "500": { description: Failed to delete product media }
+
+  /uc/uploads/request-url:
+    post:
+      operationId: requestUcUploadUrl
+      tags: [uc-admin]
+      summary: Request a presigned upload URL
+      description: Requires a bearer token, except for a valid water-test action token and assessment id.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcUploadRequest" }
+      responses:
+        "200":
+          description: Presigned upload details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcUploadResponse" }
+        "400": { description: "Missing, unsupported, or oversized file metadata" }
+        "401": { description: Authentication or assessment action token required }
+        "403": { description: Assessment owner required }
+        "500": { description: Failed to generate upload URL }
+
+  /uc/admin/inventory/wishlist-demand:
+    get:
+      operationId: listUcInventoryWishlistDemand
+      tags: [uc-admin]
+      summary: List product demand from active restock wishlist entries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Wishlist demand summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryWishlistDemand"
+        "401":
+          description: Unauthorized
+
+  /uc/admin/inventory/{productId}:
+    patch:
+      operationId: updateUcInventoryItem
+      tags: [uc-admin]
+      summary: Update a product's stock quantity in WooCommerce
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryStockUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryUpdateResult"
+        "400":
+          description: Invalid input
+        "401":
+          description: Unauthorized
+        "502":
+          description: WooCommerce unreachable
+
+  /uc/admin/inventory/sync:
+    post:
+      operationId: triggerUcInventorySync
+      tags: [uc-admin]
+      summary: Trigger the configured n8n inventory-sync webhook
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sync triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncTriggered"
+        "401":
+          description: Unauthorized
+        "422":
+          description: n8n webhook URL not configured
+
+  /admin/integrations:
+    get:
+      operationId: getAdminIntegrations
+      tags: [uc-admin]
+      summary: Get integration settings metadata (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationsSettings"
+        "401":
+          description: Unauthorized
+    patch:
+      operationId: updateAdminIntegrations
+      tags: [uc-admin]
+      summary: Update integration settings (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntegrationsSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /uc/admin/customers:
+    get:
+      operationId: listUcCustomers
+      tags: [uc-admin]
+      summary: List UC Companion customers with search and date-range filter (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by name, email, or normalized international phone number (case-insensitive)
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range start (inclusive)
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range end (inclusive)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcCustomerList"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Admin access required
+
+  /uc/admin/customers/export:
+    get:
+      operationId: exportUcCustomers
+      tags: [uc-admin]
+      summary: Export all UC Companion customers matching search and date filters as CSV (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by name, email, or normalized international phone number (case-insensitive)
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range start (inclusive)
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Registration date range end (inclusive)
+      responses:
+        "200":
+          description: Filtered customer CSV
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Invalid date filter
+        "401":
+          description: Unauthorized
+        "403":
+          description: Admin access required
+
+  /uc/admin/customers/{customerId}:
+    get:
+      operationId: getUcCustomer
+      tags: [uc-admin]
+      summary: Get a single UC customer with their orders and tickets (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcCustomerDetail"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Admin access required
+        "404":
+          description: Customer not found
+
+  /uc/admin/customers/count:
+    get:
+      operationId: getUcCustomersCount
+      tags: [uc-admin]
+      summary: Total registered UC Companion customers (non-deleted)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcCustomersCount"
+        "401":
+          description: Unauthorized
+
+  /uc/admin/users/{id}/temporary-password:
+    post:
+      operationId: issueUcTemporaryPassword
+      tags: [uc-admin]
+      summary: Issue a verified-channel, 24-hour temporary Companion password
+      description: |
+        Authorized ProjectHub staff may issue a temporary password only for an
+        active password-authenticated Companion account. The plaintext is
+        returned once to the operator and delivered through the selected
+        verified channel. Only a hash is retained; the resulting customer
+        session must complete a permanent password change before accessing
+        Companion features.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcTemporaryPasswordInput"
+      responses:
+        "200":
+          description: Temporary password issued and delivered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcTemporaryPasswordResult"
+        "202":
+          description: Legacy generic rejection response
+        "400":
+          description: Invalid customer id or delivery channel
+        "401":
+          description: Authentication required
+        "403":
+          description: Companion password issuance permission required
+        "422":
+          description: Account or selected destination is not eligible
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicActionableError" }
+        "502":
+          description: Delivery provider failed and no temporary credential remains active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicActionableError" }
+        "503":
+          description: WhatsApp is disconnected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicActionableError" }
+
+  /uc/admin/locations:
+    get:
+      operationId: listUcAdminLocations
+      tags: [uc-admin]
+      summary: List managed Companion service locations
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Managed locations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [locations]
+                properties:
+                  locations:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcLocation" }
+        "403": { description: Admin access required }
+    post:
+      operationId: createUcAdminLocation
+      tags: [uc-admin]
+      summary: Create a managed Companion service location
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcLocationInput" }
+      responses:
+        "201":
+          description: Location created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { location: { $ref: "#/components/schemas/UcLocation" } }
+        "400": { description: Invalid location fields }
+        "403": { description: Admin access required }
+  /uc/locations/{id}/ratings:
+    get:
+      operationId: getUcLocationRatingAggregate
+      tags: [uc-admin]
+      summary: Get privacy-safe community rating aggregates for a location
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200": { description: Rating aggregate, content: { application/json: { schema: { $ref: "#/components/schemas/UcLocationRatingAggregate" } } } }
+  /uc/locations/{id}/rating:
+    put:
+      operationId: upsertUcLocationRating
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UcLocationRatingInput" } } }
+      responses:
+        "200": { description: Rating saved }
+        "401": { description: Authentication required }
+        "400": { description: Invalid rating }
+  /uc/admin/locations/{id}:
+    patch:
+      operationId: updateUcAdminLocation
+      tags: [uc-admin]
+      summary: Partially update a managed Companion service location
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcLocationUpdateInput" }
+      responses:
+        "200":
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location: { $ref: "#/components/schemas/UcLocation" }
+                  verificationReset: { type: boolean }
+        "400": { description: Empty or invalid partial update }
+        "403": { description: Admin access required }
+        "404": { description: Location not found }
+
+  /uc/admin/location-rating-reports:
+    get:
+      operationId: listLocationRatingReports
+      tags: [uc-admin]
+      summary: List reports on community location ratings
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Location rating reports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, ratingId, reporterUserId, reason, createdAt]
+                      properties:
+                        id: { type: string }
+                        ratingId: { type: string }
+                        reporterUserId: { type: integer }
+                        reason: { type: string }
+                        detail: { type: string, nullable: true }
+                        createdAt: { type: string }
+
+  /uc/admin/location-ratings/{id}/moderation:
+    patch:
+      operationId: moderateLocationRating
+      tags: [uc-admin]
+      summary: Update the moderation status of a location rating
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [published, hidden, removed]
+      responses:
+        "200":
+          description: Rating updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rating:
+                    type: object
+                    required: [id, status, updatedAt]
+                    properties:
+                      id: { type: string }
+                      status: { type: string }
+                      updatedAt: { type: string }
+
+  /uc/admin/locations/{id}/assessment:
+    get:
+      operationId: getLocationAssessment
+      tags: [uc-admin]
+      summary: Get verified location assessment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assessment:
+                    $ref: "#/components/schemas/UcLocationAssessment"
+    put:
+      operationId: updateLocationAssessment
+      tags: [uc-admin]
+      summary: Create or update verified location assessment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcLocationAssessmentInput"
+      responses:
+        "200":
+          description: Assessment updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assessment:
+                    $ref: "#/components/schemas/UcLocationAssessment"
+
+  /admin/unsynced-registrations:
+    get:
+      operationId: listUnsyncedRegistrations
+      tags: [uc-admin]
+      summary: List durable registration records needing reconciliation
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Registration ledger records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/UnsyncedRegistration" }
+        "403": { description: Admin access required }
+
+  /admin/unsynced-registrations/retry:
+    post:
+      operationId: recoverUnsyncedRegistration
+      tags: [uc-admin]
+      summary: Link a durable registration to an account or create one safely
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnsyncedRegistrationRecoveryInput" }
+      responses:
+        "200": { description: Reconciliation result }
+        "400": { description: Invalid recovery input }
+        "403": { description: Admin access required }
+        "404": { description: Ledger record not found }
+        "409": { description: Identity conflict }
+
+  /admin/unsynced-registrations/clear-resolved:
+    post:
+      operationId: clearResolvedRegistrations
+      tags: [uc-admin]
+      summary: Atomically clear database-persisted resolved registration records
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: boolean, enum: [true] }
+      responses:
+        "200":
+          description: Number of records cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cleared]
+                properties: { cleared: { type: integer, minimum: 0 } }
+        "400": { description: Confirmation required }
+        "403": { description: Admin access required }
+
+  /uc/auth/change-password:
+    post:
+      operationId: completeUcTemporaryPasswordChange
+      tags: [uc-admin]
+      summary: Replace a temporary Companion password with a permanent password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcPermanentPasswordInput"
+      responses:
+        "200":
+          description: Permanent password saved and a fresh session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcPasswordChangeResult"
+        "400":
+          description: Invalid permanent password
+        "401":
+          description: Temporary session missing or expired
+
+  /uc/auth/complete-password-change:
+    post:
+      operationId: completeUcTemporaryPasswordChangeAlias
+      tags: [uc-admin]
+      summary: Alias for completing a temporary Companion password change
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcPermanentPasswordInput"
+      responses:
+        "200":
+          description: Permanent password saved and a fresh session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcPasswordChangeResult"
+        "400":
+          description: Invalid permanent password
+        "401":
+          description: Temporary session missing or expired
+
+  /uc/offline-clients:
+    get:
+      operationId: listUcOfflineClients
+      tags: [uc-admin]
+      summary: List offline sales and Companion account setup states
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Offline sales
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clients]
+                properties:
+                  clients:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcOfflineClient" }
+        "401": { description: Impact view access required }
+    post:
+      operationId: createUcOfflineClient
+      tags: [uc-admin]
+      summary: Record an offline sale and provision or link a Companion account
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcOfflineClientInput" }
+      responses:
+        "201":
+          description: Sale recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcOfflineClientResponse" }
+        "200":
+          description: Idempotent repeat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcOfflineClientResponse" }
+        "400": { description: Invalid sale or missing login identifier }
+        "409": { description: Account identity conflict }
+
+  /uc/offline-clients/{id}:
+    put:
+      operationId: updateUcOfflineClient
+      tags: [uc-admin]
+      summary: Update an offline sale
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcOfflineClientUpdateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcOfflineClientResponse" }
+        "400": { description: Invalid input }
+        "404": { description: Entry not found }
+
+  /uc/offline-clients/{id}/delivery-retry:
+    post:
+      operationId: retryUcOfflineClientDelivery
+      tags: [uc-admin]
+      summary: Issue a fresh credential and retry failed offline-sale delivery
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Delivery retry result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client: { $ref: "#/components/schemas/UcOfflineClient" }
+        "404": { description: Entry not found }
+        "409": { description: Sale is not eligible for retry }
+
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List team members
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Member"
+    post:
+      operationId: createMember
+      tags: [members]
+      summary: Create a team member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberInput"
+      responses:
+        "201":
+          description: Created member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+
+  /members/{id}:
+    get:
+      operationId: getMember
+      tags: [members]
+      summary: Get a team member
+      parameters:
+        - $ref: "#/components/parameters/MemberId"
+      responses:
+        "200":
+          description: Member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Update a team member
+      parameters:
+        - $ref: "#/components/parameters/MemberId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberUpdate"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteMember
+      tags: [members]
+      summary: Delete a team member
+      parameters:
+        - $ref: "#/components/parameters/MemberId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects
+      responses:
+        "200":
+          description: List of projects with progress info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectWithProgress"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /projects/{id}/summary:
+    get:
+      operationId: getProjectSummary
+      tags: [projects]
+      summary: Get task breakdown and progress for a project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+        "404":
+          description: Not found
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks, optionally filtered
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: assigneeId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TaskStatus"
+        - name: sourcePlatform
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get a task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Cross-project totals and status breakdown
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Recently created or updated tasks across all projects
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /anthropic/conversations:
+    get:
+      operationId: listAnthropicConversations
+      tags: [anthropic]
+      summary: List all conversations
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnthropicConversation"
+    post:
+      operationId: createAnthropicConversation
+      tags: [anthropic]
+      summary: Create a new conversation
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnthropicConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicConversation"
+  /anthropic/conversations/{id}:
+    get:
+      operationId: getAnthropicConversation
+      tags: [anthropic]
+      summary: Get conversation with messages
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicError"
+    delete:
+      operationId: deleteAnthropicConversation
+      tags: [anthropic]
+      summary: Delete a conversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicError"
+  /anthropic/conversations/{id}/messages:
+    get:
+      operationId: listAnthropicMessages
+      tags: [anthropic]
+      summary: List messages in a conversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnthropicMessage"
+    post:
+      operationId: sendAnthropicMessage
+      tags: [anthropic]
+      summary: Send a message and receive an AI response (SSE stream)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnthropicMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant response chunks
+          content:
+            text/event-stream: {}
+
+  /ai/query:
+    post:
+      operationId: aiQuery
+      tags: [ai-monitor]
+      summary: Inbound webhook — Ultra Clear AI asks a question about projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiQueryInput"
+      responses:
+        "200":
+          description: AI-generated answer with live project context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiQueryAnswer"
+
+  /ai/report:
+    get:
+      operationId: getAiReport
+      tags: [ai-monitor]
+      summary: Get the latest generated project report
+      responses:
+        "200":
+          description: Latest AI report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiReport"
+    post:
+      operationId: generateAiReport
+      tags: [ai-monitor]
+      summary: Generate a fresh AI project status report
+      responses:
+        "200":
+          description: Freshly generated report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiReport"
+
+  /ai/push:
+    post:
+      operationId: pushToOrchestrator
+      tags: [ai-monitor]
+      summary: Manually push current project summary to Ultra Clear AI orchestrator
+      responses:
+        "200":
+          description: Push result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPushResult"
+
+  /ai/pushes:
+    get:
+      operationId: listAiPushEvents
+      tags: [ai-monitor]
+      summary: List recent orchestrator push events (history board, newest first)
+      responses:
+        "200":
+          description: Push event history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiPushEvent"
+
+  /ai/echo:
+    post:
+      operationId: aiPushEcho
+      tags: [ai-monitor]
+      summary: Inbound status callback (echo) from the orchestrator — HMAC-SHA256 signed via X-Webhook-Signature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPushEchoInput"
+      responses:
+        "200":
+          description: Echo accepted, push record updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPushEchoAck"
+        "401":
+          description: Invalid or missing webhook signature
+        "404":
+          description: Unknown push id
+
+  # ─── Contacts ───────────────────────────────────────────────────
+  /contacts:
+    get:
+      operationId: listContacts
+      tags: [contacts]
+      summary: List all contacts in the unified ledger
+      responses:
+        "200":
+          description: List of contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contact"
+    post:
+      operationId: createContact
+      tags: [contacts]
+      summary: Create a new contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+
+  /contacts/{id}:
+    get:
+      operationId: getContact
+      tags: [contacts]
+      summary: Get a contact with their communication methods
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+      responses:
+        "200":
+          description: Contact with methods
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactWithMethods"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateContact
+      tags: [contacts]
+      summary: Update a contact
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactUpdate"
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteContact
+      tags: [contacts]
+      summary: Delete a contact
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /contacts/{id}/methods:
+    get:
+      operationId: listContactMethods
+      tags: [contacts]
+      summary: List communication methods for a contact
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+      responses:
+        "200":
+          description: List of methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactMethod"
+    post:
+      operationId: addContactMethod
+      tags: [contacts]
+      summary: Add a communication method to a contact
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactMethodInput"
+      responses:
+        "201":
+          description: Created method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactMethod"
+        "404":
+          description: Contact not found
+
+  /contacts/{id}/methods/{methodId}:
+    patch:
+      operationId: updateContactMethod
+      tags: [contacts]
+      summary: Update a communication method
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+        - name: methodId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactMethodUpdate"
+      responses:
+        "200":
+          description: Updated method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactMethod"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteContactMethod
+      tags: [contacts]
+      summary: Delete a communication method
+      parameters:
+        - $ref: "#/components/parameters/ContactId"
+        - name: methodId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ─── System Status / Watchdog ────────────────────────────────────
+  /admin/monitoring:
+    get:
+      operationId: getMonitoringSnapshot
+      tags: [system]
+      summary: Live monitoring snapshot — site checks, payment readiness, service status, problem counts
+      responses:
+        "200":
+          description: Current monitoring snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringSnapshot"
+
+  /system/status:
+    get:
+      operationId: listSystemStatus
+      tags: [system]
+      summary: List all platform connection statuses
+      responses:
+        "200":
+          description: List of platform statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SystemStatusRecord"
+    post:
+      operationId: createSystemStatus
+      tags: [system]
+      summary: Register a new platform to monitor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemStatusInput"
+      responses:
+        "201":
+          description: Created status record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatusRecord"
+
+  /system/status/{id}:
+    patch:
+      operationId: updateSystemStatus
+      tags: [system]
+      summary: Update a platform connection status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemStatusUpdate"
+      responses:
+        "200":
+          description: Updated status record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatusRecord"
+        "404":
+          description: Not found
+
+  /system/ping/{id}:
+    post:
+      operationId: pingPlatform
+      tags: [system]
+      summary: Manually trigger a watchdog ping for a platform
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ping result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatusRecord"
+        "404":
+          description: Not found
+
+  # ─── Notifications ───────────────────────────────────────────────
+  /notifications/logs:
+    get:
+      operationId: listNotificationLogs
+      tags: [notifications]
+      summary: List all dispatched notification logs
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of notification logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationLog"
+
+  /notifications/dispatch:
+    post:
+      operationId: dispatchNotification
+      tags: [notifications]
+      summary: Manually dispatch a notification to a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationDispatchInput"
+      responses:
+        "200":
+          description: Dispatch result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationDispatchResult"
+
+  # ─── Team Auth ───────────────────────────────────────────────────
+  /auth/change-passcode:
+    post:
+      operationId: changePasscode
+      tags: [whatsapp]
+      summary: Change the team passcode
+      description: |
+        Verifies the current passcode (checking the DB-stored bcrypt hash first,
+        then falling back to SESSION_SECRET) and stores a bcrypt hash of the new
+        passcode in team_settings.  Requires a valid team-session Bearer token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasscodeInput"
+      responses:
+        "200":
+          description: Passcode updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePasscodeResult"
+        "400":
+          description: Missing or too-short passcode
+        "401":
+          description: Current passcode incorrect or no valid session token
+
+  /auth/token:
+    post:
+      operationId: issueTeamToken
+      tags: [whatsapp]
+      summary: Exchange the team passcode for a signed team-session JWT
+      description: |
+        Validates the passcode against SESSION_SECRET and issues a short-lived
+        JWT with type "team-session".  Required before calling any WhatsApp
+        management or send routes.  Returns 503 if SESSION_SECRET is not
+        configured on the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamTokenRequest"
+      responses:
+        "200":
+          description: JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamTokenResponse"
+        "400":
+          description: Missing passcode
+        "401":
+          description: Invalid passcode
+        "503":
+          description: Auth not configured (SESSION_SECRET missing)
+
+  # ─── WhatsApp ────────────────────────────────────────────────────
+  /whatsapp/status:
+    get:
+      operationId: getWhatsAppStatus
+      tags: [whatsapp]
+      summary: Get current WhatsApp connection state
+      responses:
+        "200":
+          description: Current WhatsApp status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppStatus"
+
+  /whatsapp/connect:
+    post:
+      operationId: connectWhatsApp
+      tags: [whatsapp]
+      summary: Initiate WhatsApp pairing flow
+      responses:
+        "200":
+          description: Current WhatsApp status after connect attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppStatus"
+        "503":
+          description: WhatsApp could not be started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppRequestError"
+
+  /whatsapp/disconnect:
+    post:
+      operationId: disconnectWhatsApp
+      tags: [whatsapp]
+      summary: Log out and wipe the current WhatsApp session
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, state]
+                properties:
+                  ok: { type: boolean }
+                  state: { type: string }
+
+  /whatsapp/send:
+    post:
+      operationId: sendWhatsAppQuickMessage
+      tags: [whatsapp]
+      summary: Send a free-form WhatsApp message to a phone number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsAppSendInput"
+      responses:
+        "200":
+          description: Message queued / sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppSendResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        "503":
+          description: WhatsApp not connected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
+  # ─── Webhook Ingestion ───────────────────────────────────────────
+  /webhook/ingest:
+    post:
+      operationId: ingestWebhook
+      tags: [webhook]
+      summary: Receive event payloads from Team AI Embedded and other connected platforms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookPayload"
+      responses:
+        "200":
+          description: Ingestion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookIngestResult"
+        "400":
+          description: Validation failed
+
+  /uc/referrals/validate:
+    post:
+      operationId: validateUcReferralOrPromotionCode
+      tags: [uc-referrals]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 40 }
+      responses:
+        "200":
+          description: Explicit code validity and type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcCodeValidation" }
+        "401": { description: Authentication required }
+  /uc/referrals/my-code:
+    get:
+      operationId: getUcReferralCode
+      tags: [uc-referrals]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Authenticated account referral snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcReferralSnapshot" }
+        "401": { description: Authentication required }
+
+  /oauth/token:
+    post:
+      operationId: issueAgentClientToken
+      tags: [agent-oauth]
+      summary: Issue a short-lived private machine-agent token
+      description: Send client_id and client_secret using HTTP Basic authentication. Client secret post authentication is not accepted.
+      security: [{ clientBasic: [] }]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type: { type: string, enum: [client_credentials] }
+                scope: { type: string }
+      responses:
+        "200": { description: Token issued, content: { application/json: { schema: { $ref: "#/components/schemas/AgentToken" } } } }
+        "401": { description: Invalid client }
+        "429": { description: Rate limited }
+  /uc/ai/water-chat:
+    post:
+      operationId: createUcAlisonTurn
+      tags: [anthropic]
+      summary: Generate and persist one anonymous Alison turn
+      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlisonTurnInput" }
+      responses:
+        "200":
+          description: Generated or idempotently replayed Alison answer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlisonTurnResponse" }
+        "400": { description: Invalid messages or anonymous identifiers }
+        "401": { description: Customer authentication required }
+        "429": { description: Customer rate limit exceeded }
+        "502": { description: Alison generation or transcript persistence unavailable }
+  /oauth/clients:
+    get:
+      operationId: listAgentOauthClients
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Registered private clients, content: { application/json: { schema: { $ref: "#/components/schemas/AgentClientList" } } } }
+        "403": { description: Active ProjectHub administrator required }
+    post:
+      operationId: createAgentOauthClient
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentClientInput"
+      responses:
+        "201": { description: Client and one-time secret }
+        "400": { description: Invalid scope list }
+        "403": { description: Active ProjectHub administrator required }
+  /oauth/clients/{id}/rotate:
+    post:
+      operationId: rotateAgentOauthClient
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Rotated one-time secret }
+        "403": { description: Active ProjectHub administrator required }
+  /oauth/clients/{id}/suspend:
+    post:
+      operationId: suspendAgentOauthClient
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { status: { type: string, enum: [suspended, revoked] } }
+      responses:
+        "200": { description: Client suspended or revoked }
+        "403": { description: Active ProjectHub administrator required }
+  /oauth/audit:
+    get:
+      operationId: listAgentOauthAudit
+      tags: [agent-oauth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Audit entries }
+        "403": { description: Active ProjectHub administrator required }
+  /integrations/v1/monitor:
+    get:
+      operationId: getAgentMonitor
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Operational health }
+        "403": { description: Scope required }
+  /integrations/v1/companion/users:
+    get:
+      operationId: listAgentCompanionUsers
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Minimized non-deleted customer records }
+  /integrations/v1/interactions:
+    get:
+      operationId: listAgentInteractions
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Minimized interaction records }
+  /integrations/v1/alison/feedback:
+    get:
+      operationId: listAgentAlisonFeedback
+      tags: [agent-oauth]
+      security: [{ agentBearer: [] }]
+      responses:
+        "200": { description: Filtered Alison feedback records }
+  /integrations/v1/alison/chats:
+    get:
+      operationId: listAgentAlisonChats
+      tags: [agent-oauth]
+      summary: List anonymous Alison chat transcripts
+      description: Requires an opaque machine access token in the Authorization header and the alison.read scope. Chats are retained for 30 days.
+      security: [{ agentBearer: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          description: Opaque cursor returned as nextCursor by the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Anonymous Alison chats ordered newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlisonChatPage" }
+        "400": { description: Invalid cursor }
+        "401": { description: "Missing, invalid, expired, or revoked bearer token" }
+        "403": { description: Bearer token does not include alison.read }
+        "503": { description: Authorization audit could not be recorded }
+
+  /uc/guides:
+    get:
+      operationId: listPublishedUcGuides
+      tags: [uc-guides]
+      summary: List published Companion installation guides
+      responses:
+        "200":
+          description: Published guide index
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guides]
+                properties:
+                  guides:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcGuideSummary" }
+        "304": { description: Not modified }
+  /uc/guides/{slug}:
+    get:
+      operationId: getPublishedUcGuide
+      tags: [uc-guides]
+      summary: Get one published Companion installation guide
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Published guide
+          headers:
+            ETag: { schema: { type: string } }
+            Last-Modified: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guide]
+                properties:
+                  guide: { $ref: "#/components/schemas/UcGuide" }
+        "304": { description: Not modified }
+        "404": { description: Guide not found }
+  /uc/blog:
+    get:
+      operationId: listPublishedCompanionBlogArticles
+      tags: [companion-blog]
+      summary: List published Companion blog articles
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 10 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: category, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        "200":
+          description: Latest-first published article summaries and next-page cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlogArticlePage" }
+        "400": { description: Invalid pagination cursor }
+  /uc/blog/{slug}:
+    get:
+      operationId: getPublishedCompanionBlogArticle
+      tags: [companion-blog]
+      summary: Get a published Companion blog article by slug
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Immutable published article snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogArticle" }
+        "404": { description: Article not found or not published }
+  /uc/editor/blog:
+    get:
+      operationId: listEditorialBlogArticles
+      tags: [companion-blog]
+      summary: List editorial drafts, rejected articles, and published entries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, rejected, published] } }
+      responses:
+        "200":
+          description: Editorial queue
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [articles]
+                properties:
+                  articles:
+                    type: array
+                    items: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "401": { description: Active ProjectHub team session required }
+    post:
+      operationId: createEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Create a human article draft or import a .txt, .md, or .docx file
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogArticleInput" }
+      responses:
+        "201":
+          description: Editorial draft created; direct publication requires a live admin account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "400": { description: Invalid article or unsupported upload }
+        "401": { description: Active ProjectHub team session required }
+        "403": { description: Admin access required for direct publication }
+  /uc/editor/blog/{id}:
+    get:
+      operationId: getEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Read one editorial article and its history
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Editorial article and immutable action history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article, history]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+                  history: { type: array, items: { $ref: "#/components/schemas/BlogHistoryEntry" } }
+        "401": { description: Active ProjectHub team session required }
+        "404": { description: Article not found }
+    patch:
+      operationId: updateEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Save an editorial revision without changing the published snapshot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogArticleUpdate" }
+      responses:
+        "200":
+          description: Article revision saved for review
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "400": { description: Invalid article or sources }
+        "401": { description: Active ProjectHub team session required }
+        "404": { description: Article not found }
+  /uc/editor/blog/{id}/publish:
+    post:
+      operationId: publishEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Approve the latest article revision and publish its snapshot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Article revision published
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [article]
+                properties:
+                  article: { $ref: "#/components/schemas/BlogEditorialArticle" }
+        "400": { description: Article lacks publishable content or sources }
+        "401": { description: Admin authentication required }
+        "404": { description: Article not found }
+  /uc/editor/blog/{id}/reject:
+    post:
+      operationId: rejectEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Reject an article and record actionable reviewer feedback
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogRejectionInput" }
+      responses:
+        "200": { description: Article rejected with reviewer feedback }
+        "400": { description: Feedback is required }
+        "401": { description: Admin authentication required }
+        "404": { description: Article not found }
+  /uc/editor/blog/{id}/unpublish:
+    post:
+      operationId: unpublishEditorialBlogArticle
+      tags: [companion-blog]
+      summary: Remove a published article from the public feed
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Article unpublished }
+        "401": { description: Admin authentication required }
+        "404": { description: Article not found }
+  /uc/editor/blog/draft-from-brief:
+    post:
+      operationId: requestCompanionBlogDraftFromBrief
+      tags: [companion-blog]
+      summary: Queue sourced draft generation from a ProjectHub brief
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogBriefInput" }
+      responses:
+        "202":
+          description: Generation run queued; poll GET /uc/editor/blog/runs for completion or actionable errors
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlogRunResponse" }
+        "400": { description: Brief is invalid }
+        "401": { description: Active ProjectHub team session required }
+  /uc/editor/blog/runs:
+    get:
+      operationId: listCompanionBlogEditorialRuns
+      tags: [companion-blog]
+      summary: List weekly and on-demand editorial research and generation runs
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Latest run status and actionable failures
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs: { type: array, items: { $ref: "#/components/schemas/BlogRun" } }
+        "401": { description: Active ProjectHub team session required }
+  /integrations/v1/blog/topics:
+    post:
+      operationId: submitCompanionBlogTopicProposals
+      tags: [companion-blog]
+      summary: Submit bounded topic proposals for human review
+      security: [{ agentBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogTopicProposalsInput" }
+      responses:
+        "201": { description: Topic proposals recorded; agents cannot approve or publish }
+        "400": { description: Invalid topic proposals or source URLs }
+        "401": { description: Invalid agent token }
+        "403": { description: blog.submit scope required }
+  /integrations/v1/blog/drafts:
+    post:
+      operationId: submitCompanionBlogDrafts
+      tags: [companion-blog]
+      summary: Submit sourced drafts into the human review queue
+      security: [{ agentBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlogMachineDraftsInput" }
+      responses:
+        "201": { description: Drafts recorded for human review only }
+        "400": { description: Invalid or unsourced article draft }
+        "401": { description: Invalid agent token }
+        "403": { description: blog.submit scope required }
+  /uc/admin/guides:
+    get:
+      operationId: listUcAdminGuides
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: All draft and published guides
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guides]
+                properties:
+                  guides:
+                    type: array
+                    items: { $ref: "#/components/schemas/UcGuideSummary" }
+    post:
+      operationId: createUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcGuideInput" }
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guide]
+                properties: { guide: { $ref: "#/components/schemas/UcGuide" } }
+        "400": { description: Invalid guide or media metadata }
+        "403": { description: Active administrator required }
+  /uc/admin/guides/{id}:
+    get:
+      operationId: getUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: Draft or published guide
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guide]
+                properties: { guide: { $ref: "#/components/schemas/UcGuide" } }
+        "404": { description: Guide not found }
+    put:
+      operationId: updateUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcGuideInput" }
+      responses:
+        "200": { description: Guide saved }
+        "400": { description: Invalid guide or media metadata }
+        "403": { description: Active administrator required }
+        "404": { description: Guide not found }
+  /uc/admin/guides/{id}/publish:
+    post:
+      operationId: publishUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Guide published }
+        "400": { description: Guide content or media is invalid }
+        "403": { description: Active administrator required }
+        "404": { description: Guide not found }
+  /uc/admin/guides/{id}/unpublish:
+    post:
+      operationId: unpublishUcAdminGuide
+      tags: [uc-guides]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Guide unpublished }
+        "403": { description: Active administrator required }
+  /uc/customer/lifecycle/lookup:
+    get:
+      operationId: lookupCustomerLifecycle
+      tags: [customer-lifecycle]
+      summary: Look up authenticated customer purchases eligible for filter registration
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer-scoped purchase matches and identity status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerLifecycleLookup" }
+        "401": { description: Authentication required }
+        "409": { description: Customer identity requires staff reconciliation }
+
+  /uc/customer/filters/register:
+    post:
+      operationId: registerCustomerFilterFromPurchase
+      tags: [customer-lifecycle]
+      summary: Register one filter from an eligible canonical purchase line
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VerifiedFilterRegistrationInput" }
+      responses:
+        "201":
+          description: Verified filter registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CanonicalFilterRegistration" }
+        "400": { description: Invalid registration input }
+        "401": { description: Authentication required }
+        "409": { description: Purchase line is already registered or ownership conflicts }
+
+  /uc/customer/legacy-reviews:
+    get:
+      operationId: listCustomerLegacyRegistrationReviews
+      tags: [customer-lifecycle]
+      summary: List legacy registration reviews owned by the authenticated customer
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer-scoped review statuses and messages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacyRegistrationReviewList" }
+        "401": { description: Authentication required }
+    post:
+      operationId: submitCustomerLegacyRegistrationReview
+      tags: [customer-lifecycle]
+      summary: Submit unmatched legacy purchase details for staff review
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegacyRegistrationSubmissionInput" }
+      responses:
+        "202":
+          description: Review submitted and pending staff decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacyRegistrationStatus" }
+        "400": { description: Invalid evidence metadata }
+        "401": { description: Authentication required }
+        "409": { description: Idempotency key conflict or duplicate review }
+
+  /uc/customer/history:
+    get:
+      operationId: getCanonicalCustomerHistory
+      tags: [customer-lifecycle]
+      summary: Get canonical customer purchases, filters, maintenance, receipts, and impact
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Complete history for the authenticated customer only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CanonicalCustomerHistory" }
+        "401": { description: Authentication required }
+
+  /uc/customer/impact/share:
+    get:
+      operationId: getCanonicalImpactShare
+      tags: [customer-lifecycle]
+      summary: Get verified personal and global impact for Share My Impact
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Share payload with validated referral attribution metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImpactSharePayload" }
+        "401": { description: Authentication required }
+
+  /uc/customer/location-tier-events:
+    post:
+      operationId: recordLocationTierAnalytics
+      tags: [customer-lifecycle]
+      summary: Record a privacy-safe nearby-location tier outcome
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LocationTierAnalyticsInput" }
+      responses:
+        "202": { description: Event accepted without storing customer coordinates }
+        "400": { description: Invalid coarse analytics payload }
+        "401": { description: Authentication required }
+
+  /uc/admin/customer-lifecycle/reviews:
+    get:
+      operationId: listLifecycleRegistrationReviews
+      tags: [customer-lifecycle]
+      summary: List legacy registration reviews for ProjectHub staff
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ReviewStatus" } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Paginated staff review queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffReviewQueue" }
+        "401": { description: Authentication required }
+        "403": { description: Lifecycle review permission required }
+
+  /uc/admin/customer-lifecycle/reviews/{reviewId}/decision:
+    post:
+      operationId: decideLifecycleRegistrationReview
+      tags: [customer-lifecycle]
+      summary: Apply an approved DB review decision to a legacy review
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reviewId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegacyReviewDecisionInput" }
+      responses:
+        "200":
+          description: Idempotent review decision result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffLegacyRegistrationReview" }
+        "400": { description: Invalid decision or missing reason }
+        "401": { description: Authentication required }
+        "403": { description: Lifecycle review permission required }
+        "404": { description: Review not found }
+        "409": { description: Review is stale or ownership conflicts }
+
+  /uc/admin/customer-lifecycle/identity-conflicts:
+    get:
+      operationId: listLifecycleIdentityConflicts
+      tags: [customer-lifecycle]
+      summary: List unresolved identity conflicts without exposing credentials
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Paginated identity conflict queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityConflictQueue" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/admin/customer-lifecycle/identity-conflicts/{conflictId}/resolve:
+    post:
+      operationId: resolveLifecycleIdentityConflict
+      tags: [customer-lifecycle]
+      summary: Resolve one identity conflict with an audited reason
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conflictId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityConflictResolutionInput" }
+      responses:
+        "200":
+          description: Conflict resolution
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityConflict" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+        "404": { description: Conflict not found }
+
+  /uc/admin/customer-lifecycle/reconciliation-conflicts:
+    get:
+      operationId: listLifecycleReconciliationConflicts
+      tags: [customer-lifecycle]
+      summary: List unresolved order and receipt reconciliation conflicts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, in_review, resolved] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Paginated reconciliation queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationConflictQueue" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/admin/customer-lifecycle/mission-control:
+    get:
+      operationId: getCustomerLifecycleMissionControl
+      tags: [customer-lifecycle]
+      summary: Get aggregate lifecycle integrity indicators and queue counts
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Privacy-safe mission-control indicators
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MissionControlIndicators" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/admin/customer-lifecycle/timeline:
+    get:
+      operationId: getCustomerLifecycleTimeline
+      tags: [customer-lifecycle]
+      summary: Reconstruct a customer, purchase, filter, and impact timeline
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: customerId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Timeline without secrets or raw evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerLifecycleTimeline" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+        "404": { description: Customer not found }
+
+  /uc/admin/customer-lifecycle/audit:
+    get:
+      operationId: listCustomerLifecycleAuditEvents
+      tags: [customer-lifecycle]
+      summary: List audited lifecycle mutations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: resourceType, in: query, schema: { type: string } }
+        - { name: resourceId, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Audit events with redacted values
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventPage" }
+        "401": { description: Authentication required }
+        "403": { description: Mission control permission required }
+
+  /uc/customer-lifecycle/config:
+    get:
+      operationId: getCustomerLifecycleFeatureConfig
+      tags: [customer-lifecycle]
+      summary: Get non-sensitive customer lifecycle feature availability
+      responses:
+        "200":
+          description: Public feature availability; secrets and internal settings are excluded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerLifecycleFeatureConfig" }
+
+components:
+  parameters:
+    MemberId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    ContactId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+  securitySchemes:
+    clientBasic:
+      type: http
+      scheme: basic
+    bearerAuth:
+      type: http
+      scheme: bearer
+    agentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+
+  schemas:
+    BlogSource:
+      type: object
+      required: [title, url]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        publisher: { type: string, maxLength: 120 }
+        url: { type: string, pattern: '^https:\x2f\x2f.+$' }
+
+    BlogArticle:
+      type: object
+      required: [id, slug, title, summary, body, category, tags, sources, publishedAt, version]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        body: { type: string }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        sources: { type: array, items: { $ref: "#/components/schemas/BlogSource" } }
+        publishedAt: { type: string, format: date-time }
+        version: { type: string }
+
+    BlogArticleSummary:
+      type: object
+      required: [id, slug, title, summary, category, tags, publishedAt, version]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        publishedAt: { type: string, format: date-time }
+        version: { type: string }
+
+    BlogArticlePage:
+      type: object
+      required: [articles, nextCursor]
+      properties:
+        articles: { type: array, items: { $ref: "#/components/schemas/BlogArticleSummary" } }
+        nextCursor: { type: ["string", "null"] }
+
+    BlogEditorialArticle:
+      type: object
+      required: [id, slug, title, summary, body, content, category, tags, sources, origin, status, rationale, rejectionFeedback, createdBy, updatedBy, version, publishedAt, publishedSnapshot, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        body: { type: string }
+        content: { type: string, description: "ProjectHub editor alias for body" }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        sources: { type: array, items: { $ref: "#/components/schemas/BlogSource" } }
+        origin: { type: string, enum: [human, upload, brief, weekly, agent] }
+        status: { type: string, enum: [draft, rejected, published] }
+        rationale: { type: ["string", "null"] }
+        rejectionFeedback: { type: ["string", "null"] }
+        createdBy: { type: string }
+        updatedBy: { type: string }
+        version: { type: string }
+        publishedAt: { type: ["string", "null"], format: date-time }
+        publishedSnapshot: { oneOf: [{ $ref: "#/components/schemas/BlogArticle" }, { type: "null" }] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BlogArticleInput:
+      type: object
+      properties:
+        slug: { type: string, maxLength: 120 }
+        title: { type: string, maxLength: 200 }
+        summary: { type: string, maxLength: 500 }
+        body: { type: string, maxLength: 50000 }
+        content: { type: string, maxLength: 50000, description: "ProjectHub editor alias for body" }
+        category: { type: string, maxLength: 80 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        sources: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+        rationale: { type: string, maxLength: 1000 }
+        directPublish: { type: boolean }
+        filename: { type: string, maxLength: 255 }
+        base64Content: { type: string, maxLength: 6000000 }
+
+    BlogArticleUpdate:
+      type: object
+      required: [title]
+      properties:
+        slug: { type: string, maxLength: 120 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, maxLength: 500 }
+        body: { type: string, minLength: 1, maxLength: 50000 }
+        content: { type: string, minLength: 1, maxLength: 50000, description: "ProjectHub editor alias for body" }
+        category: { type: string, maxLength: 80 }
+        tags: { type: array, maxItems: 12, items: { type: string, maxLength: 40 } }
+        sources: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+        rationale: { type: string, maxLength: 1000 }
+
+    BlogHistoryEntry:
+      type: object
+      required: [id, actorId, action, rationale, snapshot, createdAt]
+      properties:
+        id: { type: string }
+        actorId: { type: string }
+        action: { type: string }
+        rationale: { type: ["string", "null"] }
+        snapshot: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    BlogRejectionInput:
+      type: object
+      required: [feedback]
+      properties:
+        feedback: { type: string, minLength: 1, maxLength: 1000 }
+
+    BlogBriefInput:
+      type: object
+      required: [brief]
+      properties:
+        brief: { type: string, minLength: 10, maxLength: 1000 }
+        idempotencyKey: { type: string, maxLength: 120 }
+
+    BlogRun:
+      type: object
+      required: [id, runKey, runType, status, requestedBy, brief, resultSummary, error, topics, createdAt, startedAt, completedAt]
+      properties:
+        id: { type: string }
+        runKey: { type: string }
+        runType: { type: string, enum: [weekly, brief] }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        requestedBy: { type: ["string", "null"] }
+        brief: { type: ["string", "null"] }
+        resultSummary: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+        topics: { type: array, items: { type: object, additionalProperties: true } }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+
+    BlogRunResponse:
+      type: object
+      required: [run, reused]
+      properties:
+        run: { $ref: "#/components/schemas/BlogRun" }
+        reused: { type: boolean }
+
+    BlogTopicProposal:
+      type: object
+      required: [topic, rationale, sources]
+      properties:
+        topic: { type: string, minLength: 1, maxLength: 160 }
+        rationale: { type: string, minLength: 1, maxLength: 1000 }
+        sources: { type: array, minItems: 1, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+
+    BlogTopicProposalsInput:
+      type: object
+      required: [topics]
+      properties:
+        topics: { type: array, minItems: 1, maxItems: 10, items: { $ref: "#/components/schemas/BlogTopicProposal" } }
+
+    BlogMachineArticleInput:
+      allOf:
+        - { $ref: "#/components/schemas/BlogArticleInput" }
+        - type: object
+          required: [title, body, sources]
+          properties:
+            title: { type: string, minLength: 1, maxLength: 200 }
+            body: { type: string, minLength: 1, maxLength: 50000 }
+            sources: { type: array, minItems: 1, maxItems: 8, items: { $ref: "#/components/schemas/BlogSource" } }
+
+    BlogMachineDraftsInput:
+      type: object
+      required: [articles]
+      properties:
+        articles: { type: array, minItems: 1, maxItems: 3, items: { $ref: "#/components/schemas/BlogMachineArticleInput" } }
+
+    AlisonTurnInput:
+      type: object
+      required: [messages, conversationId, turnId]
+      properties:
+        conversationId:
+          type: string
+          minLength: 16
+          maxLength: 128
+          pattern: "^[A-Za-z0-9_-]+$"
+        turnId:
+          type: string
+          minLength: 16
+          maxLength: 128
+          pattern: "^[A-Za-z0-9_-]+$"
+        messages:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [role, content]
+            properties:
+              role: { type: string, enum: [user, assistant] }
+              content: { type: string, minLength: 1 }
+        isRetry: { type: boolean, default: false }
+    AlisonTurnResponse:
+      type: object
+      required: [reply, suggestions]
+      properties:
+        reply: { type: string }
+        suggestions:
+          type: array
+          items: { type: string }
+    AlisonTranscriptMessage:
+      type: object
+      required: [role, content, createdAt]
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+    AlisonChat:
+      type: object
+      required: [conversationId, createdAt, updatedAt, messages]
+      properties:
+        conversationId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/AlisonTranscriptMessage" }
+    AlisonChatPage:
+      type: object
+      required: [chats, nextCursor]
+      properties:
+        chats:
+          type: array
+          items: { $ref: "#/components/schemas/AlisonChat" }
+        nextCursor: { type: [string, "null"] }
+    AgentToken:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in: { type: integer }
+        scope: { type: string }
+    AgentClientInput:
+      type: object
+      required: [name, scopes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [companion.monitor.read, companion.users.read, interactions.read, alison.read]
+        expiresAt: { type: string, format: date-time }
+    AgentClient:
+      type: object
+      required: [id, name, scopes, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        scopes: { type: array, items: { type: string } }
+        status: { type: string, enum: [active, suspended, revoked] }
+        expiresAt: { type: [string, "null"], format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    AgentClientList:
+      type: object
+      required: [clients]
+      properties:
+        clients: { type: array, items: { $ref: "#/components/schemas/AgentClient" } }
+    UcCodeValidation:
+      type: object
+      required: [valid, type, discountPercent, label]
+      properties:
+        valid: { type: boolean }
+        type: { type: [string, "null"], enum: [referral, promotion, null] }
+        discountPercent: { type: integer, minimum: 0, maximum: 100 }
+        label: { type: string }
+    UcReferralSnapshot:
+      type: object
+      properties:
+        code: { type: [string, "null"] }
+        referredCount: { type: integer }
+        conversions: { type: integer }
+        creditsEarnedKes: { type: integer }
+        usedReferralCode: { type: [string, "null"] }
+    InstantWaterSource:
+      type: string
+      enum: [municipal, borehole, shallow, vendor, bottled, rain]
+
+    InstantWaterConcern:
+      type: string
+      enum: [scale, taste, cloudy, skin, safety, cost]
+
+    InstantWaterSetting:
+      type: string
+      enum: [home, rental, salon, office, hospitality, school, resell]
+
+    InstantWaterAssessmentAnswers:
+      type: object
+      additionalProperties: false
+      required: [country, area, source, concern, setting]
+      properties:
+        country: { type: string, minLength: 2, maxLength: 80 }
+        area: { type: string, minLength: 1, maxLength: 160 }
+        source: { $ref: "#/components/schemas/InstantWaterSource" }
+        concern: { $ref: "#/components/schemas/InstantWaterConcern" }
+        symptom:
+          type: string
+          enum: [none, scale, taste, cloudy, skin, safety]
+        useContext:
+          type: string
+          enum: [drinking, cooking, bathing, mixed]
+        setting: { $ref: "#/components/schemas/InstantWaterSetting" }
+
+    PublicInstantWaterAssessmentInput:
+      type: object
+      additionalProperties: false
+      required: [firstName, phone, consent, idempotencyKey, answers]
+      properties:
+        firstName:
+          $ref: "#/components/schemas/InstantWaterFirstName"
+        phone:
+          $ref: "#/components/schemas/InstantWaterPhone"
+        consent: { type: boolean, const: true }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        consentVersion: { type: string, maxLength: 40, default: instant-water-check-v1 }
+        sourceAttribution:
+          type: object
+          additionalProperties: false
+          properties:
+            src: { type: string, maxLength: 80 }
+            utmSource: { type: string, maxLength: 80 }
+            utmMedium: { type: string, maxLength: 80 }
+            utmCampaign: { type: string, maxLength: 80 }
+            utmContent: { type: string, maxLength: 80 }
+        answers:
+          $ref: "#/components/schemas/InstantWaterAssessmentAnswers"
+
+    AuthenticatedInstantWaterAssessmentInput:
+      type: object
+      additionalProperties: false
+      required: [answers, idempotencyKey, firstName, phone]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        answers:
+          $ref: "#/components/schemas/InstantWaterAssessmentAnswers"
+        firstName:
+          $ref: "#/components/schemas/InstantWaterFirstName"
+        phone:
+          $ref: "#/components/schemas/InstantWaterPhone"
+
+    InstantWaterFirstName:
+      type: string
+      minLength: 2
+      maxLength: 80
+      pattern: '^(?![0-9]+$).+$'
+      x-uc-validator: instant-water-first-name@1
+      description: |
+        Authoritative identity policy: trim the value, normalize it to Unicode NFC,
+        then require 2-80 Unicode code points. The first character and every
+        segment must be a Unicode letter followed only by Unicode letters or
+        combining marks. Segments may be separated by exactly one ASCII space,
+        straight or curly apostrophe, or hyphen. Reject punctuation-only,
+        whitespace-only, numeric-only, control/separator-containing, repeated
+        runs of three or more repeated characters, repeated-separator,
+        leading-separator, and trailing-separator values. The portable pattern above is only a coarse numeric-only
+        prefilter; x-uc-validator is authoritative when the exact Unicode and
+        repetition semantics cannot be represented by standard OpenAPI.
+
+    InstantWaterPhone:
+      type: string
+      minLength: 7
+      maxLength: 40
+      pattern: '^\+?[ () .-]*[0-9](?:[ () .-]*[0-9]){6,38}$'
+      x-uc-validator: instant-water-phone@1
+      description: |
+         Authoritative identity policy: trim the value and normalize it to E.164
+         using the selected answers.country. International values identify their
+         country from the calling code; local values are interpreted in the
+         selected country. Accept only possible, valid numbers for that country,
+         allowing formatting characters but rejecting repeated separators,
+         malformed parentheses, and mismatched country calling codes. The
+         portable pattern above is only a coarse prefilter;
+         x-uc-validator is authoritative.
+
+    InstantWaterBands:
+      type: object
+      required: [hardness, taste, sediment, microbial]
+      properties:
+        hardness: { type: string, enum: [Low, Moderate, High] }
+        taste: { type: string, enum: [Low, Moderate, High] }
+        sediment: { type: string, enum: [Low, Moderate, High] }
+        microbial: { type: string, enum: [Low, Moderate, High] }
+
+    InstantWaterAssessmentCreated:
+      type: object
+      required: [assessmentId, reference, result, resultToken, resultTokenExpiresAt]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string, pattern: "^WT-[A-Za-z0-9-]+$" }
+        resultToken: { type: string, writeOnly: true }
+        resultTokenExpiresAt: { type: string, format: date-time }
+        result:
+          $ref: "#/components/schemas/PublicInstantWaterAssessmentResult"
+
+    AuthenticatedInstantWaterAssessmentCreated:
+      type: object
+      required: [assessmentId, reference, result]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string, pattern: "^WT-[A-Za-z0-9-]+$" }
+        result:
+          $ref: "#/components/schemas/PublicInstantWaterAssessmentResult"
+
+    PublicInstantWaterAssessmentResult:
+      type: object
+      required:
+        [reference, rulesVersion, bands, summary, recommendation, disclaimer, provenance, serviceAvailable]
+      properties:
+        reference: { type: string }
+        rulesVersion: { type: string, enum: [instant-water-check-v1] }
+        bands: { $ref: "#/components/schemas/InstantWaterBands" }
+        summary: { type: string }
+        areaFlag:
+          type: string
+          enum: [none, hard_groundwater, rift_valley_fluoride]
+        recommendation:
+          type: object
+          required: [name, explanation]
+          properties:
+            name: { type: string }
+            explanation: { type: string }
+        disclaimer: { type: string }
+        provenance:
+          type: string
+          enum: [general_indicative, reviewed_regional_guidance]
+        serviceAvailable: { type: boolean }
+        physicalTestStatus: { type: string }
+
+    InstantWaterVerificationRequestInput:
+      type: object
+      additionalProperties: false
+      required: [channel, idempotencyKey]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        channel: { type: string, enum: [whatsapp, sms] }
+        smsConsent: { type: boolean, description: Required when channel is sms }
+
+    InstantWaterVerificationRequested:
+      type: object
+      required: [accepted, channel]
+      properties:
+        accepted: { type: boolean }
+        channel: { type: string, enum: [whatsapp, sms] }
+        retryAfterSeconds: { type: integer, minimum: 0 }
+
+    InstantWaterVerificationConfirmInput:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { type: string, pattern: "^[0-9]{6}$" }
+
+    InstantWaterVerificationConfirmed:
+      type: object
+      required: [verified, actionToken, actionTokenExpiresAt]
+      properties:
+        verified: { type: boolean }
+        actionToken: { type: string, writeOnly: true }
+        actionTokenExpiresAt: { type: string, format: date-time }
+        accountLinkState:
+          type: string
+          enum: [verified_unmatched, attached, ambiguous_match]
+        handoffToken:
+          type: string
+          writeOnly: true
+          description: One-time short-lived account handoff credential, returned only for verified_unmatched.
+
+    InstantWaterAssessmentHandoffConsumeInput:
+      type: object
+      additionalProperties: false
+      required: [handoffToken]
+      properties:
+        handoffToken: { type: string, minLength: 32, maxLength: 200 }
+
+    InstantWaterAssessmentAttachInput:
+      type: object
+      additionalProperties: false
+      properties:
+        actionToken: { type: string, writeOnly: true }
+        resultToken:
+          type: string
+          writeOnly: true
+          description: Public token may be combined with a signed-in account's already verified matching phone; it cannot authorize attachment alone.
+
+    InstantWaterPhysicalTestRequestInput:
+      type: object
+      additionalProperties: false
+      required: [serviceAddress, preferredContactTime, acknowledgement, idempotencyKey]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        actionToken: { type: string, writeOnly: true }
+        serviceAddress: { type: string, minLength: 5, maxLength: 300 }
+        preferredContactTime: { type: string, minLength: 1, maxLength: 120 }
+        acknowledgement: { type: boolean, const: true }
+        mediaReferences:
+          type: array
+          maxItems: 7
+          items:
+            type: object
+            required: [reference, mediaType]
+            properties:
+              reference: { type: string, maxLength: 300 }
+              mediaType: { type: string, enum: [jpg, png, webp, mp4, mov, webm] }
+
+    InstantWaterPhysicalTestResponse:
+      type: object
+      required: [assessmentId, reference, serviceState]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string }
+        serviceState:
+          type: string
+          enum: [instant_result_ready, follow_up_requested, physical_test_requested, scheduled, completed, closed]
+        ticketId: { type: string }
+
+    InstantWaterAssessment:
+      type: object
+      required: [assessmentId, reference, bands, accountLinkState, serviceState, createdAt]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string }
+        bands: { $ref: "#/components/schemas/InstantWaterBands" }
+        accountLinkState: { type: string }
+        serviceState: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    InstantWaterAssessmentHistory:
+      type: object
+      required: [assessments]
+      properties:
+        assessments:
+          type: array
+          items: { $ref: "#/components/schemas/InstantWaterAssessment" }
+
+    InstantWaterLatestSummary:
+      type: object
+      required: [assessment]
+      properties:
+        assessment:
+          oneOf:
+            - $ref: "#/components/schemas/InstantWaterAssessment"
+            - type: "null"
+
+    ProjectHubInstantWaterList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectHubInstantWaterSummary" }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    ProjectHubInstantWaterSummary:
+      type: object
+      required: [assessmentId, reference, bands, area, serviceState, accountLinkState, updatedAt]
+      properties:
+        assessmentId: { type: string }
+        reference: { type: string }
+        firstName: { type: string }
+        maskedPhone: { type: string }
+        country: { type: string }
+        area: { type: string }
+        source: { $ref: "#/components/schemas/InstantWaterSource" }
+        concern: { $ref: "#/components/schemas/InstantWaterConcern" }
+        bands: { $ref: "#/components/schemas/InstantWaterBands" }
+        serviceState: { type: string }
+        accountLinkState: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProjectHubInstantWaterDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProjectHubInstantWaterSummary"
+        - type: object
+          properties:
+            phone: { type: string }
+            consentVersion: { type: string }
+            sourceAttribution: { type: object, additionalProperties: true }
+            serviceAddress: { type: string }
+            preferredContactTime: { type: string }
+            mediaReferences:
+              type: array
+              items: { $ref: "#/components/schemas/ProjectHubInstantWaterMediaReference" }
+
+    ProjectHubInstantWaterMediaReference:
+      type: object
+      additionalProperties: false
+      required: [reference, mediaType, downloadUrl]
+      properties:
+        reference:
+          type: string
+          description: Opaque private evidence reference; never a public object URL.
+        mediaType:
+          type: string
+          enum: [jpg, png, webp, mp4, mov, webm]
+        downloadUrl:
+          type: string
+          format: uri-reference
+          readOnly: true
+          description: Authorized private download route; not a public storage URL.
+
+    ProjectHubInstantWaterUpdateInput:
+      type: object
+      additionalProperties: false
+      required: [serviceState, expectedUpdatedAt]
+      properties:
+        serviceState:
+          type: string
+          enum: [instant_result_ready, follow_up_requested, physical_test_requested, scheduled, completed, closed]
+        expectedUpdatedAt: { type: string, format: date-time }
+        internalNote: { type: string, maxLength: 2000 }
+
+    UcOrderCustomerStageInput:
+      type: object
+      required: [stage, idempotencyKey]
+      properties:
+        stage: { type: string, enum: [accepted, shipped, delivered] }
+        idempotencyKey: { type: string }
+
+    UcWaterTestCustomerStageInput:
+      type: object
+      required: [stage, idempotencyKey]
+      properties:
+        stage: { type: string, enum: [accepted, conducted, result_sent] }
+        idempotencyKey: { type: string }
+        resultDeliveryReference: { type: string, description: Required for result_sent }
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    TaskStatus:
+      type: string
+      enum: [todo, in_progress, in_review, done]
+
+    TaskPriority:
+      type: string
+      enum: [low, medium, high, urgent]
+
+    ProjectStatus:
+      type: string
+      enum: [planning, active, on_hold, completed]
+
+    Member:
+      type: object
+      required: [id, name, email, role, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    MemberInput:
+      type: object
+      required: [name, email, role]
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string, minLength: 1 }
+        role: { type: string, minLength: 1 }
+
+    MemberUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string, minLength: 1 }
+        role: { type: string, minLength: 1 }
+
+    Project:
+      type: object
+      required: [id, name, description, status, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        createdAt: { type: string, format: date-time }
+
+    ProjectWithProgress:
+      allOf:
+        - $ref: "#/components/schemas/Project"
+        - type: object
+          required: [taskCount, doneCount, progressPercent]
+          properties:
+            taskCount: { type: integer }
+            doneCount: { type: integer }
+            progressPercent: { type: number }
+
+    ProjectInput:
+      type: object
+      required: [name, description, status]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        dueDate:
+          type: ["string", "null"]
+          format: date
+
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        dueDate:
+          type: ["string", "null"]
+          format: date
+
+    ProjectSummary:
+      type: object
+      required:
+        [
+          projectId,
+          totalTasks,
+          progressPercent,
+          statusBreakdown,
+          priorityBreakdown,
+          overdueCount,
+        ]
+      properties:
+        projectId: { type: integer }
+        totalTasks: { type: integer }
+        progressPercent: { type: number }
+        statusBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+        priorityBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+        overdueCount: { type: integer }
+
+    Task:
+      type: object
+      required:
+        [
+          id,
+          projectId,
+          title,
+          description,
+          status,
+          priority,
+          assigneeId,
+          dueDate,
+          sourcePlatform,
+          deliveryFormat,
+          notifyVia,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: integer }
+        projectId: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        assigneeId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        sourcePlatform:
+          type: ["string", "null"]
+        resourceRequired: {}
+        deliveryFormat:
+          type: ["string", "null"]
+        notifyVia:
+          type: ["string", "null"]
+        assignmentEmailStatus:
+          type: string
+          enum: [sent, failed, skipped]
+        assignmentEmailError:
+          type: ["string", "null"]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    TaskInput:
+      type: object
+      required: [projectId, title, status, priority]
+      properties:
+        projectId: { type: integer }
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        assigneeId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        sourcePlatform:
+          type: ["string", "null"]
+        resourceRequired: {}
+        deliveryFormat:
+          type: ["string", "null"]
+        notifyVia:
+          type: ["string", "null"]
+
+    TaskUpdate:
+      type: object
+      properties:
+        projectId: { type: integer }
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        assigneeId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        sourcePlatform:
+          type: ["string", "null"]
+        resourceRequired: {}
+        deliveryFormat:
+          type: ["string", "null"]
+        notifyVia:
+          type: ["string", "null"]
+
+    DashboardSummary:
+      type: object
+      required:
+        [
+          totalProjects,
+          activeProjects,
+          totalTasks,
+          overdueTasks,
+          statusBreakdown,
+          tasksDueThisWeek,
+        ]
+      properties:
+        totalProjects: { type: integer }
+        activeProjects: { type: integer }
+        totalTasks: { type: integer }
+        overdueTasks: { type: integer }
+        tasksDueThisWeek: { type: integer }
+        statusBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+
+    ActivityItem:
+      type: object
+      required:
+        [
+          taskId,
+          taskTitle,
+          projectId,
+          projectName,
+          status,
+          assigneeName,
+          updatedAt,
+        ]
+      properties:
+        taskId: { type: integer }
+        taskTitle: { type: string }
+        projectId: { type: integer }
+        projectName: { type: string }
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        assigneeName:
+          type: ["string", "null"]
+        updatedAt: { type: string, format: date-time }
+
+    AnthropicConversation:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, title, createdAt]
+    AnthropicMessage:
+      type: object
+      properties:
+        id: { type: integer }
+        conversationId: { type: integer }
+        role: { type: string }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, conversationId, role, content, createdAt]
+    AnthropicConversationInput:
+      type: object
+      properties:
+        title: { type: string, maxLength: 80 }
+      required: [title]
+    AnthropicMessageInput:
+      type: object
+      properties:
+        content: { type: string }
+      required: [content]
+    AnthropicConversationWithMessages:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        createdAt: { type: string, format: date-time }
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnthropicMessage"
+      required: [id, title, createdAt, messages]
+    AnthropicError:
+      type: object
+      properties:
+        error: { type: string }
+      required: [error]
+
+    AiQueryInput:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string, minLength: 1 }
+        source:
+          type: string
+          description: Identifier of the calling agent (e.g. "orchestrator", "analytics-agent")
+
+    AiQueryAnswer:
+      type: object
+      required: [answer, generatedAt]
+      properties:
+        answer: { type: string }
+        generatedAt: { type: string, format: date-time }
+        source: { type: string }
+
+    AiReport:
+      type: object
+      required: [summary, highlights, risks, generatedAt]
+      properties:
+        summary: { type: string }
+        highlights:
+          type: array
+          items: { type: string }
+        risks:
+          type: array
+          items: { type: string }
+        generatedAt: { type: string, format: date-time }
+
+    AiPushResult:
+      type: object
+      required: [success, message, sentAt]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        sentAt: { type: string, format: date-time }
+        webhookUrl: { type: string }
+        pushId: { type: string }
+
+    AiPushEvent:
+      type: object
+      required: [id, payloadType, trigger, target, sentAt, outboundOk, outboundMessage, status, statusDetail, statusUpdatedAt]
+      properties:
+        id: { type: string }
+        payloadType: { type: string }
+        trigger: { type: string }
+        target: { type: string }
+        sentAt: { type: string, format: date-time }
+        outboundOk: { type: boolean }
+        outboundMessage: { type: string }
+        status: { type: string }
+        statusDetail: { type: string }
+        statusUpdatedAt: { type: string, format: date-time }
+        lastEchoAt: { type: string, format: date-time }
+        targetAgent: { type: string }
+        taskTitle: { type: string }
+
+    AiPushEchoInput:
+      type: object
+      required: [pushId, status]
+      properties:
+        pushId: { type: string, minLength: 1 }
+        status:
+          type: string
+          enum: [received, processing, completed, failed]
+        message: { type: string }
+
+    AiPushEchoAck:
+      type: object
+      required: [ok, pushId, status]
+      properties:
+        ok: { type: boolean }
+        pushId: { type: string }
+        status: { type: string }
+
+    # ─── Contact Schemas ─────────────────────────────────────────
+    Contact:
+      type: object
+      required: [id, fullName, role, organization, tags, createdAt]
+      properties:
+        id: { type: integer }
+        fullName: { type: string }
+        role: { type: string }
+        organization: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ContactInput:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 1 }
+        role: { type: string }
+        organization: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
+    ContactUpdate:
+      type: object
+      properties:
+        fullName: { type: string, minLength: 1 }
+        role: { type: string }
+        organization: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
+    ContactMethod:
+      type: object
+      required: [id, contactId, channelType, channelValue, isPreferred, createdAt]
+      properties:
+        id: { type: integer }
+        contactId: { type: integer }
+        channelType: { type: string }
+        channelValue: { type: string }
+        isPreferred: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    ContactMethodInput:
+      type: object
+      required: [channelType, channelValue]
+      properties:
+        channelType: { type: string, minLength: 1 }
+        channelValue: { type: string, minLength: 1 }
+        isPreferred: { type: boolean }
+
+    ContactMethodUpdate:
+      type: object
+      properties:
+        channelType: { type: string, minLength: 1 }
+        channelValue: { type: string, minLength: 1 }
+        isPreferred: { type: boolean }
+
+    ContactWithMethods:
+      allOf:
+        - $ref: "#/components/schemas/Contact"
+        - type: object
+          required: [methods]
+          properties:
+            methods:
+              type: array
+              items:
+                $ref: "#/components/schemas/ContactMethod"
+
+    # ─── System Status Schemas ────────────────────────────────────
+    SystemStatusRecord:
+      type: object
+      required: [id, platform, status, lastChecked, createdAt]
+      properties:
+        id: { type: integer }
+        platform: { type: string }
+        status: { type: string }
+        lastChecked: { type: string, format: date-time }
+        lastSync:
+          type: ["string", "null"]
+          format: date-time
+        notes: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    SystemStatusInput:
+      type: object
+      required: [platform]
+      properties:
+        platform: { type: string, minLength: 1 }
+        status: { type: string }
+        notes: { type: string }
+
+    SystemStatusUpdate:
+      type: object
+      properties:
+        status: { type: string }
+        notes: { type: string }
+
+    # ─── Monitoring Schemas ───────────────────────────────────────
+    MonitoringHistoryPoint:
+      type: object
+      required: [at, ok]
+      properties:
+        at: { type: string }
+        ok: { type: boolean }
+        responseMs: { type: ["integer", "null"] }
+
+    MonitoringSiteCheck:
+      type: object
+      required: [key, label, url, ok, checkedAt, history]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        url: { type: string }
+        ok: { type: boolean }
+        httpStatus: { type: ["integer", "null"] }
+        responseMs: { type: ["integer", "null"] }
+        checkedAt: { type: string }
+        error: { type: ["string", "null"] }
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringHistoryPoint"
+
+    MonitoringService:
+      type: object
+      required: [name, status, detail]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [ok, warn, down] }
+        detail: { type: string }
+
+    MonitoringSnapshot:
+      type: object
+      required: [generatedAt, site, payments, services, problems]
+      properties:
+        generatedAt: { type: string }
+        site:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringSiteCheck"
+        payments:
+          type: object
+          required: [paystack, mpesaMode, stripe, cod]
+          properties:
+            paystack: { type: boolean }
+            mpesaMode: { type: string, enum: [live, demo] }
+            stripe: { type: boolean }
+            cod: { type: boolean }
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringService"
+        problems:
+          type: object
+          required: [recoveryOrders, notificationFailures7d]
+          properties:
+            recoveryOrders: { type: integer }
+            notificationFailures7d: { type: integer }
+
+    # ─── Notification Schemas ─────────────────────────────────────
+    NotificationLog:
+      type: object
+      required: [id, channelType, channelValue, templateId, status, sentAt]
+      properties:
+        id: { type: integer }
+        taskId:
+          type: ["integer", "null"]
+        contactId:
+          type: ["integer", "null"]
+        channelType: { type: string }
+        channelValue: { type: string }
+        templateId: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        status: { type: string }
+        errorMessage:
+          type: ["string", "null"]
+        sentAt: { type: string, format: date-time }
+        whatsappMessageId:
+          type: ["string", "null"]
+          description: Baileys message key ID used to match delivery/read receipts
+        deliveryStatus:
+          type: ["string", "null"]
+          description: "WhatsApp receipt status: delivered | read (null = not yet acknowledged)"
+
+    NotificationDispatchInput:
+      type: object
+      required: [contactId, templateId]
+      properties:
+        contactId: { type: integer }
+        templateId: { type: string }
+        taskId:
+          type: ["integer", "null"]
+        overrideChannel:
+          type: ["string", "null"]
+
+    NotificationDispatchResult:
+      type: object
+      required: [success, channelUsed, logId]
+      properties:
+        success: { type: boolean }
+        channelUsed: { type: string }
+        logId: { type: integer }
+        fallbackUsed: { type: boolean }
+        message: { type: string }
+
+    # ─── Webhook Schemas ──────────────────────────────────────────
+    WebhookPayload:
+      type: object
+      required: [event, sourcePlatform]
+      properties:
+        event: { type: string }
+        sourcePlatform: { type: string }
+        taskData:
+          type: object
+          properties:
+            title: { type: string }
+            description: { type: string }
+            assigneeId:
+              type: ["integer", "null"]
+            projectId: { type: integer }
+            status: { type: string }
+            priority: { type: string }
+            dueDate:
+              type: ["string", "null"]
+            resourceRequired: {}
+            deliveryFormat: { type: string }
+            notifyVia: { type: string }
+        meta: {}
+
+    WebhookIngestResult:
+      type: object
+      required: [accepted, taskId, message]
+      properties:
+        accepted: { type: boolean }
+        taskId:
+          type: ["integer", "null"]
+        message: { type: string }
+        validationErrors:
+          type: array
+          items: { type: string }
+
+    # ─── Team Auth Schemas ────────────────────────────────────────
+    ChangePasscodeInput:
+      type: object
+      required: [currentPasscode, newPasscode]
+      properties:
+        currentPasscode:
+          type: string
+          minLength: 1
+          description: The current team passcode (used to verify identity)
+        newPasscode:
+          type: string
+          minLength: 8
+          description: The new passcode (minimum 8 characters)
+
+    ChangePasscodeResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    TeamTokenRequest:
+      type: object
+      required: [passcode]
+      properties:
+        passcode:
+          type: string
+          minLength: 1
+          description: The team passcode (SESSION_SECRET value)
+
+    TeamTokenResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: Signed team-session JWT (Bearer token)
+
+    # ─── WhatsApp Schemas ─────────────────────────────────────────
+    WhatsAppStatus:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [disconnected, connecting, qr, connected, error]
+        qr:
+          type: ["string", "null"]
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/WhatsAppStatusError"
+            - type: "null"
+
+    WhatsAppStatusError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [QR_GENERATION_FAILED, WHATSAPP_INIT_FAILED]
+        message:
+          type: string
+
+    WhatsAppRequestError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/WhatsAppStatusError"
+
+    WhatsAppSendInput:
+      type: object
+      required: [to, message]
+      properties:
+        to:
+          type: string
+          minLength: 1
+          description: Recipient phone number (e.g. +254712345678)
+        message:
+          type: string
+          minLength: 1
+          description: Plain-text message body
+
+    WhatsAppSendResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        to: { type: string }
+
+    # ─── UC Admin Schemas ─────────────────────────────────────────
+    InventoryProduct:
+      type: object
+      required: [id, name, sku, stockQuantity, stockStatus, syncedAt]
+      properties:
+        id:            { type: integer }
+        name:          { type: string }
+        sku:           { type: string }
+        stockQuantity: { type: integer }
+        stockStatus:   { type: string }
+        permalink:     { type: ["string", "null"] }
+        syncedAt:      { type: string, format: date-time }
+
+    UcProductImage:
+      type: object
+      required: [src, alt]
+      properties:
+        src: { type: string }
+        alt: { type: string }
+
+    UcProductCategory:
+      type: object
+      additionalProperties: true
+      properties:
+        name: { type: string }
+
+    UcProduct:
+      type: object
+      required: [id, name, price, regularPrice, salePrice, description, shortDescription, tagline, categories, images, sku, stockStatus, stockQuantity, tags, lifespanDays, filterCapacityLitres, enquiryOnly, totalSales, videoUrl]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: string }
+        regularPrice: { type: ["string", "null"] }
+        salePrice: { type: ["string", "null"] }
+        description: { type: string }
+        shortDescription: { type: ["string", "null"] }
+        tagline: { type: ["string", "null"] }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/UcProductCategory" }
+        images:
+          type: array
+          items: { $ref: "#/components/schemas/UcProductImage" }
+        sku: { type: ["string", "null"] }
+        stockStatus: { type: ["string", "null"] }
+        stockQuantity: { type: ["integer", "null"] }
+        tags:
+          type: array
+          items: { type: object, additionalProperties: true }
+        lifespanDays: { type: integer }
+        filterCapacityLitres: { type: number }
+        enquiryOnly: { type: boolean }
+        totalSales: { type: integer }
+        videoUrl: { type: ["string", "null"] }
+
+    UcProductUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        shortDescription: { type: string }
+        regularPrice: { type: [string, number], minimum: 0 }
+        # Omit salePrice to leave it unchanged; send "" explicitly to remove it.
+        salePrice: { type: [string, number], minimum: 0 }
+        stockStatus: { type: string, enum: [instock, outofstock, onbackorder] }
+        stockQuantity: { type: integer, minimum: 0 }
+
+    UcProductUpdateResult:
+      type: object
+      required: [ok, productId, updated, source]
+      properties:
+        ok: { type: boolean }
+        productId: { type: integer }
+        updated:
+          type: array
+          items: { type: string }
+        source: { type: string, enum: [woocommerce, mock] }
+
+    UcProductMedia:
+      type: object
+      required: [id, productId, type, url, alt, position, createdAt]
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        type: { type: string, enum: [photo, video] }
+        url: { type: string, maxLength: 2048 }
+        alt: { type: string }
+        position: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    UcProductMediaInput:
+      type: object
+      required: [url, type]
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Absolute URL, /objects/... path, or API storage/product-image path.
+        type: { type: string, enum: [photo, video] }
+        alt: { type: string }
+        position: { type: integer }
+
+    UcUploadRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: number, exclusiveMinimum: 0 }
+        contentType: { type: string, minLength: 1 }
+        assessmentId: { type: string }
+        actionToken: { type: string }
+
+    UcUploadResponse:
+      type: object
+      required: [uploadURL, objectPath, kind]
+      properties:
+        uploadURL: { type: string, description: Presigned PUT URL }
+        objectPath: { type: string }
+        kind: { type: string, enum: [photo, video, document] }
+
+    InventoryList:
+      type: object
+      required: [products, source]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryProduct"
+        source:
+          type: string
+          enum: [woocommerce, mock]
+
+    InventoryStockUpdate:
+      type: object
+      required: [stockQuantity]
+      properties:
+        stockQuantity:
+          type: integer
+          minimum: 0
+
+    InventoryUpdateResult:
+      type: object
+      required: [ok, productId, stockQuantity, source]
+      properties:
+        ok:            { type: boolean }
+        productId:     { type: integer }
+        stockQuantity: { type: integer }
+        source:        { type: string }
+
+    InventoryWishlistDemand:
+      type: object
+      required:
+        - productId
+        - productName
+        - waitingCustomerCount
+        - pendingCustomerCount
+        - notifiedCustomerCount
+        - lastAddedAt
+        - lastNotifiedRestockAt
+        - restockDemandAlertedAt
+      properties:
+        productId:                 { type: integer }
+        productName:               { type: string }
+        waitingCustomerCount:      { type: integer }
+        pendingCustomerCount:      { type: integer }
+        notifiedCustomerCount:     { type: integer }
+        lastAddedAt:               { type: ["string", "null"], format: date-time }
+        lastNotifiedRestockAt:     { type: ["string", "null"], format: date-time }
+        restockDemandAlertedAt:    { type: ["string", "null"], format: date-time }
+
+    SyncTriggered:
+      type: object
+      required: [ok, triggeredAt]
+      properties:
+        ok:          { type: boolean }
+        triggeredAt: { type: string, format: date-time }
+
+    IntegrationsSettings:
+      type: object
+      required: [n8nInventoryWebhook]
+      properties:
+        n8nInventoryWebhook:
+          type: object
+          required: [isSet]
+          properties:
+            isSet:     { type: boolean }
+            hostname:  { type: ["string", "null"] }
+            updatedAt: { type: ["string", "null"] }
+
+    IntegrationsSettingsInput:
+      type: object
+      properties:
+        n8nInventoryWebhookUrl: { type: string }
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    UcCustomerSummary:
+      type: object
+      required: [id, email, firstName, lastName, name, phone, joinedAt, orderCount, products]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        orderCount:
+          type: integer
+        products:
+          type: array
+          items:
+            type: string
+
+    UcCustomerList:
+      type: object
+      required: [customers, total, page, limit]
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    UcCustomerOrderItem:
+      type: object
+      required: [name, quantity, total]
+      properties:
+        name:
+          type: string
+        quantity:
+          type: integer
+        total:
+          type: string
+
+    UcCustomerOrder:
+      type: object
+      required: [id, status, total, currency, paymentMethod, dateCreated, lineItems]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        total:
+          type: string
+        currency:
+          type: string
+        paymentMethod:
+          type: string
+        dateCreated:
+          type: string
+          format: date-time
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerOrderItem"
+
+    UcCustomerTicket:
+      type: object
+      required: [id, productModel, issueDescription, status, createdAt]
+      properties:
+        id:
+          type: string
+        productModel:
+          type: string
+        issueDescription:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    UcCustomerDetail:
+      type: object
+      required: [customer, orders, tickets]
+      properties:
+        customer:
+          type: object
+          required: [id, email, firstName, lastName, name, phone, joinedAt, authProvider, emailVerified, phoneVerified, recoveryChannels]
+          properties:
+            id:
+              type: integer
+            email:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+            name:
+              type: string
+            phone:
+              type: string
+            joinedAt:
+              type: string
+              format: date-time
+            authProvider:
+              type: string
+            emailVerified:
+              type: boolean
+              description: Explicit verification state; false means the destination must not be treated as verified.
+            phoneVerified:
+              type: boolean
+              description: Explicit verification state; false means the destination must not be treated as verified.
+            recoveryChannels:
+              type: object
+              required: [email, whatsapp]
+              properties:
+                email:
+                  type: object
+                  required: [available, verified]
+                  properties:
+                    available: { type: boolean }
+                    verified: { type: boolean }
+                whatsapp:
+                  type: object
+                  required: [available, verified, status]
+                  properties:
+                    available: { type: boolean }
+                    verified: { type: boolean }
+                    status:
+                      type: string
+                      description: Current WhatsApp connection state; contains no session or QR material.
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerOrder"
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/UcCustomerTicket"
+
+    UcCustomersCount:
+      type: object
+      required: [count, newThisWeek, newThisMonth]
+      properties:
+        count:
+          type: integer
+          description: Total registered (non-deleted) UC Companion customers
+        newThisWeek:
+          type: integer
+          description: Customers who registered since the start of the current calendar week
+        newThisMonth:
+          type: integer
+          description: Customers who registered since the start of the current calendar month
+
+    UcTemporaryPasswordInput:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          type: string
+          enum: [email, whatsapp]
+
+    UcTemporaryPasswordResult:
+      type: object
+      required: [ok, temporaryPassword, expiresAt, delivery]
+      properties:
+        ok:
+          type: boolean
+        temporaryPassword:
+          type: string
+          description: Plaintext credential shown only in this issuance response
+        expiresAt:
+          type: string
+          format: date-time
+        delivery:
+          type: object
+          required: [channel, delivered]
+          properties:
+            channel:
+              type: string
+              enum: [email, whatsapp]
+            delivered:
+              type: boolean
+
+    PublicActionableError:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          enum:
+            - INSUFFICIENT_PERMISSION
+            - ACCOUNT_INELIGIBLE
+            - UNAVAILABLE_UNVERIFIED_DESTINATION
+            - WHATSAPP_DISCONNECTED
+            - DELIVERY_PROVIDER_FAILURE
+        error:
+          type: string
+
+    UcLocation:
+      type: object
+      required: [id, type, name, address, lat, lng, hours, active, verified, countryIso]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor, water_atm, refill_station, city_tap] }
+        name: { type: string }
+        address: { type: string }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        hours: { type: string }
+        phone: { type: [string, "null"] }
+        vendorName: { type: [string, "null"] }
+        countryIso: { type: string, pattern: "^[A-Z]{2}$" }
+        city: { type: [string, "null"], maxLength: 120 }
+        accessNotes: { type: [string, "null"], maxLength: 1000 }
+        municipal: { type: [string, "null"], maxLength: 200 }
+        sourceAttribution: { type: [string, "null"], maxLength: 500 }
+        lastFieldVerifiedOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        nextReviewOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        active: { type: boolean }
+        verified: { type: boolean }
+
+    UcLocationRatingInput:
+      type: object
+      required: [waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence]
+      properties:
+        waterQuality: { type: integer, minimum: 1, maximum: 5 }
+        cleanliness: { type: integer, minimum: 1, maximum: 5 }
+        equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+        serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+        safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: [string, "null"], maxLength: 1000 }
+    UcLocationRatingAggregate:
+      type: object
+      required: [locationId, page, limit, count, averages, ratings]
+      properties:
+        locationId: { type: string }
+        page: { type: integer }
+        limit: { type: integer }
+        count: { type: integer }
+        averages: { type: object, additionalProperties: { type: number } }
+        ratings:
+          type: array
+          items:
+            type: object
+            required: [id, waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence, createdAt, updatedAt]
+            properties:
+              id: { type: string }
+              waterQuality: { type: integer, minimum: 1, maximum: 5 }
+              cleanliness: { type: integer, minimum: 1, maximum: 5 }
+              equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+              serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+              safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+              comment: { type: [string, "null"], maxLength: 1000 }
+              createdAt: { type: string, format: date-time }
+              updatedAt: { type: string, format: date-time }
+
+    UcLocationInput:
+      type: object
+      required: [type, name, address, latitude, longitude, hours]
+      properties:
+        type: { type: string, enum: [experience_centre, refill_atm, vendor, water_atm, refill_station, city_tap] }
+        name: { type: string, minLength: 1 }
+        address: { type: string, minLength: 1 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        hours: { type: string, minLength: 1 }
+        phone: { type: [string, "null"] }
+        vendorName: { type: [string, "null"] }
+        countryIso: { type: string, pattern: "^[A-Z]{2}$" }
+        city: { type: [string, "null"], maxLength: 120 }
+        accessNotes: { type: [string, "null"], maxLength: 1000 }
+        municipal: { type: [string, "null"], maxLength: 200 }
+        sourceAttribution: { type: [string, "null"], maxLength: 500 }
+        lastFieldVerifiedOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        nextReviewOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+
+    UcLocationAssessmentInput:
+      type: object
+      required: [waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence]
+      properties:
+        waterQuality: { type: integer, minimum: 1, maximum: 5 }
+        cleanliness: { type: integer, minimum: 1, maximum: 5 }
+        equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+        serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+        safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+        checks:
+          type: object
+          additionalProperties: {}
+        notes: { type: string, nullable: true, maxLength: 2000 }
+
+    UcLocationAssessment:
+      type: object
+      required: [id, locationId, assessorId, waterQuality, cleanliness, equipmentCondition, serviceReliability, safetyConfidence, checks, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        locationId: { type: string }
+        assessorId: { type: string }
+        waterQuality: { type: integer, minimum: 1, maximum: 5 }
+        cleanliness: { type: integer, minimum: 1, maximum: 5 }
+        equipmentCondition: { type: integer, minimum: 1, maximum: 5 }
+        serviceReliability: { type: integer, minimum: 1, maximum: 5 }
+        safetyConfidence: { type: integer, minimum: 1, maximum: 5 }
+        checks: { type: string }
+        notes: { type: string, nullable: true }
+        status: { type: string }
+        verifiedAt: { type: string, nullable: true }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    UcLocationUpdateInput:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        active: { type: boolean }
+        type: { type: string, enum: [experience_centre, refill_atm, vendor, water_atm, refill_station, city_tap] }
+        name: { type: string, minLength: 1 }
+        address: { type: string, minLength: 1 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        hours: { type: string, minLength: 1 }
+        phone: { type: [string, "null"] }
+        vendorName: { type: [string, "null"] }
+        countryIso: { type: string, pattern: "^[A-Z]{2}$" }
+        city: { type: [string, "null"], maxLength: 120 }
+        accessNotes: { type: [string, "null"], maxLength: 1000 }
+        municipal: { type: [string, "null"], maxLength: 200 }
+        sourceAttribution: { type: [string, "null"], maxLength: 500 }
+        lastFieldVerifiedOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        nextReviewOn: { type: [string, "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+
+    UnsyncedRegistration:
+      type: object
+      required: [email, phone, recordedAt, dbPersisted]
+      properties:
+        id: { type: [integer, "null"] }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        authProvider: { type: string }
+        recordedAt: { type: string, format: date-time }
+        dbPersisted: { type: boolean }
+        recoveryStatus: { type: string, enum: [pending, blocked, resolved, retryable] }
+        recoveryReason: { type: string, enum: [email_conflict, phone_conflict, invalid_phone] }
+        targetAccountId: { type: integer }
+        resolvedAt: { type: string, format: date-time }
+        resolvedBy: { type: string }
+
+    UnsyncedRegistrationRecoveryInput:
+      type: object
+      required: [originalEmail, recordedAt, target]
+      properties:
+        originalEmail: { type: string, minLength: 1 }
+        originalPhone: { type: string }
+        correctedEmail: { type: string, minLength: 1 }
+        correctedPhone: { type: string }
+        recordedAt: { type: string, format: date-time }
+        target:
+          oneOf:
+            - type: object
+              required: [type, accountId]
+              properties:
+                type: { type: string, enum: [existing] }
+                accountId: { type: integer, minimum: 1 }
+            - type: object
+              required: [type]
+              properties:
+                type: { type: string, enum: [new] }
+        targetAccountId: { type: integer, minimum: 1, description: Backward-compatible shorthand for an existing target }
+        createAccount: { type: boolean, description: Explicitly choose a new account }
+
+    UcPermanentPasswordInput:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword:
+          type: string
+          minLength: 8
+        currentPassword:
+          type: string
+
+    UcPasswordChangeResult:
+      type: object
+      required: [ok, token, user]
+      properties:
+        ok:
+          type: boolean
+        token:
+          type: string
+        user:
+          type: object
+          required: [id, email, mustChangePassword]
+          properties:
+            id:
+              type: integer
+            email:
+              type: string
+            mustChangePassword:
+              type: boolean
+
+    UcOfflineProduct:
+      type: object
+      required: [productName, quantity]
+      properties:
+        productId: { type: integer }
+        productName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        litresPerUnit: { type: number, minimum: 0 }
+
+    UcOfflineClientInput:
+      type: object
+      required: [products, saleDate, idempotencyKey]
+      properties:
+        clientRef: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        phone: { type: string, description: International phone number }
+        email: { type: string, description: Case-insensitive email address }
+        products:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/UcOfflineProduct" }
+        saleDate: { type: string, format: date }
+        notes: { type: string }
+        idempotencyKey: { type: string, minLength: 8 }
+
+    UcOfflineClientUpdateInput:
+      type: object
+      required: [products, saleDate]
+      properties:
+        clientRef: { type: string }
+        phone: { type: string, description: International phone number }
+        email: { type: string, description: Case-insensitive email address }
+        products:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/UcOfflineProduct" }
+        saleDate: { type: string, format: date }
+        notes: { type: string }
+
+    UcOfflineClient:
+      type: object
+      required: [id, clientRef, products, saleDate, accountSetupStatus, deliveryStatus]
+      properties:
+        id: { type: integer }
+        clientRef: { type: string }
+        phone: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/UcOfflineProduct" }
+        saleDate: { type: string, format: date }
+        notes: { type: string }
+        companionUserId: { type: [integer, "null"] }
+        accountSetupStatus:
+          type: string
+          enum: [pending, created, linked-existing, conflict, failed]
+        deliveryChannel:
+          type: [string, "null"]
+          enum: [email, whatsapp, null]
+        deliveryStatus:
+          type: string
+          enum: [pending, sending, sent, failed, not_applicable]
+        deliveryMetadata: { type: object, additionalProperties: true }
+        conflictReason: { type: [string, "null"] }
+        deliveryAttempts: { type: integer }
+        deliveryLastAttemptAt: { type: [string, "null"], format: date-time }
+        deliveryError: { type: [string, "null"] }
+
+    UcOfflineClientResponse:
+      type: object
+      required: [client]
+      properties:
+        client: { $ref: "#/components/schemas/UcOfflineClient" }
+
+    UcGuideMedia:
+      type: object
+      required: [id, kind, url, mimeType, altText]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [image, animation, video] }
+        url: { type: string }
+        objectPath: { type: [string, "null"] }
+        mimeType: { type: string }
+        altText: { type: string }
+        caption: { type: [string, "null"] }
+        posterUrl: { type: [string, "null"] }
+        byteSize: { type: [integer, "null"] }
+        durationSeconds: { type: [integer, "null"] }
+        animated: { type: boolean }
+    UcGuideSection:
+      type: object
+      required: [id, position, heading, steps, media]
+      properties:
+        id: { type: string }
+        position: { type: integer }
+        heading: { type: string }
+        body: { type: [string, "null"] }
+        steps: { type: array, items: { type: string } }
+        tip: { type: [string, "null"] }
+        warning: { type: [string, "null"] }
+        illustrationIcon: { type: [string, "null"] }
+        media: { type: array, items: { $ref: "#/components/schemas/UcGuideMedia" } }
+    UcGuideSummary:
+      type: object
+      required: [slug, title, summary, category, products, icon, readTime, version, updatedAt]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        category: { type: string }
+        products: { type: string }
+        icon: { type: string }
+        readTime: { type: string }
+        status: { type: [string, "null"], enum: [draft, published, null] }
+        version: { type: integer }
+        publishedAt: { type: [string, "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UcGuide:
+      allOf:
+        - $ref: "#/components/schemas/UcGuideSummary"
+        - type: object
+          required: [id, sections]
+          properties:
+            id: { type: string }
+            sections: { type: array, items: { $ref: "#/components/schemas/UcGuideSection" } }
+    UcGuideInput:
+      type: object
+      required: [slug, title, summary, sections]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9-]{3,120}$" }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 1000 }
+        category: { type: string }
+        products: { type: string }
+        icon: { type: string }
+        readTime: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/UcGuideSection" } }
+
+    ReviewStatus:
+      type: string
+      enum: [pending_review, approved, rejected, correction_requested]
+
+    CustomerLifecycleFeatureConfig:
+      type: object
+      required: [canonicalReads, legacyReviewSubmission, canonicalGlobalImpact, nearbyDistanceTiers]
+      properties:
+        canonicalReads: { type: boolean }
+        legacyReviewSubmission: { type: boolean }
+        canonicalGlobalImpact: { type: boolean }
+        nearbyDistanceTiers: { type: boolean }
+
+    CustomerLifecycleIdentity:
+      type: object
+      required: [customerId, status]
+      properties:
+        customerId: { type: integer, minimum: 1 }
+        status: { type: string, enum: [verified, review_required, deleted] }
+        identitySources: { type: array, items: { type: string, enum: [companion, woocommerce, social, offline] } }
+
+    CanonicalPurchaseLine:
+      type: object
+      required: [id, productId, productName, quantity, lineTotal, registrationEligible]
+      properties:
+        id: { type: integer, format: int64 }
+        productId: { type: integer }
+        productName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        productReference: { type: [string, "null"] }
+        lineTotal: { type: string }
+        registrationEligible: { type: boolean }
+        registeredFilterId: { type: [integer, "null"] }
+
+    CanonicalPurchase:
+      type: object
+      required: [id, currency, total, paymentStatus, fulfilmentStatus, lines]
+      properties:
+        id: { type: integer, format: int64 }
+        companionOrderId: { type: [integer, "null"] }
+        woocommerceOrderId: { type: [integer, "null"] }
+        receiptNumber: { type: [string, "null"] }
+        currency: { type: string }
+        total: { type: string }
+        paymentStatus: { type: string }
+        fulfilmentStatus: { type: string }
+        sourceCreatedAt: { type: [string, "null"], format: date-time }
+        lines: { type: array, items: { $ref: "#/components/schemas/CanonicalPurchaseLine" } }
+
+    CustomerLifecycleLookup:
+      type: object
+      required: [identity, purchases, featureEnabled]
+      properties:
+        identity: { $ref: "#/components/schemas/CustomerLifecycleIdentity" }
+        purchases: { type: array, items: { $ref: "#/components/schemas/CanonicalPurchase" } }
+        featureEnabled: { type: boolean }
+
+    VerifiedFilterRegistrationInput:
+      type: object
+      required: [purchaseLineId, activatedAt, idempotencyKey]
+      properties:
+        purchaseLineId: { type: integer, format: int64 }
+        activatedAt: { type: string, format: date-time }
+        referralCode: { type: [string, "null"], maxLength: 120 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    CanonicalFilterRegistration:
+      type: object
+      required: [id, customerId, productId, productName, verificationStatus, lifecycleStatus, activatedAt, maintenanceCount]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        productId: { type: integer }
+        productName: { type: string }
+        verificationStatus: { $ref: "#/components/schemas/ReviewStatus" }
+        lifecycleStatus: { type: string, enum: [active, inactive] }
+        activatedAt: { type: string, format: date-time }
+        deactivatedAt: { type: [string, "null"], format: date-time }
+        maintenanceCount: { type: integer, minimum: 0 }
+        verifiedLitres: { type: integer, minimum: 0 }
+
+    LegacyRegistrationSubmissionInput:
+      type: object
+      required: [productId, productName, idempotencyKey]
+      properties:
+        productId: { type: integer }
+        productName: { type: string, minLength: 1, maxLength: 200 }
+        approximatePurchaseDate: { type: [string, "null"], format: date }
+        installationDate: { type: [string, "null"], format: date }
+        receiptReference: { type: [string, "null"], maxLength: 200 }
+        serialOrQrReference: { type: [string, "null"], maxLength: 200 }
+        sellerChannel: { type: [string, "null"], maxLength: 120 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    LegacyRegistrationStatus:
+      type: object
+      required: [id, customerId, productId, productName, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        customerId: { type: integer }
+        productId: { type: integer }
+        productName: { type: string }
+        approximatePurchaseDate: { type: [string, "null"], format: date }
+        installationDate: { type: [string, "null"], format: date }
+        receiptReference: { type: [string, "null"], maxLength: 200 }
+        serialOrQrReference: { type: [string, "null"], maxLength: 200 }
+        sellerChannel: { type: [string, "null"], maxLength: 120 }
+        status: { $ref: "#/components/schemas/ReviewStatus" }
+        customerMessage: { type: [string, "null"] }
+        canonicalPurchaseId: { type: [integer, "null"], format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    StaffLegacyRegistrationReview:
+      allOf:
+        - $ref: "#/components/schemas/LegacyRegistrationStatus"
+        - type: object
+          required: [evidenceObjectPath]
+          properties:
+            evidenceObjectPath: { type: [string, "null"], maxLength: 500 }
+            decisionReason: { type: [string, "null"] }
+
+    LegacyRegistrationReviewList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LegacyRegistrationStatus" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    LegacyReviewDecisionInput:
+      type: object
+      required: [decision, reason, idempotencyKey]
+      properties:
+        decision: { type: string, enum: [approved, rejected, correction_requested, merged] }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        canonicalPurchaseId: { type: [integer, "null"], format: int64 }
+        purchaseLineId: { type: [integer, "null"], format: int64 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    CanonicalMaintenanceEvent:
+      type: object
+      required: [id, eventType, value, unit, actor, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        eventType: { type: string, enum: [registration, activation, deactivation, maintenance, replacement, referral_conversion, correction] }
+        value: { type: integer }
+        unit: { type: string }
+        actor: { type: string }
+        eligible: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CanonicalCustomerHistory:
+      type: object
+      required: [customerId, filters, purchases, maintenanceEvents, personalImpact]
+      properties:
+        customerId: { type: integer }
+        filters: { type: array, items: { $ref: "#/components/schemas/CanonicalFilterRegistration" } }
+        purchases: { type: array, items: { $ref: "#/components/schemas/CanonicalPurchase" } }
+        maintenanceEvents: { type: array, items: { $ref: "#/components/schemas/CanonicalMaintenanceEvent" } }
+        personalImpact: { $ref: "#/components/schemas/ImpactTotals" }
+        reviewMessages: { type: array, items: { type: string } }
+
+    ImpactTotals:
+      type: object
+      required: [verifiedLitres, maintenanceCount]
+      properties:
+        verifiedLitres: { type: integer, minimum: 0 }
+        maintenanceCount: { type: integer, minimum: 0 }
+
+    ImpactSharePayload:
+      type: object
+      required: [heading, personalImpact, globalImpact, joinUrl]
+      properties:
+        heading: { type: string, enum: ["The Ultra Clear Impact"] }
+        personalImpact: { $ref: "#/components/schemas/ImpactTotals" }
+        globalImpact: { $ref: "#/components/schemas/ImpactTotals" }
+        joinUrl: { type: string, format: uri-reference }
+        attributionId: { type: [string, "null"] }
+
+    LocationTierAnalyticsInput:
+      type: object
+      required: [event, tier, idempotencyKey]
+      properties:
+        event: { type: string, enum: [permission_granted, permission_denied, tier_selected, no_results_within_10km] }
+        tier: { type: [string, "null"], enum: [tier_1_0_to_2km, tier_2_2_to_5km, tier_3_5_to_10km, null] }
+        coarseCountry: { type: [string, "null"], maxLength: 2 }
+        coarseCity: { type: [string, "null"], maxLength: 120 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    StaffReviewQueue:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/StaffLegacyRegistrationReview" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    IdentityConflict:
+      type: object
+      required: [id, principalType, reason, status, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        principalType: { type: string }
+        reason: { $ref: "#/components/schemas/ConflictReasonCode" }
+        status: { type: string, enum: [open, in_review, resolved] }
+        candidateCustomerIds: { type: array, items: { type: integer } }
+        createdAt: { type: string, format: date-time }
+
+    IdentityConflictQueue:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/IdentityConflict" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    IdentityConflictResolutionInput:
+      type: object
+      required: [customerId, reason, idempotencyKey]
+      properties:
+        customerId: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+
+    ReconciliationConflict:
+      type: object
+      required: [id, conflictType, source, reason, status, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        conflictType: { type: string }
+        source: { type: string }
+        sourceReference: { type: string }
+        reason: { $ref: "#/components/schemas/ConflictReasonCode" }
+        status: { type: string, enum: [open, in_review, resolved] }
+        priority: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    ConflictReasonCode:
+      type: string
+      enum: [customer_identity_mismatch, duplicate_provider_reference, duplicate_receipt_reference, product_line_mismatch, quantity_mismatch, amount_currency_mismatch, paid_order_missing_receipt, receipt_multiple_customers, app_woocommerce_duplicate, registration_already_owned, ambiguous_identity]
+
+    ReconciliationConflictQueue:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReconciliationConflict" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    MissionControlIndicators:
+      type: object
+      required: [eligibleCustomers, registrationAttempts, pendingReviews, oldestPendingReviewAgeSeconds, impactReconciled]
+      properties:
+        eligibleCustomers: { type: integer, minimum: 0 }
+        registrationAttempts: { type: integer, minimum: 0 }
+        registrationSuccessRate: { type: number, minimum: 0, maximum: 1 }
+        pendingReviews: { type: integer, minimum: 0 }
+        oldestPendingReviewAgeSeconds: { type: integer, minimum: 0 }
+        identityConflicts: { type: integer, minimum: 0 }
+        reconciliationConflicts: { type: integer, minimum: 0 }
+        impactReconciled: { type: boolean }
+        shareSignupConversionRate: { type: number, minimum: 0, maximum: 1 }
+        locationNoResultRate: { type: number, minimum: 0, maximum: 1 }
+
+    CustomerLifecycleTimelineEvent:
+      type: object
+      required: [eventType, createdAt]
+      properties:
+        eventType: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        summaryCode: { type: string, enum: [registration_submitted, registration_approved, registration_rejected, correction_requested, purchase_linked, maintenance_recorded, impact_posted, impact_corrected] }
+        createdAt: { type: string, format: date-time }
+
+    CustomerLifecycleTimeline:
+      type: object
+      required: [customerId, events, page, limit, total]
+      properties:
+        customerId: { type: integer }
+        events: { type: array, items: { $ref: "#/components/schemas/CustomerLifecycleTimelineEvent" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    AuditEvent:
+      type: object
+      required: [id, actorType, action, resourceType, resourceId, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        actorType: { type: string }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        reasonCode: { type: [string, "null"], enum: [identity_conflict, ownership_conflict, evidence_review, status_change, purchase_link, impact_correction, maintenance_correction, null] }
+        changedFields:
+          type: array
+          items: { $ref: "#/components/schemas/AuditChangeField" }
+        correlationId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AuditChangeField:
+      type: object
+      required: [field, changeType]
+      properties:
+        field:
+          type: string
+          enum: [status, verification_status, lifecycle_status, purchase_link, assigned_owner, impact_eligibility, maintenance_count]
+        changeType:
+          type: string
+          enum: [set, changed, cleared, linked, unlinked, increased, decreased]
+
+    AuditEventPage:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }

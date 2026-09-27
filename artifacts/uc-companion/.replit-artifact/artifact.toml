@@ -1,0 +1,31 @@
+kind = "mobile"
+previewPath = "/uc-companion/"
+title = "Ultra-Clear Companion"
+version = "1.0.0"
+id = "artifacts/uc-companion"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/uc-companion/" ]
+localPort = 20002
+
+[services.development]
+run = "pnpm --filter @workspace/uc-companion run dev"
+
+[services.production]
+run = [ "pnpm", "--filter", "@workspace/uc-companion", "run", "serve" ]
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/uc-companion", "run", "build" ]
+
+[services.production.build.env]
+EXPO_PUBLIC_DOMAIN = "app.ucfilters.com"
+EXPO_PUBLIC_API_DOMAIN = "api.ucfilters.com"
+CLERK_PROXY_URL = "/api/__clerk"
+
+[services.env]
+PORT = "20002"
+BASE_PATH = "/uc-companion/"
+METRO_PORT = "0"

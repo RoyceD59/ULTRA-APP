@@ -1,0 +1,623 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Users, UserPlus, Shield, ShieldOff, RotateCcw,
+  Copy, Check, Loader2, UserX, UserCheck, Mail, Settings2,
+  AlertCircle, CheckCircle2, CircleAlert, RefreshCw, XCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import {
+  listUsers, inviteUser, updateUserRole, updateUser, adminResetPassword,
+  listRecoveryEmailDeliveries,
+  isTeamAdmin, PAGES,
+  type AdminResetResult, type TeamUserRecord, type PagePermission,
+  type RecoveryEmailDelivery, type RecoveryEmailDeliveryEvent,
+} from "@/lib/team-auth";
+
+// ─── Permissions Dialog ────────────────────────────────────────────────────────
+
+const LEVEL_LABELS: Record<PagePermission, string> = {
+  none: "No access",
+  view: "View",
+  edit: "Edit",
+};
+
+function initialPermissions(
+  existing: Record<string, PagePermission> | null = null,
+): Record<string, PagePermission> {
+  const base: Record<string, PagePermission> = {};
+  for (const page of PAGES) base[page.slug] = "none";
+  return { ...base, ...(existing ?? {}) };
+}
+
+function PermissionsMatrix({
+  permissions,
+  onChange,
+  radioNamePrefix,
+}: {
+  permissions: Record<string, PagePermission>;
+  onChange: (permissions: Record<string, PagePermission>) => void;
+  radioNamePrefix: string;
+}) {
+  function setAll(level: PagePermission) {
+    const next: Record<string, PagePermission> = {};
+    for (const page of PAGES) next[page.slug] = level;
+    onChange(next);
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="mr-1">Set all:</span>
+        {(["none", "view", "edit"] as PagePermission[]).map((level) => (
+          <Button key={level} size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setAll(level)}>
+            {LEVEL_LABELS[level]}
+          </Button>
+        ))}
+      </div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-40">Page</TableHead>
+              <TableHead className="text-center">No access</TableHead>
+              <TableHead className="text-center">View</TableHead>
+              <TableHead className="text-center">Edit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {PAGES.map((page) => (
+              <TableRow key={page.slug}>
+                <TableCell className="font-medium text-sm">{page.label}</TableCell>
+                {(["none", "view", "edit"] as PagePermission[]).map((level) => (
+                  <TableCell key={level} className="text-center">
+                    <input
+                      type="radio"
+                      name={`${radioNamePrefix}-${page.slug}`}
+                      value={level}
+                      checked={(permissions[page.slug] ?? "none") === level}
+                      onChange={() => onChange({ ...permissions, [page.slug]: level })}
+                      className="accent-primary cursor-pointer w-4 h-4"
+                    />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
+function PermissionsDialog({
+  user,
+  open,
+  onClose,
+}: { user: TeamUserRecord | null; open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [perms, setPerms] = useState<Record<string, PagePermission>>({});
+
+  function handleOpen(u: TeamUserRecord) {
+    setPerms(initialPermissions(u.permissions));
+  }
+
+  const mutation = useMutation({
+    mutationFn: () => updateUser(user!.id, { permissions: perms }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["team-users"] });
+      toast({ title: "Permissions saved" });
+      onClose();
+    },
+    onError: (err: Error) => toast({ title: "Save failed", description: err.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (v && user) handleOpen(user);
+        if (!v) onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings2 className="w-4 h-4 text-primary" />
+            Page permissions — {user?.name}
+          </DialogTitle>
+          <DialogDescription>
+            Choose which pages <strong>{user?.email}</strong> can access.
+            Admins always have full access regardless of these settings.
+          </DialogDescription>
+        </DialogHeader>
+
+        <PermissionsMatrix
+          permissions={perms}
+          onChange={setPerms}
+          radioNamePrefix="member-permission"
+        />
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Saving…</> : "Save permissions"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Invite Dialog ─────────────────────────────────────────────────────────────
+
+function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [step, setStep] = useState<"email" | "permissions">("email");
+  const [perms, setPerms] = useState<Record<string, PagePermission>>(initialPermissions);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: (permissions?: Record<string, PagePermission>) => inviteUser(email.trim(), permissions),
+    onSuccess: (data) => {
+      setEmail(data.email);
+      setInviteUrl(data.inviteUrl);
+      setEmailSent(data.emailSent);
+      void qc.invalidateQueries({ queryKey: ["team-users"] });
+      void qc.invalidateQueries({ queryKey: ["recovery-email-deliveries"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Invite failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  async function copyLink() {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleClose() {
+    setEmail("");
+    setStep("email");
+    setPerms(initialPermissions());
+    setInviteUrl(null);
+    setEmailSent(null);
+    setCopied(false);
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className={step === "permissions" ? "sm:max-w-lg max-h-[90vh] overflow-y-auto" : "sm:max-w-md"}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-primary" />
+            {step === "permissions" && !inviteUrl ? "Set page permissions" : "Invite team member"}
+          </DialogTitle>
+          <DialogDescription>
+            {step === "permissions" && !inviteUrl ? (
+              <>Choose what <strong>{email}</strong> can access when they first sign in.</>
+            ) : (
+              <>An invite link will be generated (valid 7 days). We'll also try to email it.</>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        {inviteUrl ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Invite link for <strong>{email}</strong>:
+            </p>
+            <div className="flex gap-2">
+              <Input value={inviteUrl} readOnly className="font-mono text-xs" />
+              <Button size="icon" variant="outline" onClick={copyLink}>
+                {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+            {emailSent ? (
+              <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                Invite email sent to {email}.
+              </p>
+            ) : (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Email delivery failed — share this link with the invitee manually.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">Share this link with the invitee. It expires in 7 days.</p>
+            <DialogFooter><Button onClick={handleClose}>Done</Button></DialogFooter>
+          </div>
+        ) : step === "email" ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email address</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="colleague@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={mutation.isPending}
+                onKeyDown={(e) => e.key === "Enter" && email.trim() && setStep("permissions")}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={handleClose}>Cancel</Button>
+              <Button onClick={() => setStep("permissions")} disabled={!email.trim()}>Continue</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">Step 2 of 2 — this is optional and can be changed later.</p>
+            <PermissionsMatrix
+              permissions={perms}
+              onChange={setPerms}
+              radioNamePrefix="invite-permission"
+            />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setStep("email")} disabled={mutation.isPending}>Back</Button>
+              <Button variant="outline" onClick={() => mutation.mutate(undefined)} disabled={mutation.isPending}>
+                {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</> : "Skip"}
+              </Button>
+              <Button onClick={() => mutation.mutate(perms)} disabled={mutation.isPending}>
+                {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending…</> : "Send invite"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Reset Password Dialog ──────────────────────────────────────────────────────
+
+function ResetPasswordDialog({
+  user, open, onClose,
+}: { user: TeamUserRecord | null; open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [result, setResult] = useState<AdminResetResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: () => adminResetPassword(user!.id),
+    onSuccess: (data) => {
+      setResult(data);
+      void qc.invalidateQueries({ queryKey: ["recovery-email-deliveries"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  async function copyLink() {
+    if (!result) return;
+    await navigator.clipboard.writeText(result.resetUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleClose() { setResult(null); setCopied(false); onClose(); }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-primary" />
+            Reset password — {user?.name}
+          </DialogTitle>
+          <DialogDescription>
+            A reset link (valid 24 hours) will be generated and emailed to {user?.email}.
+          </DialogDescription>
+        </DialogHeader>
+
+        {result ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Reset link generated:</p>
+            <div className="flex gap-2">
+              <Input value={result.resetUrl} readOnly className="font-mono text-xs" />
+              <Button size="icon" variant="outline" onClick={copyLink}>
+                {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+            {result.emailSent ? (
+              <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                Reset email sent to {result.email}.
+              </p>
+            ) : (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Email delivery failed — share this link with the user manually.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">This link expires in 24 hours.</p>
+            <DialogFooter><Button onClick={handleClose}>Done</Button></DialogFooter>
+          </div>
+        ) : (
+          <DialogFooter>
+            <Button variant="ghost" onClick={handleClose}>Cancel</Button>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+              {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</> : "Generate reset link"}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Permission summary badge ──────────────────────────────────────────────────
+
+function PermissionSummary({ user }: { user: TeamUserRecord }) {
+  if (user.role === "admin") return <span className="text-xs text-muted-foreground">All pages (admin)</span>;
+  const perms = user.permissions ?? {};
+  const editCount = Object.values(perms).filter((v) => v === "edit").length;
+  const viewCount = Object.values(perms).filter((v) => v === "view").length;
+  if (editCount === 0 && viewCount === 0) return <span className="text-xs text-destructive">No access</span>;
+  const parts: string[] = [];
+  if (editCount > 0) parts.push(`${editCount} edit`);
+  if (viewCount > 0) parts.push(`${viewCount} view`);
+  return <span className="text-xs text-muted-foreground">{parts.join(", ")}</span>;
+}
+
+function RecoveryDeliveryBadge({
+  event,
+}: {
+  event: RecoveryEmailDeliveryEvent;
+}) {
+  if (event === "delivered") {
+    return <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Delivered</Badge>;
+  }
+  if (event === "delayed") {
+    return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 gap-1"><CircleAlert className="w-3.5 h-3.5" /> Delayed</Badge>;
+  }
+  if (event === "bounced" || event === "complained") {
+    return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1"><XCircle className="w-3.5 h-3.5" /> {event === "bounced" ? "Bounced" : "Complained"}</Badge>;
+  }
+  if (event === "failed") {
+    return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1"><XCircle className="w-3.5 h-3.5" /> Not accepted</Badge>;
+  }
+  return <Badge variant="outline" className="gap-1"><Check className="w-3.5 h-3.5" /> Accepted</Badge>;
+}
+
+function displayDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleString();
+}
+
+function RecoveryEmailHistory({
+  deliveries,
+  loading,
+  refreshing,
+  onRefresh,
+}: {
+  deliveries: RecoveryEmailDelivery[];
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Mail className="w-5 h-5" /> Recovery email delivery</h2>
+          <p className="text-sm text-muted-foreground">Recent invitation and password-reset sends. Status is checked with Resend; email contents and recovery links are never shown here.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing} className="shrink-0 gap-2">
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Recipient</TableHead>
+              <TableHead>Message</TableHead>
+              <TableHead>Delivery status</TableHead>
+              <TableHead>Sent</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Checking recent delivery events…</TableCell></TableRow>
+            ) : deliveries.length === 0 ? (
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">No invitation or password-reset emails have been sent yet.</TableCell></TableRow>
+            ) : deliveries.map((delivery) => (
+              <TableRow key={delivery.id}>
+                <TableCell className="text-sm">{delivery.recipient}</TableCell>
+                <TableCell className="text-sm">{delivery.type === "invitation" ? "Invitation" : "Password reset"}</TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <RecoveryDeliveryBadge event={delivery.deliveryEvent} />
+                    {delivery.errorMessage && <p className="text-xs text-destructive flex gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{delivery.errorMessage}</p>}
+                  </div>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{displayDate(delivery.sentAt)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function AdminUsersPage() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<TeamUserRecord | null>(null);
+  const [permTarget, setPermTarget] = useState<TeamUserRecord | null>(null);
+  const isAdmin = isTeamAdmin();
+
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ["team-users"],
+    queryFn: listUsers,
+  });
+  const recoveryEmails = useQuery({
+    queryKey: ["recovery-email-deliveries"],
+    queryFn: listRecoveryEmailDeliveries,
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+  });
+
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: "admin" | "member" }) => updateUserRole(id, role),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["team-users"] }),
+    onError: (err: Error) => toast({ title: "Role change failed", description: err.message, variant: "destructive" }),
+  });
+
+  const activeMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateUser(id, { isActive }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["team-users"] }),
+    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+  });
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        You don't have permission to view this page.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Users className="w-6 h-6" /> User Management
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Invite team members, manage roles, set page permissions, and reset passwords.
+          </p>
+        </div>
+        <Button onClick={() => setInviteOpen(true)} className="gap-2">
+          <UserPlus className="w-4 h-4" /> Invite member
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-32 text-muted-foreground gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading users…
+        </div>
+      ) : (
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Page access</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((user) => (
+                <TableRow key={user.id} className={!user.isActive ? "opacity-50" : ""}>
+                  <TableCell className="font-medium">{user.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Mail className="w-3 h-3" />{user.email}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={user.role === "admin" ? "default" : "secondary"}>
+                      {user.role === "admin" ? (
+                        <><Shield className="w-3 h-3 mr-1" />Admin</>
+                      ) : "Member"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <PermissionSummary user={user} />
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={user.isActive ? "outline" : "destructive"}>
+                      {user.isActive ? "Active" : "Deactivated"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Set permissions (members only) */}
+                      {user.role === "member" && (
+                        <Button
+                          size="sm" variant="ghost" title="Set page permissions"
+                          onClick={() => setPermTarget(user)}
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {/* Toggle role */}
+                      <Button
+                        size="sm" variant="ghost"
+                        title={user.role === "admin" ? "Demote to member" : "Promote to admin"}
+                        disabled={roleMutation.isPending}
+                        onClick={() => roleMutation.mutate({ id: user.id, role: user.role === "admin" ? "member" : "admin" })}
+                      >
+                        {user.role === "admin" ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                      </Button>
+                      {/* Reset password */}
+                      <Button size="sm" variant="ghost" title="Reset password" onClick={() => setResetTarget(user)}>
+                        <RotateCcw className="w-4 h-4" />
+                      </Button>
+                      {/* Deactivate / reactivate */}
+                      <Button
+                        size="sm" variant="ghost"
+                        title={user.isActive ? "Deactivate account" : "Reactivate account"}
+                        disabled={activeMutation.isPending}
+                        onClick={() => activeMutation.mutate({ id: user.id, isActive: !user.isActive })}
+                      >
+                        {user.isActive ? <UserX className="w-4 h-4 text-destructive" /> : <UserCheck className="w-4 h-4 text-green-600" />}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {users.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    No team members yet. Invite someone to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <ResetPasswordDialog user={resetTarget} open={!!resetTarget} onClose={() => setResetTarget(null)} />
+      <PermissionsDialog user={permTarget} open={!!permTarget} onClose={() => setPermTarget(null)} />
+      <RecoveryEmailHistory
+        deliveries={recoveryEmails.data ?? []}
+        loading={recoveryEmails.isLoading}
+        refreshing={recoveryEmails.isFetching}
+        onRefresh={() => { void recoveryEmails.refetch(); }}
+      />
+    </div>
+  );
+}
