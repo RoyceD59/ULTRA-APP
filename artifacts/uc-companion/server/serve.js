@@ -164,6 +164,7 @@ function serveWebApp(res, webBundlePath) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="uc-build-id" content="${relativeBundlePath.split('/')[0]}" />
     <title>${getAppName()}</title>
     <style>
       html, body, #root {
@@ -175,16 +176,19 @@ function serveWebApp(res, webBundlePath) {
       #root {
         display: flex;
         flex: 1;
+        min-height: 0;
+        height: 100dvh;
+        overflow: hidden;
       }
     </style>
   </head>
   <body>
     <div id="root"></div>
-    <script src="${scriptUrl}"></script>
+    <script defer src="${scriptUrl}"></script>
   </body>
 </html>`;
 
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
   res.end(html);
   return true;
 }
@@ -234,6 +238,22 @@ const server = http.createServer((req, res) => {
   }
 
   const webBundlePath = getWebBundlePath();
+
+  if (pathname === '/version.json') {
+    // Resolve metadata from the SAME build as the served script, never a
+    // separate latest-file pointer that could disagree during deployment.
+    const infoPath = webBundlePath && path.resolve(path.dirname(webBundlePath), '../../../..', 'build-info.json');
+    res.setHeader('cache-control', 'no-store');
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    if (!infoPath || !fs.existsSync(infoPath)) {
+      res.writeHead(503);
+      res.end(JSON.stringify({ error: 'Build identification unavailable; rebuild the Companion.' }));
+    } else {
+      res.writeHead(200);
+      res.end(fs.readFileSync(infoPath));
+    }
+    return;
+  }
 
   if (pathname === '/bundle-status') {
     res.writeHead(webBundlePath ? 204 : 503, {

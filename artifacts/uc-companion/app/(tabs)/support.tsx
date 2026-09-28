@@ -22,7 +22,7 @@ import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { trackEvent } from '@/lib/analytics';
 
 const TABS = ['Guides', 'My Tickets', 'Water Test'];
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 // ─── AI banner ────────────────────────────────────────────────────────────────
 function AiBanner({
@@ -341,7 +341,7 @@ function SupportScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  screen:           { flex: 1 },
+  screen:           { flex: 1, width: '100%', maxWidth: 1000, alignSelf: 'center' },
   customerHeader:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
   customerHeaderTitle: { color: '#fff', fontSize: 18, fontWeight: '700' as const },
   customerHeaderSub: { color: 'rgba(255,255,255,0.76)', fontSize: 12, marginTop: 2 },

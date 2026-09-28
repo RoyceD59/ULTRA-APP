@@ -101,6 +101,9 @@ describe('serve.js production server', () => {
       'web',
     );
     mkdirSync(webBundleDir, { recursive: true });
+    writeFileSync(join(staticRoot, timestamp, 'build-info.json'), JSON.stringify({
+      buildId: timestamp, revision: 'test-revision', tabs: ['index', 'products', 'blog', 'support', 'map', 'account'],
+    }));
     writeFileSync(
       join(webBundleDir, 'bundle.js'),
       '// minimal test bundle\nconsole.log("uc-companion-web");\n',
@@ -178,6 +181,19 @@ describe('serve.js production server', () => {
   function get(path, headers = {}) {
     return fetch(`http://127.0.0.1:${port}${path}`, { headers });
   }
+
+  test('HTML and version metadata cannot be cached and identify the same release', async () => {
+    const html = await get(`${BASE_PATH}/`);
+    assert.equal(html.headers.get('cache-control'), 'no-store');
+    const markup = await html.text();
+    const metadata = await get(`${BASE_PATH}/version.json`);
+    assert.equal(metadata.status, 200);
+    assert.equal(metadata.headers.get('cache-control'), 'no-store');
+    const info = await metadata.json();
+    assert.ok(bundleSrcFromRoot.includes(`/${info.buildId}/`));
+    assert.ok(markup.includes(`content="${info.buildId}"`));
+    assert.deepEqual(info.tabs, ['index', 'products', 'blog', 'support', 'map', 'account']);
+  });
 
   // ── 1. Root path returns HTML with a <script src="…bundle.js"> ──────────
 

@@ -14,7 +14,7 @@ import { LOCATIONS_REFRESH_INTERVAL_MS, reconcileSelectedLocation, startFocusedL
 import LocationDetailModal from '@/components/LocationDetailModal';
 
 const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onPress: (location: MapLocation) => void }) {
   const isCentre = loc.type === 'experience_centre';
@@ -152,11 +152,11 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  filterRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 8 },
-  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  screen: { flex: 1, width: '100%', maxWidth: 1200, alignSelf: 'center' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16, paddingBottom: 8 },
+  filterBtn: { paddingHorizontal: 16, paddingVertical: 10, minHeight: 44, borderRadius: 20, borderWidth: 1 },
   mapHint: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
-  mapHintText: { fontSize: 13, fontWeight: '500' as const },
+  mapHintText: { flex: 1, fontSize: 13, fontWeight: '500' as const },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 28 },
   stateTitle: { fontSize: 17, fontWeight: '700' as const },
   stateText: { fontSize: 14, textAlign: 'center' },

@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Platform,
   ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Animated,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -14,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import ProductCard from '@/components/ProductCard';
 import FilterChip from '@/components/FilterChip';
@@ -94,11 +94,9 @@ export default function ProductsScreen() {
 function ProductsScreenContent() {
   const colors = useColors();
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const MAX_WIDTH = 1200;
-  const contentBound = { width: '100%' as const, maxWidth: MAX_WIDTH, alignSelf: 'center' as const };
-  const numColumns = width >= 1440 ? 5 : width >= 1024 ? 4 : width >= 768 ? 3 : 2;
-  const cardMaxWidth = `${100 / numColumns}%` as const;
+  const layout = useCompanionLayout();
+  const contentBound = { width: '100%' as const, maxWidth: 1200, alignSelf: 'center' as const };
+  const numColumns = layout.columns;
 
   const { category: categoryParam } = useLocalSearchParams<{ category?: string }>();
   const api = useApi();
@@ -452,7 +450,7 @@ function ProductsScreenContent() {
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
-  const headerTop = Platform.OS === 'web' ? 0 : insets.top;
+  const headerTop = 0;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -548,8 +546,8 @@ function ProductsScreenContent() {
               key={`grid-${numColumns}`}
               numColumns={numColumns}
               keyExtractor={i => String(i.id)}
-              contentContainerStyle={styles.grid}
-              columnWrapperStyle={styles.row}
+              contentContainerStyle={[styles.grid, { paddingHorizontal: layout.gutter }]}
+              columnWrapperStyle={numColumns > 1 ? [styles.row, { gap: layout.gap }] : undefined}
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
               ListHeaderComponent={
@@ -564,13 +562,13 @@ function ProductsScreenContent() {
                   </View>
                   {showNudge && (
                     <>
-                      <View style={styles.row}>
+                      <View style={[styles.row, { flexDirection: 'row', gap: layout.gap }]}>
                         {(products ?? []).slice(0, numColumns).map(product => {
                           const isServerWishlisted = wishlist?.some(w => w.productId === product.id) ?? false;
                           const pendingState = wishlistPendingMap[product.id];
                           const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
                           return (
-                            <View key={product.id} style={[styles.cardWrap, { maxWidth: cardMaxWidth }]}>
+                            <View key={product.id} style={[styles.cardWrap, { width: layout.cardWidth, marginBottom: 8 }]}>
                               <ProductCard
                                 product={product}
                                 isWishlisted={isWishlisted}
@@ -608,7 +606,7 @@ function ProductsScreenContent() {
                 const pendingState = wishlistPendingMap[item.id];
                 const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
                 return (
-                  <View style={[styles.cardWrap, { maxWidth: cardMaxWidth }]}>
+                  <View style={[styles.cardWrap, { width: layout.cardWidth, marginBottom: 8 }]}>
                     <ProductCard
                       product={item}
                       isWishlisted={isWishlisted}
@@ -794,7 +792,7 @@ const styles = StyleSheet.create({
   catalogCount: { fontSize: 12 },
   grid: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 0 },
   row: { gap: 4, marginBottom: 8 },
-  cardWrap: { flex: 1 },
+  cardWrap: { flexGrow: 0, flexShrink: 0 },
   empty: { alignItems: 'center', marginTop: 60, gap: 12, paddingHorizontal: 28 },
   emptyText: { fontSize: 15 },
   emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },

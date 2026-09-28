@@ -3,6 +3,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
+const { writeBuildInfo } = require('./build-info');
 const {
   parseConfiguredMetroPort,
   reserveAvailablePort,
@@ -645,6 +646,7 @@ async function main() {
 
   console.log('Updating manifests and creating landing page...');
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
+  writeBuildInfo(projectRoot, timestamp);
 
   console.log('Build complete! Deploy to:', baseUrl);
 

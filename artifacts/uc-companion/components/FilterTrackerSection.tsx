@@ -27,6 +27,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { commitPurchaseBackedRegistration } from '@/lib/filterRegistrationCommit';
 import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
 import {
   FilterActivation,
@@ -516,7 +517,7 @@ export function RegisterModal({
       );
       // Refresh only after durable registration so the capacity-backed impact
       // card reflects the newly registered filter.
-      await queryClient.invalidateQueries({ queryKey: ['customer-rewards'] });
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
       reset();
     } catch (e) {
       // Keep the verified purchase selection visible so the customer can retry

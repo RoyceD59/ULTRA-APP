@@ -1,6 +1,8 @@
 export type CustomerId = number | string | null | undefined;
 
 export const customerQueryKeys = {
+  locationRating: (customerId: CustomerId, locationId: string | number | undefined) =>
+    ['customer', customerId, 'location-rating', locationId] as const,
   orders: (customerId: CustomerId) =>
     ['customer', customerId, 'orders'] as const,
   order: (customerId: CustomerId, orderId: string | number | undefined) =>
