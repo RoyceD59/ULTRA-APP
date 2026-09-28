@@ -53,3 +53,9 @@ artifacts/api-server/.whatsapp-session/
 
 # Runtime JSONL data records (contain customer PII) — never commit
 artifacts/api-server/data/
+
+# Local secrets and generated Companion releases
+.env
+.env.*
+!.env.example
+artifacts/uc-companion/static-build/

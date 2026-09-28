@@ -41,7 +41,7 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
 import type { SupportedCountryCode } from '@workspace/api-zod/phone';
 
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 const MENU_ITEMS = [
   { label: 'My Orders',                icon: 'bag-outline'           as const, route: '/account' },
@@ -1209,7 +1209,7 @@ function AccountScreenContent() {
 
 const styles = StyleSheet.create({
   screen:           { flex: 1 },
-  guestContainer:   { flex: 1, alignItems: 'center', padding: 40, gap: 16 },
+  guestContainer:   { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', alignItems: 'center', padding: 40, gap: 16 },
   avatarPlaceholder:{ width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
   guestTitle:       { fontSize: 22, fontWeight: '700' as const, textAlign: 'center' },
   guestSub:         { fontSize: 14, textAlign: 'center', lineHeight: 22 },
@@ -1227,7 +1227,7 @@ const styles = StyleSheet.create({
   profilePhone:     { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
   editHeaderBtn:    { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
 
-  body:             { padding: 16, gap: 20 },
+  body:             { padding: 16, gap: 20, width: '100%', maxWidth: 900, alignSelf: 'center' },
   section:          { gap: 12 },
   sectionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailActions:    { flexDirection: 'row', alignItems: 'center', gap: 8 },

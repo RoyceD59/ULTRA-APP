@@ -9,9 +9,12 @@ import { useColors } from '@/hooks/useColors';
 import { useApi, type UCBlogArticleSummary } from '@/hooks/useApi';
 import { fetchBlogPage } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
+
+import SwipeTabs from '@/components/SwipeTabs';
 
 const PAGE_SIZE = 12;
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 function formatPublishedDate(value: string): string {
   const date = new Date(value);
@@ -50,6 +53,11 @@ function ArticleCard({
 }
 
 export default function BlogScreen() {
+  return <SwipeTabs tab="blog"><BlogScreenContent /></SwipeTabs>;
+}
+
+function BlogScreenContent() {
+  const layout = useCompanionLayout();
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
@@ -95,12 +103,17 @@ export default function BlogScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <FlatList
+        key={`articles-${layout.articleColumns}`}
+        numColumns={layout.articleColumns}
+        columnWrapperStyle={layout.articleColumns > 1 ? { gap: layout.gap } : undefined}
         data={articles}
         keyExtractor={(article) => article.id}
         renderItem={({ item }) => (
-          <ArticleCard article={item} onPress={() => router.push(`/blog/${encodeURIComponent(item.slug)}` as never)} />
+          <View style={{ width: layout.articleWidth }}>
+            <ArticleCard article={item} onPress={() => router.push(`/blog/${encodeURIComponent(item.slug)}` as never)} />
+          </View>
         )}
-        contentContainerStyle={[styles.listContent, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 118 : 100) }]}
+        contentContainerStyle={[styles.listContent, { paddingHorizontal: layout.gutter, paddingBottom: cartBarInset }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={(
@@ -220,7 +233,7 @@ export default function BlogScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  listContent: { paddingHorizontal: 14, gap: 12, width: '100%', maxWidth: 900, alignSelf: 'center' },
+  listContent: { paddingHorizontal: 14, gap: 12, width: '100%', maxWidth: 1200, alignSelf: 'center' },
   listHeader: { gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 13, marginHorizontal: -14, paddingHorizontal: 20, paddingBottom: 22 },
   headerIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
@@ -235,7 +248,7 @@ const styles = StyleSheet.create({
   offlineNotice: { borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
   offlineText: { fontSize: 12, flexShrink: 1 },
   articleCard: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 9 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   category: { maxWidth: '70%', overflow: 'hidden', borderRadius: 20, paddingHorizontal: 9, paddingVertical: 4, fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase', letterSpacing: 0.4 },
   date: { fontSize: 11 },
   articleTitle: { fontSize: 17, lineHeight: 23, fontWeight: '700' as const },

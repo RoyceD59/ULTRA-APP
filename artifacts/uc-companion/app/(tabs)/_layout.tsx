@@ -1,18 +1,14 @@
 import React, { useRef, useEffect } from 'react';
-import { Platform, StyleSheet, useColorScheme, View, Text, TouchableOpacity, Animated } from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
+import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
-import { useCart } from '@/context/CartContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-
-// ── Global Cart Bar ───────────────────────────────────────────────────────────
-// Floats above the tab bar from every tab when the cart is non-empty.
+import { useColors } from '@/hooks/useColors';
+import { useCart } from '@/context/CartContext';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
+import { COMPANION_TABS } from '@/lib/companionLayout';
+import CompanionNavigation from '@/components/CompanionNavigation';
 
 function formatKES(price: number) {
   return `KES ${price.toLocaleString('en-KE')}`;
@@ -22,6 +18,7 @@ function GlobalCartBar() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const layout = useCompanionLayout();
   const { totalItems, totalPrice, cartHydrated } = useCart();
 
   // Hydration guard: before the AsyncStorage read completes, `totalItems` is
@@ -40,10 +37,10 @@ function GlobalCartBar() {
     }).start();
   }, [hasItems, anim]);
 
-  // Position the compact bar just above the tab bar.
-  // Tab bar is ~49 pt tall on iOS (+ safe-area bottom), ~56 on Android, ~84 on web.
-  const tabBarHeight = Platform.OS === 'web' ? 84 : Platform.OS === 'ios' ? 49 : 56;
-  const bottomOffset = tabBarHeight + (Platform.OS === 'web' ? 0 : insets.bottom);
+  const bottomOffset = layout.size === 'compact'
+    ? layout.bottomNavigationHeight + insets.bottom + 8 : insets.bottom + 16;
+
+  if (!hasItems) return null;
 
   return (
     <Animated.View
@@ -53,6 +50,8 @@ function GlobalCartBar() {
         {
           backgroundColor: colors.primary,
           bottom: bottomOffset,
+          left: layout.navigationWidth + 12,
+          maxWidth: 680,
           opacity: anim,
           transform: [
             {
@@ -66,7 +65,7 @@ function GlobalCartBar() {
       ]}
     >
       {/* Left: item count + total */}
-      <View style={styles.barLeft}>
+      <View style={[styles.barLeft, { flexShrink: 1 }]}>
         <View style={[styles.badgeCircle, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
           <Text style={styles.badgeText}>{totalItems}</Text>
         </View>
@@ -91,143 +90,26 @@ function GlobalCartBar() {
   );
 }
 
-// ── Native-tab layout (iOS Liquid Glass) ─────────────────────────────────────
-
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="products">
-        <NativeTabs.Trigger.Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
-        <NativeTabs.Trigger.Label>Products</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="blog">
-        <NativeTabs.Trigger.Icon sf={{ default: 'book', selected: 'book.fill' }} />
-        <NativeTabs.Trigger.Label>Blog</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="support">
-        <NativeTabs.Trigger.Icon sf={{ default: 'questionmark.circle', selected: 'questionmark.circle.fill' }} />
-        <NativeTabs.Trigger.Label>Support</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="map">
-        <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} />
-        <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="account">
-        <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} />
-        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-// ── Classic tab layout (Android / web / older iOS) ───────────────────────────
-
-function ClassicTabLayout() {
-  const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
-  const { totalItems, cartHydrated } = useCart();
-
-  const tabBarStyle = {
-    position: 'absolute' as const,
-    backgroundColor: isIOS ? 'transparent' : colors.background,
-    borderTopWidth: isWeb ? 1 : 0,
-    borderTopColor: colors.border,
-    elevation: 0,
-    ...(isWeb ? { height: 84 } : {}),
-  };
-
-  return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
-        headerShown: false,
-        // Slide/shift transition between tabs — pairs with the swipe-to-switch
-        // gesture (SwipeTabs) so page selection feels like sliding.
-        animation: 'shift',
-        tabBarStyle,
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView intensity={100} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
-          ) : null,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="house" tintColor={color} size={24} /> : <Feather name="home" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="products"
-        options={{
-          title: 'Products',
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="cart" tintColor={color} size={24} /> : <Ionicons name="cart-outline" size={22} color={color} />,
-          // Hydration-gated: never show a (stale-zero-derived) badge state pre-hydration
-          tabBarBadge: cartHydrated && totalItems > 0 ? totalItems : undefined,
-        }}
-      />
-      <Tabs.Screen
-        name="blog"
-        options={{
-          title: 'Blog',
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="book" tintColor={color} size={24} /> : <Ionicons name="book-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="support"
-        options={{
-          title: 'Support',
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="questionmark.circle" tintColor={color} size={24} /> : <Ionicons name="help-circle-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="map"
-        options={{
-          title: 'Map',
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="map" tintColor={color} size={24} /> : <Feather name="map-pin" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: 'Account',
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="person" tintColor={color} size={24} /> : <Feather name="user" size={22} color={color} />,
-        }}
-      />
-    </Tabs>
-  );
-}
-
-// ── Root export ───────────────────────────────────────────────────────────────
 
 export default function TabLayout() {
+  const layout = useCompanionLayout();
+  const insets = useSafeAreaInsets();
+  const colors = useColors();
+  const bottom = layout.size === 'compact' ? layout.bottomNavigationHeight + insets.bottom : 0;
+  // Keep one navigator mounted across breakpoints: rotation must preserve the
+  // selected tab, filters, scroll position, and in-progress form state.
   return (
-    <View style={{ flex: 1 }}>
-      {isLiquidGlassAvailable() ? <NativeTabLayout /> : <ClassicTabLayout />}
-      {/* Persistent cart bar — visible from every tab when cart is non-empty */}
+    <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.background }}>
+      <Tabs tabBar={props => <CompanionNavigation {...props} />}
+        screenOptions={{ headerShown: false, animation: 'none', lazy: true,
+          sceneStyle: { marginLeft: layout.navigationWidth, marginBottom: bottom, paddingTop: insets.top, minWidth: 0 },
+        }}>
+        {COMPANION_TABS.map(tab => <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.label }} />)}
+      </Tabs>
       <GlobalCartBar />
     </View>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   globalBar: {
@@ -241,7 +123,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
-    height: 46,
+    minHeight: 56,
+    flexWrap: 'wrap',
+    gap: 8,
     // Shadow
     shadowColor: '#000',
     shadowOpacity: 0.18,
@@ -262,12 +146,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  barTotal: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  barTotal: { color: '#fff', fontSize: 13, fontWeight: '700', flexShrink: 1 },
   checkoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    minHeight: 34,
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
