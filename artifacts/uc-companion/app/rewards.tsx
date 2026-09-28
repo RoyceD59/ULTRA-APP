@@ -18,6 +18,7 @@ import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import { useColors } from '@/hooks/useColors';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
 import { buildRewardsQrPayload } from '@/lib/rewardsQr';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 
 type LedgerEntry = CustomerRewards['ledger'][number];
 
@@ -86,7 +87,7 @@ export default function RewardsScreen() {
     isRefetching,
     refetch,
   } = useQuery({
-    queryKey: ['customer-rewards'],
+    queryKey: customerQueryKeys.rewards(user?.id),
     queryFn: () => api.getRewards(),
     enabled: !!user,
     staleTime: 0,

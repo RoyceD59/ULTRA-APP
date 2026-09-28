@@ -1193,7 +1193,7 @@ function AccountScreenContent() {
         visible={redeemVisible}
         balance={rewards?.balance ?? 0}
         onClose={() => setRedeemVisible(false)}
-        onRedeemed={() => queryClient.invalidateQueries({ queryKey: ['customer-rewards'] })}
+        onRedeemed={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
       />
       {rewards && (
         <ImpactShareModal

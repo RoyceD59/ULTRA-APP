@@ -71,6 +71,26 @@ stale HTML retaining an older five-tab deployment.
 
 ## Remaining limits
 
+### Account freshness follow-up
+
+Shared products, promotions, locations, ratings and editorial queries now
+refresh every 60 seconds while active (background polling is disabled).
+Queries also refresh on browser focus/reconnect; native AppState transitions
+feed the query focus manager. This is eventual refresh, not an instantaneous
+cross-device synchronization guarantee.
+
+Rewards consumers, redemption and filter-registration updates use the same
+customer-scoped cache key. Personal location ratings are now scoped to both
+customer and location, with mutation invalidation bound to the initiating
+customer. Other customers' balances and private ratings remain isolated.
+
+The inspected source uses one DATABASE_URL connection pool. Live equality of
+deployment database settings and multi-account write/read behavior still need
+verification in the authenticated Replit deployment. The supplied project URL
+currently returns an access-required 404 in the available browser session.
+No schema migration, account merge, data backfill or production deployment has
+been performed by this follow-up.
+
 No production deployment or cache purge has been performed. The original
 loading-time complaint needs before/after network measurements with the live
 API. The web Map is still the source's location-list implementation; this

@@ -5,6 +5,7 @@ import { useColors } from '@/hooks/useColors';
 import { useApi, MapLocation, LocationRatingAggregate, LocationRating } from '@/hooks/useApi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import StarRating from '@/components/StarRating';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
@@ -21,7 +22,7 @@ export default function LocationDetailModal({
 }) {
   const colors = useColors();
   const api = useApi();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [reportingRatingId, setReportingRatingId] = useState<string | null>(null);
 
@@ -32,7 +33,7 @@ export default function LocationDetailModal({
   });
 
   const { data: myRatingRes } = useQuery({
-    queryKey: ['myLocationRating', location?.id],
+    queryKey: customerQueryKeys.locationRating(user?.id, location?.id),
     queryFn: () => api.getMyLocationRating(location!.id),
     enabled: !!location?.id && !!token,
   });
@@ -254,6 +255,7 @@ export default function LocationDetailModal({
           </ScrollView>
         ) : showRatingForm ? (
           <RatingForm
+            key={`${user?.id ?? 'guest'}:${location.id}`}
             location={location}
             existingRating={myRating}
             onClose={() => setShowRatingForm(false)}
@@ -361,6 +363,7 @@ function ReportForm({ locationId, ratingId, onClose }: { locationId: string, rat
 }
 
 function RatingForm({ location, existingRating, onClose }: { location: MapLocation, existingRating?: LocationRating | null, onClose: () => void }) {
+  const { user } = useAuth();
   const colors = useColors();
   const api = useApi();
   const queryClient = useQueryClient();
@@ -375,10 +378,10 @@ function RatingForm({ location, existingRating, onClose }: { location: MapLocati
   const [comment, setComment] = useState(existingRating?.comment || '');
 
   const mutation = useMutation({
-    mutationFn: () => api.upsertLocationRating(location.id, { ...scores, comment }),
-    onSuccess: () => {
+    mutationFn: ({ customerId: _customerId }: { customerId: number }) => api.upsertLocationRating(location.id, { ...scores, comment }),
+    onSuccess: (_data, { customerId }) => {
       queryClient.invalidateQueries({ queryKey: ['locationRatings', location.id] });
-      queryClient.invalidateQueries({ queryKey: ['myLocationRating', location.id] });
+      queryClient.invalidateQueries({ queryKey: customerQueryKeys.locationRating(customerId, location.id) });
       onClose();
     }
   });
@@ -432,8 +435,8 @@ function RatingForm({ location, existingRating, onClose }: { location: MapLocati
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.btnPrimary, { flex: 1, backgroundColor: canSubmit ? colors.primary : colors.border }]}
-          disabled={!canSubmit || mutation.isPending}
-          onPress={() => mutation.mutate()}
+          disabled={!canSubmit || !user || mutation.isPending}
+          onPress={() => user && mutation.mutate({ customerId: user.id })}
         >
           {mutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryTxt}>Submit</Text>}
         </TouchableOpacity>

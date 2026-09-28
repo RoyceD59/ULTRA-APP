@@ -8,6 +8,7 @@ describe('customer query cache isolation', () => {
   it('scopes every private resource key to the authenticated customer', () => {
     const forCustomer = (customerId: number) => [
       customerQueryKeys.orders(customerId),
+      customerQueryKeys.locationRating(customerId, 'location-1'),
       customerQueryKeys.rewards(customerId),
       customerQueryKeys.referral(customerId),
       customerQueryKeys.profile(customerId),
