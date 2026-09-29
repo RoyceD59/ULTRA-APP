@@ -1,0 +1,31 @@
+name: Companion checks
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+permissions:
+  contents: read
+jobs:
+  companion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm --filter @workspace/uc-companion... install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec tsc -b lib/api-client-react lib/api-zod
+      - run: pnpm --filter @workspace/uc-companion typecheck
+      - run: pnpm --filter @workspace/uc-companion test
+      - name: Export web preview with fixture configuration
+        working-directory: artifacts/uc-companion
+        env:
+          EXPO_PUBLIC_API_DOMAIN: localhost:5055
+          EXPO_PUBLIC_DOMAIN: localhost:5055
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_bG9jYWxob3N0JA
+        run: pnpm exec expo export --platform web --output-dir dist --max-workers 2

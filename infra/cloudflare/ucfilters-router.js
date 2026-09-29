@@ -131,6 +131,13 @@ async function routeRequest(request) {
   }
 
   const contentType = headers.get("Content-Type") || "";
+  // HTML and release metadata must always reflect the current deployment.
+  // A cached shell can point at removed bundles and hide newly shipped tabs.
+  if (contentType.includes("text/html") || incoming.pathname === "/version.json") {
+    headers.set("Cache-Control", "no-store");
+    headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+    headers.delete("Expires");
+  }
   const isExpoManifest =
     isCompanionHost &&
     contentType.includes("application/json") &&

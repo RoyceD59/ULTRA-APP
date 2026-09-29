@@ -229,7 +229,7 @@ describe('other cart surfaces respect cartHydrated (source-level tripwires)', ()
       'GlobalCartBar must gate hasItems on cartHydrated');
 
     // The Products tab badge must not derive from the pre-hydration default.
-    assert.match(src, /tabBarBadge:\s*cartHydrated\s*&&\s*totalItems\s*>\s*0/,
+    assert.match(readAppSource('components/CompanionNavigation.tsx'), /cartHydrated\s*&&\s*totalItems\s*>\s*0/,
       'the tab badge must be gated on cartHydrated');
   });
 
@@ -246,9 +246,8 @@ describe('other cart surfaces respect cartHydrated (source-level tripwires)', ()
     }
   });
 
-  it('H: useCartBarInset returns 0 until cartHydrated', () => {
+  it('H: useCartBarInset delegates hydration-aware spacing to the shared layout helper', () => {
     const src = readAppSource('hooks/useCartBarInset.ts');
-    assert.match(src, /if\s*\(\s*!cartHydrated\s*\|\|\s*!totalItems\s*\)\s*return\s*0/,
-      'useCartBarInset must treat the bar as absent until cartHydrated');
+    assert.match(src, /cartContentInset\(cartHydrated, totalItems, insets.bottom, fontScale\)/);
   });
 });

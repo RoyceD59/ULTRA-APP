@@ -17,6 +17,7 @@ import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import { catalogueQueryKey } from '@/lib/catalogueQuery';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
 import { featuredState } from '@/lib/customerScreenState';
 import { fetchBlogPage } from '@/lib/blogContent';
 
@@ -66,6 +67,7 @@ export default function HomeScreen() {
 }
 
 function HomeScreenContent() {
+  const layout = useCompanionLayout();
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
@@ -73,7 +75,7 @@ function HomeScreenContent() {
   const api = useApi();
   const [filterDays, setFilterDays] = useState<number | null>(null);
   const [filterAdjusted, setFilterAdjusted] = useState(false);
-  const topPad = Platform.OS === 'web' ? 67 : 0;
+  const topPad = 0;
 
   const { data: products, isLoading, isError, refetch: retryProducts } = useQuery({
     queryKey: catalogueQueryKey(),
@@ -146,7 +148,7 @@ function HomeScreenContent() {
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topPad + 16 }]}>
-        <View>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.greeting}>{greeting()}{user ? `, ${user.firstName}` : ''}</Text>
           <Text style={styles.headerSub}>Your water, your health</Text>
         </View>
@@ -159,7 +161,7 @@ function HomeScreenContent() {
         </TouchableOpacity>
       </View>
 
-       <View style={styles.body}>
+       <View style={[styles.body, { padding: layout.gutter }]}>
         {/* Filter Health */}
         <TouchableOpacity accessibilityRole="button" accessibilityLabel={filterDays !== null ? 'View filter status' : 'Register your filter'}
           onPress={() => router.push('/(tabs)/account' as never)} activeOpacity={0.8}
@@ -265,7 +267,7 @@ function HomeScreenContent() {
             {QUICK_ACTIONS.map(a => (
               <TouchableOpacity key={a.id} activeOpacity={0.8}
                 onPress={() => router.push(a.route as never)}
-                style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                style={[styles.actionCard, { minWidth: layout.size === 'compact' ? '45%' : '20%', backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.actionIcon, { backgroundColor: a.color + '18' }]}>
                   <Ionicons name={a.icon} size={24} color={a.color} />
                 </View>
@@ -300,7 +302,7 @@ function HomeScreenContent() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 12, paddingHorizontal: 2, paddingVertical: 4 }}
             renderItem={({ item }) => (
-              <View style={{ width: 180 }}>
+              <View style={{ width: Math.max(156, Math.min(240, layout.cardWidth)) }}>
                 <ProductCard product={item} onPress={() => router.push(`/product/${item.id}` as never)} />
               </View>
             )}
@@ -334,7 +336,7 @@ const styles = StyleSheet.create({
   filterTitle: { fontSize: 14, fontWeight: '600' as const },
   filterSub: { fontSize: 12, marginTop: 2 },
   section: {},
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionHeader: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '700' as const },
   seeAll: { fontSize: 14, fontWeight: '500' as const },
   statusAction: { minHeight: 44, justifyContent: 'center', alignItems: 'center', gap: 8 },

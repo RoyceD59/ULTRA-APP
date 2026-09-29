@@ -57,6 +57,7 @@ export type { SwipeTab } from '../lib/swipeTabs';
 const TAB_HREF: Record<SwipeTab, Href> = {
   index: '/',
   products: '/products',
+  blog: '/blog',
   support: '/support',
   map: '/map',
   account: '/account',

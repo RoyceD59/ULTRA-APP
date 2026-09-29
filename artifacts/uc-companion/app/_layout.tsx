@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { Stack, useRouter } from 'expo-router';
-import { TouchableOpacity, Text } from 'react-native';
+import { TouchableOpacity, Text, AppState, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
@@ -25,6 +25,7 @@ import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 import { cartBackDestination } from '@/lib/customerScreenState';
+import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
 
 // Set API base URL before any component renders
 const apiBase = getApiBase();
@@ -46,7 +47,10 @@ const queryClient = new QueryClient({
       staleTime: 2 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
       retry: 1,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: 'always',
+      refetchOnReconnect: 'always',
+      refetchInterval: query => sharedDataRefreshInterval(query.queryKey),
+      refetchIntervalInBackground: false,
     },
   },
 });
@@ -62,6 +66,16 @@ function RootLayoutNav() {
   useNativeNotificationRouting();
 
   useWaterTestHandoffCapture();
+
+  useEffect(() => {
+    // React Query already handles browser visibility; native needs AppState.
+    if (Platform.OS === 'web') return;
+    focusManager.setFocused(AppState.currentState === 'active');
+    const subscription = AppState.addEventListener('change', state => {
+      focusManager.setFocused(state === 'active');
+    });
+    return () => { subscription.remove(); focusManager.setFocused(undefined); };
+  }, []);
 
   useEffect(() => {
     const tokenBeforeUpdate = previousToken.current;

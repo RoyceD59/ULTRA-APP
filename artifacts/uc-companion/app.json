@@ -3,7 +3,7 @@
     "name": "Ultra-Clear Companion",
     "slug": "uc-companion",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "uc-companion",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
       "policy": "appVersion"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.ultraclean.companion",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Ultra-Clear uses your location to show nearby experience centres and water refill ATMs.",
