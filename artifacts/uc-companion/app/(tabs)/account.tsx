@@ -11,6 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
+import CareOverviewEntry from '@/components/CareOverviewEntry';
 import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
 import {
@@ -1112,6 +1113,7 @@ function AccountScreenContent() {
           )}
 
           {/* Menu */}
+          <CareOverviewEntry />
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>My Account</Text>
             <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
