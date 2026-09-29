@@ -1,0 +1,39 @@
+name: Refill foundation checks
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run typecheck:libs
+      - run: pnpm --filter @workspace/api-server typecheck
+      - run: pnpm --filter @workspace/projecthub typecheck
+      - run: pnpm --filter @workspace/uc-companion typecheck
+      - run: pnpm --filter @workspace/api-server build
+      - name: Build Project Hub preview
+        env:
+          PORT: '5055'
+          BASE_PATH: '/'
+        run: pnpm --filter @workspace/projecthub build
+      - name: Check isolated API routes and refill economics
+        working-directory: artifacts/api-server
+        env:
+          DATABASE_URL: postgres://localhost:1/refill_test_unused
+          SESSION_SECRET: unit-test-only
+        run: node --import tsx/esm --test src/tests/refill-readiness.test.ts
+      - run: pnpm --filter @workspace/projecthub test
+      - run: pnpm --filter @workspace/uc-companion test

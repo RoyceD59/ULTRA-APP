@@ -38,6 +38,7 @@ import orderStatusWebhookRouter from "./order-status-webhook.js";
 import agentOauthRouter from "./agent-oauth.js";
 import guidesRouter from "./guides.js";
 import blogRouter from "./blog.js";
+import refillReadinessRouter from "./refill-readiness.js";
 
 const router: IRouter = Router();
 
@@ -78,6 +79,7 @@ router.use(anthropicRouter);
 router.use(agentOauthRouter);
 router.use(guidesRouter);
 router.use(blogRouter);
+router.use(refillReadinessRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);

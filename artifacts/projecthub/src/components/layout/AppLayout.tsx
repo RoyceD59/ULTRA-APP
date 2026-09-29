@@ -48,6 +48,7 @@ const ADMIN_NAVIGATION = [
   ["Inventory", "/admin/inventory", Package],
   ["Integrations", "/admin/integrations", Link2],
   ["Rewards", "/admin/rewards", Gift],
+  ["Care & Refill Readiness", "/admin/refill-readiness", Droplets],
   ["Referral Support", "/admin/referrals", BellRing],
   ["Promotions", "/admin/promotions", Tag],
   ["Locations", "/admin/locations", MapPin],

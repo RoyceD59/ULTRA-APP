@@ -37,6 +37,7 @@ import AdminNotificationSettingsPage from '@/pages/admin/notification-settings';
 import AdminInventoryPage from '@/pages/admin/inventory';
 import AdminIntegrationsPage from '@/pages/admin/integrations';
 import AdminRewardsPage from '@/pages/admin/rewards';
+import RefillReadinessPage from '@/pages/admin/refill-readiness';
 import AdminCustomersPage from '@/pages/admin/customers';
 import AdminUnsyncedRegistrationsPage from '@/pages/admin/unsynced-registrations';
 import AdminReferralsPage from '@/pages/admin/referrals';
@@ -128,6 +129,7 @@ function Router() {
               <Route path="/admin/inventory"><AdminGuard><AdminInventoryPage /></AdminGuard></Route>
               <Route path="/admin/integrations"><AdminGuard><AdminIntegrationsPage /></AdminGuard></Route>
               <Route path="/admin/rewards"><AdminGuard><AdminRewardsPage /></AdminGuard></Route>
+              <Route path="/admin/refill-readiness"><AdminGuard><RefillReadinessPage /></AdminGuard></Route>
               <Route path="/admin/customers"><AdminGuard><AdminCustomersPage /></AdminGuard></Route>
               <Route path="/admin/unsynced-registrations"><AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard></Route>
               <Route path="/admin/referrals"><AdminGuard><AdminReferralsPage /></AdminGuard></Route>

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./instant-water-identity": "./src/instant-water-identity.ts",
-    "./phone": "./src/phone.ts"
+    "./phone": "./src/phone.ts",
+    "./refill-readiness": "./src/refill-readiness.ts"
   },
   "dependencies": {
     "libphonenumber-js": "^1.13.13",
