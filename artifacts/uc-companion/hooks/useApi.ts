@@ -746,6 +746,7 @@ export function useApi() {
 
     /** Fetch the current user's loyalty-points balance and recent ledger. */
     getRewards: () => get<CustomerRewards>('/api/uc/customer/rewards'),
+    getRefillCapabilities: () => get<unknown>('/api/uc/refill/capabilities'),
     /** Explicit recovery action; normally the issued token is reused from SecureStore. */
     rotateRewardsQr: () => post<{ qrToken: string }>('/api/uc/customer/rewards/qr/rotate'),
     /** Acknowledge the push lifecycle for this account; no device token is sent. */
