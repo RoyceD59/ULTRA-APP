@@ -19,7 +19,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm exec tsc -b lib/api-client-react lib/api-zod
+      - run: pnpm run typecheck:libs
       - run: pnpm --filter @workspace/api-server typecheck
       - run: pnpm --filter @workspace/projecthub typecheck
       - run: pnpm --filter @workspace/uc-companion typecheck
