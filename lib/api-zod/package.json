@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./instant-water-identity": "./src/instant-water-identity.ts",
     "./phone": "./src/phone.ts",
-    "./refill-readiness": "./src/refill-readiness.ts"
+    "./refill-readiness": "./src/refill-readiness.ts",
+    "./refill-governance": "./src/refill-governance.ts"
   },
   "dependencies": {
     "libphonenumber-js": "^1.13.13",

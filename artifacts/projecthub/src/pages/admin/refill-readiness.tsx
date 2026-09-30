@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { getAuthHeaders } from '@/lib/team-auth';
 import { apiUrl } from '@/lib/api-base';
 import { parseFixedUnits } from '@/lib/refill-input';
+import { Link } from 'wouter';
 
 type Readiness = {
   phase: string; activationAllowed: false;
@@ -58,6 +59,7 @@ export default function RefillReadinessPage() {
       {readiness.isPending ? <p role="status">Loading controls…</p> : readiness.isError ? <div role="alert"><p>We couldn't refresh the rollout controls.</p><Button variant="outline" onClick={() => { void readiness.refetch(); }}>Retry controls</Button></div> : <>
         <ul className="space-y-2 list-disc pl-5 text-sm">{readiness.data?.blockers.map(item => <li key={item.id}>{item.message}</li>)}</ul>
         <p className="text-sm text-muted-foreground">All new switches default off. The care overview links to existing free-member features only.</p>
+        {import.meta.env.VITE_UC_REFILL_GOVERNANCE_PREVIEW === 'true' && <Link href="/admin/refill-governance" className="inline-block text-sm underline">Open station and campaign governance →</Link>}
       </>}
     </section>
     <section className="rounded-xl border p-5 space-y-5" aria-labelledby="refill-preview-heading">
