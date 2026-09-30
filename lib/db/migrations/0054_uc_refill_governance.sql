@@ -1,6 +1,7 @@
 -- Additive governance only. No customer credit, vendor volume or cash is posted here.
 -- Apply to a backed-up database before exposing governance routes. Existing UC
 -- accounts, rewards, orders, impact and payments are left untouched.
+BEGIN;
 CREATE TABLE IF NOT EXISTS uc_refill_station_actions (
   id bigserial PRIMARY KEY,
   station_id text NOT NULL REFERENCES uc_locations(id),
@@ -80,3 +81,4 @@ CREATE TRIGGER uc_refill_campaign_versions_immutable BEFORE UPDATE OR DELETE
 DROP TRIGGER IF EXISTS uc_refill_campaign_actions_immutable ON uc_refill_campaign_actions;
 CREATE TRIGGER uc_refill_campaign_actions_immutable BEFORE UPDATE OR DELETE
   ON uc_refill_campaign_actions FOR EACH ROW EXECUTE FUNCTION uc_refill_reject_immutable_change();
+COMMIT;
