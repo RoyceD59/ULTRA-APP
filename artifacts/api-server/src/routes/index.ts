@@ -39,6 +39,7 @@ import agentOauthRouter from "./agent-oauth.js";
 import guidesRouter from "./guides.js";
 import blogRouter from "./blog.js";
 import refillReadinessRouter from "./refill-readiness.js";
+import refillGovernanceRouter from "./refill-governance.js";
 
 const router: IRouter = Router();
 
@@ -80,6 +81,7 @@ router.use(agentOauthRouter);
 router.use(guidesRouter);
 router.use(blogRouter);
 router.use(refillReadinessRouter);
+router.use(refillGovernanceRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);
