@@ -76,7 +76,8 @@ test('station, operator and immutable rule approvals are enforced in PostgreSQL'
     await assert.rejects(pool.query('UPDATE uc_refill_campaign_versions SET max_grants=999 WHERE id=$1', [created.body.id]), /append-only/);
     await assert.rejects(pool.query('DELETE FROM uc_refill_campaign_actions WHERE campaign_version_id=$1', [created.body.id]), /append-only/);
     assert.equal((await api.post(`${url}/rules/${created.body.id}/suspend`).set(auth('maker', 'admin')).send(reason)).status, 200);
-    assert.equal((await api.get(`${url}/rules`).set(auth('checker', 'admin'))).body[0].status, 'suspended');
+    const listed = await api.get(`${url}/rules`).set(auth('checker', 'admin'));
+    assert.equal(listed.body.find((rule: { id: string }) => rule.id === created.body.id)?.status, 'suspended');
 
     await pool.query("UPDATE team_users SET is_active=false WHERE id='operator'");
     scope = await api.get('/api/uc/station/refill/scope').set(auth('operator', 'member'));
