@@ -11,6 +11,9 @@ describe("preview isolation", () => {
     assert.throws(() => assertPreviewIsolation({ ...safe, DATABASE_URL: "postgres://preview:preview@api.ucfilters.com/ultra_preview" }), /disposable/);
     assert.throws(() => assertPreviewIsolation({ ...safe, MPESA_PASSKEY: "x" }), /MPESA_PASSKEY/);
     assert.throws(() => assertPreviewIsolation({ ...safe, AI_ORCHESTRATOR_WEBHOOK_URL: "https://team-horizon--jerryaroyce.replit.app" }), /AI_ORCHESTRATOR/);
+    assert.doesNotThrow(() => assertPreviewIsolation({ ...safe, AI_INTEGRATIONS_ANTHROPIC_API_KEY: "preview-no-external-ai", AI_INTEGRATIONS_ANTHROPIC_BASE_URL: "http://team-ai-mock:6060/anthropic" }));
+    assert.throws(() => assertPreviewIsolation({ ...safe, AI_INTEGRATIONS_ANTHROPIC_API_KEY: "live-key" }), /real Anthropic/);
+    assert.throws(() => assertPreviewIsolation({ ...safe, AI_INTEGRATIONS_ANTHROPIC_BASE_URL: "https://api.anthropic.com" }), /local mock/);
   });
   it("admits only exact local preview origins", () => {
     const origins = buildCorsOrigins({ ...safe, NODE_ENV: "production", PREVIEW_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5055" });

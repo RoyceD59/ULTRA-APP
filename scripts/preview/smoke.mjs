@@ -19,4 +19,8 @@ for (const port of [5055, 3000]) {
   assert.match(await page.text(), /<html/i);
 }
 await check(':3000/healthz');
+for (const route of ['products', 'blog', 'support', 'map', 'account']) {
+  const page = await check(`:3000/${route}`);
+  assert.match(page.headers.get('content-type') ?? '', /text\/html/);
+}
 console.log('Preview API, CORS isolation, Project Hub, and Companion are reachable');

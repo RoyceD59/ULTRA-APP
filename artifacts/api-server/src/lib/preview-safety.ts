@@ -18,6 +18,12 @@ export function assertPreviewIsolation(env: NodeJS.ProcessEnv): void {
   ];
   const populated = forbiddenNames.filter(name => !!env[name]?.trim());
   if (populated.length) throw new Error(`Preview refuses live-capable credentials: ${populated.join(", ")}`);
+  if (env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] && env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] !== "preview-no-external-ai") {
+    throw new Error("Preview refuses a real Anthropic integration key");
+  }
+  if (env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"] && env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"] !== "http://team-ai-mock:6060/anthropic") {
+    throw new Error("Preview requires the local mock Anthropic endpoint");
+  }
   const forbiddenHosts = /(?:^|[/.])(?:ucfilters\.com|ucfilters\.co\.ke|replit\.app)(?:[/:]|$)/i;
   for (const name of ["AI_ORCHESTRATOR_WEBHOOK_URL", "WC_BASE_URL", "PROJECTHUB_URL", "COMPANION_ALISON_BASE_URL"]) {
     if (forbiddenHosts.test(env[name] ?? "")) throw new Error(`Preview refuses a live endpoint in ${name}`);

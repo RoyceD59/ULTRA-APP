@@ -58,6 +58,8 @@ services:
       PREVIEW_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5055
       UC_REFILL_GOVERNANCE_PREVIEW: "true"
       AI_ORCHESTRATOR_WEBHOOK_URL: http://team-ai-mock:6060/webhook/projecthub
+      AI_INTEGRATIONS_ANTHROPIC_BASE_URL: http://team-ai-mock:6060/anthropic
+      AI_INTEGRATIONS_ANTHROPIC_API_KEY: preview-no-external-ai
     ports:
       - "127.0.0.1:5000:5000"
     depends_on:

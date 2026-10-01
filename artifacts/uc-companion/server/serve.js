@@ -12,6 +12,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { isWebAppRoute } = require('./web-routes.cjs');
 
 const STATIC_ROOT =
   process.env.STATIC_ROOT || path.resolve(__dirname, '..', 'static-build');
@@ -227,7 +228,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   let pathname = url.pathname;
 
-  if (basePath && pathname.startsWith(basePath)) {
+  if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))) {
     pathname = pathname.slice(basePath.length) || '/';
   }
 
@@ -278,7 +279,7 @@ const server = http.createServer((req, res) => {
   if (serveStaticFile(pathname, res)) return;
 
   const acceptsHtml = req.headers.accept?.includes('text/html');
-  if (req.method === 'GET' && acceptsHtml) {
+  if (req.method === 'GET' && (acceptsHtml || isWebAppRoute(pathname))) {
     // Serve the web bundle when one is available; fall back to the landing page
     // when the bundle is absent (e.g. the window between old-bundle removal and
     // new-bundle arrival during a rebuild).  This prevents a blank or 404
@@ -287,7 +288,7 @@ const server = http.createServer((req, res) => {
     return serveLandingPage(req, res, landingPageTemplate, appName);
   }
 
-  res.writeHead(404);
+  res.writeHead(404, { 'cache-control': 'no-store' });
   res.end('Not Found');
 });
 

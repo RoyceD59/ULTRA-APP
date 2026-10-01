@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
+import webRoutes from '../../artifacts/uc-companion/server/web-routes.cjs';
 
 const root = resolve(process.argv[2] || 'dist');
 const port = Number(process.env.PORT || 3000);
@@ -19,7 +20,9 @@ http.createServer(async (req, res) => {
     if ((await stat(file)).isDirectory()) file = resolve(file, 'index.html');
     await stat(file);
   } catch {
-    if (!req.headers.accept?.includes('text/html')) { res.writeHead(404).end(); return; }
+    if (!req.headers.accept?.includes('text/html') && !webRoutes.isWebAppRoute(pathname)) {
+      res.writeHead(404, { 'Cache-Control': 'no-store' }).end(); return;
+    }
     file = resolve(root, 'index.html');
   }
   try {
