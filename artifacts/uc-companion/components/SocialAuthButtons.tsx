@@ -34,6 +34,11 @@ WebBrowser.maybeCompleteAuthSession();
 type Provider = 'google' | 'apple';
 
 export default function SocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
+  if (process.env.EXPO_PUBLIC_PREVIEW_SAFE_MODE === '1') return null;
+  return <ConnectedSocialAuthButtons onSuccess={onSuccess} />;
+}
+
+function ConnectedSocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
   useWarmUpBrowser();
   const colors = useColors();
   const { startSSOFlow } = useSSO();

@@ -1,0 +1,51 @@
+name: Isolated preproduction preview
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4.4.0
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Check preview guards
+        run: |
+          node --test artifacts/uc-companion/scripts/__tests__/validate-preview-build.test.mjs
+          pnpm --filter @workspace/api-server exec node --import tsx/esm --test src/tests/preview-safety.test.ts
+      - name: Validate and start isolated containers
+        run: |
+          docker compose -p ultra-preview -f infra/preview/compose.yaml config --quiet
+          docker compose -p ultra-preview -f infra/preview/compose.yaml up --build --detach --wait --wait-timeout 1200
+      - name: Smoke-check all three app surfaces
+        run: |
+          node scripts/preview/smoke.mjs
+          test "$(docker compose -p ultra-preview -f infra/preview/compose.yaml exec -T db psql -U preview -d ultra_preview -tAc "SELECT to_regclass('public.uc_refill_campaign_versions') IS NOT NULL")" = "t"
+      - name: Exercise responsive browser navigation
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright test
+      - name: Capture container logs
+        if: always()
+        run: docker compose -p ultra-preview -f infra/preview/compose.yaml logs --no-color > preview-compose.log 2>&1 || true
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: preview-evidence
+          path: |
+            preview-compose.log
+            preview-playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Remove CI-only preview database
+        if: always()
+        run: docker compose -p ultra-preview -f infra/preview/compose.yaml down --volumes || true
