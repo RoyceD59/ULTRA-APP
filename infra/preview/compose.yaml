@@ -94,7 +94,7 @@ services:
       PORT: "3000"
       EXPO_PUBLIC_API_DOMAIN: localhost:5000
       EXPO_PUBLIC_DOMAIN: localhost:3000
-      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsucHJldmlldy5sb2NhbGhvc3Qk
+      EXPO_PUBLIC_PREVIEW_SAFE_MODE: "1"
     depends_on:
       hub:
         condition: service_healthy

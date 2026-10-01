@@ -7,3 +7,6 @@ const expected = mode === 'hub' ? ['http://localhost:5000'] : ['localhost:5000',
 if (values.some((value, index) => value !== expected[index])) {
   throw new Error(`${mode} preview build refuses non-local origins`);
 }
+if (mode === 'companion' && process.env.EXPO_PUBLIC_PREVIEW_SAFE_MODE !== '1') {
+  throw new Error('Companion preview must disable connected sign-in');
+}
