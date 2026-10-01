@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
+import { assertPreviewIsolation } from "./lib/preview-safety.js";
 
 if (process.env.NODE_ENV === "production" &&
     !(process.env.WATER_CHECK_TOKEN_SECRET || process.env.SESSION_SECRET)) {
@@ -2243,6 +2244,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+assertPreviewIsolation(process.env);
 applyStartupMigrations()
   .then(async () => {
     // Post-merge setup runs this process before drizzle-kit compares the
@@ -2252,6 +2254,16 @@ applyStartupMigrations()
     if (process.env["STARTUP_MIGRATIONS_ONLY"] === "1") {
       logger.info("Startup migrations completed in migration-only mode");
       process.exit(0);
+    }
+
+    if (process.env["PREVIEW_SAFE_MODE"] === "1") {
+      const server = app.listen(port, (err?: Error) => {
+        if (err) { logger.error({ err }, "Preview API listen failed"); process.exit(1); }
+        logger.info({ port }, "Isolated preview API listening; background and outbound startup work disabled");
+      });
+      process.on("SIGTERM", () => shutdown(server, "SIGTERM"));
+      process.on("SIGINT", () => shutdown(server, "SIGINT"));
+      return;
     }
 
     // Fire-and-forget — a failure here must not prevent the server from starting.
