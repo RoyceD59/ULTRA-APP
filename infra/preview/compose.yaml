@@ -14,8 +14,6 @@ services:
       POSTGRES_USER: preview
       POSTGRES_PASSWORD: preview-local-only
       POSTGRES_DB: ultra_preview
-    ports:
-      - "127.0.0.1:55432:5432"
     volumes:
       - preview-db:/var/lib/postgresql/data
     networks: [preview]
@@ -59,8 +57,6 @@ services:
       AI_ORCHESTRATOR_WEBHOOK_URL: http://team-ai-mock:6060/webhook/projecthub
       AI_INTEGRATIONS_ANTHROPIC_BASE_URL: http://team-ai-mock:6060/anthropic
       AI_INTEGRATIONS_ANTHROPIC_API_KEY: preview-no-external-ai
-    ports:
-      - "127.0.0.1:5000:5000"
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -81,8 +77,6 @@ services:
       BASE_PATH: /
       VITE_API_BASE_URL: http://localhost:5000
       VITE_UC_REFILL_GOVERNANCE_PREVIEW: "true"
-    ports:
-      - "127.0.0.1:5055:5055"
     depends_on:
       api:
         condition: service_healthy
@@ -101,8 +95,6 @@ services:
       EXPO_PUBLIC_API_DOMAIN: localhost:5000
       EXPO_PUBLIC_DOMAIN: localhost:3000
       EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsucHJldmlldy5sb2NhbGhvc3Qk
-    ports:
-      - "127.0.0.1:3000:3000"
     depends_on:
       hub:
         condition: service_healthy
@@ -113,9 +105,33 @@ services:
       timeout: 5s
       retries: 30
 
+  gateway:
+    image: nginx:stable-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [preview, browser]
+    ports:
+      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:5055:5055"
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+      hub:
+        condition: service_healthy
+      companion:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   preview-db:
 
 networks:
   preview:
     internal: true
+  browser:
+    driver: bridge
