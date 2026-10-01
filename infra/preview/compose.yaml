@@ -53,7 +53,6 @@ services:
       PORT: "5000"
       DATABASE_URL: postgres://preview:preview-local-only@db:5432/ultra_preview
       SESSION_SECRET: isolated-local-preview-session-secret
-      CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsucHJldmlldy5sb2NhbGhvc3Qk
       PREVIEW_SAFE_MODE: "1"
       PREVIEW_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5055
       UC_REFILL_GOVERNANCE_PREVIEW: "true"

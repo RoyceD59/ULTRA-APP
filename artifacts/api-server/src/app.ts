@@ -80,7 +80,9 @@ app.use(
 // ─── Clerk proxy (production social sign-in) ─────────────────────────────────
 // Streams raw bytes to Clerk's Frontend API — must be mounted before any body
 // parser. Dev traffic goes to Clerk's dev FAPI directly and never hits this.
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+if (process.env.PREVIEW_SAFE_MODE !== "1") {
+  app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+}
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 // Expo web and the separately hosted production web apps call the API from
@@ -117,14 +119,18 @@ app.use(
 // Resolve the publishable key from the incoming request host so the same
 // server can serve multiple Clerk custom domains. Falls back to
 // CLERK_PUBLISHABLE_KEY when the host doesn't map to a custom domain.
-app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
-);
+// The isolated preview has no Clerk instance or credentials. Its public routes
+// can still be checked, while authenticated flows require connected staging.
+if (process.env.PREVIEW_SAFE_MODE !== "1") {
+  app.use(
+    clerkMiddleware((req) => ({
+      publishableKey: publishableKeyFromHost(
+        getClerkProxyHost(req) ?? "",
+        process.env.CLERK_PUBLISHABLE_KEY,
+      ),
+    })),
+  );
+}
 
 app.use("/api", router);
 
