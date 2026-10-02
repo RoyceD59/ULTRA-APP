@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "uc-hydrate-forest",
+  "account_id": "c6ef5ecddd874fc1891f829f9c6e2ba7",
+  "pages_build_output_dir": "../../../artifacts/uc-companion/forest-dist",
+  "compatibility_date": "2026-10-02"
+}

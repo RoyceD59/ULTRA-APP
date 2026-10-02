@@ -12,6 +12,7 @@ import { migrateAndGuardSessionDir } from "./lib/whatsapp";
 import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/account-records.js";
 import { processPendingReferralSettlements } from "./routes/referrals.js";
 import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
+import { ensureHydrateTreeSchema } from "./lib/hydrate-tree-schema.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -2173,6 +2174,9 @@ async function applyStartupMigrations(): Promise<void> {
       ON instant_water_lead_outbox(status, next_attempt_at);
   `);
   logger.info("Startup migration: instant water assessment and ticket tables ensured");
+
+  await ensureHydrateTreeSchema(pool);
+  logger.info("Startup migration: hydrate shared trees ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;

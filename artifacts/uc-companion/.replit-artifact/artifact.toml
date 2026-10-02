@@ -15,10 +15,10 @@ localPort = 20002
 run = "pnpm --filter @workspace/uc-companion run dev"
 
 [services.production]
-run = [ "pnpm", "--filter", "@workspace/uc-companion", "run", "serve" ]
+run = [ "node", "infra/cloudflare/forest/release-build.mjs", "serve-companion" ]
 
 [services.production.build]
-args = [ "pnpm", "--filter", "@workspace/uc-companion", "run", "build" ]
+args = [ "node", "infra/cloudflare/forest/release-build.mjs", "companion" ]
 
 [services.production.build.env]
 EXPO_PUBLIC_DOMAIN = "app.ucfilters.com"

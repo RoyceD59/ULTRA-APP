@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hydrate the Future Forest Programme</title>
+<meta name="description" content="Ultra Clear customer contributions allocated to tree growing and restoration in Kenya through Hydrate the Future.">
+<!-- API that serves live totals (GET /api/uc/impact/forest), e.g. https://api.ucfilters.com.
+     Leave empty to show the interim figures below. -->
+<meta name="uc-api-base" content="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<!--
+  Hydrate the Future™ public forest — standalone page linked from the
+  Companion Impact Card.
+
+  Link format:  /?tree=UC-AB72CD&stage=sapling
+           or:  /#tree-UC-AB72CD-sapling
+  The link carries an anonymous id and a growth stage only — never names,
+  amounts or percentages.
+
+  Hosting (Cloudflare Pages): deploy this folder as a Pages project, add a
+  custom domain such as forest.ucfilters.com, set the uc-api-base meta above,
+  and set EXPO_PUBLIC_FOREST_URL in the Companion build to the page address.
+  The Impact Card hides the forest button until that variable is set.
+
+  Live figures come from the API and refresh every 5 minutes. Planted and
+  established counts are set on the API (FOREST_TREES_PLANTED,
+  FOREST_TREES_ESTABLISHED, FOREST_REPORT_DATE). FALLBACK below is shown only
+  when the API is unset or unreachable.
+
+  Programme updates (donation dates, certificate, partner, field report,
+  news) live in programme-status.json next to this file. Edit that file,
+  not this one; instructions are inside it.
+-->
+<style>
+/* Layout: canvas forest as the hero, then a narrow reading column of figures, stages and method. */
+:root {
+  --canopy: #1f5c3d;      /* forest green — primary accent */
+  --leaf: #3f8f5f;
+  --soil: #a4492a;        /* Kenyan red soil — used only for ground and the stage strip */
+  --water: #0a77a8;       /* Ultra Clear blue — links to the water brand */
+  --bg: #f3f6f1;
+  --surface: #ffffff;
+  --fg: #16261c;
+  --muted: #56685b;
+  --line: #d6e0d6;
+  --sky-top: #cfe6ef;
+  --sky-low: #eef4e6;
+  --ring: #f2b705;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canopy: #7cc89a; --leaf: #4f9e6f; --soil: #c9653f; --water: #5cb8e0;
+    --bg: #0f1712; --surface: #17221b; --fg: #e5eee7; --muted: #9db2a3; --line: #2a3a2f;
+    --sky-top: #0d1f2b; --sky-low: #1a2a1f; --ring: #f2c94c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canopy: #7cc89a; --leaf: #4f9e6f; --soil: #c9653f; --water: #5cb8e0;
+  --bg: #0f1712; --surface: #17221b; --fg: #e5eee7; --muted: #9db2a3; --line: #2a3a2f;
+  --sky-top: #0d1f2b; --sky-low: #1a2a1f; --ring: #f2c94c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 1rem/1.6 var(--font-body); }
+a { color: var(--water); }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+.hero { position: relative; }
+#forest { display: block; width: 100%; height: clamp(300px, 56vw, 540px); }
+.sky-bar { max-width: 46rem; margin: .4rem auto 0; padding-inline: 1rem; display: flex; flex-wrap: wrap; gap: .25rem 1rem; justify-content: space-between; align-items: center; }
+.caption, .sky-line { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); min-width: 0; }
+.sky-line { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.sky-note { margin: 0; flex-basis: 100%; font: 400 .72rem/1.45 var(--font-body); color: var(--muted); max-width: 65ch; }
+.sky-btn { font: 600 .72rem/1 var(--font-body); color: var(--canopy); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: .4rem .7rem; cursor: pointer; }
+.hero-copy { padding: 1.25rem 1rem 0; max-width: 46rem; margin: 0 auto; }
+.eyebrow { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .12em; text-transform: uppercase; color: var(--canopy); }
+h1 { margin: .35rem 0 .5rem; font: 800 clamp(2rem, 6vw, 3.4rem)/1.02 var(--font-display); letter-spacing: -.03em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; font-size: 1.08rem; }
+
+main { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 1.5rem 3rem; display: grid; gap: 2.25rem; }
+h2 { margin: 0 0 .75rem; font: 700 1.35rem/1.2 var(--font-display); letter-spacing: -.01em; text-wrap: balance; }
+
+.yours { display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: center; padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.yours .badge { width: 3.25rem; height: 3.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--ring); color: #2b2200; font: 800 1.2rem var(--font-display); }
+.yours p { margin: 0; min-width: 0; }
+.tree-id { font: 500 .85rem var(--font-data); color: var(--muted); }
+.stage-name { font: 700 1.15rem/1.3 var(--font-display); color: var(--canopy); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin: 0; }
+.figures div { padding: .9rem 1rem; border-top: 3px solid var(--canopy); background: var(--surface); border-radius: 0 0 10px 10px; min-width: 0; }
+.figures dt { font-size: .85rem; color: var(--muted); }
+.figures dd { margin: .2rem 0 0; font: 600 1.35rem/1.25 var(--font-data); font-variant-numeric: tabular-nums; }
+.figures dd small { display: block; font: 400 .82rem/1.4 var(--font-body); color: var(--muted); margin-top: .15rem; }
+.figures .pending dd { font: 600 1rem/1.35 var(--font-body); color: var(--muted); }
+.basis { margin: .75rem 0 0; font-size: .9rem; color: var(--muted); }
+.status { margin: -.25rem 0 .75rem; font: 500 .78rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); }
+.status.live::before { content: ""; display: inline-block; width: .5rem; height: .5rem; margin-right: .4rem; border-radius: 50%; background: var(--leaf); vertical-align: .05rem; }
+
+.milestones { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; }
+.milestones li { padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.milestones p { margin: .3rem 0 0; font-size: .92rem; color: var(--muted); }
+.ms-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.pill { font: 500 .68rem/1 var(--font-data); letter-spacing: .06em; text-transform: uppercase; padding: .3rem .5rem; border-radius: 999px; white-space: nowrap; }
+.pill.pending { color: var(--muted); border: 1px dashed var(--muted); }
+.pill.scheduled { color: var(--fg); background: color-mix(in srgb, var(--ring) 35%, transparent); }
+.pill.done { color: var(--bg); background: var(--canopy); }
+.updates { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.updates li { padding-left: .9rem; border-left: 3px solid var(--leaf); }
+.updates li.empty { border-left-style: dashed; border-left-color: var(--line); color: var(--muted); font-size: .92rem; }
+.updates time { display: block; font: 500 .75rem var(--font-data); color: var(--muted); }
+.updates p { margin: .15rem 0 0; font-size: .92rem; }
+.stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-left: 3px solid var(--soil); }
+.stages li { position: relative; padding: .5rem 0 .75rem 1.25rem; }
+.stages li::before { content: ""; position: absolute; left: -.5rem; top: .9rem; width: .75rem; height: .75rem; border-radius: 50%; background: var(--bg); border: 3px solid var(--soil); }
+.stages li.reached::before { background: var(--soil); }
+.stages li.current { font-weight: 600; }
+.stages li.current::after { content: "Your tree"; margin-left: .5rem; font: 500 .7rem var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: #2b2200; background: var(--ring); padding: .1rem .4rem; border-radius: 4px; }
+.stages strong { font-family: var(--font-display); }
+.stages span { display: block; color: var(--muted); font-size: .92rem; }
+.split-note { margin: .5rem 0 0; padding: .75rem 1rem; border-radius: 10px; background: var(--surface); border: 1px dashed var(--line); font-size: .92rem; }
+
+.method p, .method li { max-width: 65ch; }
+.method ul { padding-left: 1.1rem; margin: .5rem 0; }
+.method code { font-family: var(--font-data); font-size: .88em; }
+
+.join { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; justify-content: space-between; padding: 1.25rem; border-radius: 14px; background: var(--canopy); color: var(--bg); }
+.join p { margin: 0; max-width: 34ch; font: 700 1.15rem/1.3 var(--font-display); }
+.join a { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .6rem 1.1rem; border-radius: 10px; background: var(--bg); color: var(--canopy); font-weight: 600; text-decoration: none; }
+footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 0 2rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <canvas id="forest" role="img" aria-label="Illustration of trees allocated through Ultra Clear customer contributions, on red soil beneath hills under the live sky"></canvas>
+  <div class="sky-bar">
+    <p class="caption" id="forest-caption">Illustration.</p>
+    <p class="sky-line"><span id="sky-status" role="status">Live sky over Nairobi</span>
+      <button type="button" id="sky-me" class="sky-btn">Use my sky</button></p>
+    <p class="sky-note">“Use my sky” uses your approximate location only to display your local sky. We do not store it. It is rounded to about 11 km and sent only to our weather data provider, Open-Meteo.</p>
+  </div>
+  <div class="hero-copy">
+    <p class="eyebrow">Hydrate the Future™ · Kenya</p>
+    <h1>The Hydrate the Future™ forest programme</h1>
+    <p class="lede">Through Hydrate the Future™, 3% of eligible Ultra Clear sales revenue is allocated to the programme: half is allocated to tree growing and restoration in Kenya, half supports clean-water access. Customer contributions are pooled, so several customers contribute to each tree.</p>
+  </div>
+</header>
+
+<main>
+  <section id="yours" class="yours" hidden aria-live="polite">
+    <div class="badge" aria-hidden="true">★</div>
+    <p><span class="tree-id" id="tree-id"></span><br><span class="stage-name" id="stage-name"></span><br><span id="stage-meaning"></span></p>
+  </section>
+
+  <section aria-labelledby="totals-h">
+    <h2 id="totals-h">Programme figures</h2>
+    <p class="status" id="status" role="status">Loading live figures…</p>
+    <dl class="figures" id="figures"></dl>
+    <p class="basis" id="basis"></p>
+  </section>
+
+  <section aria-labelledby="updates-h">
+    <h2 id="updates-h">Programme updates</h2>
+    <ul class="milestones" id="milestones"></ul>
+    <ol class="updates" id="updates"></ol>
+  </section>
+
+  <section aria-labelledby="stages-h">
+    <h2 id="stages-h">How a tree grows</h2>
+    <ol class="stages" id="stages"></ol>
+    <p class="split-note"><strong>Fully allocated is not the same as established.</strong> A fully allocated tree means contributions have reached its estimated cost. An established tree is one the programme has confirmed in the field. Only programme reports move trees to established.</p>
+  </section>
+
+  <section class="method" aria-labelledby="method-h">
+    <h2 id="method-h">Methodology</h2>
+    <p>For every eligible transaction (a paid KES purchase that was not cancelled, failed or refunded):</p>
+    <ul>
+      <li><code>allocation = eligible revenue × 3%</code></li>
+      <li><code>tree allocation = allocation × 50%</code> (the other 50% supports clean-water access)</li>
+      <li><code>shared tree progress = tree allocations assigned to the tree ÷ tree cost</code></li>
+      <li><code>estimated trees funded = total tree allocation ÷ tree cost</code></li>
+    </ul>
+    <p id="cost-text"></p>
+    <p id="proxy-text"></p>
+    <p>Tree allocations fill shared trees in purchase order, so several customers contribute to each tree together. Customers see their own allocation and their tree’s progress; who else contributes to a tree is never shown. Refills logged in the Companion app water a tree but carry no revenue, so they never add funding. Watering moves a tree from Seed to Sprout; funding progress moves it from Sapling onward.</p>
+    <p>Links to this page carry only an anonymous tree id and a growth stage, never names, contact details, amounts or percentages.</p>
+  </section>
+
+  <section class="join" aria-label="Join">
+    <p>Start your tree with your first Ultra Clear purchase.</p>
+    <a href="https://app.ucfilters.com" rel="noopener">Explore Ultra Clear</a>
+  </section>
+</main>
+<footer><p>Engineering Wellness, Drop by Drop. · Hydrate the Future™ is an Ultra Clear programme.</p></footer>
+
+<script>
+"use strict";
+
+// ── Programme status (staff-maintained) ──────────────────────────────────
+// Filled from programme-status.json next to this page, so staff can post the
+// donation dates, certificate, partner and field report without editing code.
+// Anything left null shows as pending — never as a made-up value.
+const STATUS = {
+  partner: null,
+  figuresAsOf: null,
+  donation: { scheduledFor: null, madeOn: null, amountKes: null },
+  certificate: { url: null, issuedOn: null, issuer: null },
+  fieldReport: { url: null, publishedOn: null },
+  updates: [],
+};
+const isDonated = () => !!STATUS.donation.madeOn;
+const locationText = () => STATUS.partner
+  ? `Kenya — with ${STATUS.partner}; planting sites to be confirmed by the programme partner`
+  : "Kenya — planting sites to be confirmed by the programme partner";
+
+function fmtDate(v) {
+  if (!v) return null;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(String(v));
+  const d = iso ? new Date(v + "T12:00:00Z") : null;
+  return d && !isNaN(d) ? d.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : String(v);
+}
+/** Only https links (or same-site files such as certificates/…pdf). */
+function safeUrl(u) {
+  if (!u) return null;
+  try {
+    const x = new URL(String(u), location.href);
+    return x.protocol === "https:" || x.origin === location.origin ? x.href : null;
+  } catch (e) { return null; }
+}
+const str = v => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+async function loadProgrammeStatus() {
+  try {
+    const res = await fetch("programme-status.json", { cache: "no-store" });
+    if (res.ok) {
+      const j = await res.json();
+      STATUS.partner = str(j.partner);
+      STATUS.figuresAsOf = str(j.figuresAsOf);
+      STATUS.donation = {
+        scheduledFor: str(j.donation?.scheduledFor), madeOn: str(j.donation?.madeOn),
+        amountKes: Number.isFinite(j.donation?.amountKes) ? j.donation.amountKes : null,
+      };
+      STATUS.certificate = { url: safeUrl(str(j.certificate?.url)), issuedOn: str(j.certificate?.issuedOn), issuer: str(j.certificate?.issuer) };
+      STATUS.fieldReport = { url: safeUrl(str(j.fieldReport?.url)), publishedOn: str(j.fieldReport?.publishedOn) };
+      STATUS.updates = (Array.isArray(j.updates) ? j.updates : [])
+        .filter(u => str(u?.title))
+        .map(u => ({ date: str(u.date), title: str(u.title), body: str(u.body), url: safeUrl(str(u.url)) }))
+        .sort((x, y) => String(y.date || "").localeCompare(String(x.date || "")));
+    }
+  } catch (e) { /* file missing or malformed: keep everything pending */ }
+  renderUpdates();
+  if (lastFigures) renderFigures(lastFigures.f, lastFigures.live);
+  loadLive();
+}
+
+function renderUpdates() {
+  const D = STATUS.donation, C = STATUS.certificate, R = STATUS.fieldReport;
+  const amount = D.amountKes ? ` · ${kes(D.amountKes)}` : "";
+  const items = [
+    ["Donation", D.madeOn ? "done" : D.scheduledFor ? "scheduled" : "pending",
+      D.madeOn ? `Made on ${fmtDate(D.madeOn)}${amount}` : D.scheduledFor ? `Scheduled for ${fmtDate(D.scheduledFor)}` : "Date to be confirmed", null],
+    ["Donation certificate", C.url ? "done" : "pending",
+      C.url ? `Issued${C.issuedOn ? ` on ${fmtDate(C.issuedOn)}` : ""}${C.issuer ? ` by ${C.issuer}` : ""}` : "Will be published when received",
+      C.url ? ["View certificate", C.url] : null],
+    ["Programme partner", STATUS.partner ? "done" : "pending", STATUS.partner || "To be announced", null],
+    ["First field report", R.url ? "done" : "pending",
+      R.url ? `Published${R.publishedOn ? ` on ${fmtDate(R.publishedOn)}` : ""}` : "Field outcomes will be posted after the programme partner reports",
+      R.url ? ["Read the report", R.url] : null],
+  ];
+  const PILL = { done: "Done", scheduled: "Scheduled", pending: "Pending" };
+  const ul = document.getElementById("milestones");
+  ul.replaceChildren(...items.map(([label, state, detail, link]) => {
+    const li = document.createElement("li");
+    const head = document.createElement("div"); head.className = "ms-head";
+    const t = document.createElement("strong"); t.textContent = label;
+    const pill = document.createElement("span"); pill.className = `pill ${state}`; pill.textContent = PILL[state];
+    head.append(t, pill);
+    const p = document.createElement("p"); p.textContent = detail;
+    if (link) { const a = document.createElement("a"); a.href = link[1]; a.rel = "noopener"; a.textContent = link[0]; p.append(" · ", a); }
+    li.append(head, p);
+    return li;
+  }));
+
+  const ol = document.getElementById("updates");
+  if (STATUS.updates.length === 0) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = "No updates yet. The donation date and certificate will be posted here.";
+    ol.replaceChildren(li);
+    return;
+  }
+  ol.replaceChildren(...STATUS.updates.map(u => {
+    const li = document.createElement("li");
+    if (u.date) { const d = document.createElement("time"); d.dateTime = u.date; d.textContent = fmtDate(u.date); li.append(d); }
+    const t = document.createElement("strong"); t.textContent = u.title; li.append(t);
+    if (u.body || u.url) {
+      const p = document.createElement("p"); if (u.body) p.textContent = u.body;
+      if (u.url) { const a = document.createElement("a"); a.href = u.url; a.rel = "noopener"; a.textContent = "Details"; p.append(u.body ? " · " : "", a); }
+      li.append(p);
+    }
+    return li;
+  }));
+}
+
+// ── Fallback figures (interim; shown only without live data) ─────────────
+const FALLBACK = {
+  contributionRate: 0.03,
+  treeShare: 0.5,
+  treeCostKes: 750,
+  eligibleRevenueKes: null,
+  treesPlanted: null,
+  treesEstablished: null,
+  reportDate: null,
+};
+const COST_RANGE = [500, 750];
+
+const STAGES = [
+  ["seed", "Seed", "A customer’s first purchase starts their contribution to a shared tree."],
+  ["sprout", "Sprout", "Refills or a replacement show continued engagement. They water the tree visually but do not add funding."],
+  ["sapling", "Sapling", "25% of the shared tree’s estimated cost has been allocated."],
+  ["growing", "Growing tree", "50–99% allocated."],
+  ["funded", "Fully allocated tree", "Estimated end-to-end cost fully allocated."],
+  ["established", "Established tree", "Field status confirmed by programme verification."],
+];
+const STAGE_KEYS = STAGES.map(s => s[0]);
+const ID_RE = /^UC-[A-HJ-NP-Z2-9]{6}$/;
+
+const kes = n => "KSh " + Math.round(n).toLocaleString("en-KE");
+const num = n => Math.round(n).toLocaleString("en-KE");
+
+// ── Visitor's tree from the link (query or #tree-UC-XXXXXX-stage) ───────
+function readVisitor() {
+  let id = null, stage = null;
+  try {
+    const q = new URLSearchParams(location.search);
+    id = q.get("tree"); stage = q.get("stage");
+  } catch (e) { /* ignore */ }
+  const m = /^#tree-(UC-[A-Z0-9]{6})-([a-z]+)$/.exec(location.hash || "");
+  if (m) { id = m[1]; stage = m[2]; }
+  if (!id || !ID_RE.test(id)) return null;
+  if (!STAGE_KEYS.includes(stage)) return null;
+  return { id, stage };
+}
+const visitor = readVisitor();
+
+// ── Figures ──────────────────────────────────────────────────────────────
+let fundedTrees = 0;
+
+let lastFigures = null;
+function renderFigures(f, live) {
+  lastFigures = { f, live };
+  const allocation = f.contributionKes;
+  const treeFund = f.treeFundKes;
+  fundedTrees = f.estimatedTreesFunded ?? 0;
+  const high = Math.floor(treeFund / COST_RANGE[0]);
+  const reported = f.reportDate ? `Programme report, ${f.reportDate}` : "Programme report";
+  const rows = [
+    ["Estimated trees to be funded", live ? num(f.estimatedTreesFunded) : null, live ? `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range` : "Pending — live totals unavailable"],
+    ["Tree allocation (1.5%)", live ? kes(treeFund) : null, live ? "half of every 3% allocation" : "Pending — live totals unavailable"],
+    ["Clean-water allocation (1.5%)", live ? kes(f.cleanWaterKes) : null, live ? "the other half, for clean-water access" : "Pending — live totals unavailable"],
+    ["Customer contributions (3%)", live ? kes(allocation) : null, live ? `of ${kes(f.eligibleRevenueKes)} eligible revenue` : "Pending — live totals unavailable"],
+    ["Trees reported planted", f.treesPlanted, f.treesPlanted === null ? "Not yet reported by programme partner" : reported],
+    ["Trees established", f.treesEstablished, f.treesEstablished === null ? "Not yet field-verified" : reported],
+  ];
+  if (live && f.growingTreePct !== null) {
+    rows.splice(1, 0, ["Shared tree in progress", f.growingTreePct + "% allocated", `${num(f.sharedTreesFunded)} shared tree${f.sharedTreesFunded === 1 ? "" : "s"} fully allocated in the app`]);
+  }
+  rows.push(["Programme location", locationText(), null]);
+  rows.push(["Certification", certificationText(), null]);
+
+  const dl = document.getElementById("figures");
+  dl.replaceChildren();
+  for (const [label, value, note] of rows) {
+    const wrap = document.createElement("div");
+    const dt = document.createElement("dt"); dt.textContent = label;
+    const dd = document.createElement("dd");
+    if (value === null || value === undefined) {
+      wrap.className = "pending"; dd.textContent = note;
+    } else {
+      dd.textContent = typeof value === "number" ? num(value) : value;
+      if (note) { const s = document.createElement("small"); s.textContent = note; dd.appendChild(s); }
+    }
+    if (label === "Programme location" || label === "Certification") wrap.className = "pending";
+    if (label === "Certification" && STATUS.certificate.url) {
+      const a = document.createElement("a");
+      a.href = STATUS.certificate.url; a.rel = "noopener"; a.textContent = "View donation certificate";
+      dd.replaceChildren(a);
+    }
+    wrap.append(dt, dd); dl.appendChild(wrap);
+  }
+  const outcomes = "Field outcomes will be updated after the programme partner publishes its report.";
+  const nature = " These figures represent funds allocated to the programme, not yet verified field outcomes.";
+  const asOf = STATUS.figuresAsOf ? ` as of ${fmtDate(STATUS.figuresAsOf)}` : "";
+  document.getElementById("basis").textContent = live
+    ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : outcomes + " ")
+      + (f.baselineRevenueKes > 0 ? `Includes ${kes(f.baselineRevenueKes)} of earlier and offline sales.` : "Revenue covers purchases recorded in the Ultra Clear app.")
+      + nature
+    : `Live programme totals are unavailable; no revenue or funding figures are assumed. ${outcomes}${nature}`;
+  if (backdrop && trees.length !== Math.min(fundedTrees, MAX_DRAWN)) layout();
+}
+
+function certificationText() {
+  const D = STATUS.donation, tail = " Certificate will be published when received.";
+  if (D.madeOn) return `Donation made on ${fmtDate(D.madeOn)}.` + (STATUS.certificate.url ? "" : tail);
+  if (D.scheduledFor) return `Donation scheduled for ${fmtDate(D.scheduledFor)}.` + tail;
+  return "Donation date to be confirmed." + tail;
+}
+
+function fallbackFigures() {
+  const F = FALLBACK;
+  const contributionKes = null;
+  const treeFundKes = null;
+  return {
+    eligibleRevenueKes: F.eligibleRevenueKes, contributionKes, treeFundKes,
+    cleanWaterKes: null, treeCostKes: F.treeCostKes,
+    estimatedTreesFunded: null,
+    treesPlanted: F.treesPlanted, treesEstablished: F.treesEstablished,
+    reportDate: F.reportDate, baselineRevenueKes: 0,
+    growingTreePct: null, sharedTreesFunded: 0,
+  };
+}
+
+function setStatus(text, live) {
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.classList.toggle("live", live);
+}
+
+async function loadLive() {
+  const base = (document.querySelector('meta[name="uc-api-base"]')?.content || "").trim().replace(/\/+$/, "");
+  const interim = "Programme totals pending";
+  if (!base) { setStatus(interim, false); return; }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(base + "/api/uc/impact/forest", { signal: ctrl.signal, credentials: "omit" });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(String(res.status));
+    const d = await res.json();
+    if (d.config?.contributionRate !== 0.03 || d.config?.treeShare !== 0.5 ||
+        !Number.isFinite(d.config?.treeCostKes) || d.config.treeCostKes <= 0 ||
+        !["eligibleRevenueKes", "contributionKes", "treeFundKes", "cleanWaterKes", "estimatedTreesFunded"].every(k => Number.isFinite(d[k]) && d[k] >= 0) ||
+        !Number.isFinite(Date.parse(d.generatedAt))) throw new Error("Invalid programme totals");
+    renderFigures({ ...d, treeCostKes: d.config.treeCostKes }, true);
+    const at = new Date(d.generatedAt);
+    setStatus("Live figures as of " + at.toLocaleString("en-KE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }), true);
+  } catch (e) {
+    renderFigures(fallbackFigures(), false);
+    setStatus(`Live figures unavailable · ${interim.charAt(0).toLowerCase()}${interim.slice(1)}`, false);
+  }
+}
+
+const P = FALLBACK;
+document.getElementById("cost-text").textContent =
+  `Tree cost is estimated at ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} in Kenya, covering planting and early care. The headline counter uses ${kes(P.treeCostKes)} so impact is never overstated. International programme estimates (USD 2.15–3.75) are a separate range, not a currency conversion of the Kenya figure.`;
+document.getElementById("proxy-text").textContent =
+  "Confirmed customer lifetime value is not yet available. No baseline revenue, average-sale benchmark or verified field outcomes are assumed. Purchases allocate funding; logged refills do not.";
+
+// ── Stage list ───────────────────────────────────────────────────────────
+const ol = document.getElementById("stages");
+const vIdx = visitor ? STAGE_KEYS.indexOf(visitor.stage) : -1;
+STAGES.forEach(([key, label, meaning], i) => {
+  const li = document.createElement("li");
+  if (i <= vIdx) li.classList.add("reached");
+  if (i === vIdx) li.classList.add("current");
+  const s = document.createElement("strong"); s.textContent = label;
+  const m = document.createElement("span"); m.textContent = meaning;
+  li.append(s, m); ol.appendChild(li);
+});
+
+if (visitor) {
+  const st = STAGES[vIdx];
+  document.getElementById("yours").hidden = false;
+  document.getElementById("tree-id").textContent = `Tree ${visitor.id}`;
+  document.getElementById("stage-name").textContent = st[1];
+  document.getElementById("stage-meaning").textContent = visitor.stage === "established"
+    ? "Established stage shared from the Companion. This anonymous link does not verify field status; see the programme reports below."
+    : st[2] + " This anonymous link shows a digital illustration, not independently verified field status.";
+}
+
+// ── Canvas forest ────────────────────────────────────────────────────────
+// A procedural illustration of a Kenyan highland restoration site at golden
+// hour (moonlit in dark mode). Trees are grown from branching rules and
+// leaf clusters lit from the sun, pre-rendered once into sprites, then drawn
+// back to front with a light wind sway. It is an illustration, not a photo of
+// real planted trees — field photos belong to programme reports.
+const canvas = document.getElementById("forest");
+const ctx = canvas.getContext("2d");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const MAX_DRAWN = 260;        // above this, each drawn tree stands for several
+const SPRITE_H = 200;         // sprite design height (units)
+const SPRITE_RES = 2;         // sprite pixels per unit
+let W = 0, H = 0, DPR = 1, horizon = 0, perTree = 1;
+let trees = [], sprites = [], visitorSprites = {}, backdrop = null, scene = null, clouds = null, flashUntil = 0;
+
+function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296; }
+
+// ── Live sky ─────────────────────────────────────────────────────────────
+// Real sun position for a place and time, plus current weather from
+// Open-Meteo (free, no key). Plain-JS copy of artifacts/uc-companion/lib/
+// skyState.ts — keep the two in step. Default sky: Nairobi. "Use my sky"
+// switches to the visitor's location (rounded to ~11 km) only on request.
+const SKY_DEFAULT = { lat: -1.29, lon: 36.82, label: "Nairobi" };
+const RAD = Math.PI / 180;
+
+function solarPosition(date, lat, lon) {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const doy = Math.floor((date.getTime() - start) / 86400000) + 1;
+  const hours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const g = (2 * Math.PI / 365) * (doy - 1 + (hours - 12) / 24);
+  const eqTime = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  let ha = (hours * 60 + eqTime + 4 * lon) / 4 - 180;
+  if (ha < -180) ha += 360; if (ha > 180) ha -= 360;
+  const cz = Math.sin(lat * RAD) * Math.sin(decl) + Math.cos(lat * RAD) * Math.cos(decl) * Math.cos(ha * RAD);
+  return { elevation: 90 - Math.acos(Math.min(1, Math.max(-1, cz))) / RAD, hourAngle: ha };
+}
+
+function weatherFromCode(code, cloudPct = 0, wind = 8, temp = null) {
+  let kind = "clear";
+  if (code >= 95) kind = "storm";
+  else if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82) || (code >= 71 && code <= 77) || code === 85 || code === 86) kind = "rain";
+  else if (code >= 51 && code <= 57) kind = "drizzle";
+  else if (code === 45 || code === 48) kind = "fog";
+  else if (code === 3) kind = "overcast";
+  else if (code === 1 || code === 2) kind = "partly";
+  const floor = { clear: 0, partly: 0.3, overcast: 0.85, fog: 0.7, drizzle: 0.75, rain: 0.9, storm: 1 }[kind];
+  return { kind, cloudCover: Math.max(Math.min(1, Math.max(0, cloudPct / 100)), floor), windKmh: Math.max(0, wind), temperatureC: temp };
+}
+const CLEAR = { kind: "clear", cloudCover: 0.1, windKmh: 8, temperatureC: null };
+const WEATHER_NAMES = { clear: "Clear", partly: "Partly cloudy", overcast: "Overcast", fog: "Fog", drizzle: "Drizzle", rain: "Rain", storm: "Thunderstorm" };
+
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16), k = Math.min(1, Math.max(0, t));
+  const ch = s => Math.round(((pa >> s) & 255) * (1 - k) + ((pb >> s) & 255) * k);
+  return "#" + [ch(16), ch(8), ch(0)].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+const rgbOf = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(",");
+
+const PHASE_SCENES = {
+  night: {
+    sky: ["#070f1c", "#132236", "#2a2e44"], sunGlow: "#bfcdf0", sunCore: "#e9eefc",
+    hills: ["#283a49", "#203038", "#18262a"], haze: "#2c3442",
+    soil: ["#45281c", "#341d14", "#25140d"], grass: ["#34432b", "#2b3823", "#435035", "#24301d"],
+    bark: ["#140e0a", "#2a2018"], shadow: "#000000",
+    leaf: ["#06120b", "#0b1d14", "#14301f", "#27443a"], acacia: ["#0a120a", "#141f14", "#22331f", "#36482f"],
+    cloud: "#3a4458", label: "#e5eee7", labelBg: "#0c140f", ring: "#f2c94c",
+  },
+  twilight: {
+    sky: ["#24345e", "#8a6d8c", "#f0a46a"], sunGlow: "#ffb27a", sunCore: "#ffd9b0",
+    hills: ["#6c6f86", "#585f73", "#47525c"], haze: "#c9a58f",
+    soil: ["#8a4a30", "#6a3420", "#4a2414"], grass: ["#6b7340", "#59633a", "#80804c", "#4a5430"],
+    bark: ["#2e2016", "#5a3f2c"], shadow: "#1a0c06",
+    leaf: ["#14301b", "#24472a", "#3f6a36", "#7a8f4c"], acacia: ["#1f2c16", "#354a22", "#566e32", "#8a9a52"],
+    cloud: "#c99a9a", label: "#f4ece4", labelBg: "#2a1c22", ring: "#f2b705",
+  },
+  golden: {
+    sky: ["#6fa6c9", "#b9d6e0", "#f3dcb4"], sunGlow: "#ffe8b4", sunCore: "#fff6dc",
+    hills: ["#9db0b0", "#7d978d", "#5f7d69"], haze: "#efe0c6",
+    soil: ["#b5673f", "#8e4528", "#6a2f1a"], grass: ["#94a053", "#76863f", "#b0ac63", "#5f6e33"],
+    bark: ["#3e2a1d", "#6e4d36"], shadow: "#28160c",
+    leaf: ["#183d22", "#2d5a31", "#4f8340", "#93b45a"], acacia: ["#2b3f1e", "#465f2b", "#6f8a3d", "#a9b866"],
+    cloud: "#f4e6d2", label: "#17241b", labelBg: "#fffcf4", ring: "#f2b705",
+  },
+  day: {
+    sky: ["#3f86c4", "#8fc1e2", "#d6e9ef"], sunGlow: "#fff6d8", sunCore: "#ffffff",
+    hills: ["#a9bcc4", "#8ea7a3", "#748f80"], haze: "#e3ecee",
+    soil: ["#b86a42", "#934a2b", "#6d311b"], grass: ["#96a352", "#79893f", "#b3b065", "#617035"],
+    bark: ["#3e2a1d", "#7a5640"], shadow: "#28160c",
+    leaf: ["#1a4224", "#2f6034", "#548a44", "#9cbd60"], acacia: ["#2d4320", "#4a642e", "#738f40", "#adbd6a"],
+    cloud: "#ffffff", label: "#17241b", labelBg: "#fffcf4", ring: "#f2b705",
+  },
+};
+
+function blendScenes(a, b, t) {
+  const out = {};
+  for (const k of Object.keys(a)) out[k] = Array.isArray(a[k]) ? a[k].map((c, i) => mixHex(c, b[k][i], t)) : mixHex(a[k], b[k], t);
+  return out;
+}
+
+/** Scene palette and effects for a sun position and weather. */
+function buildScene(elevation, hourAngle, w) {
+  const P = PHASE_SCENES;
+  let base, phase;
+  if (elevation <= -8) { base = P.night; phase = "night"; }
+  else if (elevation <= -1) { base = blendScenes(P.night, P.twilight, (elevation + 8) / 7); phase = "twilight"; }
+  else if (elevation <= 8) { base = blendScenes(P.twilight, P.golden, (elevation + 1) / 9); phase = "golden"; }
+  else if (elevation <= 25) { base = blendScenes(P.golden, P.day, (elevation - 8) / 17); phase = "day"; }
+  else { base = P.day; phase = "day"; }
+
+  const grey = phase === "night" ? "#30363e" : "#a7afb4";
+  const overcast = w.kind === "fog" ? 0.75 : Math.max(0, w.cloudCover - 0.35) / 0.65;
+  const dark = w.kind === "storm" ? 0.35 : w.kind === "rain" ? 0.2 : w.kind === "drizzle" ? 0.1 : 0;
+  const tone = c => mixHex(c, "#000000", dark * 0.8);
+  const sunUp = elevation > -1 && overcast < 0.9, moonUp = elevation < -8 && overcast < 0.9;
+  const disc = sunUp
+    ? { x: 0.5 + Math.max(-1, Math.min(1, hourAngle / 90)) * 0.4, y: 0.5 - Math.min(1, Math.max(0, elevation) / 60) * 0.42, moon: false }
+    : moonUp ? { x: 0.5 - Math.max(-1, Math.min(1, hourAngle / 180)) * 0.35, y: 0.16, moon: true } : null;
+  return {
+    phase, weather: w, overcast, disc,
+    key: `${phase}|${Math.round(elevation / 3)}|${w.kind}|${Math.round(overcast * 4)}`,
+    sky: base.sky.map(c => mixHex(mixHex(c, grey, overcast * 0.85), "#000000", dark)),
+    sunGlow: rgbOf(base.sunGlow), sunCore: base.sunCore,
+    hills: base.hills.map(c => w.kind === "fog" ? mixHex(tone(c), grey, 0.45) : tone(c)),
+    haze: w.kind === "fog" ? mixHex(base.haze, grey, 0.4) : base.haze,
+    soil: base.soil.map(tone), grass: base.grass.map(tone), bark: base.bark.map(tone),
+    leaf: base.leaf.map(tone), acacia: base.acacia.map(tone),
+    shadow: rgbOf(base.shadow), shadowScale: 1 - overcast * 0.75,
+    cloud: mixHex(base.cloud, grey, overcast * 0.6 + dark), stars: phase === "night" && w.cloudCover < 0.7,
+    // Label colours are picked, not blended: a blend gives grey on grey.
+    label: (phase === "night" || phase === "twilight" ? P.night : P.day).label,
+    labelBg: (phase === "night" || phase === "twilight" ? P.night : P.day).labelBg + "e6",
+    ring: rgbOf(base.ring),
+  };
+}
+
+const sky = { place: SKY_DEFAULT, weather: CLEAR, weatherKnown: false, own: false, tz: "Africa/Nairobi" };
+// The visitor's location is held in memory for this visit only — never stored.
+
+function currentScene() {
+  const sun = solarPosition(new Date(), sky.place.lat, sky.place.lon);
+  return buildScene(sun.elevation, sun.hourAngle, sky.weather);
+}
+
+function renderSkyBar() {
+  // Time at the place whose sky is drawn, not the viewer's clock.
+  let time;
+  try { time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: sky.tz || undefined }); }
+  catch (e) { time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  const w = sky.weatherKnown
+    ? WEATHER_NAMES[sky.weather.kind] + (sky.weather.temperatureC === null ? "" : ` · ${Math.round(sky.weather.temperatureC)}°C`)
+    : "weather data unavailable";
+  document.getElementById("sky-status").textContent = `Live sky over ${sky.place.label} · ${time} · ${w}`;
+  const btn = document.getElementById("sky-me");
+  btn.textContent = sky.own ? "Use Nairobi sky" : "Use my sky";
+}
+
+async function loadWeather() {
+  const lat = Math.round(sky.place.lat * 10) / 10, lon = Math.round(sky.place.lon * 10) / 10;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m&timezone=auto`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    const body = await res.json();
+    if (typeof body.timezone === "string") sky.tz = body.timezone;
+    const c = body.current;
+    if (!c || typeof c.weather_code !== "number") throw new Error("bad weather");
+    sky.weather = weatherFromCode(c.weather_code, c.cloud_cover ?? 0, c.wind_speed_10m ?? 8, c.temperature_2m ?? null);
+    sky.weatherKnown = true;
+  } catch (e) {
+    sky.weather = CLEAR; sky.weatherKnown = false;
+  }
+  refreshSky();
+}
+
+function refreshSky() {
+  const next = currentScene();
+  if (!scene || next.key !== scene.key) { scene = next; layout(); }
+  else scene = { ...next, key: scene.key };
+  renderSkyBar();
+}
+
+document.getElementById("sky-me").addEventListener("click", () => {
+  if (sky.own) {
+    sky.place = SKY_DEFAULT; sky.own = false; sky.tz = "Africa/Nairobi";
+    loadWeather();
+    return;
+  }
+  if (!navigator.geolocation) { document.getElementById("sky-status").textContent = "Location isn’t available in this browser."; return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = Math.round(pos.coords.latitude * 10) / 10, lon = Math.round(pos.coords.longitude * 10) / 10;
+    sky.place = { lat, lon, label: "your location" }; sky.own = true; sky.tz = null;
+    loadWeather();
+  }, () => {
+    document.getElementById("sky-status").textContent = "Location not shared · showing the sky over Nairobi";
+  }, { enableHighAccuracy: false, maximumAge: 6 * 3600 * 1000, timeout: 10000 });
+});
+
+// ── Tree geometry ────────────────────────────────────────────────────────
+// Returns branch segments and leaf blobs in sprite units, base at (0, 0),
+// growing upward (negative y). Sun comes from the upper right.
+function growTree(seed, species, h = SPRITE_H) {
+  const r = rng(seed);
+  const segs = [], tips = [];
+  const acacia = species === "acacia";
+  const maxDepth = acacia ? 4 : 6;
+
+  function branch(x, y, ang, len, w, depth) {
+    const bend = (r() - 0.5) * 0.18;
+    const x2 = x + Math.cos(ang + bend) * len, y2 = y + Math.sin(ang + bend) * len;
+    segs.push({ x1: x, y1: y, x2, y2, w1: w, w2: w * 0.72, depth });
+    if (depth >= maxDepth || len < h * 0.035) { tips.push({ x: x2, y: y2, depth }); return; }
+    const kids = acacia ? (depth === 0 ? 3 + (r() < 0.5 ? 1 : 0) : 2) : (r() < 0.35 ? 3 : 2);
+    for (let i = 0; i < kids; i++) {
+      const spread = acacia ? (depth === 0 ? 0.55 + r() * 0.35 : 0.35 + r() * 0.3) : 0.26 + r() * 0.2;
+      const side = kids === 1 ? 0 : (i / (kids - 1) - 0.5) * 2;
+      let a = ang + side * spread + (r() - 0.5) * 0.25;
+      if (acacia) a = Math.min(-0.25, Math.max(-Math.PI + 0.25, a)); // keep arms rising
+      const lf = acacia ? (depth === 0 ? 0.62 : 0.7) : 0.74 + r() * 0.08;
+      branch(x2, y2, a, len * lf, w * 0.68, depth + 1);
+    }
+    // Inner foliage along the limbs so broadleaf crowns read as full and rounded.
+    if (!acacia && depth >= 2) {
+      tips.push({ x: x2, y: y2, depth, inner: true });
+      if (r() < 0.6) tips.push({ x: (x + x2) / 2, y: (y + y2) / 2, depth, inner: true });
+    }
+  }
+
+  const lean = (r() - 0.5) * 0.12;
+  branch(0, 0, -Math.PI / 2 + lean, h * (acacia ? 0.36 : 0.3), h * (acacia ? 0.045 : 0.055), 0);
+
+  // Foliage: clusters of small blobs. Acacia canopies are flat-topped.
+  const leaves = [];
+  const minTipY = Math.min(...tips.filter(t => !t.inner).map(t => t.y));
+  for (const t of tips) {
+    const R = acacia ? h * (0.1 + r() * 0.05) : h * (0.07 + r() * 0.045) * (t.inner ? 0.85 : 1);
+    const cy = acacia ? minTipY + (t.y - minTipY) * 0.35 - h * 0.02 : t.y;
+    const flat = acacia ? 0.32 : 0.85;
+    const n = Math.round((R * R) / (acacia ? 5 : 4)) + 10;
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = R * Math.pow(r(), 0.6);
+      leaves.push({ x: t.x + Math.cos(a) * d, y: cy + Math.sin(a) * d * flat, s: 1.1 + r() * 1.7, j: r() });
+    }
+  }
+  // Light each blob by its position in the canopy plus a little noise.
+  const xs = leaves.map(l => l.x), ys = leaves.map(l => l.y);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const R = Math.max(Math.max(...xs) - cx, cy - Math.min(...ys), 1);
+  for (const l of leaves) {
+    const nx = (l.x - cx) / R, ny = (l.y - cy) / R;
+    l.light = nx * 0.6 - ny * 0.8 + (r() - 0.5) * 0.7;
+  }
+  leaves.sort((a, b) => a.light - b.light);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const allX = xs.concat(segs.flatMap(s => [s.x1, s.x2])), allY = ys.concat(segs.flatMap(s => [s.y1, s.y2]));
+  const pad = 6;
+  const box = { x0: Math.min(...allX) - pad, x1: Math.max(...allX) + pad, y0: Math.min(...allY) - pad, y1: Math.max(...allY) + pad };
+  return { segs, leaves, canopyW: width, canopyY: cy, box };
+}
+
+function paintTree(c, g, palette, species) {
+  const tone = species === "acacia" ? palette.acacia : palette.leaf;
+  // Bark: dark body, then a thinner sunlit edge.
+  c.lineCap = "round";
+  for (const pass of [0, 1]) {
+    c.strokeStyle = palette.bark[pass];
+    for (const s of g.segs) {
+      const w = (s.w1 + s.w2) / 2 * (pass ? 0.38 : 1);
+      if (w < 0.35) continue;
+      c.lineWidth = w;
+      const off = pass ? s.w1 * 0.22 : 0;
+      c.beginPath(); c.moveTo(s.x1 + off, s.y1); c.lineTo(s.x2 + off, s.y2); c.stroke();
+    }
+  }
+  // Volume shadow under the canopy, then each blob in its light band.
+  c.fillStyle = tone[0];
+  for (const l of g.leaves) { c.beginPath(); c.arc(l.x - 0.6, l.y + 1.2, l.s * 1.2, 0, Math.PI * 2); c.fill(); }
+  for (const l of g.leaves) {
+    const v = l.light + (l.j - 0.5) * 0.35;
+    c.globalAlpha = 0.8 + l.j * 0.2;
+    c.fillStyle = v < -0.5 ? tone[0] : v < 0 ? tone[1] : v < 0.6 ? tone[2] : tone[3];
+    // Leaf-shaped dab rather than a circle.
+    c.beginPath(); c.ellipse(l.x, l.y, l.s * 1.25, l.s * 0.8, l.j * 3.14, 0, Math.PI * 2); c.fill();
+  }
+  c.globalAlpha = 1;
+  c.fillStyle = tone[3];
+  for (const l of g.leaves) {
+    if (l.light < 0.8) continue;
+    c.beginPath(); c.arc(l.x + l.s * 0.3, l.y - l.s * 0.35, l.s * 0.4, 0, Math.PI * 2); c.fill();
+  }
+  // Whole-canopy volume: lit upper right, shaded lower left (only over paint).
+  const b = g.box;
+  const vol = c.createLinearGradient(b.x1, b.y0, b.x0, b.y1);
+  vol.addColorStop(0, "rgba(255,240,200,0.10)"); vol.addColorStop(0.55, "rgba(0,0,0,0)"); vol.addColorStop(1, "rgba(0,10,0,0.28)");
+  c.globalCompositeOperation = "source-atop";
+  c.fillStyle = vol; c.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  c.globalCompositeOperation = "source-over";
+}
+
+function makeSprite(seed, species, palette, h = SPRITE_H) {
+  const g = growTree(seed, species, h);
+  const b = g.box, w = b.x1 - b.x0, ht = b.y1 - b.y0;
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(w * SPRITE_RES); cv.height = Math.ceil(ht * SPRITE_RES);
+  const c = cv.getContext("2d");
+  c.setTransform(SPRITE_RES, 0, 0, SPRITE_RES, -b.x0 * SPRITE_RES, -b.y0 * SPRITE_RES);
+  paintTree(c, g, palette, species);
+  return { cv, ox: -b.x0, oy: -b.y0, w, h: ht, canopyW: g.canopyW, unit: h };
+}
+
+// ── Backdrop: sky, sun or moon, hills, soil and grass ───────────────────
+function ridge(r, base, amp) {
+  const p = [r() * 6, r() * 6, r() * 6], f = [1.3 + r(), 3.1 + r() * 2, 7 + r() * 4];
+  return x => base - amp * (0.55 * Math.sin(x * f[0] + p[0]) + 0.3 * Math.sin(x * f[1] + p[1]) + 0.15 * Math.sin(x * f[2] + p[2]));
+}
+
+function mix(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+
+function paintBackdrop() {
+  const s = scene;
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(W * DPR); cv.height = Math.ceil(H * DPR);
+  const c = cv.getContext("2d");
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = rng(7);
+
+  const sky = c.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, s.sky[0]); sky.addColorStop(0.55, s.sky[1]); sky.addColorStop(1, s.sky[2]);
+  c.fillStyle = sky; c.fillRect(0, 0, W, horizon + 40);
+
+  if (s.stars) {
+    for (let i = 0; i < 160; i++) {
+      c.fillStyle = `rgba(230,236,255,${0.25 + r() * 0.6})`;
+      c.fillRect(r() * W, r() * horizon * 0.8, r() < 0.1 ? 1.6 : 1, r() < 0.1 ? 1.6 : 1);
+    }
+  }
+  if (s.disc) {
+    const sx = W * s.disc.x, sy = horizon * s.disc.y * 2, sr = Math.max(s.disc.moon ? 6 : 9, H * (s.disc.moon ? 0.018 : 0.028));
+    const glow = c.createRadialGradient(sx, sy, 0, sx, sy, H * (s.disc.moon ? 0.35 : 0.75));
+    const g0 = s.disc.moon ? 0.3 : 0.55 * (1 - s.overcast * 0.6);
+    glow.addColorStop(0, `rgba(${s.sunGlow},${g0})`); glow.addColorStop(0.25, `rgba(${s.sunGlow},${g0 * 0.33})`); glow.addColorStop(1, `rgba(${s.sunGlow},0)`);
+    c.fillStyle = glow; c.fillRect(0, 0, W, H);
+    const core = c.createRadialGradient(sx, sy, 0, sx, sy, sr * 1.6);
+    core.addColorStop(0, s.sunCore); core.addColorStop(0.55, s.sunCore); core.addColorStop(1, `rgba(${s.sunGlow},0)`);
+    c.fillStyle = core; c.beginPath(); c.arc(sx, sy, sr * 1.6, 0, Math.PI * 2); c.fill();
+  }
+
+  // Three ridges fading into haze: aerial perspective.
+  s.hills.forEach((col, i) => {
+    const f = ridge(r, horizon - (2 - i) * H * 0.055 - H * 0.01, H * (0.05 + i * 0.012));
+    c.fillStyle = mix(col, s.haze, 0.45 - i * 0.18);
+    c.beginPath(); c.moveTo(0, H);
+    for (let x = 0; x <= W + 8; x += 8) c.lineTo(x, f(x / W * 3));
+    c.lineTo(W, H); c.closePath(); c.fill();
+  });
+  const hz = c.createLinearGradient(0, horizon - H * 0.12, 0, horizon + 8);
+  hz.addColorStop(0, "rgba(0,0,0,0)"); hz.addColorStop(1, s.haze + "99");
+  c.fillStyle = hz; c.fillRect(0, horizon - H * 0.12, W, H * 0.12 + 8);
+
+  // Laterite soil, darker toward the viewer.
+  const soil = c.createLinearGradient(0, horizon, 0, H);
+  soil.addColorStop(0, s.soil[0]); soil.addColorStop(0.5, s.soil[1]); soil.addColorStop(1, s.soil[2]);
+  c.fillStyle = soil;
+  c.beginPath(); c.moveTo(0, horizon + 4);
+  for (let x = 0; x <= W + 12; x += 12) c.lineTo(x, horizon + Math.sin(x / 70) * 2.5);
+  c.lineTo(W, H); c.lineTo(0, H); c.closePath(); c.fill();
+
+  // Soil grain and grass tufts, larger near the viewer.
+  const area = W * (H - horizon);
+  for (let i = 0; i < Math.min(5000, area / 40); i++) {
+    const y = horizon + Math.pow(r(), 0.8) * (H - horizon), d = (y - horizon) / (H - horizon);
+    c.fillStyle = r() < 0.5 ? "rgba(255,220,190,0.07)" : "rgba(40,15,5,0.12)";
+    const sz = 0.6 + d * 1.6;
+    c.fillRect(r() * W, y, sz, sz * 0.6);
+  }
+  c.lineCap = "round";
+  for (let i = 0; i < Math.min(3200, area / 70); i++) {
+    const y = horizon + 3 + Math.pow(r(), 0.7) * (H - horizon), d = (y - horizon) / (H - horizon);
+    const x = r() * W, blades = 2 + Math.floor(r() * 5), len = 1.5 + d * 8 * (0.4 + r() * 0.8);
+    c.strokeStyle = s.grass[Math.floor(r() * s.grass.length)];
+    c.globalAlpha = 0.35 + d * 0.45;
+    c.lineWidth = 0.4 + d * 0.8;
+    for (let b = 0; b < blades; b++) {
+      const lean = (r() - 0.5) * 0.9;
+      c.beginPath(); c.moveTo(x, y);
+      c.quadraticCurveTo(x + lean * len * 0.4, y - len * 0.6, x + lean * len, y - len);
+      c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+  return cv;
+}
+
+// Cloud layer, twice the canvas width so it can drift and wrap seamlessly.
+function paintClouds() {
+  const s = scene, n = Math.round(s.weather.cloudCover * 14);
+  if (n === 0) return null;
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(W * 2 * DPR); cv.height = Math.ceil(horizon * DPR);
+  const c = cv.getContext("2d");
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = rng(31);
+  for (let i = 0; i < n * 2; i++) {
+    const cx = (i / (n * 2)) * W * 2 + r() * W * 0.08, cy = horizon * (0.12 + r() * 0.5);
+    const w = W * (0.12 + r() * 0.16) * (0.6 + s.weather.cloudCover * 0.6), puffs = 4 + Math.floor(r() * 4);
+    for (let k = 0; k < puffs; k++) {
+      const px = cx + (k / (puffs - 1) - 0.5) * w * 0.85, rx = w * (0.18 + r() * 0.14), ry = rx * (0.45 + r() * 0.2);
+      const py = cy - r() * ry * 0.7;
+      const gr = c.createRadialGradient(px, py - ry * 0.3, 0, px, py, rx);
+      gr.addColorStop(0, s.cloud + "f2"); gr.addColorStop(0.7, s.cloud + "c0"); gr.addColorStop(1, s.cloud + "00");
+      c.fillStyle = gr; c.beginPath(); c.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2); c.fill();
+    }
+  }
+  return cv;
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────
+function layout() {
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  if (!W || !H) return;
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.ceil(W * DPR); canvas.height = Math.ceil(H * DPR);
+  horizon = H * 0.52;
+  scene = scene || currentScene();
+
+  sprites = Array.from({ length: 12 }, (_, i) =>
+    makeSprite(1000 + i * 97, i % 5 < 3 ? "broadleaf" : "acacia", scene));
+  visitorSprites = {
+    sapling: makeSprite(77, "broadleaf", scene, 90),
+    growing: makeSprite(311, "broadleaf", scene, 150),
+    funded: makeSprite(523, "broadleaf", scene, SPRITE_H),
+  };
+  backdrop = paintBackdrop();
+  clouds = paintClouds();
+
+  const count = Math.min(fundedTrees, MAX_DRAWN);
+  perTree = fundedTrees > MAX_DRAWN ? Math.ceil(fundedTrees / MAX_DRAWN) : 1;
+  const r = rng(20261002);
+  const ground = H - horizon;
+  trees = Array.from({ length: count }, () => {
+    const d = Math.pow(r(), 1.35);                  // 0 = far, 1 = near (most trees farther away)
+    let x = r() * W;
+    if (visitor && d > 0.55 && Math.abs(x - W / 2) < W * 0.09) x += (x < W / 2 ? -1 : 1) * W * 0.12;
+    const size = (0.07 + d * 0.33) * (H / 420);
+    return { x, y: horizon + 4 + d * (ground - 30), d, size, sprite: sprites[Math.floor(r() * sprites.length)], phase: r() * 6.283 };
+  }).sort((a, b) => a.y - b.y);
+
+  const cap = document.getElementById("forest-caption");
+  if (cap) cap.textContent = fundedTrees === 0
+    ? "Illustration. The first fully allocated tree will appear here."
+    : `Illustration. Each tree drawn represents ${perTree === 1 ? "one estimated fully allocated tree" : `${num(perTree)} estimated fully allocated trees`}.`;
+}
+
+// ── Drawing ──────────────────────────────────────────────────────────────
+function drawSprite(sp, x, y, scale, skew, alpha) {
+  ctx.globalAlpha = alpha;
+  // Skew pivots at the base: the trunk stays planted while the crown sways.
+  ctx.setTransform(DPR * scale, 0, DPR * scale * skew, DPR * scale, DPR * x, DPR * y);
+  ctx.drawImage(sp.cv, -sp.ox, -sp.oy, sp.w, sp.h);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+}
+
+function drawShadow(x, y, w, alpha) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = `rgba(${scene.shadow},${alpha})`;
+  ctx.beginPath(); ctx.ellipse(x - w * 0.25, y + 1, w * 0.55, Math.max(1.5, w * 0.11), 0, 0, Math.PI * 2); ctx.fill();
+}
+
+function leafShape(x, y, len, ang, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(len * 0.5, -len * 0.42, len, 0);
+  ctx.quadraticCurveTo(len * 0.5, len * 0.42, 0, 0); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 0.6;
+  ctx.beginPath(); ctx.moveTo(len * 0.05, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
+  ctx.restore();
+}
+
+function drawVisitor(t) {
+  const x = W / 2, y = H - 30, k = H / 420;
+  const sway = reduceMotion ? 0 : Math.sin(t / 1700) * 0.012;
+  const pulse = reduceMotion ? 0.5 : 0.5 + Math.sin(t / 650) * 0.25;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, 46 * k);
+  glow.addColorStop(0, `rgba(${scene.ring},${0.45 * pulse})`); glow.addColorStop(1, `rgba(${scene.ring},0)`);
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.ellipse(x, y, 46 * k, 13 * k, 0, 0, Math.PI * 2); ctx.fill();
+
+  const st = visitor.stage;
+  if (st === "seed" || st === "sprout") {
+    // Freshly turned mound of darker, moist soil.
+    ctx.fillStyle = scene.soil[2];
+    ctx.beginPath(); ctx.ellipse(x, y, 20 * k, 6 * k, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "rgba(255,220,190,0.12)";
+    ctx.beginPath(); ctx.ellipse(x + 4 * k, y - 3 * k, 10 * k, 2.5 * k, 0, 0, Math.PI * 2); ctx.fill();
+    if (st === "seed") {
+      ctx.fillStyle = "#7a5230";
+      ctx.beginPath(); ctx.ellipse(x + 2 * k, y - 4.5 * k, 3.4 * k, 2.2 * k, -0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,240,210,0.5)";
+      ctx.beginPath(); ctx.ellipse(x + 3 * k, y - 5.4 * k, 1.1 * k, 0.6 * k, -0.4, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const top = y - 26 * k, bx = x + Math.sin(t / 1500) * (reduceMotion ? 0 : 1.2) * k;
+      ctx.strokeStyle = scene.leaf[1]; ctx.lineWidth = 1.6 * k; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x, y - 3 * k); ctx.quadraticCurveTo(x - 3 * k, y - 14 * k, bx, top); ctx.stroke();
+      leafShape(bx, top + 9 * k, 10 * k, Math.PI + 0.35, scene.leaf[2]);
+      leafShape(bx, top + 9 * k, 10 * k, -0.35, scene.leaf[2]);
+      leafShape(bx, top + 1 * k, 8 * k, -Math.PI / 2 - 0.6, scene.leaf[3]);
+      leafShape(bx, top + 1 * k, 7 * k, -Math.PI / 2 + 0.5, scene.leaf[2]);
+    }
+  } else {
+    const sp = st === "sapling" ? visitorSprites.sapling : st === "growing" ? visitorSprites.growing : visitorSprites.funded;
+    const scale = (st === "sapling" ? 0.55 : st === "growing" ? 0.48 : 0.5) * k * 1.5;
+    // Mulch ring.
+    ctx.fillStyle = "rgba(60,35,20,0.55)";
+    ctx.beginPath(); ctx.ellipse(x, y + 1, 16 * k, 4.5 * k, 0, 0, Math.PI * 2); ctx.fill();
+    drawShadow(x, y, sp.canopyW * scale * 0.9, 0.3);
+    drawSprite(sp, x, y, scale, sway, 1);
+    if (st === "sapling") {
+      // Bamboo stake and tie: standard for young planted trees.
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.strokeStyle = "#c9b27a"; ctx.lineWidth = 2.2 * k; ctx.lineCap = "butt";
+      ctx.beginPath(); ctx.moveTo(x + 5 * k, y + 2 * k); ctx.lineTo(x + 5 * k, y - 48 * k); ctx.stroke();
+      ctx.strokeStyle = "#8c7444"; ctx.lineWidth = 0.8 * k;
+      for (const n of [14, 30]) { ctx.beginPath(); ctx.moveTo(x + 4 * k, y - n * k); ctx.lineTo(x + 6.2 * k, y - n * k); ctx.stroke(); }
+      ctx.strokeStyle = "#e8e2d0"; ctx.lineWidth = 1 * k;
+      ctx.beginPath(); ctx.moveTo(x + 1 * k, y - 36 * k); ctx.lineTo(x + 5 * k, y - 37 * k); ctx.stroke();
+    }
+  }
+}
+
+function drawVisitorLabel() {
+  const x = W / 2, y = H - 30, k = H / 420;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // The scene shows the programme name, not the visitor's id; the id stays in
+  // the "Your tree" panel below.
+  const text = "Ultra Clear Canopy";
+  ctx.font = `600 ${Math.max(11, 12 * k)}px "Source Sans 3", "Segoe UI", system-ui, sans-serif`;
+  const tw = ctx.measureText(text).width + 16, th = 20;
+  const lx = x - tw / 2, ly = y + 6;
+  ctx.fillStyle = scene.labelBg;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, ly, tw, th, 6) : ctx.rect(lx, ly, tw, th); ctx.fill();
+  ctx.fillStyle = scene.label; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(text, x, ly + th / 2 + 0.5);
+}
+
+function drawWeather(t) {
+  const w = scene.weather;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (w.kind === "fog") {
+    const fg = ctx.createLinearGradient(0, horizon - H * 0.1, 0, H);
+    fg.addColorStop(0, scene.cloud + "00"); fg.addColorStop(0.35, scene.cloud + "8c"); fg.addColorStop(1, scene.cloud + "40");
+    ctx.fillStyle = fg; ctx.fillRect(0, horizon - H * 0.1, W, H);
+  }
+  if (w.kind === "rain" || w.kind === "storm" || w.kind === "drizzle") {
+    const heavy = w.kind !== "drizzle", n = heavy ? 220 : 110, slant = Math.min(0.5, w.windKmh / 60);
+    ctx.strokeStyle = heavy ? "rgba(215,228,240,0.45)" : "rgba(215,228,240,0.3)";
+    ctx.lineWidth = heavy ? 1 : 0.7;
+    ctx.beginPath();
+    const r = rng(77), fall = reduceMotion ? 0 : t * (heavy ? 0.9 : 0.5);
+    for (let i = 0; i < n; i++) {
+      const len = (heavy ? 12 : 7) * (0.6 + r() * 0.6);
+      const x0 = r() * (W + 60), y = (r() * H + fall * (0.8 + r() * 0.4)) % (H + len) - len;
+      const x = (x0 - slant * (y + len)) % (W + 60);
+      ctx.moveTo(x, y); ctx.lineTo(x - slant * len, y + len);
+    }
+    ctx.stroke();
+  }
+  if (w.kind === "storm" && !reduceMotion) {
+    if (t > flashUntil + 4000 && Math.random() < 0.004) flashUntil = t + 180;
+    if (t < flashUntil) { ctx.fillStyle = "rgba(235,240,255,0.35)"; ctx.fillRect(0, 0, W, H); }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function frame(t) {
+  if (!backdrop) { layout(); if (!backdrop) return; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(backdrop, 0, 0);
+  const wind = scene.weather.windKmh;
+  if (clouds) {
+    // Drift with the wind; the layer is two canvases wide and wraps.
+    const off = reduceMotion ? 0 : ((t / 1000) * (2 + wind * 0.6) * DPR) % (clouds.width);
+    ctx.globalAlpha = 0.55 + scene.overcast * 0.4;
+    ctx.drawImage(clouds, -off, 0); ctx.drawImage(clouds, clouds.width - off, 0);
+    ctx.globalAlpha = 1;
+  }
+  const swayAmp = Math.min(0.06, 0.008 + wind / 900);
+  for (const tr of trees) {
+    const scale = tr.size;
+    const sway = reduceMotion ? 0 : Math.sin(t / (1600 - Math.min(800, wind * 15)) + tr.phase) * swayAmp * (0.35 + tr.d);
+    const shadeA = (0.12 + tr.d * 0.22) * scene.shadowScale;
+    drawShadow(tr.x, tr.y, tr.sprite.canopyW * scale, shadeA);
+    // Far trees sit in the haze: lower opacity lets the ridge colour through.
+    drawSprite(tr.sprite, tr.x, tr.y, scale, sway, 0.62 + tr.d * 0.38);
+  }
+  if (visitor) drawVisitor(t);
+  drawWeather(t);
+  if (visitor) { drawVisitorLabel(); ctx.setTransform(1, 0, 0, 1, 0, 0); }
+  if (!reduceMotion) requestAnimationFrame(frame);
+}
+
+renderFigures(fallbackFigures(), false);
+renderUpdates();
+loadProgrammeStatus();
+setInterval(loadLive, 5 * 60 * 1000);
+scene = currentScene();
+renderSkyBar();
+frame(performance.now());
+loadWeather();
+setInterval(refreshSky, 60 * 1000);
+setInterval(loadWeather, 15 * 60 * 1000);
+let resizeTimer;
+const relayout = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { layout(); if (reduceMotion) frame(performance.now()); }, 120); };
+addEventListener("resize", relayout);
+</script>
+</body>
+</html>

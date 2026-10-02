@@ -10,6 +10,219 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Own shared-tree allocation and aggregate progress
+ */
+export const getHydrateCustomerTreeResponseEligibleOrdersMin = 0;
+
+export const getHydrateCustomerTreeResponseEligiblePurchasesKesMin = 0;
+
+export const getHydrateCustomerTreeResponseAllocationKesMin = 0;
+
+export const getHydrateCustomerTreeResponseTreeShareKesMin = 0;
+
+export const getHydrateCustomerTreeResponseCleanWaterKesMin = 0;
+
+export const getHydrateCustomerTreeResponseReplacementPurchasesMin = 0;
+
+export const getHydrateCustomerTreeResponseTreesHelpedMin = 0;
+
+export const getHydrateCustomerTreeResponseConfigTreeCostKesExclusiveMin = 0;
+
+export const getHydrateCustomerTreeResponseTreeFundedPctMin = 0;
+export const getHydrateCustomerTreeResponseTreeFundedPctMax = 100;
+
+export const getHydrateCustomerTreeResponseTreeYourShareKesMin = 0;
+
+
+
+export const GetHydrateCustomerTreeResponse = zod.object({
+  "eligibleOrders": zod.number().min(getHydrateCustomerTreeResponseEligibleOrdersMin),
+  "eligiblePurchasesKes": zod.number().min(getHydrateCustomerTreeResponseEligiblePurchasesKesMin),
+  "allocationKes": zod.number().min(getHydrateCustomerTreeResponseAllocationKesMin),
+  "treeShareKes": zod.number().min(getHydrateCustomerTreeResponseTreeShareKesMin),
+  "cleanWaterKes": zod.number().min(getHydrateCustomerTreeResponseCleanWaterKesMin),
+  "replacementPurchases": zod.number().min(getHydrateCustomerTreeResponseReplacementPurchasesMin),
+  "treesHelped": zod.number().min(getHydrateCustomerTreeResponseTreesHelpedMin),
+  "config": zod.object({
+  "contributionRate": zod.number(),
+  "treeShare": zod.number(),
+  "treeCostKes": zod.number().gt(getHydrateCustomerTreeResponseConfigTreeCostKesExclusiveMin)
+}),
+  "tree": zod.object({
+  "stage": zod.enum(['seed', 'sapling', 'growing', 'funded']),
+  "fundedPct": zod.number().min(getHydrateCustomerTreeResponseTreeFundedPctMin).max(getHydrateCustomerTreeResponseTreeFundedPctMax),
+  "established": zod.boolean(),
+  "yourShareKes": zod.number().min(getHydrateCustomerTreeResponseTreeYourShareKesMin)
+}).nullable()
+})
+
+
+/**
+ * @summary Credential-free aggregate programme allocations, not verified field outcomes
+ */
+export const getHydrateForestTotalsResponseEligibleRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseAppRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseBaselineRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseContributionKesMin = 0;
+
+export const getHydrateForestTotalsResponseTreeFundKesMin = 0;
+
+export const getHydrateForestTotalsResponseCleanWaterKesMin = 0;
+
+export const getHydrateForestTotalsResponseSharedTreesFundedMin = 0;
+
+export const getHydrateForestTotalsResponseGrowingTreePctMin = 0;
+export const getHydrateForestTotalsResponseGrowingTreePctMax = 100;
+
+export const getHydrateForestTotalsResponseEstimatedTreesFundedMin = 0;
+
+export const getHydrateForestTotalsResponseTreesPlantedMin = 0;
+
+export const getHydrateForestTotalsResponseTreesEstablishedMin = 0;
+
+export const getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin = 0;
+
+
+
+export const GetHydrateForestTotalsResponse = zod.object({
+  "generatedAt": zod.string(),
+  "eligibleRevenueKes": zod.number().min(getHydrateForestTotalsResponseEligibleRevenueKesMin),
+  "appRevenueKes": zod.number().min(getHydrateForestTotalsResponseAppRevenueKesMin),
+  "baselineRevenueKes": zod.number().min(getHydrateForestTotalsResponseBaselineRevenueKesMin),
+  "contributionKes": zod.number().min(getHydrateForestTotalsResponseContributionKesMin),
+  "treeFundKes": zod.number().min(getHydrateForestTotalsResponseTreeFundKesMin),
+  "cleanWaterKes": zod.number().min(getHydrateForestTotalsResponseCleanWaterKesMin),
+  "sharedTreesFunded": zod.number().min(getHydrateForestTotalsResponseSharedTreesFundedMin),
+  "growingTreePct": zod.number().min(getHydrateForestTotalsResponseGrowingTreePctMin).max(getHydrateForestTotalsResponseGrowingTreePctMax).nullable(),
+  "estimatedTreesFunded": zod.number().min(getHydrateForestTotalsResponseEstimatedTreesFundedMin),
+  "treesPlanted": zod.number().min(getHydrateForestTotalsResponseTreesPlantedMin).nullable(),
+  "treesEstablished": zod.number().min(getHydrateForestTotalsResponseTreesEstablishedMin).nullable(),
+  "reportDate": zod.string().nullable(),
+  "location": zod.string(),
+  "config": zod.object({
+  "contributionRate": zod.number(),
+  "treeShare": zod.number(),
+  "treeCostKes": zod.number().gt(getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin)
+})
+})
+
+
+/**
+ * @summary Administrator-only Companion review log with matching-dataset counts
+ */
+export const listCustomerReviewsQueryPageDefault = 1;
+export const listCustomerReviewsQueryPageMax = 100000;
+
+export const listCustomerReviewsQueryLimitDefault = 20;
+export const listCustomerReviewsQueryLimitMax = 50;
+
+export const listCustomerReviewsQueryProductIdMax = 2147483647;
+
+export const listCustomerReviewsQueryRatingMax = 5;
+
+export const listCustomerReviewsQuerySearchMax = 200;
+
+
+
+export const ListCustomerReviewsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerReviewsQueryPageMax).default(listCustomerReviewsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listCustomerReviewsQueryLimitMax).default(listCustomerReviewsQueryLimitDefault),
+  "productId": zod.coerce.number().min(1).max(listCustomerReviewsQueryProductIdMax).optional(),
+  "rating": zod.coerce.number().min(1).max(listCustomerReviewsQueryRatingMax).optional(),
+  "ratingSentiment": zod.enum(['Positive', 'Neutral', 'Negative']).optional(),
+  "aiSentiment": zod.enum(['Positive', 'Neutral', 'Negative', 'Mixed']).optional(),
+  "status": zod.enum(['pending', 'processing', 'completed', 'failed', 'unavailable']).optional(),
+  "disagreement": zod.coerce.boolean().optional(),
+  "search": zod.coerce.string().max(listCustomerReviewsQuerySearchMax).optional()
+})
+
+export const listCustomerReviewsResponseReviewsItemRatingMax = 5;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisExplanationMax = 460;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax = 40;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisThemesMax = 3;
+
+
+
+export const ListCustomerReviewsResponse = zod.object({
+  "reviews": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "authorName": zod.string(),
+  "rating": zod.number().min(1).max(listCustomerReviewsResponseReviewsItemRatingMax),
+  "title": zod.string(),
+  "body": zod.string(),
+  "media": zod.array(zod.object({
+  "url": zod.string(),
+  "type": zod.enum(['photo', 'video'])
+})),
+  "createdAt": zod.coerce.date(),
+  "editedAt": zod.coerce.date().nullable(),
+  "ratingSentiment": zod.enum(['Positive', 'Neutral', 'Negative']),
+  "disagreement": zod.boolean(),
+  "analysis": zod.object({
+  "status": zod.enum(['pending', 'processing', 'completed', 'failed', 'unavailable']),
+  "category": zod.enum(['Positive', 'Neutral', 'Negative', 'Mixed']).optional(),
+  "explanation": zod.string().max(listCustomerReviewsResponseReviewsItemAnalysisExplanationMax).optional(),
+  "themes": zod.array(zod.string().max(listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax)).max(listCustomerReviewsResponseReviewsItemAnalysisThemesMax).optional(),
+  "analyzedAt": zod.coerce.date().optional(),
+  "error": zod.string().optional()
+})
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "counts": zod.object({
+  "rating": zod.object({
+  "Positive": zod.number(),
+  "Neutral": zod.number(),
+  "Negative": zod.number()
+}),
+  "ai": zod.object({
+  "Positive": zod.number(),
+  "Neutral": zod.number(),
+  "Negative": zod.number(),
+  "Mixed": zod.number()
+}),
+  "status": zod.object({
+  "pending": zod.number(),
+  "processing": zod.number(),
+  "completed": zod.number(),
+  "failed": zod.number(),
+  "unavailable": zod.number()
+}),
+  "disagreements": zod.number()
+}),
+  "products": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}))
+})
+
+
+/**
+ * @summary Queue a failed eligible review for automated text analysis
+ */
+export const retryCustomerReviewAnalysisPathIdMax = 2147483647;
+
+
+
+export const RetryCustomerReviewAnalysisParams = zod.object({
+  "id": zod.coerce.number().min(1).max(retryCustomerReviewAnalysisPathIdMax)
+})
+
+export const RetryCustomerReviewAnalysisResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Create a public instant water assessment
  */
 export const createPublicInstantWaterAssessmentBodyFirstNameMin = 2;
@@ -2846,7 +3059,7 @@ export const IssueAgentClientTokenResponse = zod.object({
 
 
 /**
- * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+ * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer. New replies use relevant curated Markdown and published guide/article snapshots, with concise default answers.
  * @summary Generate and persist one anonymous Alison turn
  */
 export const createUcAlisonTurnBodyConversationIdMin = 16;
@@ -4506,4 +4719,41 @@ export const GetCustomerLifecycleFeatureConfigResponse = zod.object({
   "legacyReviewSubmission": zod.boolean(),
   "canonicalGlobalImpact": zod.boolean(),
   "nearbyDistanceTiers": zod.boolean()
+})
+
+
+/**
+ * @summary Read persisted refill preview activation flags
+ */
+export const GetRefillFeaturesResponse = zod.object({
+  "careOverview": zod.boolean(),
+  "refillGovernance": zod.boolean()
+})
+
+
+/**
+ * @summary Update persisted refill preview activation flags
+ */
+export const UpdateRefillFeaturesBody = zod.object({
+  "careOverview": zod.boolean().optional(),
+  "refillGovernance": zod.boolean().optional()
+})
+
+export const UpdateRefillFeaturesResponse = zod.object({
+  "careOverview": zod.boolean(),
+  "refillGovernance": zod.boolean()
+})
+
+
+/**
+ * @summary Read safe refill feature capabilities
+ */
+export const GetRefillCapabilitiesResponse = zod.object({
+  "version": zod.literal(1),
+  "careOverview": zod.boolean(),
+  "promoRefill": zod.literal(false),
+  "paidRefill": zod.literal(false),
+  "moneyWallet": zod.literal(false),
+  "paidCare": zod.literal(false),
+  "automaticCollection": zod.literal(false)
 })

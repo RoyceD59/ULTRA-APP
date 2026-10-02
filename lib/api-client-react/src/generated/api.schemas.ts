@@ -5,6 +5,218 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface HydrateAllocationConfig {
+  contributionRate: 0.03;
+  treeShare: 0.5;
+  /** @exclusiveMinimum 0 */
+  treeCostKes: number;
+}
+
+export type HydrateCustomerTreeTreeStage = typeof HydrateCustomerTreeTreeStage[keyof typeof HydrateCustomerTreeTreeStage];
+
+
+export const HydrateCustomerTreeTreeStage = {
+  seed: 'seed',
+  sapling: 'sapling',
+  growing: 'growing',
+  funded: 'funded',
+} as const;
+
+/**
+ * @nullable
+ */
+export type HydrateCustomerTreeTree = {
+  stage: HydrateCustomerTreeTreeStage;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  fundedPct: number;
+  established: boolean;
+  /** @minimum 0 */
+  yourShareKes: number;
+} | null;
+
+export interface HydrateCustomerTree {
+  /** @minimum 0 */
+  eligibleOrders: number;
+  /** @minimum 0 */
+  eligiblePurchasesKes: number;
+  /** @minimum 0 */
+  allocationKes: number;
+  /** @minimum 0 */
+  treeShareKes: number;
+  /** @minimum 0 */
+  cleanWaterKes: number;
+  /** @minimum 0 */
+  replacementPurchases: number;
+  /** @minimum 0 */
+  treesHelped: number;
+  config: HydrateAllocationConfig;
+  /** @nullable */
+  tree: HydrateCustomerTreeTree;
+}
+
+export interface HydrateForestTotals {
+  generatedAt: string;
+  /** @minimum 0 */
+  eligibleRevenueKes: number;
+  /** @minimum 0 */
+  appRevenueKes: number;
+  /** @minimum 0 */
+  baselineRevenueKes: number;
+  /** @minimum 0 */
+  contributionKes: number;
+  /** @minimum 0 */
+  treeFundKes: number;
+  /** @minimum 0 */
+  cleanWaterKes: number;
+  /** @minimum 0 */
+  sharedTreesFunded: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  growingTreePct: number | null;
+  /** @minimum 0 */
+  estimatedTreesFunded: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  treesPlanted: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  treesEstablished: number | null;
+  /** @nullable */
+  reportDate: string | null;
+  location: string;
+  config: HydrateAllocationConfig;
+}
+
+export type CustomerReviewAssessmentStatus = typeof CustomerReviewAssessmentStatus[keyof typeof CustomerReviewAssessmentStatus];
+
+
+export const CustomerReviewAssessmentStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+} as const;
+
+export type CustomerReviewAssessmentCategory = typeof CustomerReviewAssessmentCategory[keyof typeof CustomerReviewAssessmentCategory];
+
+
+export const CustomerReviewAssessmentCategory = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+  Mixed: 'Mixed',
+} as const;
+
+export interface CustomerReviewAssessment {
+  status: CustomerReviewAssessmentStatus;
+  category?: CustomerReviewAssessmentCategory;
+  /** @maxLength 460 */
+  explanation?: string;
+  /**
+     * @maxItems 3
+     * @items.maxLength 40
+     */
+  themes?: string[];
+  analyzedAt?: string;
+  error?: string;
+}
+
+export type CustomerReviewLogEntryMediaItemType = typeof CustomerReviewLogEntryMediaItemType[keyof typeof CustomerReviewLogEntryMediaItemType];
+
+
+export const CustomerReviewLogEntryMediaItemType = {
+  photo: 'photo',
+  video: 'video',
+} as const;
+
+export type CustomerReviewLogEntryMediaItem = {
+  url: string;
+  type: CustomerReviewLogEntryMediaItemType;
+};
+
+export type CustomerReviewLogEntryRatingSentiment = typeof CustomerReviewLogEntryRatingSentiment[keyof typeof CustomerReviewLogEntryRatingSentiment];
+
+
+export const CustomerReviewLogEntryRatingSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+} as const;
+
+export interface CustomerReviewLogEntry {
+  id: number;
+  productId: number;
+  productName: string;
+  authorName: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  title: string;
+  body: string;
+  media: CustomerReviewLogEntryMediaItem[];
+  createdAt: string;
+  /** @nullable */
+  editedAt: string | null;
+  ratingSentiment: CustomerReviewLogEntryRatingSentiment;
+  disagreement: boolean;
+  analysis: CustomerReviewAssessment;
+}
+
+export type CustomerReviewCountsRating = {
+  Positive: number;
+  Neutral: number;
+  Negative: number;
+};
+
+export type CustomerReviewCountsAi = {
+  Positive: number;
+  Neutral: number;
+  Negative: number;
+  Mixed: number;
+};
+
+export type CustomerReviewCountsStatus = {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  unavailable: number;
+};
+
+export interface CustomerReviewCounts {
+  rating: CustomerReviewCountsRating;
+  ai: CustomerReviewCountsAi;
+  status: CustomerReviewCountsStatus;
+  disagreements: number;
+}
+
+export type CustomerReviewLogProductsItem = {
+  id: number;
+  name: string;
+};
+
+export interface CustomerReviewLog {
+  reviews: CustomerReviewLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  counts: CustomerReviewCounts;
+  products: CustomerReviewLogProductsItem[];
+}
+
 export interface BlogSource {
   /**
      * @minLength 1
@@ -2557,6 +2769,33 @@ export interface CustomerLifecycleFeatureConfig {
   nearbyDistanceTiers: boolean;
 }
 
+export interface RefillFeatures {
+  careOverview: boolean;
+  refillGovernance: boolean;
+}
+
+export interface RefillFeaturesUpdate {
+  careOverview?: boolean;
+  refillGovernance?: boolean;
+}
+
+export type RefillCapabilitiesVersion = typeof RefillCapabilitiesVersion[keyof typeof RefillCapabilitiesVersion];
+
+
+export const RefillCapabilitiesVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export interface RefillCapabilities {
+  version: RefillCapabilitiesVersion;
+  careOverview: boolean;
+  promoRefill: false;
+  paidRefill: false;
+  moneyWallet: false;
+  paidCare: false;
+  automaticCollection: false;
+}
+
 export type CustomerLifecycleIdentityStatus = typeof CustomerLifecycleIdentityStatus[keyof typeof CustomerLifecycleIdentityStatus];
 
 
@@ -3087,6 +3326,71 @@ export interface AuditEventPage {
   limit: number;
   total: number;
 }
+
+export type ListCustomerReviewsParams = {
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+/**
+ * @minimum 1
+ * @maximum 2147483647
+ */
+productId?: number;
+/**
+ * @minimum 1
+ * @maximum 5
+ */
+rating?: number;
+ratingSentiment?: ListCustomerReviewsRatingSentiment;
+aiSentiment?: ListCustomerReviewsAiSentiment;
+status?: ListCustomerReviewsStatus;
+disagreement?: boolean;
+/**
+ * @maxLength 200
+ */
+search?: string;
+};
+
+export type ListCustomerReviewsRatingSentiment = typeof ListCustomerReviewsRatingSentiment[keyof typeof ListCustomerReviewsRatingSentiment];
+
+
+export const ListCustomerReviewsRatingSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+} as const;
+
+export type ListCustomerReviewsAiSentiment = typeof ListCustomerReviewsAiSentiment[keyof typeof ListCustomerReviewsAiSentiment];
+
+
+export const ListCustomerReviewsAiSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+  Mixed: 'Mixed',
+} as const;
+
+export type ListCustomerReviewsStatus = typeof ListCustomerReviewsStatus[keyof typeof ListCustomerReviewsStatus];
+
+
+export const ListCustomerReviewsStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+} as const;
+
+export type RetryCustomerReviewAnalysis200 = {
+  ok: boolean;
+};
 
 export type ListProjectHubInstantWaterAssessmentsParams = {
 status?: string;
