@@ -56,3 +56,6 @@ artifacts/api-server/data/
 
 # Generated static forest package — publish only through the allowlisted build.
 artifacts/uc-companion/forest-dist/
+
+# Isolated Hydrate release generated files
+.hydrate-release/
