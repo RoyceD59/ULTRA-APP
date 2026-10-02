@@ -91,9 +91,17 @@ contribution history: additive tables are safe to leave during rollback.
 
 ## Preview evidence and remaining release gate
 
-Pages preview: `https://907751d8.uc-hydrate-forest.pages.dev/`
+Pages preview: `https://4ad447b1.uc-hydrate-forest.pages.dev/`
 (branch alias: `https://release-hydrate-the-future.uc-hydrate-forest.pages.dev/`).
 Deployment environment is **preview**, not production.
+Draft pull request: `https://github.com/RoyceD59/ULTRA-APP/pull/5`.
+The source branch was rechecked before creating the release branch; no existing
+branch was rewritten or merged.
 The production endpoint/router are unchanged until approved; therefore production
 live-totals validation is a release gate, not a preview pass.
 Native device checks must be reported separately from web/unit/build checks.
+
+Do not use a normal workspace-wide republish for this release without first isolating
+the approved changes: the inspected live Companion revision predates other workspace
+features. Preserve the live release as the deployment baseline, apply only this
+forest/impact integration, and leave unrelated newer workspace work untouched.
