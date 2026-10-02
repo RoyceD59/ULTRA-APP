@@ -10,8 +10,9 @@ export interface LocationRefreshScheduler {
 }
 
 const defaultScheduler: LocationRefreshScheduler = {
+  // Browser timers must not receive the scheduler object as their `this`.
   setInterval: (callback, delayMs) => globalThis.setInterval(callback, delayMs),
-  clearInterval: handle => globalThis.clearInterval(handle),
+  clearInterval: (handle) => globalThis.clearInterval(handle),
 };
 
 export function startFocusedLocationRefresh(

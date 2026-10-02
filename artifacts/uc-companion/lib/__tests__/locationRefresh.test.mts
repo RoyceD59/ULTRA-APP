@@ -25,6 +25,30 @@ const closedTap = {
 } as MapLocation;
 
 describe('focused customer-map location refresh', () => {
+  it('calls browser timers with the global receiver, including cleanup', () => {
+    const originalSet = globalThis.setInterval;
+    const originalClear = globalThis.clearInterval;
+    const handle = 29 as unknown as ReturnType<typeof setInterval>;
+    let cleared = false;
+    globalThis.setInterval = function (this: unknown) {
+      assert.equal(this, globalThis, 'wrong timer receiver causes Illegal invocation');
+      return handle;
+    } as typeof setInterval;
+    globalThis.clearInterval = function (this: unknown, value) {
+      assert.equal(this, globalThis);
+      assert.equal(value, handle);
+      cleared = true;
+    } as typeof clearInterval;
+    try {
+      const stop = startFocusedLocationRefresh(() => {});
+      stop();
+      assert.equal(cleared, true);
+    } finally {
+      globalThis.setInterval = originalSet;
+      globalThis.clearInterval = originalClear;
+    }
+  });
+
   it('refreshes immediately, again within one minute, and stops while off-screen', () => {
     let refreshes = 0;
     let intervalCallback: (() => void) | null = null;

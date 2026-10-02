@@ -38,3 +38,15 @@ When manually rebuilding the committed static bundle, use the production artifac
 **Why:** A build can succeed and remove stale UI strings while embedding development API/asset origins or missing the production path prefix, leaving its checked-in output unusable after publishing.
 
 **How to apply:** Read the validated artifact production build settings before a manual regeneration, then confirm generated web/native bundles use the intended API origin and prefixed asset URLs.
+
+An assigned task's checkout can lag the published Companion implementation. Verify both the deployed build and its canonical browser origin before diagnosing a live failure from local source.
+
+**Why:** A live browser audit exposed blog screens absent from the task checkout; the deployment alias also produced cross-origin errors against APIs configured for the custom app domain.
+
+**How to apply:** Obtain deployment metadata, compare public build identifiers and available merged source, and distinguish canonical-domain failures from alias-only failures. Do not infer that a CMS feature is missing merely because it is absent from an older task checkout.
+
+The supported published Companion browser origin is the custom app domain. Browser entry from the shared deployment alias should lead there, rather than widening production API CORS to accommodate the alias.
+
+**Why:** Public API and asset delivery are configured for the custom domain, while the deployment alias shares its root with ProjectHub. Allowing the alias alone does not resolve root-route collisions or cross-origin assets.
+
+**How to apply:** Preserve browser routes and query parameters when directing visitors to the custom app domain; keep native manifests, assets and development previews out of browser-only redirects. Do not hijack ProjectHub's shared-root routes.

@@ -87,6 +87,16 @@ describe('serve.js production server', () => {
    */
   let bundleSrcFromRoot;
 
+  test('redirects alias Companion deep entries before booting the wrong-origin bundle', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}${BASE_PATH}/cart?from=product`, {
+      headers: { accept: 'text/html', 'x-forwarded-host': 'team-horizon--jerryaroyce.replit.app' },
+      redirect: 'manual',
+    });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get('location'), 'https://app.ucfilters.com/cart?from=product');
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+  });
+
   before(async () => {
     // ----- build a minimal static-build fixture -----
     staticRoot = mkdtempSync(join(tmpdir(), 'uc-serve-test-'));

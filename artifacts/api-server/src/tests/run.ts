@@ -38,6 +38,11 @@ import { Pool } from "pg";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { testResourceLimits } from "./resource-limits.js";
+
+// Each tsx worker starts esbuild. High advertised host CPU counts combined
+// with 32 workers can exhaust the container's OS-thread limit before tests run.
+const resourceLimits = testResourceLimits(process.env);
 
 // ── 0. Require DATABASE_URL ───────────────────────────────────────────────────
 
@@ -104,7 +109,7 @@ function spawnAsync(
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
-      env: opts.env,
+      env: { ...opts.env, GOMAXPROCS: resourceLimits.goMaxProcs },
       stdio: opts.stdio === "pipe" ? ["pipe", "pipe", "pipe"] : "inherit",
     });
     activeChild = child;
@@ -318,7 +323,7 @@ async function runTestPhase(
 let childExitCode: number;
 if (testGlob) {
   // Explicit TEST_GLOB runs retain their historical single-phase behavior.
-  const concurrency = SHARED_STATE_FILES.some((part) => testGlob.includes(part)) ? 1 : 32;
+  const concurrency = SHARED_STATE_FILES.some((part) => testGlob.includes(part)) ? 1 : resourceLimits.concurrency;
   childExitCode = await runTestPhase("focused tests", [testGlob], concurrency);
 } else {
   const allTests = await listTestFiles(`${testCwd}/src/tests`);
@@ -339,7 +344,7 @@ if (testGlob) {
   const ordinaryExitCode = await runTestPhase(
     "ordinary tests",
     [asGlob(ordinaryTests)],
-    32,
+    resourceLimits.concurrency,
     ordinaryTests.length,
   );
   const sharedExitCode = await runTestPhase(

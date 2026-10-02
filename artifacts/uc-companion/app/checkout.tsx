@@ -877,6 +877,8 @@ export default function CheckoutScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
+        {/* Keep support in the scroll flow so it never covers address/payment taps. */}
+        <AlisonBubble message={alisonGreeting} placement="inline" />
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Address</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.field}>
@@ -1009,9 +1011,6 @@ export default function CheckoutScreen() {
           </View>
         </View>
       </ScrollView>
-
-      {/* Alison chat bubble — greets on arrival, collapses after 2 s */}
-      <AlisonBubble message={alisonGreeting} bottomOffset={110} />
 
       <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border,
         paddingBottom: Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>

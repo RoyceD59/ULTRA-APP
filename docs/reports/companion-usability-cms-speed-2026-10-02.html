@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companion usability audit, CMS design and speed plan</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#172c42;background:#f5f7fa}body{max-width:1060px;margin:auto;padding:28px}main{background:white;padding:32px;border:1px solid #dae2eb;border-radius:12px}h1{font-size:28px;line-height:1.2}h2{margin-top:32px;color:#0054a6}h3{margin-top:22px}p,li{line-height:1.6}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border:1px solid #dae2eb;text-align:left;vertical-align:top;padding:10px}th{background:#eef4fa}.scroll{overflow-x:auto}.notice{border-left:4px solid #a42424;background:#fff3f2;padding:16px}.muted{color:#526475}code{overflow-wrap:anywhere;font-size:13px}a{color:#0054a6}footer{margin-top:30px;color:#526475;font-size:13px}@media(max-width:600px){body{padding:10px}main{padding:18px}h1{font-size:24px}}@media print{body{background:white;padding:0}main{border:0;padding:0}}
+</style>
+</head>
+<body><main>
+<h1>Ultra-Clear Companion<br>Usability audit, CMS design and loading-speed plan</h1>
+<p class="muted">2 October 2026 · Browser audit and read-only architecture investigation</p>
+<div class="notice"><strong>Result: not ready for an “every page and every tap works” sign-off.</strong> The map crash is reproduced on the configured public origin. Checkout has a visible overlay issue. Signed-in and native-device checks remain unverified. This report is an audit and proposed design, not an implemented fix.</div>
+<h2>Implementation update after approval</h2>
+<p>The approved reliability fixes are implemented in the workspace, <strong>not published to the live app</strong>. The original audit evidence below describes the pre-fix deployment.</p>
+<ul>
+<li>Map refresh now invokes global timers with the correct receiver. The regression test checks both scheduling and cleanup.</li>
+<li>Checkout places Alison inside its scrolling content, retaining the greeting, automatic collapse and chat navigation. The existing browser tester confirmed the greeting and collapsed launcher do not cover address or payment controls, including while the phone field is focused. No message, order or payment was submitted; the browser-local test item was removed.</li>
+<li>HTML entries served from the Replit deployment alias redirect to the canonical app domain, preserving the route and query string. Custom-host proxy requests do not loop; native manifests, versioned assets and health checks remain accessible. Root-relative links on the shared alias outside the Companion path still belong to ProjectHub; users should enter Companion through its canonical app domain.</li>
+<li>Companion TypeScript checking and all 485 Companion tests pass. Production server redirect behavior is covered by an HTTP integration test.</li>
+</ul>
+<p>This does not close physical iOS/Android, signed-in account/QR, authenticated Alison answer/timeout/retry, or every-page usability coverage. Existing workflow logs also contain Expo package-alignment and unrelated API-test failures; these fixes do not establish that all project validation passes.</p>
+<p><strong>Validation repair update:</strong> the user approved repairing the broader blockers. Regenerating the shared API types and installing the SDK-aligned packages restored all project type checks and Expo Doctor (20/20). The API runner now bounds both test workers and transform-process threads. A full bounded run exposed one remaining fixed-identity collision in push-auth tests; unique suite-owned IDs and cleanup fix it, and the focused push-auth/resource-limit checks pass. Final project completion validation is still required. No production deployment was performed.</p>
+<h2>1. Scope and evidence</h2>
+<ul>
+<li>The user reported freezes on iPhone and Android browsers, a map error, and problems with products, QR, blog and global impact sync.</li>
+<li>Automated testing used 390×844 Chromium and WebKit browser simulations on the deployment alias. A targeted follow-up checked the previously blocked shopping/blog/map path on the configured public origin in mobile Chromium.</li>
+<li>Canonical browser entry: <a href="https://app.ucfilters.com/">https://app.ucfilters.com/</a>. The Replit deployment alias was obtained from deployment metadata; it is not equivalent to this custom-origin configuration.</li>
+<li>No physical iOS or Android phone, native camera, native map, authenticated customer session, authenticated Alison answer, or native safe-area behavior was verified.</li>
+<li>No order, payment, account, database, product or profile mutation was made. A browser-local cart item was added and removed. External messages and destructive submissions were not performed.</li>
+<li>The task checkout differs from published code: live blog screens exist although they are absent from the task checkout. Existing editorial capabilities were checked in accessible merged source before planning a CMS.</li>
+</ul>
+<h2>2. Confirmed defects and priorities</h2>
+<div class="scroll"><table>
+<thead><tr><th>Priority</th><th>Finding</th><th>Evidence and proposed fix</th></tr></thead>
+<tbody>
+<tr><td>P0</td><td>Map crashes on the canonical browser origin</td><td>Tapping Map produces “Something went wrong.” Browser stack: <code>TypeError: Illegal invocation</code> at <code>startFocusedLocationRefresh</code>. In <code>artifacts/uc-companion/lib/locationRefresh.ts</code>, bare global timers are stored on a scheduler and called as its methods. Proposed fix: wrappers that invoke timers with the correct global context, retain injected test schedulers, and verify interval cleanup. Runtime and source strongly agree; no patch has been applied.</td></tr>
+<tr><td>P1</td><td>Deployment alias has API/font CORS and direct-entry routing failures</td><td>On the Replit alias, requests to <code>api.ucfilters.com</code> fail preflight and fonts from <code>app.ucfilters.com</code> are blocked. Some direct routes land in ProjectHub; the supplied Companion prefix shows not-found. On the canonical origin, product/blog/impact data load. Proposed fix: explicitly decide supported entry origins, use correct redirects and base paths, and align exact CORS allowlists for supported hosts. Do not allow every origin as a shortcut.</td></tr>
+<tr><td>P1</td><td>Checkout Alison overlay covers part of the form</td><td>Canonical checkout screenshot shows the greeting bubble overlapping the phone/payment area on a short mobile viewport. Proposed fix: reserve space, move/collapse the bubble, and ensure fields and payment choices remain reachable with and without the keyboard. No payment was attempted.</td></tr>
+<tr><td>P2</td><td>Unfriendly route titles</td><td>Guide detail shows literal <code>guide/[id]</code>; Alison shows <code>ai-chat</code>. Set customer-facing titles in the shared route configuration.</td></tr>
+<tr><td>Review</td><td>Public blog article title begins “DRAFT”</td><td>A public article title is prefixed DRAFT. This is not proof that an unpublished record leaked. Staff should verify its publication state, content quality and intended title before changing or unpublishing it.</td></tr>
+</tbody></table></div>
+<p>Canonical browsing showed initial spinners/brief blank content followed by rendered pages. That does not reproduce every reported post-load freeze or establish behavior on physical devices.</p>
+<h2>3. Page and tap coverage</h2>
+<p><strong>Partial pass</strong> means only the listed actions were exercised. A rendered screen is not proof that every form branch works. Alias-only findings must not be presented as canonical failures.</p>
+<div class="scroll"><table>
+<thead><tr><th>Page / interaction family</th><th>Outcome</th><th>What was checked / what remains</th></tr></thead>
+<tbody>
+<tr><td>Home and tabs</td><td>Partial pass</td><td>Home renders, tabs/shortcuts respond. Canonical products, blog preview and impact populate. Sign-in-dependent registration remains blocked.</td></tr>
+<tr><td>Products search/category</td><td>Partial pass; alias fails</td><td>Alias search retains input and category selection updates the URL but data fails CORS. Canonical catalogue loads 27 products. Every category/filter combination was not re-tested.</td></tr>
+<tr><td>Product detail</td><td>Partial pass</td><td>Canonical Faucet Filter Cartridge loads price, stock state and detail; Add to Cart works. Every product, gallery, review and enquiry branch remains unverified.</td></tr>
+<tr><td>Basket</td><td>Partial pass</td><td>Canonical add, summary and remove work; empty state and in-app Back work. Alias direct entry is misrouted. Quantity increment/decrement, recommendations, persistence and cold-entry Back need explicit coverage.</td></tr>
+<tr><td>Checkout</td><td>Partial pass / overlay defect</td><td>Entry, address fields, methods and summary render on canonical origin. No order/payment submitted. Address validation, promo/referral, cancellations and timeout branches remain untested.</td></tr>
+<tr><td>Support / guides</td><td>Partial pass</td><td>Search finds Survivor Straw; detail has five sections; Back retains search. Bundled guide content renders despite alias API failure. All media/link actions were not exercised.</td></tr>
+<tr><td>Water test</td><td>Render and cancel only</td><td>Form and choices appear; Back works. Country picker, validation, booking, consent, history and submission remain untested.</td></tr>
+<tr><td>Tickets / new ticket</td><td>Render only</td><td>Empty tickets view and account-required form appear. Attachment handling, validation, signed-in history and submission remain untested.</td></tr>
+<tr><td>Map</td><td>Fail</td><td>Full-screen crash reproduced on canonical Chromium. Filters, directions, detail modal, ratings and dismissal blocked. Native map and canonical WebKit not tested.</td></tr>
+<tr><td>Account / login / register / forgot password</td><td>Signed-out rendering only</td><td>Account and entry screens render. No login, registration or reset submitted; validation and signed-in behavior remain untested.</td></tr>
+<tr><td>Alison</td><td>Signed-out guard only</td><td>Greeting and sign-in prompt appear. Real-provider answer, timeout, retry, edit, rating and product links remain unverified.</td></tr>
+<tr><td>Blog feed / detail</td><td>Feed partial pass</td><td>Canonical feed loads one DRAFT-prefixed item; alias feed fails CORS. Article tap/linkpoints, paging and offline behavior not fully exercised.</td></tr>
+<tr><td>Impact / QR / rewards</td><td>Data partial pass; protected actions blocked</td><td>Canonical Home displays 2 users, 450 L and 900 bottles; alias displays zeros. Global synchronization across users was not verified. Rewards QR, scan and impact-share require signed-in/native coverage.</td></tr>
+<tr><td>Orders / order detail</td><td>Blocked</td><td>No disposable signed-in customer/order fixture available. Status/history/return actions not tested.</td></tr>
+<tr><td>Enquiry / reviews / referral / notification preferences</td><td>Blocked / not exercised</td><td>Need product/session fixtures or controlled external-service setup. No enquiry, review, referral message or notification was sent.</td></tr>
+<tr><td>Change password</td><td>Blocked</td><td>No controlled reset or temporary-password session.</td></tr>
+<tr><td>Admin product edit / media</td><td>Not tested</td><td>Require authorized staff and disposable product/media fixtures; real commerce writes are excluded.</td></tr>
+<tr><td>Not-found / shared overlays</td><td>Mixed</td><td>Not-found and alias routing failure observed. Checkout bubble overlap observed. Profile, delete, redeem, impact-share, filter/reminder, performance, media and other protected modals not fully tested.</td></tr>
+</tbody></table></div>
+<h2>4. CMS design proposal</h2>
+<p><strong>Recommended: extend the existing ProjectHub CMS, not install a replacement.</strong> Existing merged blog code already includes draft/review/publish/reject actions, history and published snapshots. Guide administration also exists. WooCommerce remains authoritative for products, prices, stock and orders.</p>
+<h3>Options and trade-offs</h3>
+<ol>
+<li><strong>Existing CMS extension — recommended.</strong> Lowest migration risk; reuse team permissions, editorial workflow, API/database and media storage. Improve staff usability and unify navigation only where the audit identifies gaps.</li>
+<li><strong>Shared editorial workspace for blog and guides.</strong> Consistent editor/media/preview controls, while keeping separate blog and guide data models. More work, but avoids replacing working publishing logic.</li>
+<li><strong>External headless CMS.</strong> Consider only if current authoring/localization requirements exceed the existing tools. Adds migration, preview, authentication, integration and synchronization costs; not justified by current evidence.</li>
+</ol>
+<h3>Recommended staff-facing structure</h3>
+<ul>
+<li><strong>Content:</strong> blog and guide lists, search, status filters and draft editing.</li>
+<li><strong>Review:</strong> editorial feedback, approval queue and preview, retaining existing publishing permissions.</li>
+<li><strong>Media:</strong> approved uploads, alt text, image sizes and links; reuse existing storage verification.</li>
+<li><strong>History:</strong> revisions and audit trail; restoring a revision must be explicitly confirmed.</li>
+<li><strong>Read delivery:</strong> public clients receive published snapshots only; failed revisions must not remove current live content.</li>
+</ul>
+<p>Data flow: staff draft → authorized review/publish → published snapshot → cached public API → Companion. Product references use WooCommerce IDs/URLs, not copied prices or inventory. Public drafts stay private, private response caches are user-scoped, and successful publishing invalidates relevant cached content. This is a design for approval, not a statement that all listed capabilities need to be newly built.</p>
+<h2>5. Loading-speed measurements and plan</h2>
+<p>Single HTTP spot checks from the workspace; not phone-network benchmarks, load tests or measured Core Web Vitals:</p>
+<div class="scroll"><table>
+<thead><tr><th>Resource</th><th>Observed</th><th>Interpretation</th></tr></thead>
+<tbody>
+<tr><td>Versioned JS on Replit alias</td><td>4,762,886 transferred bytes; 0.15 s total; private cache header; no content encoding observed</td><td>The alias does not reflect the canonical compression path.</td></tr>
+<tr><td>Same versioned JS on canonical origin</td><td>1,177,441 transferred bytes; 0.42 s total; zstd; private, max-age=14400</td><td>Canonical compression already works. Main-thread parse/startup cost and route splitting still need profiling.</td></tr>
+<tr><td>Catalogue API</td><td>About 2.9 s; 82,073 bytes; HTTP 200</td><td>Catalogue is slower than the other sampled data endpoints; one sample cannot establish percentile latency.</td></tr>
+<tr><td>Locations / impact / blog APIs on alias</td><td>About 0.12 / 0.27 / 0.08 s; HTTP 200</td><td>Successful server responses do not imply the browser is permitted to read them.</td></tr>
+</tbody></table></div>
+<h3>Phase 1 — reliability before speed</h3>
+<p>Fix the map timer crash, checkout overlap and supported-origin/deep-link routing. Add focused regressions for correct timer receiver/cleanup, route reloads and controlled mobile layouts. Confirm no uncaught errors and no essential control blocked by an overlay.</p>
+<h3>Phase 2 — establish a real mobile baseline</h3>
+<p>Measure cold/warm Home, catalogue, product, blog and guide journeys on agreed low-end Android and iPhone/network profiles. Record compressed bytes, JavaScript parse/startup, LCP, INP, CLS, API percentiles, requests and image transfer. Proposed targets: LCP ≤2.5 s, INP ≤200 ms, CLS ≤0.1; these are goals, not current scores.</p>
+<h3>Phase 3 — reduce startup and repeated work</h3>
+<p>Profile heavy route modules and root providers before changing them. Separate admin-only/heavy modules where supported; defer unused media/native functionality. Aim for at least 30% lower initial transfer/parse cost against the baseline without breaking Expo routing or native builds. Keep versioned public assets cacheable where privacy permits; do not apply public caching to authenticated data.</p>
+<h3>Phase 4 — catalogue and freshness</h3>
+<p>Profile WooCommerce fetches, use bounded normalized catalogue caching and targeted invalidation after updates, avoid duplicate refetches, and consider server-side filtered paging. Targets: at least 50% lower warm response latency and 80% fewer repeated upstream reads under the chosen test scenario. Preserve complete catalogue pagination or fail explicitly; keep checkout price/stock authoritative.</p>
+<h3>Phase 5 — media and published content</h3>
+<p>Reuse existing image derivatives, correctly size product/feed images, reserve dimensions and defer below-fold video. Proposed image targets: median catalogue image ≤150 KB, main image ≤250 KB. Validate existing published-snapshot/ETag caching rather than duplicating it; publishing should become visible within the agreed freshness window (initial proposal ≤60 seconds).</p>
+<h2>6. Completion gates</h2>
+<ul>
+<li>Every customer/admin route has an explicit tested result or named blocker; no blanket pass from screen rendering alone.</li>
+<li>Core browser journeys have no crashes, indefinite loading or tap-blocking overlays. Direct entry and Back work on supported origins.</li>
+<li>Controlled signed-in customer/admin fixtures cover account, QR, rewards, forms, password flows and Alison real answer/timeout/retry without changing customer data.</li>
+<li>Real native iOS and Android sessions cover signed-out/in navigation, basket direct entry, safe areas, keyboard, camera/QR and Alison. Browser simulations cannot close this gate.</li>
+<li>Payment/order submission remains outside this audit; any future such testing must use a controlled sandbox, never an accidental live order.</li>
+</ul>
+<footer>The original audit made no app or data changes. Subsequently approved browser reliability fixes are now in the workspace; no deployment, CMS implementation, or performance optimization was performed. The original physical-device confirmation remains incomplete.</footer>
+</main></body></html>

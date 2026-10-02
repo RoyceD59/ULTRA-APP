@@ -4,8 +4,22 @@ generated = []
 [[outputs]]
 id = "hr6AMKQQ20TmKri3JqRIx"
 uri = "file://docs/projecthub-webhook-guide.html"
-type = "text"
+type = "html"
 title = "ProjectHub — Webhook & Agent Dispatch Guide"
 description = "Full reference for the Webhook Tester, live ingest endpoint, payload schema, agent dispatch, and end-to-end walkthrough."
 logical_id = "11c8fc2d-64f7-49e9-bb4a-44edcc970878"
+content_type = "text/html"
+
+[[outputs]]
+id = "CbilUY1BhQStexfOxvDK4"
+uri = "file://docs/reports/companion-usability-cms-speed-2026-10-02.html"
+type = "html"
+title = "Companion audit, fixes and validation repairs"
+description = "Updated usability report with browser reliability fixes, validation repairs, CMS/loading-speed design and explicit remaining device/session coverage gaps."
+logical_id = "09be97ef-d8c5-4621-9826-8bcb1a10aeb4"
+content_hash = "sha256:ed9a89d2cc3ec6348925bc6c56be07661c070596c9ba03b52d2211c054ca30ce"
+size = 18341
+mtime_ms = 1790966998534
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/09be97ef-d8c5-4621-9826-8bcb1a10aeb4/3959c815-c95e-4f39-9dc4-9ce18d0701b9"
+storage_version_token = "1790967016891671"
 content_type = "text/html"

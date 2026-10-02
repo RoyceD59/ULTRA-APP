@@ -13,6 +13,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+const { browserEntryRedirect } = require('./browser-entry.cjs');
+
 const { isWebAppRoute } = require('./web-routes.cjs');
 const STATIC_ROOT =
   process.env.STATIC_ROOT || path.resolve(__dirname, '..', 'static-build');
@@ -230,6 +232,13 @@ const server = http.createServer((req, res) => {
 
   if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))) {
     pathname = pathname.slice(basePath.length) || '/';
+  }
+
+  const browserRedirect = browserEntryRedirect(req, pathname, url.search);
+  if (browserRedirect) {
+    res.writeHead(302, { location: browserRedirect, 'cache-control': 'no-store' });
+    res.end();
+    return;
   }
 
   if (pathname === '/status') {

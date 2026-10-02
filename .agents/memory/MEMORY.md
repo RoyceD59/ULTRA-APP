@@ -15,6 +15,7 @@
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines drop exports; spliced handler code → restore file from last good commit + re-apply legit lines.
 - [API test-DB isolation](api-test-db-isolation.md) — tests run in a per-run database; drizzle push always diffs public of the connected DB; raw-SQL-only tables (startup migrations) must be mirrored in lib/db schema.
+- [API test resource budgets](api-test-resource-budget.md) — bound test workers and transform threads; host CPU count can exceed the container's OS-thread budget.
 - [Shared settings in parallel tests](shared-settings-parallel-tests.md) — unit tests must inject settings and clocks rather than rely on the singleton team_settings row or process env.
 - [API order-flow test harness](api-order-test-harness.md) — tests hitting /uc/orders must delete MPESA_*/WC_* env vars; a stub returning {id:…} is mistaken for a real WC order.
 - [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).

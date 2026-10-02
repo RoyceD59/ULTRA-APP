@@ -11,4 +11,10 @@ description: How api-server tests isolate from the live dev database, and the dr
 - If api tests suddenly fail en masse with "relation X does not exist", check whether `public` drifted from `lib/db/src/schema/` — any table/column created only by raw SQL (e.g. the api-server's startup migrations in `src/index.ts`) must have a matching Drizzle schema file, or push-based flows break. `uc_return_requests` was the first such case.
 - `TEST_GLOB='src/tests/foo.test.ts' pnpm test` runs a subset inside the same isolation.
 - Never execute an API test file directly with `tsx --test`: it inherits the development `DATABASE_URL`, and destructive failure-injection tests can mutate live development tables. Always enter through the package test wrapper, including focused runs.
-- The full suite exceeds the 300s shell cap; run it via the validation mechanism (registered command `api-tests`), not a raw shell call. Backgrounded (`nohup`/`setsid`) shell processes get killed when the tool call returns — don't rely on them.
+- For long runs, use managed validation or the tool's supported background-task mode and collect its result before finishing. Do not rely on shell-detached `nohup`/`setsid` processes.
+
+Per-run database isolation does not isolate test identities between files in that run.
+
+**Why:** Fixed customer IDs inherited other suites' deleted-account state, causing a signed push-auth test to return 401 instead of its expected no-token 404.
+
+**How to apply:** Use suite-owned identities and clean up only owned rows. Never assume small fixed user IDs are unused merely because the database is temporary.
