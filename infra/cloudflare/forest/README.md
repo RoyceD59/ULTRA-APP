@@ -68,7 +68,7 @@ or credentialed URLs and discards all preconfigured query/hash values.
 1. Confirm production approval, hostname and a release window.
 2. Publish only the required backend/Companion release via the existing release
    process, with `EXPO_PUBLIC_FOREST_URL` set for that release. Do not publish unrelated
-   workspace changes. Migration `0056_uc_hydrate_trees.sql`, matching Drizzle schema and
+    workspace changes. Migration `0057_uc_hydrate_trees.sql`, matching Drizzle schema and
    idempotent startup DDL add two tables; there is no drop or data rewrite.
 3. Confirm the production aggregate returns valid JSON without auth and the private
    tree endpoint still rejects guests, team sessions and deleted customers.
@@ -123,9 +123,11 @@ forest/impact integration, and leave unrelated newer workspace work untouched.
 ### Frozen app/API package
 
 `release-sources.tar.gz` contains only source/dependency manifests from the observed
-live baseline `9f113c2f847e3631fb59f97774f64e5e8f23c85f`, with this task's impact/API
+live baseline `9cf3861de793aab6322038f4affa4b51316b432a`, with this task's impact/API
 integration applied. It excludes repository metadata, environment files, runtime data,
-dependencies, compiled outputs, browser fixtures and newer unrelated features.
+dependencies, compiled outputs, browser fixtures and newer unreleased features.
+Already-published Reviews, Alison and refill-governance changes are preserved.
+Review analysis owns migration 0056; Hydrate uses the collision-free 0057.
 The Zod barrel follows the existing codegen command's single generated-module export,
 avoiding conflicting split-type reexports in the old snapshot.
 
@@ -158,6 +160,10 @@ Do not delete or replace newer working-tree source to accomplish the isolation.
 Checks on the isolated baseline: library/API/Companion typechecks passed; 10 hydrate
 API tests passed in a fresh database that was dropped; Hub/API builds passed; web,
 Android and iOS Companion bundles/manifests/assets built successfully.
+The refreshed package also passed Hub typechecking, 20 focused tree/sky/geometry tests
+and four hosting/package tests. An explicit string callback type fixes a pre-existing
+Alison TypeScript inference error without changing runtime behavior; its nine focused
+knowledge tests passed. The API development workflow restarted cleanly.
 The additional signed-in browser continuation did not finish and was stopped; it is
 not a passed account-switch/litres-entry check. No physical-phone checks were performed.
 
@@ -165,4 +171,31 @@ Publishing requires the owner's Replit Publishing action. Review any database pr
 and do not approve unrelated schema changes or development-data replacement. The release
 needs only the two additive Hydrate tables and their indexes; startup DDL ensures them.
 Once published, verify the production endpoint, narrowly update the router, and verify
-the final production card-to-forest flow before declaring this task complete.
+the final production card-to-forest flow before declaring the production release complete.
+
+### Owner-approved integration / production split
+
+The owner approved finishing this integration task so it can merge, with the live
+API/card rollout moved to a separate follow-up. Publishing uses the main project,
+not an unmerged isolated task. This completion therefore covers the integrated code,
+reconciled isolated release package, GitHub synchronization and published static forest.
+It does **not** claim live API totals, live card behavior, router rollout, production
+schema rollout or native-device verification have passed.
+
+After this task merges, the follow-up must recheck the live revision and package guard.
+If production changed, refresh the archive first:
+
+```sh
+node infra/cloudflare/forest/reconcile-release.mjs <exact-current-live-revision>
+```
+
+The reconciler derives only the existing integration delta, preserves already-published
+changes, regenerates contracts from the combined specification and refuses ambiguous
+conflicts. The old and new Git revisions must be available locally and dependencies
+installed. It never replaces working-tree application code.
+
+Then publish from Replit, allow only the additive Hydrate database change, verify the
+API, preserve the current live worker while adding only forest read CORS, and confirm
+the final card/forest flow. Restore normal artifact production commands using validated
+artifact configuration after verification, so future releases are not frozen.
+Leave `forest.ucfilters.com` and DNS unchanged until certification and separate approval.
