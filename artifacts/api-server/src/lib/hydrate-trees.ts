@@ -58,7 +58,7 @@ export function hydrateConfig(env: Record<string, string | undefined> = process.
     treesPlanted: optionalCount(env["FOREST_TREES_PLANTED"]),
     treesEstablished: optionalCount(env["FOREST_TREES_ESTABLISHED"]),
     reportDate: env["FOREST_REPORT_DATE"]?.trim() || null,
-    location: env["FOREST_LOCATION"]?.trim() || "Kenya — planting sites to be confirmed by the programme",
+    location: env["FOREST_LOCATION"]?.trim() || "Kenya — planting sites to be confirmed by the programme partner",
   };
 }
 

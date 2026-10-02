@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hydrate the Future Forest</title>
-<meta name="description" content="Ultra Clear customers' combined contribution to growing and restoring trees in Kenya through Hydrate the Future.">
+<title>Hydrate the Future Forest Programme</title>
+<meta name="description" content="Ultra Clear customer contributions allocated to tree growing and restoration in Kenya through Hydrate the Future.">
 <!-- API that serves live totals (GET /api/uc/impact/forest), e.g. https://api.ucfilters.com.
      Leave empty to show the interim figures below. -->
 <meta name="uc-api-base" content="">
@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <!--
   Hydrate the Future™ public forest — standalone page linked from the
-  Companion Impact Card ("See your tree in our growing forest").
+  Companion Impact Card.
 
   Link format:  /?tree=UC-AB72CD&stage=sapling
            or:  /#tree-UC-AB72CD-sapling
@@ -73,6 +73,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--ring); outline-
 .sky-bar { max-width: 46rem; margin: .4rem auto 0; padding-inline: 1rem; display: flex; flex-wrap: wrap; gap: .25rem 1rem; justify-content: space-between; align-items: center; }
 .caption, .sky-line { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); min-width: 0; }
 .sky-line { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.sky-note { margin: 0; flex-basis: 100%; font: 400 .72rem/1.45 var(--font-body); color: var(--muted); max-width: 65ch; }
 .sky-btn { font: 600 .72rem/1 var(--font-body); color: var(--canopy); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: .4rem .7rem; cursor: pointer; }
 .hero-copy { padding: 1.25rem 1rem 0; max-width: 46rem; margin: 0 auto; }
 .eyebrow { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .12em; text-transform: uppercase; color: var(--canopy); }
@@ -120,16 +121,17 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 </head>
 <body>
 <header class="hero">
-  <canvas id="forest" role="img" aria-label="Illustrated forest of trees funded by Ultra Clear customers, on red soil beneath hills at golden hour"></canvas>
+  <canvas id="forest" role="img" aria-label="Illustration of trees allocated through Ultra Clear customer contributions, on red soil beneath hills under the live sky"></canvas>
   <div class="sky-bar">
     <p class="caption" id="forest-caption">Illustration.</p>
     <p class="sky-line"><span id="sky-status" role="status">Live sky over Nairobi</span>
       <button type="button" id="sky-me" class="sky-btn">Use my sky</button></p>
+    <p class="sky-note">“Use my sky” uses your approximate location only to display your local sky. We do not store it. It is rounded to about 11 km and sent only to our weather data provider, Open-Meteo.</p>
   </div>
   <div class="hero-copy">
     <p class="eyebrow">Hydrate the Future™ · Kenya</p>
-    <h1>Our growing forest</h1>
-    <p class="lede">Through Hydrate the Future™, 3% of eligible Ultra Clear purchases is allocated to the programme: half grows and restores trees in Kenya, half supports clean-water access. Customers’ contributions combine, so several people grow each tree together.</p>
+    <h1>The Hydrate the Future™ forest programme</h1>
+    <p class="lede">Through Hydrate the Future™, 3% of eligible Ultra Clear sales revenue is allocated to the programme: half is allocated to tree growing and restoration in Kenya, half supports clean-water access. Customer contributions are pooled, so several customers contribute to each tree.</p>
   </div>
 </header>
 
@@ -149,7 +151,7 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
   <section aria-labelledby="stages-h">
     <h2 id="stages-h">How a tree grows</h2>
     <ol class="stages" id="stages"></ol>
-    <p class="split-note"><strong>Funded is not the same as established.</strong> A funded tree means contributions have reached its estimated cost. An established tree is one the programme has confirmed in the field. Only programme reports move trees to established.</p>
+    <p class="split-note"><strong>Fully allocated is not the same as established.</strong> A fully allocated tree means contributions have reached its estimated cost. An established tree is one the programme has confirmed in the field. Only programme reports move trees to established.</p>
   </section>
 
   <section class="method" aria-labelledby="method-h">
@@ -157,17 +159,18 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
     <p>For every eligible transaction (a paid KES purchase that was not cancelled, failed or refunded):</p>
     <ul>
       <li><code>allocation = eligible revenue × 3%</code></li>
-      <li><code>tree share = allocation × 50%</code> (the other 50% supports clean-water access)</li>
-      <li><code>shared tree progress = tree shares assigned to the tree ÷ tree cost</code></li>
-      <li><code>estimated trees funded = total tree share ÷ tree cost</code></li>
+      <li><code>tree allocation = allocation × 50%</code> (the other 50% supports clean-water access)</li>
+      <li><code>shared tree progress = tree allocations assigned to the tree ÷ tree cost</code></li>
+      <li><code>estimated trees funded = total tree allocation ÷ tree cost</code></li>
     </ul>
     <p id="cost-text"></p>
     <p id="proxy-text"></p>
-    <p>Tree shares fill shared trees in purchase order, so several customers grow each tree together. Customers see their own share and their tree’s progress; who else funds a tree is never shown. Refills logged in the Companion app water a tree but carry no revenue, so they never add funding. Links to this page carry only an anonymous tree id and a growth stage, never names, contact details, amounts or percentages.</p>
+    <p>Tree allocations fill shared trees in purchase order, so several customers contribute to each tree together. Customers see their own allocation and their tree’s progress; who else contributes to a tree is never shown. Refills logged in the Companion app water a tree but carry no revenue, so they never add funding. Watering moves a tree from Seed to Sprout; funding progress moves it from Sapling onward.</p>
+    <p>Links to this page carry only an anonymous tree id and a growth stage, never names, contact details, amounts or percentages.</p>
   </section>
 
   <section class="join" aria-label="Join">
-    <p>Plant your seed with your first Ultra Clear purchase.</p>
+    <p>Start your tree with your first Ultra Clear purchase.</p>
     <a href="https://app.ucfilters.com" rel="noopener">Explore Ultra Clear</a>
   </section>
 </main>
@@ -175,6 +178,20 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 
 <script>
 "use strict";
+
+// Staff-maintained programme status. Leave a field null until it is confirmed;
+// the page then says so instead of showing a placeholder.
+const PROGRAMME_STATUS = {
+  partner: null,               // programme partner name, once confirmed
+  figuresAsOf: null,           // date of the interim figures, e.g. "30 Sep 2026"
+  donationScheduledFor: null,  // e.g. "9 Oct 2026"
+  donationMadeOn: null,        // set when the donation has been made
+  certificateUrl: null,        // link to the published donation certificate
+};
+const DONATED = !!PROGRAMME_STATUS.donationMadeOn;
+const LOCATION_TEXT = PROGRAMME_STATUS.partner
+  ? `Kenya — with ${PROGRAMME_STATUS.partner}; planting sites to be confirmed by the programme partner`
+  : "Kenya — planting sites to be confirmed by the programme partner";
 
 // ── Fallback figures (interim; shown only without live data) ─────────────
 const FALLBACK = {
@@ -186,17 +203,17 @@ const FALLBACK = {
   treesPlanted: null,
   treesEstablished: null,
   reportDate: null,
-  location: "Kenya — planting sites to be confirmed by the programme",
+  location: LOCATION_TEXT,
 };
 const COST_RANGE = [500, 750];
 const INTERIM_AVERAGE_KES = 12220; // revenue per sale — proxy, not confirmed LTV
 
 const STAGES = [
-  ["seed", "Seed", "A customer joins a shared tree with their first purchase."],
-  ["sprout", "Sprout", "Refills or a replacement water the tree."],
-  ["sapling", "Sapling", "25% of the shared tree’s estimated cost is funded."],
-  ["growing", "Growing tree", "50–99% funded."],
-  ["funded", "Funded tree", "Estimated end-to-end cost reached."],
+  ["seed", "Seed", "A customer’s first purchase starts their contribution to a shared tree."],
+  ["sprout", "Sprout", "Refills or a replacement show continued engagement. They water the tree visually but do not add funding."],
+  ["sapling", "Sapling", "25% of the shared tree’s estimated cost has been allocated."],
+  ["growing", "Growing tree", "50–99% allocated."],
+  ["funded", "Fully allocated tree", "Estimated end-to-end cost fully allocated."],
   ["established", "Established tree", "Field status confirmed by programme verification."],
 ];
 const STAGE_KEYS = STAGES.map(s => s[0]);
@@ -230,17 +247,18 @@ function renderFigures(f, live) {
   const high = Math.floor(treeFund / COST_RANGE[0]);
   const reported = f.reportDate ? `Programme report, ${f.reportDate}` : "Programme report";
   const rows = [
-    ["Trees funded (estimated)", num(f.estimatedTreesFunded), `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range`],
-    ["Tree share (1.5%)", kes(treeFund), "half of every 3% allocation"],
-    ["Clean-water share (1.5%)", kes(f.cleanWaterKes), "the other half, for clean-water access"],
+    [DONATED ? "Trees funded by donation" : "Estimated trees to be funded", num(f.estimatedTreesFunded), `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range`],
+    ["Tree allocation (1.5%)", kes(treeFund), "half of every 3% allocation"],
+    ["Clean-water allocation (1.5%)", kes(f.cleanWaterKes), "the other half, for clean-water access"],
     ["Customer contributions (3%)", kes(allocation), `of ${kes(f.eligibleRevenueKes)} eligible revenue`],
-    ["Trees reported planted", f.treesPlanted, f.treesPlanted === null ? "Awaiting programme report" : reported],
-    ["Trees established", f.treesEstablished, f.treesEstablished === null ? "Awaiting field verification" : reported],
+    ["Trees reported planted", f.treesPlanted, f.treesPlanted === null ? "Not yet reported by programme partner" : reported],
+    ["Trees established", f.treesEstablished, f.treesEstablished === null ? "Not yet field-verified" : reported],
   ];
   if (live && f.growingTreePct !== null) {
-    rows.splice(1, 0, ["Shared tree growing now", f.growingTreePct + "%", `${num(f.sharedTreesFunded)} shared tree${f.sharedTreesFunded === 1 ? "" : "s"} fully funded in the app`]);
+    rows.splice(1, 0, ["Shared tree in progress", f.growingTreePct + "% allocated", `${num(f.sharedTreesFunded)} shared tree${f.sharedTreesFunded === 1 ? "" : "s"} fully allocated in the app`]);
   }
-  rows.push(["Programme location", f.location, null]);
+  rows.push(["Programme location", LOCATION_TEXT, null]);
+  rows.push(["Certification", certificationText(), null]);
 
   const dl = document.getElementById("figures");
   dl.replaceChildren();
@@ -254,14 +272,30 @@ function renderFigures(f, live) {
       dd.textContent = typeof value === "number" ? num(value) : value;
       if (note) { const s = document.createElement("small"); s.textContent = note; dd.appendChild(s); }
     }
-    if (label === "Programme location") wrap.className = "pending";
+    if (label === "Programme location" || label === "Certification") wrap.className = "pending";
+    if (label === "Certification" && PROGRAMME_STATUS.certificateUrl) {
+      const a = document.createElement("a");
+      a.href = PROGRAMME_STATUS.certificateUrl; a.rel = "noopener"; a.textContent = "View donation certificate";
+      dd.replaceChildren(a);
+    }
     wrap.append(dt, dd); dl.appendChild(wrap);
   }
+  const outcomes = "Field outcomes will be updated after the programme partner publishes its report.";
+  const nature = " These figures represent funds allocated to the programme, not yet verified field outcomes.";
+  const asOf = PROGRAMME_STATUS.figuresAsOf ? ` as of ${PROGRAMME_STATUS.figuresAsOf}` : "";
   document.getElementById("basis").textContent = live
-    ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : "No programme field report has been published yet. ")
+    ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : outcomes + " ")
       + (f.baselineRevenueKes > 0 ? `Includes ${kes(f.baselineRevenueKes)} of earlier and offline sales.` : "Revenue covers purchases recorded in the Ultra Clear app.")
-    : `Interim figures based on ${num(FALLBACK.confirmedSales)} confirmed sales. No programme field report has been published yet.`;
+      + nature
+    : `Interim figures based on ${num(FALLBACK.confirmedSales)} confirmed sales${asOf}. ${outcomes}${nature}`;
   if (backdrop && trees.length !== Math.min(fundedTrees, MAX_DRAWN)) layout();
+}
+
+function certificationText() {
+  const S = PROGRAMME_STATUS, tail = " Certificate will be published when received.";
+  if (S.donationMadeOn) return `Donation made on ${S.donationMadeOn}.` + (S.certificateUrl ? "" : tail);
+  if (S.donationScheduledFor) return `Donation scheduled for ${S.donationScheduledFor}.` + tail;
+  return "Donation date to be confirmed." + tail;
 }
 
 function fallbackFigures() {
@@ -286,7 +320,10 @@ function setStatus(text, live) {
 
 async function loadLive() {
   const base = (document.querySelector('meta[name="uc-api-base"]')?.content || "").trim().replace(/\/+$/, "");
-  if (!base) { setStatus("Showing interim figures", false); return; }
+  const interim = PROGRAMME_STATUS.figuresAsOf
+    ? `Showing interim figures as of ${PROGRAMME_STATUS.figuresAsOf}`
+    : "Showing interim figures · as-of date to be confirmed";
+  if (!base) { setStatus(interim, false); return; }
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -296,9 +333,9 @@ async function loadLive() {
     const d = await res.json();
     renderFigures({ ...d, treeCostKes: d.config.treeCostKes }, true);
     const at = new Date(d.generatedAt);
-    setStatus("Live · updated " + at.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" }), true);
+    setStatus("Live figures as of " + at.toLocaleString("en-KE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }), true);
   } catch (e) {
-    setStatus("Live figures unavailable · showing last interim figures", false);
+    setStatus(`Live figures unavailable · ${interim.charAt(0).toLowerCase()}${interim.slice(1)}`, false);
   }
 }
 
@@ -307,7 +344,7 @@ document.getElementById("cost-text").textContent =
   `Tree cost is estimated at ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} in Kenya, covering planting and early care. The headline counter uses ${kes(P.treeCostKes)} so impact is never overstated. International programme estimates (USD 2.15–3.75) are a separate range, not a currency conversion of the Kenya figure.`;
 const perSaleTree = INTERIM_AVERAGE_KES * P.contributionRate * P.treeShare;
 document.getElementById("proxy-text").textContent =
-  `Confirmed average customer lifetime value is not yet available. As an interim proxy, average revenue per sale is ${kes(INTERIM_AVERAGE_KES)} (${kes(P.eligibleRevenueKes)} ÷ ${P.confirmedSales}). Its tree share is about ${kes(perSaleTree)}, roughly ${Math.floor(perSaleTree / COST_RANGE[1] * 100)}–${Math.floor(perSaleTree / COST_RANGE[0] * 100)}% of one tree, so about four customers grow each tree together.`;
+  `Confirmed average customer lifetime value is not yet available. As an interim proxy, average revenue per sale is ${kes(INTERIM_AVERAGE_KES)} (${kes(P.eligibleRevenueKes)} ÷ ${P.confirmedSales}). Its tree allocation is about ${kes(perSaleTree)}, roughly ${Math.floor(perSaleTree / COST_RANGE[1] * 100)}–${Math.floor(perSaleTree / COST_RANGE[0] * 100)}% of one tree, so about four customers contribute to each tree together.`;
 
 // ── Stage list ───────────────────────────────────────────────────────────
 const ol = document.getElementById("stages");
@@ -326,7 +363,7 @@ if (visitor) {
   document.getElementById("yours").hidden = false;
   document.getElementById("tree-id").textContent = `Tree ${visitor.id}`;
   document.getElementById("stage-name").textContent = st[1];
-  document.getElementById("stage-meaning").textContent = st[2] + " This is your copy of the shared tree you help grow, highlighted in the forest above.";
+  document.getElementById("stage-meaning").textContent = st[2] + " This is your view of the shared tree you contribute to, highlighted in the forest above.";
 }
 
 // ── Canvas forest ────────────────────────────────────────────────────────
@@ -352,7 +389,6 @@ function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) >>> 0) /
 // skyState.ts — keep the two in step. Default sky: Nairobi. "Use my sky"
 // switches to the visitor's location (rounded to ~11 km) only on request.
 const SKY_DEFAULT = { lat: -1.29, lon: 36.82, label: "Nairobi" };
-const SKY_STORE = "uc-forest-sky-place";
 const RAD = Math.PI / 180;
 
 function solarPosition(date, lat, lon) {
@@ -467,12 +503,7 @@ function buildScene(elevation, hourAngle, w) {
 }
 
 const sky = { place: SKY_DEFAULT, weather: CLEAR, weatherKnown: false, own: false, tz: "Africa/Nairobi" };
-try {
-  const saved = JSON.parse(localStorage.getItem(SKY_STORE) || "null");
-  if (saved && Number.isFinite(saved.lat) && Number.isFinite(saved.lon)) {
-    sky.place = { lat: saved.lat, lon: saved.lon, label: "your location" }; sky.own = true; sky.tz = null;
-  }
-} catch (e) { /* storage unavailable: default sky */ }
+// The visitor's location is held in memory for this visit only — never stored.
 
 function currentScene() {
   const sun = solarPosition(new Date(), sky.place.lat, sky.place.lon);
@@ -486,7 +517,7 @@ function renderSkyBar() {
   catch (e) { time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
   const w = sky.weatherKnown
     ? WEATHER_NAMES[sky.weather.kind] + (sky.weather.temperatureC === null ? "" : ` · ${Math.round(sky.weather.temperatureC)}°C`)
-    : "weather unavailable";
+    : "weather data unavailable";
   document.getElementById("sky-status").textContent = `Live sky over ${sky.place.label} · ${time} · ${w}`;
   const btn = document.getElementById("sky-me");
   btn.textContent = sky.own ? "Use Nairobi sky" : "Use my sky";
@@ -521,7 +552,6 @@ function refreshSky() {
 document.getElementById("sky-me").addEventListener("click", () => {
   if (sky.own) {
     sky.place = SKY_DEFAULT; sky.own = false; sky.tz = "Africa/Nairobi";
-    try { localStorage.removeItem(SKY_STORE); } catch (e) { /* ignore */ }
     loadWeather();
     return;
   }
@@ -529,7 +559,6 @@ document.getElementById("sky-me").addEventListener("click", () => {
   navigator.geolocation.getCurrentPosition(pos => {
     const lat = Math.round(pos.coords.latitude * 10) / 10, lon = Math.round(pos.coords.longitude * 10) / 10;
     sky.place = { lat, lon, label: "your location" }; sky.own = true; sky.tz = null;
-    try { localStorage.setItem(SKY_STORE, JSON.stringify({ lat, lon })); } catch (e) { /* ignore */ }
     loadWeather();
   }, () => {
     document.getElementById("sky-status").textContent = "Location not shared · showing the sky over Nairobi";
@@ -791,8 +820,8 @@ function layout() {
 
   const cap = document.getElementById("forest-caption");
   if (cap) cap.textContent = fundedTrees === 0
-    ? "Illustration. The first funded tree will appear here."
-    : `Illustration. Each tree drawn represents ${perTree === 1 ? "one estimated funded tree" : `${num(perTree)} estimated funded trees`}.`;
+    ? "Illustration. The first fully allocated tree will appear here."
+    : `Illustration. Each tree drawn represents ${perTree === 1 ? "one estimated fully allocated tree" : `${num(perTree)} estimated fully allocated trees`}.`;
 }
 
 // ── Drawing ──────────────────────────────────────────────────────────────
