@@ -451,8 +451,9 @@ export function useApi() {
     const timer = controller ? setTimeout(abort, deadlineMs) : null;
     try {
       const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders(), signal: controller?.signal ?? signal });
-      if (!res.ok) return throwResponseError(res);
-      return res.json() as Promise<T>;
+      if (!res.ok) return await throwResponseError(res);
+      // Keep the deadline armed while the response body is arriving too.
+      return await res.json() as T;
     } finally {
       if (timer) clearTimeout(timer);
       signal?.removeEventListener('abort', abort);

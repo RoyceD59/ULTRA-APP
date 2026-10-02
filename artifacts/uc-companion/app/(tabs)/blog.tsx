@@ -10,7 +10,9 @@ import { useApi, type UCBlogArticleSummary } from '@/hooks/useApi';
 import { fetchBlogPage } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useCompanionLayout } from '@/hooks/useCompanionLayout';
+import PageDataLoader from '@/components/PageDataLoader';
 
+import PhotoHeader from '@/components/PhotoHeader';
 import SwipeTabs from '@/components/SwipeTabs';
 
 const PAGE_SIZE = 12;
@@ -118,7 +120,8 @@ function BlogScreenContent() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={(
           <View style={styles.listHeader}>
-            <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topPad + 22 }]}>
+            <PhotoHeader source={require('@/assets/headers/blog-water.jpg')} photoHeight={112} position="top" style={{ marginHorizontal: -14 }}>
+            <View style={[styles.header, { backgroundColor: '#005d8f', marginHorizontal: 0, paddingTop: topPad + 18 }]}>
               <View style={[styles.headerIcon, { backgroundColor: colors.primaryForeground }]}>
                 <Ionicons name="book-outline" size={23} color={colors.primary} />
               </View>
@@ -127,6 +130,7 @@ function BlogScreenContent() {
                 <Text style={[styles.headerSubtitle, { color: colors.primaryForeground }]}>Clear answers for healthier water.</Text>
               </View>
             </View>
+            </PhotoHeader>
             <View style={styles.controls}>
               <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Ionicons name="search-outline" size={19} color={colors.mutedForeground} />
@@ -180,15 +184,18 @@ function BlogScreenContent() {
                   <Text style={[styles.offlineText, { color: colors.text }]}>Showing saved articles. Connect to refresh.</Text>
                 </View>
               ) : null}
+              {query.isError && articles.length > 0 ? (
+                <TouchableOpacity accessibilityRole="button" onPress={() => { void query.refetch(); }}
+                  style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={{ color: colors.primary }}>Showing saved articles. Tap to retry the update.</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         )}
         ListEmptyComponent={
           query.isLoading ? (
-            <View style={styles.state}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading articles…</Text>
-            </View>
+            <PageDataLoader label="Loading articles…" />
           ) : query.isError ? (
             <View style={styles.state}>
               <Ionicons name="cloud-offline-outline" size={28} color={colors.mutedForeground} />

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -26,6 +26,7 @@ import { getApiBase } from '@/lib/apiBase';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
+import { FONT_STARTUP_BUDGET_MS, startupReady } from '@/lib/pageLoading';
 
 // Set API base URL before any component renders
 const apiBase = getApiBase();
@@ -33,7 +34,8 @@ if (apiBase) {
   setBaseUrl(apiBase);
 }
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// Static native splash: retain font gating, but never let slow optional fonts
+// hold navigation indefinitely. Existing screens already use system font weights.
 SplashScreen.preventAutoHideAsync();
 
 // Clerk (social sign-in). Env vars are injected by the dev script in
@@ -149,14 +151,20 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const [fontBudgetExpired, setFontBudgetExpired] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setFontBudgetExpired(true), FONT_STARTUP_BUDGET_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  const ready = startupReady(fontsLoaded, fontError, fontBudgetExpired);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+    if (ready) {
+      void SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, ready]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!ready) return null;
 
   const app = (
     <QueryClientProvider client={queryClient}>

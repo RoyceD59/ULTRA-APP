@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
@@ -18,8 +18,10 @@ import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import { catalogueQueryKey } from '@/lib/catalogueQuery';
 import { useCompanionLayout } from '@/hooks/useCompanionLayout';
-import { featuredState } from '@/lib/customerScreenState';
+import { pageDataState } from '@/lib/pageLoading';
+import PageDataLoader from '@/components/PageDataLoader';
 import { fetchBlogPage } from '@/lib/blogContent';
+import PhotoHeader from '@/components/PhotoHeader';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -91,7 +93,7 @@ function HomeScreenContent() {
 
   // The editorial feed is an independent query: blog network delays or errors
   // never hold up the Home screen or any of its existing data.
-  const { data: latestBlog, isError: latestBlogError, refetch: retryBlog } = useQuery({
+  const { data: latestBlog, isLoading: latestBlogLoading, isError: latestBlogError, refetch: retryBlog } = useQuery({
     queryKey: ['companion', 'blog', { homeLatest: true, limit: 3 }],
     queryFn: ({ signal }) => fetchBlogPage(
       (requestSignal) => api.getBlogArticles({ limit: 3 }, requestSignal),
@@ -139,7 +141,7 @@ function HomeScreenContent() {
 
   const cartBarInset = useCartBarInset();
   const featured = products?.slice(0, 6) ?? [];
-  const productState = featuredState(isLoading, isError, featured.length);
+  const productState = pageDataState(products !== undefined, isLoading, isError);
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]}
@@ -147,7 +149,8 @@ function HomeScreenContent() {
       showsVerticalScrollIndicator={false}>
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topPad + 16 }]}>
+      <PhotoHeader source={require('@/assets/headers/home-water.jpg')} photoHeight={128} position="center">
+      <View style={[styles.header, { backgroundColor: UC_DEEP, paddingTop: topPad + 16 }]}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.greeting}>{greeting()}{user ? `, ${user.firstName}` : ''}</Text>
           <Text style={styles.headerSub}>Your water, your health</Text>
@@ -160,6 +163,7 @@ function HomeScreenContent() {
           )}
         </TouchableOpacity>
       </View>
+      </PhotoHeader>
 
        <View style={[styles.body, { padding: layout.gutter }]}>
         {/* Filter Health */}
@@ -246,6 +250,8 @@ function HomeScreenContent() {
                 <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
             ))
+          ) : latestBlogLoading ? (
+            <PageDataLoader label="Loading articles…" />
           ) : latestBlogError ? (
             <TouchableOpacity accessibilityRole="button" onPress={() => { void retryBlog(); }} style={styles.statusAction}>
               <Text style={{ color: colors.mutedForeground }}>Blog articles unavailable. Tap to retry.</Text>
@@ -284,14 +290,19 @@ function HomeScreenContent() {
             <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
           </TouchableOpacity>
         </View>
+        {products !== undefined && isError && (
+          <TouchableOpacity onPress={() => retryProducts()} accessibilityRole="button" style={styles.statusAction}>
+            <Text style={{ color: colors.mutedForeground }}>Showing saved products. Tap to retry the update.</Text>
+          </TouchableOpacity>
+        )}
 
         {productState === 'loading' ? (
-          <View style={styles.statusAction}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.mutedForeground }}>Loading products…</Text></View>
+          <PageDataLoader label="Loading products…" />
         ) : productState === 'error' ? (
           <TouchableOpacity onPress={() => retryProducts()} accessibilityRole="button" style={styles.statusAction}>
             <Text style={{ color: colors.text }}>Products couldn't load. Tap to retry.</Text>
           </TouchableOpacity>
-        ) : productState === 'empty' ? (
+        ) : featured.length === 0 ? (
           <TouchableOpacity onPress={() => router.push('/(tabs)/products')} accessibilityRole="button" style={styles.statusAction}>
             <Text style={{ color: colors.mutedForeground }}>No featured products yet. Browse the shop.</Text>
           </TouchableOpacity>

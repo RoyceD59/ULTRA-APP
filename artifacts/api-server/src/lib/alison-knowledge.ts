@@ -22,8 +22,8 @@ export const MAX_KNOWLEDGE_CHARS = 14_000;
 const STOP_WORDS = new Set("a an and are as at be can could do does for from have how i in is it me my of on or please the this to use want what when where which with you your tell about more detail yes no thanks thank".split(" "));
 
 export function questionTerms(text: string): string[] {
-  return [...new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])
-    .filter((word) => word.length >= 3 && !STOP_WORDS.has(word)))].slice(0, 24);
+  const words: string[] = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return [...new Set(words.filter((word) => word.length >= 3 && !STOP_WORDS.has(word)))].slice(0, 24);
 }
 
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }

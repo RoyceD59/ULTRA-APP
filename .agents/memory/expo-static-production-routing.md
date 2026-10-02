@@ -50,3 +50,13 @@ The supported published Companion browser origin is the custom app domain. Brows
 **Why:** Public API and asset delivery are configured for the custom domain, while the deployment alias shares its root with ProjectHub. Allowing the alias alone does not resolve root-route collisions or cross-origin assets.
 
 **How to apply:** Preserve browser routes and query parameters when directing visitors to the custom app domain; keep native manifests, assets and development previews out of browser-only redirects. Do not hijack ProjectHub's shared-root routes.
+
+Run manual noninteractive production packaging with `CI=1` while the development
+Metro workflow is running.
+
+**Why:** A second watch-mode Metro instance exhausted the shared container's
+inotify watcher budget even after leftover pnpm staging packages were removed.
+Expo's CI mode disables file watching without disabling production bundling.
+
+**How to apply:** Include `CI=1` in the packaging command rather than raising
+system limits or changing application source for a host resource-limit failure.

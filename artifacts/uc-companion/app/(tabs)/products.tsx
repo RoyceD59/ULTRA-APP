@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Platform,
-  ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Animated,
+   RefreshControl, ScrollView, TouchableOpacity, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -15,7 +15,10 @@ import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCompanionLayout } from '@/hooks/useCompanionLayout';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import PhotoHeader from '@/components/PhotoHeader';
 import ProductCard from '@/components/ProductCard';
+import PageDataLoader from '@/components/PageDataLoader';
+import { pageDataState } from '@/lib/pageLoading';
 import FilterChip from '@/components/FilterChip';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
@@ -456,7 +459,8 @@ function ProductsScreenContent() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
 
       {/* ── Branded header bar ── */}
-      <View style={[styles.brandHeader, { paddingTop: headerTop }]}>
+      <PhotoHeader source={require('@/assets/headers/shop-filter.jpg')} photoHeight={104} position="center">
+      <View style={[styles.brandHeader, { paddingTop: headerTop + 10 }]}>
         <View style={[styles.brandHeaderInner, contentBound]}>
           <Image
             source={require('@/assets/images/logo-lockup-white.png')}
@@ -477,6 +481,7 @@ function ProductsScreenContent() {
           </TouchableOpacity>
         </View>
       </View>
+      </PhotoHeader>
 
       {/* ── Sticky search + category chips ── */}
       <View style={[styles.stickyControls, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
@@ -524,9 +529,14 @@ function ProductsScreenContent() {
 
         {/* Products catalog */}
         <View onLayout={e => { catalogOffsetY.current = e.nativeEvent.layout.y; }}>
-          {isLoading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
-          ) : isError ? (
+          {products !== undefined && isError && (
+            <TouchableOpacity onPress={() => refetch()} accessibilityRole="button" style={styles.retryBtn}>
+              <Text style={{ color: colors.primary }}>Showing saved products. Tap to retry the update.</Text>
+            </TouchableOpacity>
+          )}
+          {pageDataState(products !== undefined, isLoading, isError) === 'loading' ? (
+            <PageDataLoader label="Loading products…" />
+          ) : !products && isError ? (
             <View style={styles.empty}>
               <Ionicons name="cloud-offline-outline" size={40} color={colors.border} />
               <Text style={[styles.emptyText, { color: colors.text }]}>Couldn&apos;t load products</Text>
