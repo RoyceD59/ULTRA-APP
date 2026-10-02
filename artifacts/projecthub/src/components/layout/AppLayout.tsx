@@ -56,6 +56,7 @@ const ADMIN_NAVIGATION = [
   ["Unsynced Registrations", "/admin/unsynced-registrations", AlertTriangle],
   ["Agent Operations", "/admin/agent-operations", Bot],
   ["Companion Guides", "/admin/guides", FileText],
+  ["Customer Reviews", "/customer-reviews", MessagesSquare],
 ] as const;
 
 const SECURITY_BANNER_DISMISS_KEY = "ph_sec_mpesa_dismissed";

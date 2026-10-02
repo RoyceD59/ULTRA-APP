@@ -43,6 +43,54 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /admin/customer-reviews:
+    get:
+      operationId: listCustomerReviews
+      tags: [uc-admin]
+      summary: Administrator-only Companion review log with matching-dataset counts
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: page, schema: {type: integer, minimum: 1, maximum: 100000, default: 1}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+        - {in: query, name: productId, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+        - {in: query, name: rating, schema: {type: integer, minimum: 1, maximum: 5}}
+        - {in: query, name: ratingSentiment, schema: {type: string, enum: [Positive, Neutral, Negative]}}
+        - {in: query, name: aiSentiment, schema: {type: string, enum: [Positive, Neutral, Negative, Mixed]}}
+        - {in: query, name: status, schema: {type: string, enum: [pending, processing, completed, failed, unavailable]}}
+        - {in: query, name: disagreement, schema: {type: boolean}}
+        - {in: query, name: search, schema: {type: string, maxLength: 200}}
+      responses:
+        "200":
+          description: Paginated rows and summaries across all matching reviews
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CustomerReviewLog"}
+        "400": {description: Invalid filter or pagination}
+        "401": {description: Authentication required}
+        "403": {description: Administrator access required}
+        "503": {description: Review log temporarily unavailable}
+  /admin/customer-reviews/{id}/retry:
+    post:
+      operationId: retryCustomerReviewAnalysis
+      tags: [uc-admin]
+      summary: Queue a failed eligible review for automated text analysis
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+      responses:
+        "200":
+          description: Retry queued without waiting for AI
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: {type: boolean}
+        "401": {description: Authentication required}
+        "403": {description: Administrator access required}
+        "409": {description: Current review is not eligible for retry}
+        "503": {description: Retry temporarily unavailable}
   /water-check/assessments:
     post:
       operationId: createPublicInstantWaterAssessment
@@ -3240,6 +3288,86 @@ components:
       bearerFormat: opaque
 
   schemas:
+    CustomerReviewAssessment:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [pending, processing, completed, failed, unavailable]}
+        category: {type: string, enum: [Positive, Neutral, Negative, Mixed]}
+        explanation: {type: string, maxLength: 460}
+        themes: {type: array, maxItems: 3, items: {type: string, maxLength: 40}}
+        analyzedAt: {type: string, format: date-time}
+        error: {type: string}
+    CustomerReviewLogEntry:
+      type: object
+      required: [id, productId, productName, authorName, rating, title, body, media, createdAt, editedAt, ratingSentiment, disagreement, analysis]
+      properties:
+        id: {type: integer}
+        productId: {type: integer}
+        productName: {type: string}
+        authorName: {type: string}
+        rating: {type: integer, minimum: 1, maximum: 5}
+        title: {type: string}
+        body: {type: string}
+        media:
+          type: array
+          items:
+            type: object
+            required: [url, type]
+            properties:
+              url: {type: string}
+              type: {type: string, enum: [photo, video]}
+        createdAt: {type: string, format: date-time}
+        editedAt: {type: ["string", "null"], format: date-time}
+        ratingSentiment: {type: string, enum: [Positive, Neutral, Negative]}
+        disagreement: {type: boolean}
+        analysis: {$ref: "#/components/schemas/CustomerReviewAssessment"}
+    CustomerReviewCounts:
+      type: object
+      required: [rating, ai, status, disagreements]
+      properties:
+        rating:
+          type: object
+          required: [Positive, Neutral, Negative]
+          properties:
+            Positive: {type: integer}
+            Neutral: {type: integer}
+            Negative: {type: integer}
+        ai:
+          type: object
+          required: [Positive, Neutral, Negative, Mixed]
+          properties:
+            Positive: {type: integer}
+            Neutral: {type: integer}
+            Negative: {type: integer}
+            Mixed: {type: integer}
+        status:
+          type: object
+          required: [pending, processing, completed, failed, unavailable]
+          properties:
+            pending: {type: integer}
+            processing: {type: integer}
+            completed: {type: integer}
+            failed: {type: integer}
+            unavailable: {type: integer}
+        disagreements: {type: integer}
+    CustomerReviewLog:
+      type: object
+      required: [reviews, total, page, limit, counts, products]
+      properties:
+        reviews: {type: array, items: {$ref: "#/components/schemas/CustomerReviewLogEntry"}}
+        total: {type: integer}
+        page: {type: integer}
+        limit: {type: integer}
+        counts: {$ref: "#/components/schemas/CustomerReviewCounts"}
+        products:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: integer}
+              name: {type: string}
     BlogSource:
       type: object
       required: [title, url]

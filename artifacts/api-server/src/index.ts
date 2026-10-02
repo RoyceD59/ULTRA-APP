@@ -3,6 +3,8 @@ import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
 import { assertPreviewIsolation } from "./lib/preview-safety.js";
+import { ensureReviewAnalysisSchema } from "./lib/review-analysis-schema.js";
+import { startReviewAnalysisWorker } from "./lib/review-analysis-worker.js";
 
 if (process.env.NODE_ENV === "production" &&
     !(process.env.WATER_CHECK_TOKEN_SECRET || process.env.SESSION_SECRET)) {
@@ -644,6 +646,9 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
+  // Review eligibility references deleted_at, so order this rollout after
+  // the lifecycle column exists, including on partially upgraded deployments.
+  await ensureReviewAnalysisSchema();
   await pool.query(`
     CREATE INDEX IF NOT EXISTS uc_users_active_count_covering_idx
       ON uc_users (deleted_at)
@@ -2398,6 +2403,7 @@ applyStartupMigrations()
 
       logger.info({ port }, "Server listening");
       startScheduler();
+      startReviewAnalysisWorker();
       processPendingReferralSettlements().catch((err) => logger.error({ err }, "Referral settlement startup pass failed"));
       const referralTimer = setInterval(() => {
         processPendingReferralSettlements().catch((err) => logger.error({ err }, "Referral settlement pass failed"));

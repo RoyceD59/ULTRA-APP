@@ -70,6 +70,7 @@ import type {
   CustomerLifecycleFeatureConfig,
   CustomerLifecycleLookup,
   CustomerLifecycleTimeline,
+  CustomerReviewLog,
   DashboardSummary,
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
@@ -112,6 +113,7 @@ import type {
   ListAgentAlisonChatsParams,
   ListCompanionBlogEditorialRuns200,
   ListCustomerLifecycleAuditEventsParams,
+  ListCustomerReviewsParams,
   ListEditorialBlogArticles200,
   ListEditorialBlogArticlesParams,
   ListLifecycleReconciliationConflictsParams,
@@ -156,6 +158,7 @@ import type {
   RefillCapabilities,
   RefillFeatures,
   RefillFeaturesUpdate,
+  RetryCustomerReviewAnalysis200,
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
@@ -238,6 +241,161 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListCustomerReviewsUrl = (params?: ListCustomerReviewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/customer-reviews?${stringifiedParams}` : `/api/admin/customer-reviews`
+}
+
+/**
+ * @summary Administrator-only Companion review log with matching-dataset counts
+ */
+export const listCustomerReviews = async (params?: ListCustomerReviewsParams, options?: RequestInit): Promise<CustomerReviewLog> => {
+
+  return customFetch<CustomerReviewLog>(getListCustomerReviewsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerReviewsQueryKey = (params?: ListCustomerReviewsParams,) => {
+    return [
+    `/api/admin/customer-reviews`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCustomerReviewsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerReviews>>, TError = ErrorType<void>>(params?: ListCustomerReviewsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerReviewsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerReviews>>> = ({ signal }) => listCustomerReviews(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerReviews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerReviewsQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerReviews>>>
+export type ListCustomerReviewsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Administrator-only Companion review log with matching-dataset counts
+ */
+
+export function useListCustomerReviews<TData = Awaited<ReturnType<typeof listCustomerReviews>>, TError = ErrorType<void>>(
+ params?: ListCustomerReviewsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerReviewsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRetryCustomerReviewAnalysisUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/customer-reviews/${id}/retry`
+}
+
+/**
+ * @summary Queue a failed eligible review for automated text analysis
+ */
+export const retryCustomerReviewAnalysis = async (id: number, options?: RequestInit): Promise<RetryCustomerReviewAnalysis200> => {
+
+  return customFetch<RetryCustomerReviewAnalysis200>(getRetryCustomerReviewAnalysisUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryCustomerReviewAnalysisMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCustomerReviewAnalysis>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryCustomerReviewAnalysis>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryCustomerReviewAnalysis'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryCustomerReviewAnalysis>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryCustomerReviewAnalysis(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryCustomerReviewAnalysisMutationResult = NonNullable<Awaited<ReturnType<typeof retryCustomerReviewAnalysis>>>
+
+    export type RetryCustomerReviewAnalysisMutationError = ErrorType<void>
+
+    /**
+ * @summary Queue a failed eligible review for automated text analysis
+ */
+export const useRetryCustomerReviewAnalysis = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCustomerReviewAnalysis>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryCustomerReviewAnalysis>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryCustomerReviewAnalysisMutationOptions(options));
+    }
 
 export const getCreatePublicInstantWaterAssessmentUrl = () => {
 

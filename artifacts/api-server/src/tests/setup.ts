@@ -13,6 +13,9 @@
 
 import { pool } from "@workspace/db";
 import { readFile } from "node:fs/promises";
+import { ensureReviewAnalysisSchema } from "../lib/review-analysis-schema.js";
+
+await ensureReviewAnalysisSchema();
 
 // sheet_syncs error columns
 await pool.query(`

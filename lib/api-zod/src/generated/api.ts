@@ -10,6 +10,118 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Administrator-only Companion review log with matching-dataset counts
+ */
+export const listCustomerReviewsQueryPageDefault = 1;
+export const listCustomerReviewsQueryPageMax = 100000;
+
+export const listCustomerReviewsQueryLimitDefault = 20;
+export const listCustomerReviewsQueryLimitMax = 50;
+
+export const listCustomerReviewsQueryProductIdMax = 2147483647;
+
+export const listCustomerReviewsQueryRatingMax = 5;
+
+export const listCustomerReviewsQuerySearchMax = 200;
+
+
+
+export const ListCustomerReviewsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerReviewsQueryPageMax).default(listCustomerReviewsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listCustomerReviewsQueryLimitMax).default(listCustomerReviewsQueryLimitDefault),
+  "productId": zod.coerce.number().min(1).max(listCustomerReviewsQueryProductIdMax).optional(),
+  "rating": zod.coerce.number().min(1).max(listCustomerReviewsQueryRatingMax).optional(),
+  "ratingSentiment": zod.enum(['Positive', 'Neutral', 'Negative']).optional(),
+  "aiSentiment": zod.enum(['Positive', 'Neutral', 'Negative', 'Mixed']).optional(),
+  "status": zod.enum(['pending', 'processing', 'completed', 'failed', 'unavailable']).optional(),
+  "disagreement": zod.coerce.boolean().optional(),
+  "search": zod.coerce.string().max(listCustomerReviewsQuerySearchMax).optional()
+})
+
+export const listCustomerReviewsResponseReviewsItemRatingMax = 5;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisExplanationMax = 460;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax = 40;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisThemesMax = 3;
+
+
+
+export const ListCustomerReviewsResponse = zod.object({
+  "reviews": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "authorName": zod.string(),
+  "rating": zod.number().min(1).max(listCustomerReviewsResponseReviewsItemRatingMax),
+  "title": zod.string(),
+  "body": zod.string(),
+  "media": zod.array(zod.object({
+  "url": zod.string(),
+  "type": zod.enum(['photo', 'video'])
+})),
+  "createdAt": zod.coerce.date(),
+  "editedAt": zod.coerce.date().nullable(),
+  "ratingSentiment": zod.enum(['Positive', 'Neutral', 'Negative']),
+  "disagreement": zod.boolean(),
+  "analysis": zod.object({
+  "status": zod.enum(['pending', 'processing', 'completed', 'failed', 'unavailable']),
+  "category": zod.enum(['Positive', 'Neutral', 'Negative', 'Mixed']).optional(),
+  "explanation": zod.string().max(listCustomerReviewsResponseReviewsItemAnalysisExplanationMax).optional(),
+  "themes": zod.array(zod.string().max(listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax)).max(listCustomerReviewsResponseReviewsItemAnalysisThemesMax).optional(),
+  "analyzedAt": zod.coerce.date().optional(),
+  "error": zod.string().optional()
+})
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "counts": zod.object({
+  "rating": zod.object({
+  "Positive": zod.number(),
+  "Neutral": zod.number(),
+  "Negative": zod.number()
+}),
+  "ai": zod.object({
+  "Positive": zod.number(),
+  "Neutral": zod.number(),
+  "Negative": zod.number(),
+  "Mixed": zod.number()
+}),
+  "status": zod.object({
+  "pending": zod.number(),
+  "processing": zod.number(),
+  "completed": zod.number(),
+  "failed": zod.number(),
+  "unavailable": zod.number()
+}),
+  "disagreements": zod.number()
+}),
+  "products": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}))
+})
+
+
+/**
+ * @summary Queue a failed eligible review for automated text analysis
+ */
+export const retryCustomerReviewAnalysisPathIdMax = 2147483647;
+
+
+
+export const RetryCustomerReviewAnalysisParams = zod.object({
+  "id": zod.coerce.number().min(1).max(retryCustomerReviewAnalysisPathIdMax)
+})
+
+export const RetryCustomerReviewAnalysisResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Create a public instant water assessment
  */
 export const createPublicInstantWaterAssessmentBodyFirstNameMin = 2;

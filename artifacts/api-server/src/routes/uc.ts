@@ -619,12 +619,13 @@ function parseWcJson(text: string): unknown {
   return JSON.parse(text.slice(start));
 }
 
-async function wcFetchArray(
+export async function wcFetchArray(
   path: string,
-  extra: Record<string, string> = {}
+  extra: Record<string, string> = {},
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>[] | null> {
   try {
-    const res = await fetch(wcUrl(path, extra));
+    const res = await fetch(wcUrl(path, extra), { signal });
     const text = await res.text();
     const data: unknown = parseWcJson(text);
     return Array.isArray(data) ? (data as Record<string, unknown>[]) : null;
@@ -1520,32 +1521,38 @@ router.post("/uc/products/:id/reviews", async (req: Request, res: Response): Pro
   } catch { /* keep JWT-derived name */ }
 
   try {
-    const existing = await db.query.ucReviewsTable.findFirst({
-      where: and(eq(ucReviewsTable.productId, productId), eq(ucReviewsTable.userId, userId)),
+    const result = await db.transaction(async (tx) => {
+      // Serialize saves with account deletion and other saves by this identity.
+      // Re-check after the lock: the earlier guard alone has a deletion race.
+      if (reviewNumericId > 0 && reviewNumericId < 1_000_000_000) {
+        const [user] = await tx.select().from(ucUsersTable)
+          .where(eq(ucUsersTable.id, reviewNumericId)).for("update");
+        if (user?.deletedAt) throw new Error("REVIEW_ACCOUNT_DELETED");
+      } else {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`review:${userId}`}))`);
+      }
+      const [existing] = await tx.select().from(ucReviewsTable)
+        .where(and(eq(ucReviewsTable.productId, productId), eq(ucReviewsTable.userId, userId))).limit(1).for("update");
+      const fields = { productId, userId, authorName, rating: stars,
+        title: typeof title === "string" ? title.trim() : "", body: text, media: items };
+      const [row] = existing
+        ? await tx.update(ucReviewsTable).set(fields).where(eq(ucReviewsTable.id, existing.id)).returning()
+        : await tx.insert(ucReviewsTable).values(fields).returning();
+      return { row, updated: !!existing };
     });
-    if (existing) {
-      const [updated] = await db
-        .update(ucReviewsTable)
-        .set({ rating: stars, title: typeof title === "string" ? title.trim() : "", body: text, media: items, authorName })
-        .where(eq(ucReviewsTable.id, existing.id))
-        .returning();
-      res.json({ ...updated, updated: true });
+    // Explicit customer response allowlist. Internal AI status, assessment,
+    // revisions, leases and fingerprints never leak to public clients.
+    const r = result.row!;
+    res.status(result.updated ? 200 : 201).json({
+      id: r.id, productId: r.productId, userId: r.userId, authorName: r.authorName,
+      rating: r.rating, title: r.title, body: r.body, media: r.media,
+      createdAt: r.createdAt, ...(result.updated ? { updated: true } : {}),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "REVIEW_ACCOUNT_DELETED") {
+      res.status(401).json({ error: "This account has been deleted" });
       return;
     }
-    const [row] = await db
-      .insert(ucReviewsTable)
-      .values({
-        productId,
-        userId,
-        authorName,
-        rating: stars,
-        title: typeof title === "string" ? title.trim() : "",
-        body: text,
-        media: items,
-      })
-      .returning();
-    res.status(201).json(row);
-  } catch (err) {
     logger.error({ err, productId, userId }, "Failed to save review");
     res.status(500).json({ error: "Failed to save review" });
   }
@@ -3420,6 +3427,15 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
         body:       r.body,
         media:      r.media ?? [],
         createdAt:  r.createdAt,
+        editedAt:   r.editedAt,
+        automatedTextAssessment: {
+          status: r.analysis.status,
+          category: r.analysis.category ?? null,
+          explanation: r.analysis.explanation ?? null,
+          themes: r.analysis.themes ?? [],
+          analyzedAt: r.analysis.analyzedAt ?? null,
+          version: r.analysis.version,
+        },
       })),
       notificationPreferences: notifPrefRows.map(p => ({
         optOutOrderUpdates: p.optOutOrders,
@@ -3625,19 +3641,20 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
     //    isAdmin is cleared so any still-valid bearer tokens lose DB-level privilege.
     //    deletedAt is set so all DB-anchored customer routes reject further requests
     //    with this token (token revocation without a token blacklist).
-    await db
-      .update(ucUsersTable)
-      .set({
-        email:        `deleted-${numericId}@deleted.invalid`,
-        passwordHash: await bcryptjs.hash(Math.random().toString(36), 10),
-        firstName:    DELETED,
-        lastName:     "",
-        phone:        "",
-        address:      "",
-        isAdmin:      false,
-        deletedAt:    new Date(),
-      })
-      .where(eq(ucUsersTable.id, numericId));
+    const erasedPassword = await bcryptjs.hash(Math.random().toString(36), 10);
+    await db.transaction(async (tx) => {
+      await tx.update(ucUsersTable).set({
+        email: `deleted-${numericId}@deleted.invalid`, passwordHash: erasedPassword,
+        firstName: DELETED, lastName: "", phone: "", address: "",
+        isAdmin: false, deletedAt: new Date(),
+      }).where(eq(ucUsersTable.id, numericId));
+      // Erasure and review invalidation commit atomically. A later failure in
+      // another deletion step cannot leave retained AI-derived personal text
+      // behind an already-deleted identity. The trigger clears all job data.
+      await tx.update(ucReviewsTable)
+        .set({ authorName: DELETED, title: "", body: DELETED, media: [] })
+        .where(eq(ucReviewsTable.userId, userId));
+    });
 
     // 5. Redact personal fields on linked orders (shipping address carries name/phone)
     await db
@@ -3663,12 +3680,8 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
       .set({ name: DELETED, phone: "", address: "", concerns: "", photos: [], videos: [] })
       .where(eq(ucWaterTestsTable.userId, userId));
 
-    // 9. Redact public review content (authorName + free text + media refs).
-    //    Reviews are publicly visible, so redaction is mandatory.
-    await db
-      .update(ucReviewsTable)
-      .set({ authorName: DELETED, title: "", body: DELETED, media: [] })
-      .where(eq(ucReviewsTable.userId, userId));
+    // 9. Public review content and derived analysis were redacted atomically
+    //    with the account in step 4; do not invalidate their revision twice.
 
     // 10. Redact notification-log rows whose recipient/body carry PII.
     //     Redact recipient (email/phone) and messageBody for every log entry

@@ -5,6 +5,126 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type CustomerReviewAssessmentStatus = typeof CustomerReviewAssessmentStatus[keyof typeof CustomerReviewAssessmentStatus];
+
+
+export const CustomerReviewAssessmentStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+} as const;
+
+export type CustomerReviewAssessmentCategory = typeof CustomerReviewAssessmentCategory[keyof typeof CustomerReviewAssessmentCategory];
+
+
+export const CustomerReviewAssessmentCategory = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+  Mixed: 'Mixed',
+} as const;
+
+export interface CustomerReviewAssessment {
+  status: CustomerReviewAssessmentStatus;
+  category?: CustomerReviewAssessmentCategory;
+  /** @maxLength 460 */
+  explanation?: string;
+  /**
+     * @maxItems 3
+     * @items.maxLength 40
+     */
+  themes?: string[];
+  analyzedAt?: string;
+  error?: string;
+}
+
+export type CustomerReviewLogEntryMediaItemType = typeof CustomerReviewLogEntryMediaItemType[keyof typeof CustomerReviewLogEntryMediaItemType];
+
+
+export const CustomerReviewLogEntryMediaItemType = {
+  photo: 'photo',
+  video: 'video',
+} as const;
+
+export type CustomerReviewLogEntryMediaItem = {
+  url: string;
+  type: CustomerReviewLogEntryMediaItemType;
+};
+
+export type CustomerReviewLogEntryRatingSentiment = typeof CustomerReviewLogEntryRatingSentiment[keyof typeof CustomerReviewLogEntryRatingSentiment];
+
+
+export const CustomerReviewLogEntryRatingSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+} as const;
+
+export interface CustomerReviewLogEntry {
+  id: number;
+  productId: number;
+  productName: string;
+  authorName: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  title: string;
+  body: string;
+  media: CustomerReviewLogEntryMediaItem[];
+  createdAt: string;
+  /** @nullable */
+  editedAt: string | null;
+  ratingSentiment: CustomerReviewLogEntryRatingSentiment;
+  disagreement: boolean;
+  analysis: CustomerReviewAssessment;
+}
+
+export type CustomerReviewCountsRating = {
+  Positive: number;
+  Neutral: number;
+  Negative: number;
+};
+
+export type CustomerReviewCountsAi = {
+  Positive: number;
+  Neutral: number;
+  Negative: number;
+  Mixed: number;
+};
+
+export type CustomerReviewCountsStatus = {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  unavailable: number;
+};
+
+export interface CustomerReviewCounts {
+  rating: CustomerReviewCountsRating;
+  ai: CustomerReviewCountsAi;
+  status: CustomerReviewCountsStatus;
+  disagreements: number;
+}
+
+export type CustomerReviewLogProductsItem = {
+  id: number;
+  name: string;
+};
+
+export interface CustomerReviewLog {
+  reviews: CustomerReviewLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  counts: CustomerReviewCounts;
+  products: CustomerReviewLogProductsItem[];
+}
+
 export interface BlogSource {
   /**
      * @minLength 1
@@ -3114,6 +3234,71 @@ export interface AuditEventPage {
   limit: number;
   total: number;
 }
+
+export type ListCustomerReviewsParams = {
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+/**
+ * @minimum 1
+ * @maximum 2147483647
+ */
+productId?: number;
+/**
+ * @minimum 1
+ * @maximum 5
+ */
+rating?: number;
+ratingSentiment?: ListCustomerReviewsRatingSentiment;
+aiSentiment?: ListCustomerReviewsAiSentiment;
+status?: ListCustomerReviewsStatus;
+disagreement?: boolean;
+/**
+ * @maxLength 200
+ */
+search?: string;
+};
+
+export type ListCustomerReviewsRatingSentiment = typeof ListCustomerReviewsRatingSentiment[keyof typeof ListCustomerReviewsRatingSentiment];
+
+
+export const ListCustomerReviewsRatingSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+} as const;
+
+export type ListCustomerReviewsAiSentiment = typeof ListCustomerReviewsAiSentiment[keyof typeof ListCustomerReviewsAiSentiment];
+
+
+export const ListCustomerReviewsAiSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+  Mixed: 'Mixed',
+} as const;
+
+export type ListCustomerReviewsStatus = typeof ListCustomerReviewsStatus[keyof typeof ListCustomerReviewsStatus];
+
+
+export const ListCustomerReviewsStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+} as const;
+
+export type RetryCustomerReviewAnalysis200 = {
+  ok: boolean;
+};
 
 export type ListProjectHubInstantWaterAssessmentsParams = {
 status?: string;

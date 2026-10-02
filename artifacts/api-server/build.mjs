@@ -122,6 +122,8 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     path.resolve(distDir, "knowledge/alison"),
     { recursive: true },
   );
+  await cp(path.resolve(artifactDir, "../../lib/db/migrations/0056_review_analysis.sql"),
+    path.resolve(distDir, "0056_review_analysis.sql"));
 }
 
 buildAll().catch((err) => {

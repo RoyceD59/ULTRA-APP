@@ -36,7 +36,7 @@
 
 import { Pool } from "pg";
 import { spawn, type ChildProcess } from "node:child_process";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { testResourceLimits } from "./resource-limits.js";
 
@@ -247,6 +247,15 @@ if (pushExitCode !== 0) {
   await ensureCleanup();
   process.exit(1);
 }
+
+// Review edit/deletion invariants live in a database trigger, not Drizzle DDL.
+// Apply the same idempotent SQL used at API startup in every isolated test DB.
+const reviewMigrationDb = new Pool({ connectionString: TEST_URL });
+try {
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0056_review_analysis.sql", import.meta.url), "utf8",
+  ));
+} finally { await reviewMigrationDb.end(); }
 
 console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 

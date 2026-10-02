@@ -49,3 +49,4 @@
 - [Refill preview activation](refill-preview-activation.md) — persisted admin switches activate delivered previews only; unfinished financial and dispensing functions remain unavailable.
 - [Article body links](article-body-links.md) — rendered articles must use descriptive clickable linkpoints, not bare URLs or literal Markdown links.
 - [Alison answer policy](alison-answer-policy.md) — short replies backed by curated agent Markdown and local customer-facing documents.
+- [Review sentiment policy](review-sentiment-policy.md) — stars and text remain separate; Mixed is not disagreement; staff-only AI must not drive customer decisions.

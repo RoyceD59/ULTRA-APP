@@ -47,6 +47,7 @@ import AdminProductEditorPage from '@/pages/admin/products/editor';
 import AdminLocationsPage from '@/pages/admin/locations';
 import AgentOperationsPage from '@/pages/admin/agent-operations';
 import AdminGuidesPage from '@/pages/admin/guides';
+import CustomerReviewsPage from '@/pages/admin/customer-reviews';
 import CompanionBlogPage from '@/pages/blog';
 import RefillGovernancePage from '@/pages/admin/refill-governance';
 
@@ -140,6 +141,7 @@ function Router() {
               <Route path="/admin/products/:id"><AdminGuard><AdminProductEditorPage /></AdminGuard></Route>
               <Route path="/admin/locations"><AdminGuard><AdminLocationsPage /></AdminGuard></Route>
               <Route path="/admin/agent-operations"><AdminGuard><AgentOperationsPage /></AdminGuard></Route>
+              <Route path="/customer-reviews"><AdminGuard><CustomerReviewsPage /></AdminGuard></Route>
               <Route path="/admin/guides"><AdminGuard><AdminGuidesPage /></AdminGuard></Route>
               <Route component={NotFound} />
             </Switch>
