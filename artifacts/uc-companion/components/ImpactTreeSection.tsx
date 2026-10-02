@@ -1,9 +1,10 @@
 /**
  * Hydrate the Future™ tree — the tree section of the Impact Card.
  *
- * Funding comes from the customer's own paid orders (3% each); refills only
- * animate the tree. Field planting/establishment is programme-reported and is
- * never inferred here. See lib/impactTree.ts for the rules.
+ * Shows a copy of the customer's shared tree from GET /api/uc/customer/tree:
+ * half of their 3% allocation grows trees, several customers fill one tree,
+ * and only their own share is shown. Refills only animate the tree. Field
+ * establishment is programme-reported. See lib/impactTree.ts.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -18,9 +19,8 @@ import * as Crypto from 'expo-crypto';
 import { useColors } from '@/hooks/useColors';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
-import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import {
-  TREE_CONFIG, TREE_STAGES, TREE_ID_PATTERN, computeTreeProgress, forestLink, newTreeId,
+  TREE_CONFIG, TREE_STAGES, TREE_ID_PATTERN, displayStage, forestLink, newTreeId,
   type TreeStage,
 } from '@/lib/impactTree';
 
@@ -46,11 +46,11 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
   const [methodOpen, setMethodOpen] = useState(false);
   const [treeId, setTreeId] = useState<string | null>(null);
 
-  const ordersQ = useQuery({
-    queryKey: customerQueryKeys.orders(user?.id),
-    queryFn: () => api.getOrders(),
+  const treeQ = useQuery({
+    queryKey: ['customer', user?.id, 'hydrate-tree'],
+    queryFn: () => api.getCustomerTree(),
     enabled: !!user,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
 
   // Anonymous, per-account tree id kept on this device.
@@ -71,8 +71,9 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
     return () => { cancelled = true; };
   }, [user]);
 
-  const progress = computeTreeProgress(ordersQ.data ?? [], refillEntries);
-  const stageInfo = TREE_STAGES[progress.stage];
+  const data = treeQ.data;
+  const stage = displayStage(data, refillEntries);
+  const stageInfo = TREE_STAGES[stage];
 
   // ── Animation: grow on stage change, gentle sway, pulse when watered ────
   const grow = useRef(new Animated.Value(0.85)).current;
@@ -90,17 +91,17 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
     if (reduceMotion) { grow.setValue(1); return; }
     grow.setValue(0.85);
     Animated.spring(grow, { toValue: 1, friction: 5, useNativeDriver: true }).start();
-  }, [progress.stage, reduceMotion, grow]);
+  }, [stage, reduceMotion, grow]);
 
   useEffect(() => {
-    if (reduceMotion || progress.stage === 'none') return;
+    if (reduceMotion || stage === 'none') return;
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(sway, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       Animated.timing(sway, { toValue: -1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
     ]));
     loop.start();
     return () => loop.stop();
-  }, [progress.stage, reduceMotion, sway]);
+  }, [stage, reduceMotion, sway]);
 
   useEffect(() => {
     if (refillEntries > lastRefills.current) {
@@ -118,8 +119,8 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
 
   const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: ['-1.5deg', '1.5deg'] });
 
-  const barPct = progress.stage === 'funded' ? progress.currentTreePct : Math.min(99, progress.totalPctOfTree);
-  const link = FOREST_URL && treeId ? safeForestLink(FOREST_URL, treeId, progress.stage) : null;
+  const barPct = data?.tree?.fundedPct ?? 0;
+  const link = FOREST_URL && treeId ? safeForestLink(FOREST_URL, treeId, stage) : null;
 
   return (
     <View style={[styles.wrap, { borderColor: colors.border, backgroundColor: colors.background }]} testID="impact-tree">
@@ -130,12 +131,12 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
         </TouchableOpacity>
       </View>
 
-      {ordersQ.isLoading ? (
+      {treeQ.isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
-      ) : ordersQ.isError ? (
+      ) : treeQ.isError ? (
         <View style={{ gap: 8, alignItems: 'flex-start' }}>
-          <Text style={[styles.small, { color: colors.mutedForeground }]}>We couldn’t load your purchases to grow your tree.</Text>
-          <TouchableOpacity onPress={() => ordersQ.refetch()}>
+          <Text style={[styles.small, { color: colors.mutedForeground }]}>We couldn’t load your tree right now.</Text>
+          <TouchableOpacity onPress={() => treeQ.refetch()}>
             <Text style={[styles.link, { color: colors.primary }]}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -144,18 +145,14 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
           <View style={styles.treeRow}>
             <View style={styles.treeBox} accessible accessibilityLabel={`Tree stage: ${stageInfo.label}`}>
               <Animated.View style={{ transform: [{ scale: grow }, { rotate }] }}>
-                <TreeArt stage={progress.stage} />
+                <TreeArt stage={stage} />
               </Animated.View>
               <Animated.View pointerEvents="none" style={[styles.drop, { opacity: water }]}>
                 <Ionicons name="water" size={18} color="#27B7D7" />
               </Animated.View>
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[styles.stage, { color: LEAF_DARK }]}>
-                {progress.stage === 'funded' && progress.treesFunded > 1
-                  ? `${progress.treesFunded} funded trees`
-                  : stageInfo.label}
-              </Text>
+              <Text style={[styles.stage, { color: LEAF_DARK }]}>{stageInfo.label}</Text>
               <Text style={[styles.small, { color: colors.mutedForeground }]}>{stageInfo.meaning}</Text>
               {watered && (
                 <Text style={[styles.small, { color: '#0A77A8' }]}>Your refill watered your tree.</Text>
@@ -163,31 +160,34 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
             </View>
           </View>
 
-          {progress.stage !== 'none' && (
+          {data && stage !== 'none' && (
             <>
               <View style={styles.statsRow}>
-                <Stat label="Eligible purchases" value={kes(progress.eligiblePurchasesKes)} />
-                <Stat label="Your 3% allocation" value={kes(progress.allocationKes)} />
+                <Stat label="Eligible purchases" value={kes(data.eligiblePurchasesKes)} />
+                <Stat label="Your 3% allocation" value={kes(data.allocationKes)} />
               </View>
+              <Text style={[styles.small, { color: colors.mutedForeground }]}>
+                {kes(data.treeShareKes)} grows trees · {kes(data.cleanWaterKes)} supports clean-water access
+              </Text>
 
-              <View style={{ gap: 4 }}>
-                <View style={styles.barHead}>
-                  <Text style={[styles.small, { color: colors.text, fontWeight: '700' }]}>
-                    {progress.treesFunded >= 1 ? 'Next tree funded' : 'Estimated tree cost funded'}
+              {data.tree && (
+                <View style={{ gap: 4 }}>
+                  <View style={styles.barHead}>
+                    <Text style={[styles.small, { color: colors.text, fontWeight: '700' }]}>Your shared tree funded</Text>
+                    <Text style={[styles.small, { color: colors.text, fontWeight: '700' }]}>{barPct}%</Text>
+                  </View>
+                  <View style={[styles.track, { backgroundColor: colors.border }]}
+                    accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: barPct }}>
+                    <View style={[styles.fill, { width: `${barPct}%` }]} />
+                  </View>
+                  <Text style={[styles.tiny, { color: colors.mutedForeground }]}>
+                    You added {kes(data.tree.yourShareKes)} to this tree, estimated at {kes(data.config.treeCostKes)}. Customers’ contributions combine to grow each tree.
                   </Text>
-                  <Text style={[styles.small, { color: colors.text, fontWeight: '700' }]}>{barPct}%</Text>
                 </View>
-                <View style={[styles.track, { backgroundColor: colors.border }]}
-                  accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: barPct }}>
-                  <View style={[styles.fill, { width: `${barPct}%` }]} />
-                </View>
-                <Text style={[styles.tiny, { color: colors.mutedForeground }]}>
-                  Of an estimated {kes(TREE_CONFIG.treeCostKes)} per tree (conservative end of KSh 500–750)
-                </Text>
-              </View>
+              )}
 
               <Text style={[styles.small, { color: colors.mutedForeground }]}>
-                {progress.replacementPurchases} replacement{progress.replacementPurchases === 1 ? '' : 's'} · {progress.refillEntries} refill{progress.refillEntries === 1 ? '' : 's'} logged
+                {data.treesHelped > 1 ? `${data.treesHelped} trees helped · ` : ''}{data.replacementPurchases} replacement{data.replacementPurchases === 1 ? '' : 's'} · {refillEntries} refill{refillEntries === 1 ? '' : 's'} logged
               </Text>
             </>
           )}
@@ -213,11 +213,12 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
               <TouchableOpacity onPress={() => setMethodOpen(false)} accessibilityLabel="Close"><Ionicons name="close" size={22} color={colors.text} /></TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 10 }}>
-              <Method title="Allocation" body="3% of each eligible purchase — paid KES orders that were not cancelled, failed or refunded — is allocated to Hydrate the Future™ tree growing and restoration in Kenya." />
-              <Method title="Tree cost" body={`Progress uses KSh ${TREE_CONFIG.treeCostKes} per tree, the conservative end of the KSh ${TREE_CONFIG.treeCostRangeKes[0]}–${TREE_CONFIG.treeCostRangeKes[1]} Kenya estimate, so impact is never overstated. International programme estimates (USD 2.15–3.75) are separate and are not used here.`} />
-              <Method title="Interim benchmark" body={`At the interim average of KSh ${TREE_CONFIG.interimAverageLtvKes.toLocaleString('en-US')} per sale (a proxy, not confirmed customer LTV), 3% is about KSh 367 — roughly half of one tree. One customer funds a whole tree at about KSh 25,000 of purchases; below that, several customers’ contributions combine.`} />
-              <Method title="Refills" body="Refills you log water your tree and move it to Sprout. They are not purchases, so they don’t add funding." />
-              <Method title="Funded vs established" body="“Funded” means your allocation has reached the estimated cost of a tree. “Established” is a separate status that only the programme can confirm from field verification." />
+              <Method title="Allocation" body="3% of each eligible purchase (paid KES orders that were not cancelled, failed or refunded) goes to Hydrate the Future™. Half grows trees in Kenya; the other half supports clean-water access." />
+              <Method title="Shared trees" body="Tree contributions from several customers combine to fund one tree, filled in purchase order. You see your tree’s progress and your own share. Other customers’ details are never shown." />
+              <Method title="Tree cost" body={`Each tree is estimated at KSh ${TREE_CONFIG.treeCostKes}, the conservative end of the KSh ${TREE_CONFIG.treeCostRangeKes[0]}–${TREE_CONFIG.treeCostRangeKes[1]} Kenya estimate. International programme estimates (USD 2.15–3.75) are separate and not used here.`} />
+              <Method title="Interim benchmark" body={`At the interim average of KSh ${TREE_CONFIG.interimAverageLtvKes.toLocaleString('en-US')} per sale (a proxy, not confirmed customer LTV), the tree share is about KSh ${Math.round(TREE_CONFIG.interimAverageLtvKes * TREE_CONFIG.contributionRate * TREE_CONFIG.treeShare)} — so roughly four customers fund one tree.`} />
+              <Method title="Refills" body="Refills you log water your tree and can move a seed to Sprout. They are not purchases, so they don’t add funding." />
+              <Method title="Funded vs established" body="“Funded” means contributions have reached the tree’s estimated cost. “Established” is shown only when the programme confirms the tree in the field." />
             </ScrollView>
             <TouchableOpacity onPress={() => setMethodOpen(false)} style={[styles.cta, { marginTop: 8 }]}>
               <Text style={styles.ctaText}>Got it</Text>
@@ -282,7 +283,7 @@ function TreeArt({ stage }: { stage: TreeStage }) {
           <Circle cx={62} cy={46} r={12} fill={LEAF_DARK} opacity={0.85} />
         </>
       )}
-      {stage === 'funded' && (
+      {(stage === 'funded' || stage === 'established') && (
         <>
           <Rect x={44} y={40} width={8} height={45} rx={3} fill={TRUNK} />
           <Circle cx={48} cy={30} r={24} fill={LEAF} />

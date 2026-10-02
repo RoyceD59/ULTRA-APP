@@ -370,6 +370,27 @@ export interface RegisteredImpactFilter {
   sourceOrderId: number | null;
 }
 
+/**
+ * GET /api/uc/customer/tree — the customer's Hydrate the Future shared tree.
+ * Only their own share and the tree's overall progress; never co-funders.
+ */
+export interface CustomerTree {
+  eligibleOrders: number;
+  eligiblePurchasesKes: number;
+  allocationKes: number;
+  treeShareKes: number;
+  cleanWaterKes: number;
+  replacementPurchases: number;
+  treesHelped: number;
+  tree: null | {
+    stage: 'seed' | 'sapling' | 'growing' | 'funded';
+    fundedPct: number;
+    established: boolean;
+    yourShareKes: number;
+  };
+  config: { contributionRate: number; treeShare: number; treeCostKes: number };
+}
+
 export interface PersonalImpact {
   totalLitres: number;
   starLevel: number;
@@ -510,6 +531,7 @@ export function useApi() {
     requestContactVerification: (channel: 'email' | 'whatsapp') =>
       post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getCustomerTree: () => get<CustomerTree>('/api/uc/customer/tree'),
     getOrder: (orderId: number) => get<UCOrder>(`/api/uc/orders/${orderId}`),
     getReturnRequest: (orderId: number) =>
       get<{ request: { id: number; reason: string; details: string; status: string; createdAt: string } | null }>(`/api/uc/orders/${orderId}/return-request`),

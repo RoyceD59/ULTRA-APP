@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hydrate the Future Forest</title>
 <meta name="description" content="Ultra Clear customers' combined contribution to growing and restoring trees in Kenya through Hydrate the Future.">
+<!-- API that serves live totals (GET /api/uc/impact/forest), e.g. https://api.ucfilters.com.
+     Leave empty to show the interim figures below. -->
+<meta name="uc-api-base" content="">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -12,17 +15,20 @@
   Hydrate the Future™ public forest — standalone page linked from the
   Companion Impact Card ("See your tree in our growing forest").
 
-  Link format:  forest.html?tree=UC-AB12CD&stage=sapling
-           or:  forest.html#tree-UC-AB12CD-sapling
+  Link format:  /?tree=UC-AB72CD&stage=sapling
+           or:  /#tree-UC-AB72CD-sapling
   The link carries an anonymous id and a growth stage only — never names,
   amounts or percentages.
 
-  Hosting: upload this file (e.g. https://www.ucfilters.com/forest.html) and set
-  EXPO_PUBLIC_FOREST_URL to that address — the Impact Card hides the forest
-  button until it is set.
+  Hosting (Cloudflare Pages): deploy this folder as a Pages project, add a
+  custom domain such as forest.ucfilters.com, set the uc-api-base meta above,
+  and set EXPO_PUBLIC_FOREST_URL in the Companion build to the page address.
+  The Impact Card hides the forest button until that variable is set.
 
-  Staff: update the PROGRAMME block in the script when new figures are
-  confirmed. Leave a field null to show it as awaiting a report.
+  Live figures come from the API and refresh every 5 minutes. Planted and
+  established counts are set on the API (FOREST_TREES_PLANTED,
+  FOREST_TREES_ESTABLISHED, FOREST_REPORT_DATE). FALLBACK below is shown only
+  when the API is unset or unreachable.
 -->
 <style>
 /* Layout: canvas forest as the hero, then a narrow reading column of figures, stages and method. */
@@ -85,6 +91,8 @@ h2 { margin: 0 0 .75rem; font: 700 1.35rem/1.2 var(--font-display); letter-spaci
 .figures dd small { display: block; font: 400 .82rem/1.4 var(--font-body); color: var(--muted); margin-top: .15rem; }
 .figures .pending dd { font: 600 1rem/1.35 var(--font-body); color: var(--muted); }
 .basis { margin: .75rem 0 0; font-size: .9rem; color: var(--muted); }
+.status { margin: -.25rem 0 .75rem; font: 500 .78rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); }
+.status.live::before { content: ""; display: inline-block; width: .5rem; height: .5rem; margin-right: .4rem; border-radius: 50%; background: var(--leaf); vertical-align: .05rem; }
 
 .stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-left: 3px solid var(--soil); }
 .stages li { position: relative; padding: .5rem 0 .75rem 1.25rem; }
@@ -112,7 +120,7 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
   <div class="hero-copy">
     <p class="eyebrow">Hydrate the Future™ · Kenya</p>
     <h1>Our growing forest</h1>
-    <p class="lede">Through Hydrate the Future™, 3% of eligible Ultra Clear purchases is allocated to growing and restoring trees in Kenya. Each customer nurtures a digital tree; together they fund real ones.</p>
+    <p class="lede">Through Hydrate the Future™, 3% of eligible Ultra Clear purchases is allocated to the programme: half grows and restores trees in Kenya, half supports clean-water access. Customers’ contributions combine, so several people grow each tree together.</p>
   </div>
 </header>
 
@@ -124,6 +132,7 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 
   <section aria-labelledby="totals-h">
     <h2 id="totals-h">Programme figures</h2>
+    <p class="status" id="status" role="status">Loading live figures…</p>
     <dl class="figures" id="figures"></dl>
     <p class="basis" id="basis"></p>
   </section>
@@ -138,13 +147,14 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
     <h2 id="method-h">Methodology</h2>
     <p>For every eligible transaction (a paid KES purchase that was not cancelled, failed or refunded):</p>
     <ul>
-      <li><code>customer allocation = eligible revenue × 3%</code></li>
-      <li><code>tree funding progress = accumulated allocation ÷ tree cost</code></li>
-      <li><code>estimated trees funded = total allocation ÷ tree cost</code></li>
+      <li><code>allocation = eligible revenue × 3%</code></li>
+      <li><code>tree share = allocation × 50%</code> (the other 50% supports clean-water access)</li>
+      <li><code>shared tree progress = tree shares assigned to the tree ÷ tree cost</code></li>
+      <li><code>estimated trees funded = total tree share ÷ tree cost</code></li>
     </ul>
     <p id="cost-text"></p>
     <p id="proxy-text"></p>
-    <p>Refills customers log in the Companion app water their digital tree but carry no revenue, so they never add funding. Links to this page carry only an anonymous tree id and a growth stage. They contain no names, contact details, amounts or percentages.</p>
+    <p>Tree shares fill shared trees in purchase order, so several customers grow each tree together. Customers see their own share and their tree’s progress; who else funds a tree is never shown. Refills logged in the Companion app water a tree but carry no revenue, so they never add funding. Links to this page carry only an anonymous tree id and a growth stage, never names, contact details, amounts or percentages.</p>
   </section>
 
   <section class="join" aria-label="Join">
@@ -157,24 +167,25 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 <script>
 "use strict";
 
-// ── Programme figures (staff-maintained) ─────────────────────────────────
-const PROGRAMME = {
+// ── Fallback figures (interim; shown only without live data) ─────────────
+const FALLBACK = {
   contributionRate: 0.03,
-  treeCostKes: 750,              // conservative primary
-  treeCostRangeKes: [500, 750],  // Kenya estimate
-  eligibleRevenueKes: 1723000,   // realised revenue, interim
+  treeShare: 0.5,
+  treeCostKes: 750,
+  eligibleRevenueKes: 1723000,
   confirmedSales: 141,
-  interimAverageKes: 12220,      // revenue per sale — proxy, not confirmed LTV
-  treesPlanted: null,            // set from programme report
-  treesEstablished: null,        // set from field verification
+  treesPlanted: null,
+  treesEstablished: null,
+  reportDate: null,
   location: "Kenya — planting sites to be confirmed by the programme",
-  reportingBasis: "Interim figures based on confirmed sales. No programme field report has been published yet.",
 };
+const COST_RANGE = [500, 750];
+const INTERIM_AVERAGE_KES = 12220; // revenue per sale — proxy, not confirmed LTV
 
 const STAGES = [
-  ["seed", "Seed", "Relationship begins with a first purchase."],
-  ["sprout", "Sprout", "First refill or replacement; contributions start to build."],
-  ["sapling", "Sapling", "25% of the estimated tree cost is funded."],
+  ["seed", "Seed", "A customer joins a shared tree with their first purchase."],
+  ["sprout", "Sprout", "Refills or a replacement water the tree."],
+  ["sapling", "Sapling", "25% of the shared tree’s estimated cost is funded."],
   ["growing", "Growing tree", "50–99% funded."],
   ["funded", "Funded tree", "Estimated end-to-end cost reached."],
   ["established", "Established tree", "Field status confirmed by programme verification."],
@@ -195,45 +206,99 @@ function readVisitor() {
   const m = /^#tree-(UC-[A-Z0-9]{6})-([a-z]+)$/.exec(location.hash || "");
   if (m) { id = m[1]; stage = m[2]; }
   if (!id || !ID_RE.test(id)) return null;
-  // Established is programme-only: a link can never claim it.
-  if (!STAGE_KEYS.includes(stage) || stage === "established") stage = "seed";
+  if (!STAGE_KEYS.includes(stage)) stage = "seed";
   return { id, stage };
 }
 const visitor = readVisitor();
 
 // ── Figures ──────────────────────────────────────────────────────────────
-const P = PROGRAMME;
-const allocation = P.eligibleRevenueKes * P.contributionRate;
-const fundedLow = Math.floor(allocation / P.treeCostRangeKes[1]);
-const fundedHigh = Math.floor(allocation / P.treeCostRangeKes[0]);
+let fundedTrees = 0;
 
-const figures = [
-  ["Customer contributions (3%)", kes(allocation), `of ${kes(P.eligibleRevenueKes)} eligible revenue`],
-  ["Estimated trees funded", num(fundedLow), `at ${kes(P.treeCostKes)} per tree · ${num(fundedLow)}–${num(fundedHigh)} across the ${kes(P.treeCostRangeKes[0])}–${num(P.treeCostRangeKes[1])} range`],
-  ["Trees reported planted", P.treesPlanted, "Awaiting programme report"],
-  ["Trees established", P.treesEstablished, "Awaiting field verification"],
-  ["Eligible revenue", kes(P.eligibleRevenueKes), `${num(P.confirmedSales)} confirmed sales`],
-  ["Programme location", P.location, null],
-];
-const dl = document.getElementById("figures");
-for (const [label, value, note] of figures) {
-  const wrap = document.createElement("div");
-  const dt = document.createElement("dt"); dt.textContent = label;
-  const dd = document.createElement("dd");
-  if (value === null || value === undefined) {
-    wrap.className = "pending"; dd.textContent = note;
-  } else {
-    dd.textContent = typeof value === "number" ? num(value) : value;
-    if (note) { const s = document.createElement("small"); s.textContent = note; dd.appendChild(s); }
+function renderFigures(f, live) {
+  const allocation = f.contributionKes;
+  const treeFund = f.treeFundKes;
+  fundedTrees = f.estimatedTreesFunded;
+  const high = Math.floor(treeFund / COST_RANGE[0]);
+  const reported = f.reportDate ? `Programme report, ${f.reportDate}` : "Programme report";
+  const rows = [
+    ["Trees funded (estimated)", num(f.estimatedTreesFunded), `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range`],
+    ["Tree share (1.5%)", kes(treeFund), "half of every 3% allocation"],
+    ["Clean-water share (1.5%)", kes(f.cleanWaterKes), "the other half, for clean-water access"],
+    ["Customer contributions (3%)", kes(allocation), `of ${kes(f.eligibleRevenueKes)} eligible revenue`],
+    ["Trees reported planted", f.treesPlanted, f.treesPlanted === null ? "Awaiting programme report" : reported],
+    ["Trees established", f.treesEstablished, f.treesEstablished === null ? "Awaiting field verification" : reported],
+  ];
+  if (live && f.growingTreePct !== null) {
+    rows.splice(1, 0, ["Shared tree growing now", f.growingTreePct + "%", `${num(f.sharedTreesFunded)} shared tree${f.sharedTreesFunded === 1 ? "" : "s"} fully funded in the app`]);
   }
-  if (label === "Programme location") wrap.className = "pending";
-  wrap.append(dt, dd); dl.appendChild(wrap);
+  rows.push(["Programme location", f.location, null]);
+
+  const dl = document.getElementById("figures");
+  dl.replaceChildren();
+  for (const [label, value, note] of rows) {
+    const wrap = document.createElement("div");
+    const dt = document.createElement("dt"); dt.textContent = label;
+    const dd = document.createElement("dd");
+    if (value === null || value === undefined) {
+      wrap.className = "pending"; dd.textContent = note;
+    } else {
+      dd.textContent = typeof value === "number" ? num(value) : value;
+      if (note) { const s = document.createElement("small"); s.textContent = note; dd.appendChild(s); }
+    }
+    if (label === "Programme location") wrap.className = "pending";
+    wrap.append(dt, dd); dl.appendChild(wrap);
+  }
+  document.getElementById("basis").textContent = live
+    ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : "No programme field report has been published yet. ")
+      + (f.baselineRevenueKes > 0 ? `Includes ${kes(f.baselineRevenueKes)} of earlier and offline sales.` : "Revenue covers purchases recorded in the Ultra Clear app.")
+    : `Interim figures based on ${num(FALLBACK.confirmedSales)} confirmed sales. No programme field report has been published yet.`;
+  if (trees.length !== fundedTrees) layout();
 }
-document.getElementById("basis").textContent = "Reporting basis: " + P.reportingBasis;
+
+function fallbackFigures() {
+  const F = FALLBACK;
+  const contributionKes = F.eligibleRevenueKes * F.contributionRate;
+  const treeFundKes = contributionKes * F.treeShare;
+  return {
+    eligibleRevenueKes: F.eligibleRevenueKes, contributionKes, treeFundKes,
+    cleanWaterKes: contributionKes - treeFundKes, treeCostKes: F.treeCostKes,
+    estimatedTreesFunded: Math.floor(treeFundKes / F.treeCostKes + 1e-9),
+    treesPlanted: F.treesPlanted, treesEstablished: F.treesEstablished,
+    reportDate: F.reportDate, location: F.location, baselineRevenueKes: 0,
+    growingTreePct: null, sharedTreesFunded: 0,
+  };
+}
+
+function setStatus(text, live) {
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.classList.toggle("live", live);
+}
+
+async function loadLive() {
+  const base = (document.querySelector('meta[name="uc-api-base"]')?.content || "").trim().replace(/\/+$/, "");
+  if (!base) { setStatus("Showing interim figures", false); return; }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(base + "/api/uc/impact/forest", { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(String(res.status));
+    const d = await res.json();
+    renderFigures({ ...d, treeCostKes: d.config.treeCostKes }, true);
+    const at = new Date(d.generatedAt);
+    setStatus("Live · updated " + at.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" }), true);
+  } catch (e) {
+    setStatus("Live figures unavailable · showing last interim figures", false);
+  }
+}
+
+const P = FALLBACK;
 document.getElementById("cost-text").textContent =
-  `Tree cost is estimated at ${kes(P.treeCostRangeKes[0])}–${num(P.treeCostRangeKes[1])} in Kenya, covering planting and early care. The headline counter uses ${kes(P.treeCostKes)} so impact is never overstated. International programme estimates (USD 2.15–3.75) are a separate range, not a currency conversion of the Kenya figure.`;
+  `Tree cost is estimated at ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} in Kenya, covering planting and early care. The headline counter uses ${kes(P.treeCostKes)} so impact is never overstated. International programme estimates (USD 2.15–3.75) are a separate range, not a currency conversion of the Kenya figure.`;
+const perSaleTree = INTERIM_AVERAGE_KES * P.contributionRate * P.treeShare;
 document.getElementById("proxy-text").textContent =
-  `Confirmed average customer lifetime value is not yet available. As an interim proxy, average revenue per sale is ${kes(P.interimAverageKes)} (${kes(P.eligibleRevenueKes)} ÷ ${P.confirmedSales}). At 3% that is about ${kes(P.interimAverageKes * P.contributionRate)}, roughly ${Math.floor(P.interimAverageKes * P.contributionRate / P.treeCostRangeKes[1] * 100)}–${Math.floor(P.interimAverageKes * P.contributionRate / P.treeCostRangeKes[0] * 100)}% of one tree. One customer funds a whole tree at ${kes(P.treeCostRangeKes[0] / P.contributionRate)}–${num(P.treeCostRangeKes[1] / P.contributionRate)} of purchases; below that, contributions combine.`;
+  `Confirmed average customer lifetime value is not yet available. As an interim proxy, average revenue per sale is ${kes(INTERIM_AVERAGE_KES)} (${kes(P.eligibleRevenueKes)} ÷ ${P.confirmedSales}). Its tree share is about ${kes(perSaleTree)}, roughly ${Math.floor(perSaleTree / COST_RANGE[1] * 100)}–${Math.floor(perSaleTree / COST_RANGE[0] * 100)}% of one tree, so about four customers grow each tree together.`;
 
 // ── Stage list ───────────────────────────────────────────────────────────
 const ol = document.getElementById("stages");
@@ -252,7 +317,7 @@ if (visitor) {
   document.getElementById("yours").hidden = false;
   document.getElementById("tree-id").textContent = `Tree ${visitor.id}`;
   document.getElementById("stage-name").textContent = st[1];
-  document.getElementById("stage-meaning").textContent = st[2] + " Highlighted in the forest above.";
+  document.getElementById("stage-meaning").textContent = st[2] + " This is your copy of the shared tree you help grow, highlighted in the forest above.";
 }
 
 // ── Canvas forest ────────────────────────────────────────────────────────
@@ -271,7 +336,7 @@ function layout() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const r = rng(20261002);
   // One tree per estimated funded tree (conservative count), back to front.
-  trees = Array.from({ length: fundedLow }, () => {
+  trees = Array.from({ length: fundedTrees }, () => {
     const depth = r();                         // 0 = far, 1 = near
     return { x: r() * W, depth, size: 0.45 + depth * 0.75, phase: r() * Math.PI * 2, delay: r() * 1.2 };
   }).sort((a, b) => a.depth - b.depth);
@@ -308,7 +373,7 @@ function drawVisitor(x, groundY, t, colors) {
     ctx.beginPath(); ctx.ellipse(x - 8 * s, groundY - 24 * s, 9 * s, 4.5 * s, -0.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(x + 8 * s, groundY - 27 * s, 9 * s, 4.5 * s, 0.5, 0, Math.PI * 2); ctx.fill();
   } else {
-    const scale = { sapling: 0.55, growing: 0.8, funded: 1.05 }[stage] || 0.55;
+    const scale = { sapling: 0.55, growing: 0.8, funded: 1.05, established: 1.05 }[stage] || 0.55;
     const sway = reduceMotion ? 0 : Math.sin(t / 900) * 0.025;
     drawTree(x, groundY, scale * 1.25, sway, 1, colors);
   }
@@ -349,6 +414,9 @@ function frame(t) {
   if (!reduceMotion) requestAnimationFrame(frame);
 }
 
+renderFigures(fallbackFigures(), false);
+loadLive();
+setInterval(loadLive, 5 * 60 * 1000);
 layout();
 // Trees start fully grown so the first still frame is complete; frame()
 // schedules its own sway loop unless reduced motion is on.

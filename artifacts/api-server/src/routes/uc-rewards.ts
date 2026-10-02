@@ -133,7 +133,7 @@ async function personalImpact(userId: number) {
   };
 }
 
-async function authenticatedCustomer(req: Request, res: Response): Promise<number | null> {
+export async function authenticatedCustomer(req: Request, res: Response): Promise<number | null> {
   const claims = verifyToken(req.headers["authorization"]);
   const userId = claims ? Number(claims.id) : 0;
   if (!Number.isInteger(userId) || userId <= 0 || userId >= 1_000_000_000) {

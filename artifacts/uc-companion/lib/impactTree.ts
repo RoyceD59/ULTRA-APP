@@ -1,122 +1,48 @@
 /**
- * Hydrate the Future™ tree — pure logic behind the Impact Card tree section.
+ * Hydrate the Future™ tree — display logic for the Impact Card.
  *
- * Money and ecology are tracked separately on purpose:
- *  • Funding progress comes only from the customer's paid orders:
- *      allocation = Σ eligible order total × 3%
- *      progress   = allocation ÷ tree cost (KES 750, the conservative end
- *                   of the KES 500–750 Kenya estimate)
- *  • Refills are self-reported litres with no revenue. They animate the tree
- *    (Sprout) but never add funding.
- *  • "Established" means a field-verified tree. Only programme reporting can
- *    set it, so the app never reaches it from purchases alone.
+ * The server owns the money and the shared-tree membership
+ * (GET /api/uc/customer/tree): 3% of each eligible purchase is allocated,
+ * half grows trees and half stays with clean-water access. Tree shares from
+ * several customers fill one shared tree; each member sees a copy of it here,
+ * with their own share but never who else funds it.
+ *
+ * Refills are self-reported litres with no revenue: they only move a seed to
+ * Sprout. "Established" comes from programme field verification only.
  */
-import type { UCOrder } from '@/hooks/useApi';
+import type { CustomerTree } from '@/hooks/useApi';
 
 export const TREE_CONFIG = {
   contributionRate: 0.03,
-  /** Primary (conservative) cost used for every progress figure. */
+  treeShare: 0.5,
   treeCostKes: 750,
   treeCostRangeKes: [500, 750] as const,
   /**
    * Interim proxy: KES 1,723,000 realised revenue ÷ 141 confirmed sales.
-   * This is revenue per sale, NOT confirmed customer LTV — replace when the
-   * confirmed figure is available.
+   * Revenue per sale, NOT confirmed customer LTV.
    */
   interimAverageLtvKes: 12_220,
 } as const;
 
-export type TreeStage = 'none' | 'seed' | 'sprout' | 'sapling' | 'growing' | 'funded';
+export type TreeStage = 'none' | 'seed' | 'sprout' | 'sapling' | 'growing' | 'funded' | 'established';
 
-export const TREE_STAGES: Record<TreeStage | 'established', { label: string; meaning: string }> = {
-  none:        { label: 'No tree yet',      meaning: 'Your first Ultra Clear purchase plants your seed.' },
-  seed:        { label: 'Seed',             meaning: 'Your relationship with Ultra Clear has begun.' },
-  sprout:      { label: 'Sprout',           meaning: 'Refills and replacements are helping your tree grow.' },
-  sapling:     { label: 'Sapling',          meaning: 'Your tree is partly funded.' },
-  growing:     { label: 'Growing tree',     meaning: 'Most of your tree’s estimated cost is funded.' },
-  funded:      { label: 'Funded tree',      meaning: 'Your contributions have reached the estimated cost of a tree.' },
+export const TREE_STAGES: Record<TreeStage, { label: string; meaning: string }> = {
+  none:        { label: 'No tree yet',      meaning: 'Your first Ultra Clear purchase plants your seed in a shared tree.' },
+  seed:        { label: 'Seed',             meaning: 'You’ve joined a shared tree. It grows as Ultra Clear customers buy.' },
+  sprout:      { label: 'Sprout',           meaning: 'Your refills and replacements are watering your tree.' },
+  sapling:     { label: 'Sapling',          meaning: 'Your shared tree is at least a quarter funded.' },
+  growing:     { label: 'Growing tree',     meaning: 'Most of your shared tree’s estimated cost is funded.' },
+  funded:      { label: 'Funded tree',      meaning: 'Your shared tree has reached its estimated cost.' },
   established: { label: 'Established tree', meaning: 'Field status confirmed by the programme.' },
 };
 
-const EXCLUDED_STATUSES = ['refunded', 'cancelled', 'failed', 'trash'];
-const REPLACEMENT_PRODUCT_IDS = new Set([22, 23, 24, 25, 26]);
-
-/**
- * Paid, KES, and not reversed. Status is checked as well as paymentStatus
- * because a paid-then-refunded WooCommerce order still reports
- * paymentStatus "paid" (its date_paid is set).
- */
-export function isEligibleOrder(o: Pick<UCOrder, 'status' | 'paymentStatus' | 'currency'>): boolean {
-  const status = String(o.status ?? '').toLowerCase();
-  if (EXCLUDED_STATUSES.includes(status)) return false;
-  const paid = o.paymentStatus
-    ? o.paymentStatus.toLowerCase() === 'paid'
-    : status === 'processing' || status === 'completed';
-  return paid && String(o.currency || 'KES').toUpperCase() === 'KES';
-}
-
-export function isReplacementLine(line: UCOrder['lineItems'][number]): boolean {
-  if (line.productId !== undefined && REPLACEMENT_PRODUCT_IDS.has(line.productId)) return true;
-  return /cartridge|replacement/i.test(line.name ?? '');
-}
-
-function orderTotalKes(total: string): number {
-  const n = Number(String(total).replace(/,/g, ''));
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-export interface TreeProgress {
-  stage: TreeStage;
-  eligibleOrders: number;
-  eligiblePurchasesKes: number;
-  allocationKes: number;
-  /** Whole trees whose estimated cost the allocation covers. */
-  treesFunded: number;
-  /** % of the current (next) tree funded, 0–99. */
-  currentTreePct: number;
-  /** % of one tree funded overall, uncapped (e.g. 160 = 1.6 trees). */
-  totalPctOfTree: number;
-  replacementPurchases: number;
-  refillEntries: number;
-}
-
-export function computeTreeProgress(
-  orders: readonly Pick<UCOrder, 'status' | 'paymentStatus' | 'currency' | 'total' | 'lineItems'>[],
-  refillEntries: number,
-  cfg = TREE_CONFIG,
-): TreeProgress {
-  const eligible = orders.filter(isEligibleOrder);
-  const purchases = eligible.reduce((s, o) => s + orderTotalKes(o.total), 0);
-  const allocation = Math.round(purchases * cfg.contributionRate * 100) / 100;
-  // Epsilon absorbs float noise exactly at a whole-tree boundary.
-  const treesExact = allocation / cfg.treeCostKes + 1e-9;
-  const treesFunded = Math.floor(treesExact);
-  const totalPct = Math.floor((allocation / cfg.treeCostKes) * 100 + 1e-7);
-  const replacements = eligible.reduce(
-    (n, o) => n + (o.lineItems ?? []).filter(isReplacementLine).reduce((q, l) => q + (l.quantity || 1), 0), 0);
-
-  // Stage is the furthest of the event-based and funding-based stages, so a
-  // large first purchase can't skip "Sprout" into an inconsistent state.
-  let stage: TreeStage = 'none';
-  if (eligible.length > 0) {
-    if (treesFunded >= 1) stage = 'funded';
-    else if (totalPct >= 50) stage = 'growing';
-    else if (totalPct >= 25) stage = 'sapling';
-    else if (replacements > 0 || refillEntries > 0) stage = 'sprout';
-    else stage = 'seed';
-  }
-
-  return {
-    stage,
-    eligibleOrders: eligible.length,
-    eligiblePurchasesKes: purchases,
-    allocationKes: allocation,
-    treesFunded,
-    currentTreePct: treesFunded >= 1 ? totalPct % 100 : Math.min(99, totalPct),
-    totalPctOfTree: totalPct,
-    replacementPurchases: replacements,
-    refillEntries,
-  };
+/** What the card shows, from the server response plus local refill activity. */
+export function displayStage(t: CustomerTree | undefined, refillEntries: number): TreeStage {
+  if (!t || t.eligibleOrders === 0) return 'none';
+  if (!t.tree) return 'seed'; // paid, but not yet allocated to a tree
+  if (t.tree.established) return 'established';
+  if (t.tree.stage === 'seed' && (t.replacementPurchases > 0 || refillEntries > 0)) return 'sprout';
+  return t.tree.stage;
 }
 
 // ── Anonymous forest link ─────────────────────────────────────────────────
@@ -125,10 +51,7 @@ export function computeTreeProgress(
 const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const TREE_ID_PATTERN = /^UC-[A-HJ-NP-Z2-9]{6}$/;
 
-/**
- * Random, not derived from the account id — so it can't be reversed to a
- * customer and can be regenerated if ever needed.
- */
+/** Random, not derived from the account id, so it can't be traced back. */
 export function newTreeId(randomBytes: (n: number) => Uint8Array): string {
   const bytes = randomBytes(6);
   let id = 'UC-';
@@ -136,10 +59,7 @@ export function newTreeId(randomBytes: (n: number) => Uint8Array): string {
   return id;
 }
 
-/**
- * Only the anonymous id and the stage leave the device — never amounts or
- * percentages, which could be reversed into the customer's spend.
- */
+/** Only the anonymous id and the stage leave the device. */
 export function forestLink(baseUrl: string, treeId: string, stage: TreeStage): string {
   const url = new URL(baseUrl);
   url.searchParams.set('tree', treeId);

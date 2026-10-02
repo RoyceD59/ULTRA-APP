@@ -2173,6 +2173,34 @@ async function applyStartupMigrations(): Promise<void> {
       ON instant_water_lead_outbox(status, next_attempt_at);
   `);
   logger.info("Startup migration: instant water assessment and ticket tables ensured");
+
+  // Hydrate the Future shared trees. Keep this DDL in lockstep with
+  // lib/db/migrations/0054_uc_hydrate_trees.sql.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_hydrate_trees (
+      tree_number integer PRIMARY KEY,
+      target_minor integer NOT NULL CONSTRAINT uc_hydrate_trees_target_check CHECK (target_minor > 0),
+      established_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS uc_hydrate_tree_contributions (
+      id bigserial PRIMARY KEY,
+      canonical_purchase_id bigint NOT NULL REFERENCES uc_canonical_purchases(id),
+      customer_id integer NOT NULL REFERENCES uc_users(id),
+      tree_number integer NOT NULL REFERENCES uc_hydrate_trees(tree_number),
+      amount_minor integer NOT NULL CONSTRAINT uc_hydrate_tree_contributions_amount_check CHECK (amount_minor > 0),
+      reversed_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_hydrate_tree_contributions_purchase_tree_unique
+      ON uc_hydrate_tree_contributions(canonical_purchase_id, tree_number);
+    CREATE INDEX IF NOT EXISTS uc_hydrate_tree_contributions_customer_idx
+      ON uc_hydrate_tree_contributions(customer_id, created_at);
+    CREATE INDEX IF NOT EXISTS uc_hydrate_tree_contributions_tree_idx
+      ON uc_hydrate_tree_contributions(tree_number);
+  `);
+  logger.info("Startup migration: hydrate shared trees ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;
