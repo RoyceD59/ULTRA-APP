@@ -17,11 +17,6 @@ export const TREE_CONFIG = {
   treeShare: 0.5,
   treeCostKes: 750,
   treeCostRangeKes: [500, 750] as const,
-  /**
-   * Interim proxy: KES 1,723,000 realised revenue ÷ 141 confirmed sales.
-   * Revenue per sale, NOT confirmed customer LTV.
-   */
-  interimAverageLtvKes: 12_220,
 } as const;
 
 export type TreeStage = 'none' | 'seed' | 'sprout' | 'sapling' | 'growing' | 'funded' | 'established';
@@ -42,7 +37,7 @@ export function displayStage(t: CustomerTree | undefined, refillEntries: number)
   if (!t.tree) return 'seed'; // paid, but not yet allocated to a tree
   if (t.tree.established) return 'established';
   if (t.tree.stage === 'seed' && (t.replacementPurchases > 0 || refillEntries > 0)) return 'sprout';
-  return t.tree.stage;
+  return ['seed', 'sapling', 'growing', 'funded'].includes(t.tree.stage) ? t.tree.stage : 'none';
 }
 
 // ── Anonymous forest link ─────────────────────────────────────────────────
@@ -62,6 +57,10 @@ export function newTreeId(randomBytes: (n: number) => Uint8Array): string {
 /** Only the anonymous id and the stage leave the device. */
 export function forestLink(baseUrl: string, treeId: string, stage: TreeStage): string {
   const url = new URL(baseUrl);
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Forest URL must use credential-free HTTPS');
+  if (!TREE_ID_PATTERN.test(treeId) || stage === 'none' || !TREE_STAGES[stage]) throw new Error('Invalid tree link');
+  url.search = '';
+  url.hash = '';
   url.searchParams.set('tree', treeId);
   url.searchParams.set('stage', stage);
   return url.toString();

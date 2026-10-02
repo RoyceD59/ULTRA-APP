@@ -40,3 +40,19 @@ test('tree ids are random-format and links carry only id + stage', () => {
   assert.equal(TREE_CONFIG.treeCostKes * 1, 750);
   assert.equal(TREE_CONFIG.contributionRate * TREE_CONFIG.treeShare, 0.015);
 });
+
+test('configured queries and hashes cannot leak into forest links', () => {
+  const u = new URL(forestLink('https://forest.example.org/?email=private&token=secret#old', 'UC-ABCDEF', 'growing'));
+  assert.deepEqual([...u.searchParams.keys()].sort(), ['stage', 'tree']);
+  assert.equal(u.hash, '');
+  assert.equal(u.href.includes('secret'), false);
+  for (const base of ['http://forest.example.org/', 'javascript:alert(1)', 'https://user:password@forest.example.org/']) {
+    assert.throws(() => forestLink(base, 'UC-ABCDEF', 'seed'));
+  }
+  assert.throws(() => forestLink('https://forest.example.org/', 'UC-ABCDEF', 'none'));
+  assert.throws(() => forestLink('https://forest.example.org/', 'customer-123', 'seed'));
+});
+
+test('invalid API stage never creates a personal forest link', () => {
+  assert.equal(displayStage(tree({}, { stage: 'unknown' }), 2), 'none');
+});

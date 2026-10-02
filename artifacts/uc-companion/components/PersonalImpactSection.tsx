@@ -252,7 +252,7 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
           />
           <View style={styles.hydrateContainer}>
             <Text style={[styles.hydrateText, { color: colors.mutedForeground }]}>
-              Through Hydrate the Future™, 3% of eligible Ultra Clear purchases is allocated to growing and restoring trees in Kenya.
+              Hydrate the Future™ receives 3% of eligible purchases, split equally between trees in Kenya and clean-water access. Logged refills do not add funding.
             </Text>
           </View>
 

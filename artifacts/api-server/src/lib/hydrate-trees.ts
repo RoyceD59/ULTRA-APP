@@ -42,7 +42,7 @@ function optionalCount(raw: string | undefined): number | null {
 /**
  * Programme figures come from env so staff can update them without a release:
  *   HYDRATE_TREE_COST_KES          (default 750; applies to NEW trees only)
- *   HYDRATE_TREE_SHARE             (default 0.5 of the 3%)
+ *   Tree share is fixed at 0.5 of the 3%; it is not an environment override.
  *   FOREST_BASELINE_REVENUE_KES    (eligible revenue not captured in the app,
  *                                   e.g. earlier/offline sales — must not
  *                                   overlap app purchases)
@@ -52,7 +52,7 @@ function optionalCount(raw: string | undefined): number | null {
 export function hydrateConfig(env: Record<string, string | undefined> = process.env): HydrateConfig {
   return {
     contributionRate: 0.03,
-    treeShare: num(env["HYDRATE_TREE_SHARE"], 0.5, { min: 0.01, max: 1 }),
+    treeShare: 0.5,
     treeCostMinor: Math.round(num(env["HYDRATE_TREE_COST_KES"], 750, { min: 1 }) * 100),
     baselineRevenueKes: num(env["FOREST_BASELINE_REVENUE_KES"], 0),
     treesPlanted: optionalCount(env["FOREST_TREES_PLANTED"]),
@@ -113,13 +113,13 @@ export function planAllocations(
 // ── Persistence ─────────────────────────────────────────────────────────────
 
 const LOCK_KEY = "uc_hydrate_tree_allocation";
-const BATCH = 500;
 
 /** Paid, customer-linked KES purchase whose app order was not reversed. */
 const ELIGIBLE_SQL = `
   p.payment_status = 'paid'
   AND p.customer_id IS NOT NULL
   AND upper(p.currency) = 'KES'
+  AND lower(p.fulfilment_status) NOT IN ('refunded', 'cancelled', 'canceled', 'failed', 'trash')
   AND NOT EXISTS (
     SELECT 1 FROM uc_orders o
     WHERE o.id = p.companion_order_id
@@ -138,7 +138,8 @@ export async function syncTreeContributions(cfg = hydrateConfig()): Promise<{ al
     const reversed = await client.query(
       `UPDATE uc_hydrate_tree_contributions c SET reversed_at = now()
        WHERE c.reversed_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM uc_canonical_purchases p WHERE p.id = c.canonical_purchase_id AND ${ELIGIBLE_SQL})`,
+         AND NOT EXISTS (SELECT 1 FROM uc_canonical_purchases p WHERE p.id = c.canonical_purchase_id
+           AND p.customer_id = c.customer_id AND ${ELIGIBLE_SQL})`,
     );
     const allocated = await allocateBatch(client, cfg);
     await client.query("COMMIT");
@@ -158,8 +159,7 @@ async function allocateBatch(client: PoolClient, cfg: HydrateConfig): Promise<nu
        AND NOT EXISTS (SELECT 1 FROM uc_hydrate_tree_contributions c WHERE c.canonical_purchase_id = p.id)
        -- skip purchases too small to earn a whole cent, or they'd block the batch forever
        AND floor(p.total_minor * $1::numeric) >= 1
-     ORDER BY COALESCE(p.source_created_at, p.created_at), p.id
-     LIMIT ${BATCH}`,
+     ORDER BY COALESCE(p.source_created_at, p.created_at), p.id`,
     [cfg.contributionRate * cfg.treeShare],
   );
   const purchases = pending.rows

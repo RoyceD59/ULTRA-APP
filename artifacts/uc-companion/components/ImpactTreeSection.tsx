@@ -39,22 +39,31 @@ interface Props {
 }
 
 export default function ImpactTreeSection({ refillEntries }: Props) {
+  const { user } = useAuth();
+  // Unmount all account-local identity, animation and error state on a switch.
+  return <AccountImpactTree key={user?.id ?? 'guest'} refillEntries={refillEntries} />;
+}
+
+function AccountImpactTree({ refillEntries }: Props) {
   const colors = useColors();
   const api = useApi();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [methodOpen, setMethodOpen] = useState(false);
   const sky = useLiveSky();
-  const [treeId, setTreeId] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<{ accountId: number; treeId: string } | null>(null);
+  const [linkError, setLinkError] = useState('');
 
   const treeQ = useQuery({
     queryKey: ['customer', user?.id, 'hydrate-tree'],
     queryFn: () => api.getCustomerTree(),
-    enabled: !!user,
+    enabled: !!user && !!token,
     staleTime: 60 * 1000,
+    refetchOnMount: 'always',
   });
 
   // Anonymous, per-account tree id kept on this device.
   useEffect(() => {
+    setLinkError('');
     if (!user) return;
     const key = `uc_hydrate_tree_id_${user.id}`;
     let cancelled = false;
@@ -65,11 +74,11 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
           id = newTreeId(n => Crypto.getRandomBytes(n));
           await AsyncStorage.setItem(key, id);
         }
-        if (!cancelled) setTreeId(id);
+        if (!cancelled) setIdentity({ accountId: user.id, treeId: id });
       } catch { /* link simply stays hidden */ }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user?.id]);
 
   const data = treeQ.data;
   const stage = displayStage(data, refillEntries);
@@ -85,6 +94,8 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -94,7 +105,7 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
   }, [stage, reduceMotion, grow]);
 
   useEffect(() => {
-    if (reduceMotion || stage === 'none') return;
+    if (reduceMotion || stage === 'none') { sway.setValue(0); return; }
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(sway, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       Animated.timing(sway, { toValue: -1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -122,7 +133,9 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
   const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: [`-${swayDeg}deg`, `${swayDeg}deg`] });
 
   const barPct = data?.tree?.fundedPct ?? 0;
-  const link = FOREST_URL && treeId ? safeForestLink(FOREST_URL, treeId, stage) : null;
+  const treeId = identity?.accountId === user?.id ? identity?.treeId : null;
+  const link = FOREST_URL && treeId && stage !== 'none' && !treeQ.isError
+    ? safeForestLink(FOREST_URL, treeId, stage) : null;
 
   return (
     <View style={[styles.wrap, { borderColor: colors.border, backgroundColor: colors.background }]} testID="impact-tree">
@@ -202,11 +215,15 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
           </Text>
 
           {link && (
-            <TouchableOpacity onPress={() => Linking.openURL(link).catch(() => {})} style={styles.cta} testID="impact-tree-forest">
+            <TouchableOpacity accessibilityRole="link" onPress={() => {
+              setLinkError('');
+              Linking.openURL(link).catch(() => setLinkError('Unable to open the forest. Please try again.'));
+            }} style={styles.cta} testID="impact-tree-forest">
               <Ionicons name="leaf" size={16} color="#fff" />
               <Text style={styles.ctaText}>See your tree in our growing forest</Text>
             </TouchableOpacity>
           )}
+          {!!linkError && <Text accessibilityRole="alert" style={[styles.small, { color: colors.destructive }]}>{linkError}</Text>}
         </>
       )}
 
@@ -220,8 +237,8 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
             <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 10 }}>
               <Method title="Allocation" body="3% of each eligible purchase (paid KES orders that were not cancelled, failed or refunded) goes to Hydrate the Future™. Half grows trees in Kenya; the other half supports clean-water access." />
               <Method title="Shared trees" body="Tree contributions from several customers combine to fund one tree, filled in purchase order. You see your tree’s progress and your own share. Other customers’ details are never shown." />
-              <Method title="Tree cost" body={`Each tree is estimated at KSh ${TREE_CONFIG.treeCostKes}, the conservative end of the KSh ${TREE_CONFIG.treeCostRangeKes[0]}–${TREE_CONFIG.treeCostRangeKes[1]} Kenya estimate. International programme estimates (USD 2.15–3.75) are separate and not used here.`} />
-              <Method title="Interim benchmark" body={`At the interim average of KSh ${TREE_CONFIG.interimAverageLtvKes.toLocaleString('en-US')} per sale (a proxy, not confirmed customer LTV), the tree share is about KSh ${Math.round(TREE_CONFIG.interimAverageLtvKes * TREE_CONFIG.contributionRate * TREE_CONFIG.treeShare)} — so roughly four customers fund one tree.`} />
+              <Method title="Tree cost" body={`Each new tree is estimated at KSh ${data?.config.treeCostKes ?? TREE_CONFIG.treeCostKes}. The Kenya estimate is KSh ${TREE_CONFIG.treeCostRangeKes[0]}–${TREE_CONFIG.treeCostRangeKes[1]}. International programme estimates (USD 2.15–3.75) are separate and not used here.`} />
+              <Method title="Customer lifetime value" body="Confirmed customer lifetime value and programme field results are not yet available. Your purchase allocation is not a donation receipt, a carbon credit or verified field impact." />
               <Method title="Refills" body="Refills you log water your tree and can move a seed to Sprout. They are not purchases, so they don’t add funding." />
               <Method title="Funded vs established" body="“Funded” means contributions have reached the tree’s estimated cost. “Established” is shown only when the programme confirms the tree in the field." />
             </ScrollView>

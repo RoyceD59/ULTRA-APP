@@ -29,7 +29,6 @@ async function syncIfStale(force = false): Promise<void> {
       lastSyncAt = Date.now();
       if (r.allocated || r.reversed) logger.info(r, "[hydrate-trees] contributions synced");
     })
-    .catch(err => { logger.error({ err }, "[hydrate-trees] sync failed"); })
     .finally(() => { inFlight = null; });
   await inFlight;
 }
@@ -55,6 +54,7 @@ router.get("/uc/impact/forest", async (_req: Request, res: Response): Promise<vo
     await syncIfStale();
     res.json(await forestTotals());
   } catch (err) {
+    res.setHeader("Cache-Control", "no-store");
     logger.error({ err }, "[uc/impact/forest] failed");
     res.status(503).json({ error: "Forest totals are temporarily unavailable" });
   }

@@ -115,6 +115,31 @@ describe("shared trees (database)", () => {
     }
     // A second pass is idempotent.
     assert.deepEqual(await syncTreeContributions(), { allocated: 0, reversed: 0 });
+    const concurrent = await Promise.all([syncTreeContributions(), syncTreeContributions(), syncTreeContributions()]);
+    assert.ok(concurrent.every(r => r.allocated === 0 && r.reversed === 0));
+  });
+
+  it("rejects a team session even when its numeric ID collides with a customer", async () => {
+    const response = await fetch(`${base}/uc/customer/tree`, {
+      headers: { Authorization: `Bearer ${issueToken({ id: ids[0]!, email: emails[0]!, type: "team-session" })}` },
+    });
+    assert.equal(response.status, 401);
+  });
+
+  it("public forest GET and preflight are accessible without credentials; private tree is not", async () => {
+    const origin = "https://forest.ucfilters.com";
+    const response = await fetch(`${base}/uc/impact/forest`, { headers: { Origin: origin } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assert.equal(response.headers.get("Access-Control-Allow-Credentials"), null);
+    const options = await fetch(`${base}/uc/impact/forest`, {
+      method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": "GET" },
+    });
+    assert.equal(options.status, 204);
+    assert.equal(options.headers.get("Access-Control-Allow-Origin"), "*");
+    const privateResponse = await fetch(`${base}/uc/customer/tree`, { headers: { Origin: origin } });
+    assert.equal(privateResponse.status, 401);
+    assert.notEqual(privateResponse.headers.get("Access-Control-Allow-Origin"), "*");
   });
 
   it("shows the customer their own share and tree progress, but no co-funder data", async () => {

@@ -312,14 +312,12 @@ const FALLBACK = {
   contributionRate: 0.03,
   treeShare: 0.5,
   treeCostKes: 750,
-  eligibleRevenueKes: 1723000,
-  confirmedSales: 141,
+  eligibleRevenueKes: null,
   treesPlanted: null,
   treesEstablished: null,
   reportDate: null,
 };
 const COST_RANGE = [500, 750];
-const INTERIM_AVERAGE_KES = 12220; // revenue per sale — proxy, not confirmed LTV
 
 const STAGES = [
   ["seed", "Seed", "A customer’s first purchase starts their contribution to a shared tree."],
@@ -345,7 +343,7 @@ function readVisitor() {
   const m = /^#tree-(UC-[A-Z0-9]{6})-([a-z]+)$/.exec(location.hash || "");
   if (m) { id = m[1]; stage = m[2]; }
   if (!id || !ID_RE.test(id)) return null;
-  if (!STAGE_KEYS.includes(stage)) stage = "seed";
+  if (!STAGE_KEYS.includes(stage)) return null;
   return { id, stage };
 }
 const visitor = readVisitor();
@@ -358,14 +356,14 @@ function renderFigures(f, live) {
   lastFigures = { f, live };
   const allocation = f.contributionKes;
   const treeFund = f.treeFundKes;
-  fundedTrees = f.estimatedTreesFunded;
+  fundedTrees = f.estimatedTreesFunded ?? 0;
   const high = Math.floor(treeFund / COST_RANGE[0]);
   const reported = f.reportDate ? `Programme report, ${f.reportDate}` : "Programme report";
   const rows = [
-    [isDonated() ? "Trees funded by donation" : "Estimated trees to be funded", num(f.estimatedTreesFunded), `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range`],
-    ["Tree allocation (1.5%)", kes(treeFund), "half of every 3% allocation"],
-    ["Clean-water allocation (1.5%)", kes(f.cleanWaterKes), "the other half, for clean-water access"],
-    ["Customer contributions (3%)", kes(allocation), `of ${kes(f.eligibleRevenueKes)} eligible revenue`],
+    ["Estimated trees to be funded", live ? num(f.estimatedTreesFunded) : null, live ? `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range` : "Pending — live totals unavailable"],
+    ["Tree allocation (1.5%)", live ? kes(treeFund) : null, live ? "half of every 3% allocation" : "Pending — live totals unavailable"],
+    ["Clean-water allocation (1.5%)", live ? kes(f.cleanWaterKes) : null, live ? "the other half, for clean-water access" : "Pending — live totals unavailable"],
+    ["Customer contributions (3%)", live ? kes(allocation) : null, live ? `of ${kes(f.eligibleRevenueKes)} eligible revenue` : "Pending — live totals unavailable"],
     ["Trees reported planted", f.treesPlanted, f.treesPlanted === null ? "Not yet reported by programme partner" : reported],
     ["Trees established", f.treesEstablished, f.treesEstablished === null ? "Not yet field-verified" : reported],
   ];
@@ -402,7 +400,7 @@ function renderFigures(f, live) {
     ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : outcomes + " ")
       + (f.baselineRevenueKes > 0 ? `Includes ${kes(f.baselineRevenueKes)} of earlier and offline sales.` : "Revenue covers purchases recorded in the Ultra Clear app.")
       + nature
-    : `Interim figures based on ${num(FALLBACK.confirmedSales)} confirmed sales${asOf}. ${outcomes}${nature}`;
+    : `Live programme totals are unavailable; no revenue or funding figures are assumed. ${outcomes}${nature}`;
   if (backdrop && trees.length !== Math.min(fundedTrees, MAX_DRAWN)) layout();
 }
 
@@ -415,12 +413,12 @@ function certificationText() {
 
 function fallbackFigures() {
   const F = FALLBACK;
-  const contributionKes = F.eligibleRevenueKes * F.contributionRate;
-  const treeFundKes = contributionKes * F.treeShare;
+  const contributionKes = null;
+  const treeFundKes = null;
   return {
     eligibleRevenueKes: F.eligibleRevenueKes, contributionKes, treeFundKes,
-    cleanWaterKes: contributionKes - treeFundKes, treeCostKes: F.treeCostKes,
-    estimatedTreesFunded: Math.floor(treeFundKes / F.treeCostKes + 1e-9),
+    cleanWaterKes: null, treeCostKes: F.treeCostKes,
+    estimatedTreesFunded: null,
     treesPlanted: F.treesPlanted, treesEstablished: F.treesEstablished,
     reportDate: F.reportDate, baselineRevenueKes: 0,
     growingTreePct: null, sharedTreesFunded: 0,
@@ -435,21 +433,24 @@ function setStatus(text, live) {
 
 async function loadLive() {
   const base = (document.querySelector('meta[name="uc-api-base"]')?.content || "").trim().replace(/\/+$/, "");
-  const interim = STATUS.figuresAsOf
-    ? `Showing interim figures as of ${fmtDate(STATUS.figuresAsOf)}`
-    : "Showing interim figures · as-of date to be confirmed";
+  const interim = "Programme totals pending";
   if (!base) { setStatus(interim, false); return; }
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(base + "/api/uc/impact/forest", { signal: ctrl.signal });
+    const res = await fetch(base + "/api/uc/impact/forest", { signal: ctrl.signal, credentials: "omit" });
     clearTimeout(timer);
     if (!res.ok) throw new Error(String(res.status));
     const d = await res.json();
+    if (d.config?.contributionRate !== 0.03 || d.config?.treeShare !== 0.5 ||
+        !Number.isFinite(d.config?.treeCostKes) || d.config.treeCostKes <= 0 ||
+        !["eligibleRevenueKes", "contributionKes", "treeFundKes", "cleanWaterKes", "estimatedTreesFunded"].every(k => Number.isFinite(d[k]) && d[k] >= 0) ||
+        !Number.isFinite(Date.parse(d.generatedAt))) throw new Error("Invalid programme totals");
     renderFigures({ ...d, treeCostKes: d.config.treeCostKes }, true);
     const at = new Date(d.generatedAt);
     setStatus("Live figures as of " + at.toLocaleString("en-KE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }), true);
   } catch (e) {
+    renderFigures(fallbackFigures(), false);
     setStatus(`Live figures unavailable · ${interim.charAt(0).toLowerCase()}${interim.slice(1)}`, false);
   }
 }
@@ -457,9 +458,8 @@ async function loadLive() {
 const P = FALLBACK;
 document.getElementById("cost-text").textContent =
   `Tree cost is estimated at ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} in Kenya, covering planting and early care. The headline counter uses ${kes(P.treeCostKes)} so impact is never overstated. International programme estimates (USD 2.15–3.75) are a separate range, not a currency conversion of the Kenya figure.`;
-const perSaleTree = INTERIM_AVERAGE_KES * P.contributionRate * P.treeShare;
 document.getElementById("proxy-text").textContent =
-  `Confirmed average customer lifetime value is not yet available. As an interim proxy, average revenue per sale is ${kes(INTERIM_AVERAGE_KES)} (${kes(P.eligibleRevenueKes)} ÷ ${P.confirmedSales}). Its tree allocation is about ${kes(perSaleTree)}, roughly ${Math.floor(perSaleTree / COST_RANGE[1] * 100)}–${Math.floor(perSaleTree / COST_RANGE[0] * 100)}% of one tree, so about four customers contribute to each tree together.`;
+  "Confirmed customer lifetime value is not yet available. No baseline revenue, average-sale benchmark or verified field outcomes are assumed. Purchases allocate funding; logged refills do not.";
 
 // ── Stage list ───────────────────────────────────────────────────────────
 const ol = document.getElementById("stages");
@@ -478,7 +478,9 @@ if (visitor) {
   document.getElementById("yours").hidden = false;
   document.getElementById("tree-id").textContent = `Tree ${visitor.id}`;
   document.getElementById("stage-name").textContent = st[1];
-  document.getElementById("stage-meaning").textContent = st[2] + " This is your view of the shared tree you contribute to, highlighted in the forest above.";
+  document.getElementById("stage-meaning").textContent = visitor.stage === "established"
+    ? "Established stage shared from the Companion. This anonymous link does not verify field status; see the programme reports below."
+    : st[2] + " This anonymous link shows a digital illustration, not independently verified field status.";
 }
 
 // ── Canvas forest ────────────────────────────────────────────────────────

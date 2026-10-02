@@ -10,6 +10,107 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Own shared-tree allocation and aggregate progress
+ */
+export const getHydrateCustomerTreeResponseEligibleOrdersMin = 0;
+
+export const getHydrateCustomerTreeResponseEligiblePurchasesKesMin = 0;
+
+export const getHydrateCustomerTreeResponseAllocationKesMin = 0;
+
+export const getHydrateCustomerTreeResponseTreeShareKesMin = 0;
+
+export const getHydrateCustomerTreeResponseCleanWaterKesMin = 0;
+
+export const getHydrateCustomerTreeResponseReplacementPurchasesMin = 0;
+
+export const getHydrateCustomerTreeResponseTreesHelpedMin = 0;
+
+export const getHydrateCustomerTreeResponseConfigTreeCostKesExclusiveMin = 0;
+
+export const getHydrateCustomerTreeResponseTreeFundedPctMin = 0;
+export const getHydrateCustomerTreeResponseTreeFundedPctMax = 100;
+
+export const getHydrateCustomerTreeResponseTreeYourShareKesMin = 0;
+
+
+
+export const GetHydrateCustomerTreeResponse = zod.object({
+  "eligibleOrders": zod.number().min(getHydrateCustomerTreeResponseEligibleOrdersMin),
+  "eligiblePurchasesKes": zod.number().min(getHydrateCustomerTreeResponseEligiblePurchasesKesMin),
+  "allocationKes": zod.number().min(getHydrateCustomerTreeResponseAllocationKesMin),
+  "treeShareKes": zod.number().min(getHydrateCustomerTreeResponseTreeShareKesMin),
+  "cleanWaterKes": zod.number().min(getHydrateCustomerTreeResponseCleanWaterKesMin),
+  "replacementPurchases": zod.number().min(getHydrateCustomerTreeResponseReplacementPurchasesMin),
+  "treesHelped": zod.number().min(getHydrateCustomerTreeResponseTreesHelpedMin),
+  "config": zod.object({
+  "contributionRate": zod.number(),
+  "treeShare": zod.number(),
+  "treeCostKes": zod.number().gt(getHydrateCustomerTreeResponseConfigTreeCostKesExclusiveMin)
+}),
+  "tree": zod.object({
+  "stage": zod.enum(['seed', 'sapling', 'growing', 'funded']),
+  "fundedPct": zod.number().min(getHydrateCustomerTreeResponseTreeFundedPctMin).max(getHydrateCustomerTreeResponseTreeFundedPctMax),
+  "established": zod.boolean(),
+  "yourShareKes": zod.number().min(getHydrateCustomerTreeResponseTreeYourShareKesMin)
+}).nullable()
+})
+
+
+/**
+ * @summary Credential-free aggregate programme allocations, not verified field outcomes
+ */
+export const getHydrateForestTotalsResponseEligibleRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseAppRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseBaselineRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseContributionKesMin = 0;
+
+export const getHydrateForestTotalsResponseTreeFundKesMin = 0;
+
+export const getHydrateForestTotalsResponseCleanWaterKesMin = 0;
+
+export const getHydrateForestTotalsResponseSharedTreesFundedMin = 0;
+
+export const getHydrateForestTotalsResponseGrowingTreePctMin = 0;
+export const getHydrateForestTotalsResponseGrowingTreePctMax = 100;
+
+export const getHydrateForestTotalsResponseEstimatedTreesFundedMin = 0;
+
+export const getHydrateForestTotalsResponseTreesPlantedMin = 0;
+
+export const getHydrateForestTotalsResponseTreesEstablishedMin = 0;
+
+export const getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin = 0;
+
+
+
+export const GetHydrateForestTotalsResponse = zod.object({
+  "generatedAt": zod.string(),
+  "eligibleRevenueKes": zod.number().min(getHydrateForestTotalsResponseEligibleRevenueKesMin),
+  "appRevenueKes": zod.number().min(getHydrateForestTotalsResponseAppRevenueKesMin),
+  "baselineRevenueKes": zod.number().min(getHydrateForestTotalsResponseBaselineRevenueKesMin),
+  "contributionKes": zod.number().min(getHydrateForestTotalsResponseContributionKesMin),
+  "treeFundKes": zod.number().min(getHydrateForestTotalsResponseTreeFundKesMin),
+  "cleanWaterKes": zod.number().min(getHydrateForestTotalsResponseCleanWaterKesMin),
+  "sharedTreesFunded": zod.number().min(getHydrateForestTotalsResponseSharedTreesFundedMin),
+  "growingTreePct": zod.number().min(getHydrateForestTotalsResponseGrowingTreePctMin).max(getHydrateForestTotalsResponseGrowingTreePctMax).nullable(),
+  "estimatedTreesFunded": zod.number().min(getHydrateForestTotalsResponseEstimatedTreesFundedMin),
+  "treesPlanted": zod.number().min(getHydrateForestTotalsResponseTreesPlantedMin).nullable(),
+  "treesEstablished": zod.number().min(getHydrateForestTotalsResponseTreesEstablishedMin).nullable(),
+  "reportDate": zod.string().nullable(),
+  "location": zod.string(),
+  "config": zod.object({
+  "contributionRate": zod.number(),
+  "treeShare": zod.number(),
+  "treeCostKes": zod.number().gt(getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin)
+})
+})
+
+
+/**
  * @summary Create a public instant water assessment
  */
 export const createPublicInstantWaterAssessmentBodyFirstNameMin = 2;

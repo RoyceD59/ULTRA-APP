@@ -43,6 +43,33 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/customer/tree:
+    get:
+      operationId: getHydrateCustomerTree
+      tags: [customer-lifecycle]
+      summary: Own shared-tree allocation and aggregate progress
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer's allocation only; no co-funder identities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HydrateCustomerTree" }
+        "401": { description: Active customer session required }
+        "503": { description: Allocation or read temporarily unavailable }
+  /uc/impact/forest:
+    get:
+      operationId: getHydrateForestTotals
+      tags: [customer-lifecycle]
+      summary: Credential-free aggregate programme allocations, not verified field outcomes
+      security: []
+      responses:
+        "200":
+          description: Public aggregate totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HydrateForestTotals" }
+        "503": { description: Totals temporarily unavailable; do not assume zero }
   /water-check/assessments:
     post:
       operationId: createPublicInstantWaterAssessment
@@ -3193,6 +3220,52 @@ components:
       bearerFormat: opaque
 
   schemas:
+    HydrateAllocationConfig:
+      type: object
+      required: [contributionRate, treeShare, treeCostKes]
+      properties:
+        contributionRate: { type: number, const: 0.03 }
+        treeShare: { type: number, const: 0.5 }
+        treeCostKes: { type: number, exclusiveMinimum: 0 }
+    HydrateCustomerTree:
+      type: object
+      required: [eligibleOrders, eligiblePurchasesKes, allocationKes, treeShareKes, cleanWaterKes, replacementPurchases, treesHelped, tree, config]
+      properties:
+        eligibleOrders: { type: integer, minimum: 0 }
+        eligiblePurchasesKes: { type: number, minimum: 0 }
+        allocationKes: { type: number, minimum: 0 }
+        treeShareKes: { type: number, minimum: 0 }
+        cleanWaterKes: { type: number, minimum: 0 }
+        replacementPurchases: { type: integer, minimum: 0 }
+        treesHelped: { type: integer, minimum: 0 }
+        config: { $ref: "#/components/schemas/HydrateAllocationConfig" }
+        tree:
+          type: [object, "null"]
+          required: [stage, fundedPct, established, yourShareKes]
+          properties:
+            stage: { type: string, enum: [seed, sapling, growing, funded] }
+            fundedPct: { type: integer, minimum: 0, maximum: 100 }
+            established: { type: boolean }
+            yourShareKes: { type: number, minimum: 0 }
+    HydrateForestTotals:
+      type: object
+      required: [generatedAt, eligibleRevenueKes, appRevenueKes, baselineRevenueKes, contributionKes, treeFundKes, cleanWaterKes, sharedTreesFunded, growingTreePct, estimatedTreesFunded, treesPlanted, treesEstablished, reportDate, location, config]
+      properties:
+        generatedAt: { type: string }
+        eligibleRevenueKes: { type: number, minimum: 0 }
+        appRevenueKes: { type: number, minimum: 0 }
+        baselineRevenueKes: { type: number, minimum: 0 }
+        contributionKes: { type: number, minimum: 0 }
+        treeFundKes: { type: number, minimum: 0 }
+        cleanWaterKes: { type: number, minimum: 0 }
+        sharedTreesFunded: { type: integer, minimum: 0 }
+        growingTreePct: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        estimatedTreesFunded: { type: integer, minimum: 0 }
+        treesPlanted: { type: [integer, "null"], minimum: 0 }
+        treesEstablished: { type: [integer, "null"], minimum: 0 }
+        reportDate: { type: [string, "null"] }
+        location: { type: string }
+        config: { $ref: "#/components/schemas/HydrateAllocationConfig" }
     BlogSource:
       type: object
       required: [title, url]

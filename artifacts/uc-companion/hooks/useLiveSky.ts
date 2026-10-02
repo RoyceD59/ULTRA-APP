@@ -56,9 +56,14 @@ export function useLiveSky(): LiveSky {
   const weatherQ = useQuery({
     queryKey: ['live-sky-weather', place.lat, place.lon],
     queryFn: async () => {
-      const res = await fetch(openMeteoUrl(place.lat, place.lon));
-      if (!res.ok) throw new Error(String(res.status));
-      const body = await res.json() as { timezone?: unknown };
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      let body: { timezone?: unknown };
+      try {
+        const res = await fetch(openMeteoUrl(place.lat, place.lon), { signal: controller.signal, credentials: 'omit' });
+        if (!res.ok) throw new Error(String(res.status));
+        body = await res.json() as { timezone?: unknown };
+      } finally { clearTimeout(timer); }
       const w = parseOpenMeteo(body);
       if (!w) throw new Error('Malformed weather response');
       return { weather: w, timeZone: typeof body.timezone === 'string' ? body.timezone : undefined };

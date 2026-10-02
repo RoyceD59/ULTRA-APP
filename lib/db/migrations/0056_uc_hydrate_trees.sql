@@ -1,5 +1,5 @@
 -- Hydrate the Future shared trees. Keep in lockstep with the startup DDL in
--- artifacts/api-server/src/index.ts ("hydrate shared trees").
+-- artifacts/api-server/src/lib/hydrate-tree-schema.ts.
 CREATE TABLE IF NOT EXISTS uc_hydrate_trees (
   tree_number integer PRIMARY KEY,
   target_minor integer NOT NULL CONSTRAINT uc_hydrate_trees_target_check CHECK (target_minor > 0),

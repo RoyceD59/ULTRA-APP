@@ -5,6 +5,98 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface HydrateAllocationConfig {
+  contributionRate: 0.03;
+  treeShare: 0.5;
+  /** @exclusiveMinimum 0 */
+  treeCostKes: number;
+}
+
+export type HydrateCustomerTreeTreeStage = typeof HydrateCustomerTreeTreeStage[keyof typeof HydrateCustomerTreeTreeStage];
+
+
+export const HydrateCustomerTreeTreeStage = {
+  seed: 'seed',
+  sapling: 'sapling',
+  growing: 'growing',
+  funded: 'funded',
+} as const;
+
+/**
+ * @nullable
+ */
+export type HydrateCustomerTreeTree = {
+  stage: HydrateCustomerTreeTreeStage;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  fundedPct: number;
+  established: boolean;
+  /** @minimum 0 */
+  yourShareKes: number;
+} | null;
+
+export interface HydrateCustomerTree {
+  /** @minimum 0 */
+  eligibleOrders: number;
+  /** @minimum 0 */
+  eligiblePurchasesKes: number;
+  /** @minimum 0 */
+  allocationKes: number;
+  /** @minimum 0 */
+  treeShareKes: number;
+  /** @minimum 0 */
+  cleanWaterKes: number;
+  /** @minimum 0 */
+  replacementPurchases: number;
+  /** @minimum 0 */
+  treesHelped: number;
+  config: HydrateAllocationConfig;
+  /** @nullable */
+  tree: HydrateCustomerTreeTree;
+}
+
+export interface HydrateForestTotals {
+  generatedAt: string;
+  /** @minimum 0 */
+  eligibleRevenueKes: number;
+  /** @minimum 0 */
+  appRevenueKes: number;
+  /** @minimum 0 */
+  baselineRevenueKes: number;
+  /** @minimum 0 */
+  contributionKes: number;
+  /** @minimum 0 */
+  treeFundKes: number;
+  /** @minimum 0 */
+  cleanWaterKes: number;
+  /** @minimum 0 */
+  sharedTreesFunded: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  growingTreePct: number | null;
+  /** @minimum 0 */
+  estimatedTreesFunded: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  treesPlanted: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  treesEstablished: number | null;
+  /** @nullable */
+  reportDate: string | null;
+  location: string;
+  config: HydrateAllocationConfig;
+}
+
 export interface BlogSource {
   /**
      * @minLength 1
