@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useApi, type PersonalImpact } from '@/hooks/useApi';
 import { calculateImpact, getActiveMilestone } from '@/lib/calculateImpact';
+import ImpactTreeSection from '@/components/ImpactTreeSection';
 
 interface Props {
   impact: PersonalImpact;
@@ -245,10 +246,13 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
             </View>
           )}
 
-          {/* HYDRATE THE FUTURE */}
+          {/* HYDRATE THE FUTURE — TREE */}
+          <ImpactTreeSection
+            refillEntries={Math.max(impact.history.filter(h => h.litres > 0).length, impact.hasRefilled ? 1 : 0)}
+          />
           <View style={styles.hydrateContainer}>
             <Text style={[styles.hydrateText, { color: colors.mutedForeground }]}>
-              3% of Ultra Clear revenue supports clean-water access through Hydrate the Future™
+              Through Hydrate the Future™, 3% of eligible Ultra Clear purchases is allocated to growing and restoring trees in Kenya.
             </Text>
           </View>
 

@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hydrate the Future Forest</title>
+<meta name="description" content="Ultra Clear customers' combined contribution to growing and restoring trees in Kenya through Hydrate the Future.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<!--
+  Hydrate the Future™ public forest — standalone page linked from the
+  Companion Impact Card ("See your tree in our growing forest").
+
+  Link format:  forest.html?tree=UC-AB12CD&stage=sapling
+           or:  forest.html#tree-UC-AB12CD-sapling
+  The link carries an anonymous id and a growth stage only — never names,
+  amounts or percentages.
+
+  Hosting: upload this file (e.g. https://www.ucfilters.com/forest.html) and set
+  EXPO_PUBLIC_FOREST_URL to that address — the Impact Card hides the forest
+  button until it is set.
+
+  Staff: update the PROGRAMME block in the script when new figures are
+  confirmed. Leave a field null to show it as awaiting a report.
+-->
+<style>
+/* Layout: canvas forest as the hero, then a narrow reading column of figures, stages and method. */
+:root {
+  --canopy: #1f5c3d;      /* forest green — primary accent */
+  --leaf: #3f8f5f;
+  --soil: #a4492a;        /* Kenyan red soil — used only for ground and the stage strip */
+  --water: #0a77a8;       /* Ultra Clear blue — links to the water brand */
+  --bg: #f3f6f1;
+  --surface: #ffffff;
+  --fg: #16261c;
+  --muted: #56685b;
+  --line: #d6e0d6;
+  --sky-top: #cfe6ef;
+  --sky-low: #eef4e6;
+  --ring: #f2b705;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canopy: #7cc89a; --leaf: #4f9e6f; --soil: #c9653f; --water: #5cb8e0;
+    --bg: #0f1712; --surface: #17221b; --fg: #e5eee7; --muted: #9db2a3; --line: #2a3a2f;
+    --sky-top: #0d1f2b; --sky-low: #1a2a1f; --ring: #f2c94c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canopy: #7cc89a; --leaf: #4f9e6f; --soil: #c9653f; --water: #5cb8e0;
+  --bg: #0f1712; --surface: #17221b; --fg: #e5eee7; --muted: #9db2a3; --line: #2a3a2f;
+  --sky-top: #0d1f2b; --sky-low: #1a2a1f; --ring: #f2c94c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 1rem/1.6 var(--font-body); }
+a { color: var(--water); }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+.hero { position: relative; }
+#forest { display: block; width: 100%; height: clamp(260px, 52vw, 460px); }
+.hero-copy { padding: 1.25rem 1rem 0; max-width: 46rem; margin: 0 auto; }
+.eyebrow { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .12em; text-transform: uppercase; color: var(--canopy); }
+h1 { margin: .35rem 0 .5rem; font: 800 clamp(2rem, 6vw, 3.4rem)/1.02 var(--font-display); letter-spacing: -.03em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; font-size: 1.08rem; }
+
+main { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 1.5rem 3rem; display: grid; gap: 2.25rem; }
+h2 { margin: 0 0 .75rem; font: 700 1.35rem/1.2 var(--font-display); letter-spacing: -.01em; text-wrap: balance; }
+
+.yours { display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: center; padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.yours .badge { width: 3.25rem; height: 3.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--ring); color: #2b2200; font: 800 1.2rem var(--font-display); }
+.yours p { margin: 0; min-width: 0; }
+.tree-id { font: 500 .85rem var(--font-data); color: var(--muted); }
+.stage-name { font: 700 1.15rem/1.3 var(--font-display); color: var(--canopy); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin: 0; }
+.figures div { padding: .9rem 1rem; border-top: 3px solid var(--canopy); background: var(--surface); border-radius: 0 0 10px 10px; min-width: 0; }
+.figures dt { font-size: .85rem; color: var(--muted); }
+.figures dd { margin: .2rem 0 0; font: 600 1.35rem/1.25 var(--font-data); font-variant-numeric: tabular-nums; }
+.figures dd small { display: block; font: 400 .82rem/1.4 var(--font-body); color: var(--muted); margin-top: .15rem; }
+.figures .pending dd { font: 600 1rem/1.35 var(--font-body); color: var(--muted); }
+.basis { margin: .75rem 0 0; font-size: .9rem; color: var(--muted); }
+
+.stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-left: 3px solid var(--soil); }
+.stages li { position: relative; padding: .5rem 0 .75rem 1.25rem; }
+.stages li::before { content: ""; position: absolute; left: -.5rem; top: .9rem; width: .75rem; height: .75rem; border-radius: 50%; background: var(--bg); border: 3px solid var(--soil); }
+.stages li.reached::before { background: var(--soil); }
+.stages li.current { font-weight: 600; }
+.stages li.current::after { content: "Your tree"; margin-left: .5rem; font: 500 .7rem var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: #2b2200; background: var(--ring); padding: .1rem .4rem; border-radius: 4px; }
+.stages strong { font-family: var(--font-display); }
+.stages span { display: block; color: var(--muted); font-size: .92rem; }
+.split-note { margin: .5rem 0 0; padding: .75rem 1rem; border-radius: 10px; background: var(--surface); border: 1px dashed var(--line); font-size: .92rem; }
+
+.method p, .method li { max-width: 65ch; }
+.method ul { padding-left: 1.1rem; margin: .5rem 0; }
+.method code { font-family: var(--font-data); font-size: .88em; }
+
+.join { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; justify-content: space-between; padding: 1.25rem; border-radius: 14px; background: var(--canopy); color: var(--bg); }
+.join p { margin: 0; max-width: 34ch; font: 700 1.15rem/1.3 var(--font-display); }
+.join a { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .6rem 1.1rem; border-radius: 10px; background: var(--bg); color: var(--canopy); font-weight: 600; text-decoration: none; }
+footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 0 2rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <canvas id="forest" role="img" aria-label="Animated forest of trees funded by Ultra Clear customers"></canvas>
+  <div class="hero-copy">
+    <p class="eyebrow">Hydrate the Future™ · Kenya</p>
+    <h1>Our growing forest</h1>
+    <p class="lede">Through Hydrate the Future™, 3% of eligible Ultra Clear purchases is allocated to growing and restoring trees in Kenya. Each customer nurtures a digital tree; together they fund real ones.</p>
+  </div>
+</header>
+
+<main>
+  <section id="yours" class="yours" hidden aria-live="polite">
+    <div class="badge" aria-hidden="true">★</div>
+    <p><span class="tree-id" id="tree-id"></span><br><span class="stage-name" id="stage-name"></span><br><span id="stage-meaning"></span></p>
+  </section>
+
+  <section aria-labelledby="totals-h">
+    <h2 id="totals-h">Programme figures</h2>
+    <dl class="figures" id="figures"></dl>
+    <p class="basis" id="basis"></p>
+  </section>
+
+  <section aria-labelledby="stages-h">
+    <h2 id="stages-h">How a tree grows</h2>
+    <ol class="stages" id="stages"></ol>
+    <p class="split-note"><strong>Funded is not the same as established.</strong> A funded tree means contributions have reached its estimated cost. An established tree is one the programme has confirmed in the field. Only programme reports move trees to established.</p>
+  </section>
+
+  <section class="method" aria-labelledby="method-h">
+    <h2 id="method-h">Methodology</h2>
+    <p>For every eligible transaction (a paid KES purchase that was not cancelled, failed or refunded):</p>
+    <ul>
+      <li><code>customer allocation = eligible revenue × 3%</code></li>
+      <li><code>tree funding progress = accumulated allocation ÷ tree cost</code></li>
+      <li><code>estimated trees funded = total allocation ÷ tree cost</code></li>
+    </ul>
+    <p id="cost-text"></p>
+    <p id="proxy-text"></p>
+    <p>Refills customers log in the Companion app water their digital tree but carry no revenue, so they never add funding. Links to this page carry only an anonymous tree id and a growth stage. They contain no names, contact details, amounts or percentages.</p>
+  </section>
+
+  <section class="join" aria-label="Join">
+    <p>Plant your seed with your first Ultra Clear purchase.</p>
+    <a href="https://www.ucfilters.com" rel="noopener">Explore Ultra Clear</a>
+  </section>
+</main>
+<footer><p>Engineering Wellness, Drop by Drop. · Hydrate the Future™ is an Ultra Clear programme.</p></footer>
+
+<script>
+"use strict";
+
+// ── Programme figures (staff-maintained) ─────────────────────────────────
+const PROGRAMME = {
+  contributionRate: 0.03,
+  treeCostKes: 750,              // conservative primary
+  treeCostRangeKes: [500, 750],  // Kenya estimate
+  eligibleRevenueKes: 1723000,   // realised revenue, interim
+  confirmedSales: 141,
+  interimAverageKes: 12220,      // revenue per sale — proxy, not confirmed LTV
+  treesPlanted: null,            // set from programme report
+  treesEstablished: null,        // set from field verification
+  location: "Kenya — planting sites to be confirmed by the programme",
+  reportingBasis: "Interim figures based on confirmed sales. No programme field report has been published yet.",
+};
+
+const STAGES = [
+  ["seed", "Seed", "Relationship begins with a first purchase."],
+  ["sprout", "Sprout", "First refill or replacement; contributions start to build."],
+  ["sapling", "Sapling", "25% of the estimated tree cost is funded."],
+  ["growing", "Growing tree", "50–99% funded."],
+  ["funded", "Funded tree", "Estimated end-to-end cost reached."],
+  ["established", "Established tree", "Field status confirmed by programme verification."],
+];
+const STAGE_KEYS = STAGES.map(s => s[0]);
+const ID_RE = /^UC-[A-HJ-NP-Z2-9]{6}$/;
+
+const kes = n => "KSh " + Math.round(n).toLocaleString("en-KE");
+const num = n => Math.round(n).toLocaleString("en-KE");
+
+// ── Visitor's tree from the link (query or #tree-UC-XXXXXX-stage) ───────
+function readVisitor() {
+  let id = null, stage = null;
+  try {
+    const q = new URLSearchParams(location.search);
+    id = q.get("tree"); stage = q.get("stage");
+  } catch (e) { /* ignore */ }
+  const m = /^#tree-(UC-[A-Z0-9]{6})-([a-z]+)$/.exec(location.hash || "");
+  if (m) { id = m[1]; stage = m[2]; }
+  if (!id || !ID_RE.test(id)) return null;
+  // Established is programme-only: a link can never claim it.
+  if (!STAGE_KEYS.includes(stage) || stage === "established") stage = "seed";
+  return { id, stage };
+}
+const visitor = readVisitor();
+
+// ── Figures ──────────────────────────────────────────────────────────────
+const P = PROGRAMME;
+const allocation = P.eligibleRevenueKes * P.contributionRate;
+const fundedLow = Math.floor(allocation / P.treeCostRangeKes[1]);
+const fundedHigh = Math.floor(allocation / P.treeCostRangeKes[0]);
+
+const figures = [
+  ["Customer contributions (3%)", kes(allocation), `of ${kes(P.eligibleRevenueKes)} eligible revenue`],
+  ["Estimated trees funded", num(fundedLow), `at ${kes(P.treeCostKes)} per tree · ${num(fundedLow)}–${num(fundedHigh)} across the ${kes(P.treeCostRangeKes[0])}–${num(P.treeCostRangeKes[1])} range`],
+  ["Trees reported planted", P.treesPlanted, "Awaiting programme report"],
+  ["Trees established", P.treesEstablished, "Awaiting field verification"],
+  ["Eligible revenue", kes(P.eligibleRevenueKes), `${num(P.confirmedSales)} confirmed sales`],
+  ["Programme location", P.location, null],
+];
+const dl = document.getElementById("figures");
+for (const [label, value, note] of figures) {
+  const wrap = document.createElement("div");
+  const dt = document.createElement("dt"); dt.textContent = label;
+  const dd = document.createElement("dd");
+  if (value === null || value === undefined) {
+    wrap.className = "pending"; dd.textContent = note;
+  } else {
+    dd.textContent = typeof value === "number" ? num(value) : value;
+    if (note) { const s = document.createElement("small"); s.textContent = note; dd.appendChild(s); }
+  }
+  if (label === "Programme location") wrap.className = "pending";
+  wrap.append(dt, dd); dl.appendChild(wrap);
+}
+document.getElementById("basis").textContent = "Reporting basis: " + P.reportingBasis;
+document.getElementById("cost-text").textContent =
+  `Tree cost is estimated at ${kes(P.treeCostRangeKes[0])}–${num(P.treeCostRangeKes[1])} in Kenya, covering planting and early care. The headline counter uses ${kes(P.treeCostKes)} so impact is never overstated. International programme estimates (USD 2.15–3.75) are a separate range, not a currency conversion of the Kenya figure.`;
+document.getElementById("proxy-text").textContent =
+  `Confirmed average customer lifetime value is not yet available. As an interim proxy, average revenue per sale is ${kes(P.interimAverageKes)} (${kes(P.eligibleRevenueKes)} ÷ ${P.confirmedSales}). At 3% that is about ${kes(P.interimAverageKes * P.contributionRate)}, roughly ${Math.floor(P.interimAverageKes * P.contributionRate / P.treeCostRangeKes[1] * 100)}–${Math.floor(P.interimAverageKes * P.contributionRate / P.treeCostRangeKes[0] * 100)}% of one tree. One customer funds a whole tree at ${kes(P.treeCostRangeKes[0] / P.contributionRate)}–${num(P.treeCostRangeKes[1] / P.contributionRate)} of purchases; below that, contributions combine.`;
+
+// ── Stage list ───────────────────────────────────────────────────────────
+const ol = document.getElementById("stages");
+const vIdx = visitor ? STAGE_KEYS.indexOf(visitor.stage) : -1;
+STAGES.forEach(([key, label, meaning], i) => {
+  const li = document.createElement("li");
+  if (i <= vIdx) li.classList.add("reached");
+  if (i === vIdx) li.classList.add("current");
+  const s = document.createElement("strong"); s.textContent = label;
+  const m = document.createElement("span"); m.textContent = meaning;
+  li.append(s, m); ol.appendChild(li);
+});
+
+if (visitor) {
+  const st = STAGES[vIdx];
+  document.getElementById("yours").hidden = false;
+  document.getElementById("tree-id").textContent = `Tree ${visitor.id}`;
+  document.getElementById("stage-name").textContent = st[1];
+  document.getElementById("stage-meaning").textContent = st[2] + " Highlighted in the forest above.";
+}
+
+// ── Canvas forest ────────────────────────────────────────────────────────
+const canvas = document.getElementById("forest");
+const ctx = canvas.getContext("2d");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let W = 0, H = 0, trees = [], start = performance.now();
+
+function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296; }
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function layout() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const r = rng(20261002);
+  // One tree per estimated funded tree (conservative count), back to front.
+  trees = Array.from({ length: fundedLow }, () => {
+    const depth = r();                         // 0 = far, 1 = near
+    return { x: r() * W, depth, size: 0.45 + depth * 0.75, phase: r() * Math.PI * 2, delay: r() * 1.2 };
+  }).sort((a, b) => a.depth - b.depth);
+}
+
+function drawTree(x, groundY, scale, sway, grow, colors, stage) {
+  const s = scale * Math.min(1, H / 360) * grow;
+  if (s <= 0.01) return;
+  const trunkH = 46 * s, trunkW = 6 * s;
+  ctx.save();
+  ctx.translate(x, groundY);
+  ctx.rotate(sway);
+  ctx.fillStyle = colors.trunk;
+  ctx.fillRect(-trunkW / 2, -trunkH, trunkW, trunkH);
+  ctx.fillStyle = colors.leaf;
+  ctx.beginPath(); ctx.arc(0, -trunkH - 10 * s, 22 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = colors.canopy;
+  ctx.beginPath(); ctx.arc(-14 * s, -trunkH + 2 * s, 14 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14 * s, -trunkH, 15 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawVisitor(x, groundY, t, colors) {
+  const stage = visitor.stage;
+  const s = Math.min(1, H / 360) * 1.25;
+  const pulse = reduceMotion ? 0 : Math.sin(t / 500) * 2;
+  ctx.strokeStyle = colors.ring; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(x, groundY + 2, 30 * s + pulse, 7 * s, 0, 0, Math.PI * 2); ctx.stroke();
+  if (stage === "seed") {
+    ctx.fillStyle = colors.soil; ctx.beginPath(); ctx.ellipse(x, groundY - 4 * s, 7 * s, 5 * s, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (stage === "sprout") {
+    ctx.fillStyle = colors.canopy; ctx.fillRect(x - 1.5 * s, groundY - 22 * s, 3 * s, 22 * s);
+    ctx.fillStyle = colors.leaf;
+    ctx.beginPath(); ctx.ellipse(x - 8 * s, groundY - 24 * s, 9 * s, 4.5 * s, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 8 * s, groundY - 27 * s, 9 * s, 4.5 * s, 0.5, 0, Math.PI * 2); ctx.fill();
+  } else {
+    const scale = { sapling: 0.55, growing: 0.8, funded: 1.05 }[stage] || 0.55;
+    const sway = reduceMotion ? 0 : Math.sin(t / 900) * 0.025;
+    drawTree(x, groundY, scale * 1.25, sway, 1, colors);
+  }
+  ctx.fillStyle = colors.fg;
+  ctx.font = `500 12px ${css("--font-data") || "monospace"}`;
+  ctx.textAlign = "center";
+  ctx.fillText(visitor.id, x, groundY + 24 * s);
+}
+
+function frame(t) {
+  const colors = {
+    skyTop: css("--sky-top"), skyLow: css("--sky-low"), soil: css("--soil"),
+    leaf: css("--leaf"), canopy: css("--canopy"), trunk: "#6b4a30", ring: css("--ring"), fg: css("--fg"),
+  };
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, colors.skyTop); sky.addColorStop(1, colors.skyLow);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+  const horizon = H * 0.55;
+  ctx.fillStyle = colors.soil;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.moveTo(0, horizon);
+  for (let x = 0; x <= W; x += 24) ctx.lineTo(x, horizon + Math.sin(x / 90) * 6);
+  ctx.lineTo(W, horizon + Math.sin(W / 90) * 6);
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  const elapsed = (t - start) / 1000;
+  for (const tr of trees) {
+    const groundY = horizon + 8 + tr.depth * (H - horizon - 30);
+    const grow = reduceMotion ? 1 : Math.min(1, Math.max(0, (elapsed - tr.delay) / 0.9));
+    const sway = reduceMotion ? 0 : Math.sin(t / 1100 + tr.phase) * 0.02 * tr.depth;
+    ctx.globalAlpha = 0.55 + tr.depth * 0.45;
+    drawTree(tr.x, groundY, tr.size, sway, grow, colors);
+  }
+  ctx.globalAlpha = 1;
+  if (visitor) drawVisitor(W / 2, H - 48, t, colors);
+  if (!reduceMotion) requestAnimationFrame(frame);
+}
+
+layout();
+// Trees start fully grown so the first still frame is complete; frame()
+// schedules its own sway loop unless reduced motion is on.
+start = performance.now() - 5000;
+frame(performance.now());
+let resizeTimer;
+addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { layout(); if (reduceMotion) frame(performance.now()); }, 120); });
+</script>
+</body>
+</html>
