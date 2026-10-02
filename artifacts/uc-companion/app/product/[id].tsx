@@ -20,6 +20,7 @@ import MediaViewer from '@/components/MediaViewer';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { trackEvent } from '@/lib/analytics';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -52,6 +53,7 @@ export default function ProductDetailScreen() {
   const pid = parseInt(id ?? '');
   const queryClient = useQueryClient();
   const [slideIndex, setSlideIndex] = useState(0);
+  const viewedProducts = useRef(new Set<number>());
 
   const MAX_WIDTH = 1200;
   const isDesktop = width >= 1024;
@@ -83,6 +85,12 @@ export default function ProductDetailScreen() {
     queryFn: () => api.getProduct(pid),
     enabled: !!id,
   });
+
+  useEffect(() => {
+    if (!product || viewedProducts.current.has(product.id)) return;
+    viewedProducts.current.add(product.id);
+    trackEvent('product_viewed', { productId: product.id });
+  }, [product]);
 
   const { data: reviewData } = useQuery({
     queryKey: customerQueryKeys.reviews(user?.id, pid),

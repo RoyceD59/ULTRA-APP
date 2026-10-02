@@ -9,6 +9,7 @@ import {
   totalItems as calcTotalItems,
   totalPrice as calcTotalPrice,
 } from './cartStorage';
+import { trackEvent } from '@/lib/analytics';
 
 export type { CartItem };
 
@@ -175,6 +176,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       persist(next, v);
       return next;
     });
+    // Every real customer-facing add path funnels through this method.
+    // Keep analytics outside the state updater to avoid Strict Mode replays.
+    trackEvent('cart_item_added', { productId: product.id, quantity: product.quantity });
   }, [writeSync, persist]);
 
   const removeItem = useCallback((id: number) => {

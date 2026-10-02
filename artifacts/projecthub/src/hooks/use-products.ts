@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/team-auth";
+import { trackEvent } from "@/lib/analytics";
 
 export interface ProductMedia {
   id: number;
@@ -82,7 +83,15 @@ export function useUpdateProduct() {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    onSuccess: (_, { id }) => {
+    onSuccess: (_, { id, data }) => {
+      trackEvent("product_saved", { productId: id, fieldCount: Object.keys(data).length });
+      if (data.stockQuantity !== undefined || data.stockStatus !== undefined) {
+        trackEvent("inventory_updated", {
+          productId: id,
+          stockQuantity: data.stockQuantity,
+          stockStatus: data.stockStatus,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["uc-product", id] });
       qc.invalidateQueries({ queryKey: ["uc-products"] });
       qc.invalidateQueries({ queryKey: ["uc-inventory"] });

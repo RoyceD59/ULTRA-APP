@@ -9,6 +9,7 @@
 - [UC upload/media security](uc-upload-security.md) — attach-time metadata verification is the enforcement point for presigned uploads; admin is DB-anchored; public serving limited to uploads/<uuid>.
 - [Expo SDK-aligned package pins](expo-sdk-version-pins.md) — expo-* versions must match the SDK line (expo-doctor gate); a mismatched one crashes Expo Go at launch while web/tests/export still pass.
 - [PNPM patched dependency validation](pnpm-patched-dependency-validation.md) — pnpm retains original and patched virtual-store copies; test the hash-qualified patched instance.
+- [pnpm Nix version bootstrap](pnpm-nix-version-bootstrap.md) — automatic version management can recurse through the provisioned binary and exhaust workspace processes.
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
 - [WooCommerce catalogue pagination](woocommerce-catalog-pagination.md) — category resolution and local category fallback must page all WooCommerce results or fail explicitly; never serve a silently truncated catalogue.
 - [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.

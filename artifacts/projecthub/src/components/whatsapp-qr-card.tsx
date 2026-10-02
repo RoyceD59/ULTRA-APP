@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TeamAuthDialog } from "@/components/team-auth-dialog";
 import { getAuthHeaders, isTeamAuthenticated, clearTeamToken } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import { trackEvent } from "@/lib/analytics";
 
 const BASE = API_ORIGIN;
 
@@ -51,6 +52,7 @@ async function fetchStatus(): Promise<WaStatus> {
 async function postConnect(): Promise<WaStatus> {
   const headers = getAuthHeaders();
   if (!headers) throw new Error("Not authenticated");
+  trackEvent("whatsapp_connect_requested", {});
   const res = await fetch(`${BASE}/api/whatsapp/connect`, { method: "POST", headers });
   if (res.status === 401) { clearTeamToken(); throw new Error("Session expired"); }
   if (!res.ok) throw await apiError(res, "Could not start WhatsApp session. Retry.");

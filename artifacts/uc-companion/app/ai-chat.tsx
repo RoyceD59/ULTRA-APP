@@ -26,6 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 import { chatFailureMessage, completedChatHistory } from '@/lib/chatTurn';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
+import { trackEvent } from '@/lib/analytics';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -262,9 +263,12 @@ export default function AiChatScreen() {
     requestRef.current = controller;
     const deadline = setTimeout(() => controller.abort(), 25_000);
     try {
-      const { reply, suggestions } = await api.waterAiChat(
+      const replyRequest = api.waterAiChat(
         history, conversationId, turnId, filterContext, isRetry, controller.signal,
       );
+      trackEvent('alison_message_sent');
+      const { reply, suggestions } = await replyRequest;
+      trackEvent('alison_reply_received');
       setMessages(prev => [...prev, {
         id: `a-${Crypto.randomUUID()}`, role: 'assistant', content: reply,
         suggestions: suggestions?.length ? suggestions : undefined,
@@ -341,13 +345,16 @@ export default function AiChatScreen() {
       const timeout = setTimeout(() => controller.abort(), 25_000);
       let result: Awaited<ReturnType<typeof api.waterAiChat>>;
       try {
-        result = await api.waterAiChat(
+        const replyRequest = api.waterAiChat(
           history, conversationId, Crypto.randomUUID(), filterContext, true, controller.signal,
         );
+        trackEvent('alison_message_sent');
+        result = await replyRequest;
       } finally {
         clearTimeout(timeout);
       }
       const { reply, suggestions } = result;
+      trackEvent('alison_reply_received');
       setMessages(prev => [...prev, {
         id:          `a-retry-${Date.now()}`,
         role:        'assistant',

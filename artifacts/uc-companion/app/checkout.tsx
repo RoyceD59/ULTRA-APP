@@ -25,6 +25,7 @@ import AlisonBubble from '@/components/AlisonBubble';
 import { CountryPicker } from '@/components/CountryPicker';
 import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
 import { countryCodeFromValue } from '@workspace/api-zod/phone';
+import { trackEvent } from '@/lib/analytics';
 
 const DELIVERY_FEE = 500;
 
@@ -127,6 +128,15 @@ export default function CheckoutScreen() {
   const { items, totalPrice, clearCart, cartHydrated, cartLoadError, refreshCart } = useCart();
   const { user } = useAuth();
   const api = useApi();
+  const checkoutStarted = useRef(false);
+
+  useEffect(() => {
+    if (!cartHydrated || items.length === 0 || checkoutStarted.current) return;
+    checkoutStarted.current = true;
+    trackEvent('checkout_started', {
+      itemCount: items.reduce((count, item) => count + item.quantity, 0),
+    });
+  }, [cartHydrated, items]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paystack');
   // Server-driven method availability — hides deactivated providers (e.g. card
@@ -762,6 +772,12 @@ export default function CheckoutScreen() {
         applyReferralDiscount: usingReferralDiscount,
         idempotencyKey: orderIdentity.idempotencyKey,
       });
+      if (method === 'paystack' || method === 'mpesa' || method === 'cod' || method === 'stripe') {
+        trackEvent('order_submitted', {
+          paymentMethod: method,
+          itemCount: items.reduce((count, item) => count + item.quantity, 0),
+        });
+      }
       clearCart();
       setMpesaWaiting(false);
       setProcessing(false);

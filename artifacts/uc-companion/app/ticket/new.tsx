@@ -25,6 +25,7 @@ import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { saveDraft, loadDraft, clearDraft, persistMediaForDraft, validateMediaItems, enqueueDraftSave, drainDraftSaveQueue } from '@/lib/formDrafts';
+import { trackEvent } from '@/lib/analytics';
 
 const CONTACT_TIMES = ['Morning (8am–12pm)', 'Afternoon (12pm–5pm)', 'Evening (5pm–8pm)', 'Any time'];
 
@@ -169,6 +170,10 @@ export default function NewTicketScreen() {
         preferredContactTime: contactTime,
         photos: uploaded.filter(m => m.type === 'photo').map(m => m.url),
         videos: uploaded.filter(m => m.type === 'video').map(m => m.url),
+      });
+      trackEvent('support_ticket_submitted', {
+        photoCount: uploaded.filter(item => item.type === 'photo').length,
+        videoCount: uploaded.filter(item => item.type === 'video').length,
       });
       const summary = [
         'ULTRA CLEAR — SERVICE REQUEST',

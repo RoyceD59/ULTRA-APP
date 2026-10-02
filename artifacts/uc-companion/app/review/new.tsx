@@ -15,6 +15,7 @@ import StarRating from '@/components/StarRating';
 import MediaPicker, { type MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { trackEvent } from '@/lib/analytics';
 
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 
@@ -159,6 +160,11 @@ function NewReviewScreenContent() {
         ? await uploadMediaItems(media, api.requestUploadUrl, (done, total) => setProgress({ done, total }))
         : [];
       await api.submitReview(pid, { rating, body: body.trim(), media: uploaded });
+      trackEvent('review_submitted', {
+        rating,
+        photoCount: uploaded.filter(item => item.type === 'photo').length,
+        videoCount: uploaded.filter(item => item.type === 'video').length,
+      });
       await queryClient.invalidateQueries({ queryKey: customerQueryKeys.reviews(user?.id, pid) });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(

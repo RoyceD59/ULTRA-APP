@@ -1,3 +1,4 @@
+import { trackEvent } from "@/lib/analytics";
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -80,6 +81,7 @@ async function updateStock(productId: number, stockQuantity: number): Promise<vo
     const d = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(d.error ?? `Request failed (${res.status})`);
   }
+  trackEvent("inventory_updated", { productId, stockQuantity });
 }
 
 async function triggerSync(): Promise<void> {

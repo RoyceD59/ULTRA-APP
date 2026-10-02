@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, refreshTeamUser } from "@/lib/team-auth";
+import { trackEvent } from "@/lib/analytics";
 
 type SourceLink = { url: string; title?: string };
 type PublishedSnapshot = {
@@ -381,6 +382,7 @@ export default function CompanionBlogPage() {
         });
     const article = normalizeArticle(result.article);
     if (!article) throw new Error("The save succeeded but the server returned no article.");
+    trackEvent("blog_saved", { action: selectedId ? "update" : "create", sourceCount: body.sources.length });
     setSelectedId(article.id);
     setSelectedArticle(article);
     setForm({
@@ -462,6 +464,7 @@ export default function CompanionBlogPage() {
         method: "POST",
         ...(action === "reject" ? { body: JSON.stringify({ feedback: rejectionFeedback.trim() }) } : {}),
       });
+      if (action === "publish") trackEvent("blog_published", { sourceCount: form.sources.length });
       await Promise.all([loadArticles(), selectArticle(articleId)]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : `Could not ${action} this article.`);
