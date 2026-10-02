@@ -876,13 +876,16 @@ function drawVisitor(t) {
 function drawVisitorLabel() {
   const x = W / 2, y = H - 30, k = H / 420;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  ctx.font = `500 ${Math.max(11, 12 * k)}px "IBM Plex Mono", ui-monospace, monospace`;
-  const tw = ctx.measureText(visitor.id).width + 14, th = 20;
+  // The scene shows the programme name, not the visitor's id; the id stays in
+  // the "Your tree" panel below.
+  const text = "Ultra Clear Canopy";
+  ctx.font = `600 ${Math.max(11, 12 * k)}px "Source Sans 3", "Segoe UI", system-ui, sans-serif`;
+  const tw = ctx.measureText(text).width + 16, th = 20;
   const lx = x - tw / 2, ly = y + 6;
   ctx.fillStyle = scene.labelBg;
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, ly, tw, th, 6) : ctx.rect(lx, ly, tw, th); ctx.fill();
   ctx.fillStyle = scene.label; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(visitor.id, x, ly + th / 2 + 0.5);
+  ctx.fillText(text, x, ly + th / 2 + 0.5);
 }
 
 function drawWeather(t) {
