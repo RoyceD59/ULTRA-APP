@@ -30,3 +30,17 @@ test('isolated release is pinned, contains source only, and preserves already pu
   const migration = execFileSync('tar', ['-xOzf', archive, 'lib/db/migrations/0057_uc_hydrate_trees.sql'], { encoding: 'utf8' });
   assert.equal(migration.trim(), (await readFile('lib/db/migrations/0057_uc_hydrate_trees.sql', 'utf8')).trim());
 });
+
+test('frozen release preserves typed API errors and background-free preview startup', () => {
+  const archive = resolve(here, 'release-sources.tar.gz');
+  const source = path => execFileSync('tar', ['-xOzf', archive, path], { encoding: 'utf8' });
+  const client = source('artifacts/uc-companion/hooks/useApi.ts');
+  assert.ok(client.includes("import { ApiError } from './apiError'"));
+  assert.ok(client.includes("import { handleRejectedSessionResponse } from './deletedAccountResponse'"));
+  assert.ok(client.includes('export { ApiError }'));
+  const startup = source('artifacts/api-server/src/index.ts');
+  const preview = startup.match(/if \(process\.env\["PREVIEW_SAFE_MODE"\] === "1"\) \{([\s\S]*?)\n    \}/)?.[1];
+  assert.ok(preview);
+  assert.ok(preview.includes('app.listen') && preview.includes('return;'));
+  assert.doesNotMatch(preview, /startScheduler|startReviewAnalysisWorker|processPendingReferralSettlements|setInterval|setTimeout/);
+});

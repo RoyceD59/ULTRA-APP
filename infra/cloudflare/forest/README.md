@@ -164,6 +164,12 @@ The refreshed package also passed Hub typechecking, 20 focused tree/sky/geometry
 and four hosting/package tests. An explicit string callback type fixes a pre-existing
 Alison TypeScript inference error without changing runtime behavior; its nine focused
 knowledge tests passed. The API development workflow restarted cleanly.
+After main-project synchronization, current-source product/library typechecks, ten
+isolated Hydrate API tests and twenty tree/sky tests passed separately from the frozen
+package checks. A preview-startup regression confirms only the HTTP listener starts:
+no scheduler, worker or referral-settlement timer. Companion typed API errors and
+rejected-session handling remain imported and publicly reexported where required.
+The archive now has an additional safety check for those same boundaries.
 The additional signed-in browser continuation did not finish and was stopped; it is
 not a passed account-switch/litres-entry check. No physical-phone checks were performed.
 
