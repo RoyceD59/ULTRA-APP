@@ -1,33 +1,47 @@
 /**
  * Illustrated scene for the Impact Card tree: Kenyan highland restoration
- * site at golden hour (moonlit in dark mode), with the customer's shared tree
+ * site under the live sky (real sun position and current weather, see
+ * hooks/useLiveSky), with the customer's shared tree
  * drawn botanically for its stage — seed in a mound, seedling, staked sapling,
  * young tree, mature tree. Geometry comes from lib/treeGeometry and is cached
  * per stage; the static backdrop and the swaying tree are separate layers so
  * animation never re-renders the scene.
  */
 import React from 'react';
-import { Animated, StyleSheet, View, useColorScheme } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { growTree, grassPath, ridgePath, type TreeShape } from '@/lib/treeGeometry';
+import { growTree, grassPath, ridgePath, rng, type TreeShape } from '@/lib/treeGeometry';
 import type { TreeStage } from '@/lib/impactTree';
+import type { ScenePalette, Weather } from '@/lib/skyState';
 
 const VW = 320, VH = 150, BASE_X = 160, BASE_Y = 136, HORIZON = 82;
 
-const PALETTES = {
-  day: {
-    sky: ['#6fa6c9', '#b9d6e0', '#f3dcb4'], sunGlow: '#ffe8b4', sunCore: '#fff6dc',
-    hills: ['#b7c3bf', '#9aaea4', '#7f9888'], soil: ['#b5673f', '#8e4528', '#6a2f1a'],
-    grass: '#8f9a50', bark: ['#3e2a1d', '#7a5640'],
-    leaf: ['#183d22', '#2d5a31', '#4f8340', '#93b45a'], shadow: '#2a1408', mound: '#5b2b18', seed: '#7a5230',
-  },
-  night: {
-    sky: ['#081321', '#16263a', '#36324a'], sunGlow: '#bfcdf0', sunCore: '#e9eefc',
-    hills: ['#33445a', '#2a3a48', '#22323b'], soil: ['#4d2c1f', '#3a2016', '#2a160f'],
-    grass: '#3d4a2e', bark: ['#1e150f', '#4a3626'],
-    leaf: ['#0c1f12', '#16331d', '#2a4f2d', '#4d6e44'], shadow: '#000000', mound: '#2a160f', seed: '#5a3a22',
-  },
-};
+// Fixed cloud field; how many show depends on cloud cover.
+const CLOUDS = (() => {
+  const r = rng(91);
+  return Array.from({ length: 9 }, () => ({
+    x: r() * VW, y: 10 + r() * 46, w: 34 + r() * 50, puffs: 3 + Math.floor(r() * 3), seed: r(),
+  }));
+})();
+function cloudPath(c: { x: number; y: number; w: number; puffs: number; seed: number }): string {
+  const r = rng(Math.floor(c.seed * 1e6));
+  let d = '';
+  for (let i = 0; i < c.puffs; i++) {
+    const px = c.x + (i / (c.puffs - 1) - 0.5) * c.w * 0.8, rx = c.w * (0.22 + r() * 0.12), ry = rx * 0.55;
+    const py = c.y - r() * ry * 0.6;
+    d += `M${px - rx} ${py}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0`;
+  }
+  return d;
+}
+const RAIN = (() => {
+  const r = rng(17);
+  let d = '';
+  for (let i = 0; i < 90; i++) {
+    const x = r() * (VW + 30) - 15, y = r() * VH, l = 6 + r() * 6;
+    d += `M${x.toFixed(1)} ${y.toFixed(1)}l${(-l * 0.25).toFixed(1)} ${l.toFixed(1)}`;
+  }
+  return d;
+})();
 
 // Geometry is deterministic, so compute it once per stage for the app's life.
 const cache = new Map<string, TreeShape>();
@@ -49,6 +63,12 @@ const DISTANT = [
   { x: 290, y: 95, seed: 61, h: 19, sp: 'acacia' as const },
 ];
 const GRASS = grassPath(5, VW, HORIZON + 4, VH, 140);
+const STARS = (() => {
+  const r = rng(3);
+  let d = '';
+  for (let i = 0; i < 50; i++) d += `M${(r() * VW).toFixed(1)} ${(r() * HORIZON * 0.75).toFixed(1)}h0.1`;
+  return d;
+})();
 const RIDGES = [0, 1, 2].map(i => ridgePath(3 + i * 7, VW, HORIZON - (2 - i) * 9 - 2, 6 + i * 2, VH));
 
 function TreeShapeView({ t, leaf, bark }: { t: TreeShape; leaf: string[]; bark: string[] }) {
@@ -65,14 +85,17 @@ function TreeShapeView({ t, leaf, bark }: { t: TreeShape; leaf: string[]; bark: 
 
 interface Props {
   stage: TreeStage;
+  palette: ScenePalette;
+  weather: Weather;
   /** Wraps the tree layer: grow + sway transforms from the parent. */
   treeStyle?: object;
 }
 
-export default function TreeScene({ stage, treeStyle }: Props) {
-  const dark = useColorScheme() === 'dark';
-  const p = dark ? PALETTES.night : PALETTES.day;
+export default function TreeScene({ stage, palette: p, weather, treeStyle }: Props) {
   const shape = STAGE_TREE[stage]?.();
+  const disc = p.disc;
+  const cloudCount = Math.round(weather.cloudCover * CLOUDS.length);
+  const rainy = weather.kind === 'rain' || weather.kind === 'storm' || weather.kind === 'drizzle';
 
   return (
     <View style={styles.frame}>
@@ -84,8 +107,8 @@ export default function TreeScene({ stage, treeStyle }: Props) {
             <Stop offset="0.6" stopColor={p.sky[1]} />
             <Stop offset="1" stopColor={p.sky[2]} />
           </LinearGradient>
-          <RadialGradient id="sun" cx="250" cy="34" r="90" gradientUnits="userSpaceOnUse">
-            <Stop offset="0" stopColor={p.sunGlow} stopOpacity="0.7" />
+          <RadialGradient id="sun" cx={disc?.x ?? 160} cy={disc?.y ?? 80} r={disc?.moon ? 50 : 90} gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor={p.sunGlow} stopOpacity={disc ? (disc.moon ? 0.35 : 0.7) : 0} />
             <Stop offset="1" stopColor={p.sunGlow} stopOpacity="0" />
           </RadialGradient>
           <LinearGradient id="soil" x1="0" y1="0" x2="0" y2="1">
@@ -95,8 +118,14 @@ export default function TreeScene({ stage, treeStyle }: Props) {
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width={VW} height={VH} fill="url(#sky)" />
+        {p.phase === 'night' && weather.cloudCover < 0.7 && (
+          <Path d={STARS} stroke="#e8eeff" strokeWidth={0.7} strokeLinecap="round" opacity={0.7 * (1 - weather.cloudCover)} />
+        )}
         <Rect x="0" y="0" width={VW} height={VH} fill="url(#sun)" />
-        <Ellipse cx="250" cy="34" rx="7" ry="7" fill={p.sunCore} />
+        {disc && <Ellipse cx={disc.x} cy={disc.y} rx={disc.moon ? 5 : 7} ry={disc.moon ? 5 : 7} fill={p.sunCore} />}
+        {CLOUDS.slice(0, cloudCount).map((c, i) => (
+          <Path key={`c${i}`} d={cloudPath(c)} fill={p.cloud} opacity={0.55 + weather.cloudCover * 0.35} />
+        ))}
         {RIDGES.map((d, i) => <Path key={i} d={d} fill={p.hills[i]} />)}
         <Path d={`M0 ${HORIZON}Q80 ${HORIZON - 3} 160 ${HORIZON}T${VW} ${HORIZON}L${VW} ${VH}L0 ${VH}Z`} fill="url(#soil)" />
         {DISTANT.map(t => (
@@ -106,10 +135,11 @@ export default function TreeScene({ stage, treeStyle }: Props) {
           </G>
         ))}
         <Path d={GRASS} stroke={p.grass} strokeWidth={0.5} strokeLinecap="round" fill="none" opacity={0.5} />
+        {weather.kind === 'fog' && <Rect x="0" y={HORIZON - 30} width={VW} height={VH} fill={p.cloud} opacity={0.35} />}
         {/* Ground shadow / planting pit under the customer's tree */}
         <Ellipse cx={BASE_X - (shape ? shape.canopyWidth * 0.15 : 0)} cy={BASE_Y + 1}
           rx={shape ? Math.max(14, shape.canopyWidth * 0.5) : 16} ry={shape ? 5 : 3.5}
-          fill={p.shadow} opacity={shape ? 0.3 : 0.25} />
+          fill={p.shadow} opacity={shape ? p.shadowOpacity : 0.25} />
       </Svg>
 
       {/* Customer's tree layer (animated by the parent) */}
@@ -146,6 +176,13 @@ export default function TreeScene({ stage, treeStyle }: Props) {
           </G>
         </Svg>
       </Animated.View>
+
+      {rainy && (
+        <Svg style={StyleSheet.absoluteFill} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="xMidYMax slice" pointerEvents="none">
+          <Path d={RAIN} stroke="#d8e4ee" strokeWidth={weather.kind === 'drizzle' ? 0.4 : 0.7}
+            strokeLinecap="round" opacity={weather.kind === 'drizzle' ? 0.35 : 0.55} />
+        </Svg>
+      )}
     </View>
   );
 }

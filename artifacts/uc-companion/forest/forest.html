@@ -70,7 +70,10 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--ring); outline-
 
 .hero { position: relative; }
 #forest { display: block; width: 100%; height: clamp(300px, 56vw, 540px); }
-.caption { margin: .4rem auto 0; padding-inline: 1rem; max-width: 46rem; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); }
+.sky-bar { max-width: 46rem; margin: .4rem auto 0; padding-inline: 1rem; display: flex; flex-wrap: wrap; gap: .25rem 1rem; justify-content: space-between; align-items: center; }
+.caption, .sky-line { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); min-width: 0; }
+.sky-line { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.sky-btn { font: 600 .72rem/1 var(--font-body); color: var(--canopy); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: .4rem .7rem; cursor: pointer; }
 .hero-copy { padding: 1.25rem 1rem 0; max-width: 46rem; margin: 0 auto; }
 .eyebrow { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .12em; text-transform: uppercase; color: var(--canopy); }
 h1 { margin: .35rem 0 .5rem; font: 800 clamp(2rem, 6vw, 3.4rem)/1.02 var(--font-display); letter-spacing: -.03em; text-wrap: balance; }
@@ -118,7 +121,11 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 <body>
 <header class="hero">
   <canvas id="forest" role="img" aria-label="Illustrated forest of trees funded by Ultra Clear customers, on red soil beneath hills at golden hour"></canvas>
-  <p class="caption" id="forest-caption">Illustration.</p>
+  <div class="sky-bar">
+    <p class="caption" id="forest-caption">Illustration.</p>
+    <p class="sky-line"><span id="sky-status" role="status">Live sky over Nairobi</span>
+      <button type="button" id="sky-me" class="sky-btn">Use my sky</button></p>
+  </div>
   <div class="hero-copy">
     <p class="eyebrow">Hydrate the Future™ · Kenya</p>
     <h1>Our growing forest</h1>
@@ -335,34 +342,199 @@ const MAX_DRAWN = 260;        // above this, each drawn tree stands for several
 const SPRITE_H = 200;         // sprite design height (units)
 const SPRITE_RES = 2;         // sprite pixels per unit
 let W = 0, H = 0, DPR = 1, horizon = 0, perTree = 1;
-let trees = [], sprites = [], visitorSprites = {}, backdrop = null, scene = null;
+let trees = [], sprites = [], visitorSprites = {}, backdrop = null, scene = null, clouds = null, flashUntil = 0;
 
 function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296; }
 
-function isDark() {
-  const t = document.documentElement.getAttribute("data-theme");
-  if (t) return t === "dark";
-  return matchMedia("(prefers-color-scheme: dark)").matches;
+// ── Live sky ─────────────────────────────────────────────────────────────
+// Real sun position for a place and time, plus current weather from
+// Open-Meteo (free, no key). Plain-JS copy of artifacts/uc-companion/lib/
+// skyState.ts — keep the two in step. Default sky: Nairobi. "Use my sky"
+// switches to the visitor's location (rounded to ~11 km) only on request.
+const SKY_DEFAULT = { lat: -1.29, lon: 36.82, label: "Nairobi" };
+const SKY_STORE = "uc-forest-sky-place";
+const RAD = Math.PI / 180;
+
+function solarPosition(date, lat, lon) {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const doy = Math.floor((date.getTime() - start) / 86400000) + 1;
+  const hours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const g = (2 * Math.PI / 365) * (doy - 1 + (hours - 12) / 24);
+  const eqTime = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  let ha = (hours * 60 + eqTime + 4 * lon) / 4 - 180;
+  if (ha < -180) ha += 360; if (ha > 180) ha -= 360;
+  const cz = Math.sin(lat * RAD) * Math.sin(decl) + Math.cos(lat * RAD) * Math.cos(decl) * Math.cos(ha * RAD);
+  return { elevation: 90 - Math.acos(Math.min(1, Math.max(-1, cz))) / RAD, hourAngle: ha };
 }
 
-const SCENES = {
-  day: {
-    sky: ["#6fa6c9", "#b9d6e0", "#f3dcb4"], sunGlow: "255,232,180", sunCore: "#fff6dc",
-    sun: [0.8, 0.26], hills: ["#9db0b0", "#7d978d", "#5f7d69"], haze: "#efe0c6",
-    soil: ["#b5673f", "#8e4528", "#6a2f1a"], grass: ["#94a053", "#76863f", "#b0ac63", "#5f6e33"],
-    bark: ["#3e2a1d", "#6e4d36"], shadow: "40,22,12", stars: false,
-    leaf: ["#183d22", "#2d5a31", "#4f8340", "#93b45a"], acacia: ["#2b3f1e", "#465f2b", "#6f8a3d", "#a9b866"],
-    label: "#17241b", labelBg: "rgba(255,252,244,.9)", ring: "242,183,5",
-  },
+function weatherFromCode(code, cloudPct = 0, wind = 8, temp = null) {
+  let kind = "clear";
+  if (code >= 95) kind = "storm";
+  else if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82) || (code >= 71 && code <= 77) || code === 85 || code === 86) kind = "rain";
+  else if (code >= 51 && code <= 57) kind = "drizzle";
+  else if (code === 45 || code === 48) kind = "fog";
+  else if (code === 3) kind = "overcast";
+  else if (code === 1 || code === 2) kind = "partly";
+  const floor = { clear: 0, partly: 0.3, overcast: 0.85, fog: 0.7, drizzle: 0.75, rain: 0.9, storm: 1 }[kind];
+  return { kind, cloudCover: Math.max(Math.min(1, Math.max(0, cloudPct / 100)), floor), windKmh: Math.max(0, wind), temperatureC: temp };
+}
+const CLEAR = { kind: "clear", cloudCover: 0.1, windKmh: 8, temperatureC: null };
+const WEATHER_NAMES = { clear: "Clear", partly: "Partly cloudy", overcast: "Overcast", fog: "Fog", drizzle: "Drizzle", rain: "Rain", storm: "Thunderstorm" };
+
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16), k = Math.min(1, Math.max(0, t));
+  const ch = s => Math.round(((pa >> s) & 255) * (1 - k) + ((pb >> s) & 255) * k);
+  return "#" + [ch(16), ch(8), ch(0)].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+const rgbOf = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(",");
+
+const PHASE_SCENES = {
   night: {
-    sky: ["#081321", "#16263a", "#36324a"], sunGlow: "190,205,240", sunCore: "#e9eefc",
-    sun: [0.78, 0.22], hills: ["#283a49", "#203038", "#18262a"], haze: "#2c3442",
-    soil: ["#4d2c1f", "#3a2016", "#2a160f"], grass: ["#34432b", "#2b3823", "#435035", "#24301d"],
-    bark: ["#1e150f", "#3a2a1e"], shadow: "0,0,0", stars: true,
-    leaf: ["#0c1f12", "#16331d", "#2a4f2d", "#4d6e44"], acacia: ["#141f10", "#25331a", "#3d5128", "#5f7140"],
-    label: "#e5eee7", labelBg: "rgba(12,20,15,.85)", ring: "242,201,76",
+    sky: ["#070f1c", "#132236", "#2a2e44"], sunGlow: "#bfcdf0", sunCore: "#e9eefc",
+    hills: ["#283a49", "#203038", "#18262a"], haze: "#2c3442",
+    soil: ["#45281c", "#341d14", "#25140d"], grass: ["#34432b", "#2b3823", "#435035", "#24301d"],
+    bark: ["#140e0a", "#2a2018"], shadow: "#000000",
+    leaf: ["#06120b", "#0b1d14", "#14301f", "#27443a"], acacia: ["#0a120a", "#141f14", "#22331f", "#36482f"],
+    cloud: "#3a4458", label: "#e5eee7", labelBg: "#0c140f", ring: "#f2c94c",
+  },
+  twilight: {
+    sky: ["#24345e", "#8a6d8c", "#f0a46a"], sunGlow: "#ffb27a", sunCore: "#ffd9b0",
+    hills: ["#6c6f86", "#585f73", "#47525c"], haze: "#c9a58f",
+    soil: ["#8a4a30", "#6a3420", "#4a2414"], grass: ["#6b7340", "#59633a", "#80804c", "#4a5430"],
+    bark: ["#2e2016", "#5a3f2c"], shadow: "#1a0c06",
+    leaf: ["#14301b", "#24472a", "#3f6a36", "#7a8f4c"], acacia: ["#1f2c16", "#354a22", "#566e32", "#8a9a52"],
+    cloud: "#c99a9a", label: "#f4ece4", labelBg: "#2a1c22", ring: "#f2b705",
+  },
+  golden: {
+    sky: ["#6fa6c9", "#b9d6e0", "#f3dcb4"], sunGlow: "#ffe8b4", sunCore: "#fff6dc",
+    hills: ["#9db0b0", "#7d978d", "#5f7d69"], haze: "#efe0c6",
+    soil: ["#b5673f", "#8e4528", "#6a2f1a"], grass: ["#94a053", "#76863f", "#b0ac63", "#5f6e33"],
+    bark: ["#3e2a1d", "#6e4d36"], shadow: "#28160c",
+    leaf: ["#183d22", "#2d5a31", "#4f8340", "#93b45a"], acacia: ["#2b3f1e", "#465f2b", "#6f8a3d", "#a9b866"],
+    cloud: "#f4e6d2", label: "#17241b", labelBg: "#fffcf4", ring: "#f2b705",
+  },
+  day: {
+    sky: ["#3f86c4", "#8fc1e2", "#d6e9ef"], sunGlow: "#fff6d8", sunCore: "#ffffff",
+    hills: ["#a9bcc4", "#8ea7a3", "#748f80"], haze: "#e3ecee",
+    soil: ["#b86a42", "#934a2b", "#6d311b"], grass: ["#96a352", "#79893f", "#b3b065", "#617035"],
+    bark: ["#3e2a1d", "#7a5640"], shadow: "#28160c",
+    leaf: ["#1a4224", "#2f6034", "#548a44", "#9cbd60"], acacia: ["#2d4320", "#4a642e", "#738f40", "#adbd6a"],
+    cloud: "#ffffff", label: "#17241b", labelBg: "#fffcf4", ring: "#f2b705",
   },
 };
+
+function blendScenes(a, b, t) {
+  const out = {};
+  for (const k of Object.keys(a)) out[k] = Array.isArray(a[k]) ? a[k].map((c, i) => mixHex(c, b[k][i], t)) : mixHex(a[k], b[k], t);
+  return out;
+}
+
+/** Scene palette and effects for a sun position and weather. */
+function buildScene(elevation, hourAngle, w) {
+  const P = PHASE_SCENES;
+  let base, phase;
+  if (elevation <= -8) { base = P.night; phase = "night"; }
+  else if (elevation <= -1) { base = blendScenes(P.night, P.twilight, (elevation + 8) / 7); phase = "twilight"; }
+  else if (elevation <= 8) { base = blendScenes(P.twilight, P.golden, (elevation + 1) / 9); phase = "golden"; }
+  else if (elevation <= 25) { base = blendScenes(P.golden, P.day, (elevation - 8) / 17); phase = "day"; }
+  else { base = P.day; phase = "day"; }
+
+  const grey = phase === "night" ? "#30363e" : "#a7afb4";
+  const overcast = w.kind === "fog" ? 0.75 : Math.max(0, w.cloudCover - 0.35) / 0.65;
+  const dark = w.kind === "storm" ? 0.35 : w.kind === "rain" ? 0.2 : w.kind === "drizzle" ? 0.1 : 0;
+  const tone = c => mixHex(c, "#000000", dark * 0.8);
+  const sunUp = elevation > -1 && overcast < 0.9, moonUp = elevation < -8 && overcast < 0.9;
+  const disc = sunUp
+    ? { x: 0.5 + Math.max(-1, Math.min(1, hourAngle / 90)) * 0.4, y: 0.5 - Math.min(1, Math.max(0, elevation) / 60) * 0.42, moon: false }
+    : moonUp ? { x: 0.5 - Math.max(-1, Math.min(1, hourAngle / 180)) * 0.35, y: 0.16, moon: true } : null;
+  return {
+    phase, weather: w, overcast, disc,
+    key: `${phase}|${Math.round(elevation / 3)}|${w.kind}|${Math.round(overcast * 4)}`,
+    sky: base.sky.map(c => mixHex(mixHex(c, grey, overcast * 0.85), "#000000", dark)),
+    sunGlow: rgbOf(base.sunGlow), sunCore: base.sunCore,
+    hills: base.hills.map(c => w.kind === "fog" ? mixHex(tone(c), grey, 0.45) : tone(c)),
+    haze: w.kind === "fog" ? mixHex(base.haze, grey, 0.4) : base.haze,
+    soil: base.soil.map(tone), grass: base.grass.map(tone), bark: base.bark.map(tone),
+    leaf: base.leaf.map(tone), acacia: base.acacia.map(tone),
+    shadow: rgbOf(base.shadow), shadowScale: 1 - overcast * 0.75,
+    cloud: mixHex(base.cloud, grey, overcast * 0.6 + dark), stars: phase === "night" && w.cloudCover < 0.7,
+    // Label colours are picked, not blended: a blend gives grey on grey.
+    label: (phase === "night" || phase === "twilight" ? P.night : P.day).label,
+    labelBg: (phase === "night" || phase === "twilight" ? P.night : P.day).labelBg + "e6",
+    ring: rgbOf(base.ring),
+  };
+}
+
+const sky = { place: SKY_DEFAULT, weather: CLEAR, weatherKnown: false, own: false, tz: "Africa/Nairobi" };
+try {
+  const saved = JSON.parse(localStorage.getItem(SKY_STORE) || "null");
+  if (saved && Number.isFinite(saved.lat) && Number.isFinite(saved.lon)) {
+    sky.place = { lat: saved.lat, lon: saved.lon, label: "your location" }; sky.own = true; sky.tz = null;
+  }
+} catch (e) { /* storage unavailable: default sky */ }
+
+function currentScene() {
+  const sun = solarPosition(new Date(), sky.place.lat, sky.place.lon);
+  return buildScene(sun.elevation, sun.hourAngle, sky.weather);
+}
+
+function renderSkyBar() {
+  // Time at the place whose sky is drawn, not the viewer's clock.
+  let time;
+  try { time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: sky.tz || undefined }); }
+  catch (e) { time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  const w = sky.weatherKnown
+    ? WEATHER_NAMES[sky.weather.kind] + (sky.weather.temperatureC === null ? "" : ` · ${Math.round(sky.weather.temperatureC)}°C`)
+    : "weather unavailable";
+  document.getElementById("sky-status").textContent = `Live sky over ${sky.place.label} · ${time} · ${w}`;
+  const btn = document.getElementById("sky-me");
+  btn.textContent = sky.own ? "Use Nairobi sky" : "Use my sky";
+}
+
+async function loadWeather() {
+  const lat = Math.round(sky.place.lat * 10) / 10, lon = Math.round(sky.place.lon * 10) / 10;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m&timezone=auto`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    const body = await res.json();
+    if (typeof body.timezone === "string") sky.tz = body.timezone;
+    const c = body.current;
+    if (!c || typeof c.weather_code !== "number") throw new Error("bad weather");
+    sky.weather = weatherFromCode(c.weather_code, c.cloud_cover ?? 0, c.wind_speed_10m ?? 8, c.temperature_2m ?? null);
+    sky.weatherKnown = true;
+  } catch (e) {
+    sky.weather = CLEAR; sky.weatherKnown = false;
+  }
+  refreshSky();
+}
+
+function refreshSky() {
+  const next = currentScene();
+  if (!scene || next.key !== scene.key) { scene = next; layout(); }
+  else scene = { ...next, key: scene.key };
+  renderSkyBar();
+}
+
+document.getElementById("sky-me").addEventListener("click", () => {
+  if (sky.own) {
+    sky.place = SKY_DEFAULT; sky.own = false; sky.tz = "Africa/Nairobi";
+    try { localStorage.removeItem(SKY_STORE); } catch (e) { /* ignore */ }
+    loadWeather();
+    return;
+  }
+  if (!navigator.geolocation) { document.getElementById("sky-status").textContent = "Location isn’t available in this browser."; return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = Math.round(pos.coords.latitude * 10) / 10, lon = Math.round(pos.coords.longitude * 10) / 10;
+    sky.place = { lat, lon, label: "your location" }; sky.own = true; sky.tz = null;
+    try { localStorage.setItem(SKY_STORE, JSON.stringify({ lat, lon })); } catch (e) { /* ignore */ }
+    loadWeather();
+  }, () => {
+    document.getElementById("sky-status").textContent = "Location not shared · showing the sky over Nairobi";
+  }, { enableHighAccuracy: false, maximumAge: 6 * 3600 * 1000, timeout: 10000 });
+});
 
 // ── Tree geometry ────────────────────────────────────────────────────────
 // Returns branch segments and leaf blobs in sprite units, base at (0, 0),
@@ -506,13 +678,16 @@ function paintBackdrop() {
       c.fillRect(r() * W, r() * horizon * 0.8, r() < 0.1 ? 1.6 : 1, r() < 0.1 ? 1.6 : 1);
     }
   }
-  const sx = W * s.sun[0], sy = H * s.sun[1], sr = Math.max(9, H * 0.028);
-  const glow = c.createRadialGradient(sx, sy, 0, sx, sy, H * 0.75);
-  glow.addColorStop(0, `rgba(${s.sunGlow},0.55)`); glow.addColorStop(0.25, `rgba(${s.sunGlow},0.18)`); glow.addColorStop(1, `rgba(${s.sunGlow},0)`);
-  c.fillStyle = glow; c.fillRect(0, 0, W, H);
-  const core = c.createRadialGradient(sx, sy, 0, sx, sy, sr * 1.6);
-  core.addColorStop(0, s.sunCore); core.addColorStop(0.55, s.sunCore); core.addColorStop(1, `rgba(${s.sunGlow},0)`);
-  c.fillStyle = core; c.beginPath(); c.arc(sx, sy, sr * 1.6, 0, Math.PI * 2); c.fill();
+  if (s.disc) {
+    const sx = W * s.disc.x, sy = horizon * s.disc.y * 2, sr = Math.max(s.disc.moon ? 6 : 9, H * (s.disc.moon ? 0.018 : 0.028));
+    const glow = c.createRadialGradient(sx, sy, 0, sx, sy, H * (s.disc.moon ? 0.35 : 0.75));
+    const g0 = s.disc.moon ? 0.3 : 0.55 * (1 - s.overcast * 0.6);
+    glow.addColorStop(0, `rgba(${s.sunGlow},${g0})`); glow.addColorStop(0.25, `rgba(${s.sunGlow},${g0 * 0.33})`); glow.addColorStop(1, `rgba(${s.sunGlow},0)`);
+    c.fillStyle = glow; c.fillRect(0, 0, W, H);
+    const core = c.createRadialGradient(sx, sy, 0, sx, sy, sr * 1.6);
+    core.addColorStop(0, s.sunCore); core.addColorStop(0.55, s.sunCore); core.addColorStop(1, `rgba(${s.sunGlow},0)`);
+    c.fillStyle = core; c.beginPath(); c.arc(sx, sy, sr * 1.6, 0, Math.PI * 2); c.fill();
+  }
 
   // Three ridges fading into haze: aerial perspective.
   s.hills.forEach((col, i) => {
@@ -560,6 +735,29 @@ function paintBackdrop() {
   return cv;
 }
 
+// Cloud layer, twice the canvas width so it can drift and wrap seamlessly.
+function paintClouds() {
+  const s = scene, n = Math.round(s.weather.cloudCover * 14);
+  if (n === 0) return null;
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(W * 2 * DPR); cv.height = Math.ceil(horizon * DPR);
+  const c = cv.getContext("2d");
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = rng(31);
+  for (let i = 0; i < n * 2; i++) {
+    const cx = (i / (n * 2)) * W * 2 + r() * W * 0.08, cy = horizon * (0.12 + r() * 0.5);
+    const w = W * (0.12 + r() * 0.16) * (0.6 + s.weather.cloudCover * 0.6), puffs = 4 + Math.floor(r() * 4);
+    for (let k = 0; k < puffs; k++) {
+      const px = cx + (k / (puffs - 1) - 0.5) * w * 0.85, rx = w * (0.18 + r() * 0.14), ry = rx * (0.45 + r() * 0.2);
+      const py = cy - r() * ry * 0.7;
+      const gr = c.createRadialGradient(px, py - ry * 0.3, 0, px, py, rx);
+      gr.addColorStop(0, s.cloud + "f2"); gr.addColorStop(0.7, s.cloud + "c0"); gr.addColorStop(1, s.cloud + "00");
+      c.fillStyle = gr; c.beginPath(); c.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2); c.fill();
+    }
+  }
+  return cv;
+}
+
 // ── Layout ───────────────────────────────────────────────────────────────
 function layout() {
   W = canvas.clientWidth; H = canvas.clientHeight;
@@ -567,7 +765,7 @@ function layout() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.ceil(W * DPR); canvas.height = Math.ceil(H * DPR);
   horizon = H * 0.52;
-  scene = isDark() ? SCENES.night : SCENES.day;
+  scene = scene || currentScene();
 
   sprites = Array.from({ length: 12 }, (_, i) =>
     makeSprite(1000 + i * 97, i % 5 < 3 ? "broadleaf" : "acacia", scene));
@@ -577,6 +775,7 @@ function layout() {
     funded: makeSprite(523, "broadleaf", scene, SPRITE_H),
   };
   backdrop = paintBackdrop();
+  clouds = paintClouds();
 
   const count = Math.min(fundedTrees, MAX_DRAWN);
   perTree = fundedTrees > MAX_DRAWN ? Math.ceil(fundedTrees / MAX_DRAWN) : 1;
@@ -672,7 +871,10 @@ function drawVisitor(t) {
       ctx.beginPath(); ctx.moveTo(x + 1 * k, y - 36 * k); ctx.lineTo(x + 5 * k, y - 37 * k); ctx.stroke();
     }
   }
-  // Label chip.
+}
+
+function drawVisitorLabel() {
+  const x = W / 2, y = H - 30, k = H / 420;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.font = `500 ${Math.max(11, 12 * k)}px "IBM Plex Mono", ui-monospace, monospace`;
   const tw = ctx.measureText(visitor.id).width + 14, th = 20;
@@ -683,32 +885,75 @@ function drawVisitor(t) {
   ctx.fillText(visitor.id, x, ly + th / 2 + 0.5);
 }
 
+function drawWeather(t) {
+  const w = scene.weather;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (w.kind === "fog") {
+    const fg = ctx.createLinearGradient(0, horizon - H * 0.1, 0, H);
+    fg.addColorStop(0, scene.cloud + "00"); fg.addColorStop(0.35, scene.cloud + "8c"); fg.addColorStop(1, scene.cloud + "40");
+    ctx.fillStyle = fg; ctx.fillRect(0, horizon - H * 0.1, W, H);
+  }
+  if (w.kind === "rain" || w.kind === "storm" || w.kind === "drizzle") {
+    const heavy = w.kind !== "drizzle", n = heavy ? 220 : 110, slant = Math.min(0.5, w.windKmh / 60);
+    ctx.strokeStyle = heavy ? "rgba(215,228,240,0.45)" : "rgba(215,228,240,0.3)";
+    ctx.lineWidth = heavy ? 1 : 0.7;
+    ctx.beginPath();
+    const r = rng(77), fall = reduceMotion ? 0 : t * (heavy ? 0.9 : 0.5);
+    for (let i = 0; i < n; i++) {
+      const len = (heavy ? 12 : 7) * (0.6 + r() * 0.6);
+      const x0 = r() * (W + 60), y = (r() * H + fall * (0.8 + r() * 0.4)) % (H + len) - len;
+      const x = (x0 - slant * (y + len)) % (W + 60);
+      ctx.moveTo(x, y); ctx.lineTo(x - slant * len, y + len);
+    }
+    ctx.stroke();
+  }
+  if (w.kind === "storm" && !reduceMotion) {
+    if (t > flashUntil + 4000 && Math.random() < 0.004) flashUntil = t + 180;
+    if (t < flashUntil) { ctx.fillStyle = "rgba(235,240,255,0.35)"; ctx.fillRect(0, 0, W, H); }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
 function frame(t) {
   if (!backdrop) { layout(); if (!backdrop) return; }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(backdrop, 0, 0);
+  const wind = scene.weather.windKmh;
+  if (clouds) {
+    // Drift with the wind; the layer is two canvases wide and wraps.
+    const off = reduceMotion ? 0 : ((t / 1000) * (2 + wind * 0.6) * DPR) % (clouds.width);
+    ctx.globalAlpha = 0.55 + scene.overcast * 0.4;
+    ctx.drawImage(clouds, -off, 0); ctx.drawImage(clouds, clouds.width - off, 0);
+    ctx.globalAlpha = 1;
+  }
+  const swayAmp = Math.min(0.06, 0.008 + wind / 900);
   for (const tr of trees) {
     const scale = tr.size;
-    const sway = reduceMotion ? 0 : Math.sin(t / 1600 + tr.phase) * 0.018 * (0.35 + tr.d);
-    const shadeA = 0.12 + tr.d * 0.22;
+    const sway = reduceMotion ? 0 : Math.sin(t / (1600 - Math.min(800, wind * 15)) + tr.phase) * swayAmp * (0.35 + tr.d);
+    const shadeA = (0.12 + tr.d * 0.22) * scene.shadowScale;
     drawShadow(tr.x, tr.y, tr.sprite.canopyW * scale, shadeA);
     // Far trees sit in the haze: lower opacity lets the ridge colour through.
     drawSprite(tr.sprite, tr.x, tr.y, scale, sway, 0.62 + tr.d * 0.38);
   }
   if (visitor) drawVisitor(t);
+  drawWeather(t);
+  if (visitor) { drawVisitorLabel(); ctx.setTransform(1, 0, 0, 1, 0, 0); }
   if (!reduceMotion) requestAnimationFrame(frame);
 }
 
 renderFigures(fallbackFigures(), false);
 loadLive();
 setInterval(loadLive, 5 * 60 * 1000);
+scene = currentScene();
+renderSkyBar();
 frame(performance.now());
+loadWeather();
+setInterval(refreshSky, 60 * 1000);
+setInterval(loadWeather, 15 * 60 * 1000);
 let resizeTimer;
 const relayout = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { layout(); if (reduceMotion) frame(performance.now()); }, 120); };
 addEventListener("resize", relayout);
-matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", relayout);
-new MutationObserver(relayout).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 </script>
 </body>
 </html>

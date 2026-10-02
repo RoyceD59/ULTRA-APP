@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import TreeScene from '@/components/TreeScene';
+import { useLiveSky } from '@/hooks/useLiveSky';
 import {
   TREE_CONFIG, TREE_STAGES, TREE_ID_PATTERN, displayStage, forestLink, newTreeId,
   type TreeStage,
@@ -42,6 +43,7 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
   const api = useApi();
   const { user } = useAuth();
   const [methodOpen, setMethodOpen] = useState(false);
+  const sky = useLiveSky();
   const [treeId, setTreeId] = useState<string | null>(null);
 
   const treeQ = useQuery({
@@ -115,7 +117,9 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
     lastRefills.current = refillEntries;
   }, [refillEntries, reduceMotion, water]);
 
-  const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: ['-0.8deg', '0.8deg'] });
+  // Real wind sets the sway: a still evening barely moves, a gusty storm bends.
+  const swayDeg = Math.min(3, 0.4 + sky.weather.windKmh / 18);
+  const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: [`-${swayDeg}deg`, `${swayDeg}deg`] });
 
   const barPct = data?.tree?.fundedPct ?? 0;
   const link = FOREST_URL && treeId ? safeForestLink(FOREST_URL, treeId, stage) : null;
@@ -142,11 +146,15 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
         <>
           <View accessible accessibilityRole="image"
             accessibilityLabel={`Illustration of your shared tree at the ${stageInfo.label} stage`}>
-            <TreeScene stage={stage} treeStyle={{ transform: [{ scale: grow }, { rotate }] }} />
+            <TreeScene stage={stage} palette={sky.palette} weather={sky.weather}
+              treeStyle={{ transform: [{ scale: grow }, { rotate }] }} />
             <Animated.View pointerEvents="none" style={[styles.drop, { opacity: water }]}>
               <Ionicons name="water" size={18} color="#27B7D7" />
             </Animated.View>
           </View>
+          <Text style={[styles.tiny, { color: colors.mutedForeground }]} testID="impact-tree-sky">
+            {sky.summary}
+          </Text>
           <View style={styles.treeRow}>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={[styles.stage, { color: LEAF_DARK }]}>{stageInfo.label}</Text>
