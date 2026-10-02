@@ -69,7 +69,8 @@ a { color: var(--water); }
 a:focus-visible, button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 
 .hero { position: relative; }
-#forest { display: block; width: 100%; height: clamp(260px, 52vw, 460px); }
+#forest { display: block; width: 100%; height: clamp(300px, 56vw, 540px); }
+.caption { margin: .4rem auto 0; padding-inline: 1rem; max-width: 46rem; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); }
 .hero-copy { padding: 1.25rem 1rem 0; max-width: 46rem; margin: 0 auto; }
 .eyebrow { margin: 0; font: 500 .72rem/1.4 var(--font-data); letter-spacing: .12em; text-transform: uppercase; color: var(--canopy); }
 h1 { margin: .35rem 0 .5rem; font: 800 clamp(2rem, 6vw, 3.4rem)/1.02 var(--font-display); letter-spacing: -.03em; text-wrap: balance; }
@@ -116,7 +117,8 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 </head>
 <body>
 <header class="hero">
-  <canvas id="forest" role="img" aria-label="Animated forest of trees funded by Ultra Clear customers"></canvas>
+  <canvas id="forest" role="img" aria-label="Illustrated forest of trees funded by Ultra Clear customers, on red soil beneath hills at golden hour"></canvas>
+  <p class="caption" id="forest-caption">Illustration.</p>
   <div class="hero-copy">
     <p class="eyebrow">Hydrate the Future™ · Kenya</p>
     <h1>Our growing forest</h1>
@@ -252,7 +254,7 @@ function renderFigures(f, live) {
     ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : "No programme field report has been published yet. ")
       + (f.baselineRevenueKes > 0 ? `Includes ${kes(f.baselineRevenueKes)} of earlier and offline sales.` : "Revenue covers purchases recorded in the Ultra Clear app.")
     : `Interim figures based on ${num(FALLBACK.confirmedSales)} confirmed sales. No programme field report has been published yet.`;
-  if (trees.length !== fundedTrees) layout();
+  if (backdrop && trees.length !== Math.min(fundedTrees, MAX_DRAWN)) layout();
 }
 
 function fallbackFigures() {
@@ -321,109 +323,392 @@ if (visitor) {
 }
 
 // ── Canvas forest ────────────────────────────────────────────────────────
+// A procedural illustration of a Kenyan highland restoration site at golden
+// hour (moonlit in dark mode). Trees are grown from branching rules and
+// leaf clusters lit from the sun, pre-rendered once into sprites, then drawn
+// back to front with a light wind sway. It is an illustration, not a photo of
+// real planted trees — field photos belong to programme reports.
 const canvas = document.getElementById("forest");
 const ctx = canvas.getContext("2d");
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-let W = 0, H = 0, trees = [], start = performance.now();
+const MAX_DRAWN = 260;        // above this, each drawn tree stands for several
+const SPRITE_H = 200;         // sprite design height (units)
+const SPRITE_RES = 2;         // sprite pixels per unit
+let W = 0, H = 0, DPR = 1, horizon = 0, perTree = 1;
+let trees = [], sprites = [], visitorSprites = {}, backdrop = null, scene = null;
 
 function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296; }
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-function layout() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  W = canvas.clientWidth; H = canvas.clientHeight;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const r = rng(20261002);
-  // One tree per estimated funded tree (conservative count), back to front.
-  trees = Array.from({ length: fundedTrees }, () => {
-    const depth = r();                         // 0 = far, 1 = near
-    return { x: r() * W, depth, size: 0.45 + depth * 0.75, phase: r() * Math.PI * 2, delay: r() * 1.2 };
-  }).sort((a, b) => a.depth - b.depth);
+function isDark() {
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t) return t === "dark";
+  return matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-function drawTree(x, groundY, scale, sway, grow, colors, stage) {
-  const s = scale * Math.min(1, H / 360) * grow;
-  if (s <= 0.01) return;
-  const trunkH = 46 * s, trunkW = 6 * s;
-  ctx.save();
-  ctx.translate(x, groundY);
-  ctx.rotate(sway);
-  ctx.fillStyle = colors.trunk;
-  ctx.fillRect(-trunkW / 2, -trunkH, trunkW, trunkH);
-  ctx.fillStyle = colors.leaf;
-  ctx.beginPath(); ctx.arc(0, -trunkH - 10 * s, 22 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = colors.canopy;
-  ctx.beginPath(); ctx.arc(-14 * s, -trunkH + 2 * s, 14 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(14 * s, -trunkH, 15 * s, 0, Math.PI * 2); ctx.fill();
+const SCENES = {
+  day: {
+    sky: ["#6fa6c9", "#b9d6e0", "#f3dcb4"], sunGlow: "255,232,180", sunCore: "#fff6dc",
+    sun: [0.8, 0.26], hills: ["#9db0b0", "#7d978d", "#5f7d69"], haze: "#efe0c6",
+    soil: ["#b5673f", "#8e4528", "#6a2f1a"], grass: ["#94a053", "#76863f", "#b0ac63", "#5f6e33"],
+    bark: ["#3e2a1d", "#6e4d36"], shadow: "40,22,12", stars: false,
+    leaf: ["#183d22", "#2d5a31", "#4f8340", "#93b45a"], acacia: ["#2b3f1e", "#465f2b", "#6f8a3d", "#a9b866"],
+    label: "#17241b", labelBg: "rgba(255,252,244,.9)", ring: "242,183,5",
+  },
+  night: {
+    sky: ["#081321", "#16263a", "#36324a"], sunGlow: "190,205,240", sunCore: "#e9eefc",
+    sun: [0.78, 0.22], hills: ["#283a49", "#203038", "#18262a"], haze: "#2c3442",
+    soil: ["#4d2c1f", "#3a2016", "#2a160f"], grass: ["#34432b", "#2b3823", "#435035", "#24301d"],
+    bark: ["#1e150f", "#3a2a1e"], shadow: "0,0,0", stars: true,
+    leaf: ["#0c1f12", "#16331d", "#2a4f2d", "#4d6e44"], acacia: ["#141f10", "#25331a", "#3d5128", "#5f7140"],
+    label: "#e5eee7", labelBg: "rgba(12,20,15,.85)", ring: "242,201,76",
+  },
+};
+
+// ── Tree geometry ────────────────────────────────────────────────────────
+// Returns branch segments and leaf blobs in sprite units, base at (0, 0),
+// growing upward (negative y). Sun comes from the upper right.
+function growTree(seed, species, h = SPRITE_H) {
+  const r = rng(seed);
+  const segs = [], tips = [];
+  const acacia = species === "acacia";
+  const maxDepth = acacia ? 4 : 6;
+
+  function branch(x, y, ang, len, w, depth) {
+    const bend = (r() - 0.5) * 0.18;
+    const x2 = x + Math.cos(ang + bend) * len, y2 = y + Math.sin(ang + bend) * len;
+    segs.push({ x1: x, y1: y, x2, y2, w1: w, w2: w * 0.72, depth });
+    if (depth >= maxDepth || len < h * 0.035) { tips.push({ x: x2, y: y2, depth }); return; }
+    const kids = acacia ? (depth === 0 ? 3 + (r() < 0.5 ? 1 : 0) : 2) : (r() < 0.35 ? 3 : 2);
+    for (let i = 0; i < kids; i++) {
+      const spread = acacia ? (depth === 0 ? 0.55 + r() * 0.35 : 0.35 + r() * 0.3) : 0.26 + r() * 0.2;
+      const side = kids === 1 ? 0 : (i / (kids - 1) - 0.5) * 2;
+      let a = ang + side * spread + (r() - 0.5) * 0.25;
+      if (acacia) a = Math.min(-0.25, Math.max(-Math.PI + 0.25, a)); // keep arms rising
+      const lf = acacia ? (depth === 0 ? 0.62 : 0.7) : 0.74 + r() * 0.08;
+      branch(x2, y2, a, len * lf, w * 0.68, depth + 1);
+    }
+    // Inner foliage along the limbs so broadleaf crowns read as full and rounded.
+    if (!acacia && depth >= 2) {
+      tips.push({ x: x2, y: y2, depth, inner: true });
+      if (r() < 0.6) tips.push({ x: (x + x2) / 2, y: (y + y2) / 2, depth, inner: true });
+    }
+  }
+
+  const lean = (r() - 0.5) * 0.12;
+  branch(0, 0, -Math.PI / 2 + lean, h * (acacia ? 0.36 : 0.3), h * (acacia ? 0.045 : 0.055), 0);
+
+  // Foliage: clusters of small blobs. Acacia canopies are flat-topped.
+  const leaves = [];
+  const minTipY = Math.min(...tips.filter(t => !t.inner).map(t => t.y));
+  for (const t of tips) {
+    const R = acacia ? h * (0.1 + r() * 0.05) : h * (0.07 + r() * 0.045) * (t.inner ? 0.85 : 1);
+    const cy = acacia ? minTipY + (t.y - minTipY) * 0.35 - h * 0.02 : t.y;
+    const flat = acacia ? 0.32 : 0.85;
+    const n = Math.round((R * R) / (acacia ? 5 : 4)) + 10;
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = R * Math.pow(r(), 0.6);
+      leaves.push({ x: t.x + Math.cos(a) * d, y: cy + Math.sin(a) * d * flat, s: 1.1 + r() * 1.7, j: r() });
+    }
+  }
+  // Light each blob by its position in the canopy plus a little noise.
+  const xs = leaves.map(l => l.x), ys = leaves.map(l => l.y);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const R = Math.max(Math.max(...xs) - cx, cy - Math.min(...ys), 1);
+  for (const l of leaves) {
+    const nx = (l.x - cx) / R, ny = (l.y - cy) / R;
+    l.light = nx * 0.6 - ny * 0.8 + (r() - 0.5) * 0.7;
+  }
+  leaves.sort((a, b) => a.light - b.light);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const allX = xs.concat(segs.flatMap(s => [s.x1, s.x2])), allY = ys.concat(segs.flatMap(s => [s.y1, s.y2]));
+  const pad = 6;
+  const box = { x0: Math.min(...allX) - pad, x1: Math.max(...allX) + pad, y0: Math.min(...allY) - pad, y1: Math.max(...allY) + pad };
+  return { segs, leaves, canopyW: width, canopyY: cy, box };
+}
+
+function paintTree(c, g, palette, species) {
+  const tone = species === "acacia" ? palette.acacia : palette.leaf;
+  // Bark: dark body, then a thinner sunlit edge.
+  c.lineCap = "round";
+  for (const pass of [0, 1]) {
+    c.strokeStyle = palette.bark[pass];
+    for (const s of g.segs) {
+      const w = (s.w1 + s.w2) / 2 * (pass ? 0.38 : 1);
+      if (w < 0.35) continue;
+      c.lineWidth = w;
+      const off = pass ? s.w1 * 0.22 : 0;
+      c.beginPath(); c.moveTo(s.x1 + off, s.y1); c.lineTo(s.x2 + off, s.y2); c.stroke();
+    }
+  }
+  // Volume shadow under the canopy, then each blob in its light band.
+  c.fillStyle = tone[0];
+  for (const l of g.leaves) { c.beginPath(); c.arc(l.x - 0.6, l.y + 1.2, l.s * 1.2, 0, Math.PI * 2); c.fill(); }
+  for (const l of g.leaves) {
+    const v = l.light + (l.j - 0.5) * 0.35;
+    c.globalAlpha = 0.8 + l.j * 0.2;
+    c.fillStyle = v < -0.5 ? tone[0] : v < 0 ? tone[1] : v < 0.6 ? tone[2] : tone[3];
+    // Leaf-shaped dab rather than a circle.
+    c.beginPath(); c.ellipse(l.x, l.y, l.s * 1.25, l.s * 0.8, l.j * 3.14, 0, Math.PI * 2); c.fill();
+  }
+  c.globalAlpha = 1;
+  c.fillStyle = tone[3];
+  for (const l of g.leaves) {
+    if (l.light < 0.8) continue;
+    c.beginPath(); c.arc(l.x + l.s * 0.3, l.y - l.s * 0.35, l.s * 0.4, 0, Math.PI * 2); c.fill();
+  }
+  // Whole-canopy volume: lit upper right, shaded lower left (only over paint).
+  const b = g.box;
+  const vol = c.createLinearGradient(b.x1, b.y0, b.x0, b.y1);
+  vol.addColorStop(0, "rgba(255,240,200,0.10)"); vol.addColorStop(0.55, "rgba(0,0,0,0)"); vol.addColorStop(1, "rgba(0,10,0,0.28)");
+  c.globalCompositeOperation = "source-atop";
+  c.fillStyle = vol; c.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  c.globalCompositeOperation = "source-over";
+}
+
+function makeSprite(seed, species, palette, h = SPRITE_H) {
+  const g = growTree(seed, species, h);
+  const b = g.box, w = b.x1 - b.x0, ht = b.y1 - b.y0;
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(w * SPRITE_RES); cv.height = Math.ceil(ht * SPRITE_RES);
+  const c = cv.getContext("2d");
+  c.setTransform(SPRITE_RES, 0, 0, SPRITE_RES, -b.x0 * SPRITE_RES, -b.y0 * SPRITE_RES);
+  paintTree(c, g, palette, species);
+  return { cv, ox: -b.x0, oy: -b.y0, w, h: ht, canopyW: g.canopyW, unit: h };
+}
+
+// ── Backdrop: sky, sun or moon, hills, soil and grass ───────────────────
+function ridge(r, base, amp) {
+  const p = [r() * 6, r() * 6, r() * 6], f = [1.3 + r(), 3.1 + r() * 2, 7 + r() * 4];
+  return x => base - amp * (0.55 * Math.sin(x * f[0] + p[0]) + 0.3 * Math.sin(x * f[1] + p[1]) + 0.15 * Math.sin(x * f[2] + p[2]));
+}
+
+function mix(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+
+function paintBackdrop() {
+  const s = scene;
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(W * DPR); cv.height = Math.ceil(H * DPR);
+  const c = cv.getContext("2d");
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = rng(7);
+
+  const sky = c.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, s.sky[0]); sky.addColorStop(0.55, s.sky[1]); sky.addColorStop(1, s.sky[2]);
+  c.fillStyle = sky; c.fillRect(0, 0, W, horizon + 40);
+
+  if (s.stars) {
+    for (let i = 0; i < 160; i++) {
+      c.fillStyle = `rgba(230,236,255,${0.25 + r() * 0.6})`;
+      c.fillRect(r() * W, r() * horizon * 0.8, r() < 0.1 ? 1.6 : 1, r() < 0.1 ? 1.6 : 1);
+    }
+  }
+  const sx = W * s.sun[0], sy = H * s.sun[1], sr = Math.max(9, H * 0.028);
+  const glow = c.createRadialGradient(sx, sy, 0, sx, sy, H * 0.75);
+  glow.addColorStop(0, `rgba(${s.sunGlow},0.55)`); glow.addColorStop(0.25, `rgba(${s.sunGlow},0.18)`); glow.addColorStop(1, `rgba(${s.sunGlow},0)`);
+  c.fillStyle = glow; c.fillRect(0, 0, W, H);
+  const core = c.createRadialGradient(sx, sy, 0, sx, sy, sr * 1.6);
+  core.addColorStop(0, s.sunCore); core.addColorStop(0.55, s.sunCore); core.addColorStop(1, `rgba(${s.sunGlow},0)`);
+  c.fillStyle = core; c.beginPath(); c.arc(sx, sy, sr * 1.6, 0, Math.PI * 2); c.fill();
+
+  // Three ridges fading into haze: aerial perspective.
+  s.hills.forEach((col, i) => {
+    const f = ridge(r, horizon - (2 - i) * H * 0.055 - H * 0.01, H * (0.05 + i * 0.012));
+    c.fillStyle = mix(col, s.haze, 0.45 - i * 0.18);
+    c.beginPath(); c.moveTo(0, H);
+    for (let x = 0; x <= W + 8; x += 8) c.lineTo(x, f(x / W * 3));
+    c.lineTo(W, H); c.closePath(); c.fill();
+  });
+  const hz = c.createLinearGradient(0, horizon - H * 0.12, 0, horizon + 8);
+  hz.addColorStop(0, "rgba(0,0,0,0)"); hz.addColorStop(1, s.haze + "99");
+  c.fillStyle = hz; c.fillRect(0, horizon - H * 0.12, W, H * 0.12 + 8);
+
+  // Laterite soil, darker toward the viewer.
+  const soil = c.createLinearGradient(0, horizon, 0, H);
+  soil.addColorStop(0, s.soil[0]); soil.addColorStop(0.5, s.soil[1]); soil.addColorStop(1, s.soil[2]);
+  c.fillStyle = soil;
+  c.beginPath(); c.moveTo(0, horizon + 4);
+  for (let x = 0; x <= W + 12; x += 12) c.lineTo(x, horizon + Math.sin(x / 70) * 2.5);
+  c.lineTo(W, H); c.lineTo(0, H); c.closePath(); c.fill();
+
+  // Soil grain and grass tufts, larger near the viewer.
+  const area = W * (H - horizon);
+  for (let i = 0; i < Math.min(5000, area / 40); i++) {
+    const y = horizon + Math.pow(r(), 0.8) * (H - horizon), d = (y - horizon) / (H - horizon);
+    c.fillStyle = r() < 0.5 ? "rgba(255,220,190,0.07)" : "rgba(40,15,5,0.12)";
+    const sz = 0.6 + d * 1.6;
+    c.fillRect(r() * W, y, sz, sz * 0.6);
+  }
+  c.lineCap = "round";
+  for (let i = 0; i < Math.min(3200, area / 70); i++) {
+    const y = horizon + 3 + Math.pow(r(), 0.7) * (H - horizon), d = (y - horizon) / (H - horizon);
+    const x = r() * W, blades = 2 + Math.floor(r() * 5), len = 1.5 + d * 8 * (0.4 + r() * 0.8);
+    c.strokeStyle = s.grass[Math.floor(r() * s.grass.length)];
+    c.globalAlpha = 0.35 + d * 0.45;
+    c.lineWidth = 0.4 + d * 0.8;
+    for (let b = 0; b < blades; b++) {
+      const lean = (r() - 0.5) * 0.9;
+      c.beginPath(); c.moveTo(x, y);
+      c.quadraticCurveTo(x + lean * len * 0.4, y - len * 0.6, x + lean * len, y - len);
+      c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+  return cv;
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────
+function layout() {
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  if (!W || !H) return;
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.ceil(W * DPR); canvas.height = Math.ceil(H * DPR);
+  horizon = H * 0.52;
+  scene = isDark() ? SCENES.night : SCENES.day;
+
+  sprites = Array.from({ length: 12 }, (_, i) =>
+    makeSprite(1000 + i * 97, i % 5 < 3 ? "broadleaf" : "acacia", scene));
+  visitorSprites = {
+    sapling: makeSprite(77, "broadleaf", scene, 90),
+    growing: makeSprite(311, "broadleaf", scene, 150),
+    funded: makeSprite(523, "broadleaf", scene, SPRITE_H),
+  };
+  backdrop = paintBackdrop();
+
+  const count = Math.min(fundedTrees, MAX_DRAWN);
+  perTree = fundedTrees > MAX_DRAWN ? Math.ceil(fundedTrees / MAX_DRAWN) : 1;
+  const r = rng(20261002);
+  const ground = H - horizon;
+  trees = Array.from({ length: count }, () => {
+    const d = Math.pow(r(), 1.35);                  // 0 = far, 1 = near (most trees farther away)
+    let x = r() * W;
+    if (visitor && d > 0.55 && Math.abs(x - W / 2) < W * 0.09) x += (x < W / 2 ? -1 : 1) * W * 0.12;
+    const size = (0.07 + d * 0.33) * (H / 420);
+    return { x, y: horizon + 4 + d * (ground - 30), d, size, sprite: sprites[Math.floor(r() * sprites.length)], phase: r() * 6.283 };
+  }).sort((a, b) => a.y - b.y);
+
+  const cap = document.getElementById("forest-caption");
+  if (cap) cap.textContent = fundedTrees === 0
+    ? "Illustration. The first funded tree will appear here."
+    : `Illustration. Each tree drawn represents ${perTree === 1 ? "one estimated funded tree" : `${num(perTree)} estimated funded trees`}.`;
+}
+
+// ── Drawing ──────────────────────────────────────────────────────────────
+function drawSprite(sp, x, y, scale, skew, alpha) {
+  ctx.globalAlpha = alpha;
+  // Skew pivots at the base: the trunk stays planted while the crown sways.
+  ctx.setTransform(DPR * scale, 0, DPR * scale * skew, DPR * scale, DPR * x, DPR * y);
+  ctx.drawImage(sp.cv, -sp.ox, -sp.oy, sp.w, sp.h);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+}
+
+function drawShadow(x, y, w, alpha) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = `rgba(${scene.shadow},${alpha})`;
+  ctx.beginPath(); ctx.ellipse(x - w * 0.25, y + 1, w * 0.55, Math.max(1.5, w * 0.11), 0, 0, Math.PI * 2); ctx.fill();
+}
+
+function leafShape(x, y, len, ang, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(len * 0.5, -len * 0.42, len, 0);
+  ctx.quadraticCurveTo(len * 0.5, len * 0.42, 0, 0); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 0.6;
+  ctx.beginPath(); ctx.moveTo(len * 0.05, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
   ctx.restore();
 }
 
-function drawVisitor(x, groundY, t, colors) {
-  const stage = visitor.stage;
-  const s = Math.min(1, H / 360) * 1.25;
-  const pulse = reduceMotion ? 0 : Math.sin(t / 500) * 2;
-  ctx.strokeStyle = colors.ring; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.ellipse(x, groundY + 2, 30 * s + pulse, 7 * s, 0, 0, Math.PI * 2); ctx.stroke();
-  if (stage === "seed") {
-    ctx.fillStyle = colors.soil; ctx.beginPath(); ctx.ellipse(x, groundY - 4 * s, 7 * s, 5 * s, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (stage === "sprout") {
-    ctx.fillStyle = colors.canopy; ctx.fillRect(x - 1.5 * s, groundY - 22 * s, 3 * s, 22 * s);
-    ctx.fillStyle = colors.leaf;
-    ctx.beginPath(); ctx.ellipse(x - 8 * s, groundY - 24 * s, 9 * s, 4.5 * s, -0.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(x + 8 * s, groundY - 27 * s, 9 * s, 4.5 * s, 0.5, 0, Math.PI * 2); ctx.fill();
+function drawVisitor(t) {
+  const x = W / 2, y = H - 30, k = H / 420;
+  const sway = reduceMotion ? 0 : Math.sin(t / 1700) * 0.012;
+  const pulse = reduceMotion ? 0.5 : 0.5 + Math.sin(t / 650) * 0.25;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, 46 * k);
+  glow.addColorStop(0, `rgba(${scene.ring},${0.45 * pulse})`); glow.addColorStop(1, `rgba(${scene.ring},0)`);
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.ellipse(x, y, 46 * k, 13 * k, 0, 0, Math.PI * 2); ctx.fill();
+
+  const st = visitor.stage;
+  if (st === "seed" || st === "sprout") {
+    // Freshly turned mound of darker, moist soil.
+    ctx.fillStyle = scene.soil[2];
+    ctx.beginPath(); ctx.ellipse(x, y, 20 * k, 6 * k, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "rgba(255,220,190,0.12)";
+    ctx.beginPath(); ctx.ellipse(x + 4 * k, y - 3 * k, 10 * k, 2.5 * k, 0, 0, Math.PI * 2); ctx.fill();
+    if (st === "seed") {
+      ctx.fillStyle = "#7a5230";
+      ctx.beginPath(); ctx.ellipse(x + 2 * k, y - 4.5 * k, 3.4 * k, 2.2 * k, -0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,240,210,0.5)";
+      ctx.beginPath(); ctx.ellipse(x + 3 * k, y - 5.4 * k, 1.1 * k, 0.6 * k, -0.4, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const top = y - 26 * k, bx = x + Math.sin(t / 1500) * (reduceMotion ? 0 : 1.2) * k;
+      ctx.strokeStyle = scene.leaf[1]; ctx.lineWidth = 1.6 * k; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x, y - 3 * k); ctx.quadraticCurveTo(x - 3 * k, y - 14 * k, bx, top); ctx.stroke();
+      leafShape(bx, top + 9 * k, 10 * k, Math.PI + 0.35, scene.leaf[2]);
+      leafShape(bx, top + 9 * k, 10 * k, -0.35, scene.leaf[2]);
+      leafShape(bx, top + 1 * k, 8 * k, -Math.PI / 2 - 0.6, scene.leaf[3]);
+      leafShape(bx, top + 1 * k, 7 * k, -Math.PI / 2 + 0.5, scene.leaf[2]);
+    }
   } else {
-    const scale = { sapling: 0.55, growing: 0.8, funded: 1.05, established: 1.05 }[stage] || 0.55;
-    const sway = reduceMotion ? 0 : Math.sin(t / 900) * 0.025;
-    drawTree(x, groundY, scale * 1.25, sway, 1, colors);
+    const sp = st === "sapling" ? visitorSprites.sapling : st === "growing" ? visitorSprites.growing : visitorSprites.funded;
+    const scale = (st === "sapling" ? 0.55 : st === "growing" ? 0.48 : 0.5) * k * 1.5;
+    // Mulch ring.
+    ctx.fillStyle = "rgba(60,35,20,0.55)";
+    ctx.beginPath(); ctx.ellipse(x, y + 1, 16 * k, 4.5 * k, 0, 0, Math.PI * 2); ctx.fill();
+    drawShadow(x, y, sp.canopyW * scale * 0.9, 0.3);
+    drawSprite(sp, x, y, scale, sway, 1);
+    if (st === "sapling") {
+      // Bamboo stake and tie: standard for young planted trees.
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.strokeStyle = "#c9b27a"; ctx.lineWidth = 2.2 * k; ctx.lineCap = "butt";
+      ctx.beginPath(); ctx.moveTo(x + 5 * k, y + 2 * k); ctx.lineTo(x + 5 * k, y - 48 * k); ctx.stroke();
+      ctx.strokeStyle = "#8c7444"; ctx.lineWidth = 0.8 * k;
+      for (const n of [14, 30]) { ctx.beginPath(); ctx.moveTo(x + 4 * k, y - n * k); ctx.lineTo(x + 6.2 * k, y - n * k); ctx.stroke(); }
+      ctx.strokeStyle = "#e8e2d0"; ctx.lineWidth = 1 * k;
+      ctx.beginPath(); ctx.moveTo(x + 1 * k, y - 36 * k); ctx.lineTo(x + 5 * k, y - 37 * k); ctx.stroke();
+    }
   }
-  ctx.fillStyle = colors.fg;
-  ctx.font = `500 12px ${css("--font-data") || "monospace"}`;
-  ctx.textAlign = "center";
-  ctx.fillText(visitor.id, x, groundY + 24 * s);
+  // Label chip.
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.font = `500 ${Math.max(11, 12 * k)}px "IBM Plex Mono", ui-monospace, monospace`;
+  const tw = ctx.measureText(visitor.id).width + 14, th = 20;
+  const lx = x - tw / 2, ly = y + 6;
+  ctx.fillStyle = scene.labelBg;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, ly, tw, th, 6) : ctx.rect(lx, ly, tw, th); ctx.fill();
+  ctx.fillStyle = scene.label; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(visitor.id, x, ly + th / 2 + 0.5);
 }
 
 function frame(t) {
-  const colors = {
-    skyTop: css("--sky-top"), skyLow: css("--sky-low"), soil: css("--soil"),
-    leaf: css("--leaf"), canopy: css("--canopy"), trunk: "#6b4a30", ring: css("--ring"), fg: css("--fg"),
-  };
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, colors.skyTop); sky.addColorStop(1, colors.skyLow);
-  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-
-  const horizon = H * 0.55;
-  ctx.fillStyle = colors.soil;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath(); ctx.moveTo(0, horizon);
-  for (let x = 0; x <= W; x += 24) ctx.lineTo(x, horizon + Math.sin(x / 90) * 6);
-  ctx.lineTo(W, horizon + Math.sin(W / 90) * 6);
-  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
-  ctx.globalAlpha = 1;
-
-  const elapsed = (t - start) / 1000;
+  if (!backdrop) { layout(); if (!backdrop) return; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(backdrop, 0, 0);
   for (const tr of trees) {
-    const groundY = horizon + 8 + tr.depth * (H - horizon - 30);
-    const grow = reduceMotion ? 1 : Math.min(1, Math.max(0, (elapsed - tr.delay) / 0.9));
-    const sway = reduceMotion ? 0 : Math.sin(t / 1100 + tr.phase) * 0.02 * tr.depth;
-    ctx.globalAlpha = 0.55 + tr.depth * 0.45;
-    drawTree(tr.x, groundY, tr.size, sway, grow, colors);
+    const scale = tr.size;
+    const sway = reduceMotion ? 0 : Math.sin(t / 1600 + tr.phase) * 0.018 * (0.35 + tr.d);
+    const shadeA = 0.12 + tr.d * 0.22;
+    drawShadow(tr.x, tr.y, tr.sprite.canopyW * scale, shadeA);
+    // Far trees sit in the haze: lower opacity lets the ridge colour through.
+    drawSprite(tr.sprite, tr.x, tr.y, scale, sway, 0.62 + tr.d * 0.38);
   }
-  ctx.globalAlpha = 1;
-  if (visitor) drawVisitor(W / 2, H - 48, t, colors);
+  if (visitor) drawVisitor(t);
   if (!reduceMotion) requestAnimationFrame(frame);
 }
 
 renderFigures(fallbackFigures(), false);
 loadLive();
 setInterval(loadLive, 5 * 60 * 1000);
-layout();
-// Trees start fully grown so the first still frame is complete; frame()
-// schedules its own sway loop unless reduced motion is on.
-start = performance.now() - 5000;
 frame(performance.now());
 let resizeTimer;
-addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { layout(); if (reduceMotion) frame(performance.now()); }, 120); });
+const relayout = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { layout(); if (reduceMotion) frame(performance.now()); }, 120); };
+addEventListener("resize", relayout);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", relayout);
+new MutationObserver(relayout).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 </script>
 </body>
 </html>

@@ -11,7 +11,6 @@ import {
   AccessibilityInfo, ActivityIndicator, Animated, Easing, Linking, Modal,
   ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +18,7 @@ import * as Crypto from 'expo-crypto';
 import { useColors } from '@/hooks/useColors';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
+import TreeScene from '@/components/TreeScene';
 import {
   TREE_CONFIG, TREE_STAGES, TREE_ID_PATTERN, displayStage, forestLink, newTreeId,
   type TreeStage,
@@ -29,8 +29,6 @@ const FOREST_URL = process.env.EXPO_PUBLIC_FOREST_URL;
 
 const LEAF = '#2E8B57';
 const LEAF_DARK = '#1F6B43';
-const TRUNK = '#8B5E3C';
-const SOIL = '#7A5A3A';
 
 const kes = (n: number) => `KSh ${Math.round(n).toLocaleString('en-US')}`;
 
@@ -76,7 +74,7 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
   const stageInfo = TREE_STAGES[stage];
 
   // ── Animation: grow on stage change, gentle sway, pulse when watered ────
-  const grow = useRef(new Animated.Value(0.85)).current;
+  const grow = useRef(new Animated.Value(0.94)).current;
   const sway = useRef(new Animated.Value(0)).current;
   const water = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -89,7 +87,7 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
 
   useEffect(() => {
     if (reduceMotion) { grow.setValue(1); return; }
-    grow.setValue(0.85);
+    grow.setValue(0.94);
     Animated.spring(grow, { toValue: 1, friction: 5, useNativeDriver: true }).start();
   }, [stage, reduceMotion, grow]);
 
@@ -117,7 +115,7 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
     lastRefills.current = refillEntries;
   }, [refillEntries, reduceMotion, water]);
 
-  const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: ['-1.5deg', '1.5deg'] });
+  const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: ['-0.8deg', '0.8deg'] });
 
   const barPct = data?.tree?.fundedPct ?? 0;
   const link = FOREST_URL && treeId ? safeForestLink(FOREST_URL, treeId, stage) : null;
@@ -142,15 +140,14 @@ export default function ImpactTreeSection({ refillEntries }: Props) {
         </View>
       ) : (
         <>
+          <View accessible accessibilityRole="image"
+            accessibilityLabel={`Illustration of your shared tree at the ${stageInfo.label} stage`}>
+            <TreeScene stage={stage} treeStyle={{ transform: [{ scale: grow }, { rotate }] }} />
+            <Animated.View pointerEvents="none" style={[styles.drop, { opacity: water }]}>
+              <Ionicons name="water" size={18} color="#27B7D7" />
+            </Animated.View>
+          </View>
           <View style={styles.treeRow}>
-            <View style={styles.treeBox} accessible accessibilityLabel={`Tree stage: ${stageInfo.label}`}>
-              <Animated.View style={{ transform: [{ scale: grow }, { rotate }] }}>
-                <TreeArt stage={stage} />
-              </Animated.View>
-              <Animated.View pointerEvents="none" style={[styles.drop, { opacity: water }]}>
-                <Ionicons name="water" size={18} color="#27B7D7" />
-              </Animated.View>
-            </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={[styles.stage, { color: LEAF_DARK }]}>{stageInfo.label}</Text>
               <Text style={[styles.small, { color: colors.mutedForeground }]}>{stageInfo.meaning}</Text>
@@ -254,55 +251,12 @@ function Method({ title, body }: { title: string; body: string }) {
   );
 }
 
-/** Stage artwork — a simple layered SVG that grows with each stage. */
-function TreeArt({ stage }: { stage: TreeStage }) {
-  return (
-    <Svg width={96} height={96} viewBox="0 0 96 96">
-      <Ellipse cx={48} cy={88} rx={34} ry={6} fill={SOIL} opacity={0.35} />
-      {stage === 'none' && <Ellipse cx={48} cy={84} rx={10} ry={3} fill={SOIL} opacity={0.6} />}
-      {stage === 'seed' && <Ellipse cx={48} cy={82} rx={6} ry={4.5} fill={TRUNK} />}
-      {stage === 'sprout' && (
-        <>
-          <Rect x={46.5} y={66} width={3} height={18} rx={1.5} fill={LEAF_DARK} />
-          <Path d="M48 70 C 38 64, 36 58, 40 54 C 46 58, 48 64, 48 70 Z" fill={LEAF} />
-          <Path d="M48 68 C 58 62, 60 56, 56 52 C 50 56, 48 62, 48 68 Z" fill={LEAF} />
-        </>
-      )}
-      {stage === 'sapling' && (
-        <>
-          <Rect x={46} y={52} width={4} height={33} rx={2} fill={TRUNK} />
-          <Circle cx={48} cy={48} r={14} fill={LEAF} />
-          <Circle cx={40} cy={54} r={8} fill={LEAF_DARK} opacity={0.8} />
-        </>
-      )}
-      {stage === 'growing' && (
-        <>
-          <Rect x={45} y={44} width={6} height={41} rx={3} fill={TRUNK} />
-          <Circle cx={48} cy={38} r={20} fill={LEAF} />
-          <Circle cx={34} cy={48} r={11} fill={LEAF_DARK} opacity={0.85} />
-          <Circle cx={62} cy={46} r={12} fill={LEAF_DARK} opacity={0.85} />
-        </>
-      )}
-      {(stage === 'funded' || stage === 'established') && (
-        <>
-          <Rect x={44} y={40} width={8} height={45} rx={3} fill={TRUNK} />
-          <Circle cx={48} cy={30} r={24} fill={LEAF} />
-          <Circle cx={30} cy={44} r={14} fill={LEAF_DARK} opacity={0.9} />
-          <Circle cx={66} cy={42} r={15} fill={LEAF_DARK} opacity={0.9} />
-          <Circle cx={56} cy={22} r={4} fill="#F2C94C" />
-        </>
-      )}
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap:       { borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
   headRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   title:      { fontSize: 13, fontWeight: '700', flex: 1 },
   treeRow:    { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  treeBox:    { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
-  drop:       { position: 'absolute', top: 4, right: 10 },
+  drop:       { position: 'absolute', top: '42%', left: '54%' },
   stage:      { fontSize: 16, fontWeight: '800' },
   statsRow:   { flexDirection: 'row', gap: 8 },
   stat:       { flex: 1, borderWidth: 1, borderRadius: 10, padding: 8, gap: 2 },
