@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { getAuthHeaders } from '@/lib/team-auth';
 import { apiUrl } from '@/lib/api-base';
 import { parseFixedUnits } from '@/lib/refill-input';
+import { RefillActivationControls } from '@/components/admin/RefillActivationControls';
 
 type Readiness = {
   phase: string; activationAllowed: false;
@@ -27,7 +28,7 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 const money = (minor: number) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(minor / 100);
 
 export default function RefillReadinessPage() {
-  const readiness = useQuery({ queryKey: ['admin', 'refill-readiness'], queryFn: () => request<Readiness>('/api/uc/admin/refill/readiness') });
+  const readiness = useQuery({ queryKey: ['admin', 'refill-readiness'], queryFn: () => request<Readiness>('/api/uc/admin/refill/readiness'), staleTime: 0, refetchOnWindowFocus: true });
   const [values, setValues] = useState<Record<string, string>>({});
   const [result, setResult] = useState<RefillSimulationResult | null>(null);
   const [error, setError] = useState('');
@@ -50,14 +51,15 @@ export default function RefillReadinessPage() {
     finally { setBusy(false); }
   };
   return <div className="max-w-5xl mx-auto space-y-8 p-4 sm:p-6">
-    <header className="space-y-2"><h1 className="text-2xl font-semibold">Care and refill readiness</h1>
-      <p className="text-muted-foreground">Review rollout controls and the cost of a proposed refill before committing a campaign.</p></header>
+    <header className="space-y-2"><h1 className="text-2xl font-semibold">Care and refill activation</h1>
+      <p className="text-muted-foreground">Control the new previews and review the cost of a proposed refill before committing a campaign.</p></header>
+    <RefillActivationControls />
     <section className="rounded-xl border p-5 space-y-4" aria-labelledby="refill-controls-heading">
-      <h2 id="refill-controls-heading" className="text-lg font-semibold">Pilot controls</h2>
+      <h2 id="refill-controls-heading" className="text-lg font-semibold">Transaction readiness</h2>
       <p className="font-medium">Refill, wallet and paid-care transactions are unavailable in this foundation.</p>
-      {readiness.isPending ? <p role="status">Loading controls…</p> : readiness.isError ? <div role="alert"><p>We couldn't refresh the rollout controls.</p><Button variant="outline" onClick={() => { void readiness.refetch(); }}>Retry controls</Button></div> : <>
+      {readiness.isPending ? <p role="status">Loading readiness…</p> : readiness.isError ? <div role="alert"><p>We couldn't refresh the rollout readiness.</p><Button variant="outline" onClick={() => { void readiness.refetch(); }}>Retry readiness</Button></div> : <>
         <ul className="space-y-2 list-disc pl-5 text-sm">{readiness.data?.blockers.map(item => <li key={item.id}>{item.message}</li>)}</ul>
-        <p className="text-sm text-muted-foreground">All new switches default off. The care overview links to existing free-member features only.</p>
+        <p className="text-sm text-muted-foreground">New previews default off. Care Overview links only to existing free-member features.</p>
       </>}
     </section>
     <section className="rounded-xl border p-5 space-y-5" aria-labelledby="refill-preview-heading">

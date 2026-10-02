@@ -10,8 +10,8 @@ export interface LocationRefreshScheduler {
 }
 
 const defaultScheduler: LocationRefreshScheduler = {
-  setInterval,
-  clearInterval,
+  setInterval: (callback, delayMs) => globalThis.setInterval(callback, delayMs),
+  clearInterval: handle => globalThis.clearInterval(handle),
 };
 
 export function startFocusedLocationRefresh(

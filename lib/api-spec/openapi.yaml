@@ -3154,6 +3154,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CustomerLifecycleFeatureConfig" }
 
+  /uc/admin/refill/features:
+    get:
+      operationId: getRefillFeatures
+      tags: [uc-admin]
+      summary: Read persisted refill preview activation flags
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Current feature activation settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillFeatures" }
+        "401": { description: A team session is required }
+        "403": { description: A live team administrator is required }
+    patch:
+      operationId: updateRefillFeatures
+      tags: [uc-admin]
+      summary: Update persisted refill preview activation flags
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefillFeaturesUpdate" }
+      responses:
+        "200":
+          description: Updated feature settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillFeatures" }
+        "400": { description: Invalid or empty feature update }
+        "401": { description: A team session is required }
+        "403": { description: A live team administrator is required }
+
+  /uc/refill/capabilities:
+    get:
+      operationId: getRefillCapabilities
+      tags: [uc-admin]
+      summary: Read safe refill feature capabilities
+      responses:
+        "200":
+          description: Current public care flag and permanently hard-off paid-operation capabilities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillCapabilities" }
+
 components:
   parameters:
     MemberId:
@@ -5308,6 +5354,35 @@ components:
         legacyReviewSubmission: { type: boolean }
         canonicalGlobalImpact: { type: boolean }
         nearbyDistanceTiers: { type: boolean }
+
+    RefillFeatures:
+      type: object
+      additionalProperties: false
+      required: [careOverview, refillGovernance]
+      properties:
+        careOverview: { type: boolean }
+        refillGovernance: { type: boolean }
+
+    RefillFeaturesUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        careOverview: { type: boolean }
+        refillGovernance: { type: boolean }
+
+    RefillCapabilities:
+      type: object
+      additionalProperties: false
+      required: [version, careOverview, promoRefill, paidRefill, moneyWallet, paidCare, automaticCollection]
+      properties:
+        version: { type: integer, enum: [1] }
+        careOverview: { type: boolean }
+        promoRefill: { type: boolean, enum: [false] }
+        paidRefill: { type: boolean, enum: [false] }
+        moneyWallet: { type: boolean, enum: [false] }
+        paidCare: { type: boolean, enum: [false] }
+        automaticCollection: { type: boolean, enum: [false] }
 
     CustomerLifecycleIdentity:
       type: object

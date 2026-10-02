@@ -26,7 +26,9 @@ export function companionLayout(width: number, fontScale = 1) {
   const cardWidth = Math.max(0, (contentWidth - gutter * 2 - gap * (columns - 1)) / columns);
   const articleColumns = Math.max(1, Math.min(3, Math.floor((contentWidth - gutter * 2 + gap) / (280 * Math.max(1, fontScale) + gap))));
   const articleWidth = Math.max(0, (contentWidth - gutter * 2 - gap * (articleColumns - 1)) / articleColumns);
-  return { size, navigationWidth, contentWidth, gutter, gap, columns, cardWidth,
+  return {
+    size, navigationWidth, contentWidth, gutter, gap, columns, cardWidth,
     articleColumns, articleWidth,
-    bottomNavigationHeight: size === 'compact' ? Math.max(72, 44 + 22 * fontScale) : 0 } as const;
+    bottomNavigationHeight: size === 'compact' ? Math.max(72, 44 + 22 * fontScale) : 0,
+  } as const;
 }

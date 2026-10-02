@@ -39,9 +39,10 @@ import agentOauthRouter from "./agent-oauth.js";
 import guidesRouter from "./guides.js";
 import blogRouter from "./blog.js";
 import refillReadinessRouter from "./refill-readiness.js";
+import refillGovernanceRouter from "./refill-governance.js";
+import refillFeaturesRouter from "./refill-features.js";
 
 const router: IRouter = Router();
-
 // ─── ProjectHub team auth guards ─────────────────────────────────────────────
 // Path-scoped middleware: each entry runs ONLY for requests whose path starts
 // with the given prefix, so UC, webhook, and payment endpoints are unaffected.
@@ -80,6 +81,8 @@ router.use(agentOauthRouter);
 router.use(guidesRouter);
 router.use(blogRouter);
 router.use(refillReadinessRouter);
+router.use(refillGovernanceRouter);
+router.use(refillFeaturesRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);

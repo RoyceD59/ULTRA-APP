@@ -4507,3 +4507,40 @@ export const GetCustomerLifecycleFeatureConfigResponse = zod.object({
   "canonicalGlobalImpact": zod.boolean(),
   "nearbyDistanceTiers": zod.boolean()
 })
+
+
+/**
+ * @summary Read persisted refill preview activation flags
+ */
+export const GetRefillFeaturesResponse = zod.object({
+  "careOverview": zod.boolean(),
+  "refillGovernance": zod.boolean()
+})
+
+
+/**
+ * @summary Update persisted refill preview activation flags
+ */
+export const UpdateRefillFeaturesBody = zod.object({
+  "careOverview": zod.boolean().optional(),
+  "refillGovernance": zod.boolean().optional()
+})
+
+export const UpdateRefillFeaturesResponse = zod.object({
+  "careOverview": zod.boolean(),
+  "refillGovernance": zod.boolean()
+})
+
+
+/**
+ * @summary Read safe refill feature capabilities
+ */
+export const GetRefillCapabilitiesResponse = zod.object({
+  "version": zod.literal(1),
+  "careOverview": zod.boolean(),
+  "promoRefill": zod.literal(false),
+  "paidRefill": zod.literal(false),
+  "moneyWallet": zod.literal(false),
+  "paidCare": zod.literal(false),
+  "automaticCollection": zod.literal(false)
+})

@@ -2557,6 +2557,33 @@ export interface CustomerLifecycleFeatureConfig {
   nearbyDistanceTiers: boolean;
 }
 
+export interface RefillFeatures {
+  careOverview: boolean;
+  refillGovernance: boolean;
+}
+
+export interface RefillFeaturesUpdate {
+  careOverview?: boolean;
+  refillGovernance?: boolean;
+}
+
+export type RefillCapabilitiesVersion = typeof RefillCapabilitiesVersion[keyof typeof RefillCapabilitiesVersion];
+
+
+export const RefillCapabilitiesVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export interface RefillCapabilities {
+  version: RefillCapabilitiesVersion;
+  careOverview: boolean;
+  promoRefill: false;
+  paidRefill: false;
+  moneyWallet: false;
+  paidCare: false;
+  automaticCollection: false;
+}
+
 export type CustomerLifecycleIdentityStatus = typeof CustomerLifecycleIdentityStatus[keyof typeof CustomerLifecycleIdentityStatus];
 
 

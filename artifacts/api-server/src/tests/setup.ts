@@ -12,6 +12,7 @@
  */
 
 import { pool } from "@workspace/db";
+import { readFile } from "node:fs/promises";
 
 // sheet_syncs error columns
 await pool.query(`
@@ -543,5 +544,18 @@ await pool.query(`
   CREATE INDEX IF NOT EXISTS uc_order_notification_outbox_pending_idx
     ON uc_order_notification_outbox (status, next_attempt_at);
 `);
+
+await pool.query(`
+  ALTER TABLE team_settings
+    ADD COLUMN IF NOT EXISTS care_overview_preview boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS refill_governance_preview boolean NOT NULL DEFAULT false;
+`);
+for (const migrationPath of [
+  "../../../../lib/db/migrations/0054_uc_refill_governance.sql",
+  "../../../../lib/db/migrations/0055_refill_preview_flags.sql",
+]) {
+  const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
+  await pool.query(migration);
+}
 
 console.log("[test-setup] all startup migrations applied");

@@ -10,6 +10,7 @@ import { useApi, type UCBlogArticle, type UCBlogSource } from '@/hooks/useApi';
 import { fetchBlogArticle } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { articleInlineLinks } from '@workspace/api-zod/blog-inline-links';
 
 type ArticleBlock = { kind: 'heading' | 'paragraph' | 'list' | 'quote'; text: string; ordered?: boolean; number?: string };
 
@@ -44,16 +45,48 @@ function parseArticleBody(body: string): ArticleBlock[] {
   return blocks;
 }
 
-function renderInline(text: string, color: string): React.ReactNode[] {
+function renderEmphasis(text: string, color?: string, keyPrefix = ''): React.ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <Text key={index} style={{ fontWeight: '700', color }}>{part.slice(2, -2)}</Text>;
+      return <Text key={`${keyPrefix}${index}`} style={{ fontWeight: '700', ...(color ? { color } : {}) }}>{part.slice(2, -2)}</Text>;
     }
     if (part.startsWith('*') && part.endsWith('*')) {
-      return <Text key={index} style={{ fontStyle: 'italic' }}>{part.slice(1, -1)}</Text>;
+      return <Text key={`${keyPrefix}${index}`} style={{ fontStyle: 'italic' }}>{part.slice(1, -1)}</Text>;
     }
-    return <Text key={index}>{part}</Text>;
+    return <Text key={`${keyPrefix}${index}`}>{part}</Text>;
+  });
+}
+
+function renderInline(
+  text: string,
+  color: string,
+  linkColor: string,
+  sources: readonly UCBlogSource[],
+  onSourceError: () => void,
+): React.ReactNode[] {
+  return articleInlineLinks(text, sources).map((part, index) => {
+    if (part.kind === 'text') {
+      return renderEmphasis(part.text, color, `text-${index}-`);
+    }
+    const label = part.text.replace(/\*\*([^*]+)\*\*|\*([^*]+)\*/g, '$1$2');
+    const webLinkProps = Platform.OS === 'web' ? { href: part.url } as { href: string } : {};
+    return (
+      <Text
+        key={`link-${index}`}
+        {...webLinkProps}
+        accessibilityRole="link"
+        accessibilityLabel={label}
+        onPress={(event) => {
+          // The web anchor and Linking must not both navigate on the same click.
+          if (Platform.OS === 'web') event.preventDefault();
+          void Linking.openURL(part.url).catch(onSourceError);
+        }}
+        style={{ color: linkColor, textDecorationLine: 'underline' }}
+      >
+        {renderEmphasis(part.text, undefined, `link-${index}-`)}
+      </Text>
+    );
   });
 }
 
@@ -93,24 +126,24 @@ function ArticleContent({
       <View style={styles.body}>
         {blocks.map((block, index) => {
           if (block.kind === 'heading') {
-            return <Text key={index} accessibilityRole="header" style={[styles.bodyHeading, { color: colors.text }]}>{block.text}</Text>;
+            return <Text key={index} accessibilityRole="header" style={[styles.bodyHeading, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>;
           }
           if (block.kind === 'list') {
             return (
               <View key={index} style={styles.listItem}>
                 <Text style={[styles.listMarker, { color: colors.primary }]}>{block.ordered ? `${block.number ?? '1'}.` : '•'}</Text>
-                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text)}</Text>
+                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>
               </View>
             );
           }
           if (block.kind === 'quote') {
             return (
               <View key={index} style={[styles.quote, { borderLeftColor: colors.accent, backgroundColor: colors.surface }]}>
-                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text)}</Text>
+                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>
               </View>
             );
           }
-          return <Text key={index} style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text)}</Text>;
+          return <Text key={index} style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>;
         })}
       </View>
       {sources.length > 0 ? (

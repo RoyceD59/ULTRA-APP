@@ -1,8 +1,14 @@
 import { refillCapabilitiesSchema } from '@workspace/api-zod/refill-readiness';
 
-/** Both switches must opt in. Offline, old servers and malformed data hide it. */
-export function careOverviewAvailable(value: unknown, clientFlag?: string): boolean {
-  if (clientFlag?.trim().toLowerCase() !== 'true') return false;
+/** Capability responses must be valid and explicitly opt in; all paid phases stay unavailable. */
+export function careOverviewAvailable(value: unknown): boolean {
   const parsed = refillCapabilitiesSchema.safeParse(value);
-  return parsed.success && parsed.data.careOverview;
+  if (!parsed.success) return false;
+  const capabilities = parsed.data;
+  return capabilities.careOverview
+    && !capabilities.promoRefill
+    && !capabilities.paidRefill
+    && !capabilities.moneyWallet
+    && !capabilities.paidCare
+    && !capabilities.automaticCollection;
 }

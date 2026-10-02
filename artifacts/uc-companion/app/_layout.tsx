@@ -41,6 +41,7 @@ SplashScreen.preventAutoHideAsync();
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
+const isolatedPreview = process.env.EXPO_PUBLIC_PREVIEW_SAFE_MODE === '1';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -157,29 +158,32 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) return null;
 
+  const app = (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <CartProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <KeyboardProvider>
+              <RootLayoutNav />
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </CartProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
       <ErrorBoundary>
-        {/* ClerkProvider loads in the background; the app itself never waits
-            on Clerk. Social sign-in buttons gate themselves on ClerkLoaded, so
-            a Clerk outage or offline start can't block password users. */}
-        <ClerkProvider
-          publishableKey={clerkPublishableKey}
-          tokenCache={tokenCache}
-          proxyUrl={clerkProxyUrl}
-        >
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <CartProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <KeyboardProvider>
-                    <RootLayoutNav />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </CartProvider>
-            </AuthProvider>
-          </QueryClientProvider>
-        </ClerkProvider>
+        {isolatedPreview ? app : (
+          <ClerkProvider
+            publishableKey={clerkPublishableKey}
+            tokenCache={tokenCache}
+            proxyUrl={clerkProxyUrl}
+          >
+            {app}
+          </ClerkProvider>
+        )}
       </ErrorBoundary>
     </SafeAreaProvider>
   );

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, refreshTeamUser } from "@/lib/team-auth";
 import { trackEvent } from "@/lib/analytics";
+import { ArticleBodyPreview } from "@/components/blog/ArticleBodyPreview";
 
 type SourceLink = { url: string; title?: string };
 type PublishedSnapshot = {
@@ -214,26 +215,6 @@ async function importArticleFile(file: File): Promise<string> {
   if (extension === "txt" || extension === "md") return file.text();
   throw new Error("Choose a .txt, .md, or .docx article.");
 }
-
-function SafeArticlePreview({ content }: { content: string }) {
-  const blocks = content.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
-  if (!blocks.length) return <p className="text-sm text-muted-foreground">Your article preview will appear here.</p>;
-  return <div className="space-y-4 text-sm leading-7">
-    {blocks.map((block, index) => {
-      const heading = block.match(/^(#{1,3})\s+(.+)$/);
-      if (heading) {
-        const Tag = heading[1]!.length === 1 ? "h2" : heading[1]!.length === 2 ? "h3" : "h4";
-        return <Tag key={index} className="font-semibold leading-tight">{heading[2]}</Tag>;
-      }
-      const lines = block.split("\n");
-      if (lines.every((line) => /^[-*]\s+/.test(line))) {
-        return <ul key={index} className="list-disc space-y-1 pl-5">{lines.map((line, lineIndex) => <li key={lineIndex}>{line.replace(/^[-*]\s+/, "")}</li>)}</ul>;
-      }
-      return <p key={index} className="whitespace-pre-wrap">{block}</p>;
-    })}
-  </div>;
-}
-
 function readRunValue(run: BlogRun, ...keys: string[]): unknown {
   for (const key of keys) if (run[key] !== undefined && run[key] !== null) return run[key];
   return undefined;
@@ -656,7 +637,7 @@ export default function CompanionBlogPage() {
               <h1 className="mt-3 text-3xl font-semibold leading-tight">{form.title || "Untitled article"}</h1>
               <p className="mt-3 text-base leading-7 text-muted-foreground">{form.summary || "A short introduction will appear here."}</p>
               <div className="my-6 border-t" />
-              <SafeArticlePreview content={form.content} />
+              <ArticleBodyPreview content={form.content} sources={form.sources} />
             </article>
             <aside className="space-y-5 border-t pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
               <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sources</p>{form.sources.filter((source) => source.url).length ? <ul className="mt-2 space-y-2">{form.sources.filter((source) => source.url).map((source, index) => <li key={index}>{isSafeSourceUrl(source.url) ? <a href={source.url} target="_blank" rel="noopener noreferrer" className="break-all text-xs text-primary underline underline-offset-2">{source.title || source.url}</a> : <span className="break-all text-xs text-destructive">Invalid source URL: {source.url}</span>}</li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">No source links have been added.</p>}</div>

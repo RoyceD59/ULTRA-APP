@@ -14,10 +14,8 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_DOMAIN": "app.ucfilters.com",
-        "EXPO_PUBLIC_API_DOMAIN": "api.ucfilters.com"
-      },
+      "environment": "preview",
+      "env": { "UC_PREVIEW_BUILD": "1" },
       "ios": {
         "resourceClass": "m-medium"
       },

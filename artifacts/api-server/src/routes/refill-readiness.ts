@@ -2,17 +2,29 @@ import { Router, type IRouter } from "express";
 import { simulateRefillEconomics } from "@workspace/api-zod/refill-readiness";
 import { requireAdmin } from "../lib/adminAuth.js";
 import { getRefillCapabilities, getRefillReadiness } from "../lib/refill-readiness.js";
+import { readRefillFeatures } from "../lib/refill-features.js";
 
 const router: IRouter = Router();
 
-router.get("/uc/refill/capabilities", (_req, res) => {
-  res.set("Cache-Control", "no-store").json(getRefillCapabilities());
+router.get("/uc/refill/capabilities", async (_req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const features = await readRefillFeatures();
+    res.json(getRefillCapabilities(features));
+  } catch {
+    res.status(503).json({ error: "Feature capabilities could not be loaded." });
+  }
 });
 
 router.get("/uc/admin/refill/readiness", async (req, res): Promise<void> => {
   res.set("Cache-Control", "no-store");
   if (!(await requireAdmin(req, res))) return;
-  res.json(getRefillReadiness());
+  try {
+    const features = await readRefillFeatures();
+    res.json(getRefillReadiness(features));
+  } catch {
+    res.status(503).json({ error: "Refill readiness could not be loaded." });
+  }
 });
 
 router.post("/uc/admin/refill/simulate", async (req, res): Promise<void> => {

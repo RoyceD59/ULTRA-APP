@@ -41,6 +41,10 @@ stale HTML retaining an older five-tab deployment.
 
 ## Validation on 2026-09-28
 
+The dated validation below is reported by the external source branch's prior
+validation record. It is not a current Replit test run; Replit verification is
+limited to cheap static/script/config checks unless stated separately.
+
 - 484 Companion regression tests passed, with zero failures or skips.
 - Shared API client/Zod builds and Companion TypeScript checking passed.
 - Expo production web export passed. Its JavaScript bundle is approximately

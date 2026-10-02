@@ -58,7 +58,6 @@ export function simulateRefillEconomics(value: unknown): RefillSimulationResult 
   if (missingCosts.length) {
     return { ...base, status: "missing_costs", totalCostMinor: null, contributionMinor: null };
   }
-  // Use integer arithmetic even when multiplication exceeds Number's safe range.
   const waterCost = (BigInt(input.volumeMl) * BigInt(input.costs.waterPerLitreMinor!) + 999n) / 1000n;
   const total = waterCost + BigInt(input.costs.paymentMinor!) + BigInt(input.costs.deliverySupportMinor!)
     + BigInt(input.costs.benefitObligationMinor!) + BigInt(input.costs.taxMinor!);

@@ -48,6 +48,7 @@ import AdminLocationsPage from '@/pages/admin/locations';
 import AgentOperationsPage from '@/pages/admin/agent-operations';
 import AdminGuidesPage from '@/pages/admin/guides';
 import CompanionBlogPage from '@/pages/blog';
+import RefillGovernancePage from '@/pages/admin/refill-governance';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -130,6 +131,7 @@ function Router() {
               <Route path="/admin/integrations"><AdminGuard><AdminIntegrationsPage /></AdminGuard></Route>
               <Route path="/admin/rewards"><AdminGuard><AdminRewardsPage /></AdminGuard></Route>
               <Route path="/admin/refill-readiness"><AdminGuard><RefillReadinessPage /></AdminGuard></Route>
+              <Route path="/admin/refill-governance"><AdminGuard><RefillGovernancePage /></AdminGuard></Route>
               <Route path="/admin/customers"><AdminGuard><AdminCustomersPage /></AdminGuard></Route>
               <Route path="/admin/unsynced-registrations"><AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard></Route>
               <Route path="/admin/referrals"><AdminGuard><AdminReferralsPage /></AdminGuard></Route>

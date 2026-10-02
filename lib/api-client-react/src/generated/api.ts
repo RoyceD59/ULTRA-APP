@@ -153,6 +153,9 @@ import type {
   PublicInstantWaterAssessmentResult,
   PublishEditorialBlogArticle200,
   ReconciliationConflictQueue,
+  RefillCapabilities,
+  RefillFeatures,
+  RefillFeaturesUpdate,
   RetryUcOfflineClientDelivery200,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
@@ -11786,6 +11789,231 @@ export function useGetCustomerLifecycleFeatureConfig<TData = Awaited<ReturnType<
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCustomerLifecycleFeatureConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetRefillFeaturesUrl = () => {
+
+
+
+
+  return `/api/uc/admin/refill/features`
+}
+
+/**
+ * @summary Read persisted refill preview activation flags
+ */
+export const getRefillFeatures = async ( options?: RequestInit): Promise<RefillFeatures> => {
+
+  return customFetch<RefillFeatures>(getGetRefillFeaturesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRefillFeaturesQueryKey = () => {
+    return [
+    `/api/uc/admin/refill/features`
+    ] as const;
+    }
+
+
+export const getGetRefillFeaturesQueryOptions = <TData = Awaited<ReturnType<typeof getRefillFeatures>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRefillFeatures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRefillFeaturesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRefillFeatures>>> = ({ signal }) => getRefillFeatures({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRefillFeatures>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRefillFeaturesQueryResult = NonNullable<Awaited<ReturnType<typeof getRefillFeatures>>>
+export type GetRefillFeaturesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read persisted refill preview activation flags
+ */
+
+export function useGetRefillFeatures<TData = Awaited<ReturnType<typeof getRefillFeatures>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRefillFeatures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRefillFeaturesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateRefillFeaturesUrl = () => {
+
+
+
+
+  return `/api/uc/admin/refill/features`
+}
+
+/**
+ * @summary Update persisted refill preview activation flags
+ */
+export const updateRefillFeatures = async (refillFeaturesUpdate: RefillFeaturesUpdate, options?: RequestInit): Promise<RefillFeatures> => {
+
+  return customFetch<RefillFeatures>(getUpdateRefillFeaturesUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(refillFeaturesUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateRefillFeaturesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRefillFeatures>>, TError,{data: BodyType<RefillFeaturesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateRefillFeatures>>, TError,{data: BodyType<RefillFeaturesUpdate>}, TContext> => {
+
+const mutationKey = ['updateRefillFeatures'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRefillFeatures>>, {data: BodyType<RefillFeaturesUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateRefillFeatures(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateRefillFeaturesMutationResult = NonNullable<Awaited<ReturnType<typeof updateRefillFeatures>>>
+    export type UpdateRefillFeaturesMutationBody = BodyType<RefillFeaturesUpdate>
+    export type UpdateRefillFeaturesMutationError = ErrorType<void>
+
+    /**
+ * @summary Update persisted refill preview activation flags
+ */
+export const useUpdateRefillFeatures = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRefillFeatures>>, TError,{data: BodyType<RefillFeaturesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateRefillFeatures>>,
+        TError,
+        {data: BodyType<RefillFeaturesUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateRefillFeaturesMutationOptions(options));
+    }
+
+export const getGetRefillCapabilitiesUrl = () => {
+
+
+
+
+  return `/api/uc/refill/capabilities`
+}
+
+/**
+ * @summary Read safe refill feature capabilities
+ */
+export const getRefillCapabilities = async ( options?: RequestInit): Promise<RefillCapabilities> => {
+
+  return customFetch<RefillCapabilities>(getGetRefillCapabilitiesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRefillCapabilitiesQueryKey = () => {
+    return [
+    `/api/uc/refill/capabilities`
+    ] as const;
+    }
+
+
+export const getGetRefillCapabilitiesQueryOptions = <TData = Awaited<ReturnType<typeof getRefillCapabilities>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRefillCapabilities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRefillCapabilitiesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRefillCapabilities>>> = ({ signal }) => getRefillCapabilities({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRefillCapabilities>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRefillCapabilitiesQueryResult = NonNullable<Awaited<ReturnType<typeof getRefillCapabilities>>>
+export type GetRefillCapabilitiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Read safe refill feature capabilities
+ */
+
+export function useGetRefillCapabilities<TData = Awaited<ReturnType<typeof getRefillCapabilities>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRefillCapabilities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRefillCapabilitiesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -309,7 +309,7 @@ async function runTestPhase(
     ],
     {
       cwd: testCwd,
-      env: { ...process.env, DATABASE_URL: TEST_URL },
+      env: { ...process.env, DATABASE_URL: TEST_URL, NODE_ENV: "test" },
       stdio: "inherit",
     },
   );

@@ -70,17 +70,19 @@ production/dev DATABASE_URL settings or instantaneous cross-device sync.
 
 | Switch | Default | Effect |
 | --- | --- | --- |
-| `UC_CARE_OVERVIEW_PREVIEW` | false | Server advertises existing free-member overview. |
-| `EXPO_PUBLIC_UC_CARE_OVERVIEW_PREVIEW` | false | Build-time Companion opt-in; server permission is also required. |
+| `careOverview` in ProjectHub Admin → Care & Refill Activation | false | Persisted API permission advertises the existing free-member overview; Companion checks this permission on mount/focus. |
+| `refillGovernance` in the same admin panel | false | Enables admin station/campaign review only; see CONTROLLED-REFILL-GOVERNANCE.md. |
 | Promo refill / paid refill / money wallet / paid care / automatic collection | unavailable | No enabling switch or mutation routes in this foundation. Implement and prove the appropriate phase before exposing one. |
 
-Keep both preview switches absent/false for production. To remove the preview,
-disable the server switch; focused/refreshed clients hide it, and the page
-fails closed on missing or invalid capabilities. An immediate hard kill for a
-future economic flow must be checked on every server operation. This preview
-has no operations to compensate. Application rollback requires no schema
-rollback because no migration or balance change is introduced.
-
+Keep both preview settings off until the intended rollout is approved. To remove
+Care Overview, deactivate it in the admin panel; focused/refreshed clients hide
+it, and the page fails closed on missing or invalid capabilities. The former
+`UC_CARE_OVERVIEW_PREVIEW` and `EXPO_PUBLIC_UC_CARE_OVERVIEW_PREVIEW` environment
+flags are no longer required and cannot override the persisted setting.
+An immediate hard kill for a future economic flow must be checked on every
+server operation. These previews have no financial operations to compensate.
+Rollback should preserve the additive governance/setting schema and audit data;
+it must not delete customer data or rewrite balances.
 ## Next mutation-heavy change and acceptance
 
 Design review must establish the shared PostgreSQL posting boundary, stable

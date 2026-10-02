@@ -11,7 +11,7 @@ export default function CareOverviewEntry() {
   const router = useRouter();
   if (!available) return null;
   return <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open your water care overview"
-    onPress={() => router.push('/care' as never)}
+    testID="care-overview-entry" onPress={() => router.push('/care' as never)}
     style={{ padding: 20, marginTop: 20, gap: 12, borderRadius: 16, backgroundColor: colors.primaryLight }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <Ionicons name="water-outline" size={24} color={colors.primary} />

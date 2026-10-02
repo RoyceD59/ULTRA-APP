@@ -22,11 +22,9 @@ function GlobalCartBar() {
   const { totalItems, totalPrice, cartHydrated } = useCart();
 
   // Hydration guard: before the AsyncStorage read completes, `totalItems` is
-  // the pre-hydration default (0).  Without the cartHydrated gate, a JS-context
-  // restart (e.g. Android low-memory purge) would animate the bar OUT against
-  // that stale 0 and then back IN once the real cart loads — a visible flash.
+  // the pre-hydration default (0). Without this guard a context restart can
+  // briefly hide the bar before the persisted cart is restored.
   const hasItems = cartHydrated && totalItems > 0;
-
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -64,15 +62,12 @@ function GlobalCartBar() {
         },
       ]}
     >
-      {/* Left: item count + total */}
       <View style={[styles.barLeft, { flexShrink: 1 }]}>
         <View style={[styles.badgeCircle, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
           <Text style={styles.badgeText}>{totalItems}</Text>
         </View>
         <Text style={styles.barTotal}>Subtotal {formatKES(totalPrice)}</Text>
       </View>
-
-      {/* Right: Quick Checkout button */}
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() => {
@@ -90,7 +85,6 @@ function GlobalCartBar() {
   );
 }
 
-
 export default function TabLayout() {
   const layout = useCompanionLayout();
   const insets = useSafeAreaInsets();
@@ -100,10 +94,15 @@ export default function TabLayout() {
   // selected tab, filters, scroll position, and in-progress form state.
   return (
     <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.background }}>
-      <Tabs tabBar={props => <CompanionNavigation {...props} />}
-        screenOptions={{ headerShown: false, animation: 'none', lazy: true,
+      <Tabs
+        tabBar={props => <CompanionNavigation {...props} />}
+        screenOptions={{
+          headerShown: false,
+          animation: 'none',
+          lazy: true,
           sceneStyle: { marginLeft: layout.navigationWidth, marginBottom: bottom, paddingTop: insets.top, minWidth: 0 },
-        }}>
+        }}
+      >
         {COMPANION_TABS.map(tab => <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.label }} />)}
       </Tabs>
       <GlobalCartBar />
@@ -126,35 +125,19 @@ const styles = StyleSheet.create({
     minHeight: 56,
     flexWrap: 'wrap',
     gap: 8,
-    // Shadow
     shadowColor: '#000',
     shadowOpacity: 0.18,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
-  barLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  badgeCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  barLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  badgeCircle: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   barTotal: { color: '#fff', fontSize: 13, fontWeight: '700', flexShrink: 1 },
   checkoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    minHeight: 44,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 44,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
   },
   checkoutBtnText: { fontSize: 12, fontWeight: '700' },
 });
