@@ -2846,7 +2846,7 @@ export const IssueAgentClientTokenResponse = zod.object({
 
 
 /**
- * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+ * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer. New replies use relevant curated Markdown and published guide/article snapshots, with concise default answers.
  * @summary Generate and persist one anonymous Alison turn
  */
 export const createUcAlisonTurnBodyConversationIdMin = 16;

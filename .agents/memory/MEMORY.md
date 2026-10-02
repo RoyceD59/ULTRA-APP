@@ -47,3 +47,4 @@
 - [pnpm Nix version switching](pnpm-nix-version-switching.md) — disable automatic version switching here to avoid recursive self-installs; retain the external CI pin.
 - [Refill preview activation](refill-preview-activation.md) — persisted admin switches activate delivered previews only; unfinished financial and dispensing functions remain unavailable.
 - [Article body links](article-body-links.md) — rendered articles must use descriptive clickable linkpoints, not bare URLs or literal Markdown links.
+- [Alison answer policy](alison-answer-policy.md) — short replies backed by curated agent Markdown and local customer-facing documents.

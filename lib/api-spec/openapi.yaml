@@ -2373,7 +2373,7 @@ paths:
       operationId: createUcAlisonTurn
       tags: [anthropic]
       summary: Generate and persist one anonymous Alison turn
-      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer. New replies use relevant curated Markdown and published guide/article snapshots, with concise default answers.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2390,6 +2390,7 @@ paths:
         "401": { description: Customer authentication required }
         "429": { description: Customer rate limit exceeded }
         "502": { description: Alison generation or transcript persistence unavailable }
+        "503": { description: Approved Alison reference documents temporarily unavailable }
   /oauth/clients:
     get:
       operationId: listAgentOauthClients
