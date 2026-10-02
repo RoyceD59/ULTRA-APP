@@ -29,6 +29,10 @@
   established counts are set on the API (FOREST_TREES_PLANTED,
   FOREST_TREES_ESTABLISHED, FOREST_REPORT_DATE). FALLBACK below is shown only
   when the API is unset or unreachable.
+
+  Programme updates (donation dates, certificate, partner, field report,
+  news) live in programme-status.json next to this file. Edit that file,
+  not this one; instructions are inside it.
 -->
 <style>
 /* Layout: canvas forest as the hero, then a narrow reading column of figures, stages and method. */
@@ -99,6 +103,19 @@ h2 { margin: 0 0 .75rem; font: 700 1.35rem/1.2 var(--font-display); letter-spaci
 .status { margin: -.25rem 0 .75rem; font: 500 .78rem/1.4 var(--font-data); letter-spacing: .04em; color: var(--muted); }
 .status.live::before { content: ""; display: inline-block; width: .5rem; height: .5rem; margin-right: .4rem; border-radius: 50%; background: var(--leaf); vertical-align: .05rem; }
 
+.milestones { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; }
+.milestones li { padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.milestones p { margin: .3rem 0 0; font-size: .92rem; color: var(--muted); }
+.ms-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.pill { font: 500 .68rem/1 var(--font-data); letter-spacing: .06em; text-transform: uppercase; padding: .3rem .5rem; border-radius: 999px; white-space: nowrap; }
+.pill.pending { color: var(--muted); border: 1px dashed var(--muted); }
+.pill.scheduled { color: var(--fg); background: color-mix(in srgb, var(--ring) 35%, transparent); }
+.pill.done { color: var(--bg); background: var(--canopy); }
+.updates { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.updates li { padding-left: .9rem; border-left: 3px solid var(--leaf); }
+.updates li.empty { border-left-style: dashed; border-left-color: var(--line); color: var(--muted); font-size: .92rem; }
+.updates time { display: block; font: 500 .75rem var(--font-data); color: var(--muted); }
+.updates p { margin: .15rem 0 0; font-size: .92rem; }
 .stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-left: 3px solid var(--soil); }
 .stages li { position: relative; padding: .5rem 0 .75rem 1.25rem; }
 .stages li::before { content: ""; position: absolute; left: -.5rem; top: .9rem; width: .75rem; height: .75rem; border-radius: 50%; background: var(--bg); border: 3px solid var(--soil); }
@@ -148,6 +165,12 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
     <p class="basis" id="basis"></p>
   </section>
 
+  <section aria-labelledby="updates-h">
+    <h2 id="updates-h">Programme updates</h2>
+    <ul class="milestones" id="milestones"></ul>
+    <ol class="updates" id="updates"></ol>
+  </section>
+
   <section aria-labelledby="stages-h">
     <h2 id="stages-h">How a tree grows</h2>
     <ol class="stages" id="stages"></ol>
@@ -179,19 +202,110 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 1rem; padding-block: 
 <script>
 "use strict";
 
-// Staff-maintained programme status. Leave a field null until it is confirmed;
-// the page then says so instead of showing a placeholder.
-const PROGRAMME_STATUS = {
-  partner: null,               // programme partner name, once confirmed
-  figuresAsOf: null,           // date of the interim figures, e.g. "30 Sep 2026"
-  donationScheduledFor: null,  // e.g. "9 Oct 2026"
-  donationMadeOn: null,        // set when the donation has been made
-  certificateUrl: null,        // link to the published donation certificate
+// ── Programme status (staff-maintained) ──────────────────────────────────
+// Filled from programme-status.json next to this page, so staff can post the
+// donation dates, certificate, partner and field report without editing code.
+// Anything left null shows as pending — never as a made-up value.
+const STATUS = {
+  partner: null,
+  figuresAsOf: null,
+  donation: { scheduledFor: null, madeOn: null, amountKes: null },
+  certificate: { url: null, issuedOn: null, issuer: null },
+  fieldReport: { url: null, publishedOn: null },
+  updates: [],
 };
-const DONATED = !!PROGRAMME_STATUS.donationMadeOn;
-const LOCATION_TEXT = PROGRAMME_STATUS.partner
-  ? `Kenya — with ${PROGRAMME_STATUS.partner}; planting sites to be confirmed by the programme partner`
+const isDonated = () => !!STATUS.donation.madeOn;
+const locationText = () => STATUS.partner
+  ? `Kenya — with ${STATUS.partner}; planting sites to be confirmed by the programme partner`
   : "Kenya — planting sites to be confirmed by the programme partner";
+
+function fmtDate(v) {
+  if (!v) return null;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(String(v));
+  const d = iso ? new Date(v + "T12:00:00Z") : null;
+  return d && !isNaN(d) ? d.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : String(v);
+}
+/** Only https links (or same-site files such as certificates/…pdf). */
+function safeUrl(u) {
+  if (!u) return null;
+  try {
+    const x = new URL(String(u), location.href);
+    return x.protocol === "https:" || x.origin === location.origin ? x.href : null;
+  } catch (e) { return null; }
+}
+const str = v => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+async function loadProgrammeStatus() {
+  try {
+    const res = await fetch("programme-status.json", { cache: "no-store" });
+    if (res.ok) {
+      const j = await res.json();
+      STATUS.partner = str(j.partner);
+      STATUS.figuresAsOf = str(j.figuresAsOf);
+      STATUS.donation = {
+        scheduledFor: str(j.donation?.scheduledFor), madeOn: str(j.donation?.madeOn),
+        amountKes: Number.isFinite(j.donation?.amountKes) ? j.donation.amountKes : null,
+      };
+      STATUS.certificate = { url: safeUrl(str(j.certificate?.url)), issuedOn: str(j.certificate?.issuedOn), issuer: str(j.certificate?.issuer) };
+      STATUS.fieldReport = { url: safeUrl(str(j.fieldReport?.url)), publishedOn: str(j.fieldReport?.publishedOn) };
+      STATUS.updates = (Array.isArray(j.updates) ? j.updates : [])
+        .filter(u => str(u?.title))
+        .map(u => ({ date: str(u.date), title: str(u.title), body: str(u.body), url: safeUrl(str(u.url)) }))
+        .sort((x, y) => String(y.date || "").localeCompare(String(x.date || "")));
+    }
+  } catch (e) { /* file missing or malformed: keep everything pending */ }
+  renderUpdates();
+  if (lastFigures) renderFigures(lastFigures.f, lastFigures.live);
+  loadLive();
+}
+
+function renderUpdates() {
+  const D = STATUS.donation, C = STATUS.certificate, R = STATUS.fieldReport;
+  const amount = D.amountKes ? ` · ${kes(D.amountKes)}` : "";
+  const items = [
+    ["Donation", D.madeOn ? "done" : D.scheduledFor ? "scheduled" : "pending",
+      D.madeOn ? `Made on ${fmtDate(D.madeOn)}${amount}` : D.scheduledFor ? `Scheduled for ${fmtDate(D.scheduledFor)}` : "Date to be confirmed", null],
+    ["Donation certificate", C.url ? "done" : "pending",
+      C.url ? `Issued${C.issuedOn ? ` on ${fmtDate(C.issuedOn)}` : ""}${C.issuer ? ` by ${C.issuer}` : ""}` : "Will be published when received",
+      C.url ? ["View certificate", C.url] : null],
+    ["Programme partner", STATUS.partner ? "done" : "pending", STATUS.partner || "To be announced", null],
+    ["First field report", R.url ? "done" : "pending",
+      R.url ? `Published${R.publishedOn ? ` on ${fmtDate(R.publishedOn)}` : ""}` : "Field outcomes will be posted after the programme partner reports",
+      R.url ? ["Read the report", R.url] : null],
+  ];
+  const PILL = { done: "Done", scheduled: "Scheduled", pending: "Pending" };
+  const ul = document.getElementById("milestones");
+  ul.replaceChildren(...items.map(([label, state, detail, link]) => {
+    const li = document.createElement("li");
+    const head = document.createElement("div"); head.className = "ms-head";
+    const t = document.createElement("strong"); t.textContent = label;
+    const pill = document.createElement("span"); pill.className = `pill ${state}`; pill.textContent = PILL[state];
+    head.append(t, pill);
+    const p = document.createElement("p"); p.textContent = detail;
+    if (link) { const a = document.createElement("a"); a.href = link[1]; a.rel = "noopener"; a.textContent = link[0]; p.append(" · ", a); }
+    li.append(head, p);
+    return li;
+  }));
+
+  const ol = document.getElementById("updates");
+  if (STATUS.updates.length === 0) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = "No updates yet. The donation date and certificate will be posted here.";
+    ol.replaceChildren(li);
+    return;
+  }
+  ol.replaceChildren(...STATUS.updates.map(u => {
+    const li = document.createElement("li");
+    if (u.date) { const d = document.createElement("time"); d.dateTime = u.date; d.textContent = fmtDate(u.date); li.append(d); }
+    const t = document.createElement("strong"); t.textContent = u.title; li.append(t);
+    if (u.body || u.url) {
+      const p = document.createElement("p"); if (u.body) p.textContent = u.body;
+      if (u.url) { const a = document.createElement("a"); a.href = u.url; a.rel = "noopener"; a.textContent = "Details"; p.append(u.body ? " · " : "", a); }
+      li.append(p);
+    }
+    return li;
+  }));
+}
 
 // ── Fallback figures (interim; shown only without live data) ─────────────
 const FALLBACK = {
@@ -203,7 +317,6 @@ const FALLBACK = {
   treesPlanted: null,
   treesEstablished: null,
   reportDate: null,
-  location: LOCATION_TEXT,
 };
 const COST_RANGE = [500, 750];
 const INTERIM_AVERAGE_KES = 12220; // revenue per sale — proxy, not confirmed LTV
@@ -240,14 +353,16 @@ const visitor = readVisitor();
 // ── Figures ──────────────────────────────────────────────────────────────
 let fundedTrees = 0;
 
+let lastFigures = null;
 function renderFigures(f, live) {
+  lastFigures = { f, live };
   const allocation = f.contributionKes;
   const treeFund = f.treeFundKes;
   fundedTrees = f.estimatedTreesFunded;
   const high = Math.floor(treeFund / COST_RANGE[0]);
   const reported = f.reportDate ? `Programme report, ${f.reportDate}` : "Programme report";
   const rows = [
-    [DONATED ? "Trees funded by donation" : "Estimated trees to be funded", num(f.estimatedTreesFunded), `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range`],
+    [isDonated() ? "Trees funded by donation" : "Estimated trees to be funded", num(f.estimatedTreesFunded), `at ${kes(f.treeCostKes)} per tree · ${num(f.estimatedTreesFunded)}–${num(high)} across the ${kes(COST_RANGE[0])}–${num(COST_RANGE[1])} range`],
     ["Tree allocation (1.5%)", kes(treeFund), "half of every 3% allocation"],
     ["Clean-water allocation (1.5%)", kes(f.cleanWaterKes), "the other half, for clean-water access"],
     ["Customer contributions (3%)", kes(allocation), `of ${kes(f.eligibleRevenueKes)} eligible revenue`],
@@ -257,7 +372,7 @@ function renderFigures(f, live) {
   if (live && f.growingTreePct !== null) {
     rows.splice(1, 0, ["Shared tree in progress", f.growingTreePct + "% allocated", `${num(f.sharedTreesFunded)} shared tree${f.sharedTreesFunded === 1 ? "" : "s"} fully allocated in the app`]);
   }
-  rows.push(["Programme location", LOCATION_TEXT, null]);
+  rows.push(["Programme location", locationText(), null]);
   rows.push(["Certification", certificationText(), null]);
 
   const dl = document.getElementById("figures");
@@ -273,16 +388,16 @@ function renderFigures(f, live) {
       if (note) { const s = document.createElement("small"); s.textContent = note; dd.appendChild(s); }
     }
     if (label === "Programme location" || label === "Certification") wrap.className = "pending";
-    if (label === "Certification" && PROGRAMME_STATUS.certificateUrl) {
+    if (label === "Certification" && STATUS.certificate.url) {
       const a = document.createElement("a");
-      a.href = PROGRAMME_STATUS.certificateUrl; a.rel = "noopener"; a.textContent = "View donation certificate";
+      a.href = STATUS.certificate.url; a.rel = "noopener"; a.textContent = "View donation certificate";
       dd.replaceChildren(a);
     }
     wrap.append(dt, dd); dl.appendChild(wrap);
   }
   const outcomes = "Field outcomes will be updated after the programme partner publishes its report.";
   const nature = " These figures represent funds allocated to the programme, not yet verified field outcomes.";
-  const asOf = PROGRAMME_STATUS.figuresAsOf ? ` as of ${PROGRAMME_STATUS.figuresAsOf}` : "";
+  const asOf = STATUS.figuresAsOf ? ` as of ${fmtDate(STATUS.figuresAsOf)}` : "";
   document.getElementById("basis").textContent = live
     ? (f.reportDate ? `Field figures as reported on ${f.reportDate}. ` : outcomes + " ")
       + (f.baselineRevenueKes > 0 ? `Includes ${kes(f.baselineRevenueKes)} of earlier and offline sales.` : "Revenue covers purchases recorded in the Ultra Clear app.")
@@ -292,9 +407,9 @@ function renderFigures(f, live) {
 }
 
 function certificationText() {
-  const S = PROGRAMME_STATUS, tail = " Certificate will be published when received.";
-  if (S.donationMadeOn) return `Donation made on ${S.donationMadeOn}.` + (S.certificateUrl ? "" : tail);
-  if (S.donationScheduledFor) return `Donation scheduled for ${S.donationScheduledFor}.` + tail;
+  const D = STATUS.donation, tail = " Certificate will be published when received.";
+  if (D.madeOn) return `Donation made on ${fmtDate(D.madeOn)}.` + (STATUS.certificate.url ? "" : tail);
+  if (D.scheduledFor) return `Donation scheduled for ${fmtDate(D.scheduledFor)}.` + tail;
   return "Donation date to be confirmed." + tail;
 }
 
@@ -307,7 +422,7 @@ function fallbackFigures() {
     cleanWaterKes: contributionKes - treeFundKes, treeCostKes: F.treeCostKes,
     estimatedTreesFunded: Math.floor(treeFundKes / F.treeCostKes + 1e-9),
     treesPlanted: F.treesPlanted, treesEstablished: F.treesEstablished,
-    reportDate: F.reportDate, location: F.location, baselineRevenueKes: 0,
+    reportDate: F.reportDate, baselineRevenueKes: 0,
     growingTreePct: null, sharedTreesFunded: 0,
   };
 }
@@ -320,8 +435,8 @@ function setStatus(text, live) {
 
 async function loadLive() {
   const base = (document.querySelector('meta[name="uc-api-base"]')?.content || "").trim().replace(/\/+$/, "");
-  const interim = PROGRAMME_STATUS.figuresAsOf
-    ? `Showing interim figures as of ${PROGRAMME_STATUS.figuresAsOf}`
+  const interim = STATUS.figuresAsOf
+    ? `Showing interim figures as of ${fmtDate(STATUS.figuresAsOf)}`
     : "Showing interim figures · as-of date to be confirmed";
   if (!base) { setStatus(interim, false); return; }
   try {
@@ -975,7 +1090,8 @@ function frame(t) {
 }
 
 renderFigures(fallbackFigures(), false);
-loadLive();
+renderUpdates();
+loadProgrammeStatus();
 setInterval(loadLive, 5 * 60 * 1000);
 scene = currentScene();
 renderSkyBar();
