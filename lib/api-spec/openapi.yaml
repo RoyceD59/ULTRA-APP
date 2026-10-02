@@ -70,6 +70,54 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/HydrateForestTotals" }
         "503": { description: Totals temporarily unavailable; do not assume zero }
+  /admin/customer-reviews:
+    get:
+      operationId: listCustomerReviews
+      tags: [uc-admin]
+      summary: Administrator-only Companion review log with matching-dataset counts
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: page, schema: {type: integer, minimum: 1, maximum: 100000, default: 1}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+        - {in: query, name: productId, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+        - {in: query, name: rating, schema: {type: integer, minimum: 1, maximum: 5}}
+        - {in: query, name: ratingSentiment, schema: {type: string, enum: [Positive, Neutral, Negative]}}
+        - {in: query, name: aiSentiment, schema: {type: string, enum: [Positive, Neutral, Negative, Mixed]}}
+        - {in: query, name: status, schema: {type: string, enum: [pending, processing, completed, failed, unavailable]}}
+        - {in: query, name: disagreement, schema: {type: boolean}}
+        - {in: query, name: search, schema: {type: string, maxLength: 200}}
+      responses:
+        "200":
+          description: Paginated rows and summaries across all matching reviews
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CustomerReviewLog"}
+        "400": {description: Invalid filter or pagination}
+        "401": {description: Authentication required}
+        "403": {description: Administrator access required}
+        "503": {description: Review log temporarily unavailable}
+  /admin/customer-reviews/{id}/retry:
+    post:
+      operationId: retryCustomerReviewAnalysis
+      tags: [uc-admin]
+      summary: Queue a failed eligible review for automated text analysis
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+      responses:
+        "200":
+          description: Retry queued without waiting for AI
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: {type: boolean}
+        "401": {description: Authentication required}
+        "403": {description: Administrator access required}
+        "409": {description: Current review is not eligible for retry}
+        "503": {description: Retry temporarily unavailable}
   /water-check/assessments:
     post:
       operationId: createPublicInstantWaterAssessment
@@ -2400,7 +2448,7 @@ paths:
       operationId: createUcAlisonTurn
       tags: [anthropic]
       summary: Generate and persist one anonymous Alison turn
-      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer. New replies use relevant curated Markdown and published guide/article snapshots, with concise default answers.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2417,6 +2465,7 @@ paths:
         "401": { description: Customer authentication required }
         "429": { description: Customer rate limit exceeded }
         "502": { description: Alison generation or transcript persistence unavailable }
+        "503": { description: Approved Alison reference documents temporarily unavailable }
   /oauth/clients:
     get:
       operationId: listAgentOauthClients
@@ -3181,6 +3230,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CustomerLifecycleFeatureConfig" }
 
+  /uc/admin/refill/features:
+    get:
+      operationId: getRefillFeatures
+      tags: [uc-admin]
+      summary: Read persisted refill preview activation flags
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Current feature activation settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillFeatures" }
+        "401": { description: A team session is required }
+        "403": { description: A live team administrator is required }
+    patch:
+      operationId: updateRefillFeatures
+      tags: [uc-admin]
+      summary: Update persisted refill preview activation flags
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefillFeaturesUpdate" }
+      responses:
+        "200":
+          description: Updated feature settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillFeatures" }
+        "400": { description: Invalid or empty feature update }
+        "401": { description: A team session is required }
+        "403": { description: A live team administrator is required }
+
+  /uc/refill/capabilities:
+    get:
+      operationId: getRefillCapabilities
+      tags: [uc-admin]
+      summary: Read safe refill feature capabilities
+      responses:
+        "200":
+          description: Current public care flag and permanently hard-off paid-operation capabilities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillCapabilities" }
+
 components:
   parameters:
     MemberId:
@@ -3266,6 +3361,86 @@ components:
         reportDate: { type: [string, "null"] }
         location: { type: string }
         config: { $ref: "#/components/schemas/HydrateAllocationConfig" }
+    CustomerReviewAssessment:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [pending, processing, completed, failed, unavailable]}
+        category: {type: string, enum: [Positive, Neutral, Negative, Mixed]}
+        explanation: {type: string, maxLength: 460}
+        themes: {type: array, maxItems: 3, items: {type: string, maxLength: 40}}
+        analyzedAt: {type: string, format: date-time}
+        error: {type: string}
+    CustomerReviewLogEntry:
+      type: object
+      required: [id, productId, productName, authorName, rating, title, body, media, createdAt, editedAt, ratingSentiment, disagreement, analysis]
+      properties:
+        id: {type: integer}
+        productId: {type: integer}
+        productName: {type: string}
+        authorName: {type: string}
+        rating: {type: integer, minimum: 1, maximum: 5}
+        title: {type: string}
+        body: {type: string}
+        media:
+          type: array
+          items:
+            type: object
+            required: [url, type]
+            properties:
+              url: {type: string}
+              type: {type: string, enum: [photo, video]}
+        createdAt: {type: string, format: date-time}
+        editedAt: {type: ["string", "null"], format: date-time}
+        ratingSentiment: {type: string, enum: [Positive, Neutral, Negative]}
+        disagreement: {type: boolean}
+        analysis: {$ref: "#/components/schemas/CustomerReviewAssessment"}
+    CustomerReviewCounts:
+      type: object
+      required: [rating, ai, status, disagreements]
+      properties:
+        rating:
+          type: object
+          required: [Positive, Neutral, Negative]
+          properties:
+            Positive: {type: integer}
+            Neutral: {type: integer}
+            Negative: {type: integer}
+        ai:
+          type: object
+          required: [Positive, Neutral, Negative, Mixed]
+          properties:
+            Positive: {type: integer}
+            Neutral: {type: integer}
+            Negative: {type: integer}
+            Mixed: {type: integer}
+        status:
+          type: object
+          required: [pending, processing, completed, failed, unavailable]
+          properties:
+            pending: {type: integer}
+            processing: {type: integer}
+            completed: {type: integer}
+            failed: {type: integer}
+            unavailable: {type: integer}
+        disagreements: {type: integer}
+    CustomerReviewLog:
+      type: object
+      required: [reviews, total, page, limit, counts, products]
+      properties:
+        reviews: {type: array, items: {$ref: "#/components/schemas/CustomerReviewLogEntry"}}
+        total: {type: integer}
+        page: {type: integer}
+        limit: {type: integer}
+        counts: {$ref: "#/components/schemas/CustomerReviewCounts"}
+        products:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: integer}
+              name: {type: string}
     BlogSource:
       type: object
       required: [title, url]
@@ -5381,6 +5556,35 @@ components:
         legacyReviewSubmission: { type: boolean }
         canonicalGlobalImpact: { type: boolean }
         nearbyDistanceTiers: { type: boolean }
+
+    RefillFeatures:
+      type: object
+      additionalProperties: false
+      required: [careOverview, refillGovernance]
+      properties:
+        careOverview: { type: boolean }
+        refillGovernance: { type: boolean }
+
+    RefillFeaturesUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        careOverview: { type: boolean }
+        refillGovernance: { type: boolean }
+
+    RefillCapabilities:
+      type: object
+      additionalProperties: false
+      required: [version, careOverview, promoRefill, paidRefill, moneyWallet, paidCare, automaticCollection]
+      properties:
+        version: { type: integer, enum: [1] }
+        careOverview: { type: boolean }
+        promoRefill: { type: boolean, enum: [false] }
+        paidRefill: { type: boolean, enum: [false] }
+        moneyWallet: { type: boolean, enum: [false] }
+        paidCare: { type: boolean, enum: [false] }
+        automaticCollection: { type: boolean, enum: [false] }
 
     CustomerLifecycleIdentity:
       type: object
