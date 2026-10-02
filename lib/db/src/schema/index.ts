@@ -79,3 +79,4 @@ export * from "./instant-water-assessments";
 export * from "./agent-oauth";
 export * from "./uc-guides";
 export * from "./uc-refill-governance";
+export * from "./uc-hydrate-trees";

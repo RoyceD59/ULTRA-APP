@@ -3,3 +3,7 @@
 
 # No need to store the pnpm store twice.
 .local
+
+# Only built Companion static files and its core-Node server are needed at runtime.
+# API external packages continue to use the normal root node_modules.
+.hydrate-release/**/node_modules

@@ -2,9 +2,8 @@ import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBase } from '@/lib/apiBase';
+import { getHydrateCustomerTree, type HydrateCustomerTree } from '@workspace/api-client-react';
 
-// ApiError lives in its own dependency-free module so the rate-limit tests can
-// exercise it under node:test; re-exported here so app imports keep working.
 import { ApiError } from './apiError';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
 export { ApiError };
@@ -511,6 +510,14 @@ export function useApi() {
     requestContactVerification: (channel: 'email' | 'whatsapp') =>
       post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getCustomerTree: async () => {
+      try { return await getHydrateCustomerTree({ headers: authHeaders() }); }
+      catch (error) {
+        const status = (error as { status?: number })?.status;
+        if (status) await handleRejectedSessionResponse(status, token);
+        throw error;
+      }
+    },
     getOrder: (orderId: number) => get<UCOrder>(`/api/uc/orders/${orderId}`),
     getReturnRequest: (orderId: number) =>
       get<{ request: { id: number; reason: string; details: string; status: string; createdAt: string } | null }>(`/api/uc/orders/${orderId}/return-request`),
@@ -827,3 +834,5 @@ export interface RewardsRedemptionResult {
   redemptionValue?: number;
   conversionMode?: 'fixed' | 'percentage';
 }
+
+export type CustomerTree = HydrateCustomerTree;

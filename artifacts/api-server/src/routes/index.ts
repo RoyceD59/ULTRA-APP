@@ -42,6 +42,7 @@ import blogRouter from "./blog.js";
 import refillReadinessRouter from "./refill-readiness.js";
 import refillGovernanceRouter from "./refill-governance.js";
 import refillFeaturesRouter from "./refill-features.js";
+import ucHydrateTreesRouter from "./uc-hydrate-trees.js";
 
 const router: IRouter = Router();
 // ─── ProjectHub team auth guards ─────────────────────────────────────────────
@@ -92,6 +93,7 @@ router.use(orderStatusWebhookRouter);
 router.use(instantWaterCheckRouter);
 router.use(ucWaterChatRouter);
 router.use(ucImpactRouter);
+router.use(ucHydrateTreesRouter);
 router.use(ucRemindersRouter);
 router.use(ucSocialAuthRouter);
 router.use(ucOfflineClientsRouter);

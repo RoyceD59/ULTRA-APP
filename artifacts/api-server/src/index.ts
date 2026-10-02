@@ -15,6 +15,7 @@ import { migrateAndGuardSessionDir } from "./lib/whatsapp";
 import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/account-records.js";
 import { processPendingReferralSettlements } from "./routes/referrals.js";
 import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
+import { ensureHydrateTreeSchema } from "./lib/hydrate-tree-schema.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -2281,6 +2282,8 @@ async function applyStartupMigrations(): Promise<void> {
       ON uc_refill_campaign_actions FOR EACH ROW EXECUTE FUNCTION uc_refill_reject_immutable_change();
   `);
   logger.info("Startup migration: refill governance tables ensured");
+  await ensureHydrateTreeSchema(pool);
+  logger.info("Startup migration: hydrate shared trees ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;
@@ -2365,8 +2368,11 @@ applyStartupMigrations()
 
     if (process.env["PREVIEW_SAFE_MODE"] === "1") {
       const server = app.listen(port, (err?: Error) => {
-        if (err) { logger.error({ err }, "Preview API listen failed"); process.exit(1); }
-        logger.info({ port }, "Isolated preview API listening; background and outbound startup work disabled");
+        if (err) {
+          logger.error({ err }, "Error listening on preview port");
+          process.exit(1);
+        }
+        logger.info({ port }, "Preview server listening; background and outbound startup work disabled");
       });
       process.on("SIGTERM", () => shutdown(server, "SIGTERM"));
       process.on("SIGINT", () => shutdown(server, "SIGINT"));

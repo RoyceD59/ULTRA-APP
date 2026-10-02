@@ -18,3 +18,9 @@ description: Failure modes to check after several task agents merge into main at
 **Rule 5 — stale generated API clients:** A merged task can update `lib/api-spec/openapi.yaml` and hand-written routes but land without the regenerated orval output, so `@workspace/api-zod` / `@workspace/api-client-react` "has no exported member" errors appear for brand-new endpoint types. Fix: `pnpm run codegen` in `lib/api-spec` (runs orval + `typecheck:libs`), never hand-edit the generated files. Check the spec first — if the schema IS in openapi.yaml, it's stale codegen, not a dropped export.
 
 **Rule 4 — mid-session reverts and replayed stale diffs:** A concurrent task merge can land mid-session and overwrite fixes you already applied to a shared file, or replay a stale diff over another task's identical fix, re-introducing corruption a commit already reverted. Re-run the typecheck immediately before marking a task complete; after a rejected validation, re-diff the file against the last-known-good blob and restore from the sibling task's merged commit if it is the cleaner base.
+
+**Rule — guarded startup and import/export boundaries:** A structurally conflict-free merge can retain a preview guard while inserting production background work inside it, or drop required imports/reexports while leaving their call sites intact.
+
+**Why:** These regressions survived integration onto main even though the independently frozen release package still passed. Package checks did not establish current-source correctness.
+
+**How to apply:** Verify current-source typechecks after synchronization and execute a preview-startup regression that fails on any scheduler, worker or settlement timer. Keep frozen-package and merged-source results distinct.

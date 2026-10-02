@@ -83,6 +83,8 @@ import type {
   GetUcAdminGuide200,
   GetUcLocationRatingAggregateParams,
   HealthStatus,
+  HydrateCustomerTree,
+  HydrateForestTotals,
   IdentityConflict,
   IdentityConflictQueue,
   IdentityConflictResolutionInput,
@@ -241,6 +243,160 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetHydrateCustomerTreeUrl = () => {
+
+
+
+
+  return `/api/uc/customer/tree`
+}
+
+/**
+ * @summary Own shared-tree allocation and aggregate progress
+ */
+export const getHydrateCustomerTree = async ( options?: RequestInit): Promise<HydrateCustomerTree> => {
+
+  return customFetch<HydrateCustomerTree>(getGetHydrateCustomerTreeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHydrateCustomerTreeQueryKey = () => {
+    return [
+    `/api/uc/customer/tree`
+    ] as const;
+    }
+
+
+export const getGetHydrateCustomerTreeQueryOptions = <TData = Awaited<ReturnType<typeof getHydrateCustomerTree>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHydrateCustomerTree>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHydrateCustomerTreeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHydrateCustomerTree>>> = ({ signal }) => getHydrateCustomerTree({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHydrateCustomerTree>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHydrateCustomerTreeQueryResult = NonNullable<Awaited<ReturnType<typeof getHydrateCustomerTree>>>
+export type GetHydrateCustomerTreeQueryError = ErrorType<void>
+
+
+/**
+ * @summary Own shared-tree allocation and aggregate progress
+ */
+
+export function useGetHydrateCustomerTree<TData = Awaited<ReturnType<typeof getHydrateCustomerTree>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHydrateCustomerTree>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHydrateCustomerTreeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetHydrateForestTotalsUrl = () => {
+
+
+
+
+  return `/api/uc/impact/forest`
+}
+
+/**
+ * @summary Credential-free aggregate programme allocations, not verified field outcomes
+ */
+export const getHydrateForestTotals = async ( options?: RequestInit): Promise<HydrateForestTotals> => {
+
+  return customFetch<HydrateForestTotals>(getGetHydrateForestTotalsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHydrateForestTotalsQueryKey = () => {
+    return [
+    `/api/uc/impact/forest`
+    ] as const;
+    }
+
+
+export const getGetHydrateForestTotalsQueryOptions = <TData = Awaited<ReturnType<typeof getHydrateForestTotals>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHydrateForestTotals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHydrateForestTotalsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHydrateForestTotals>>> = ({ signal }) => getHydrateForestTotals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHydrateForestTotals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHydrateForestTotalsQueryResult = NonNullable<Awaited<ReturnType<typeof getHydrateForestTotals>>>
+export type GetHydrateForestTotalsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Credential-free aggregate programme allocations, not verified field outcomes
+ */
+
+export function useGetHydrateForestTotals<TData = Awaited<ReturnType<typeof getHydrateForestTotals>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHydrateForestTotals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHydrateForestTotalsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListCustomerReviewsUrl = (params?: ListCustomerReviewsParams,) => {
   const normalizedParams = new URLSearchParams();

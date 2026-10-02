@@ -89,7 +89,14 @@ if (process.env.PREVIEW_SAFE_MODE !== "1") {
 // different origins. Native builds do not enforce CORS.
 // Origin list is built by buildCorsOrigins() so the same logic can be tested
 // without duplicating it.
-app.use(cors({ origin: buildCorsOrigins(process.env) }));
+app.use((req, res, next) => {
+  if (req.path === "/api/uc/impact/forest" &&
+      (req.method === "GET" || req.method === "HEAD" ||
+       (req.method === "OPTIONS" && ["GET", "HEAD"].includes(String(req.headers["access-control-request-method"]))))) {
+    return cors({ origin: "*", methods: ["GET", "HEAD", "OPTIONS"], credentials: false })(req, res, next);
+  }
+  return cors({ origin: buildCorsOrigins(process.env) })(req, res, next);
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
