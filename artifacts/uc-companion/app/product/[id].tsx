@@ -133,6 +133,7 @@ export default function ProductDetailScreen() {
       } else {
         await api.removeFromWishlist(pid);
       }
+      trackEvent(next ? 'wishlist_item_added' : 'wishlist_item_removed', { productId: pid });
       await queryClient.invalidateQueries({ queryKey: customerQueryKeys.wishlist(initiatingCustomerId) });
     } catch {
       if (currentCustomerId.current === initiatingCustomerId) setWishlistPending(null);

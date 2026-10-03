@@ -16,7 +16,11 @@ export type AnalyticsEvent =
   | 'review_submitted'
   | 'support_ticket_submitted'
   | 'alison_message_sent'
-  | 'alison_reply_received';
+  | 'alison_reply_received'
+  | 'article_opened'
+  | 'article_source_clicked'
+  | 'wishlist_item_added'
+  | 'wishlist_item_removed';
 
 type GuidePayload = { guideId: string };
 type GuideMediaPayload = { guideId: string; mediaKind: 'image' | 'video' };
@@ -38,6 +42,10 @@ export type AnalyticsPayloadMap = {
   support_ticket_submitted: MediaCounts;
   alison_message_sent: Record<string, never>;
   alison_reply_received: Record<string, never>;
+  article_opened: { articleId: string };
+  article_source_clicked: { articleId: string; placement: 'body' | 'sources' };
+  wishlist_item_added: { productId: number };
+  wishlist_item_removed: { productId: number };
 };
 
 declare global {
@@ -55,6 +63,7 @@ export const ANALYTICS_EVENT_NAMES: readonly AnalyticsEvent[] = [
   'cart_item_added', 'checkout_started', 'order_submitted',
   'review_submitted', 'support_ticket_submitted', 'alison_message_sent',
   'alison_reply_received',
+  'article_opened', 'article_source_clicked', 'wishlist_item_added', 'wishlist_item_removed',
 ];
 const SAFE_EVENT_NAMES = new Set<AnalyticsEvent>(ANALYTICS_EVENT_NAMES);
 
@@ -95,6 +104,17 @@ function sanitizePayload<E extends AnalyticsEvent>(
         (input.mediaKind === 'image' || input.mediaKind === 'video')
         ? { guideId: input.guideId, mediaKind: input.mediaKind } as AnalyticsPayloadMap[E]
         : undefined;
+    case 'article_opened':
+      return typeof input.articleId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(input.articleId)
+        ? { articleId: input.articleId } as AnalyticsPayloadMap[E]
+        : undefined;
+    case 'article_source_clicked':
+      return typeof input.articleId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(input.articleId) &&
+        (input.placement === 'body' || input.placement === 'sources')
+        ? { articleId: input.articleId, placement: input.placement } as AnalyticsPayloadMap[E]
+        : undefined;
+    case 'wishlist_item_added':
+    case 'wishlist_item_removed':
     case 'product_viewed':
       return Number.isSafeInteger(input.productId) && (input.productId as number) > 0
         ? { productId: input.productId as number } as AnalyticsPayloadMap[E]

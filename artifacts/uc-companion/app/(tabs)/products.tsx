@@ -1,3 +1,4 @@
+import { trackEvent } from '@/lib/analytics';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Platform,
@@ -258,6 +259,7 @@ function ProductsScreenContent() {
       } else {
         await api.removeFromWishlist(pid);
       }
+      trackEvent(nextState ? 'wishlist_item_added' : 'wishlist_item_removed', { productId: pid });
       await queryClient.invalidateQueries({ queryKey: customerQueryKeys.wishlist(initiatingCustomerId) });
     } catch {
       if (currentCustomerId.current === initiatingCustomerId) {

@@ -39,3 +39,26 @@ test('review, support, and Alison events include only successful outcomes and sa
   assert.match(chat, /const replyRequest = api\.waterAiChat\([\s\S]*?trackEvent\('alison_message_sent'\)[\s\S]*?await replyRequest/);
   assert.match(chat, /const \{ reply, suggestions \} = await replyRequest;\s*trackEvent\('alison_reply_received'\)/);
 });
+
+test('article views are deduplicated and both link placements are tracked without destinations', () => {
+  const article = source('app/blog/[slug].tsx');
+  assert.match(article, /query\.isLoading \|\| query\.isError \|\| !article \|\| lastOpenedArticle\.current === article\.id/);
+  assert.match(article, /lastOpenedArticle\.current = article\.id;\s*trackEvent\('article_opened', \{ articleId: article\.id \}\)/);
+  assert.match(article, /articleId: article\.id, placement: 'body'/);
+  assert.match(article, /articleId: article\.id, placement: 'sources'/);
+  // All four block kinds use the same body click handler; anchors still navigate once.
+  assert.equal((article.match(/onSourceError, onBodySourceClick\)/g) ?? []).length, 4);
+  assert.match(article, /event\.preventDefault\(\);\s*onSourceClick\(\);\s*void Linking\.openURL\(part\.url\)/);
+});
+
+test('wishlist changes are counted after API success in both customer entry points', () => {
+  for (const path of ['app/(tabs)/products.tsx', 'app/product/[id].tsx']) {
+    const wishlist = source(path);
+    const trackIndex = wishlist.indexOf("'wishlist_item_added' : 'wishlist_item_removed'");
+    const invalidateIndex = wishlist.indexOf('await queryClient.invalidateQueries', trackIndex);
+    assert.ok(wishlist.indexOf('await api.addToWishlist') < trackIndex);
+    assert.ok(wishlist.indexOf('await api.removeFromWishlist') < trackIndex);
+    assert.ok(trackIndex >= 0 && invalidateIndex > trackIndex);
+    assert.match(wishlist, /trackEvent\((?:next|nextState) \? 'wishlist_item_added' : 'wishlist_item_removed', \{ productId: pid \}\)/);
+  }
+});

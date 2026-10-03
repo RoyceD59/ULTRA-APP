@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -11,6 +11,7 @@ import { fetchBlogArticle } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { articleInlineLinks } from '@workspace/api-zod/blog-inline-links';
+import { trackEvent } from '@/lib/analytics';
 
 type ArticleBlock = { kind: 'heading' | 'paragraph' | 'list' | 'quote'; text: string; ordered?: boolean; number?: string };
 
@@ -64,6 +65,7 @@ function renderInline(
   linkColor: string,
   sources: readonly UCBlogSource[],
   onSourceError: () => void,
+  onSourceClick: () => void,
 ): React.ReactNode[] {
   return articleInlineLinks(text, sources).map((part, index) => {
     if (part.kind === 'text') {
@@ -80,6 +82,7 @@ function renderInline(
         onPress={(event) => {
           // The web anchor and Linking must not both navigate on the same click.
           if (Platform.OS === 'web') event.preventDefault();
+          onSourceClick();
           void Linking.openURL(part.url).catch(onSourceError);
         }}
         style={{ color: linkColor, textDecorationLine: 'underline' }}
@@ -113,6 +116,9 @@ function ArticleContent({
   const colors = useColors();
   const blocks = parseArticleBody(article.body);
   const sources = Array.isArray(article.sources) ? article.sources : [];
+  const onBodySourceClick = () => trackEvent('article_source_clicked', {
+    articleId: article.id, placement: 'body',
+  });
 
   return (
     <>
@@ -126,24 +132,24 @@ function ArticleContent({
       <View style={styles.body}>
         {blocks.map((block, index) => {
           if (block.kind === 'heading') {
-            return <Text key={index} accessibilityRole="header" style={[styles.bodyHeading, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>;
+            return <Text key={index} accessibilityRole="header" style={[styles.bodyHeading, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>;
           }
           if (block.kind === 'list') {
             return (
               <View key={index} style={styles.listItem}>
                 <Text style={[styles.listMarker, { color: colors.primary }]}>{block.ordered ? `${block.number ?? '1'}.` : '•'}</Text>
-                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>
+                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>
               </View>
             );
           }
           if (block.kind === 'quote') {
             return (
               <View key={index} style={[styles.quote, { borderLeftColor: colors.accent, backgroundColor: colors.surface }]}>
-                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>
+                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>
               </View>
             );
           }
-          return <Text key={index} style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError)}</Text>;
+          return <Text key={index} style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>;
         })}
       </View>
       {sources.length > 0 ? (
@@ -161,7 +167,10 @@ function ArticleContent({
                 accessibilityRole="link"
                 accessibilityLabel={`Open source: ${source.title}`}
                 testID={`blog-source-${index}`}
-                onPress={() => { void Linking.openURL(url).catch(onSourceError); }}
+                onPress={() => {
+                  trackEvent('article_source_clicked', { articleId: article.id, placement: 'sources' });
+                  void Linking.openURL(url).catch(onSourceError);
+                }}
                 style={styles.sourceLink}
               >
                 <Text style={[styles.sourceTitle, { color: colors.primary }]}>{source.title}</Text>
@@ -195,6 +204,12 @@ export default function BlogArticleScreen() {
     enabled: Boolean(slug),
   });
   const article = query.data?.article;
+  const lastOpenedArticle = useRef<string | null>(null);
+  useEffect(() => {
+    if (query.isLoading || query.isError || !article || lastOpenedArticle.current === article.id) return;
+    lastOpenedArticle.current = article.id;
+    trackEvent('article_opened', { articleId: article.id });
+  }, [article, query.isLoading, query.isError]);
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
   return (

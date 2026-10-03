@@ -29,6 +29,20 @@ describe("privacy-safe custom analytics", () => {
     expect(track).not.toHaveBeenCalled();
   });
 
+  it("keeps review moderation free of review, reporter and staff identity", () => {
+    const track = vi.fn();
+    window.umami = { track };
+    trackEvent("review_moderation_saved", {
+      reviewType: "location", status: "hidden", reviewId: "private-review",
+      reporterId: "private-reporter", staffEmail: "private@example.test", reason: "Private report",
+    } as never);
+    expect(track).toHaveBeenCalledExactlyOnceWith("review_moderation_saved", {
+      reviewType: "location", status: "hidden",
+    });
+    trackEvent("review_moderation_saved", { reviewType: "location", status: "private text" } as never);
+    expect(track).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let synchronous or asynchronous tracker failures interrupt the app", async () => {
     window.umami = { track: () => { throw new Error("offline"); } };
     expect(() => trackEvent("whatsapp_connect_requested", {})).not.toThrow();

@@ -21,7 +21,40 @@ test('analytics exposes only the privacy-safe event contract', () => {
     'support_ticket_submitted',
     'alison_message_sent',
     'alison_reply_received',
+    'article_opened',
+    'article_source_clicked',
+    'wishlist_item_added',
+    'wishlist_item_removed',
   ]);
+});
+
+test('article and wishlist dimensions exclude link text, URLs, titles and customer identity', () => {
+  __setPlatform('web');
+  const calls: unknown[] = [];
+  Object.assign(globalThis, { window: { umami: { track: (...args: unknown[]) => calls.push(args) } } });
+  trackEvent('article_opened', { articleId: 'article-123', title: 'Private draft' } as never);
+  trackEvent('article_source_clicked', {
+    articleId: 'article-123', placement: 'body', url: 'https://example.test/?token=private', text: 'Private link',
+  } as never);
+  trackEvent('article_source_clicked', { articleId: 'article-123', placement: 'sources' });
+  trackEvent('wishlist_item_added', { productId: 12, customerId: 9 } as never);
+  trackEvent('wishlist_item_removed', { productId: 12, name: 'Private name' } as never);
+  assert.deepEqual(calls, [
+    ['article_opened', { articleId: 'article-123' }],
+    ['article_source_clicked', { articleId: 'article-123', placement: 'body' }],
+    ['article_source_clicked', { articleId: 'article-123', placement: 'sources' }],
+    ['wishlist_item_added', { productId: 12 }],
+    ['wishlist_item_removed', { productId: 12 }],
+  ]);
+  trackEvent('article_opened', { articleId: 'private@example.test' });
+  trackEvent('article_source_clicked', { articleId: 'article-123', placement: 'private text' } as never);
+  trackEvent('wishlist_item_added', { productId: -1 });
+  assert.equal(calls.length, 5);
+  __setPlatform('android');
+  trackEvent('article_opened', { articleId: 'article-123' });
+  trackEvent('wishlist_item_removed', { productId: 12 });
+  assert.equal(calls.length, 5);
+  delete (globalThis as { window?: unknown }).window;
 });
 
 test('analytics forwards only runtime-allowlisted properties and remains safe when absent', () => {

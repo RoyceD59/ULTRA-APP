@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthHeaders } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import { trackEvent } from "@/lib/analytics";
 
 export function RatingsModeration() {
   const { toast } = useToast();
@@ -30,7 +31,8 @@ export function RatingsModeration() {
       if (!res.ok) throw new Error("Update failed");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { status }) => {
+      trackEvent("review_moderation_saved", { reviewType: "location", status });
       toast({ title: "Moderation applied" });
       queryClient.invalidateQueries({ queryKey: ["locationRatingReports"] });
     },

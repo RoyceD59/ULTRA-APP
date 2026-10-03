@@ -7,6 +7,7 @@ export type AnalyticsPayloadMap = {
   blog_published: { sourceCount: number };
   alison_conversation_opened: { messageCount: number };
   whatsapp_connect_requested: Record<string, never>;
+  review_moderation_saved: { reviewType: "location"; status: "published" | "hidden" | "removed" };
 };
 
 export type AnalyticsEvent = keyof AnalyticsPayloadMap;
@@ -17,6 +18,7 @@ const EVENT_FIELDS: Record<AnalyticsEvent, readonly string[]> = {
   blog_published: ["sourceCount"],
   alison_conversation_opened: ["messageCount"],
   whatsapp_connect_requested: [],
+  review_moderation_saved: ["reviewType", "status"],
 };
 
 declare global {
@@ -32,6 +34,11 @@ export function trackEvent<E extends AnalyticsEvent>(name: E, data: AnalyticsPay
   if (typeof window === "undefined") return;
   try {
     if (!Object.prototype.hasOwnProperty.call(EVENT_FIELDS, name)) return;
+    if (name === "review_moderation_saved") {
+      const moderation = data as AnalyticsPayloadMap["review_moderation_saved"];
+      if (moderation.reviewType !== "location" ||
+          !["published", "hidden", "removed"].includes(moderation.status)) return;
+    }
     const safe: AnalyticsData = {};
     for (const field of EVENT_FIELDS[name]) {
       const value = (data as AnalyticsData)[field];
