@@ -349,6 +349,25 @@ the owner must use Replit Publishing. No new schema/data replacement is needed f
 these UI changes. Production customer card/account-switch verification and
 restoration of normal production commands remain pending; do not claim those
 passed merely because the refreshed package builds.
+### Dependency security refresh
+
+The frozen release archive also includes the workspace dependency-security
+remediation: patched upstream versions, the three local pnpm patches, and the
+`test:dependency-security` regression suite. Only the eight explicitly listed
+dependency/patch/test files changed relative to the preceding archive. The
+manifest records that predecessor and checksum; release-package tests enforce
+byte-for-byte preservation of every other source file and validate the security
+manifests and lockfile. The live-baseline and integration-revision guards are
+unchanged, and this refresh does not publish anything or include later
+working-tree features.
+
+Validation in a freshly extracted isolated package passed the seven attack/API
+compatibility tests, shared-library and all three app typechecks, and API,
+ProjectHub, and Companion production builds (web/iOS/Android). A version-only
+audit still flags the three locally patched upstream versions; see
+`patches/README.md`. Build success does not prove native-device or signed-in
+production behavior.
+
 ### Publishing certified evidence later
 
 1. Obtain documented programme dates, partner details, donation records, certification
