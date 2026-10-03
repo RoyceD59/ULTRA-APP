@@ -7,3 +7,7 @@ description: Where Baileys session credentials live and the git-history leak cav
 - A startup check (`migrateAndGuardSessionDir`) migrates any legacy in-repo `.whatsapp-session` files out and prints a loud security warning if credentials are ever found inside the working tree.
 - **Why:** the files were once committed and git history still contains them. History rewriting was declined; the production session was logged out, re-linked, and confirmed connected on September 13, 2026, invalidating the historical credentials.
 - **How to apply:** never point `WHATSAPP_SESSION_DIR` inside the repo; keep the `.gitignore` rule; treat any new in-repo session files as an incident. Do not describe the remaining historical blobs as live credentials.
+
+- Do not assume the preview's WhatsApp session storage is isolated from the published service. Confirm the target instance and storage isolation before any operational reset; UI recovery tests should mock all WhatsApp operations.
+- **Why:** the preview has been observed restoring a configured remote WhatsApp session despite the documented local-only development default. Resetting the preview is not a safe substitute for resetting production.
+- **How to apply:** use the target's existing authorized team session for real disconnect/connect operations; never delete preview session files or remote objects as a shortcut to a live reset.

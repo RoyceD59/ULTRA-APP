@@ -20,6 +20,7 @@ import { TeamAuthDialog } from "@/components/team-auth-dialog";
 import { getAuthHeaders, isTeamAuthenticated, clearTeamToken } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
 import { trackEvent } from "@/lib/analytics";
+import { whatsappRequest } from "@/lib/whatsapp-request";
 
 const BASE = API_ORIGIN;
 
@@ -28,68 +29,60 @@ interface WaError { code: string; message: string }
 interface WaStatus { state: WaState; qr: string | null; error: WaError | null }
 const POLL_INTERVAL_MS = 3_000;
 
-async function apiError(res: Response, fallback: string): Promise<Error> {
+async function request<T>(path: string, method = "GET"): Promise<T> {
+  const headers = getAuthHeaders();
+  if (!headers) throw new Error("Not authenticated");
   try {
-    const body = await res.json() as { error?: string | { message?: string } };
-    const message = typeof body.error === "string" ? body.error : body.error?.message;
-    if (message) return new Error(message);
-  } catch {
-    // Use the safe operation-specific fallback when the server did not return
-    // JSON (for example, during a proxy or deployment failure).
+    return await whatsappRequest<T>(
+      `${BASE}/api/whatsapp/${path}`,
+      { method, headers },
+      path === "disconnect"
+        ? "Session cleanup could not be confirmed. Retry Disconnect before pairing again."
+        : "WhatsApp did not respond in time. Refresh status or disconnect the saved session before trying again.",
+      path === "disconnect" ? 90_000 : 20_000,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "Session expired") clearTeamToken();
+    throw error;
   }
-  return new Error(fallback);
 }
 
 async function fetchStatus(): Promise<WaStatus> {
-  const headers = getAuthHeaders();
-  if (!headers) throw new Error("Not authenticated");
-  const res = await fetch(`${BASE}/api/whatsapp/status`, { headers });
-  if (res.status === 401) { clearTeamToken(); throw new Error("Session expired"); }
-  if (!res.ok) throw await apiError(res, "Could not retrieve WhatsApp status. Retry.");
-  return res.json();
+  return request<WaStatus>("status");
 }
 
 async function postConnect(): Promise<WaStatus> {
-  const headers = getAuthHeaders();
-  if (!headers) throw new Error("Not authenticated");
   trackEvent("whatsapp_connect_requested", {});
-  const res = await fetch(`${BASE}/api/whatsapp/connect`, { method: "POST", headers });
-  if (res.status === 401) { clearTeamToken(); throw new Error("Session expired"); }
-  if (!res.ok) throw await apiError(res, "Could not start WhatsApp session. Retry.");
-  return res.json();
+  return request<WaStatus>("connect", "POST");
 }
 
 async function postDisconnect(): Promise<void> {
-  const headers = getAuthHeaders();
-  if (!headers) throw new Error("Not authenticated");
-  const res = await fetch(`${BASE}/api/whatsapp/disconnect`, { method: "POST", headers });
-  if (res.status === 401) { clearTeamToken(); throw new Error("Session expired"); }
-  if (!res.ok) throw await apiError(res, "Disconnect request failed. Retry.");
+  await request("disconnect", "POST");
 }
 
 export function WhatsAppQrCard() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [pollEnabled, setPollEnabled] = useState(true);
+  const [pairingStalled, setPairingStalled] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authed, setAuthed] = useState(() => isTeamAuthenticated());
 
   const { data, error: statusRequestError, isLoading, refetch: refetchStatus } = useQuery<WaStatus>({
     queryKey: ["whatsapp-status"],
     queryFn: fetchStatus,
-    refetchInterval: pollEnabled ? POLL_INTERVAL_MS : false,
+    refetchInterval: POLL_INTERVAL_MS,
     staleTime: 0,
+    retry: false,
     enabled: authed,
   });
 
-  // Stop polling for terminal states. Connecting/QR remain live so a newly
-  // emitted QR or successful pairing appears without a page reload.
+  // Keep status live even after a transient disconnected event: the server
+  // may reconnect and emit a QR after the initial request has returned.
   useEffect(() => {
-    if (data?.state === "connected" || data?.state === "error" || data?.state === "disconnected") {
-      setPollEnabled(false);
-    } else {
-      setPollEnabled(true);
-    }
+    setPairingStalled(false);
+    if (data?.state !== "connecting") return;
+    const timer = setTimeout(() => setPairingStalled(true), 45_000);
+    return () => clearTimeout(timer);
   }, [data?.state]);
 
   useEffect(() => {
@@ -101,30 +94,39 @@ export function WhatsAppQrCard() {
 
   const connectMut = useMutation({
     mutationFn: postConnect,
-    onSuccess: () => {
-      setPollEnabled(true);
+    retry: false,
+    onMutate: () => {
+      qc.setQueryData<WaStatus>(["whatsapp-status"], { state: "connecting", qr: null, error: null });
+    },
+    onSuccess: (status) => {
+      qc.setQueryData(["whatsapp-status"], status);
       qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
     },
     onError: (err: Error) => {
       if (err.message.includes("authenticated") || err.message.includes("expired")) {
         setAuthed(false);
       }
-      toast({ title: "Could not start WhatsApp session", variant: "destructive" });
+      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      toast({ title: "Could not start WhatsApp session", description: err.message, variant: "destructive" });
     },
   });
 
   const disconnectMut = useMutation({
     mutationFn: postDisconnect,
-    onSuccess: () => {
-      setPollEnabled(true);
+    retry: false,
+    onSuccess: async () => {
+      await qc.cancelQueries({ queryKey: ["whatsapp-status"] });
+      qc.setQueryData<WaStatus>(["whatsapp-status"], { state: "disconnected", qr: null, error: null });
+      connectMut.reset();
+      setPairingStalled(false);
       qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
-      toast({ title: "WhatsApp session ended" });
+      toast({ title: "Saved WhatsApp session cleared", description: "Click Connect WhatsApp to pair the desired phone." });
     },
     onError: (err: Error) => {
       if (err.message.includes("authenticated") || err.message.includes("expired")) {
         setAuthed(false);
       }
-      toast({ title: "Disconnect failed", variant: "destructive" });
+      toast({ title: "Disconnect failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -134,20 +136,32 @@ export function WhatsAppQrCard() {
     qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
   }
 
-  const state = data?.state ?? "disconnected";
+  const cleanupRequired = disconnectMut.isError || data?.error?.code === "SESSION_CLEANUP_REQUIRED";
+  const state = cleanupRequired ? "error" : data?.state ?? "disconnected";
   const qr   = data?.qr ?? null;
   const stateError = data?.error?.message;
+  const cleanupBlocked = disconnectMut.isPending || cleanupRequired;
+  const connectDisabled = connectMut.isPending || cleanupBlocked;
   const requestError =
+    (disconnectMut.error instanceof Error ? disconnectMut.error.message : null) ??
     stateError ??
     (statusRequestError instanceof Error ? statusRequestError.message : null) ??
-    (connectMut.error instanceof Error ? connectMut.error.message : null) ??
-    (disconnectMut.error instanceof Error ? disconnectMut.error.message : null);
+    (state !== "qr" && state !== "connected" && connectMut.error instanceof Error ? connectMut.error.message : null) ??
+    (pairingStalled ? "Pairing is taking too long. Disconnect the saved session below, then start a fresh connection." : null);
 
   function retryConnection() {
-    if (statusRequestError) {
+    if (cleanupRequired) {
+      disconnectMut.mutate();
+    } else if (statusRequestError) {
       void refetchStatus();
-    } else {
+    } else if (!connectDisabled) {
       connectMut.mutate();
+    }
+  }
+
+  function disconnectSession() {
+    if (window.confirm("Disconnect WhatsApp and clear its saved pairing? You will need to scan a new QR code with the desired phone.")) {
+      disconnectMut.mutate();
     }
   }
 
@@ -161,7 +175,7 @@ export function WhatsAppQrCard() {
 
       <Card className="overflow-hidden border-2 border-dashed border-emerald-500/30 bg-emerald-500/5">
         <CardHeader className="pb-3 border-b border-emerald-500/20 bg-emerald-500/5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="w-5 h-5 text-emerald-500" />
               WhatsApp Connection
@@ -215,18 +229,6 @@ export function WhatsAppQrCard() {
                   WhatsApp notifications are enabled and ready to send.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
-                onClick={() => disconnectMut.mutate()}
-                disabled={disconnectMut.isPending}
-              >
-                {disconnectMut.isPending
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <LogOut className="w-4 h-4" />}
-                Disconnect
-              </Button>
             </div>
           )}
 
@@ -237,19 +239,19 @@ export function WhatsAppQrCard() {
               data-testid="status-whatsapp-error"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p>{requestError}</p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="mt-2 gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  className="mt-2 h-auto min-h-8 w-full gap-2 whitespace-normal border-destructive/30 text-destructive hover:bg-destructive/10"
                   onClick={retryConnection}
-                  disabled={connectMut.isPending}
+                  disabled={connectMut.isPending || disconnectMut.isPending}
                   data-testid="button-retry-whatsapp"
                 >
                   {connectMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  Retry
+                  {cleanupRequired ? "Retry Disconnect" : "Retry"}
                 </Button>
               </div>
             </div>
@@ -275,13 +277,13 @@ export function WhatsAppQrCard() {
               <p className="text-sm text-muted-foreground">
                 WhatsApp is waiting for a QR code. Retry if one does not appear shortly.
               </p>
-              <Button type="button" variant="outline" onClick={retryConnection} disabled={connectMut.isPending}>
+              <Button type="button" variant="outline" onClick={retryConnection} disabled={connectDisabled}>
                 Retry connection
               </Button>
             </div>
           )}
 
-          {authed && !isLoading && state === "connecting" && (
+          {authed && !isLoading && state === "connecting" && !pairingStalled && !connectMut.isError && !cleanupBlocked && (
             <div className="flex items-center gap-2 text-muted-foreground text-sm py-2">
               <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
               Connecting to WhatsApp servers…
@@ -299,7 +301,7 @@ export function WhatsAppQrCard() {
               </div>
               <Button
                 onClick={retryConnection}
-                disabled={connectMut.isPending}
+                disabled={connectDisabled}
                 className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
                 data-testid="button-retry-whatsapp-state"
               >
@@ -322,7 +324,7 @@ export function WhatsAppQrCard() {
               </div>
               <Button
                 onClick={() => connectMut.mutate()}
-                disabled={connectMut.isPending}
+                disabled={connectDisabled}
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {connectMut.isPending
@@ -330,6 +332,24 @@ export function WhatsAppQrCard() {
                   : <MessageCircle className="w-4 h-4" />}
                 Connect WhatsApp
               </Button>
+            </div>
+          )}
+          {authed && (
+            <div className="mt-4 border-t border-emerald-500/20 pt-4 text-center">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-destructive hover:text-destructive border-destructive/30"
+                onClick={disconnectSession}
+                disabled={disconnectMut.isPending || connectMut.isPending}
+                data-testid="button-disconnect-whatsapp"
+              >
+                {disconnectMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                {disconnectMut.isPending ? "Clearing saved session…" : "Disconnect"}
+              </Button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Clears the saved pairing, even if WhatsApp is not connected.
+              </p>
             </div>
           )}
         </CardContent>
