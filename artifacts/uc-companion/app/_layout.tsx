@@ -27,6 +27,7 @@ import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
 import { FONT_STARTUP_BUDGET_MS, startupReady } from '@/lib/pageLoading';
+import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
 
 // Set API base URL before any component renders
 const apiBase = getApiBase();
@@ -59,6 +60,7 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
+  usePublicWebDocument();
   const router = useRouter();
   const { token, mustChangePassword } = useAuth();
   const client = useQueryClient();

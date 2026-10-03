@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import ImpactBubble from '@/components/ImpactBubble';
 import ForestLink from '@/components/ForestLink';
+import publicPages from '@/data/public-pages.json';
 
 const UC_DEEP = '#005d8f';
 const UC_SKY = '#52b6dc';
@@ -31,7 +32,7 @@ export default function AboutScreen() {
         <View style={styles.block}>
           <Text style={[styles.h2, { color: colors.text }]}>What the app is for</Text>
           <Text style={[styles.p, { color: colors.mutedForeground }]}>
-            Ultra Clear Companion is the owner's app for Ultra Clear filters. It helps you maintain your filter, log the water you filter and see your personal impact alongside the shared impact of the community.
+            {publicPages['/about'].description}
           </Text>
         </View>
 

@@ -8,6 +8,7 @@
     "./instant-water-identity": "./src/instant-water-identity.ts",
     "./phone": "./src/phone.ts",
     "./blog-inline-links": "./src/blog-inline-links.ts",
+    "./blog-inline-links-core": "./src/blog-inline-links-core.cjs",
     "./refill-readiness": "./src/refill-readiness.ts",
     "./refill-governance": "./src/refill-governance.ts"
   },

@@ -809,10 +809,18 @@ function applyProductMedia(
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 router.get("/uc/products", async (req: Request, res: Response): Promise<void> => {
+  const publicationSafe = req.query["publicationSafe"] === "true";
+  if (publicationSafe) {
+    res.setHeader("Cache-Control", "no-store");
+    if (!hasWCCredentials()) {
+      res.status(503).json({ error: "Published product catalogue provider is not configured" });
+      return;
+    }
+  }
   try {
     let payload: Record<string, unknown>[] | null = null;
     if (hasWCCredentials()) {
-      const extra: Record<string, string> = { per_page: "50" };
+      const extra: Record<string, string> = { per_page: "50", status: "publish" };
       const requestedCategory = typeof req.query["category"] === "string"
         ? req.query["category"]
         : "";
@@ -863,6 +871,7 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
     }
     warnForMissingProductLifespans(payload);
     const mediaMap = await fetchProductMediaMap(payload.map((p) => Number(p["id"])));
+    if (publicationSafe) res.setHeader("X-UC-Catalogue-Provenance", "woocommerce-published");
     res.json(payload.map((p) => applyProductMedia(p, mediaMap.get(Number(p["id"])))));
   } catch {
     res.status(500).json({ error: "Failed to fetch products" });

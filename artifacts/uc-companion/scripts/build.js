@@ -4,6 +4,9 @@ const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const { writeBuildInfo } = require('./build-info');
+const { publishWebIcon } = require('./publish-web-icon.cjs');
+const { prepareStaticBuild } = require('./prepare-static-build.cjs');
+const { activateStaticBuild, stagePlatformManifest } = require('./active-static-build.cjs');
 const {
   parseConfiguredMetroPort,
   reserveAvailablePort,
@@ -95,23 +98,7 @@ function getApiDomain() {
 
 function prepareDirectories(timestamp) {
   console.log('Preparing build directories...');
-
-  const staticBuild = path.join(projectRoot, 'static-build');
-  if (fs.existsSync(staticBuild)) {
-    fs.rmSync(staticBuild, { recursive: true });
-  }
-
-  const dirs = [
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'ios'),
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'android'),
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'web'),
-    path.join(staticBuild, 'ios'),
-    path.join(staticBuild, 'android'),
-  ];
-
-  for (const dir of dirs) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  prepareStaticBuild(projectRoot, timestamp);
 
   console.log('Build:', timestamp);
 }
@@ -584,10 +571,9 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
       });
     }
 
-    fs.writeFileSync(
-      path.join(projectRoot, 'static-build', platform, 'manifest.json'),
-      JSON.stringify(manifest, null, 2),
-    );
+    // Never overwrite legacy live manifests: a failed first upgrade must leave
+    // the no-pointer server on its old native AND browser release.
+    stagePlatformManifest(projectRoot, timestamp, platform, manifest);
   };
 
   updateForPlatform('ios', manifests.ios);
@@ -647,6 +633,8 @@ async function main() {
   console.log('Updating manifests and creating landing page...');
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
   writeBuildInfo(projectRoot, timestamp);
+  publishWebIcon(projectRoot);
+  activateStaticBuild(projectRoot, timestamp);
 
   console.log('Build complete! Deploy to:', baseUrl);
 

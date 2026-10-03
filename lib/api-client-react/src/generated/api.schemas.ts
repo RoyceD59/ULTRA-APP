@@ -3553,6 +3553,10 @@ customerId?: number;
 };
 
 export type ListUcProductsParams = {
+/**
+ * Require configured WooCommerce published inventory; never substitute demo products.
+ */
+publicationSafe?: boolean;
 category?: string;
 search?: string;
 };

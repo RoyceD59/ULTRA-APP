@@ -635,6 +635,10 @@ paths:
       summary: List customer-facing products
       description: Public catalogue list; optional category and name/SKU search filters.
       parameters:
+        - name: publicationSafe
+          in: query
+          description: Require configured WooCommerce published inventory; never substitute demo products.
+          schema: { type: boolean, default: false }
         - name: category
           in: query
           schema: { type: string }
@@ -644,12 +648,17 @@ paths:
       responses:
         "200":
           description: Customer-facing catalogue
+          headers:
+            X-UC-Catalogue-Provenance:
+              description: woocommerce-published when publicationSafe is true and the full published catalogue was retrieved.
+              schema: { type: string }
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/UcProduct" }
         "502": { description: WooCommerce catalogue temporarily unavailable }
+        "503": { description: Publication-safe catalogue provider is not configured }
         "500": { description: Failed to fetch products }
 
   /uc/products/{id}:

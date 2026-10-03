@@ -1208,7 +1208,10 @@ export const ListUcInventoryResponse = zod.object({
  * Public catalogue list; optional category and name/SKU search filters.
  * @summary List customer-facing products
  */
+export const listUcProductsQueryPublicationSafeDefault = false;
+
 export const ListUcProductsQueryParams = zod.object({
+  "publicationSafe": zod.coerce.boolean().default(listUcProductsQueryPublicationSafeDefault).describe('Require configured WooCommerce published inventory; never substitute demo products.'),
   "category": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional()
 })
