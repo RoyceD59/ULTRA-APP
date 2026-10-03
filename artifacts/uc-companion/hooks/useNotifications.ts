@@ -126,12 +126,18 @@ async function setZeroLifespanNotice(active: boolean): Promise<void> {
   } catch { /* non-critical */ }
 }
 
-export async function getNotifPrefs(): Promise<NotifPrefs> {
+export async function getNotifPrefs(strict = false): Promise<NotifPrefs> {
   try {
     const s = await AsyncStorage.getItem(NOTIF_PREFS_KEY);
     if (!s) return { ...DEFAULT_PREFS };
-    return { ...DEFAULT_PREFS, ...(JSON.parse(s) as Partial<NotifPrefs>) };
-  } catch { return { ...DEFAULT_PREFS }; }
+    const parsed = JSON.parse(s) as Partial<NotifPrefs>;
+    if (strict && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+      (parsed.orderUpdates !== undefined && typeof parsed.orderUpdates !== 'boolean') ||
+      (parsed.filterReminders !== undefined && typeof parsed.filterReminders !== 'boolean'))) {
+      throw new Error('Invalid notification preferences');
+    }
+    return { ...DEFAULT_PREFS, ...parsed };
+  } catch (error) { if (strict) throw error; return { ...DEFAULT_PREFS }; }
 }
 
 export async function saveNotifPrefs(prefs: NotifPrefs): Promise<void> {

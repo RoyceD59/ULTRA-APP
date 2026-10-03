@@ -19,6 +19,7 @@ import { useCartBarInset } from '@/hooks/useCartBarInset';
 import PhotoHeader from '@/components/PhotoHeader';
 import ProductCard from '@/components/ProductCard';
 import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { pageDataState } from '@/lib/pageLoading';
 import FilterChip from '@/components/FilterChip';
 import SwipeTabs from '@/components/SwipeTabs';
@@ -201,7 +202,7 @@ function ProductsScreenContent() {
   }, []);
 
   // Main products query
-  const { data: products, isLoading, isError, refetch, isRefetching } = useQuery({
+  const { data: products, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: catalogueQueryKey({
       category: category === 'All' ? undefined : category,
       search: settledSearch,
@@ -214,7 +215,7 @@ function ProductsScreenContent() {
   });
 
   // Compatibility add-ons — only fetched when basket has items
-  const { data: addons, isFetching: addonsLoading } = useQuery({
+  const { data: addons, isLoading: addonsLoading, isError: addonsError, refetch: retryAddons } = useQuery({
     queryKey: ['compatibility', basketSkus],
     queryFn: () => api.getCompatibilityProducts(basketSkus),
     enabled: hasItems && basketSkus.length > 0,
@@ -301,12 +302,9 @@ function ProductsScreenContent() {
           </Text>
         </TouchableOpacity>
       </View>
-      {addonsLoading ? (
-        <View style={styles.addonsSkeletonRow}>
-          {[0, 1, 2].map(k => (
-            <View key={k} style={[styles.addonSkeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]} />
-          ))}
-        </View>
+      {addonsError ? <PageDataError title="Compatible add-ons unavailable" onRetry={retryAddons} /> : null}
+      {addonsLoading && addons === undefined ? (
+        <PageDataLoader label="Loading compatible add-ons…" />
       ) : (addons ?? []).length > 0 ? (
         <HorizontalCarousel
           data={addons}
@@ -532,27 +530,12 @@ function ProductsScreenContent() {
         {/* Products catalog */}
         <View onLayout={e => { catalogOffsetY.current = e.nativeEvent.layout.y; }}>
           {products !== undefined && isError && (
-            <TouchableOpacity onPress={() => refetch()} accessibilityRole="button" style={styles.retryBtn}>
-              <Text style={{ color: colors.primary }}>Showing saved products. Tap to retry the update.</Text>
-            </TouchableOpacity>
+            <PageDataError title="Products could not refresh" message="Your saved products are shown below." onRetry={refetch} />
           )}
           {pageDataState(products !== undefined, isLoading, isError) === 'loading' ? (
             <PageDataLoader label="Loading products…" />
           ) : !products && isError ? (
-            <View style={styles.empty}>
-              <Ionicons name="cloud-offline-outline" size={40} color={colors.border} />
-              <Text style={[styles.emptyText, { color: colors.text }]}>Couldn&apos;t load products</Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                Check your connection and try again.
-              </Text>
-              <TouchableOpacity
-                onPress={() => refetch()}
-                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
-                accessibilityRole="button"
-              >
-                <Text style={styles.retryBtnText}>Try again</Text>
-              </TouchableOpacity>
-            </View>
+            <PageDataError title="Products unavailable" error={error} onRetry={refetch} />
           ) : (
             <FlatList
               key={`grid-${numColumns}`}

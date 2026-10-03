@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
-  ActivityIndicator, useWindowDimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,8 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { trackEvent } from '@/lib/analytics';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -80,7 +82,7 @@ export default function ProductDetailScreen() {
     });
   }, [slideIndex, galleryContainerWidth]);
 
-  const { data: product, isLoading, isError, refetch: retryProduct } = useQuery({
+  const { data: product, isLoading, isError, error: productError, refetch: retryProduct } = useQuery({
     queryKey: ['product', id],
     queryFn: () => api.getProduct(pid),
     enabled: !!id,
@@ -155,19 +157,18 @@ export default function ProductDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.videoUrl]);
 
-  if (isLoading) return (
+  if (isLoading && !product) return (
     <View style={[styles.loading, { backgroundColor: colors.background }]}>
-      <ActivityIndicator color={colors.primary} />
+      <PageDataLoader label="Loading product…" />
     </View>
   );
 
   if (!product) return (
     <View style={[styles.loading, { backgroundColor: colors.background }]}>
-      <Text style={{ color: colors.mutedForeground }}>{isError ? "Couldn't load this product" : 'Product not found'}</Text>
-      <TouchableOpacity onPress={isError ? () => retryProduct() : goBackToProducts} accessibilityRole="button"
-        style={{ minHeight: 44, justifyContent: 'center' }}>
-        <Text style={{ color: colors.primary }}>{isError ? 'Retry' : 'Browse products'}</Text>
-      </TouchableOpacity>
+      <PageDataError title={isError && (productError as { status?: number })?.status !== 404 ? 'Product unavailable' : 'Product not found'}
+        error={productError}
+        onRetry={isError && (productError as { status?: number })?.status !== 404 ? retryProduct : goBackToProducts}
+        actionLabel={isError && (productError as { status?: number })?.status !== 404 ? 'Retry' : 'Browse products'} />
     </View>
   );
 

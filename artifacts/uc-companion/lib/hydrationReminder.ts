@@ -11,9 +11,14 @@ export function hydrationReminderHours(interval: HydrationInterval): number[] {
   return hours;
 }
 const key = (userId: number) => `uc_hydration_reminder_${userId}`;
-export async function getHydrationReminderPrefs(userId: number): Promise<HydrationReminderPrefs> {
+export async function getHydrationReminderPrefs(userId: number, strict = false): Promise<HydrationReminderPrefs> {
   const raw = await AsyncStorage.getItem(key(userId));
   const value = raw ? JSON.parse(raw) : {};
+  if (strict && (!value || typeof value !== 'object' || Array.isArray(value) ||
+    (value.enabled !== undefined && typeof value.enabled !== 'boolean') ||
+    (value.intervalHours !== undefined && !validInterval(value.intervalHours)))) {
+    throw new Error('Invalid hydration reminder preferences');
+  }
   return { enabled: value.enabled === true, intervalHours: validInterval(value.intervalHours) ? value.intervalHours : 3 };
 }
 export async function saveHydrationReminderPrefs(userId: number, prefs: HydrationReminderPrefs) {

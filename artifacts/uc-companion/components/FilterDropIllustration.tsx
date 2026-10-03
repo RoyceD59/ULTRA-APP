@@ -1,0 +1,18 @@
+import React, { useState } from 'react';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { useColors } from '@/hooks/useColors';
+
+/** Decorative bundled media. Error feedback always requests the still frame. */
+export default function FilterDropIllustration({ animate = false }: { animate?: boolean }) {
+  const colors = useColors();
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Ionicons testID="filter-drop-fallback" name="water-outline" size={32} color={colors.primary} accessible={false} />;
+  return (
+    <Image key={animate ? 'animated' : 'still'}
+      testID={animate ? 'water-loader-animated' : 'water-loader-still'}
+      source={animate ? require('@/assets/loading/water.gif') : require('@/assets/loading/water-still.png')}
+      style={{ width: 56, height: 64 }} contentFit="contain" accessible={false}
+      autoplay={animate} onError={() => setFailed(true)} />
+  );
+}

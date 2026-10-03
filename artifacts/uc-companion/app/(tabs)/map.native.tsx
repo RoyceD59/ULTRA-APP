@@ -9,6 +9,8 @@ import MapView, { Marker, Region } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import * as Location from 'expo-location';
@@ -49,12 +51,13 @@ export default function MapScreen() {
   const cartBarInset = useCartBarInset();
   const bottomOffset = cartBarInset || 24;
 
-  const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
+  const { data: locationData, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn:  () => api.getLocations(),
     staleTime: LOCATIONS_REFRESH_INTERVAL_MS,
   });
 
+  const locations = useMemo(() => locationData ?? [], [locationData]);
   const visible = useMemo(() => filterMapLocations(locations, filter), [filter, locations]);
 
   useFocusEffect(useCallback(() => {
@@ -126,24 +129,18 @@ export default function MapScreen() {
 
   // ── loading state ──────────────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading && locationData === undefined) {
     return (
       <View style={[s.screen, s.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[s.loadingTxt, { color: colors.mutedForeground }]}>Loading map…</Text>
+        <PageDataLoader label="Loading map…" />
       </View>
     );
   }
 
-  if (isError) {
+  if (isError && locationData === undefined) {
     return (
       <View style={[s.screen, s.centered, { backgroundColor: colors.background }]}>
-        <Ionicons name="alert-circle-outline" size={32} color={colors.primary} />
-        <Text style={[s.stateTitle, { color: colors.text }]}>Locations are unavailable</Text>
-        <Text style={[s.stateText, { color: colors.mutedForeground }]}>Please check your connection and try again.</Text>
-        <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[s.retryBtn, { backgroundColor: colors.primary }]}>
-          <Text style={s.retryBtnText}>{isRefetching ? 'Retrying…' : 'Try again'}</Text>
-        </TouchableOpacity>
+        <PageDataError title="Locations unavailable" error={error} onRetry={refetch} />
       </View>
     );
   }

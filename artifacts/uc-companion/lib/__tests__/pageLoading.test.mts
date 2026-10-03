@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
-import { pageDataState, animatePageLoader, startupReady, FONT_STARTUP_BUDGET_MS } from '../pageLoading.ts';
+import { pageDataState, animatePageLoader, pageFailureCopy, startupReady, FONT_STARTUP_BUDGET_MS } from '../pageLoading.ts';
 
 describe('initial page loading lifecycle', () => {
   it('shows loading only without data, never on a cached/background refresh', () => {
@@ -48,8 +48,33 @@ describe('local media and non-blocking fallback contracts', () => {
   });
   it('unmounts GIF when not animating and exposes an accessible loading label', () => {
     const source = readFileSync(new URL('components/PageDataLoader.tsx', base), 'utf8');
-    assert.match(source, /key=\{animate \? 'animated' : 'still'\}/);
+    const illustration = readFileSync(new URL('components/FilterDropIllustration.tsx', base), 'utf8');
+    assert.match(illustration, /key=\{animate \? 'animated' : 'still'\}/);
+    assert.match(illustration, /onError=\{\(\) => setFailed\(true\)\}/);
+    assert.match(illustration, /filter-drop-fallback/);
+    assert.match(source, /<FilterDropIllustration animate=\{animate\}/);
     assert.match(source, /accessibilityLabel=\{label\}/);
     assert.match(source, /accessibilityRole="progressbar"/);
+  });
+  it('errors and crash fallback use the still illustration and genuine recovery actions', () => {
+    const source = readFileSync(new URL('components/PageDataError.tsx', base), 'utf8');
+    assert.match(source, /<FilterDropIllustration \/>/);
+    assert.doesNotMatch(source, /animate=|usePageMotion/);
+    assert.match(source, /await onRetry\(\)/);
+    assert.match(source, /if \(pending.current\) return/);
+    assert.match(source, /disabled=\{retrying\}/);
+    assert.match(source, /accessibilityRole="button"/);
+    const crash = readFileSync(new URL('components/ErrorFallback.tsx', base), 'utf8');
+    assert.match(crash, /<FilterDropIllustration \/>/);
+    assert.match(crash, /reloadAppAsync\(\)/);
+    assert.match(crash, /__DEV__/);
+  });
+  it('keeps offline, expired authentication, not-found and unexpected failures distinct without diagnostics', () => {
+    assert.match(pageFailureCopy(new TypeError('Failed to fetch')), /offline/);
+    assert.match(pageFailureCopy({ status: 401 }), /sign in/);
+    assert.match(pageFailureCopy({ status: 403 }), /does not have access/);
+    assert.match(pageFailureCopy({ status: 404 }), /no longer available/);
+    assert.match(pageFailureCopy(new Error('SECRET stack trace')), /try again/);
+    assert.doesNotMatch(pageFailureCopy(new Error('SECRET stack trace')), /SECRET|stack trace/);
   });
 });

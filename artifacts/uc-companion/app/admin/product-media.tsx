@@ -8,6 +8,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useApi, resolveMediaUrl } from '@/hooks/useApi';
 import MediaPicker, { type MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
@@ -108,24 +110,18 @@ export default function ProductMediaAdminScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && rows === undefined) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} />
+        <PageDataLoader label="Loading product media…" />
       </View>
     );
   }
 
-  if (isError) {
+  if (isError && rows === undefined) {
     return (
       <View style={[s.center, { backgroundColor: colors.background, gap: 12 }]}>
-        <Ionicons name="lock-closed-outline" size={40} color={colors.mutedForeground} />
-        <Text style={{ color: colors.mutedForeground, textAlign: 'center', paddingHorizontal: 30 }}>
-          Couldn't load media — this area is for the Ultra Clear team only.
-        </Text>
-        <TouchableOpacity onPress={() => refetch()} style={[s.retryBtn, { borderColor: colors.primary }]}>
-          <Text style={{ color: colors.primary, fontWeight: '600' }}>Try again</Text>
-        </TouchableOpacity>
+        <PageDataError title="Product media unavailable" message="Product media couldn’t load. This area is for the Ultra Clear team only." onRetry={refetch} />
       </View>
     );
   }

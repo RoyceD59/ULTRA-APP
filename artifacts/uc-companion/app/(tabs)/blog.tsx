@@ -11,6 +11,7 @@ import { fetchBlogPage } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useCompanionLayout } from '@/hooks/useCompanionLayout';
 import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 import PhotoHeader from '@/components/PhotoHeader';
 import SwipeTabs from '@/components/SwipeTabs';
@@ -184,28 +185,17 @@ function BlogScreenContent() {
                   <Text style={[styles.offlineText, { color: colors.text }]}>Showing saved articles. Connect to refresh.</Text>
                 </View>
               ) : null}
-              {query.isError && articles.length > 0 ? (
-                <TouchableOpacity accessibilityRole="button" onPress={() => { void query.refetch(); }}
-                  style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={{ color: colors.primary }}>Showing saved articles. Tap to retry the update.</Text>
-                </TouchableOpacity>
+               {query.isError && query.data !== undefined ? (
+                 <PageDataError title="Articles could not refresh" message="Your saved articles remain available." onRetry={query.refetch} />
               ) : null}
             </View>
           </View>
         )}
         ListEmptyComponent={
-          query.isLoading ? (
+          query.data === undefined && query.isLoading ? (
             <PageDataLoader label="Loading articles…" />
-          ) : query.isError ? (
-            <View style={styles.state}>
-              <Ionicons name="cloud-offline-outline" size={28} color={colors.mutedForeground} />
-              <Text style={[styles.stateTitle, { color: colors.text }]}>Blog unavailable</Text>
-              <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Your other Companion features are still here. Try again when your connection is back.</Text>
-              <TouchableOpacity accessibilityRole="button" testID="blog-retry" onPress={() => { void query.refetch(); }}
-                style={[styles.retryButton, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.retryText, { color: colors.primaryForeground }]}>Try again</Text>
-              </TouchableOpacity>
-            </View>
+          ) : query.data === undefined && query.isError ? (
+            <PageDataError title="Blog unavailable" error={query.error} onRetry={query.refetch} testID="blog-retry" />
           ) : (
             <View style={styles.state}>
               <Ionicons name="newspaper-outline" size={30} color={colors.mutedForeground} />

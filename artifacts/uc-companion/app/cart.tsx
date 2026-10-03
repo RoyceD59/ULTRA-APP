@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
 import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
@@ -126,18 +128,13 @@ export default function CartScreen() {
     if (cartLoadError) {
       return (
         <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
-          <Ionicons name="cloud-offline-outline" size={48} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load your basket</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>There was a problem reading your saved cart.</Text>
-          <TouchableOpacity onPress={refreshCart} style={[styles.shopBtn, { backgroundColor: colors.primary }]}>
-            <Text style={styles.shopBtnText}>Retry</Text>
-          </TouchableOpacity>
+          <PageDataError title="Your basket couldn’t load" message="Your saved basket couldn’t be read. Retry to restore it." onRetry={refreshCart} />
         </View>
       );
     }
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <PageDataLoader label="Loading your basket…" />
       </View>
     );
   }

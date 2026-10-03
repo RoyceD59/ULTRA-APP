@@ -23,7 +23,7 @@ import PageDataLoader from '@/components/PageDataLoader';
 import { fetchBlogPage } from '@/lib/blogContent';
 import PhotoHeader from '@/components/PhotoHeader';
 import { Image } from 'expo-image';
-import { useHydration } from '@/hooks/useHydration';
+import PageDataError from '@/components/PageDataError';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -77,18 +77,17 @@ function HomeScreenContent() {
   const { user } = useAuth();
   const { totalItems, cartHydrated } = useCart();
   const api = useApi();
-  const hydration = useHydration();
   const [filterDays, setFilterDays] = useState<number | null>(null);
   const [filterAdjusted, setFilterAdjusted] = useState(false);
   const topPad = 0;
 
-  const { data: products, isLoading, isError, refetch: retryProducts } = useQuery({
+  const { data: products, isLoading, isError, error: productError, refetch: retryProducts } = useQuery({
     queryKey: catalogueQueryKey(),
     queryFn: ({ signal }) => api.getProducts(undefined, signal),
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: promotions, isError: promotionsError, refetch: retryPromotions } = useQuery({
+  const { data: promotions, isLoading: promotionsLoading, isError: promotionsError, error: promotionFailure, refetch: retryPromotions } = useQuery({
     queryKey: ['promotions'],
     queryFn: ({ signal }) => api.getPromotions(signal),
     staleTime: 2 * 60 * 1000,
@@ -96,7 +95,7 @@ function HomeScreenContent() {
 
   // The editorial feed is an independent query: blog network delays or errors
   // never hold up the Home screen or any of its existing data.
-  const { data: latestBlog, isLoading: latestBlogLoading, isError: latestBlogError, refetch: retryBlog } = useQuery({
+  const { data: latestBlog, isLoading: latestBlogLoading, isError: latestBlogError, error: blogFailure, refetch: retryBlog } = useQuery({
     queryKey: ['companion', 'blog', { homeLatest: true, limit: 3 }],
     queryFn: ({ signal }) => fetchBlogPage(
       (requestSignal) => api.getBlogArticles({ limit: 3 }, requestSignal),
@@ -198,22 +197,6 @@ function HomeScreenContent() {
 
         {/* Nudge: bought a trackable filter but never registered it */}
         <RegisterFilterPrompt onRegistered={refreshFilterStatus} />
-        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/hydration' as never)}
-          style={[styles.filterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="water-outline" size={24} color={colors.primary} />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={[styles.filterTitle, { color: colors.text }]}>Daily filtered water</Text>
-            <Text style={{ color: colors.mutedForeground }}>
-              {!user ? 'Sign in to log today’s consumption' : hydration.isLoading ? 'Loading today’s total…' :
-                hydration.isError ? 'Total unavailable · open to retry' :
-                  hydration.data?.litres == null ? 'Today: not recorded · log your daily total' : `Today: ${hydration.data.litres} L · tap to edit`}
-            </Text>
-            {Platform.OS === 'web' && user && hydration.data?.litres == null && !hydration.isLoading && !hydration.isError ? (
-              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Daily prompt: record your filtered water. Background reminders require the mobile app.</Text>
-            ) : null}
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-        </TouchableOpacity>
 
         {/* Promotions banner — scrollable horizontal strip */}
         {promotions && promotions.length > 0 && (
@@ -235,11 +218,8 @@ function HomeScreenContent() {
             />
           </View>
         )}
-        {promotionsError && (
-          <TouchableOpacity onPress={() => retryPromotions()} accessibilityRole="button" style={styles.statusAction}>
-            <Text style={{ color: colors.mutedForeground }}>Promotions unavailable. Tap to retry.</Text>
-          </TouchableOpacity>
-        )}
+        {promotionsLoading && promotions === undefined ? <PageDataLoader label="Loading promotions…" /> : null}
+        {promotionsError && <PageDataError title="Promotions unavailable" error={promotionFailure} onRetry={retryPromotions} />}
 
         {/* Latest Blog reads — this request is intentionally separate from
             Home's primary catalogue and account content. */}
@@ -269,12 +249,10 @@ function HomeScreenContent() {
                 <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
             ))
-          ) : latestBlogLoading ? (
+          ) : latestBlog === undefined && latestBlogLoading ? (
             <PageDataLoader label="Loading articles…" />
-          ) : latestBlogError ? (
-            <TouchableOpacity accessibilityRole="button" onPress={() => { void retryBlog(); }} style={styles.statusAction}>
-              <Text style={{ color: colors.mutedForeground }}>Blog articles unavailable. Tap to retry.</Text>
-            </TouchableOpacity>
+          ) : latestBlog === undefined && latestBlogError ? (
+            <PageDataError title="Blog articles unavailable" error={blogFailure} onRetry={retryBlog} />
           ) : latestBlog ? (
             <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/(tabs)/blog' as never)} style={styles.statusAction}>
               <Text style={{ color: colors.mutedForeground }}>No articles yet. Explore the blog.</Text>
@@ -310,17 +288,13 @@ function HomeScreenContent() {
           </TouchableOpacity>
         </View>
         {products !== undefined && isError && (
-          <TouchableOpacity onPress={() => retryProducts()} accessibilityRole="button" style={styles.statusAction}>
-            <Text style={{ color: colors.mutedForeground }}>Showing saved products. Tap to retry the update.</Text>
-          </TouchableOpacity>
+          <PageDataError title="Products could not refresh" message="Your saved products are shown below." onRetry={retryProducts} />
         )}
 
         {productState === 'loading' ? (
           <PageDataLoader label="Loading products…" />
         ) : productState === 'error' ? (
-          <TouchableOpacity onPress={() => retryProducts()} accessibilityRole="button" style={styles.statusAction}>
-            <Text style={{ color: colors.text }}>Products couldn't load. Tap to retry.</Text>
-          </TouchableOpacity>
+          <PageDataError title="Products couldn’t load" error={productError} onRetry={retryProducts} />
         ) : featured.length === 0 ? (
           <TouchableOpacity onPress={() => router.push('/(tabs)/products')} accessibilityRole="button" style={styles.statusAction}>
             <Text style={{ color: colors.mutedForeground }}>No featured products yet. Browse the shop.</Text>

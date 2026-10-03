@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -8,6 +8,8 @@ import { useColors } from '@/hooks/useColors';
 import OrderCard from '@/components/OrderCard';
 import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 /** Complete, account-scoped order history. The account tab intentionally only
  * previews recent purchases; this screen never slices the API result. */
@@ -45,15 +47,14 @@ export default function OrdersScreen() {
         <Text style={[styles.title, { color: colors.text }]}>My Orders</Text>
         <View style={{ width: 26 }} />
       </View>
-      {orders.isLoading ? (
-        <ActivityIndicator style={styles.state} color={colors.primary} size="large" />
-      ) : orders.isError ? (
-        <View style={styles.state}>
-          <Text style={[styles.error, { color: colors.destructive }]}>We couldn&apos;t load your order history.</Text>
-          <TouchableOpacity onPress={() => orders.refetch()} style={[styles.retry, { backgroundColor: colors.primary }]}>
-            <Text style={styles.retryText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
+      {!user ? (
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/auth/login')} style={styles.state}>
+          <Text style={{ color: colors.primary }}>Sign in to view your orders</Text>
+        </TouchableOpacity>
+      ) : orders.data === undefined && orders.isLoading ? (
+        <PageDataLoader label="Loading order history…" />
+      ) : orders.data === undefined && orders.isError ? (
+        <PageDataError title="Order history unavailable" error={orders.error} onRetry={orders.refetch} />
       ) : !orders.data?.length ? (
         <View style={styles.state}>
           <Ionicons name="bag-outline" size={44} color={colors.mutedForeground} />
@@ -61,6 +62,7 @@ export default function OrdersScreen() {
         </View>
       ) : (
         <View style={styles.list}>
+          {orders.isError ? <PageDataError title="Order history could not refresh" message="Your saved orders are shown below." onRetry={orders.refetch} /> : null}
           {orders.data.map(order => (
             <OrderCard key={order.id} order={order} onPress={() => router.push(`/order/${order.id}` as never)} />
           ))}

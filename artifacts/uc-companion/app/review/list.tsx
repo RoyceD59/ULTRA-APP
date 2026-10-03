@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,6 +12,8 @@ import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 export default function ReviewListScreen() {
   const { productId, productName } = useLocalSearchParams<{ productId: string; productName?: string }>();
@@ -29,22 +31,20 @@ export default function ReviewListScreen() {
     enabled: !isNaN(pid),
   });
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} />
+        <PageDataLoader label="Loading reviews…" />
       </View>
     );
   }
 
-  if (isError || !data) {
+  if (!data) {
     return (
       <View style={[s.center, { backgroundColor: colors.background, gap: 12 }]}>
-        <Ionicons name="cloud-offline-outline" size={40} color={colors.mutedForeground} />
-        <Text style={{ color: colors.mutedForeground }}>Couldn't load reviews</Text>
-        <TouchableOpacity onPress={() => refetch()} style={[s.retryBtn, { borderColor: colors.primary }]}>
-          <Text style={{ color: colors.primary, fontWeight: '600' }}>Try again</Text>
-        </TouchableOpacity>
+        <PageDataError title={isNaN(pid) ? 'Product not found' : 'Reviews unavailable'}
+          onRetry={isNaN(pid) ? () => router.replace('/(tabs)/products') : refetch}
+          actionLabel={isNaN(pid) ? 'Browse products' : 'Retry'} />
       </View>
     );
   }
@@ -53,6 +53,7 @@ export default function ReviewListScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {isError ? <PageDataError title="Reviews could not refresh" message="Your saved reviews are still shown below." onRetry={refetch} /> : null}
       <FlatList
         data={data.reviews}
         keyExtractor={(r) => String(r.id)}

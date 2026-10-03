@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -19,6 +18,8 @@ import { useColors } from '@/hooks/useColors';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
 import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 type LedgerEntry = CustomerRewards['ledger'][number];
 
@@ -84,6 +85,7 @@ export default function RewardsScreen() {
     data: rewards,
     isLoading,
     isError,
+    error,
     isRefetching,
     refetch,
   } = useQuery({
@@ -103,7 +105,7 @@ export default function RewardsScreen() {
   if (authLoading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <PageDataLoader label="Loading your account…" />
       </View>
     );
   }
@@ -129,30 +131,18 @@ export default function RewardsScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !rewards) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading your rewards…</Text>
+        <PageDataLoader label="Loading your rewards…" />
       </View>
     );
   }
 
-  if (isError || !rewards) {
+  if (!rewards) {
     return (
       <View style={[styles.centered, styles.gate, { backgroundColor: colors.background }]}>
-        <Ionicons name="cloud-offline-outline" size={36} color={colors.mutedForeground} />
-        <Text style={[styles.gateTitle, { color: colors.text }]}>Rewards are unavailable</Text>
-        <Text style={[styles.gateCopy, { color: colors.mutedForeground }]}>
-          Check your connection and try again.
-        </Text>
-        <TouchableOpacity
-          testID="retry-rewards"
-          onPress={() => refetch()}
-          style={[styles.retryButton, { borderColor: colors.primary }]}
-        >
-          <Text style={[styles.retryText, { color: colors.primary }]}>Try Again</Text>
-        </TouchableOpacity>
+        <PageDataError title="Rewards are unavailable" error={error} onRetry={refetch} testID="retry-rewards" />
       </View>
     );
   }
@@ -171,6 +161,7 @@ export default function RewardsScreen() {
       onRefresh={refetch}
       ListHeaderComponent={(
         <>
+          {isError ? <PageDataError title="Rewards could not refresh" message="Your last loaded balance is shown below. Refresh before using rewards." onRetry={refetch} /> : null}
           <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
             <View style={styles.balanceHeading}>
               <Ionicons name="star" size={18} color={colors.primaryForeground} />
@@ -209,14 +200,8 @@ export default function RewardsScreen() {
               )}
             </View>
             <View style={[styles.qrWrap, { borderColor: colors.border }]}>
-              {qrLoading ? <ActivityIndicator testID="rewards-qr-loading" color={colors.primary} /> : qrError || !qrToken ? (
-                <View style={styles.qrFallback}>
-                  <Ionicons name="alert-circle-outline" size={24} color={colors.destructive} />
-                  <Text style={[styles.qrError, { color: colors.destructive }]}>QR unavailable</Text>
-                  <TouchableOpacity testID="retry-rewards-qr" onPress={retryQr}>
-                    <Text style={[styles.retryText, { color: colors.primary }]}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
+              {qrLoading ? <PageDataLoader label="Loading rewards QR…" /> : qrError || !qrToken ? (
+                <PageDataError title="Rewards QR unavailable" onRetry={retryQr} testID="retry-rewards-qr" />
               ) : (
                 <QRCode testID="rewards-qr" value={buildRewardsQrPayload(qrToken)} size={150} color="#1a1a1a" backgroundColor="#fff" />
               )}

@@ -193,7 +193,7 @@ describe('checkout.tsx hydration guard (source-level tripwire)', () => {
 });
 
 describe('other cart surfaces respect cartHydrated (source-level tripwires)', () => {
-  it('E: cart screen early-returns a spinner on !cartHydrated before the empty state', () => {
+  it('E: cart screen early-returns a page loader on !cartHydrated before the empty state', () => {
     const src = readAppSource('app/cart.tsx');
     assert.match(src, /cartHydrated/, 'cart.tsx must read cartHydrated from useCart()');
 
@@ -206,8 +206,8 @@ describe('other cart surfaces respect cartHydrated (source-level tripwires)', ()
     const nextStmtIdx = src.indexOf('if (items.length === 0)', guardIdx);
     assert.ok(nextStmtIdx > guardIdx, 'expected the empty-cart check after the guard');
     const guardBlock = src.slice(guardIdx, nextStmtIdx);
-    assert.match(guardBlock, /ActivityIndicator/,
-      'the !cartHydrated branch must show a spinner');
+    assert.match(guardBlock, /PageDataLoader/,
+      'the !cartHydrated branch must show the accessible page-data loader');
     assert.doesNotMatch(guardBlock, /Your cart is empty|items\.map|totalPrice/,
       'the !cartHydrated branch must not render the empty state or totals');
 

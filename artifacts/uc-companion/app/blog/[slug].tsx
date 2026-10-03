@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,6 +12,8 @@ import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { articleInlineLinks } from '@workspace/api-zod/blog-inline-links';
 import { trackEvent } from '@/lib/analytics';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 type ArticleBlock = { kind: 'heading' | 'paragraph' | 'list' | 'quote'; text: string; ordered?: boolean; number?: string };
 
@@ -227,26 +229,18 @@ export default function BlogArticleScreen() {
         <Text style={[styles.topBarTitle, { color: colors.text }]} numberOfLines={1}>The UC Blog</Text>
         <View style={styles.backButton} />
       </View>
-      {query.isLoading ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading article…</Text>
-        </View>
-      ) : query.isError || !article ? (
-        <View style={styles.centerState}>
-          <Ionicons name="document-text-outline" size={30} color={colors.mutedForeground} />
-          <Text style={[styles.stateTitle, { color: colors.text }]}>Article unavailable</Text>
-          <Text style={[styles.stateText, { color: colors.mutedForeground }]}>This article couldn’t be loaded. Please check your connection and try again.</Text>
-          <TouchableOpacity accessibilityRole="button" testID="blog-article-retry"
-            onPress={() => { void query.refetch(); }} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.retryText, { color: colors.primaryForeground }]}>Try again</Text>
-          </TouchableOpacity>
-        </View>
+      {!article && query.isLoading ? (
+        <PageDataLoader label="Loading article…" />
+      ) : !article ? (
+        <PageDataError title={(query.error as { status?: number })?.status === 404 ? 'Article not found' : 'Article unavailable'}
+          error={query.error} onRetry={(query.error as { status?: number })?.status === 404 ? () => router.replace('/(tabs)/blog') : query.refetch}
+          actionLabel={(query.error as { status?: number })?.status === 404 ? 'Browse articles' : 'Retry'} testID="blog-article-retry" />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.content, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 118 : 100) }]}
         >
+          {query.isError ? <PageDataError title="Article could not refresh" message="Your saved article is still available below." onRetry={query.refetch} /> : null}
           {query.data?.fromCache ? (
             <View style={[styles.offlineNotice, { backgroundColor: colors.warningLight }]}>
               <Ionicons name="cloud-offline-outline" size={15} color={colors.warning} />

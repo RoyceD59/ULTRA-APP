@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +9,8 @@ import { useColors } from '@/hooks/useColors';
 import { useApi } from '@/hooks/useApi';
 import { useCareOverview } from '@/hooks/useCareOverview';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 export default function CareOverview() {
   const colors = useColors();
@@ -31,7 +33,7 @@ export default function CareOverview() {
     style={{ minHeight: 48, padding: 14, backgroundColor: colors.primary, borderRadius: 12 }}>
     <Text style={{ color: colors.primaryForeground, fontWeight: '600' }}>{label}</Text>
   </TouchableOpacity>;
-  if (authLoading || configLoading) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator accessibilityLabel="Loading your water care" color={colors.primary} /></View>;
+  if (authLoading || configLoading) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><PageDataLoader label="Loading your water care…" /></View>;
   if (!available) return <View style={{ flex: 1, gap: 20, padding: 24, backgroundColor: colors.background }}>
     <Text style={{ fontSize: 22, color: colors.text }}>Water care overview is unavailable</Text>
     {button('Go to my account', () => router.replace('/(tabs)/account'))}
@@ -50,10 +52,9 @@ export default function CareOverview() {
       <View style={{ padding: 20, borderRadius: 16, backgroundColor: colors.primaryLight, gap: 10 }}>
         <Text style={{ color: colors.primary, fontWeight: '600' }}>Registered member</Text>
         <Text style={{ color: colors.text }}>Your existing account brings filter reminders, rewards and support together.</Text>
-        {rewards.isLoading ? <ActivityIndicator color={colors.primary} /> : rewards.isError ? <>
-          <Text accessibilityRole="alert" style={{ color: colors.text }}>We couldn't refresh your points. Try again before using your rewards.</Text>
-          {button('Refresh points', () => { void rewards.refetch(); })}
-        </> : <Text style={{ fontSize: 24, fontWeight: '600', color: colors.text }}>{rewards.data ? `${rewards.data.balance.toLocaleString()} points` : 'Points unavailable'}</Text>}
+        {rewards.isError ? <PageDataError title="Points could not refresh" error={rewards.error} onRetry={rewards.refetch} /> : null}
+        {rewards.isLoading && !rewards.data ? <PageDataLoader label="Loading your points…" /> :
+          rewards.data ? <Text style={{ fontSize: 24, fontWeight: '600', color: colors.text }}>{rewards.data.balance.toLocaleString()} points</Text> : null}
         <Text style={{ color: colors.text }}>Points are rewards, not cash or prepaid refill litres.</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>

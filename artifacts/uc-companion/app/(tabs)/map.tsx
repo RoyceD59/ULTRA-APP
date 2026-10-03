@@ -1,10 +1,12 @@
 // Web fallback — react-native-maps only works on native.
 // This screen shows a location list on web; map.native.tsx has the MapView.
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
@@ -62,12 +64,13 @@ export default function MapScreen() {
   const [selected, setSelected] = useState<MapLocation | null>(null);
   const cartBarInset = useCartBarInset();
 
-  const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
+  const { data: locationData, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn: () => api.getLocations(),
     staleTime: LOCATIONS_REFRESH_INTERVAL_MS,
   });
 
+  const locations = locationData ?? [];
   const visible = filterMapLocations(locations, filter);
 
   useFocusEffect(useCallback(() => {
@@ -115,15 +118,10 @@ export default function MapScreen() {
         <Text style={[styles.mapHintText, { color: colors.primary }]}>Tap any location to view details and community ratings</Text>
       </View>
 
-       {isLoading ? (
-         <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading verified locations…</Text></View>
-       ) : isError ? (
-         <View style={styles.loading}>
-           <Ionicons name="alert-circle-outline" size={32} color={colors.primary} />
-           <Text style={[styles.stateTitle, { color: colors.text }]}>Locations are unavailable</Text>
-           <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Please check your connection and try again.</Text>
-           <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text style={styles.retryText}>{isRefetching ? 'Retrying…' : 'Try again'}</Text></TouchableOpacity>
-         </View>
+       {isLoading && locationData === undefined ? (
+         <PageDataLoader label="Loading verified locations…" />
+       ) : isError && locationData === undefined ? (
+         <PageDataError title="Locations unavailable" error={error} onRetry={refetch} />
       ) : (
         <FlatList
           data={visible}
@@ -136,7 +134,10 @@ export default function MapScreen() {
               <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text style={styles.retryText}>{isRefetching ? 'Refreshing…' : 'Refresh'}</Text></TouchableOpacity>
             </View>
           }
-          ListHeaderComponent={directionsError ? <Text style={[styles.directionsError, { color: colors.mutedForeground }]}>{directionsError}</Text> : null}
+          ListHeaderComponent={<>
+            {isError ? <PageDataError title="Locations could not refresh" message="Your saved locations are shown below." onRetry={refetch} /> : null}
+            {directionsError ? <Text style={[styles.directionsError, { color: colors.mutedForeground }]}>{directionsError}</Text> : null}
+          </>}
           renderItem={({ item }) => <LocationCard loc={item} colors={colors} onPress={setSelected} />}
         />
       )}

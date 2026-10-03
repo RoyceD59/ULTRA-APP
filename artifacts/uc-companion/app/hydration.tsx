@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { saveUcDailyHydration } from '@workspace/api-client-react';
@@ -14,7 +16,7 @@ export default function HydrationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
-  const { data, date, isLoading, isError, refetch } = useHydration();
+  const { data, date, isLoading, isError, error, refetch } = useHydration();
   const client = useQueryClient();
   const [input, setInput] = useState('');
   const [message, setMessage] = useState('');
@@ -51,10 +53,11 @@ export default function HydrationScreen() {
         <TouchableOpacity accessibilityRole="button" onPress={() => router.push({ pathname: '/auth/login', params: { returnTo: '/hydration' } })}>
           <Text style={{ color: colors.primary }}>Sign in to record and sync your total</Text>
         </TouchableOpacity>
-      ) : isLoading ? <ActivityIndicator color={colors.primary} /> : isError ? (
-        <TouchableOpacity onPress={() => refetch()} accessibilityRole="button"><Text style={{ color: colors.text }}>Could not load today’s total. Tap to retry.</Text></TouchableOpacity>
+      ) : !data && isLoading ? <PageDataLoader label="Loading today’s total…" /> : !data && isError ? (
+        <PageDataError title="Today’s total unavailable" error={error} onRetry={refetch} />
       ) : (
         <>
+          {isError ? <PageDataError title="Today’s total could not refresh" message="Your last loaded total is shown below. Retry to get the latest total." onRetry={refetch} /> : null}
           <Text style={{ color: colors.text, fontSize: 20 }}>{data?.litres == null ? 'Not recorded today' : `Today: ${data.litres} L`}</Text>
           <Text style={{ color: colors.text }}>Daily total (litres)</Text>
           <TextInput accessibilityLabel="Daily filtered-water total in litres" value={input} onChangeText={setInput} keyboardType="decimal-pad" placeholder="e.g. 1.25" placeholderTextColor={colors.mutedForeground}

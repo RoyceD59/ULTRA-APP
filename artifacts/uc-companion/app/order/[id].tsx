@@ -10,6 +10,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 /**
  * Gentle nudge shown to guests after checkout: creating a free account lets
@@ -119,7 +121,7 @@ export default function OrderDetailScreen() {
     enabled: !!user,
   });
 
-  const { data: singleOrder, isLoading, refetch } = useQuery({
+  const { data: singleOrder, isLoading, isError, error, refetch } = useQuery({
     queryKey: customerQueryKeys.order(user?.id, id),
     queryFn: () => api.getOrder(Number(id)),
     enabled: !!user,
@@ -170,7 +172,22 @@ export default function OrderDetailScreen() {
     },
   });
 
-  if (isLoading || !order) {
+  if (user && !order) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/orders')}>
+          <Text style={{ color: colors.primary, padding: 16 }}>Back to orders</Text>
+        </TouchableOpacity>
+        {isLoading ? <PageDataLoader label="Loading your order…" /> :
+          <PageDataError title={(error as { status?: number })?.status === 404 ? 'Order not found' : 'Order unavailable'}
+            error={error} onRetry={(error as { status?: number })?.status === 404 ? () => router.replace('/orders') : refetch}
+            actionLabel={(error as { status?: number })?.status === 404 ? 'View orders' : 'Retry'} />}
+      </View>
+    );
+  }
+
+  // Preserve the guest checkout confirmation, which has no account-owned read.
+  if (!order) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
         <Ionicons name="checkmark-circle" size={60} color={colors.success} />
@@ -205,6 +222,7 @@ export default function OrderDetailScreen() {
     <ScrollView
       style={[styles.screen, { backgroundColor: colors.background }]}
       contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 34 : 40 }}>
+      {isError ? <PageDataError title="Order could not refresh" message="Your last loaded order is shown below." onRetry={refetch} /> : null}
 
       {/* ── Status card ─────────────────────────────────────── */}
       <View style={[styles.statusCard, { backgroundColor: statusCfg.color + '10', borderColor: statusCfg.color }]}>

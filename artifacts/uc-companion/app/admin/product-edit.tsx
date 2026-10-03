@@ -8,6 +8,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useApi } from '@/hooks/useApi';
 
 /**
@@ -117,24 +119,18 @@ export default function ProductEditAdminScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !product) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} />
+        <PageDataLoader label="Loading product details…" />
       </View>
     );
   }
 
-  if (isError) {
+  if (isError && !product) {
     return (
       <View style={[s.center, { backgroundColor: colors.background, gap: 12 }]}>
-        <Ionicons name="lock-closed-outline" size={40} color={colors.mutedForeground} />
-        <Text style={{ color: colors.mutedForeground, textAlign: 'center', paddingHorizontal: 30 }}>
-          Couldn't load product — this area is for the Ultra Clear team only.
-        </Text>
-        <TouchableOpacity onPress={() => refetch()} style={[s.retryBtn, { borderColor: colors.primary }]}>
-          <Text style={{ color: colors.primary, fontWeight: '600' }}>Try again</Text>
-        </TouchableOpacity>
+        <PageDataError title="Product details unavailable" message="Product details couldn’t load. This area is for the Ultra Clear team only." onRetry={refetch} />
       </View>
     );
   }

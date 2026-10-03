@@ -37,6 +37,8 @@ import {
   type ProfileDraftFields,
 } from '@/lib/profileDraft';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
 import ImpactShareModal from '@/components/ImpactShareModal';
 import { CountryPicker } from '@/components/CountryPicker';
@@ -937,21 +939,13 @@ function AccountScreenContent() {
                 </TouchableOpacity>
               </View>
               <View style={[rewardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {rewardsLoading ? (
-                  <View style={styles.historyState}>
-                    <ActivityIndicator color={colors.primary} />
-                    <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Loading your rewards…</Text>
-                  </View>
-                ) : rewardsError || !rewards ? (
-                  <View style={styles.historyState}>
-                    <Ionicons name="cloud-offline-outline" size={24} color={colors.mutedForeground} />
-                    <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Rewards are unavailable.</Text>
-                    <TouchableOpacity onPress={() => refetchRewards()} style={[styles.historyRetry, { borderColor: colors.primary }]}>
-                      <Text style={[styles.historyRetryText, { color: colors.primary }]}>Try Again</Text>
-                    </TouchableOpacity>
-                  </View>
+                {rewardsLoading && !rewards ? (
+                  <PageDataLoader label="Loading your rewards…" />
+                ) : !rewards ? (
+                  <PageDataError title="Rewards unavailable" onRetry={refetchRewards} />
                 ) : (
                 <>
+                {rewardsError ? <PageDataError title="Rewards could not refresh" message="Your saved balance is shown below. Refresh before using rewards." onRetry={refetchRewards} /> : null}
                 {/* Balance */}
                 <View style={[rewardStyles.balanceRow, { borderBottomColor: colors.border }]}>
                   <View style={[rewardStyles.balanceIcon, { backgroundColor: colors.primaryLight }]}>
@@ -990,15 +984,9 @@ function AccountScreenContent() {
                   </View>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
                     {qrLoading ? (
-                      <ActivityIndicator testID="account-rewards-qr-loading" color={colors.primary} size="large" />
+                      <PageDataLoader label="Loading rewards QR…" />
                     ) : qrError || !rewardsQrToken ? (
-                      <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="alert-circle-outline" size={32} color={colors.destructive} />
-                        <Text style={{ fontSize: 12, color: colors.destructive, marginTop: 4, textAlign: 'center' }}>Failed to load QR</Text>
-                        <TouchableOpacity onPress={retryQr} style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primaryLight, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Retry</Text>
-                        </TouchableOpacity>
-                      </View>
+                      <PageDataError title="Rewards QR unavailable" onRetry={retryQr} />
                     ) : (
                       <QRCode
                         testID="account-rewards-qr"
@@ -1072,10 +1060,8 @@ function AccountScreenContent() {
           {/* Filter tracker */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Assigned filters</Text>
-            {assignmentsQuery.isLoading && <ActivityIndicator color={colors.primary} />}
-            {assignmentsQuery.isError && <TouchableOpacity accessibilityRole="button" onPress={() => void assignmentsQuery.refetch()}>
-              <Text style={{ color: colors.primary }}>Could not load assigned filters. Tap to retry.</Text>
-            </TouchableOpacity>}
+            {assignmentsQuery.isLoading && !assignmentsQuery.data ? <PageDataLoader label="Loading assigned filters…" /> : null}
+            {assignmentsQuery.isError ? <PageDataError title="Assigned filters unavailable" error={assignmentsQuery.error} onRetry={assignmentsQuery.refetch} /> : null}
             {!assignmentsQuery.isLoading && !assignmentsQuery.isError && !assignmentsQuery.data?.length &&
               <Text style={{ color: colors.mutedForeground }}>No staff-assigned filters on this account.</Text>}
             {(assignmentsQuery.data ?? []).map(assignment => <View key={assignment.id} style={{ paddingVertical: 12 }}>
@@ -1112,19 +1098,10 @@ function AccountScreenContent() {
               </TouchableOpacity>
             </View>
             <View testID="water-test-history" style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {waterTestsLoading ? (
-                <View style={styles.historyState}>
-                  <ActivityIndicator color={colors.primary} />
-                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Loading your requests…</Text>
-                </View>
-              ) : waterTestsError ? (
-                <View style={styles.historyState}>
-                  <Ionicons name="cloud-offline-outline" size={24} color={colors.mutedForeground} />
-                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Request history is unavailable.</Text>
-                  <TouchableOpacity onPress={() => refetchWaterTests()} style={[styles.historyRetry, { borderColor: colors.primary }]}>
-                    <Text style={[styles.historyRetryText, { color: colors.primary }]}>Try Again</Text>
-                  </TouchableOpacity>
-                </View>
+              {waterTestsLoading && waterTests === undefined ? (
+                <PageDataLoader label="Loading your requests…" />
+              ) : waterTestsError && waterTests === undefined ? (
+                <PageDataError title="Request history unavailable" onRetry={refetchWaterTests} />
               ) : !waterTests?.length ? (
                 <View style={styles.historyState}>
                   <Ionicons name="flask-outline" size={24} color={colors.mutedForeground} />
