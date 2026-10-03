@@ -27,6 +27,7 @@ import { getLiveWaterTestsAccess } from "../lib/adminAuth.js";
 import { sendSmsAwaitable } from "../lib/sms.js";
 import { sendWhatsAppMessage } from "../lib/whatsapp.js";
 import { logger } from "../lib/logger.js";
+import { normalizeWaterSelections } from "../lib/instant-water-check.js";
 import {
   attachAssessment,
   confirmVerification,
@@ -65,7 +66,9 @@ function onlyKeys(value: unknown, keys: readonly string[]): boolean {
 }
 
 function validAnswers(value: unknown): boolean {
-  return onlyKeys(value, ["country", "area", "source", "concern", "symptom", "useContext", "setting"]);
+  if (!onlyKeys(value, ["country", "area", "source", "concern", "symptom", "useContext", "setting", "sources", "concerns", "settings"])) return false;
+  try { normalizeWaterSelections(value as Parameters<typeof normalizeWaterSelections>[0]); return true; }
+  catch { return false; }
 }
 
 function identityError(value: unknown): "INVALID_FIRST_NAME" | "INVALID_PHONE" | null {

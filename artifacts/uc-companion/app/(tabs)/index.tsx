@@ -22,6 +22,8 @@ import { pageDataState } from '@/lib/pageLoading';
 import PageDataLoader from '@/components/PageDataLoader';
 import { fetchBlogPage } from '@/lib/blogContent';
 import PhotoHeader from '@/components/PhotoHeader';
+import { Image } from 'expo-image';
+import { useHydration } from '@/hooks/useHydration';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -75,6 +77,7 @@ function HomeScreenContent() {
   const { user } = useAuth();
   const { totalItems, cartHydrated } = useCart();
   const api = useApi();
+  const hydration = useHydration();
   const [filterDays, setFilterDays] = useState<number | null>(null);
   const [filterAdjusted, setFilterAdjusted] = useState(false);
   const topPad = 0;
@@ -195,6 +198,22 @@ function HomeScreenContent() {
 
         {/* Nudge: bought a trackable filter but never registered it */}
         <RegisterFilterPrompt onRegistered={refreshFilterStatus} />
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/hydration' as never)}
+          style={[styles.filterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="water-outline" size={24} color={colors.primary} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[styles.filterTitle, { color: colors.text }]}>Daily filtered water</Text>
+            <Text style={{ color: colors.mutedForeground }}>
+              {!user ? 'Sign in to log today’s consumption' : hydration.isLoading ? 'Loading today’s total…' :
+                hydration.isError ? 'Total unavailable · open to retry' :
+                  hydration.data?.litres == null ? 'Today: not recorded · log your daily total' : `Today: ${hydration.data.litres} L · tap to edit`}
+            </Text>
+            {Platform.OS === 'web' && user && hydration.data?.litres == null && !hydration.isLoading && !hydration.isError ? (
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Daily prompt: record your filtered water. Background reminders require the mobile app.</Text>
+            ) : null}
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        </TouchableOpacity>
 
         {/* Promotions banner — scrollable horizontal strip */}
         {promotions && promotions.length > 0 && (
@@ -275,7 +294,7 @@ function HomeScreenContent() {
                 onPress={() => router.push(a.route as never)}
                 style={[styles.actionCard, { minWidth: layout.size === 'compact' ? '45%' : '20%', backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.actionIcon, { backgroundColor: a.color + '18' }]}>
-                  <Ionicons name={a.icon} size={24} color={a.color} />
+                  {a.id === 'test' ? <Image source={require('@/assets/images/water-test.png')} contentFit="contain" style={{ width: 48, height: 48 }} /> : <Ionicons name={a.icon} size={24} color={a.color} />}
                 </View>
                 <Text style={[styles.actionLabel, { color: colors.text }]}>{a.label}</Text>
               </TouchableOpacity>

@@ -5,11 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InstantWaterAssessmentAnswers } from './instantWaterAssessmentAnswers';
 import type { ProjectHubInstantWaterDetailSourceAttribution } from './projectHubInstantWaterDetailSourceAttribution';
 import type { ProjectHubInstantWaterMediaReference } from './projectHubInstantWaterMediaReference';
 import type { ProjectHubInstantWaterSummary } from './projectHubInstantWaterSummary';
 
 export type ProjectHubInstantWaterDetail = ProjectHubInstantWaterSummary & {
+  answers?: InstantWaterAssessmentAnswers;
   phone?: string;
   consentVersion?: string;
   sourceAttribution?: ProjectHubInstantWaterDetailSourceAttribution;

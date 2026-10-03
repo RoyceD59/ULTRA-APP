@@ -3,6 +3,12 @@ name: Hydrate programme policy
 description: Funding, claims and hosting scope for the Hydrate the Future forest and Companion tree.
 ---
 
+Consumption logging is not a purchase, refill transaction, donation, tree allocation, or financial-impact event.
+
+**Why:** The owner explicitly excluded those effects from daily hydration logging.
+
+**How to apply:** Keep daily consumption and reminders separate from commerce, programme funding, rewards, and impact ledgers.
+
 Hydrate the Future allocates 3% of eligible paid purchases, split equally between trees and clean-water access. Logged refills add no funding. Do not invent baseline revenue, confirmed lifetime value, donation dates, partners or field outcomes.
 
 **Why:** The approved release scope explicitly requires those funding rules and distinguishes digital allocations from verified programme activity.

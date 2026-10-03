@@ -9,10 +9,12 @@ import { countryCodeFromValue } from "@workspace/api-zod/phone";
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, ObjectStorageService } from "./objectStorage.js";
 import {
   scoreInstantWaterCheck,
+  normalizeWaterSelections,
   type InstantWaterCheckAnswers,
   type InstantWaterCheckResult,
 } from "./instant-water-check.js";
 import { enqueueLeadDelivery } from "./lead-delivery.js";
+import { withWaterRecommendationTarget } from "./water-recommendation-targets.js";
 
 const PUBLIC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTION_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -38,6 +40,7 @@ export type AssessmentRow = {
   source: string;
   concern: string;
   setting: string;
+  raw_answers: InstantWaterCheckAnswers;
   result: InstantWaterCheckResult;
   area_flags: { hardGroundwater?: boolean; riftValleyFluoride?: boolean };
   source_attribution: Record<string, string>;
@@ -56,6 +59,21 @@ export type AssessmentResponse = {
   resultTokenExpiresAt?: Date;
   result: ReturnType<typeof redactInstantWaterResult>;
 };
+/** Old snapshots may have empty raw_answers but valid compatibility columns.
+ * Restore selections only; never recompute the saved result. */
+function storedWaterAnswers(row: {
+  raw_answers?: Partial<InstantWaterCheckAnswers>;
+  area?: string; country?: string; source?: string; concern?: string; setting?: string;
+}) {
+  return normalizeWaterSelections({
+    country: row.country,
+    area: row.area ?? "Unknown",
+    source: row.source as InstantWaterCheckAnswers["source"],
+    concern: row.concern as InstantWaterCheckAnswers["concern"],
+    setting: row.setting as InstantWaterCheckAnswers["setting"],
+    ...row.raw_answers,
+  });
+}
 
 export function normalizeInstantPhone(raw: string, country?: Parameters<typeof normalizeSharedPhone>[1]): string | null {
   return normalizeSharedPhone(raw, country);
@@ -318,7 +336,7 @@ export async function createInstantAssessment(input: {
   consentVersion: string;
   country: string;
   area: string;
-  answers: InstantWaterCheckAnswers;
+  answers: Partial<InstantWaterCheckAnswers> & { area: string };
   sourceAttribution?: Record<string, string | undefined>;
   customerUserId?: string | null;
   scope: string;
@@ -329,8 +347,11 @@ export async function createInstantAssessment(input: {
   if (!normalizedFirstName) throw new Error("INVALID_FIRST_NAME");
   const normalizedPhone = normalizeSharedPhone(input.phone, countryCodeFromValue(input.country) ?? "KE");
   if (!normalizedPhone) throw new Error("INVALID_PHONE");
-  const result = scoreInstantWaterCheck(input.answers, input.country);
-  const requestHash = hashSecret(stablePayload({
+  const answers = normalizeWaterSelections(input.answers);
+  input = { ...input, answers };
+  const result = scoreInstantWaterCheck(answers, input.country);
+  result.recommendation = await withWaterRecommendationTarget(result.recommendation);
+  const requestPayload = {
     firstName: normalizedFirstName,
     normalizedPhone,
     consentVersion: input.consentVersion,
@@ -339,7 +360,14 @@ export async function createInstantAssessment(input: {
     answers: input.answers,
     sourceAttribution: input.sourceAttribution ?? {},
     customerUserId: input.customerUserId ?? null,
-  }));
+  };
+  const requestHash = hashSecret(stablePayload(requestPayload));
+  const legacyAnswers = { ...answers };
+  delete legacyAnswers.sources; delete legacyAnswers.concerns; delete legacyAnswers.settings;
+  const compatibleHashes = new Set([requestHash]);
+  if (answers.sources!.length === 1 && answers.concerns!.length === 1 && answers.settings!.length === 1) {
+    compatibleHashes.add(hashSecret(stablePayload({ ...requestPayload, answers: legacyAnswers })));
+  }
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -351,7 +379,7 @@ export async function createInstantAssessment(input: {
       [input.scope, input.idempotencyKey],
     );
     if (prior.rows[0]) {
-      if (prior.rows[0].request_hash !== requestHash) {
+      if (!compatibleHashes.has(prior.rows[0].request_hash)) {
         await client.query("ROLLBACK");
         throw new Error("IDEMPOTENCY_CONFLICT");
       }
@@ -397,8 +425,8 @@ export async function createInstantAssessment(input: {
         id, reference, input.customerUserId ?? null, normalizedFirstName, normalizedPhone,
         input.customerUserId ? "verified" : "unverified",
         input.customerUserId ? new Date() : null, "result_and_follow_up",
-        input.consentVersion, input.country.trim(), input.area.trim(), input.answers.source,
-        input.answers.concern, input.answers.setting, input.answers, result.rulesVersion,
+        input.consentVersion, input.country.trim(), input.area.trim(), answers.source,
+        answers.concern, answers.setting, answers, result.rulesVersion,
         result, result.areaFlags, input.sourceAttribution ?? {}, lifecycle, accountState,
         "not_requested", publicTokenHash, tokenExpires,
       ],
@@ -424,9 +452,9 @@ export async function createInstantAssessment(input: {
       phone: normalizedPhone,
       country: input.country.trim(),
       area: input.area.trim(),
-      source: input.answers.source,
-      concern: input.answers.concern,
-      setting: input.answers.setting,
+      source: answers.sources!.join(", "),
+      concern: answers.concerns!.join(", "),
+      setting: answers.settings!.join(", "),
       consent: "result_and_follow_up",
       consentVersion: input.consentVersion,
       sourceAttribution: input.sourceAttribution ?? {},
@@ -446,7 +474,7 @@ export async function createInstantAssessment(input: {
            AND idempotency_key = $2 AND expires_at > now()`,
         [input.scope, input.idempotencyKey],
       );
-      if (prior.rows[0]?.request_hash === requestHash) {
+      if (prior.rows[0] && compatibleHashes.has(prior.rows[0].request_hash)) {
         return { response: prior.rows[0].response as AssessmentResponse, replay: true };
       }
     }
@@ -1009,9 +1037,10 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
   accountLinkState: string;
   serviceState: string;
   createdAt: Date;
+  answers: InstantWaterCheckAnswers;
 }>> {
   const result = await pool.query(
-    `SELECT id, reference, result, country, account_link_state, physical_request_state, created_at
+    `SELECT id, reference, result, raw_answers, country, area, source, concern, setting, account_link_state, physical_request_state, created_at
        FROM instant_water_assessments
       WHERE customer_user_id = $1 AND account_link_state = 'attached'
       ORDER BY created_at DESC`,
@@ -1021,6 +1050,7 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
     assessmentId: row.id,
     reference: row.reference,
     bands: (row.result as InstantWaterCheckResult).bands,
+    answers: storedWaterAnswers(row),
     accountLinkState: row.account_link_state,
     serviceState: row.physical_request_state,
     createdAt: row.created_at,
@@ -1029,14 +1059,14 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
 
 export async function getOwnedAssessment(assessmentId: string, userId: string): Promise<Record<string, unknown> | null> {
   const result = await pool.query(
-    `SELECT id, reference, result, country, physical_request_state, created_at
+    `SELECT id, reference, result, raw_answers, country, area, source, concern, setting, physical_request_state, created_at
        FROM instant_water_assessments
       WHERE id = $1 AND customer_user_id = $2 AND account_link_state = 'attached'
       LIMIT 1`,
     [assessmentId, userId],
   );
   const row = result.rows[0] as {
-    id: string; reference: string; result: InstantWaterCheckResult; country: string;
+    id: string; reference: string; result: InstantWaterCheckResult; raw_answers: InstantWaterCheckAnswers; country: string; area: string; source: string; concern: string; setting: string;
     physical_request_state: string; created_at: Date;
   } | undefined;
   if (!row) return null;
@@ -1044,6 +1074,7 @@ export async function getOwnedAssessment(assessmentId: string, userId: string): 
     assessmentId: row.id,
     reference: row.reference,
     bands: row.result.bands,
+    answers: storedWaterAnswers(row),
     accountLinkState: "attached",
     serviceState: row.physical_request_state,
     createdAt: row.created_at,
@@ -1052,14 +1083,14 @@ export async function getOwnedAssessment(assessmentId: string, userId: string): 
 
 export async function latestOwnedAssessmentSummary(userId: string): Promise<Record<string, unknown> | null> {
   const result = await pool.query(
-    `SELECT reference, result, country, area, source, physical_request_state, created_at
+    `SELECT reference, result, raw_answers, country, area, source, concern, setting, physical_request_state, created_at
        FROM instant_water_assessments
       WHERE customer_user_id = $1 AND account_link_state = 'attached'
       ORDER BY created_at DESC LIMIT 1`,
     [userId],
   );
   const row = result.rows[0] as {
-    reference: string; result: InstantWaterCheckResult; country: string; area: string; source: string;
+    reference: string; result: InstantWaterCheckResult; raw_answers: InstantWaterCheckAnswers; country: string; area: string; source: string; concern: string; setting: string;
     physical_request_state: string; created_at: Date;
   } | undefined;
   if (!row) return null;
@@ -1067,6 +1098,7 @@ export async function latestOwnedAssessmentSummary(userId: string): Promise<Reco
     reference: row.reference,
     createdAt: row.created_at,
     source: row.source,
+    answers: storedWaterAnswers(row),
     bands: row.result.bands,
     areaFlag: row.result.areaFlags.riftValleyFluoride ? "rift_valley_fluoride" : row.result.areaFlags.hardGroundwater ? "hard_groundwater" : "none",
     recommendation: row.result.recommendation,
@@ -1083,6 +1115,7 @@ export function buildInstantAssessmentAiContext(assessment: Record<string, unkno
     reference: assessment.reference,
     createdAt: assessment.createdAt,
     source: assessment.source,
+    answers: assessment.answers,
     area: assessment.area,
     bands: assessment.bands,
     areaFlag: assessment.areaFlag,
@@ -1113,6 +1146,7 @@ export async function getAdminAssessment(assessmentId: string): Promise<Record<s
     area: row.area,
     source: row.source,
     concern: row.concern,
+    answers: storedWaterAnswers(row),
     bands: row.result.bands,
     serviceState: row.service_state ?? row.physical_request_state,
     accountLinkState: row.account_link_state,

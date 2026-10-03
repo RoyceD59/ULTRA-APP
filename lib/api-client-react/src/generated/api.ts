@@ -187,6 +187,8 @@ import type {
   UcCustomerDetail,
   UcCustomerList,
   UcCustomersCount,
+  UcDailyHydration,
+  UcDailyHydrationInput,
   UcGuideInput,
   UcLocationAssessmentInput,
   UcLocationInput,
@@ -731,6 +733,143 @@ export function useGetMyCustomerAssignments<TData = Awaited<ReturnType<typeof ge
 
 
 
+
+export const getGetUcDailyHydrationUrl = (localDate: string,) => {
+
+
+
+
+  return `/api/uc/me/hydration/${localDate}`
+}
+
+export const getUcDailyHydration = async (localDate: string, options?: RequestInit): Promise<UcDailyHydration> => {
+
+  return customFetch<UcDailyHydration>(getGetUcDailyHydrationUrl(localDate),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcDailyHydrationQueryKey = (localDate: string,) => {
+    return [
+    `/api/uc/me/hydration/${localDate}`
+    ] as const;
+    }
+
+
+export const getGetUcDailyHydrationQueryOptions = <TData = Awaited<ReturnType<typeof getUcDailyHydration>>, TError = ErrorType<unknown>>(localDate: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcDailyHydration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcDailyHydrationQueryKey(localDate);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcDailyHydration>>> = ({ signal }) => getUcDailyHydration(localDate, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: localDate !== null && localDate !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcDailyHydration>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcDailyHydrationQueryResult = NonNullable<Awaited<ReturnType<typeof getUcDailyHydration>>>
+export type GetUcDailyHydrationQueryError = ErrorType<unknown>
+
+
+
+export function useGetUcDailyHydration<TData = Awaited<ReturnType<typeof getUcDailyHydration>>, TError = ErrorType<unknown>>(
+ localDate: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcDailyHydration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcDailyHydrationQueryOptions(localDate,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveUcDailyHydrationUrl = (localDate: string,) => {
+
+
+
+
+  return `/api/uc/me/hydration/${localDate}`
+}
+
+export const saveUcDailyHydration = async (localDate: string,
+    ucDailyHydrationInput: UcDailyHydrationInput, options?: RequestInit): Promise<UcDailyHydration> => {
+
+  return customFetch<UcDailyHydration>(getSaveUcDailyHydrationUrl(localDate),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucDailyHydrationInput)
+  }
+);}
+
+
+
+
+
+export const getSaveUcDailyHydrationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveUcDailyHydration>>, TError,{localDate: string;data: BodyType<UcDailyHydrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveUcDailyHydration>>, TError,{localDate: string;data: BodyType<UcDailyHydrationInput>}, TContext> => {
+
+const mutationKey = ['saveUcDailyHydration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveUcDailyHydration>>, {localDate: string;data: BodyType<UcDailyHydrationInput>}> = (props) => {
+          const {localDate,data} = props ?? {};
+
+          return  saveUcDailyHydration(localDate,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveUcDailyHydrationMutationResult = NonNullable<Awaited<ReturnType<typeof saveUcDailyHydration>>>
+    export type SaveUcDailyHydrationMutationBody = BodyType<UcDailyHydrationInput>
+    export type SaveUcDailyHydrationMutationError = ErrorType<unknown>
+
+    export const useSaveUcDailyHydration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveUcDailyHydration>>, TError,{localDate: string;data: BodyType<UcDailyHydrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveUcDailyHydration>>,
+        TError,
+        {localDate: string;data: BodyType<UcDailyHydrationInput>},
+        TContext
+      > => {
+      return useMutation(getSaveUcDailyHydrationMutationOptions(options));
+    }
 
 export const getGetHydrateCustomerTreeUrl = () => {
 

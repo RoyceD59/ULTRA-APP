@@ -3671,6 +3671,7 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
         firstName: DELETED, lastName: "", phone: "", address: "",
         isAdmin: false, deletedAt: new Date(),
       }).where(eq(ucUsersTable.id, numericId));
+      await tx.execute(sql`DELETE FROM uc_daily_hydration WHERE user_id = ${numericId}`);
       // Erasure and review invalidation commit atomically. A later failure in
       // another deletion step cannot leave retained AI-derived personal text
       // behind an already-deleted identity. The trigger clears all job data.

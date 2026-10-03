@@ -153,8 +153,9 @@ function AssessmentDetailSheet({
                   <Activity className="w-4 h-4" /> Instant Check Results
                 </h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>Source: <span className="font-medium">{detail.source}</span></div>
-                  <div>Concern: <span className="font-medium">{detail.concern}</span></div>
+                  <div>Sources: <span className="font-medium">{detail.answers?.sources?.join(", ") ?? detail.source}</span></div>
+                  <div>Concerns: <span className="font-medium">{detail.answers?.concerns?.join(", ") ?? detail.concern}</span></div>
+                  <div>Settings: <span className="font-medium">{detail.answers?.settings?.join(", ") ?? detail.answers?.setting}</span></div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-2">

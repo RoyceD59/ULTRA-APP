@@ -87,6 +87,17 @@ export interface CustomerFilterAssignment {
   audit?: CustomerFilterAssignmentAuditItem[];
 }
 
+export interface UcDailyHydrationInput {
+  /** @minimum 0 */
+  litres: number;
+}
+
+export interface UcDailyHydration {
+  localDate: string;
+  /** @nullable */
+  litres: number | null;
+}
+
 export interface HydrateAllocationConfig {
   contributionRate: 0.03;
   treeShare: 0.5;
@@ -808,11 +819,26 @@ export interface InstantWaterAssessmentAnswers {
      * @maxLength 160
      */
   area: string;
-  source: InstantWaterSource;
-  concern: InstantWaterConcern;
+  source?: InstantWaterSource;
+  concern?: InstantWaterConcern;
   symptom?: InstantWaterAssessmentAnswersSymptom;
   useContext?: InstantWaterAssessmentAnswersUseContext;
-  setting: InstantWaterSetting;
+  setting?: InstantWaterSetting;
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  sources?: InstantWaterSource[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  concerns?: InstantWaterConcern[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  settings?: InstantWaterSetting[];
 }
 
 export type PublicInstantWaterAssessmentInputSourceAttribution = {
@@ -934,6 +960,7 @@ export type PublicInstantWaterAssessmentResultRulesVersion = typeof PublicInstan
 
 export const PublicInstantWaterAssessmentResultRulesVersion = {
   'instant-water-check-v1': 'instant-water-check-v1',
+  'instant-water-check-v2': 'instant-water-check-v2',
 } as const;
 
 export type PublicInstantWaterAssessmentResultAreaFlag = typeof PublicInstantWaterAssessmentResultAreaFlag[keyof typeof PublicInstantWaterAssessmentResultAreaFlag];
@@ -943,6 +970,14 @@ export const PublicInstantWaterAssessmentResultAreaFlag = {
   none: 'none',
   hard_groundwater: 'hard_groundwater',
   rift_valley_fluoride: 'rift_valley_fluoride',
+} as const;
+
+export type PublicInstantWaterAssessmentResultRecommendationAction = typeof PublicInstantWaterAssessmentResultRecommendationAction[keyof typeof PublicInstantWaterAssessmentResultRecommendationAction];
+
+
+export const PublicInstantWaterAssessmentResultRecommendationAction = {
+  product: 'product',
+  enquiry: 'enquiry',
 } as const;
 
 export type PublicInstantWaterAssessmentResultProvenance = typeof PublicInstantWaterAssessmentResultProvenance[keyof typeof PublicInstantWaterAssessmentResultProvenance];
@@ -956,6 +991,9 @@ export const PublicInstantWaterAssessmentResultProvenance = {
 export type PublicInstantWaterAssessmentResultRecommendation = {
   name: string;
   explanation: string;
+  productId?: number;
+  productName?: string;
+  action?: PublicInstantWaterAssessmentResultRecommendationAction;
 };
 
 export interface PublicInstantWaterAssessmentResult {
@@ -1118,6 +1156,7 @@ export interface InstantWaterPhysicalTestResponse {
 }
 
 export interface InstantWaterAssessment {
+  answers?: InstantWaterAssessmentAnswers;
   assessmentId: string;
   reference: string;
   bands: InstantWaterBands;
@@ -1180,6 +1219,7 @@ export interface ProjectHubInstantWaterMediaReference {
 }
 
 export type ProjectHubInstantWaterDetail = ProjectHubInstantWaterSummary & {
+  answers?: InstantWaterAssessmentAnswers;
   phone?: string;
   consentVersion?: string;
   sourceAttribution?: ProjectHubInstantWaterDetailSourceAttribution;

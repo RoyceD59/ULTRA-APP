@@ -10,6 +10,8 @@ import {
 } from '@/lib/sessionPersistence';
 import { getApiBase } from '@/lib/apiBase';
 import { completeUcTemporaryPasswordChange } from '@workspace/api-client-react';
+import { useHydrationReminder } from '@/hooks/useHydrationReminder';
+import { reconcileHydrationReminder } from '@/lib/hydrationReminder';
 
 export interface UCUser {
   id: number;
@@ -101,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken]     = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  useHydrationReminder(user?.id ?? null, isLoading);
   const tokenRef = useRef<string | null>(token);
   const sessionVersion = useRef(0);
   const durableWrite = useRef<Promise<void>>(Promise.resolve());
@@ -286,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     const operation = ++sessionVersion.current;
+    void reconcileHydrationReminder(null).catch(() => {});
     // Fire-and-forget: unregister this device's push token server-side so
     // order-update pushes stop arriving after logout (shared/handed-over device).
     const tokenToUnregister = tokenRef.current;

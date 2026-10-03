@@ -10,6 +10,12 @@ import { shouldRedirectToLogin } from '../../lib/authSessionRedirect.js';
 
 const NOTICE = 'Your session has expired. Please sign in again.';
 const realFetch = globalThis.fetch;
+const authRoots: ReturnType<typeof __testRender>[] = [];
+function renderAuth() {
+  const root = __testRender(AuthProvider, { children: null });
+  authRoots.push(root);
+  return root;
+}
 
 type Element = {
   props?: {
@@ -57,6 +63,7 @@ async function signIn(auth: ReturnType<typeof __testRender>): Promise<void> {
 }
 
 afterEach(() => {
+  for (const root of authRoots.splice(0)) root.dispose();
   globalThis.fetch = realFetch;
   resetStorage();
   __setPlatform('ios');
@@ -64,7 +71,7 @@ afterEach(() => {
 
 describe('expired-session notice integration', () => {
   it('turns an authenticated 401 into the login state and consumes its explanation once', async () => {
-    const auth = __testRender(AuthProvider, { children: null });
+    const auth = renderAuth();
     await signIn(auth);
     assert.equal(auth.value.token, 'current-token');
     const tokenBeforeRejection = auth.value.token;
@@ -88,7 +95,7 @@ describe('expired-session notice integration', () => {
   });
 
   it('shows no explanation on first launch or explicit sign-out', async () => {
-    const firstLaunch = __testRender(AuthProvider, { children: null });
+    const firstLaunch = renderAuth();
     assert.equal(firstLaunch.value.sessionNotice, null);
     assert.equal(renderNotice(firstLaunch.value.sessionNotice), null);
 

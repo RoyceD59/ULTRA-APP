@@ -128,7 +128,6 @@ STRIPE_ENABLED = "false"
 
 [userenv.development]
 EXPO_PUBLIC_FOREST_URL = "https://uc-hydrate-forest.pages.dev/"
-EXPO_PUBLIC_API_DOMAIN = "d663b7bc-63dd-4d9c-a358-3d9e4ae2078b-00-3ude9cqvelegq-gwbcqv4c.janeway.replit.dev"
 
 [userenv.production]
 EXPO_PUBLIC_FOREST_URL = "https://uc-hydrate-forest.pages.dev/"

@@ -218,6 +218,40 @@ export const GetMyCustomerAssignmentsResponseItem = zod.object({
 export const GetMyCustomerAssignmentsResponse = zod.array(GetMyCustomerAssignmentsResponseItem)
 
 
+export const getUcDailyHydrationPathLocalDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetUcDailyHydrationParams = zod.object({
+  "localDate": zod.coerce.string().regex(getUcDailyHydrationPathLocalDateRegExp)
+})
+
+export const GetUcDailyHydrationResponse = zod.object({
+  "localDate": zod.string(),
+  "litres": zod.number().nullable()
+})
+
+
+export const saveUcDailyHydrationPathLocalDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const SaveUcDailyHydrationParams = zod.object({
+  "localDate": zod.coerce.string().regex(saveUcDailyHydrationPathLocalDateRegExp)
+})
+
+export const saveUcDailyHydrationBodyLitresMin = 0;
+
+
+
+export const SaveUcDailyHydrationBody = zod.object({
+  "litres": zod.number().min(saveUcDailyHydrationBodyLitresMin)
+})
+
+export const SaveUcDailyHydrationResponse = zod.object({
+  "localDate": zod.string(),
+  "litres": zod.number().nullable()
+})
+
+
 /**
  * @summary Own shared-tree allocation and aggregate progress
  */
@@ -465,6 +499,12 @@ export const createPublicInstantWaterAssessmentBodyAnswersCountryMax = 80;
 
 export const createPublicInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
+export const createPublicInstantWaterAssessmentBodyAnswersSourcesMax = 3;
+
+export const createPublicInstantWaterAssessmentBodyAnswersConcernsMax = 3;
+
+export const createPublicInstantWaterAssessmentBodyAnswersSettingsMax = 3;
+
 
 
 export const CreatePublicInstantWaterAssessmentBody = zod.object({
@@ -483,11 +523,14 @@ export const CreatePublicInstantWaterAssessmentBody = zod.object({
   "answers": zod.object({
   "country": zod.string().min(createPublicInstantWaterAssessmentBodyAnswersCountryMin).max(createPublicInstantWaterAssessmentBodyAnswersCountryMax),
   "area": zod.string().min(1).max(createPublicInstantWaterAssessmentBodyAnswersAreaMax),
-  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']),
-  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
   "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
   "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
-  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(createPublicInstantWaterAssessmentBodyAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(createPublicInstantWaterAssessmentBodyAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(createPublicInstantWaterAssessmentBodyAnswersSettingsMax).optional()
 })
 })
 
@@ -501,7 +544,7 @@ export const CreatePublicInstantWaterAssessmentResponse = zod.object({
   "resultTokenExpiresAt": zod.coerce.date(),
   "result": zod.object({
   "reference": zod.string(),
-  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "rulesVersion": zod.enum(['instant-water-check-v1', 'instant-water-check-v2']),
   "bands": zod.object({
   "hardness": zod.enum(['Low', 'Moderate', 'High']),
   "taste": zod.enum(['Low', 'Moderate', 'High']),
@@ -512,7 +555,10 @@ export const CreatePublicInstantWaterAssessmentResponse = zod.object({
   "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
   "recommendation": zod.object({
   "name": zod.string(),
-  "explanation": zod.string()
+  "explanation": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "action": zod.enum(['product', 'enquiry']).optional()
 }),
   "disclaimer": zod.string(),
   "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
@@ -533,6 +579,12 @@ export const createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax = 80
 
 export const createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersSourcesMax = 3;
+
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersConcernsMax = 3;
+
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersSettingsMax = 3;
+
 export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMin = 2;
 export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMax = 80;
 
@@ -550,11 +602,14 @@ export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
   "answers": zod.object({
   "country": zod.string().min(createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMin).max(createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax),
   "area": zod.string().min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax),
-  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']),
-  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
   "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
   "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
-  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersSettingsMax).optional()
 }),
   "firstName": instantWaterFirstNameSchema,
   "phone": instantWaterPhoneSchema,
@@ -568,7 +623,7 @@ export const CreateAuthenticatedInstantWaterAssessmentResponse = zod.object({
   "reference": zod.string().regex(createAuthenticatedInstantWaterAssessmentResponseReferenceRegExp),
   "result": zod.object({
   "reference": zod.string(),
-  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "rulesVersion": zod.enum(['instant-water-check-v1', 'instant-water-check-v2']),
   "bands": zod.object({
   "hardness": zod.enum(['Low', 'Moderate', 'High']),
   "taste": zod.enum(['Low', 'Moderate', 'High']),
@@ -579,7 +634,10 @@ export const CreateAuthenticatedInstantWaterAssessmentResponse = zod.object({
   "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
   "recommendation": zod.object({
   "name": zod.string(),
-  "explanation": zod.string()
+  "explanation": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "action": zod.enum(['product', 'enquiry']).optional()
 }),
   "disclaimer": zod.string(),
   "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
@@ -603,7 +661,7 @@ export const GetPublicInstantWaterAssessmentResultParams = zod.object({
 
 export const GetPublicInstantWaterAssessmentResultResponse = zod.object({
   "reference": zod.string(),
-  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "rulesVersion": zod.enum(['instant-water-check-v1', 'instant-water-check-v2']),
   "bands": zod.object({
   "hardness": zod.enum(['Low', 'Moderate', 'High']),
   "taste": zod.enum(['Low', 'Moderate', 'High']),
@@ -614,7 +672,10 @@ export const GetPublicInstantWaterAssessmentResultResponse = zod.object({
   "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
   "recommendation": zod.object({
   "name": zod.string(),
-  "explanation": zod.string()
+  "explanation": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "action": zod.enum(['product', 'enquiry']).optional()
 }),
   "disclaimer": zod.string(),
   "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
@@ -687,7 +748,32 @@ export const ConsumeInstantWaterAssessmentHandoffBody = zod.object({
   "handoffToken": zod.string().min(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMin).max(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMax)
 })
 
+export const consumeInstantWaterAssessmentHandoffResponseAnswersCountryMin = 2;
+export const consumeInstantWaterAssessmentHandoffResponseAnswersCountryMax = 80;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersAreaMax = 160;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersSourcesMax = 3;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersConcernsMax = 3;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersSettingsMax = 3;
+
+
+
 export const ConsumeInstantWaterAssessmentHandoffResponse = zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(consumeInstantWaterAssessmentHandoffResponseAnswersCountryMin).max(consumeInstantWaterAssessmentHandoffResponseAnswersCountryMax),
+  "area": zod.string().min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -714,7 +800,32 @@ export const AttachInstantWaterAssessmentBody = zod.object({
   "resultToken": zod.string().optional().describe('Public token may be combined with a signed-in account\'s already verified matching phone; it cannot authorize attachment alone.')
 })
 
+export const attachInstantWaterAssessmentResponseAnswersCountryMin = 2;
+export const attachInstantWaterAssessmentResponseAnswersCountryMax = 80;
+
+export const attachInstantWaterAssessmentResponseAnswersAreaMax = 160;
+
+export const attachInstantWaterAssessmentResponseAnswersSourcesMax = 3;
+
+export const attachInstantWaterAssessmentResponseAnswersConcernsMax = 3;
+
+export const attachInstantWaterAssessmentResponseAnswersSettingsMax = 3;
+
+
+
 export const AttachInstantWaterAssessmentResponse = zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(attachInstantWaterAssessmentResponseAnswersCountryMin).max(attachInstantWaterAssessmentResponseAnswersCountryMax),
+  "area": zod.string().min(1).max(attachInstantWaterAssessmentResponseAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(attachInstantWaterAssessmentResponseAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(attachInstantWaterAssessmentResponseAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(attachInstantWaterAssessmentResponseAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -773,8 +884,33 @@ export const RequestInstantWaterPhysicalTestResponse = zod.object({
 /**
  * @summary List assessments owned by the authenticated customer
  */
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMin = 2;
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMax = 80;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersAreaMax = 160;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSourcesMax = 3;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersConcernsMax = 3;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSettingsMax = 3;
+
+
+
 export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
   "assessments": zod.array(zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMin).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMax),
+  "area": zod.string().min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -793,8 +929,33 @@ export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
 /**
  * @summary Get the latest owned assessment summary for Companion chat context
  */
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMin = 2;
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMax = 80;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersAreaMax = 160;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSourcesMax = 3;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersConcernsMax = 3;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSettingsMax = 3;
+
+
+
 export const GetAuthenticatedLatestInstantWaterAssessmentResponse = zod.object({
   "assessment": zod.union([zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMin).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMax),
+  "area": zod.string().min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -862,6 +1023,19 @@ export const GetProjectHubInstantWaterAssessmentParams = zod.object({
   "assessmentId": zod.coerce.string()
 })
 
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin = 2;
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax = 80;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax = 160;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax = 3;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax = 3;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax = 3;
+
+
+
 export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
   "assessmentId": zod.string(),
   "reference": zod.string(),
@@ -882,6 +1056,18 @@ export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date()
 }).and(zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax),
+  "area": zod.string().min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax).optional()
+}).optional(),
   "phone": zod.string().optional(),
   "consentVersion": zod.string().optional(),
   "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
@@ -912,6 +1098,19 @@ export const UpdateProjectHubInstantWaterAssessmentBody = zod.object({
   "internalNote": zod.string().max(updateProjectHubInstantWaterAssessmentBodyInternalNoteMax).optional()
 })
 
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin = 2;
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax = 80;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax = 160;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax = 3;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax = 3;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax = 3;
+
+
+
 export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
   "assessmentId": zod.string(),
   "reference": zod.string(),
@@ -932,6 +1131,18 @@ export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date()
 }).and(zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax),
+  "area": zod.string().min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax).optional()
+}).optional(),
   "phone": zod.string().optional(),
   "consentVersion": zod.string().optional(),
   "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),

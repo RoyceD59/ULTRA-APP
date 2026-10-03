@@ -44,6 +44,7 @@ import refillReadinessRouter from "./refill-readiness.js";
 import refillGovernanceRouter from "./refill-governance.js";
 import refillFeaturesRouter from "./refill-features.js";
 import ucHydrateTreesRouter from "./uc-hydrate-trees.js";
+import hydrationRouter from "./uc-hydration.js";
 
 const router: IRouter = Router();
 // ─── ProjectHub team auth guards ─────────────────────────────────────────────
@@ -89,6 +90,7 @@ router.use(refillFeaturesRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
 router.use(ucRouter);
+router.use(hydrationRouter);
 router.use(customerReviewsRouter);
 router.use(orderStatusWebhookRouter);
 router.use(instantWaterCheckRouter);

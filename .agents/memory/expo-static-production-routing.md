@@ -3,6 +3,12 @@ name: Expo static production routing
 description: Non-obvious SDK 57 static-web and custom-host proxy requirements for the Companion production build.
 ---
 
+When Expo preview API calls appear to fail CORS, verify the configured development API hostname before changing the CORS allowlist.
+
+**Why:** A stale development-only API-domain override pointed to a retired preview hostname returning 404 without CORS headers; the current workspace API already allowed the Expo origin.
+
+**How to apply:** Compare the bundle's configured API origin with the current workspace health endpoint. Correct only the stale development override and restart Metro; do not widen production CORS or change production routing.
+
 SDK 57 Metro bundles can emit direct `/assets/?unstable_path=...` module exports in addition to `httpServerLocation` metadata. A static deployment must rewrite both forms to copied build assets.
 
 **Why:** Rewriting only asset metadata leaves fonts and images requesting Metro-only `/assets` URLs, which return 404 after publication.

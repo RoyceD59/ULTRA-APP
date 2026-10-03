@@ -1859,6 +1859,16 @@ async function applyStartupMigrations(): Promise<void> {
     ON CONFLICT (event_type) DO NOTHING;
   `);
   logger.info("Startup migration: uc_rewards_rules table and default rules ensured");
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_daily_hydration (
+    user_id integer NOT NULL REFERENCES uc_users(id) ON DELETE CASCADE,
+    local_date date NOT NULL, litres double precision NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, local_date),
+    CONSTRAINT uc_daily_hydration_litres_valid CHECK (litres >= 0 AND litres < 'Infinity'::double precision)
+  )`);
+  await pool.query(`ALTER TABLE uc_daily_hydration DROP CONSTRAINT IF EXISTS uc_daily_hydration_litres_valid;
+    ALTER TABLE uc_daily_hydration ADD CONSTRAINT uc_daily_hydration_litres_valid
+    CHECK (litres >= 0 AND litres < 'Infinity'::double precision)`);
 
   // UC Rewards — ledger table (auditable points credit/debit history).
   // ref_id encodes a cycle-scoped idempotency key: "<userId>:<productId>:<activatedAtMs>:<stageKey>"

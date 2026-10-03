@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InstantWaterAssessmentAnswers } from './instantWaterAssessmentAnswers';
 import type { InstantWaterBands } from './instantWaterBands';
 
 export interface InstantWaterAssessment {
+  answers?: InstantWaterAssessmentAnswers;
   assessmentId: string;
   reference: string;
   bands: InstantWaterBands;
