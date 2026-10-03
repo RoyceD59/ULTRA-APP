@@ -415,6 +415,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>First name *</Text>
             <TextInput
+              accessibilityLabel="First name *"
               value={draft.firstName} onChangeText={v => setField('firstName', v)}
               placeholder="Amara" placeholderTextColor={colors.border}
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -423,6 +424,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>WhatsApp *</Text>
             <TextInput
+              accessibilityLabel="WhatsApp *"
               value={draft.phone} onChangeText={v => setField('phone', v)}
               placeholder="+254 700 000000" placeholderTextColor={colors.border} keyboardType="phone-pad"
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -444,6 +446,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Town / area *</Text>
           <TextInput
+            accessibilityLabel="Town / area *"
             value={draft.area} onChangeText={v => setField('area', v)}
             placeholder="Nairobi – Westlands" placeholderTextColor={colors.border}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -834,6 +837,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Service Address *</Text>
           <TextInput
+            accessibilityLabel="Service Address *"
             value={address} onChangeText={setAddress}
             placeholder="House/Apt, Street, Estate" placeholderTextColor={colors.border}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -843,6 +847,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Preferred Contact Time *</Text>
           <TextInput
+            accessibilityLabel="Preferred Contact Time *"
             value={time} onChangeText={setTime}
             placeholder="e.g. Tomorrow morning, Weekdays after 4PM" placeholderTextColor={colors.border}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -975,7 +980,9 @@ function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }
                </View>
             ) : (
                <View style={{ gap: 16 }}>
+                 <Text style={[styles.label, { color: colors.mutedForeground }]}>6-digit code</Text>
                  <TextInput
+                   accessibilityLabel="6-digit code"
                    value={code} onChangeText={setCode} placeholder="6-digit code"
                    keyboardType="number-pad" placeholderTextColor={colors.border}
                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card, fontSize: 24, textAlign: 'center', letterSpacing: 4 }]}

@@ -23,6 +23,7 @@ import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { trackEvent } from '@/lib/analytics';
 import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
+import { headingProps } from '@/lib/accessibility';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -329,6 +330,8 @@ export default function ProductDetailScreen() {
                     {slide.kind === 'photo' ? (
                       <Image
                         source={{ uri: resizedImageUrl(slide.src, galleryContainerWidth) }}
+                        accessible
+                        accessibilityLabel={slide.alt}
                         style={{ width: galleryContainerWidth, height: GALLERY_H }}
                         contentFit="contain"
                         transition={150}
@@ -410,6 +413,8 @@ export default function ProductDetailScreen() {
                   <TouchableOpacity
                     key={i}
                     onPress={() => goToSlide(i)}
+                    accessibilityRole="button"
+                    accessibilityLabel={slide.kind === 'photo' ? `View image ${i + 1}: ${slide.alt}` : 'View product video'}
                     activeOpacity={0.75}
                     style={[
                       styles.thumbCell,
@@ -418,7 +423,8 @@ export default function ProductDetailScreen() {
                     ]}
                   >
                     {slide.kind === 'photo' ? (
-                      <Image source={{ uri: resizedImageUrl(slide.src, 56) }} style={styles.thumbImg} contentFit="cover" transition={100} />
+                      <Image source={{ uri: resizedImageUrl(slide.src, 56) }} accessible={false} accessibilityElementsHidden aria-hidden
+                        style={styles.thumbImg} contentFit="cover" transition={100} />
                     ) : (
                       <View style={styles.thumbVideo}>
                         <Ionicons
@@ -478,7 +484,7 @@ export default function ProductDetailScreen() {
           )}
 
           {/* Name & Price */}
-          <Text style={[styles.name, { color: colors.text }]}>{product.name}</Text>
+          <Text {...headingProps(1)} style={[styles.name, { color: colors.text }]}>{product.name}</Text>
           <View style={styles.skuRow}>
             <Text style={[styles.sku, { color: colors.mutedForeground }]}>SKU: {product.sku}</Text>
             {reviewData && reviewData.count > 0 && (
@@ -526,7 +532,7 @@ export default function ProductDetailScreen() {
           }
 
           {/* Description */}
-          <Text style={[styles.sectionLabel, { color: colors.text }]}>Product Details</Text>
+          <Text {...headingProps(2)} style={[styles.sectionLabel, { color: colors.text }]}>Product Details</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>
             {product.description.replace(/<[^>]*>/g, '')}
           </Text>
@@ -538,12 +544,12 @@ export default function ProductDetailScreen() {
           ) : null}
 
           {/* Trust Badges */}
-          <Text style={[styles.sectionLabel, { color: colors.text }]}>Certifications & Trust</Text>
+          <Text {...headingProps(2)} style={[styles.sectionLabel, { color: colors.text }]}>Certifications & Trust</Text>
           <TrustBadges />
 
           {/* Reviews */}
           <View style={styles.reviewsHeader}>
-            <Text style={[styles.sectionLabel, { color: colors.text }]}>Reviews</Text>
+            <Text {...headingProps(2)} style={[styles.sectionLabel, { color: colors.text }]}>Reviews</Text>
             {reviewData && reviewData.count > 0 && (
               <View style={styles.ratingInline}>
                 <StarRating rating={reviewData.average} size={13} />

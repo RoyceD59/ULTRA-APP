@@ -189,6 +189,7 @@ function Field({
       <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
       <TextInput
         ref={inputRef}
+        accessibilityLabel={label}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

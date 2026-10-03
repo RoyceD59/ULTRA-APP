@@ -56,3 +56,4 @@
 - [Hydration reminder policy](hydration-reminder-policy.md) — every 2/3/4 hours, 5 am–8 pm local; relocating the daily summary does not authorize regrouping hydration settings.
 - [Companion SEO scope](companion-seo-scope.md) — distinguish audit targets; source and local fixtures do not establish production gains or authorize host/deployment changes.
 - [Companion build publication](companion-build-publication.md) — retained assets are not activation; test both legacy and migrated native/browser rollout boundaries.
+- [Web heading semantics](react-native-web-heading-semantics.md) — use explicit web levels; wrap accordion buttons in headings; send aria-expanded explicitly.

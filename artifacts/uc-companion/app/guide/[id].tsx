@@ -1,3 +1,4 @@
+import { headingProps } from '@/lib/accessibility';
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -182,17 +183,22 @@ function SectionCard({
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <TouchableOpacity onPress={toggle} activeOpacity={0.7} style={styles.cardHeader}>
-        <View style={[styles.sectionNum, { backgroundColor: accentColor + '18' }]}>
-          <Text style={[styles.sectionNumText, { color: accentColor }]}>{index + 1}</Text>
-        </View>
-        <Text style={[styles.cardHeading, { color: colors.text }]} numberOfLines={open ? undefined : 2}>
-          {section.heading}
-        </Text>
-        {hasContent && (
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
-        )}
-      </TouchableOpacity>
+      <View {...(Platform.OS === 'web' ? headingProps(2) : {})}>
+        <TouchableOpacity onPress={toggle} activeOpacity={0.7} style={styles.cardHeader}
+          accessibilityRole="button" accessibilityLabel={section.heading}
+          accessibilityState={{ expanded: open }} aria-expanded={open}>
+          <View style={[styles.sectionNum, { backgroundColor: accentColor + '18' }]}>
+            <Text style={[styles.sectionNumText, { color: accentColor }]}>{index + 1}</Text>
+          </View>
+          <Text {...(Platform.OS !== 'web' ? headingProps(2) : {})}
+            style={[styles.cardHeading, { color: colors.text }]} numberOfLines={open ? undefined : 2}>
+            {section.heading}
+          </Text>
+          {hasContent && (
+            <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+          )}
+        </TouchableOpacity>
+      </View>
 
       {open && hasContent && (
         <View style={styles.cardBody}>
@@ -420,7 +426,7 @@ export default function GuideDetailScreen() {
               <Ionicons name={guide.icon as never} size={24} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.heroTitle, { color: colors.text }]}>{guide.title}</Text>
+              <Text {...headingProps(1)} style={[styles.heroTitle, { color: colors.text }]}>{guide.title}</Text>
               <Text style={[styles.heroProducts, { color: colors.mutedForeground }]}>{guide.products}</Text>
             </View>
           </View>

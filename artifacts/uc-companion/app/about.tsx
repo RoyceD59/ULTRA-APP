@@ -6,6 +6,7 @@ import { useColors } from '@/hooks/useColors';
 import ImpactBubble from '@/components/ImpactBubble';
 import ForestLink from '@/components/ForestLink';
 import publicPages from '@/data/public-pages.json';
+import { headingProps } from '@/lib/accessibility';
 
 const UC_DEEP = '#005d8f';
 const UC_SKY = '#52b6dc';
@@ -22,7 +23,7 @@ export default function AboutScreen() {
       contentContainerStyle={{ paddingBottom: bottom }} showsVerticalScrollIndicator={false}>
       <View style={[styles.hero, { backgroundColor: UC_DEEP, paddingTop: (Platform.OS === 'web' ? 24 : insets.top) + 24 }]}>
         <Text style={styles.kicker}>ABOUT US</Text>
-        <Text style={styles.title}>Ultra Clear Companion</Text>
+        <Text {...headingProps(1)} style={styles.title}>Ultra Clear Companion</Text>
         <Text style={styles.lead}>
           Helping Kenyan Ultra Clear filter owners keep their filters working, log the water they filter and see the difference it makes.
         </Text>
@@ -30,21 +31,21 @@ export default function AboutScreen() {
 
       <View style={styles.body}>
         <View style={styles.block}>
-          <Text style={[styles.h2, { color: colors.text }]}>What the app is for</Text>
+          <Text {...headingProps(2)} style={[styles.h2, { color: colors.text }]}>What the app is for</Text>
           <Text style={[styles.p, { color: colors.mutedForeground }]}>
             {publicPages['/about'].description}
           </Text>
         </View>
 
         <View style={styles.block}>
-          <Text style={[styles.h2, { color: colors.text }]}>Shared impact</Text>
+          <Text {...headingProps(2)} style={[styles.h2, { color: colors.text }]}>Shared impact</Text>
           <ImpactBubble />
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.row}>
             <Ionicons name="leaf-outline" size={20} color={colors.primary} />
-            <Text style={[styles.h3, { color: colors.text }]}>Hydrate the Future</Text>
+            <Text {...headingProps(2)} style={[styles.h3, { color: colors.text }]}>Hydrate the Future</Text>
           </View>
           <Text style={[styles.p, { color: colors.mutedForeground }]}>
             3% of eligible paid purchases goes to Hydrate the Future, split equally between planting trees and access to clean water.

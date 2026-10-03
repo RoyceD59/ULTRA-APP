@@ -15,6 +15,7 @@ import PageDataError from '@/components/PageDataError';
 
 import PhotoHeader from '@/components/PhotoHeader';
 import SwipeTabs from '@/components/SwipeTabs';
+import { headingProps } from '@/lib/accessibility';
 
 const PAGE_SIZE = 12;
 const topPad = 0;
@@ -127,7 +128,7 @@ function BlogScreenContent() {
                 <Ionicons name="book-outline" size={23} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.headerTitle, { color: colors.primaryForeground }]}>The UC Blog</Text>
+                <Text {...headingProps(1)} style={[styles.headerTitle, { color: colors.primaryForeground }]}>The UC Blog</Text>
                 <Text style={[styles.headerSubtitle, { color: colors.primaryForeground }]}>Clear answers for healthier water.</Text>
               </View>
             </View>
