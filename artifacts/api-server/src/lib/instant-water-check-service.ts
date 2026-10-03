@@ -574,6 +574,18 @@ export async function requestVerification(input: {
       if (error instanceof Error && error.message === "RATE_LIMITED") await client.query("COMMIT");
       throw error;
     }
+    // After 30 days this key may request a new challenge, even for a changed
+    // channel/consent payload. Retire only this endpoint/scope/key's expired
+    // retry record, never its historical challenge. Rate-limit rejections
+    // commit counters, so retirement must follow those checks. Any later
+    // failure rolls it back; concurrent replacements are resolved by the
+    // unique-key replay recovery below and the atomic delivery claim.
+    await client.query(
+      `DELETE FROM instant_water_idempotency
+       WHERE endpoint = 'request-instant-water-verification'
+         AND scope = $1 AND idempotency_key = $2 AND expires_at <= now()`,
+      [input.assessmentId, input.idempotencyKey],
+    );
     await client.query(
       `INSERT INTO instant_water_verification_challenges
         (id, assessment_id, channel, phone_hash, code_hash, code_ciphertext, expires_at)

@@ -3,9 +3,9 @@ name: Expired retry key policy
 description: How retry-window expiry differs from permanent assessment and delivery identity.
 ---
 
-Assessment-creation keys become reusable after the 30-day retry window; expiry does not erase the original assessment, ticket, or lead delivery.
+Assessment-creation and verification-request keys become reusable after the 30-day retry window, including changed payloads. Verification reuse means a new challenge, not renewed delivery of the old code; expiry does not erase historical challenges, assessments, tickets, or lead deliveries.
 
-**Why:** Treating expiry as permanent key rejection contradicts the retry window. Treating it as record deletion would lose customer history. Secondary lead-delivery deduplication can outlive the retry window, so a new submission needs a distinct delivery identity.
+**Why:** Treating expiry as permanent key rejection contradicts the retry window. Treating it as record deletion would lose customer history. Verification codes have a much shorter validity than retry records. Secondary lead-delivery deduplication can outlive the retry window, so a new submission needs a distinct delivery identity.
 
 **How to apply:** Keep key retirement transactional and narrowly scoped. Preserve active replay/conflict behavior and rollback safety. When extending this policy to other endpoints, decide what a new submission means for that endpoint's side effects; never assume a reusable request key is a reusable delivery identity.
 
