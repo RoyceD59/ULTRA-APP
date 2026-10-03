@@ -26,6 +26,8 @@ import {
   issueUcTemporaryPassword,
   useListProjectHubInstantWaterAssessments,
   getListProjectHubInstantWaterAssessmentsQueryKey,
+  useListCustomerAssignments,
+  getListCustomerAssignmentsQueryKey,
   type UcTemporaryPasswordInputChannel,
   type UcTemporaryPasswordResult,
   type UcCustomerDetail,
@@ -364,6 +366,11 @@ function CustomerDetailPanel({
     { query: { enabled: open && customerId !== null, queryKey: getListProjectHubInstantWaterAssessmentsQueryKey(params) } }
   );
 
+  const assignmentsQuery = useListCustomerAssignments({
+    query: { enabled: open && customerId !== null, queryKey: getListCustomerAssignmentsQueryKey() },
+  });
+  const linkedAssignments = (assignmentsQuery.data ?? []).filter((a) => a.linkedAccountId === customerId && a.status === "linked");
+
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -487,6 +494,25 @@ function CustomerDetailPanel({
                   </div>
                 </div>
               )}
+            </section>
+
+            <section className="pt-4 pb-5 border-b space-y-3" data-testid="section-linked-assignments">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5" /> Linked filter assignments ({linkedAssignments.length})
+              </h3>
+              {assignmentsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : assignmentsQuery.isError ? (
+                <p role="alert" className="text-sm text-destructive">Failed to load assignments.</p>
+              ) : linkedAssignments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No linked filter assignments.</p>
+              ) : linkedAssignments.map((a) => (
+                <div key={a.id} className="rounded-lg border p-3 text-xs space-y-0.5">
+                  <div className="text-sm font-medium">{a.productName}</div>
+                  <div className="text-muted-foreground">{a.orderReference} · installed {a.installationDate}</div>
+                  <div className="text-muted-foreground">{a.cashCollectionState === "collected" ? "Cash collected" : a.cashCollectionState === "awaiting_collection" ? "Awaiting collection" : "Collection unknown"}</div>
+                </div>
+              ))}
             </section>
 
             {/* Orders */}

@@ -40,6 +40,7 @@ import type {
   AnthropicError,
   AnthropicMessage,
   AnthropicMessageInput,
+  AssignmentOrderLine,
   AuditEventPage,
   AuthenticatedInstantWaterAssessmentCreated,
   AuthenticatedInstantWaterAssessmentInput,
@@ -57,6 +58,7 @@ import type {
   ChangePasscodeResult,
   ClearResolvedRegistrations200,
   ClearResolvedRegistrationsBody,
+  ConfirmCustomerAssignmentLinkBody,
   Contact,
   ContactInput,
   ContactMethod,
@@ -64,9 +66,12 @@ import type {
   ContactMethodUpdate,
   ContactUpdate,
   ContactWithMethods,
+  CreateCustomerAssignment200,
   CreateEditorialBlogArticle201,
   CreateUcAdminGuide201,
   CreateUcAdminLocation201,
+  CustomerAssignmentInput,
+  CustomerFilterAssignment,
   CustomerLifecycleFeatureConfig,
   CustomerLifecycleLookup,
   CustomerLifecycleTimeline,
@@ -74,6 +79,7 @@ import type {
   DashboardSummary,
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
+  FindAssignmentOrderLinesParams,
   GetCustomerLifecycleTimelineParams,
   GetDashboardActivityParams,
   GetEditorialBlogArticle200,
@@ -144,6 +150,7 @@ import type {
   NotificationDispatchResult,
   NotificationLog,
   OkResponse,
+  PreviewCustomerAssignment200,
   Project,
   ProjectHubInstantWaterDetail,
   ProjectHubInstantWaterList,
@@ -243,6 +250,487 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListCustomerAssignmentsUrl = () => {
+
+
+
+
+  return `/api/admin/customer-assignments`
+}
+
+export const listCustomerAssignments = async ( options?: RequestInit): Promise<CustomerFilterAssignment[]> => {
+
+  return customFetch<CustomerFilterAssignment[]>(getListCustomerAssignmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerAssignmentsQueryKey = () => {
+    return [
+    `/api/admin/customer-assignments`
+    ] as const;
+    }
+
+
+export const getListCustomerAssignmentsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerAssignments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerAssignmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerAssignments>>> = ({ signal }) => listCustomerAssignments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerAssignmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerAssignments>>>
+export type ListCustomerAssignmentsQueryError = ErrorType<unknown>
+
+
+
+export function useListCustomerAssignments<TData = Awaited<ReturnType<typeof listCustomerAssignments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerAssignmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCustomerAssignmentUrl = () => {
+
+
+
+
+  return `/api/admin/customer-assignments`
+}
+
+export const createCustomerAssignment = async (customerAssignmentInput: CustomerAssignmentInput, options?: RequestInit): Promise<CreateCustomerAssignment200> => {
+
+  return customFetch<CreateCustomerAssignment200>(getCreateCustomerAssignmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(customerAssignmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCustomerAssignmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCustomerAssignment>>, TError,{data: BodyType<CustomerAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCustomerAssignment>>, TError,{data: BodyType<CustomerAssignmentInput>}, TContext> => {
+
+const mutationKey = ['createCustomerAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCustomerAssignment>>, {data: BodyType<CustomerAssignmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCustomerAssignment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCustomerAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof createCustomerAssignment>>>
+    export type CreateCustomerAssignmentMutationBody = BodyType<CustomerAssignmentInput>
+    export type CreateCustomerAssignmentMutationError = ErrorType<unknown>
+
+    export const useCreateCustomerAssignment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCustomerAssignment>>, TError,{data: BodyType<CustomerAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCustomerAssignment>>,
+        TError,
+        {data: BodyType<CustomerAssignmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCustomerAssignmentMutationOptions(options));
+    }
+
+export const getPreviewCustomerAssignmentUrl = () => {
+
+
+
+
+  return `/api/admin/customer-assignments/preview`
+}
+
+export const previewCustomerAssignment = async (customerAssignmentInput: CustomerAssignmentInput, options?: RequestInit): Promise<PreviewCustomerAssignment200> => {
+
+  return customFetch<PreviewCustomerAssignment200>(getPreviewCustomerAssignmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(customerAssignmentInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewCustomerAssignmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCustomerAssignment>>, TError,{data: BodyType<CustomerAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewCustomerAssignment>>, TError,{data: BodyType<CustomerAssignmentInput>}, TContext> => {
+
+const mutationKey = ['previewCustomerAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewCustomerAssignment>>, {data: BodyType<CustomerAssignmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewCustomerAssignment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewCustomerAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof previewCustomerAssignment>>>
+    export type PreviewCustomerAssignmentMutationBody = BodyType<CustomerAssignmentInput>
+    export type PreviewCustomerAssignmentMutationError = ErrorType<unknown>
+
+    export const usePreviewCustomerAssignment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCustomerAssignment>>, TError,{data: BodyType<CustomerAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewCustomerAssignment>>,
+        TError,
+        {data: BodyType<CustomerAssignmentInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewCustomerAssignmentMutationOptions(options));
+    }
+
+export const getFindAssignmentOrderLinesUrl = (params: FindAssignmentOrderLinesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/customer-assignments/order-lines?${stringifiedParams}` : `/api/admin/customer-assignments/order-lines`
+}
+
+export const findAssignmentOrderLines = async (params: FindAssignmentOrderLinesParams, options?: RequestInit): Promise<AssignmentOrderLine[]> => {
+
+  return customFetch<AssignmentOrderLine[]>(getFindAssignmentOrderLinesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindAssignmentOrderLinesQueryKey = (params?: FindAssignmentOrderLinesParams,) => {
+    return [
+    `/api/admin/customer-assignments/order-lines`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getFindAssignmentOrderLinesQueryOptions = <TData = Awaited<ReturnType<typeof findAssignmentOrderLines>>, TError = ErrorType<unknown>>(params: FindAssignmentOrderLinesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof findAssignmentOrderLines>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindAssignmentOrderLinesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findAssignmentOrderLines>>> = ({ signal }) => findAssignmentOrderLines(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findAssignmentOrderLines>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type FindAssignmentOrderLinesQueryResult = NonNullable<Awaited<ReturnType<typeof findAssignmentOrderLines>>>
+export type FindAssignmentOrderLinesQueryError = ErrorType<unknown>
+
+
+
+export function useFindAssignmentOrderLines<TData = Awaited<ReturnType<typeof findAssignmentOrderLines>>, TError = ErrorType<unknown>>(
+ params: FindAssignmentOrderLinesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof findAssignmentOrderLines>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getFindAssignmentOrderLinesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConfirmCustomerAssignmentLinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/customer-assignments/${id}/link`
+}
+
+export const confirmCustomerAssignmentLink = async (id: number,
+    confirmCustomerAssignmentLinkBody: ConfirmCustomerAssignmentLinkBody, options?: RequestInit): Promise<CustomerFilterAssignment> => {
+
+  return customFetch<CustomerFilterAssignment>(getConfirmCustomerAssignmentLinkUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(confirmCustomerAssignmentLinkBody)
+  }
+);}
+
+
+
+
+
+export const getConfirmCustomerAssignmentLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmCustomerAssignmentLink>>, TError,{id: number;data: BodyType<ConfirmCustomerAssignmentLinkBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmCustomerAssignmentLink>>, TError,{id: number;data: BodyType<ConfirmCustomerAssignmentLinkBody>}, TContext> => {
+
+const mutationKey = ['confirmCustomerAssignmentLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmCustomerAssignmentLink>>, {id: number;data: BodyType<ConfirmCustomerAssignmentLinkBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  confirmCustomerAssignmentLink(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmCustomerAssignmentLinkMutationResult = NonNullable<Awaited<ReturnType<typeof confirmCustomerAssignmentLink>>>
+    export type ConfirmCustomerAssignmentLinkMutationBody = BodyType<ConfirmCustomerAssignmentLinkBody>
+    export type ConfirmCustomerAssignmentLinkMutationError = ErrorType<unknown>
+
+    export const useConfirmCustomerAssignmentLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmCustomerAssignmentLink>>, TError,{id: number;data: BodyType<ConfirmCustomerAssignmentLinkBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmCustomerAssignmentLink>>,
+        TError,
+        {id: number;data: BodyType<ConfirmCustomerAssignmentLinkBody>},
+        TContext
+      > => {
+      return useMutation(getConfirmCustomerAssignmentLinkMutationOptions(options));
+    }
+
+export const getRetryCustomerAssignmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/customer-assignments/${id}/retry`
+}
+
+export const retryCustomerAssignment = async (id: number, options?: RequestInit): Promise<CustomerFilterAssignment> => {
+
+  return customFetch<CustomerFilterAssignment>(getRetryCustomerAssignmentUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryCustomerAssignmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCustomerAssignment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryCustomerAssignment>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryCustomerAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryCustomerAssignment>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryCustomerAssignment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryCustomerAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof retryCustomerAssignment>>>
+
+    export type RetryCustomerAssignmentMutationError = ErrorType<unknown>
+
+    export const useRetryCustomerAssignment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCustomerAssignment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryCustomerAssignment>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryCustomerAssignmentMutationOptions(options));
+    }
+
+export const getGetMyCustomerAssignmentsUrl = () => {
+
+
+
+
+  return `/api/uc/customer/assignments`
+}
+
+export const getMyCustomerAssignments = async ( options?: RequestInit): Promise<CustomerFilterAssignment[]> => {
+
+  return customFetch<CustomerFilterAssignment[]>(getGetMyCustomerAssignmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyCustomerAssignmentsQueryKey = () => {
+    return [
+    `/api/uc/customer/assignments`
+    ] as const;
+    }
+
+
+export const getGetMyCustomerAssignmentsQueryOptions = <TData = Awaited<ReturnType<typeof getMyCustomerAssignments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyCustomerAssignmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyCustomerAssignments>>> = ({ signal }) => getMyCustomerAssignments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyCustomerAssignments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyCustomerAssignmentsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyCustomerAssignments>>>
+export type GetMyCustomerAssignmentsQueryError = ErrorType<unknown>
+
+
+
+export function useGetMyCustomerAssignments<TData = Awaited<ReturnType<typeof getMyCustomerAssignments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyCustomerAssignmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetHydrateCustomerTreeUrl = () => {
 

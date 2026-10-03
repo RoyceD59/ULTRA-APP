@@ -17,6 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
 import { getApiBase } from '@/lib/apiBase';
 import { loadPersistedSession } from '@/lib/sessionPersistence';
+import { assignedPrimaryActivation } from '@/lib/assignedFilterHydration';
+import type { CustomerFilterAssignment } from '@workspace/api-client-react';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
 if (Platform.OS !== 'web') {
@@ -550,6 +552,29 @@ export async function getFilterActivation(userId: number): Promise<FilterActivat
 }
 
 // ── Filter lifecycle notifications ───────────────────────────────────────────
+const activationWrites = new Map<number, Promise<unknown>>();
+function withActivationWrite<T>(userId: number, fn: () => Promise<T>): Promise<T> {
+  const prior = activationWrites.get(userId) ?? Promise.resolve();
+  const next = prior.catch(() => undefined).then(fn);
+  activationWrites.set(userId, next);
+  void next.finally(() => { if (activationWrites.get(userId) === next) activationWrites.delete(userId); }).catch(() => undefined);
+  return next;
+}
+
+/** Fill-only hydration, with no registration or reminder side effects. */
+export function hydrateAssignedFilter(userId: number, assignments: CustomerFilterAssignment[], isCurrent: () => boolean): Promise<FilterActivation | null> {
+  return withActivationWrite(userId, async () => {
+    if (!isCurrent()) return null;
+    const existing = await getFilterActivation(userId);
+    if (existing) return existing;
+    const activation = assignedPrimaryActivation(null, assignments, await savedFilterCleanCount(userId));
+    if (!activation || !isCurrent()) return null;
+    await saveFilterCleanCount(userId, activation.cleanCount ?? 0);
+    await AsyncStorage.setItem(filterActivationKey(userId), JSON.stringify(activation));
+    await AsyncStorage.setItem(filterLastChangedKey(userId), String(new Date(activation.activatedAt).getTime()));
+    return activation;
+  });
+}
 //
 // 5 notifications per filter cycle:
 //   1. Day  0 (+2 h)         — Activate your filter
@@ -567,6 +592,13 @@ export async function getFilterActivation(userId: number): Promise<FilterActivat
  * Cancels any previously scheduled cycle first.
  */
 export async function scheduleAllFilterNotifications(
+  params: Omit<FilterActivation, 'notifIds'>,
+  userId: number,
+): Promise<FilterActivation> {
+  return withActivationWrite(userId, () => scheduleAllFilterNotificationsUnlocked(params, userId));
+}
+
+async function scheduleAllFilterNotificationsUnlocked(
   params: Omit<FilterActivation, 'notifIds'>,
   userId: number,
 ): Promise<FilterActivation> {

@@ -18,6 +18,7 @@ import {
   getNotificationPermissionStatus,
   requestNotificationPermission,
   getFilterActivation,
+  hydrateAssignedFilter,
   type FilterActivation,
 } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
@@ -567,6 +568,9 @@ function AccountScreenContent() {
 
   const [notifStatus,       setNotifStatus]       = useState<string>('undetermined');
   const [filterActivation,  setFilterActivation]  = useState<FilterActivation | null>(null);
+  const [filterActivationOwner, setFilterActivationOwner] = useState<number | undefined>();
+  const currentAccountId = useRef(user?.id);
+  currentAccountId.current = user?.id;
   const [editModalVisible,  setEditModalVisible]   = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [exporting,          setExporting]          = useState(false);
@@ -653,9 +657,11 @@ function AccountScreenContent() {
     // Never leave the previous account's filter visible while the newly
     // authenticated account's scoped record is loading.
     setFilterActivation(null);
+    setFilterActivationOwner(undefined);
     if (user) {
-      getFilterActivation(user.id).then(activation => {
-        if (active) setFilterActivation(activation);
+      const ownerId = user.id;
+      getFilterActivation(ownerId).then(activation => {
+        if (active && currentAccountId.current === ownerId) { setFilterActivation(activation); setFilterActivationOwner(ownerId); }
       });
     }
     return () => { active = false; };
@@ -673,6 +679,23 @@ function AccountScreenContent() {
     enabled: !!user && accountFocused,
     staleTime: 2 * 60 * 1000,
   });
+  const assignmentsQuery = useQuery({
+    queryKey: ['customer-filter-assignments', user?.id],
+    queryFn: ({ signal }) => api.getAssignments(signal),
+    enabled: !!user && accountFocused,
+    staleTime: 15000,
+    refetchInterval: accountFocused ? 30000 : false,
+  });
+  useEffect(() => {
+    if (!user || !assignmentsQuery.data) return;
+    const accountId = user.id;
+    let active = true;
+    void hydrateAssignedFilter(accountId, assignmentsQuery.data,
+      () => active && currentAccountId.current === accountId)
+      .then(activation => { if (active && currentAccountId.current === accountId && activation) { setFilterActivation(activation); setFilterActivationOwner(accountId); } })
+      .catch(() => { /* Keep the server list visible; next focused refresh retries local hydration. */ });
+    return () => { active = false; };
+  }, [user?.id, assignmentsQuery.data]);
 
   const {
     data: rewards,
@@ -1033,10 +1056,29 @@ function AccountScreenContent() {
           </View> : null}
 
           {/* Filter tracker */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Assigned filters</Text>
+            {assignmentsQuery.isLoading && <ActivityIndicator color={colors.primary} />}
+            {assignmentsQuery.isError && <TouchableOpacity accessibilityRole="button" onPress={() => void assignmentsQuery.refetch()}>
+              <Text style={{ color: colors.primary }}>Could not load assigned filters. Tap to retry.</Text>
+            </TouchableOpacity>}
+            {!assignmentsQuery.isLoading && !assignmentsQuery.isError && !assignmentsQuery.data?.length &&
+              <Text style={{ color: colors.mutedForeground }}>No staff-assigned filters on this account.</Text>}
+            {(assignmentsQuery.data ?? []).map(assignment => <View key={assignment.id} style={{ paddingVertical: 12 }}>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{assignment.productName}</Text>
+              <Text style={{ color: colors.mutedForeground }}>Installed {String(assignment.activatedAt ?? assignment.installationDate).slice(0, 10)} · Order #{assignment.orderReference}</Text>
+              <Text style={{ color: colors.mutedForeground }}>
+                Cash: {assignment.cashCollectionState === 'collected' ? 'collected' : assignment.cashCollectionState === 'awaiting_collection' ? 'awaiting collection' : 'collection not recorded'}
+                {' · '}{assignment.maintenanceCount ?? 0} cleanings{assignment.active === false ? ' · inactive' : ''}
+              </Text>
+            </View>)}
+          </View>
           <FilterTrackerSection
-            activation={filterActivation}
+            key={user.id}
+            activation={filterActivationOwner === user.id ? filterActivation : null}
             onActivationChange={a => {
               setFilterActivation(a);
+              setFilterActivationOwner(user.id);
               refreshNotifStatus();
             }}
             onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}

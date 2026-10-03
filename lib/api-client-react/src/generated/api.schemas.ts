@@ -5,6 +5,88 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface CustomerAssignmentInput {
+  idempotencyKey: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  productId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  installationDate: string;
+  orderId: number;
+  orderItemId: number;
+  targetAccountId?: number;
+}
+
+export interface AssignmentOrderLine {
+  orderId: number;
+  orderItemId: number;
+  productId: number;
+  name: string;
+  quantity: number;
+  ownerReference: string;
+  status: string;
+  /** @nullable */
+  wooOrderId?: number | null;
+  /** @nullable */
+  cashCollectionState?: string | null;
+  /** @nullable */
+  assignmentId?: number | null;
+}
+
+export type CustomerFilterAssignmentStatus = typeof CustomerFilterAssignmentStatus[keyof typeof CustomerFilterAssignmentStatus];
+
+
+export const CustomerFilterAssignmentStatus = {
+  pending: 'pending',
+  linked: 'linked',
+  review: 'review',
+} as const;
+
+export type CustomerFilterAssignmentAuditItemDetails = { [key: string]: unknown };
+
+export type CustomerFilterAssignmentAuditItem = {
+  actor?: string;
+  action?: string;
+  createdAt?: string;
+  details?: CustomerFilterAssignmentAuditItemDetails;
+};
+
+export interface CustomerFilterAssignment {
+  id: number;
+  customerName: string;
+  email: string;
+  phone: string;
+  productId: number;
+  productName: string;
+  lifespanDays: number;
+  capacityLitres: number;
+  installationDate: string;
+  orderId: number;
+  orderItemId: number;
+  orderReference: string;
+  cashCollectionState: string;
+  status: CustomerFilterAssignmentStatus;
+  /** @nullable */
+  reviewReason?: string | null;
+  /** @nullable */
+  targetAccountId?: number | null;
+  /** @nullable */
+  linkedAccountId?: number | null;
+  /** @nullable */
+  filterId?: number | null;
+  /** @nullable */
+  activatedAt?: string | null;
+  /** @nullable */
+  maintenanceCount?: number | null;
+  /** @nullable */
+  active?: boolean | null;
+  createdAt?: string;
+  /** @nullable */
+  linkedAt?: string | null;
+  audit?: CustomerFilterAssignmentAuditItem[];
+}
+
 export interface HydrateAllocationConfig {
   contributionRate: 0.03;
   treeShare: 0.5;
@@ -3326,6 +3408,26 @@ export interface AuditEventPage {
   limit: number;
   total: number;
 }
+
+export type CreateCustomerAssignment200 = {
+  id: number;
+};
+
+export type PreviewCustomerAssignment200 = {
+  productName: string;
+  lifespanDays: number;
+  capacityLitres: number;
+  cashCollectionState: string;
+};
+
+export type FindAssignmentOrderLinesParams = {
+q: string;
+};
+
+export type ConfirmCustomerAssignmentLinkBody = {
+  accountId: number;
+  confirm: boolean;
+};
 
 export type ListCustomerReviewsParams = {
 /**

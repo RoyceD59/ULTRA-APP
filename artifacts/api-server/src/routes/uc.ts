@@ -79,6 +79,7 @@ import {
   CanonicalPurchaseDualWriteError,
 } from "../lib/canonical-purchase-dual-write.js";
 import { isCustomerLifecycleFlagEnabled } from "../lib/customer-lifecycle-flags.js";
+import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
 
 class CheckoutKeyOwnershipConflict extends Error {
   readonly code = "CHECKOUT_KEY_OWNERSHIP_CONFLICT";
@@ -1820,6 +1821,7 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
         phoneVerified: dbUser.phoneVerified,
       };
       res.json({ token: issueToken(user), user });
+      void reconcileAssignmentsForAccount(dbUser.id);
       return;
     }
   } catch {
@@ -1942,6 +1944,7 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
         emailVerified: provisioned.emailVerified,
         phoneVerified: provisioned.phoneVerified,
       };
+      void reconcileAssignmentsForAccount(provisioned.id);
       res.json({ token: issueToken({ ...user, src: "woo" }), user });
       return;
     }
@@ -2067,6 +2070,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       emailVerified: dbUser!.emailVerified,
       phoneVerified: dbUser!.phoneVerified,
     };
+    void reconcileAssignmentsForAccount(dbUser!.id);
     // Durable folder record of the new account (sanitized — never password material).
     recordAccountRegistration({
       id: dbUser!.id, firstName: dbUser!.firstName, lastName: dbUser!.lastName,
@@ -2258,6 +2262,7 @@ async function consumeContactVerification(rawToken: string): Promise<boolean> {
     );
     await client.query("COMMIT");
     logger.info({ event: "contact_verification_completed", channel: credential.channel, result: "completed" }, "Contact verified");
+    await reconcileAssignmentsForAccount(Number(credential.user_id));
     return true;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -3131,6 +3136,7 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
           res.status(401).json({ error: "This account has been deleted" });
           return;
         }
+        await reconcileAssignmentsForAccount(dbUser.id);
         res.json({
           id: dbUser.id,
           email: publicCompanionEmail(dbUser.email),
@@ -3643,6 +3649,23 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
     //    with this token (token revocation without a token blacklist).
     const erasedPassword = await bcryptjs.hash(Math.random().toString(36), 10);
     await db.transaction(async (tx) => {
+      // Serialize with assignment creation/claims before anonymising contact
+      // fields. Otherwise the erased identity could look like a new guest.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`uc-email:${normalizeEmail(existing.email)}`}))`);
+      const deletedPhone = normalizePhone(existing.phone);
+      if (deletedPhone) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`uc-phone:${deletedPhone}`}))`);
+      await tx.execute(sql`
+        WITH marked AS (
+          UPDATE uc_customer_assignments SET status='review',review_reason='deleted_account_ambiguity'
+          WHERE status<>'linked' AND (target_account_id=${numericId}
+            OR email=${normalizeEmail(existing.email)} OR phone=${deletedPhone ?? ""})
+            AND review_reason IS DISTINCT FROM 'deleted_account_ambiguity'
+          RETURNING id
+        )
+        INSERT INTO uc_customer_assignment_audit(assignment_id,actor,action,details)
+        SELECT id,'account-deletion','link_deferred',${JSON.stringify({ reason:"deleted_account_ambiguity", accountId:numericId })}::jsonb
+        FROM marked
+      `);
       await tx.update(ucUsersTable).set({
         email: `deleted-${numericId}@deleted.invalid`, passwordHash: erasedPassword,
         firstName: DELETED, lastName: "", phone: "", address: "",
@@ -3955,6 +3978,22 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
         if (fetched.length < PER_PAGE) { complete = true; break; }
       }
       if (complete) {
+        // Staff-confirmed guest COD orders are authorized by the durable
+        // assignment, not by fuzzy Woo billing-email search.
+        const assignedOrders = (await pool.query<{ wc_order_id: number | null; id: number }>(
+          `SELECT DISTINCT o.id,o.wc_order_id FROM uc_orders o
+           JOIN uc_customer_assignments a ON a.order_id=o.id
+           WHERE a.linked_account_id=$1 AND a.status='linked' AND o.user_id=$2`,
+          [Number(claims.id), userId])).rows;
+        const assignedWooIds = new Set(assignedOrders.flatMap(o => o.wc_order_id ? [o.wc_order_id] : []));
+        const missing = [...assignedWooIds].filter(id => !orders.some(o => Number(o["id"]) === id));
+        for (let offset = 0; offset < missing.length; offset += 100) {
+          const fetched = await wcFetchArray("/orders", { include: missing.slice(offset, offset + 100).join(","), per_page: "100" }, AbortSignal.timeout(15000));
+          if (!fetched || missing.slice(offset, offset + 100).some(id => !fetched.some(o => Number(o["id"]) === id))) {
+            res.status(502).json({ error: "Assigned order history is temporarily unavailable.", retryable: true }); return;
+          }
+          orders.push(...fetched);
+        }
         // The local cash ledger wins over a stale Woo mirror once staff has
         // confirmed collection. This only overlays COD payment truth; all
         // other Woo order data remains authoritative.
@@ -3968,10 +4007,15 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
         const collectedByWcId = new Map(localOrders
           .filter(local => local.codCollectionStatus === "collected" && local.wcOrderId != null)
           .map(local => [local.wcOrderId!, local]));
-        res.json(orders
+        const assignedLocalIds = assignedOrders.filter(o => o.wc_order_id === null).map(o => o.id);
+        const localAssigned = assignedLocalIds.length ? await db.select().from(ucOrdersTable)
+          .where(and(inArray(ucOrdersTable.id, assignedLocalIds), eq(ucOrdersTable.userId, userId))) : [];
+        const assignedItems = assignedLocalIds.length ? await db.select().from(ucOrderItemsTable)
+          .where(inArray(ucOrderItemsTable.orderId, assignedLocalIds)) : [];
+        const visibleOrders = orders
           .filter(o => {
             const billing = o["billing"] as Record<string, unknown> | undefined;
-            return String(billing?.["email"] ?? "").toLowerCase() === emailLc;
+            return String(billing?.["email"] ?? "").toLowerCase() === emailLc || assignedWooIds.has(Number(o["id"]));
           })
           .sort((a, b) => String(b["date_created"] ?? "").localeCompare(String(a["date_created"] ?? "")))
           .map(order => {
@@ -3988,7 +4032,16 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
                 ...(local ? { status: local.status, paymentStatus: "paid", codCollectionStatus: "collected" } : {}),
               }
               : normalized;
-          }));
+          });
+        res.json([...visibleOrders, ...localAssigned.map(o => ({
+          id: o.id, status: o.status, dateCreated: o.dateCreated,
+          total: o.total, currency: o.currency, paymentMethod: o.paymentMethod,
+          paymentReference: o.paymentReference ?? "", codCollectionStatus: o.codCollectionStatus,
+          paymentStatus: o.codCollectionStatus === "collected" ? "paid" : "pending",
+          lineItems: assignedItems.filter(i => i.orderId === o.id).map(i => ({
+            productId: i.productId, name: i.name, quantity: i.quantity, total: i.total,
+          })),
+        }))]);
         return;
       }
       // The local mirror may not include historic store purchases. Never claim

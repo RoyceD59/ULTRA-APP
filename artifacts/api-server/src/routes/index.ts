@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import customerAssignmentsRouter from "./customer-assignments.js";
 import healthRouter from "./health";
 import membersRouter from "./members";
 import projectsRouter from "./projects";
@@ -108,6 +109,7 @@ router.use(adminNotificationSettingsRouter);
 router.use(adminIntegrationsRouter);
 router.use(adminInventorySettingsRouter);
 router.use(adminUnsyncedRegistrationsRouter);
+router.use(customerAssignmentsRouter);
 router.use(authRouter);
 router.use(contactsRouter);
 router.use(contactsSyncRouter);

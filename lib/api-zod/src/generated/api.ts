@@ -9,6 +9,215 @@ import * as zod from 'zod';
 import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant-water-identity.js';
 
 
+export const ListCustomerAssignmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "actor": zod.string().optional(),
+  "action": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "details": zod.record(zod.string(), zod.unknown()).optional()
+})).optional()
+})
+export const ListCustomerAssignmentsResponse = zod.array(ListCustomerAssignmentsResponseItem)
+
+
+export const createCustomerAssignmentBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateCustomerAssignmentBody = zod.object({
+  "idempotencyKey": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "installationDate": zod.string().regex(createCustomerAssignmentBodyInstallationDateRegExp),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "targetAccountId": zod.number().optional()
+})
+
+export const CreateCustomerAssignmentResponse = zod.object({
+  "id": zod.number()
+})
+
+
+export const previewCustomerAssignmentBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const PreviewCustomerAssignmentBody = zod.object({
+  "idempotencyKey": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "installationDate": zod.string().regex(previewCustomerAssignmentBodyInstallationDateRegExp),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "targetAccountId": zod.number().optional()
+})
+
+export const PreviewCustomerAssignmentResponse = zod.object({
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "cashCollectionState": zod.string()
+})
+
+
+export const FindAssignmentOrderLinesQueryParams = zod.object({
+  "q": zod.coerce.string()
+})
+
+export const FindAssignmentOrderLinesResponseItem = zod.object({
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "productId": zod.number(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "ownerReference": zod.string(),
+  "status": zod.string(),
+  "wooOrderId": zod.number().nullish(),
+  "cashCollectionState": zod.string().nullish(),
+  "assignmentId": zod.number().nullish()
+})
+export const FindAssignmentOrderLinesResponse = zod.array(FindAssignmentOrderLinesResponseItem)
+
+
+export const ConfirmCustomerAssignmentLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConfirmCustomerAssignmentLinkBody = zod.object({
+  "accountId": zod.number(),
+  "confirm": zod.boolean()
+})
+
+export const ConfirmCustomerAssignmentLinkResponse = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "actor": zod.string().optional(),
+  "action": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "details": zod.record(zod.string(), zod.unknown()).optional()
+})).optional()
+})
+
+
+export const RetryCustomerAssignmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryCustomerAssignmentResponse = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "actor": zod.string().optional(),
+  "action": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "details": zod.record(zod.string(), zod.unknown()).optional()
+})).optional()
+})
+
+
+export const GetMyCustomerAssignmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "actor": zod.string().optional(),
+  "action": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "details": zod.record(zod.string(), zod.unknown()).optional()
+})).optional()
+})
+export const GetMyCustomerAssignmentsResponse = zod.array(GetMyCustomerAssignmentsResponseItem)
+
+
 /**
  * @summary Own shared-tree allocation and aggregate progress
  */

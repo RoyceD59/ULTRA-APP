@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBase } from '@/lib/apiBase';
-import { getHydrateCustomerTree, type HydrateCustomerTree } from '@workspace/api-client-react';
+import { getHydrateCustomerTree, type HydrateCustomerTree, type CustomerFilterAssignment } from '@workspace/api-client-react';
 
 import { ApiError } from './apiError';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
@@ -510,6 +510,7 @@ export function useApi() {
     requestContactVerification: (channel: 'email' | 'whatsapp') =>
       post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getAssignments: (signal?: AbortSignal) => get<CustomerFilterAssignment[]>('/api/uc/customer/assignments', signal, 30000),
     getCustomerTree: async () => {
       try { return await getHydrateCustomerTree({ headers: authHeaders() }); }
       catch (error) {

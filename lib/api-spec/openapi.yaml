@@ -43,6 +43,118 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /admin/customer-assignments:
+    get:
+      operationId: listCustomerAssignments
+      tags: [uc-admin]
+      responses:
+        '200':
+          description: Durable assignments separate from recovery logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+    post:
+      operationId: createCustomerAssignment
+      tags: [uc-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerAssignmentInput' }
+      responses:
+        '200':
+          description: Reservation saved; linking requires separate confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: integer }
+  /admin/customer-assignments/preview:
+    post:
+      operationId: previewCustomerAssignment
+      tags: [uc-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerAssignmentInput' }
+      responses:
+        '200':
+          description: Server-checked contact, catalogue and ownership preview
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [productName, lifespanDays, capacityLitres, cashCollectionState]
+                properties:
+                  productName: { type: string }
+                  lifespanDays: { type: integer }
+                  capacityLitres: { type: integer }
+                  cashCollectionState: { type: string }
+  /admin/customer-assignments/order-lines:
+    get:
+      operationId: findAssignmentOrderLines
+      tags: [uc-admin]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Existing durable COD order lines; source rechecked at preview and link
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssignmentOrderLine' }
+  /admin/customer-assignments/{id}/link:
+    post:
+      operationId: confirmCustomerAssignmentLink
+      tags: [uc-admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId, confirm]
+              properties:
+                accountId: { type: integer }
+                confirm: { type: boolean }
+      responses:
+        '200':
+          description: Result, including review reasons when linking is blocked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+  /admin/customer-assignments/{id}/retry:
+    post:
+      operationId: retryCustomerAssignment
+      tags: [uc-admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Retry using verified contacts, never staff authorization by implication
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+  /uc/customer/assignments:
+    get:
+      operationId: getMyCustomerAssignments
+      tags: [customer-lifecycle]
+      responses:
+        '200':
+          description: Authenticated account-owned linked filters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CustomerFilterAssignment' }
   /uc/customer/tree:
     get:
       operationId: getHydrateCustomerTree
@@ -3315,6 +3427,69 @@ components:
       bearerFormat: opaque
 
   schemas:
+    CustomerAssignmentInput:
+      type: object
+      required: [idempotencyKey, customerName, email, phone, productId, installationDate, orderId, orderItemId]
+      properties:
+        idempotencyKey: { type: string }
+        customerName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        productId: { type: integer }
+        installationDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        orderId: { type: integer }
+        orderItemId: { type: integer }
+        targetAccountId: { type: integer }
+    AssignmentOrderLine:
+      type: object
+      required: [orderId, orderItemId, productId, name, quantity, ownerReference, status]
+      properties:
+        orderId: { type: integer }
+        orderItemId: { type: integer }
+        productId: { type: integer }
+        name: { type: string }
+        quantity: { type: integer }
+        ownerReference: { type: string }
+        status: { type: string }
+        wooOrderId: { type: [integer, 'null'] }
+        cashCollectionState: { type: [string, 'null'] }
+        assignmentId: { type: [integer, 'null'] }
+    CustomerFilterAssignment:
+      type: object
+      required: [id, customerName, email, phone, productId, productName, lifespanDays, capacityLitres, installationDate, orderId, orderItemId, orderReference, cashCollectionState, status]
+      properties:
+        id: { type: integer }
+        customerName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        productId: { type: integer }
+        productName: { type: string }
+        lifespanDays: { type: integer }
+        capacityLitres: { type: integer }
+        installationDate: { type: string }
+        orderId: { type: integer }
+        orderItemId: { type: integer }
+        orderReference: { type: string }
+        cashCollectionState: { type: string }
+        status: { type: string, enum: [pending, linked, review] }
+        reviewReason: { type: [string, 'null'] }
+        targetAccountId: { type: [integer, 'null'] }
+        linkedAccountId: { type: [integer, 'null'] }
+        filterId: { type: [integer, 'null'] }
+        activatedAt: { type: [string, 'null'] }
+        maintenanceCount: { type: [integer, 'null'] }
+        active: { type: [boolean, 'null'] }
+        createdAt: { type: string }
+        linkedAt: { type: [string, 'null'] }
+        audit:
+          type: array
+          items:
+            type: object
+            properties:
+              actor: { type: string }
+              action: { type: string }
+              createdAt: { type: string }
+              details: { type: object, additionalProperties: true }
     HydrateAllocationConfig:
       type: object
       required: [contributionRate, treeShare, treeCostKes]

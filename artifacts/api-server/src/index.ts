@@ -16,6 +16,7 @@ import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/acco
 import { processPendingReferralSettlements } from "./routes/referrals.js";
 import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
 import { ensureHydrateTreeSchema } from "./lib/hydrate-tree-schema.js";
+import { ensureCustomerAssignmentTables } from "./lib/customer-assignment-rollout.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -2283,6 +2284,7 @@ async function applyStartupMigrations(): Promise<void> {
   `);
   logger.info("Startup migration: refill governance tables ensured");
   await ensureHydrateTreeSchema(pool);
+  await ensureCustomerAssignmentTables();
   logger.info("Startup migration: hydrate shared trees ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
