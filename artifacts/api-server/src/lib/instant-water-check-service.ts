@@ -411,6 +411,18 @@ export async function createInstantAssessment(input: {
       }
     }
 
+    // After 30 days the key may start a new submission. Retire only its retry
+    // record, never the assessment/ticket. Do this after rate checks because
+    // rejected attempts commit their counters but must retain the expired key.
+    // Other creation failures roll this back. Concurrent deletes wait on the
+    // expired row; the unique-key replay recovery below handles the winner.
+    const expired = await client.query(
+      `DELETE FROM instant_water_idempotency
+       WHERE endpoint = 'create-instant-water-assessment' AND scope = $1
+         AND idempotency_key = $2 AND expires_at <= now()
+       RETURNING id`,
+      [input.scope, input.idempotencyKey],
+    );
     const id = randomUUID();
     const reference = `WT-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
     const publicToken = input.customerUserId ? undefined : token();
@@ -458,9 +470,12 @@ export async function createInstantAssessment(input: {
        VALUES ($1,'create-instant-water-assessment',$2,$3,$4,$5,$6,now() + interval '30 days')`,
       [randomUUID(), input.scope, input.idempotencyKey, requestHash, id, response],
     );
+    // The outbox/provider dedupe keys outlive the 30-day retry window. A
+    // recycled key must not suppress delivery of this new assessment.
+    const deliveryKey = `${input.scope}:${input.idempotencyKey}${expired.rows.length ? `:${id}` : ""}`;
     await enqueueLeadDelivery(client, {
-      submissionId: `${input.scope}:${input.idempotencyKey}`,
-      idempotencyKey: `${input.scope}:${input.idempotencyKey}`,
+      submissionId: deliveryKey,
+      idempotencyKey: deliveryKey,
       firstName: normalizedFirstName,
       phone: normalizedPhone,
       country: input.country.trim(),

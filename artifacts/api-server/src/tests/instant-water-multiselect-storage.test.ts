@@ -1,9 +1,9 @@
 import { before, after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { pool } from "@workspace/db";
 import { WATER_RECOMMENDATION_TARGETS, type CatalogueLoader } from "../lib/water-recommendation-targets.js";
-import { createInstantAssessment, listOwnedAssessments, getAdminAssessment, getPublicAssessment, latestOwnedAssessmentSummary, buildInstantAssessmentAiContext, hashInstantSecurityKey } from "../lib/instant-water-check-service.js";
+import { createInstantAssessment, listOwnedAssessments, getAdminAssessment, getPublicAssessment, latestOwnedAssessmentSummary, buildInstantAssessmentAiContext, hashInstantSecurityKey, instantCreateRateLimitKeys } from "../lib/instant-water-check-service.js";
 
 describe("assessment selections survive storage and compatibility paths", () => {
   let userId: number;
@@ -15,6 +15,7 @@ describe("assessment selections survive storage and compatibility paths", () => 
     userId = result.rows[0].id;
   });
   after(async () => {
+    await pool.query("DELETE FROM instant_water_idempotency WHERE assessment_id = ANY($1::text[])", [ids]);
     await pool.query("DELETE FROM instant_water_assessments WHERE id = ANY($1::text[])", [ids]);
     await pool.query("DELETE FROM uc_users WHERE id=$1", [userId]);
   });
@@ -27,6 +28,174 @@ describe("assessment selections survive storage and compatibility paths", () => 
     const target = Object.values(WATER_RECOMMENDATION_TARGETS).find(target => target.sku === sku)!;
     return [{ id: 842, sku, name: target.name }];
   };
+  const expire = async (assessmentId: string) => {
+    await pool.query(
+      "UPDATE instant_water_idempotency SET expires_at=now() - interval '1 second' WHERE assessment_id=$1 AND endpoint='create-instant-water-assessment'",
+      [assessmentId],
+    );
+  };
+  it("reuses expired keys for identical or changed submissions without losing old assessments, tickets, or lead deliveries", async t => {
+    const previousLeadUrl = process.env.GOOGLE_LEAD_APPS_SCRIPT_URL;
+    process.env.GOOGLE_LEAD_APPS_SCRIPT_URL = "https://example.test/lead";
+    t.after(() => {
+      if (previousLeadUrl === undefined) delete process.env.GOOGLE_LEAD_APPS_SCRIPT_URL;
+      else process.env.GOOGLE_LEAD_APPS_SCRIPT_URL = previousLeadUrl;
+    });
+    for (const changed of [false, true]) {
+      const request = input({ source: "municipal", concern: "taste", setting: "home" });
+      const first = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+      ids.push(first.response.assessmentId);
+      const original = await pool.query("SELECT * FROM instant_water_assessments WHERE id=$1", [first.response.assessmentId]);
+      const ticket = await pool.query("SELECT * FROM instant_water_check_tickets WHERE assessment_id=$1", [first.response.assessmentId]);
+      await expire(first.response.assessmentId);
+      const nextRequest = changed ? { ...request, area: "Nairobi" } : request;
+      const next = await createInstantAssessment(nextRequest, { loadCatalogue: verifiedCatalogue });
+      ids.push(next.response.assessmentId);
+      assert.equal(next.replay, false);
+      assert.notEqual(next.response.assessmentId, first.response.assessmentId);
+      assert.deepEqual((await pool.query("SELECT * FROM instant_water_assessments WHERE id=$1", [first.response.assessmentId])).rows, original.rows);
+      assert.deepEqual((await pool.query("SELECT * FROM instant_water_check_tickets WHERE assessment_id=$1", [first.response.assessmentId])).rows, ticket.rows);
+      const retry = await pool.query(
+        "SELECT assessment_id, expires_at > now() AS active FROM instant_water_idempotency WHERE endpoint='create-instant-water-assessment' AND scope=$1 AND idempotency_key=$2",
+        [request.scope, request.idempotencyKey],
+      );
+      assert.deepEqual(retry.rows, [{ assessment_id: next.response.assessmentId, active: true }]);
+      const outbox = await pool.query(
+        "SELECT assessment_id, idempotency_key, submission_id FROM instant_water_lead_outbox WHERE assessment_id=ANY($1::text[])",
+        [[first.response.assessmentId, next.response.assessmentId]],
+      );
+      assert.equal(outbox.rows.length, 2);
+      assert.equal(new Set(outbox.rows.map(row => row.idempotency_key)).size, 2);
+      assert.equal(new Set(outbox.rows.map(row => row.submission_id)).size, 2);
+      const replay = await createInstantAssessment(nextRequest, { loadCatalogue: async () => { throw new Error("Active retry must not call catalogue"); } });
+      assert.equal(replay.replay, true);
+      assert.deepEqual(replay.response, next.response);
+      await assert.rejects(createInstantAssessment({ ...nextRequest, area: "Kisumu" }), /IDEMPOTENCY_CONFLICT/);
+    }
+  });
+  it("creates only one new assessment and ticket for concurrent expired-key reuse, including conflicting requests", async () => {
+    for (const conflicting of [false, true]) {
+      const request = input({ source: "municipal", concern: "taste", setting: "home" });
+      const first = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+      ids.push(first.response.assessmentId);
+      await expire(first.response.assessmentId);
+      let started = 0;
+      let release!: () => void;
+      const barrier = new Promise<void>(resolve => { release = resolve; });
+      const loadCatalogue: CatalogueLoader = async sku => {
+        if (++started === 2) release();
+        await barrier;
+        return verifiedCatalogue(sku);
+      };
+      const attempts = await Promise.allSettled([
+        createInstantAssessment(request, { loadCatalogue }),
+        createInstantAssessment(conflicting ? { ...request, area: "Nairobi" } : request, { loadCatalogue }),
+      ]);
+      const successes = attempts.filter(attempt => attempt.status === "fulfilled").map(attempt => attempt.value);
+      const newIds = [...new Set(successes.map(attempt => attempt.response.assessmentId))];
+      ids.push(...newIds);
+      assert.equal(newIds.length, 1);
+      assert.notEqual(newIds[0], first.response.assessmentId);
+      assert.equal(successes.filter(attempt => !attempt.replay).length, 1);
+      if (conflicting) {
+        assert.equal(successes.length, 1);
+        const failure = attempts.find(attempt => attempt.status === "rejected");
+        assert.match(String(failure!.reason), /IDEMPOTENCY_CONFLICT/);
+      } else {
+        assert.equal(successes.length, 2);
+        assert.deepEqual(successes[0].response, successes[1].response);
+      }
+      const count = await pool.query(
+        "SELECT count(*) FROM instant_water_check_tickets WHERE assessment_id=ANY($1::text[])",
+        [[first.response.assessmentId, ...newIds]],
+      );
+      assert.equal(Number(count.rows[0].count), 2);
+    }
+  });
+  it("preserves expired keys on rate-limit rejection so later guest and customer reuse still delivers a new lead", async t => {
+    const previousLeadUrl = process.env.GOOGLE_LEAD_APPS_SCRIPT_URL;
+    process.env.GOOGLE_LEAD_APPS_SCRIPT_URL = "https://example.test/lead";
+    t.after(() => {
+      if (previousLeadUrl === undefined) delete process.env.GOOGLE_LEAD_APPS_SCRIPT_URL;
+      else process.env.GOOGLE_LEAD_APPS_SCRIPT_URL = previousLeadUrl;
+    });
+    for (const guest of [true, false]) {
+      const request = {
+        ...input({ source: "municipal", concern: "taste", setting: "home" }),
+        phone: `+25471${randomInt(1000000, 10000000)}`,
+        ...(guest ? { customerUserId: undefined, scope: `guest:${randomUUID()}` } : {}),
+        rateKey: `expired-rate:${randomUUID()}`,
+      };
+      const limits = instantCreateRateLimitKeys(request.rateKey, request.phone, request.customerUserId);
+      const rateHashes = Object.values(limits).map(key => hashInstantSecurityKey(`rate:${key}`));
+      t.after(async () => {
+        await pool.query("DELETE FROM instant_water_rate_limits WHERE key_hash=ANY($1::text[])", [rateHashes]);
+      });
+      const first = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+      ids.push(first.response.assessmentId);
+      await expire(first.response.assessmentId);
+      const expired = await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1", [first.response.assessmentId]);
+      await pool.query("UPDATE instant_water_rate_limits SET request_count=8 WHERE key_hash=$1", [rateHashes[0]]);
+      await assert.rejects(createInstantAssessment(request, { loadCatalogue: verifiedCatalogue }), /RATE_LIMITED/);
+      assert.deepEqual((await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1", [first.response.assessmentId])).rows, expired.rows);
+      const counter = await pool.query("SELECT request_count FROM instant_water_rate_limits WHERE key_hash=$1", [rateHashes[0]]);
+      assert.equal(counter.rows[0].request_count, 9, "Rejected attempts still persist rate accounting");
+      const beforeReuse = await pool.query(
+        "SELECT count(*) FROM instant_water_assessments WHERE normalized_phone=$1",
+        [request.phone],
+      );
+      assert.equal(Number(beforeReuse.rows[0].count), 1);
+      await pool.query("UPDATE instant_water_rate_limits SET request_count=0 WHERE key_hash=$1", [rateHashes[0]]);
+      const next = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+      ids.push(next.response.assessmentId);
+      assert.equal(next.replay, false);
+      assert.notEqual(next.response.assessmentId, first.response.assessmentId);
+      const deliveries = await pool.query(
+        "SELECT assessment_id,idempotency_key,submission_id FROM instant_water_lead_outbox WHERE assessment_id=ANY($1::text[])",
+        [[first.response.assessmentId, next.response.assessmentId]],
+      );
+      assert.equal(deliveries.rows.length, 2);
+      assert.equal(new Set(deliveries.rows.map(row => row.idempotency_key)).size, 2);
+      assert.equal(new Set(deliveries.rows.map(row => row.submission_id)).size, 2);
+    }
+  });
+  it("retires only the expired create record for the exact scope and key", async () => {
+    const request = input({ source: "municipal", concern: "taste", setting: "home" });
+    const first = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+    ids.push(first.response.assessmentId);
+    await expire(first.response.assessmentId);
+    for (const [endpoint, scope, key] of [
+      ["request-physical-water-check", request.scope, request.idempotencyKey],
+      ["create-instant-water-assessment", `${request.scope}:other`, request.idempotencyKey],
+      ["create-instant-water-assessment", request.scope, `${request.idempotencyKey}:other`],
+    ]) {
+      await pool.query(
+        `INSERT INTO instant_water_idempotency (id,endpoint,scope,idempotency_key,request_hash,assessment_id,response,expires_at)
+         VALUES ($1,$2,$3,$4,'unrelated',$5,'{}',now() - interval '1 second')`,
+        [randomUUID(), endpoint, scope, key, first.response.assessmentId],
+      );
+    }
+    const unrelated = await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1 AND request_hash='unrelated' ORDER BY id", [first.response.assessmentId]);
+    const next = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+    ids.push(next.response.assessmentId);
+    assert.deepEqual((await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1 AND request_hash='unrelated' ORDER BY id", [first.response.assessmentId])).rows, unrelated.rows);
+  });
+  it("restores the expired retry record if replacement creation fails", async () => {
+    const request = input({ source: "municipal", concern: "taste", setting: "home" });
+    const first = await createInstantAssessment(request, { loadCatalogue: verifiedCatalogue });
+    ids.push(first.response.assessmentId);
+    await expire(first.response.assessmentId);
+    const before = await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1", [first.response.assessmentId]);
+    // Force a database failure after expired-key retirement, without replacing
+    // shared pool methods or affecting other suites' clients.
+    await assert.rejects(
+      createInstantAssessment({ ...request, consentVersion: null as unknown as string }, { loadCatalogue: verifiedCatalogue }),
+      (error: { code?: string }) => error.code === "23502",
+    );
+    assert.deepEqual((await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1", [first.response.assessmentId])).rows, before.rows);
+    const count = await pool.query("SELECT count(*) FROM instant_water_assessments WHERE customer_user_id=$1 AND id<>ALL($2::text[])", [String(userId), ids]);
+    assert.equal(Number(count.rows[0].count), 0);
+  });
   it("returns the stored product on identical/reordered retries and rejects conflicts without calling the catalogue", async () => {
     const request = input({ sources: ["municipal", "bottled"], concerns: ["taste"], settings: ["home"] });
     let calls = 0;
