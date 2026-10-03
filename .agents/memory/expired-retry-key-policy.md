@@ -14,3 +14,9 @@ Persisted rate-limit accounting is an exception to normal rollback on rejection:
 **Why:** Otherwise a rejected attempt erases the evidence of key reuse; a subsequent successful submission can reuse the old delivery identity and silently lose its lead notification.
 
 **How to apply:** Run rejection checks that intentionally commit before any key retirement, and test rejection followed by successful reuse with an existing delivery.
+
+Physical-test retry keys remain bound to the original payload after expiry. An authorized identical retry reports the existing ticket's current state and renews the retry window; it never resubmits or overwrites the ticket.
+
+**Why:** Physical requests act on a ticket already created with the assessment. Treating expiry as a fresh submission could reopen completed service or erase staff-corrected service details and evidence. This differs intentionally from assessment-creation key reuse.
+
+**How to apply:** Preserve active response replay and payload conflicts. For expired physical retries, read the current ticket state under lock and renew only the retry record transactionally; missing tickets and failed renewals must leave the old record intact.

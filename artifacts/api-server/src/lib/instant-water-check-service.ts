@@ -999,22 +999,44 @@ export async function requestPhysicalTest(input: {
   try {
     await client.query("BEGIN");
     const prior = await client.query(
-      `SELECT request_hash, response FROM instant_water_idempotency
+      `SELECT id, request_hash, response, expires_at > now() AS active FROM instant_water_idempotency
         WHERE endpoint = 'request-instant-water-physical-test'
-          AND scope = $1 AND idempotency_key = $2 AND expires_at > now()
+          AND scope = $1 AND idempotency_key = $2
         FOR UPDATE`,
       [input.assessmentId, input.idempotencyKey],
     );
     if (prior.rows[0]) {
       if (prior.rows[0].request_hash !== requestHash) throw new Error("IDEMPOTENCY_CONFLICT");
-      await client.query("COMMIT");
-      return prior.rows[0].response as { assessmentId: string; reference: string; serviceState: string; ticketId: string };
+      if (prior.rows[0].active) {
+        await client.query("COMMIT");
+        return prior.rows[0].response as { assessmentId: string; reference: string; serviceState: string; ticketId: string };
+      }
     }
     const ticket = await client.query(
       `SELECT id, service_state FROM instant_water_check_tickets WHERE assessment_id = $1 FOR UPDATE`,
       [input.assessmentId],
     );
     if (!ticket.rows[0]) throw new Error("NOT_FOUND");
+    if (prior.rows[0]) {
+      // Unlike assessment creation, this key identifies an action on an existing
+      // ticket. Expiry never authorizes a second action or overwriting service
+      // details. Renew identical retries with the current state, even if staff
+      // have scheduled, completed, or closed the ticket in the meantime.
+      const response = {
+        assessmentId: input.assessmentId,
+        reference: row.reference,
+        serviceState: String(ticket.rows[0].service_state),
+        ticketId: String(ticket.rows[0].id),
+      };
+      await client.query(
+        `UPDATE instant_water_idempotency
+            SET response = $2::jsonb, expires_at = now() + interval '30 days'
+          WHERE id = $1`,
+        [prior.rows[0].id, JSON.stringify(response)],
+      );
+      await client.query("COMMIT");
+      return response;
+    }
     if (ticket.rows[0].service_state !== "instant_result_ready" && ticket.rows[0].service_state !== "follow_up_requested" && ticket.rows[0].service_state !== serviceState) {
       throw new Error("CONFLICT");
     }
