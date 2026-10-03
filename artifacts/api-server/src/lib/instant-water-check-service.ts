@@ -14,7 +14,7 @@ import {
   type InstantWaterCheckResult,
 } from "./instant-water-check.js";
 import { enqueueLeadDelivery } from "./lead-delivery.js";
-import { withWaterRecommendationTarget } from "./water-recommendation-targets.js";
+import { withWaterRecommendationTarget, type CatalogueLoader } from "./water-recommendation-targets.js";
 
 const PUBLIC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTION_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -342,15 +342,13 @@ export async function createInstantAssessment(input: {
   scope: string;
   idempotencyKey: string;
   rateKey?: string;
-}): Promise<{ response: AssessmentResponse; replay: boolean }> {
+}, options: { loadCatalogue?: CatalogueLoader } = {}): Promise<{ response: AssessmentResponse; replay: boolean }> {
   const normalizedFirstName = normalizeInstantFirstName(input.firstName);
   if (!normalizedFirstName) throw new Error("INVALID_FIRST_NAME");
   const normalizedPhone = normalizeSharedPhone(input.phone, countryCodeFromValue(input.country) ?? "KE");
   if (!normalizedPhone) throw new Error("INVALID_PHONE");
   const answers = normalizeWaterSelections(input.answers);
   input = { ...input, answers };
-  const result = scoreInstantWaterCheck(answers, input.country);
-  result.recommendation = await withWaterRecommendationTarget(result.recommendation);
   const requestPayload = {
     firstName: normalizedFirstName,
     normalizedPhone,
@@ -368,9 +366,24 @@ export async function createInstantAssessment(input: {
   if (answers.sources!.length === 1 && answers.concerns!.length === 1 && answers.settings!.length === 1) {
     compatibleHashes.add(hashSecret(stablePayload({ ...requestPayload, answers: legacyAnswers })));
   }
+  // Completed retries need neither fresh scoring nor a remote catalogue lookup.
+  const stored = await pool.query(
+    `SELECT request_hash, response FROM instant_water_idempotency
+     WHERE endpoint = 'create-instant-water-assessment' AND scope = $1
+       AND idempotency_key = $2 AND expires_at > now()`,
+    [input.scope, input.idempotencyKey],
+  );
+  if (stored.rows[0]) {
+    if (!compatibleHashes.has(stored.rows[0].request_hash)) throw new Error("IDEMPOTENCY_CONFLICT");
+    return { response: stored.rows[0].response as AssessmentResponse, replay: true };
+  }
+  const result = scoreInstantWaterCheck(answers, input.country);
+  // Do not acquire a transaction/client while waiting on WooCommerce.
+  result.recommendation = await withWaterRecommendationTarget(result.recommendation, options.loadCatalogue);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Another submission may have completed during the catalogue lookup.
     const prior = await client.query(
       `SELECT request_hash, response FROM instant_water_idempotency
        WHERE endpoint = 'create-instant-water-assessment' AND scope = $1
@@ -474,7 +487,8 @@ export async function createInstantAssessment(input: {
            AND idempotency_key = $2 AND expires_at > now()`,
         [input.scope, input.idempotencyKey],
       );
-      if (prior.rows[0] && compatibleHashes.has(prior.rows[0].request_hash)) {
+      if (prior.rows[0]) {
+        if (!compatibleHashes.has(prior.rows[0].request_hash)) throw new Error("IDEMPOTENCY_CONFLICT");
         return { response: prior.rows[0].response as AssessmentResponse, replay: true };
       }
     }

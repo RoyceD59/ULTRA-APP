@@ -11,7 +11,7 @@ export const WATER_RECOMMENDATION_TARGETS: Record<string, { sku: string; name: s
   "Sweet Home faucet filtration": { sku: "UC-FCT-SWH-011", name: "Sweet Home" },
 };
 
-type CatalogueLoader = (sku: string) => Promise<Array<{ id?: unknown; sku?: unknown; name?: unknown }> | null>;
+export type CatalogueLoader = (sku: string) => Promise<Array<{ id?: unknown; sku?: unknown; name?: unknown }> | null>;
 const loadCatalogue: CatalogueLoader = sku => hasWCCredentials()
   ? wcFetchArray("/products", { sku, status: "publish", per_page: "10" }, AbortSignal.timeout(5000))
   : Promise.resolve(MOCK_PRODUCTS);
