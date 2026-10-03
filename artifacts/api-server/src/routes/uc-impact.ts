@@ -167,6 +167,7 @@ async function calcImpactFromOfflineClients(): Promise<{
 // ─── GET /api/uc/impact ───────────────────────────────────────────────────────
 
 router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => {
+  res.set("Cache-Control", "no-store");
   try {
     const [
       { totalUsers: dbUsers, litresFiltered: dbLitres, cleanWaterDays },

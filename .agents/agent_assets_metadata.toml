@@ -23,3 +23,17 @@ mtime_ms = 1790966998534
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/09be97ef-d8c5-4621-9826-8bcb1a10aeb4/3959c815-c95e-4f39-9dc4-9ce18d0701b9"
 storage_version_token = "1790967016891671"
 content_type = "text/html"
+
+[[outputs]]
+id = "Rq0E2jvA00MjfKM5FyLvz"
+uri = "file://infra/cloudflare/forest/rollout-evidence/live-totals-forest.png"
+type = "image"
+title = "Live forest with programme totals"
+description = "Production forest now reads real aggregate totals. Current eligible allocations are zero; field evidence remains pending."
+logical_id = "f1ae9f72-a696-4449-b535-ef618cf26a2b"
+content_hash = "sha256:19259d5944ec2ef58cc402b3913c5100e6a76b3abe03eded4e455d86facebc54"
+size = 424691
+mtime_ms = 1791057841958
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/f1ae9f72-a696-4449-b535-ef618cf26a2b/4c035ea1-1a7d-489b-be71-df22d5c31c35"
+storage_version_token = "1791057977320285"
+content_type = "image/png"

@@ -19,6 +19,9 @@ export const TREE_CONFIG = {
   treeCostRangeKes: [500, 750] as const,
 } as const;
 
+/** Public Pages hosting is independent of Replit's app preview. */
+export const FOREST_URL = process.env.EXPO_PUBLIC_FOREST_URL || 'https://uc-hydrate-forest.pages.dev/';
+
 export type TreeStage = 'none' | 'seed' | 'sprout' | 'sapling' | 'growing' | 'funded' | 'established';
 
 export const TREE_STAGES: Record<TreeStage, { label: string; meaning: string }> = {
@@ -56,12 +59,18 @@ export function newTreeId(randomBytes: (n: number) => Uint8Array): string {
 
 /** Only the anonymous id and the stage leave the device. */
 export function forestLink(baseUrl: string, treeId: string, stage: TreeStage): string {
-  const url = new URL(baseUrl);
-  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Forest URL must use credential-free HTTPS');
+  const url = new URL(publicForestLink(baseUrl));
   if (!TREE_ID_PATTERN.test(treeId) || stage === 'none' || !TREE_STAGES[stage]) throw new Error('Invalid tree link');
-  url.search = '';
-  url.hash = '';
   url.searchParams.set('tree', treeId);
   url.searchParams.set('stage', stage);
+  return url.toString();
+}
+
+/** Global browsing sends no account, stage, token or configured query data. */
+export function publicForestLink(baseUrl = FOREST_URL): string {
+  const url = new URL(baseUrl);
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Forest URL must use credential-free HTTPS');
+  url.search = '';
+  url.hash = '';
   return url.toString();
 }

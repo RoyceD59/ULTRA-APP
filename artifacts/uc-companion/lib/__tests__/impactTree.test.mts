@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { displayStage, newTreeId, forestLink, TREE_ID_PATTERN, TREE_CONFIG } from '../impactTree';
+import { displayStage, newTreeId, forestLink, publicForestLink, FOREST_URL, TREE_ID_PATTERN, TREE_CONFIG } from '../impactTree';
 
 const tree = (over: Record<string, unknown> = {}, t: Record<string, unknown> | null = {}) => ({
   eligibleOrders: 1, eligiblePurchasesKes: 12220, allocationKes: 366.6, treeShareKes: 183.3, cleanWaterKes: 183.3,
@@ -55,4 +55,13 @@ test('configured queries and hashes cannot leak into forest links', () => {
 
 test('invalid API stage never creates a personal forest link', () => {
   assert.equal(displayStage(tree({}, { stage: 'unknown' }), 2), 'none');
+});
+
+test('the global forest opens without account information, including for customers with no tree', () => {
+  assert.equal(publicForestLink('https://forest.example.org/?email=private&stage=funded&tree=UC-ABCDEF#token'),
+    'https://forest.example.org/');
+  assert.equal(new URL(FOREST_URL).protocol, 'https:');
+  for (const base of ['http://forest.example.org', 'javascript:alert(1)', 'https://user:password@forest.example.org']) {
+    assert.throws(() => publicForestLink(base));
+  }
 });

@@ -16,7 +16,7 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
   const colors = useColors();
   const api = useApi();
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [co2eOpen, setCo2eOpen] = useState(false);
 

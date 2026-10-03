@@ -26,3 +26,14 @@ The owner approved connecting `forest.ucfilters.com` before certification, with 
 **Why:** The owner changed the earlier certification gate and explicitly selected “Connect forest.ucfilters.com now”, approving custom-domain attachment and the required forest DNS record.
 
 **How to apply:** Keep missing evidence null/pending; this domain approval does not authorize fabricated temporary figures, certification claims, or unrelated routing changes. Obtain documented evidence and public-disclosure approval before publishing verified outcomes.
+ProjectHub is the source of truth for global UC Impact, displayed uniformly across registered accounts.
+
+**Why:** The user asked, “Synche all registered account to display global UC Impact page to uniformly from project hub.”
+
+**How to apply:** Read shared global figures rather than copying totals into each account. Keep global programme figures distinct from each customer's personal impact.
+
+Companion's About Us must remain an in-app page with global impact and an external forest link, not a redirect to the forest itself.
+
+**Why:** The user explicitly selected “Create an in-app About Us page with global impact and a forest link”.
+
+**How to apply:** Keep programme browsing available without a personal tree or customer identity; do not replace the company/app information with the external forest.

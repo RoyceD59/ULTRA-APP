@@ -66,3 +66,15 @@ Expo's CI mode disables file watching without disabling production bundling.
 
 **How to apply:** Include `CI=1` in the packaging command rather than raising
 system limits or changing application source for a host resource-limit failure.
+
+Use the Expo preview's own routed origin for development API calls when the
+generic Replit development host fails in the browser; do not widen production CORS.
+
+**Why:** Browser cross-origin preflight to the generic development hostname returned
+404 with no CORS headers while shell requests to that host succeeded. The same-origin
+Expo API route reached Express normally. Curl alone cannot rule out this preview-edge
+failure.
+
+**How to apply:** Compare browser and shell preflight results and a same-origin
+request before changing backend permissions. Keep native and physical-device
+verification separate from the browser result.

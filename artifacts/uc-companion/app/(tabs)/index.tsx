@@ -341,6 +341,10 @@ function HomeScreenContent() {
 
         {/* UC Impact */}
         <ImpactBubble />
+        <TouchableOpacity accessibilityRole="link" testID="home-about-us"
+          onPress={() => router.push('/about' as never)} style={styles.statusAction}>
+          <Text style={{ color: colors.primary, fontSize: 13, textDecorationLine: 'underline' }}>About Ultra Clear</Text>
+        </TouchableOpacity>
 
         {/* Trust Badges */}
         <View style={[styles.trustSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>

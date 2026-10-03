@@ -52,7 +52,10 @@ if (mode === 'serve-companion') {
   });
   if (!response.ok) throw new Error('Cannot verify live release baseline; refusing to overwrite live services');
   const live = await response.json();
-  if (live.revision !== manifest.liveBaseRevision && live.revision !== manifest.integrationRevision) {
+   const approvedLiveRevisions = [
+     manifest.liveBaseRevision, manifest.integrationRevision, manifest.previousIntegrationRevision,
+   ].filter(Boolean);
+   if (!approvedLiveRevisions.includes(live.revision)) {
     throw new Error('Live release changed. Reconcile the frozen package before publishing.');
   }
 

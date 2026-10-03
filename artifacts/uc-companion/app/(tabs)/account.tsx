@@ -1043,9 +1043,23 @@ function AccountScreenContent() {
             </View>
           )}
 
-          {rewards ? <PersonalImpactSection impact={rewards.impact} onUpdated={impact => {
+          {rewards ? <PersonalImpactSection key={user.id} impact={rewards.impact} onUpdated={impact => {
             queryClient.setQueryData<CustomerRewards>(customerQueryKeys.rewards(user.id), current => current ? { ...current, impact } : current);
-          }} /> : null}
+          }} /> : <View style={styles.section} testID="personal-impact-unavailable">
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Ultra Clear Impact</Text>
+            <Text style={{ color: colors.mutedForeground }}>
+              {rewardsLoading ? 'Loading your impact card…' : 'Your impact card is unavailable right now.'}
+            </Text>
+            {!rewardsLoading && <TouchableOpacity accessibilityRole="button" onPress={() => refetchRewards()}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: colors.primary }}>Try again</Text>
+            </TouchableOpacity>}
+          </View>}
+
+          <TouchableOpacity accessibilityRole="link" testID="account-about-us"
+            onPress={() => router.push('/about' as never)} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ color: colors.primary, textDecorationLine: 'underline' }}>About Ultra Clear and our global impact</Text>
+          </TouchableOpacity>
 
           {rewards ? <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Share Ultra-Clear</Text>

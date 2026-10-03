@@ -19,14 +19,12 @@ import { useColors } from '@/hooks/useColors';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import TreeScene from '@/components/TreeScene';
+import ForestLink from '@/components/ForestLink';
 import { useLiveSky } from '@/hooks/useLiveSky';
 import {
-  TREE_CONFIG, TREE_STAGES, TREE_ID_PATTERN, displayStage, forestLink, newTreeId,
+  FOREST_URL, TREE_CONFIG, TREE_STAGES, TREE_ID_PATTERN, displayStage, forestLink, newTreeId,
   type TreeStage,
 } from '@/lib/impactTree';
-
-/** Hosted copy of forest/forest.html. The CTA is hidden until this is set. */
-const FOREST_URL = process.env.EXPO_PUBLIC_FOREST_URL;
 
 const LEAF = '#2E8B57';
 const LEAF_DARK = '#1F6B43';
@@ -226,6 +224,8 @@ function AccountImpactTree({ refillEntries }: Props) {
           {!!linkError && <Text accessibilityRole="alert" style={[styles.small, { color: colors.destructive }]}>{linkError}</Text>}
         </>
       )}
+
+      {!link && <ForestLink label="Browse the global forest" testID="impact-tree-public-forest" />}
 
       <Modal visible={methodOpen} transparent animationType="fade" onRequestClose={() => setMethodOpen(false)}>
         <View style={styles.overlay}>

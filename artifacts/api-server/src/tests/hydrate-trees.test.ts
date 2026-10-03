@@ -126,6 +126,21 @@ describe("shared trees (database)", () => {
     assert.equal(response.status, 401);
   });
 
+  it("rejects a signed token belonging to a deleted customer", async () => {
+    const [deleted] = await db.insert(ucUsersTable).values({
+      email: `hydrate-deleted-${Date.now()}-${process.pid}@test.invalid`,
+      passwordHash: await bcrypt.hash("Test1234!", 4),
+      firstName: "Deleted",
+      lastName: "Fixture",
+      deletedAt: new Date(),
+    }).returning();
+    ids.push(deleted!.id);
+    const response = await fetch(`${base}/uc/customer/tree`, {
+      headers: { Authorization: `Bearer ${issueToken({ id: deleted!.id, email: deleted!.email })}` },
+    });
+    assert.equal(response.status, 401);
+  });
+
   it("public forest GET and preflight are accessible without credentials; private tree is not", async () => {
     const origin = "https://forest.ucfilters.com";
     const response = await fetch(`${base}/uc/impact/forest`, { headers: { Origin: origin } });

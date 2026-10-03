@@ -123,8 +123,9 @@ partner, certificate and donation date remain pending. A production screenshot
 confirmed the supplied forest design and the explicit live-figures-unavailable state.
 
 The static site was published before the backend because it safely labels unavailable
-totals pending. The live API/Companion release and router update are **not yet deployed**.
-No live-totals or production-card pass is claimed.
+totals pending. The API/Companion release and forest router update have since been
+deployed; see the dated checks below. Signed-in production-card verification is
+still blocked by test-account sign-in.
 
 Pages preview: `https://4ad447b1.uc-hydrate-forest.pages.dev/`
 (branch alias: `https://release-hydrate-the-future.uc-hydrate-forest.pages.dev/`).
@@ -228,6 +229,126 @@ artifact configuration after verification, so future releases are not frozen.
 The custom forest hostname is separately approved; leave all other DNS and routing
 unchanged. The live API/card rollout remains separate from domain activation.
 
+
+### Rollout check and sign-in blocker — 2026-10-03
+
+Production now serves the frozen integration revision
+`a20475fad106ff663dc1cf674c8b9e5ad0720f79`, build
+`1791046893101-342`, built at `2026-10-03T17:02:43.509Z`. Read-only production
+inspection confirmed both Hydrate tables. The public forest aggregate returns
+200 JSON through `api.ucfilters.com`, with the 3% allocation and equal split;
+field evidence remains null/pending. A guest request for the private tree returns
+401 JSON. Team/deleted-principal checks and signed-in production card flow remain
+unverified. The fetched router before any rollout change is preserved in
+`rollout-evidence/router-before.txt`; forest CORS is not yet applied.
+
+The owner reported sign-in network failures and could not publish. A real browser
+reproduced a preview-only cross-origin preflight 404; the same-origin Expo route
+returned proper JSON. The preview launch command now routes its API to the Expo
+origin, and a focused browser check passed without a preflight. A separate
+phone-only session-persistence bug was found: the API intentionally returns an
+empty public email for those accounts, which the local session validator rejected.
+The working-tree validator now accepts a phone-only contact; focused persistence
+and preview-origin tests and Companion typechecking passed.
+
+**These sign-in changes are not in the frozen release archive.** Do not tell the
+owner that republishing the unchanged frozen package deploys the session fix.
+Before another publication, package and validate only the approved sign-in delta
+against the observed composite release, preserving its already-published features.
+Do not reconstruct that composite from its integration revision alone: its manifest
+separately records the newer baseline used in the archive.
+
+No customer credentials were used in the browser diagnosis, and the specific
+successful-login failure in Safari remains unverified. No physical/native device
+check was performed. Do not restore normal production commands until the rollout
+and signed-in checks succeed.
+
+Production Google/Apple authentication is also blocked: browser requests and
+direct checks of `/api/__clerk/v1/environment` and `/api/__clerk/v1/client` on
+`app.ucfilters.com` return 400 JSON with Clerk `host_invalid` ("Invalid host").
+The proxy build wiring was compared with the current managed-Clerk guidance.
+No managed credentials, DNS records, identity-provider settings or production
+router permissions were changed while diagnosing this separate blocker.
+
+
+### Public forest totals connected — 2026-10-03
+
+The live router now has only the three forest-CORS additions applied to its
+retrieved source, not a wholesale replacement with the local router.
+Deployment ID: `42a99cfe1b4c4492afc8b62755b37da3`. Its bindings, compatibility
+settings, logging, placement, tags, tail consumers and usage model are unchanged.
+`rollout-evidence/router-before.txt` and `router-after.js` preserve both versions.
+The local router's unrelated HTML-cache changes were not deployed.
+
+Actual checks through `api.ucfilters.com` passed: forest GET/HEAD return 200 and
+wildcard credential-free CORS; GET/HEAD preflight return 204; POST preflight has
+no forest CORS. The private tree, trailing-slash and suffix paths do not gain
+forest-origin access. Guest and signed team-principal requests for the private
+tree return 401. Eleven focused API tests passed in a disposable database,
+including a signed deleted-customer token. No deleted production fixture exists,
+and no production account was created or deleted for that check.
+
+The live forest browser now shows **Live figures**, not unavailable totals.
+Current eligible allocations are zero; zero is the actual aggregate response,
+not a demo fallback. The 3% programme allocation remains equally divided.
+Programme field evidence remains pending. Screenshot and safe check results are
+in `rollout-evidence/live-totals-forest.png` and `verification.json`.
+
+The owner confirmed that the test account was created in the live Companion and
+that the Companion is the forest entry point for now; no new WooCommerce linking
+flow was added. The test phone was supplied in local format; after explicitly
+converting the same number to international format for a diagnostic request, the
+server returned a neutral 401 rather than establishing a customer session.
+This does not prove whether the account exists or the password is incorrect.
+The signed-in card flow remains blocked. Normal production build commands remain
+frozen until that verification succeeds, as required by the release plan.
+
+
+### Approved Companion entry points — 2026-10-04
+
+The owner requested a small forest hyperlink below global UC Impact, a visible
+updated personal impact card, and uniform global figures managed through
+ProjectHub. They selected an **in-app About Us page with global impact and a
+forest link**, not a redirect-only About Us page.
+
+Home and `/about` now use the same account-independent impact query and endpoint,
+with refresh on navigation, foreground, reconnection and every minute. Missing
+figures show a loading/error state, not substitute zeros; failed refreshes label
+previous figures explicitly. The global endpoint sends `Cache-Control: no-store`.
+There is no bulk rewrite of registered accounts or personal impact history.
+The personal card opens expanded, remounts for a changed account, and retains
+litres, carbon estimates, milestones and refill behavior. A no-tree/error customer
+can open the public forest without an invented personal ID or stage.
+
+The narrow refresh to `release-sources.tar.gz` includes these UI changes and the
+previously diagnosed phone-only persistence correction. The differing archived
+Home/layout files were edited only at the approved navigation insertion points.
+All other archived modules are byte-for-byte unchanged; a package test enforces
+that whitelist and preserves the preceding composite release.
+`release-manifest.json` records the preceding archive hash, the approved source
+delta, and both preceding/current integration revisions. The live-baseline guard
+accepts that exact preceding composite while the owner publishes the new package;
+it still refuses an unrelated changed live release.
+
+The current working-tree Companion and API typechecks passed. Focused tests cover
+credential-free public links, invalid personal stages, shared/global cache versus
+private customer caches, and phone-only sessions. A Chromium browser confirmed
+the public About page, equal settled Home/About global totals, and a new forest
+tab with no account, token, query or fragment parameters. These are preview checks,
+not successful production customer sign-in or native/device checks.
+
+The refreshed isolated package passed all seven hosting/package tests, library
+and Companion typechecking, and eighteen focused tree/cache/session tests. Its
+web, iOS and Android bundles/manifests/assets built successfully. Library
+declarations must be built (`pnpm run typecheck:libs`) before running a standalone
+Companion typecheck in a newly extracted package. Bundle success is not a
+physical-device or native sign-in result.
+
+The new UI is **not yet published to `app.ucfilters.com`**. After this task merges,
+the owner must use Replit Publishing. No new schema/data replacement is needed for
+these UI changes. Production customer card/account-switch verification and
+restoration of normal production commands remain pending; do not claim those
+passed merely because the refreshed package builds.
 ### Publishing certified evidence later
 
 1. Obtain documented programme dates, partner details, donation records, certification
