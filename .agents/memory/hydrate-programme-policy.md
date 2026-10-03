@@ -15,8 +15,8 @@ Preserve the supplied forest design. Cloudflare hosting is for this static fores
 
 **How to apply:** Use an explicit static-file allowlist and obtain separate approval for production publication, custom-domain/DNS changes and protected-branch merges.
 
-Use the Pages domain now; defer `forest.ucfilters.com` until certified data is available.
+The owner approved connecting `forest.ucfilters.com` before certification, with unverified programme information clearly marked pending.
 
-**Why:** The user said, “Option 2 now and option 1 once we have the certified data.”
+**Why:** The owner changed the earlier certification gate and explicitly selected “Connect forest.ucfilters.com now”, approving custom-domain attachment and the required forest DNS record.
 
-**How to apply:** Keep programme evidence pending where unconfirmed. Do not attach the custom hostname merely because the illustrative forest is ready; obtain the required DNS approval when certification is available.
+**How to apply:** Keep missing evidence null/pending; this domain approval does not authorize fabricated temporary figures, certification claims, or unrelated routing changes. Obtain documented evidence and public-disclosure approval before publishing verified outcomes.

@@ -37,7 +37,7 @@ pnpm dlx wrangler@4 pages deploy artifacts/uc-companion/forest-dist \
 
 Never omit `--branch` during a preview: a default production branch can publish live.
 Production uses `--branch main` only after explicit approval. DNS/custom-domain setup
-is separate and also requires approval. Proposed hostname: `forest.ucfilters.com`.
+is separate and also requires approval. Approved hostname: `forest.ucfilters.com`.
 Do not modify the existing app, hub or API DNS records.
 
 ## Data and privacy
@@ -75,8 +75,8 @@ or credentialed URLs and discards all preconfigured query/hash values.
 4. Update the existing `ucfilters-host-router` with the narrowly scoped forest CORS
    change; retain its existing routes and all other permissions. Verify actual GET
    and OPTIONS through `api.ucfilters.com`.
-5. Publish the exact tested static package to Pages production. Custom-domain/DNS
-   attachment is deferred until certified data is available and separately approved. Verify HTTPS, root HTML,
+5. Publish the exact tested static package to Pages production. The owner separately
+   approved custom-domain/DNS attachment with evidence pending on 2026-10-03. Verify HTTPS, root HTML,
    programme JSON, 404, live totals and the card's anonymous link.
 6. Record final deployment IDs, source/release revisions, URLs and check results.
 
@@ -91,8 +91,29 @@ contribution history: additive tables are safe to leave during rollback.
 
 ## Production forest and remaining release gate
 
-The owner approved the Pages domain now and deferred `forest.ucfilters.com` until
-certified data is available. No custom domain or DNS change is approved or applied.
+The owner initially deferred `forest.ucfilters.com` until certified data was available.
+On 2026-10-03, the owner changed that gate and explicitly approved connecting the
+custom domain now with temporary, clearly labelled pending information. This does
+not approve invented programme facts or verified-outcome claims.
+
+Custom forest: **https://forest.ucfilters.com/**
+Pages domain ID: `4ac108e4-4712-49af-9648-bbfe0ac67b97`.
+Forest DNS record ID: `21e1f02a63f073cc28ade1068db35a14`
+(`CNAME forest.ucfilters.com → uc-hydrate-forest.pages.dev`, proxied, automatic TTL).
+The active `ucfilters.com` zone and Pages project are in the same connected account.
+The hostname had no existing DNS record or Pages binding before attachment.
+All 36 pre-existing zone DNS records and all three Worker routes were compared before
+and after attachment and remained unchanged. No Worker or application release was made.
+
+Verification on 2026-10-03: credential-free HTTPS root HTML, programme JSON and an
+anonymous growing-stage link returned 200; unknown pages, `.git/config` and the source
+archive returned 404. The browser screenshot showed the forest, funding policy and
+digital-illustration disclaimer. JSON evidence fields remain null and updates empty.
+The production HTML is unchanged apart from Cloudflare's injected security script;
+external fonts loaded successfully. Focused static package/router tests passed.
+Cloudflare's final domain status, ownership verification and HTTP/certificate
+validation all report **active**. The initial pending state resolved after DNS
+propagation; public HTTPS and the programme JSON were verified separately.
 
 Production forest: **https://uc-hydrate-forest.pages.dev/**
 Deployment ID: `4c62cfea-4fed-44b6-905a-f391996bbb1c` (successful production deployment).
@@ -204,4 +225,25 @@ Then publish from Replit, allow only the additive Hydrate database change, verif
 API, preserve the current live worker while adding only forest read CORS, and confirm
 the final card/forest flow. Restore normal artifact production commands using validated
 artifact configuration after verification, so future releases are not frozen.
-Leave `forest.ucfilters.com` and DNS unchanged until certification and separate approval.
+The custom forest hostname is separately approved; leave all other DNS and routing
+unchanged. The live API/card rollout remains separate from domain activation.
+
+### Publishing certified evidence later
+
+1. Obtain documented programme dates, partner details, donation records, certification
+   and independently supported field evidence. Confirm each field/document that may
+   be publicly disclosed and redact private information before packaging.
+2. Update `artifacts/uc-companion/forest/programme-status.json` only with supported,
+   approved facts. Missing values remain null/pending. Funding estimates and digital
+   growth are not planted or established tree counts; a donation alone does not
+   establish either outcome. Never invent receipts or lifetime value.
+3. Prepare updates through the approved `release/hydrate-the-future` repository branch
+   and pull-request process. Do not merge a protected branch without approval.
+4. Run the static build and tests above, then inspect a Pages preview. The current
+   static package has an explicit allowlist: adding certificate/report files requires
+   updating that packaging allowlist and its tests, not merely dropping files beside
+   the HTML. Use only publicly approved HTTPS evidence links until files are packaged.
+5. Obtain publication approval for the exact update, deploy the tested package to
+   Pages production, and verify both hostnames, programme JSON, evidence links,
+   anonymous card links and correct pending/verified labels. Preserve the 3% equal
+   split and the rule that refills add no funding.
