@@ -53,3 +53,4 @@
 - [Hydrate programme policy](hydrate-programme-policy.md) — 3% split equally; refills add no funding; unavailable evidence stays pending; static forest hosting only.
 - [Customer assignment policy](customer-assignment-policy.md) — pre-signup reservations are not accounts or sales; name is not proof; ownership linking never implies COD collection.
 - [Expired retry key policy](expired-retry-key-policy.md) — assessment keys are reusable after 30 days; customer history and longer-lived delivery identities remain separate.
+- [Hydration reminder hours](hydration-reminder-policy.md) — user-approved every 2, 3, or 4 hours, from 5 am to no later than 8 pm local time.

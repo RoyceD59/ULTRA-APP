@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-   View, Text, StyleSheet, ScrollView, Switch, Platform, TouchableOpacity, TextInput, Linking,
+   View, Text, StyleSheet, ScrollView, Switch, Platform, TouchableOpacity, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -17,9 +17,8 @@ import {
   type NotifPrefs,
 } from '@/hooks/useNotifications';
 import * as Haptics from 'expo-haptics';
-import { getHydrationReminderPrefs, saveHydrationReminderPrefs, reconcileHydrationReminder, type HydrationReminderPrefs } from '@/lib/hydrationReminder';
+import { HYDRATION_INTERVALS, getHydrationReminderPrefs, saveHydrationReminderPrefs, reconcileHydrationReminder, type HydrationReminderPrefs, type HydrationInterval } from '@/lib/hydrationReminder';
 import { requestNotificationPermission, ensureAndroidChannel } from '@/hooks/useNotifications';
-import { validReminderTime } from '@/lib/hydration';
 
 export default function NotificationPreferencesScreen() {
   const colors = useColors();
@@ -29,22 +28,21 @@ export default function NotificationPreferencesScreen() {
 
   const [prefs, setPrefs] = useState<NotifPrefs>({ orderUpdates: true, filterReminders: true });
   const [saving, setSaving] = useState(false);
-  const [hydrationPrefs, setHydrationPrefs] = useState<HydrationReminderPrefs>({ enabled: false, time: '20:00' });
-  const [hydrationTime, setHydrationTime] = useState('20:00');
+  const [hydrationPrefs, setHydrationPrefs] = useState<HydrationReminderPrefs>({ enabled: false, intervalHours: 3 });
+  const [hydrationInterval, setHydrationInterval] = useState<HydrationInterval>(3);
   const [hydrationMessage, setHydrationMessage] = useState('');
   const activeUserRef = useRef(user?.id);
   activeUserRef.current = user?.id;
   useEffect(() => {
-    setHydrationPrefs({ enabled: false, time: '20:00' }); setHydrationTime('20:00'); setHydrationMessage(''); setSaving(false);
+    setHydrationPrefs({ enabled: false, intervalHours: 3 }); setHydrationInterval(3); setHydrationMessage(''); setSaving(false);
     let active = true;
     if (user) void getHydrationReminderPrefs(user.id).then(value => {
-      if (active) { setHydrationPrefs(value); setHydrationTime(value.time); }
+      if (active) { setHydrationPrefs(value); setHydrationInterval(value.intervalHours); }
     }).catch(() => { if (active) setHydrationMessage('Could not load reminder preferences.'); });
     return () => { active = false; };
   }, [user?.id]);
-  const saveHydration = async (enabled: boolean, timeOnly = false) => {
+  const saveHydration = async (enabled: boolean) => {
     if (!user) return;
-    if ((enabled || timeOnly) && !validReminderTime(hydrationTime)) { setHydrationMessage('Enter a local time in 24-hour HH:MM format, such as 20:00.'); return; }
     setSaving(true); setHydrationMessage('');
     const owner = user.id;
     try {
@@ -54,7 +52,7 @@ export default function NotificationPreferencesScreen() {
         return;
       }
       if (activeUserRef.current !== owner) return;
-      const next = { enabled, time: validReminderTime(hydrationTime) ? hydrationTime : hydrationPrefs.time };
+      const next = { enabled, intervalHours: hydrationInterval };
       await saveHydrationReminderPrefs(user.id, next);
       if (activeUserRef.current !== owner) return;
       setHydrationPrefs(next);
@@ -62,7 +60,7 @@ export default function NotificationPreferencesScreen() {
       if (activeUserRef.current !== owner) return;
       setHydrationMessage(status === 'denied' ? 'Reminders are blocked by device Settings. Logging remains available.' :
         status === 'web' ? 'Saved for in-app prompts. Background hydration reminders require the mobile app.' :
-          enabled ? `One daily reminder scheduled at ${next.time}, local time.` : 'Daily hydration reminder disabled.');
+          enabled ? `Reminders scheduled every ${next.intervalHours} hours, starting at 5 am with none after 8 pm local time.` : 'Hydration reminders disabled.');
     } catch {
       if (activeUserRef.current === owner) setHydrationMessage('Could not schedule the reminder. Please retry.');
     } finally { if (activeUserRef.current === owner) setSaving(false); }
@@ -194,21 +192,30 @@ export default function NotificationPreferencesScreen() {
         </View>
 
         {/* Filter reminders by message — strictly opt-in channels */}
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>DAILY HYDRATION</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>HYDRATION REMINDERS</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <PrefRow icon="water-outline" iconColor={colors.primary} iconBg={colors.primaryLight}
-            title="Daily filtered-water reminder"
-            description={Platform.OS === 'web' ? 'Daily in-app prompt. Background hydration reminders require the mobile app.' : 'One daily local reminder to record your total. Off until you choose to enable it.'}
+            title="Filtered-water reminders"
+            description={Platform.OS === 'web' ? 'Daily in-app prompt. Background hydration reminders require the mobile app.' : 'Every 2, 3, or 4 hours from 5 am to 8 pm, local time. Off until you enable them.'}
             value={hydrationPrefs.enabled} onToggle={saveHydration} disabled={saving || !user || Platform.OS === 'web'} colors={colors}
             webNote={Platform.OS === 'web' ? 'Daily in-app prompts appear on Home. Background hydration reminders require the mobile app.' : undefined} />
           <View style={{ padding: 16, gap: 10 }}>
-            <Text style={{ color: colors.text }}>Local reminder time (24-hour HH:MM)</Text>
-            <TextInput accessibilityLabel="Hydration reminder local time" value={hydrationTime} onChangeText={setHydrationTime}
-              editable={Platform.OS !== 'web' && !!user}
-              placeholder="20:00" placeholderTextColor={colors.mutedForeground} maxLength={5}
-              style={{ borderWidth: 1, borderColor: colors.border, color: colors.text, padding: 12, borderRadius: 8 }} />
-            <TouchableOpacity accessibilityRole="button" disabled={saving || !user || Platform.OS === 'web'} onPress={() => saveHydration(hydrationPrefs.enabled, true)}>
-              <Text style={{ color: colors.primary }}>Save reminder time</Text>
+            <Text style={{ color: colors.text }}>Reminder frequency</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {HYDRATION_INTERVALS.map(interval => (
+                <TouchableOpacity key={interval} accessibilityRole="radio"
+                  accessibilityState={{ checked: hydrationInterval === interval, disabled: saving || !user || Platform.OS === 'web' }}
+                  disabled={saving || !user || Platform.OS === 'web'} onPress={() => setHydrationInterval(interval)}
+                  style={{ flex: 1, padding: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1,
+                    borderColor: hydrationInterval === interval ? colors.primary : colors.border,
+                    backgroundColor: hydrationInterval === interval ? colors.primaryLight : colors.card }}>
+                  <Text style={{ color: colors.text }}>Every {interval} hrs</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ color: colors.mutedForeground }}>Starts at 5 am, with no reminders after 8 pm local time.</Text>
+            <TouchableOpacity accessibilityRole="button" disabled={saving || !user || Platform.OS === 'web'} onPress={() => saveHydration(hydrationPrefs.enabled)}>
+              <Text style={{ color: colors.primary }}>Save reminder frequency</Text>
             </TouchableOpacity>
             {!user && <Text style={{ color: colors.mutedForeground }}>Sign in to configure a hydration reminder.</Text>}
             {!!hydrationMessage && <Text accessibilityLiveRegion="polite" style={{ color: colors.text }}>{hydrationMessage}</Text>}
