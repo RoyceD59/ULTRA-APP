@@ -28,7 +28,6 @@ if (!basePath) {
 }
 
 export default defineConfig({
-  optimizeDeps: { include: ['@workspace/api-zod/blog-inline-links'] },
   base: basePath,
   plugins: [
     react(),
@@ -61,17 +60,17 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   root: path.resolve(import.meta.dirname),
-  // Linked workspace sources are otherwise served directly. This wrapper
-  // imports a CommonJS parser, which needs browser ESM conversion.
+  // Linked workspace packages are not prebundled automatically. This shared
+  // parser uses CommonJS for Metro compatibility, so Vite must convert it.
   optimizeDeps: {
     include: ['@workspace/api-zod/blog-inline-links'],
   },
   build: {
+    outDir: path.resolve(import.meta.dirname, 'dist/public'),
+    emptyOutDir: true,
     commonjsOptions: {
       include: [/node_modules/, /lib\/api-zod\/src\/blog-inline-links-core\.cjs$/],
     },
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
-    emptyOutDir: true,
   },
   server: {
     port,

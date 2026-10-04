@@ -53,6 +53,7 @@
 - [Review sentiment policy](review-sentiment-policy.md) — stars and text remain separate; Mixed is not disagreement; staff-only AI must not drive customer decisions.
 - [Hydrate programme policy](hydrate-programme-policy.md) — 3% split equally; refills add no funding; unavailable evidence stays pending; static forest hosting only.
 - [Customer assignment policy](customer-assignment-policy.md) — pre-signup reservations are not accounts or sales; name is not proof; ownership linking never implies COD collection.
+- [Approved filter specifications](approved-filter-specifications.md) — Hydra Flux: 150 litres or 2–3 months depending on water quality; approved reminder default is 90 days.
 - [Expired retry key policy](expired-retry-key-policy.md) — assessment keys are reusable after 30 days; customer history and longer-lived delivery identities remain separate.
 - [Hydration reminder policy](hydration-reminder-policy.md) — every 2/3/4 hours, 5 am–8 pm local; relocating the daily summary does not authorize regrouping hydration settings.
 - [Companion SEO scope](companion-seo-scope.md) — distinguish audit targets; source and local fixtures do not establish production gains or authorize host/deployment changes.
@@ -68,3 +69,4 @@
 - [Catalogue performance boundaries](catalogue-performance-policy.md) — browsing snapshots never replace transaction-time Woo authority; local gains are not deployed or phone evidence.
 - [Promotions and fulfillment policy](promotions-fulfillment-policy.md) — managed code benefits only; reserve before payment and keep pending outcomes bound to their checkout.
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
+- [Browser fixture recovery](browser-fixture-recovery.md) — browser worker resets can erase test credentials without removing shared-development DB fixtures.
