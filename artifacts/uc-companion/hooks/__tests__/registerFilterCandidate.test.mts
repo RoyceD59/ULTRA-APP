@@ -335,6 +335,34 @@ describe('computeRegisterCandidate — products removed from the catalogue', () 
       'replace mode must not nudge for a product that is no longer in the filter catalogue');
   });
 
+  it('replace mode: skips a newer unknown-product order and returns a post-activation known-product order', () => {
+    const KNOWN_ORDER_DATE = '2026-05-01T00:00:00.000Z';
+    const result = computeRegisterCandidate({
+      eligibleForRegister: false,
+      eligibleForReplace:  true,
+      activation: makeActivation({ sourceOrderId: 100 }),
+      orders: [
+        {
+          id:          305,
+          dateCreated: NEWER_DATE,
+          lineItems:   [{ productId: REMOVED_PRODUCT_ID }],
+        },
+        {
+          id:          306,
+          dateCreated: KNOWN_ORDER_DATE,
+          lineItems:   [{ productId: PRODUCT.id }],
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.ok(result, 'a removed product must not hide a valid post-activation replacement order');
+    assert.equal(result.mode, 'replace', 'the candidate must trigger the replacement nudge');
+    assert.equal(result.orderId, 306, 'the separate known-product order must be selected');
+    assert.deepEqual(result.product, PRODUCT, 'the candidate must use the known catalogue product');
+  });
+
   it('skips an unknown product order and returns the known product order', () => {
     const KNOWN_ORDER_DATE = '2026-05-01T00:00:00.000Z';
     const result = computeRegisterCandidate({
