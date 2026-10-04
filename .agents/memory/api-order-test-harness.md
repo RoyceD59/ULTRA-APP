@@ -24,3 +24,11 @@ delete process.env["WC_CONSUMER_SECRET"];
 **How to apply:** mirror the `mpesa-idempotency.test.ts` harness (own http server, env deletion, fetch stub, cleanup). With creds deleted, orders take the local DB path — assert stored data (e.g. normalized phone) by querying `ucOrdersTable`, since the DB-path response body does not include `shippingAddress`.
 
 Related: node's test runner spawns one process per test file, so env deletion in one file never leaks into another.
+
+## Order email isolation
+
+Set a test-only `RESEND_BASE_URL` when intercepting order emails with `globalThis.fetch`; do not assume that a global fetch stub intercepts the Replit connector proxy.
+
+**Why:** Without an explicit direct-API base URL, Resend uses its connector's proxy fetch, which bypasses the global stub and can reach the live provider from a regression test.
+
+**How to apply:** Route Resend to a reserved `.invalid` host, stub that exact endpoint, and wait for background provider calls before restoring fetch. Fail on unexpected outbound requests.
