@@ -18,3 +18,9 @@ Per-run database isolation does not isolate test identities between files in tha
 **Why:** Fixed customer IDs inherited other suites' deleted-account state, causing a signed push-auth test to return 401 instead of its expected no-token 404.
 
 **How to apply:** Use suite-owned identities and clean up only owned rows. Never assume small fixed user IDs are unused merely because the database is temporary.
+
+Broad retention-job tests must isolate the table they prune, not just their fixture IDs.
+
+**Why:** The per-run database is shared across test files; a real global DELETE can remove another suite's old fixtures even when each suite owns different IDs.
+
+**How to apply:** Use a transaction-local temporary table that shadows the target table and route the production queries to that connection. Keep the real SQL predicates, inject deterministic time/settings, and roll back afterward.
