@@ -21,7 +21,7 @@ function deferred() {
 
 describe("runLowStockAlert — database coordination", () => {
   // Dedicated product IDs; the test wrapper creates an isolated database.
-  const ids = [1764600030, 1764600031, 1764600032, 1764600033];
+  const ids = [1764600030, 1764600031, 1764600032, 1764600033, 1764600034, 1764600035];
   after(async () => {
     await db.delete(ucLowStockAlertsTable).where(inArray(ucLowStockAlertsTable.productId, ids));
   });
@@ -106,6 +106,41 @@ describe("runLowStockAlert — database coordination", () => {
         assert.equal(history.length, 0, "failed delivery must not start a quiet period");
         assert.equal((await runLowStockAlert(deps)).emailed, true);
         assert.equal(attempts, 2);
+      });
+  }
+
+  for (const throws of [false, true]) {
+    it(`does not advance expired history after ${throws ? "a thrown" : "a rejected"} scheduled delivery`,
+      async () => {
+        const productId = ids[throws ? 5 : 4]!;
+        const expiredAt = new Date(now.getTime() - 48 * 60 * 60 * 1_000);
+        await db.insert(ucLowStockAlertsTable).values({ productId, alertedAt: expiredAt });
+        let attempts = 0;
+        const deps = {
+          isWcConfigured: () => true,
+          threshold: 5,
+          now,
+          fetchProducts: async () => [
+            { id: productId, name: "Expired history", stock_quantity: 0, stock_status: "outofstock" },
+          ],
+          sendEmail: async () => {
+            attempts++;
+            if (throws) throw new Error("provider unavailable");
+            return false;
+          },
+        };
+        if (throws) await assert.rejects(runLowStockAlert(deps), /provider unavailable/);
+        else assert.equal((await runLowStockAlert(deps)).emailed, false);
+        const [unchanged] = await db.select().from(ucLowStockAlertsTable)
+          .where(inArray(ucLowStockAlertsTable.productId, [productId]));
+        assert.equal(unchanged?.alertedAt.toISOString(), expiredAt.toISOString());
+        assert.equal((await runLowStockAlert({
+          ...deps, sendEmail: async () => { attempts++; return true; },
+        })).emailed, true);
+        assert.equal(attempts, 2);
+        const [recorded] = await db.select().from(ucLowStockAlertsTable)
+          .where(inArray(ucLowStockAlertsTable.productId, [productId]));
+        assert.equal(recorded?.alertedAt.toISOString(), now.toISOString());
       });
   }
 

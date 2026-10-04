@@ -280,6 +280,10 @@ const SHARED_STATE_FILES = [
   "canonical-dual-write-routes",
   "cod-order-validation",
   "dual-failure-alert",
+  // Both files exercise the same global stock-digest advisory lock. Keep
+  // unrelated test workers from being mistaken for an overlapping cron run.
+  "inventory-integrations",
+  "low-stock-alert",
   // Both suites drain the same global order outbox; isolate them from the
   // parallel phase so one worker cannot claim another suite's work.
   "order-fulfillment",

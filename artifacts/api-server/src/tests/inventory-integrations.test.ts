@@ -60,6 +60,7 @@ import { issueToken } from "../lib/jwt.js";
 import { encryptSecret } from "../lib/secret-crypto.js";
 import { pool } from "@workspace/db";
 import { _inventorySyncSeams } from "../routes/uc.js";
+import { runLowStockAlert } from "../lib/scheduler.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,65 @@ async function patch(
   });
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+// Only external providers are stubbed; HTTP auth, both history writes, and the
+// scheduler's quiet-period lookup use the real app and isolated PostgreSQL DB.
+async function withStockProviders(
+  productId: number,
+  send: () => Promise<boolean>,
+  test: () => Promise<void>,
+) {
+  const realFetch = globalThis.fetch;
+  const originalBase = process.env["RESEND_BASE_URL"];
+  // Suite setup already removed the real WooCommerce credentials.
+  process.env["WC_CONSUMER_KEY"] = "inventory-test-key";
+  process.env["WC_CONSUMER_SECRET"] = "inventory-test-secret";
+  process.env["RESEND_BASE_URL"] = "https://inventory-email.test";
+  globalThis.fetch = (async (input, init) => {
+    const url = String(input);
+    if (url.startsWith(baseUrl)) return realFetch(input, init);
+    if (url === "https://inventory-email.test/emails") {
+      const ok = await send();
+      return Response.json(ok ? { id: "inventory-test-email" } : { message: "unavailable" },
+        { status: ok ? 200 : 503 });
+    }
+    if (url.includes(`/products/${productId}`) && init?.method === "PUT") {
+      return Response.json({
+        id: productId, name: `Race stock ${productId}`, stock_quantity: 0,
+        stock_status: "outofstock",
+      });
+    }
+    throw new Error(`Unexpected external request: ${url}`);
+  }) as typeof fetch;
+  try {
+    await test();
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env["WC_CONSUMER_KEY"];
+    delete process.env["WC_CONSUMER_SECRET"];
+    if (originalBase === undefined) delete process.env["RESEND_BASE_URL"];
+    else process.env["RESEND_BASE_URL"] = originalBase;
+    await pool.query("DELETE FROM uc_low_stock_alerts WHERE product_id = $1", [productId]);
+    await pool.query(
+      "DELETE FROM uc_notification_log WHERE template = 'low_stock_alert' AND message_body LIKE $1",
+      [`%Race stock ${productId}%`],
+    );
+  }
+}
+
+async function stockHistory(productId: number) {
+  const { rows } = await pool.query<{ at: string; date: Date }>(
+    "SELECT alerted_at::text AS at, alerted_at AS date FROM uc_low_stock_alerts WHERE product_id = $1",
+    [productId],
+  );
+  return rows[0];
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -521,6 +581,133 @@ describe("GET /api/admin/integrations", () => {
     const { status } = await get(baseUrl, "/api/admin/integrations", teamAdminToken);
     assert.equal(status, 200);
   });
+});
+
+describe("manual and daily stock alerts — shared database quiet period", () => {
+  for (const newestPath of ["manual", "daily"] as const) {
+    it(`keeps the newest ${newestPath} timestamp when the older delivery writes last`,
+      { timeout: 15_000 }, async () => {
+        const productId = newestPath === "manual" ? 1764600040 : 1764600041;
+        const manualEntered = deferred();
+        const manualFinish = deferred();
+        const dailyEntered = deferred();
+        const dailyFinish = deferred();
+        // Put the scheduled timestamp on either side of the real manual DB
+        // clock, without sleeps or changing process-wide time.
+        const dailyAt = new Date(Date.now() + (newestPath === "daily" ? 3_600_000 : -3_600_000));
+        let dailyAttempts = 0;
+        await withStockProviders(productId, async () => {
+          manualEntered.resolve();
+          await manualFinish.promise;
+          return true;
+        }, async () => {
+          const dailyDeps = {
+            isWcConfigured: () => true,
+            threshold: 5,
+            now: dailyAt,
+            fetchProducts: async () => [{
+              id: productId, name: `Race stock ${productId}`,
+              stock_quantity: 0, stock_status: "outofstock",
+            }],
+            sendEmail: async () => {
+              dailyAttempts++;
+              dailyEntered.resolve();
+              await dailyFinish.promise;
+              return true;
+            },
+          };
+          // Start the daily read before the manual send records any history.
+          const daily = runLowStockAlert(dailyDeps);
+          let manual: ReturnType<typeof patch> | undefined;
+          let newest: Awaited<ReturnType<typeof stockHistory>>;
+          try {
+            await dailyEntered.promise;
+            manual = patch(baseUrl, `/api/uc/admin/inventory/${productId}`,
+              { stockQuantity: 0 }, adminToken);
+            await manualEntered.promise;
+            assert.equal(await stockHistory(productId), undefined,
+              "neither pending provider may create suppression state");
+            if (newestPath === "manual") {
+              manualFinish.resolve();
+              assert.equal((await manual).status, 200);
+              newest = await stockHistory(productId);
+              dailyFinish.resolve();
+              assert.equal((await daily).emailed, true);
+            } else {
+              dailyFinish.resolve();
+              assert.equal((await daily).emailed, true);
+              newest = await stockHistory(productId);
+              assert.equal(newest?.date.toISOString(), dailyAt.toISOString());
+              manualFinish.resolve();
+              assert.equal((await manual).status, 200);
+            }
+          } finally {
+            manualFinish.resolve();
+            dailyFinish.resolve();
+            await Promise.allSettled([daily, ...(manual ? [manual] : [])]);
+          }
+          assert.ok(newest);
+          assert.equal((await stockHistory(productId))?.at, newest.at,
+            "an older write must not shorten the newest successful delivery's quiet period");
+
+          const quietEnd = newest.date.getTime() + 24 * 60 * 60 * 1_000;
+          assert.equal((await runLowStockAlert({
+            ...dailyDeps, now: new Date(quietEnd - 1),
+          })).emailed, false, "the full 24-hour quiet period must remain in effect");
+          assert.equal(dailyAttempts, 1);
+          // PostgreSQL's manual timestamp has microseconds; JS dates have ms.
+          assert.equal((await runLowStockAlert({
+            ...dailyDeps, now: new Date(quietEnd + 1),
+          })).emailed, true, "a product becomes retry-eligible after the quiet period");
+          assert.equal(dailyAttempts, 2);
+        });
+      });
+  }
+
+  for (const failure of ["rejected", "thrown"] as const) {
+    for (const existingHistory of [false, true]) {
+      it(`a ${failure} manual send ${existingHistory ? "preserves expired history" : "creates no history"} and allows a daily retry`,
+        { timeout: 10_000 }, async () => {
+          const productId = 1764600050 + (failure === "thrown" ? 2 : 0) + Number(existingHistory);
+          const expiredAt = new Date(Date.now() - 48 * 60 * 60 * 1_000);
+          if (existingHistory) {
+            await pool.query(
+              "INSERT INTO uc_low_stock_alerts (product_id, alerted_at) VALUES ($1, $2)",
+              [productId, expiredAt],
+            );
+          }
+          const beforeFailure = await stockHistory(productId);
+          let manualAttempts = 0;
+          await withStockProviders(productId, async () => {
+            manualAttempts++;
+            if (failure === "thrown") throw new Error("simulated email network failure");
+            return false;
+          }, async () => {
+            const result = await patch(baseUrl, `/api/uc/admin/inventory/${productId}`,
+              { stockQuantity: 0 }, adminToken);
+            assert.equal(result.status, 200, "email failure must not undo a confirmed stock update");
+            assert.equal(manualAttempts, 1, "the manual path must actually attempt delivery");
+            assert.equal((await stockHistory(productId))?.at, beforeFailure?.at,
+              "failed manual delivery must not create or advance suppression history");
+            let dailyAttempts = 0;
+            const retryAt = new Date();
+            const retry = await runLowStockAlert({
+              isWcConfigured: () => true,
+              threshold: 5,
+              now: retryAt,
+              fetchProducts: async () => [{
+                id: productId, name: `Race stock ${productId}`,
+                stock_quantity: 0, stock_status: "outofstock",
+              }],
+              sendEmail: async () => { dailyAttempts++; return true; },
+            });
+            assert.equal(retry.emailed, true);
+            assert.equal(dailyAttempts, 1, "a failed manual send must leave daily retry eligibility intact");
+            assert.equal((await stockHistory(productId))?.date.toISOString(), retryAt.toISOString());
+          });
+        });
+    }
+  }
 });
 
 // ─── API: PATCH /admin/integrations ──────────────────────────────────────────
