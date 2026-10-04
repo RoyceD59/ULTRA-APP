@@ -531,8 +531,24 @@ export default function CheckoutScreen() {
         await createOrder('stripe', session.sessionId);
       } catch (e) {
         setProcessing(false);
-        // Server returns 402 if Stripe session is not paid — surface that to the user
-        Alert.alert('Payment not confirmed', (e as Error).message ?? 'Stripe payment was not completed. No order was created.');
+        // Only describe an unpaid checkout when the server confirms it.
+        // Other verification errors must not imply that no payment was made.
+        const unpaid = e instanceof ApiError && e.status === 402 &&
+          /Stripe session status: unpaid|Stripe payment was not completed/i.test(e.message);
+        Alert.alert(
+          'Payment not confirmed',
+          unpaid
+            ? 'You closed Stripe checkout before completing payment. No order was created. You can try again or pay with Cash on Delivery instead.'
+            : (e instanceof Error ? e.message : null) || 'We could not confirm your Stripe payment. Please try again.',
+          [
+            { text: 'Try again', onPress: () => handleStripeCheckout() },
+            {
+              text: 'Pay with COD instead',
+              onPress: () => { void changePaymentMethod('cod'); },
+              style: 'cancel',
+            },
+          ],
+        );
       }
     } catch (e) {
       setProcessing(false);
