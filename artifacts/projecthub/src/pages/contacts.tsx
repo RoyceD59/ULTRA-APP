@@ -3,7 +3,6 @@ import {
   useListContacts, 
   useCreateContact, 
   useGetContact,
-  useUpdateContact, 
   useDeleteContact,
   useAddContactMethod,
   useDeleteContactMethod,
@@ -34,6 +33,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ImportContactsDialog } from "@/components/contacts/ImportContactsDialog";
 import { ConnectSheetDialog } from "@/components/contacts/ConnectSheetDialog";
+import { ContactEditSection } from "@/components/contacts/ContactEditSection";
 import { getAuthHeaders } from "@/lib/team-auth";
 
 const contactSchema = z.object({
@@ -343,6 +343,7 @@ export default function Contacts() {
       />
 
       <ContactDetailsSheet 
+        key={selectedContactId ?? "closed"}
         contactId={selectedContactId} 
         onClose={() => setSelectedContactId(null)} 
       />
@@ -505,6 +506,8 @@ function ContactDetailsSheet({ contactId, onClose }: { contactId: number | null,
 
             <ScrollArea className="flex-1 p-6">
               <div className="space-y-6">
+                <ContactEditSection contact={contact} />
+                <Separator />
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Communication Methods</h3>
                   <div className="space-y-3">
