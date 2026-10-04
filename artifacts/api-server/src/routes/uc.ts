@@ -4875,7 +4875,7 @@ router.delete("/uc/admin/orders/:id", async (req: Request, res: Response): Promi
 });
 
 // GET /api/uc/admin/orders/recovery-count — count of unresolved webhook recovery
-// orders (not completed and not cancelled). Used by the nav badge so the team
+// orders (not processing, completed or cancelled). Used by the nav badge so the team
 // can see pending recovery orders without navigating to the orders page.
 // Requires admin auth. Intentionally lightweight — no line-item joins.
 router.get("/uc/admin/orders/recovery-count", async (req: Request, res: Response): Promise<void> => {
@@ -4892,6 +4892,7 @@ router.get("/uc/admin/orders/recovery-count", async (req: Request, res: Response
       .where(
         and(
           eq(ucOrdersTable.webhookRecovery, true),
+          ne(ucOrdersTable.status, "processing"),
           ne(ucOrdersTable.status, "completed"),
           ne(ucOrdersTable.status, "cancelled"),
         )

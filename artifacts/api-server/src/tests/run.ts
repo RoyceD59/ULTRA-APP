@@ -270,6 +270,8 @@ const testGlob = process.env["TEST_GLOB"];
 // The default run executes ordinary files in one parallel phase, then these
 // files in a separate serial phase against the same isolated database.
 const SHARED_STATE_FILES = [
+  // Recovery badge assertions compare a global count; isolate other suites' writes.
+  "admin-recovery-status",
   "agent-oauth-routes",
   "blog-editorial",
   "canonical-dual-write-routes",

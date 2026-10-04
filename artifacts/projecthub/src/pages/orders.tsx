@@ -264,7 +264,7 @@ function OrderActions({
 
   async function setStatus(status: string) {
     setBusy(status);
-    await call("PATCH", "", { status });
+    await call("PATCH", status === "dispatched" ? "" : "/status", { status });
     setBusy(null);
   }
 
@@ -293,6 +293,14 @@ function OrderActions({
         {order.webhookRecovery && (
           <RecoveryEnrichmentDialog order={order} token={token} onChanged={onChanged} disabled={busy !== null || isRefunded} />
         )}
+        {order.webhookRecovery && (["processing", "completed"] as const).map(status => (
+          <Button key={status} variant="outline" size="sm" className="min-h-11 sm:min-h-7 text-xs"
+            disabled={busy !== null || isRefunded || order.status === status || (status === "processing" && order.status === "completed")}
+            onClick={() => setStatus(status)}>
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+            {busy === status ? "Saving…" : `Mark ${status}`}
+          </Button>
+        ))}
         {!isRefunded && !["dispatched", "completed", "cancelled", "declined"].includes(order.status) && (
           <Button variant="outline" size="sm" className="min-h-11 sm:min-h-7 text-xs"
             disabled={busy !== null || (order.webhookRecovery && !order.recoveryEnrichedAt)}
@@ -765,7 +773,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
   const recoveryOrders  = orders?.filter(o => o.webhookRecovery) ?? [];
   const unresolvedCount = recoveryOrders.filter(
-    o => o.status !== "completed" && o.status !== "cancelled"
+    o => !["processing", "completed", "cancelled"].includes(o.status)
   ).length;
 
   // Status chips — fixed order, only statuses present in the data are shown
@@ -983,7 +991,10 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
               key={order.id}
               order={order}
               token={token}
-              onChanged={() => refetch()}
+              onChanged={() => {
+                void refetch();
+                window.dispatchEvent(new Event("uc-orders-changed"));
+              }}
               gapItems={gapsByOrderId.get(order.id)}
             />
           ))}

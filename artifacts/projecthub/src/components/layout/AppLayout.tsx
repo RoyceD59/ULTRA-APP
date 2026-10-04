@@ -5,7 +5,7 @@ import {
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
   AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch, MessagesSquare, Newspaper
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { changePassword, clearTeamAuth, getTeamToken, getTeamUser, isTeamAdmin, canView } from "@/lib/team-auth";
 import type { PageSlug } from "@/lib/team-auth";
@@ -81,16 +81,29 @@ function writeSecurityBannerDismissal(dismissed: boolean) {
 
 function useCount(path: string, select: (body: any) => number) {
   const [count, setCount] = useState(0);
+  const selector = useRef(select);
+  selector.current = select;
+  const token = getTeamToken();
   useEffect(() => {
-    const token = getTeamToken();
-    if (!token) return;
+    if (!token) { setCount(0); return; }
     let active = true;
-    fetch(apiUrl(path), { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => res.ok ? res.json() : null)
-      .then((body) => { if (active && body) setCount(select(body)); })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, [path, select]);
+    let request = 0;
+    const refresh = () => {
+      const currentRequest = ++request;
+      void fetch(apiUrl(path), { headers: { Authorization: `Bearer ${token}` } })
+        .then((res) => res.ok ? res.json() : null)
+        .then((body) => { if (active && currentRequest === request && body) setCount(selector.current(body)); })
+        .catch(() => undefined);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("uc-orders-changed", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("uc-orders-changed", refresh);
+    };
+  }, [path, token]);
   return count;
 }
 
