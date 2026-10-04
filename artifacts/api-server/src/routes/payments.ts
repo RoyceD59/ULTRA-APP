@@ -13,7 +13,7 @@ import { paymentLimiter } from "../lib/rate-limiters.js";
 import { enqueueReferralSettlement } from "./referrals.js";
 import { reconcileCanonicalPurchaseDualWrite } from "../lib/canonical-purchase-dual-write.js";
 import { prepareCheckoutOrder, bindCheckoutPayment, confirmCheckoutOrder } from "../lib/checkout-orders.js";
-import { notifyConfirmedCheckout, verifyPaymentOnServer } from "./uc.js";
+import { getTeamAlertEmail, notifyConfirmedCheckout, verifyPaymentOnServer } from "./uc.js";
 import { verifyToken } from "../lib/jwt.js";
 
 async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
@@ -35,7 +35,8 @@ async function enqueueReferralSettlementIfReady(order: { id: number; userId: str
  *
  * The team phone number is read from the DB (team_settings.team_alert_phone) first,
  * falling back to the TEAM_ALERT_PHONE env var so existing deployments are unaffected.
- * Changes made through the admin panel take effect immediately (60-second cache TTL).
+ * Email uses the shared team alert setting: DB → TEAM_ALERT_EMAIL → info@ucfilters.com.
+ * Admin saves invalidate the caches immediately; other processes refresh within 60 seconds.
  */
 /** @internal Exported so unit tests can call it directly without an HTTP server. */
 export function alertTeamRecoveryOrder(params: {
@@ -48,13 +49,13 @@ export function alertTeamRecoveryOrder(params: {
   const { subject, body, smsText, template, orderId } = params;
 
   // Primary: email
-  void sendRecoveryAlertEmail({
+  void getTeamAlertEmail().then((teamEmail) => sendRecoveryAlertEmail({
     from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
-    to:      "info@ucfilters.com",
+    to:      teamEmail,
     subject,
     text:    body,
     meta:    { template, orderId },
-  }, sendViaResend).catch(() => {
+  }, sendViaResend)).catch(() => {
     console.error(`[payments] RECOVERY_ALERT_EMAIL_FAILED: unexpected retry failure; check recovery order ${orderId} for manual fulfilment`);
   });
 

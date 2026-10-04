@@ -1223,10 +1223,11 @@ export async function runStaleRecoveryOrderDigest(
       stale.map((o) => `#${o.id}(${o.paymentMethod})`).join(", ") +
       ". Check admin panel.";
 
-    // Email to team
+    // Use the same live setting as immediate recovery-order alerts.
+    const teamEmail = await getTeamAlertEmail();
     const emailOk = await sendEmail({
       from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
-      to:      "info@ucfilters.com",
+      to:      teamEmail,
       subject: `⏰ ${stale.length} recovery order${stale.length > 1 ? "s" : ""} still unfulfilled after 24 h`,
       text:    emailBody,
       meta:    { template: "recovery_order_digest" },
@@ -1269,7 +1270,7 @@ export async function runStaleRecoveryOrderDigest(
         .values({
           channel:      "digest",
           provider:     "none",
-          recipient:    "info@ucfilters.com",
+          recipient:    teamEmail,
           template:     "recovery_order_digest",
           messageBody:  emailBody,
           status:       "failed",

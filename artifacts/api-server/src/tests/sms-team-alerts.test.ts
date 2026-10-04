@@ -135,6 +135,87 @@ function waitTick(ms = 80): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// ─── Recovery email routing (no real provider calls or shared DB writes) ────────
+
+describe("alertTeamRecoveryOrder — configurable email recipient", () => {
+  const previousEmail = process.env["TEAM_ALERT_EMAIL"];
+  const previousResendBase = process.env["RESEND_BASE_URL"];
+
+  before(() => {
+    installSelectStub();
+    installInsertStub();
+    installFetchStub();
+    // Force the existing provider adapter onto the intercepted HTTP path.
+    process.env["RESEND_BASE_URL"] = "https://api.resend.com";
+  });
+
+  beforeEach(async () => {
+    capturedRequests = [];
+    selectStub = [];
+    delete process.env["TEAM_ALERT_EMAIL"];
+    installSelectStub();
+    const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
+    invalidateTeamAlertEmailCache();
+  });
+
+  after(async () => {
+    restoreSelect();
+    restoreInsert();
+    restoreFetch();
+    if (previousEmail === undefined) delete process.env["TEAM_ALERT_EMAIL"];
+    else process.env["TEAM_ALERT_EMAIL"] = previousEmail;
+    if (previousResendBase === undefined) delete process.env["RESEND_BASE_URL"];
+    else process.env["RESEND_BASE_URL"] = previousResendBase;
+    const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
+    invalidateTeamAlertEmailCache();
+  });
+
+  async function sendAlert(): Promise<string> {
+    capturedRequests = [];
+    const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
+    alertTeamRecoveryOrder({
+      subject: "Recovery recipient test",
+      body: "Order details",
+      smsText: "Recovery recipient test",
+      template: "payment_recovery_alert",
+      orderId: 19401,
+    });
+    await waitTick();
+    const requests = capturedRequests.filter((request) => request.url.includes("resend.com"));
+    assert.equal(requests.length, 1, "Exactly one recovery email must be sent");
+    return JSON.parse(requests[0]!.bodyText).to as string;
+  }
+
+  it("uses the built-in address when neither DB nor environment is configured", async () => {
+    assert.equal(await sendAlert(), "info@ucfilters.com");
+  });
+
+  it("uses the environment fallback when no DB address is configured", async () => {
+    process.env["TEAM_ALERT_EMAIL"] = "environment@example.com";
+    assert.equal(await sendAlert(), "environment@example.com");
+  });
+
+  it("prefers the database address over the environment fallback", async () => {
+    process.env["TEAM_ALERT_EMAIL"] = "environment@example.com";
+    selectStub = [{ teamAlertEmail: "database@example.com" }];
+    assert.equal(await sendAlert(), "database@example.com");
+  });
+
+  it("uses the newly saved address on the next alert after shared cache invalidation", async () => {
+    selectStub = [{ teamAlertEmail: "old@example.com" }];
+    assert.equal(await sendAlert(), "old@example.com");
+    selectStub = [{ teamAlertEmail: "new@example.com" }];
+    const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
+    invalidateTeamAlertEmailCache();
+    assert.equal(await sendAlert(), "new@example.com");
+  });
+
+  it("still sends email to the fallback when the database lookup fails", async () => {
+    (db as any).select = () => { throw new Error("Simulated settings DB outage"); };
+    assert.equal(await sendAlert(), "info@ucfilters.com");
+  });
+});
+
 // ─── alertTeamRecoveryOrder ────────────────────────────────────────────────────
 
 describe("alertTeamRecoveryOrder — SMS team alerts", () => {
@@ -166,6 +247,8 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     // Invalidate the phone cache so each test reads fresh env var
     const { invalidateTeamAlertPhoneCache } = await import("../routes/payments.js");
     invalidateTeamAlertPhoneCache();
+    const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
+    invalidateTeamAlertEmailCache();
   });
 
   it("(a) calls sendSms (fires fetch to AT) when TEAM_ALERT_PHONE is set", async () => {
@@ -601,7 +684,46 @@ describe("runStaleRecoveryOrderDigest — digest SMS alerts", () => {
     // so each scenario exercises its own DB/env configuration.
     const { invalidateTeamAlertPhoneCache } = await import("../routes/payments.js");
     invalidateTeamAlertPhoneCache();
+    const { invalidateTeamAlertEmailCache } = await import("../routes/uc.js");
+    invalidateTeamAlertEmailCache();
   });
+
+  for (const emailAccepted of [true, false]) {
+    it(`uses the configured email for the digest${emailAccepted ? "" : " and its failure log"}`, async () => {
+      const email = "recovery-digest@example.com";
+      selectStub = [{
+        id: emailAccepted ? 650 : 651,
+        paymentMethod: "mpesa",
+        total: "6000",
+        status: "pending",
+        paymentReference: "DIGEST-EMAIL",
+        dateCreated: new Date(Date.now() - 30 * 60 * 60 * 1000),
+        webhookRecovery: true,
+        // Also supplies the team_settings lookup without writing shared DB state.
+        teamAlertEmail: email,
+      }];
+      const recipients: string[] = [];
+      const { runStaleRecoveryOrderDigest } = await import("../lib/scheduler.js");
+      await runStaleRecoveryOrderDigest({
+        sendEmail: async (message) => {
+          recipients.push(message.to);
+          return emailAccepted;
+        },
+        sendSmsAwaitable: async () => false,
+      });
+      assert.deepEqual(recipients, [email], "Digest must use the database-configured mailbox");
+      const failures = capturedInserts.filter((row) =>
+        (row as Record<string, unknown>).channel === "digest"
+      ) as Record<string, unknown>[];
+      if (emailAccepted) {
+        assert.equal(failures.length, 0);
+      } else {
+        assert.equal(failures.length, 1);
+        assert.equal(failures[0]!.recipient, email);
+        assert.equal(failures[0]!.status, "failed");
+      }
+    });
+  }
 
   it("(c) sends SMS digest when stale orders exist and TEAM_ALERT_PHONE is set", async () => {
     process.env["TEAM_ALERT_PHONE"] = "+254700000002";

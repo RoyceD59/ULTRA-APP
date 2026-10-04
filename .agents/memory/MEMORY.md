@@ -75,3 +75,4 @@
 - [Schedule-update deduplication](schedule-update-deduplication.md) — dedupe against the applied activation, not a history of lifespan values; returning to an old value is a new correction.
 - [Google Sheets reconnect](google-sheet-reconnect.md) — revoked grants must remain actionable failures; public-sheet fallback must not hide the reconnect reason.
 - [Recovery order enrichment](recovery-order-enrichment-policy.md) — staff dispatch preparation is not account ownership, payment confirmation or a customer delivery notification.
+- [Shared library typecheck freshness](shared-library-typecheck-freshness.md) — refresh referenced declarations before treating missing consumer exports or DB fields as source defects.

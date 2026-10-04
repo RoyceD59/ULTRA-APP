@@ -174,7 +174,7 @@ router.patch(
           },
         });
 
-      // Bust the in-process cache so the next deletion alert uses the new address.
+      // Shared by deletion and recovery-order alerts; the next send uses the new address.
       invalidateTeamAlertEmailCache();
 
       console.info("[admin/payment-settings] Team alert email updated via admin panel:", maskEmail(email));
