@@ -15,6 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   AlertCircle, BellOff, Lock, LogOut, RefreshCw,
   Mail, MessageSquare, RotateCcw, CheckCircle2, Filter, Trash2,
 } from "lucide-react";
@@ -357,16 +362,42 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
                 ? "Checking prune eligibility…"
                 : `${(prunePreview?.eligibleTotal ?? 0).toLocaleString()} ${prunePreview?.eligibleTotal === 1 ? "entry" : "entries"} eligible for pruning`}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => pruneMutation.mutate()}
-              disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
-              title="Delete log entries past their retention window now, without waiting for the nightly job"
-            >
-              <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
-              {pruneMutation.isPending ? "Pruning…" : "Prune now"}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
+                  title="Delete log entries past their retention window now, without waiting for the nightly job"
+                >
+                  <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
+                  {pruneMutation.isPending ? "Pruning…" : "Prune now"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Prune notification logs?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {(prunePreview?.eligibleTotal ?? 0).toLocaleString()} log {prunePreview?.eligibleTotal === 1 ? "entry is" : "entries are"} currently eligible for pruning.
+                    {" "}Confirming will permanently delete log entries past their retention window. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
+                    onClick={() => {
+                      if (!pruneMutation.isPending && prunePreview?.eligibleTotal) {
+                        pruneMutation.mutate();
+                      }
+                    }}
+                  >
+                    Confirm prune
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />

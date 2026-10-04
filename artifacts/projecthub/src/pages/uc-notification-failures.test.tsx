@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import UcNotificationFailuresPage from "./uc-notification-failures";
 
@@ -71,5 +71,75 @@ describe("notification failure search", () => {
     expect(screen.queryByText("No failures on record")).not.toBeInTheDocument();
     search("   ");
     expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(3);
+  });
+});
+
+describe("notification log prune confirmation", () => {
+  let client: QueryClient;
+
+  beforeEach(() => {
+    client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } },
+    });
+    client.setQueryData(["uc-notification-failures", "test-only"], logs);
+    client.setQueryData(["uc-notification-prune-preview", "test-only"], {
+      eligibleSuccess: 1000, eligibleFailure: 234, eligibleTotal: 1234,
+    });
+    vi.stubGlobal("fetch", vi.fn());
+    render(<QueryClientProvider client={client}><UcNotificationFailuresPage /></QueryClientProvider>);
+  });
+
+  afterEach(() => {
+    cleanup();
+    client.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the eligible count and irreversible warning without pruning, and cancels safely", () => {
+    fireEvent.click(screen.getByRole("button", { name: "Prune now" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("1,234 log entries are currently eligible");
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("This action cannot be undone.");
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(3);
+  });
+
+  it("runs the existing authenticated prune request only after confirmation", async () => {
+    vi.mocked(fetch).mockImplementation(async (_url, options) =>
+      new Response(JSON.stringify(options?.method === "POST"
+        ? { deletedSuccess: 1000, deletedFailure: 234, deletedTotal: 1234 }
+        : String(_url).endsWith("prune-preview")
+          ? { eligibleSuccess: 0, eligibleFailure: 0, eligibleTotal: 0 }
+          : logs), { status: 200 }));
+    fireEvent.click(screen.getByRole("button", { name: "Prune now" }));
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm prune" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/uc/admin/notification-logs/prune"),
+      { method: "POST", headers: { Authorization: "Bearer test-only" } },
+    ));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prune now" })).toBeDisabled());
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("uses the current preview count when reopened and prevents pruning with no eligible rows", async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Prune now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    act(() => client.setQueryData(["uc-notification-prune-preview", "test-only"], {
+      eligibleSuccess: 1, eligibleFailure: 0, eligibleTotal: 1,
+    }));
+    await waitFor(() => expect(screen.getByText("1 entry eligible for pruning")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Prune now" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("1 log entry is currently eligible");
+    act(() => client.setQueryData(["uc-notification-prune-preview", "test-only"], {
+      eligibleSuccess: 0, eligibleFailure: 0, eligibleTotal: 0,
+    }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm prune" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm prune" }));
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
