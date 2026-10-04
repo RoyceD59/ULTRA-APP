@@ -206,6 +206,7 @@ test('actual COD method-change guard retains an open unpaid Stripe checkout', as
   const input = { current: { idempotencyKey: 'stable-checkout' } };
   const identity = { current: { idempotencyKey: 'stable-checkout' } };
   const alerts: string[] = [];
+  const busy: boolean[] = [];
   let cancellations = 0;
   const unexpectedMutation = () => assert.fail('Must not clear payment state or switch to COD');
   const change = new Function(
@@ -213,6 +214,7 @@ test('actual COD method-change guard retains an open unpaid Stripe checkout', as
     'orderIdentityRef', 'lastCheckoutRequestIdRef', 'api', 'Alert',
     'setPaymentFrozen', 'cancelMpesaPoll', 'attemptRef', 'pollRef',
     'setMpesaWaiting', 'setProcessing', 'setPaymentMethod',
+    'paystackVerifyAttemptRef', 'paystackVerifyingRef', 'paymentMethodChangingRef',
     `${methodHandler}\nreturn changePaymentMethod;`,
   )(
     'stripe', false, true, input, identity, { current: null },
@@ -225,11 +227,13 @@ test('actual COD method-change guard retains an open unpaid Stripe checkout', as
     } },
     { alert: (title: string) => alerts.push(title) },
     unexpectedMutation, unexpectedMutation, { current: 0 }, { current: null },
-    unexpectedMutation, unexpectedMutation, unexpectedMutation,
+    unexpectedMutation, (value: boolean) => busy.push(value), unexpectedMutation,
+    { current: 0 }, { current: false }, { current: false },
   );
   await change('cod');
   assert.equal(cancellations, 1);
   assert.deepEqual(alerts, ['Payment still pending']);
+  assert.deepEqual(busy, [true, false]);
   assert.equal(input.current?.idempotencyKey, 'stable-checkout');
   assert.equal(identity.current?.idempotencyKey, 'stable-checkout');
 });

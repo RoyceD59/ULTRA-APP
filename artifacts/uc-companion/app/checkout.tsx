@@ -191,6 +191,9 @@ export default function CheckoutScreen() {
   // prior attempt (cancelled, timed-out, or already settled) are silently discarded
   // regardless of when their in-flight network requests resolve.
   const attemptRef = useRef(0);
+  const paystackVerifyAttemptRef = useRef(0);
+  const paystackVerifyingRef = useRef(false);
+  const paymentMethodChangingRef = useRef(false);
   // Persists the CheckoutRequestID of the most recent STK push across retries.
   // Before issuing a new push, handleMpesa queries this ID's status — if the
   // original push completed while the user was on the timeout screen, we create
@@ -207,6 +210,8 @@ export default function CheckoutScreen() {
   useEffect(() => () => {
     mpesaCheckCleanupRef.current?.();
     cancelMpesaPoll(attemptRef, pollRef);
+    paystackVerifyAttemptRef.current++;
+    paystackVerifyingRef.current = false;
   }, []);
 
   // Alison greeting — variant chosen once per checkout visit (stable seed)
@@ -267,24 +272,32 @@ export default function CheckoutScreen() {
   }, [basketKey, fulfillment, activeCode, usingReferralDiscount, paymentFrozen]);
 
   async function changePaymentMethod(method: PaymentMethod) {
-    if (method === paymentMethod || processing) return;
-    if (paymentFrozen && paymentInputRef.current) {
-      try {
+    if (method === paymentMethod || paymentMethodChangingRef.current ||
+        (processing && !paystackVerifyingRef.current)) return;
+    // Retire any in-flight verification before awaiting server cancellation.
+    // The server remains authoritative: an unknown/paid payment cannot become COD.
+    paymentMethodChangingRef.current = true;
+    paystackVerifyAttemptRef.current++;
+    paystackVerifyingRef.current = false;
+    setProcessing(true);
+    try {
+      if (paymentFrozen && paymentInputRef.current) {
         await api.cancelCheckout(paymentInputRef.current.idempotencyKey);
         paymentInputRef.current = null;
         orderIdentityRef.current = null;
         lastCheckoutRequestIdRef.current = null;
         setPaymentFrozen(false);
-      } catch (error) {
-        Alert.alert('Payment still pending', error instanceof Error ? error.message : 'Resume the original payment before changing method.');
-        return;
       }
+      cancelMpesaPoll(attemptRef, pollRef);
+      clearMpesaRetryCheck();
+      setMpesaWaiting(false);
+      setPaymentMethod(method);
+    } catch (error) {
+      Alert.alert('Payment still pending', error instanceof Error ? error.message : 'Resume the original payment before changing method.');
+    } finally {
+      paymentMethodChangingRef.current = false;
+      setProcessing(false);
     }
-    cancelMpesaPoll(attemptRef, pollRef);
-    clearMpesaRetryCheck();
-    setMpesaWaiting(false);
-    setProcessing(false);
-    setPaymentMethod(method);
   }
 
   function validateAddress(): boolean {
@@ -644,9 +657,14 @@ export default function CheckoutScreen() {
    *     2. Verify returns success → order created, navigates to /order/:id.
    */
   async function handlePaystackVerify(reference: string) {
+    if (paymentMethodChangingRef.current) return;
+    const thisAttempt = ++paystackVerifyAttemptRef.current;
+    paystackVerifyingRef.current = true;
     setProcessing(true);
     try {
       const verified = await api.paystackVerify(reference);
+      if (thisAttempt !== paystackVerifyAttemptRef.current) return;
+      paystackVerifyingRef.current = false;
       setProcessing(false);
 
       if (verified.success && verified.status === 'success') {
@@ -672,6 +690,8 @@ export default function CheckoutScreen() {
         }
       }
     } catch (e) {
+      if (thisAttempt !== paystackVerifyAttemptRef.current) return;
+      paystackVerifyingRef.current = false;
       setProcessing(false);
       // Classify verification failures without discarding `reference`: a later
       // manual checkout retry can still verify the same payment reference.
@@ -689,7 +709,9 @@ export default function CheckoutScreen() {
               // Retry verification with the SAME reference — do not re-init a new
               // Paystack session, which would lose the original charge reference.
               text: 'Try again',
-              onPress: () => handlePaystackVerify(reference),
+              onPress: () => {
+                if (thisAttempt === paystackVerifyAttemptRef.current) return handlePaystackVerify(reference);
+              },
             },
             {
               text: 'Pay with COD instead',
