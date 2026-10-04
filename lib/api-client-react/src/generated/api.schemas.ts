@@ -1972,23 +1972,157 @@ export interface SystemStatusUpdate {
   notes?: string;
 }
 
+export type RuntimeDiagnosticEnvelopeSchema = typeof RuntimeDiagnosticEnvelopeSchema[keyof typeof RuntimeDiagnosticEnvelopeSchema];
+
+
+export const RuntimeDiagnosticEnvelopeSchema = {
+  NUMBER_1: 1,
+} as const;
+
+export type RuntimeDiagnosticEnvelopeApp = typeof RuntimeDiagnosticEnvelopeApp[keyof typeof RuntimeDiagnosticEnvelopeApp];
+
+
+export const RuntimeDiagnosticEnvelopeApp = {
+  companion: 'companion',
+  projecthub: 'projecthub',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeEnvironment = typeof RuntimeDiagnosticEnvelopeEnvironment[keyof typeof RuntimeDiagnosticEnvelopeEnvironment];
+
+
+export const RuntimeDiagnosticEnvelopeEnvironment = {
+  production: 'production',
+  development: 'development',
+  preview: 'preview',
+} as const;
+
+export type RuntimeDiagnosticEnvelopePlatform = typeof RuntimeDiagnosticEnvelopePlatform[keyof typeof RuntimeDiagnosticEnvelopePlatform];
+
+
+export const RuntimeDiagnosticEnvelopePlatform = {
+  web: 'web',
+  android: 'android',
+  ios: 'ios',
+  other: 'other',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeBrowser = typeof RuntimeDiagnosticEnvelopeBrowser[keyof typeof RuntimeDiagnosticEnvelopeBrowser];
+
+
+export const RuntimeDiagnosticEnvelopeBrowser = {
+  chrome: 'chrome',
+  safari: 'safari',
+  firefox: 'firefox',
+  edge: 'edge',
+  other: 'other',
+  native: 'native',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeRouteClass = typeof RuntimeDiagnosticEnvelopeRouteClass[keyof typeof RuntimeDiagnosticEnvelopeRouteClass];
+
+
+export const RuntimeDiagnosticEnvelopeRouteClass = {
+  home: 'home',
+  catalogue: 'catalogue',
+  product: 'product',
+  cart: 'cart',
+  checkout: 'checkout',
+  orders: 'orders',
+  account: 'account',
+  auth: 'auth',
+  care: 'care',
+  guides: 'guides',
+  impact: 'impact',
+  rewards: 'rewards',
+  support: 'support',
+  admin: 'admin',
+  monitoring: 'monitoring',
+  projects: 'projects',
+  tasks: 'tasks',
+  other: 'other',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeCategory = typeof RuntimeDiagnosticEnvelopeCategory[keyof typeof RuntimeDiagnosticEnvelopeCategory];
+
+
+export const RuntimeDiagnosticEnvelopeCategory = {
+  render: 'render',
+  unhandled_error: 'unhandled_error',
+  unhandled_rejection: 'unhandled_rejection',
+  api_read_failed: 'api_read_failed',
+  api_read_timeout: 'api_read_timeout',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeFramesItemAsset = typeof RuntimeDiagnosticEnvelopeFramesItemAsset[keyof typeof RuntimeDiagnosticEnvelopeFramesItemAsset];
+
+
+export const RuntimeDiagnosticEnvelopeFramesItemAsset = {
+  application: 'application',
+  vendor: 'vendor',
+  bundle: 'bundle',
+  unknown: 'unknown',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeFramesItem = {
+  asset: RuntimeDiagnosticEnvelopeFramesItemAsset;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  line: number;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  column: number;
+};
+
+export interface RuntimeDiagnosticEnvelope {
+  schema: RuntimeDiagnosticEnvelopeSchema;
+  app: RuntimeDiagnosticEnvelopeApp;
+  environment: RuntimeDiagnosticEnvelopeEnvironment;
+  platform: RuntimeDiagnosticEnvelopePlatform;
+  browser: RuntimeDiagnosticEnvelopeBrowser;
+  /** @pattern ^(?:unknown|development|[0-9]{10,16}-[0-9]{1,10}|[a-f0-9]{40})$ */
+  release: string;
+  routeClass: RuntimeDiagnosticEnvelopeRouteClass;
+  category: RuntimeDiagnosticEnvelopeCategory;
+  /** @pattern ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ */
+  correlationId?: string;
+  /** @maxItems 5 */
+  frames: RuntimeDiagnosticEnvelopeFramesItem[];
+}
+
 export interface MonitoringHistoryPoint {
   at: string;
-  ok: boolean;
+  /** @nullable */
+  ok: boolean | null;
   /** @nullable */
   responseMs?: number | null;
 }
+
+export type MonitoringSiteCheckFreshness = typeof MonitoringSiteCheckFreshness[keyof typeof MonitoringSiteCheckFreshness];
+
+
+export const MonitoringSiteCheckFreshness = {
+  current: 'current',
+  stale: 'stale',
+} as const;
 
 export interface MonitoringSiteCheck {
   key: string;
   label: string;
   url: string;
-  ok: boolean;
+  /** @nullable */
+  ok: boolean | null;
   /** @nullable */
   httpStatus?: number | null;
   /** @nullable */
   responseMs?: number | null;
-  checkedAt: string;
+  /** @nullable */
+  checkedAt: string | null;
+  freshness?: MonitoringSiteCheckFreshness;
+  coverage?: string;
   /** @nullable */
   error?: string | null;
   history: MonitoringHistoryPoint[];
@@ -2025,8 +2159,10 @@ export type MonitoringSnapshotPayments = {
 };
 
 export type MonitoringSnapshotProblems = {
-  recoveryOrders: number;
-  notificationFailures7d: number;
+  /** @nullable */
+  recoveryOrders: number | null;
+  /** @nullable */
+  notificationFailures7d: number | null;
 };
 
 export interface MonitoringSnapshot {
@@ -4167,6 +4303,56 @@ sourcePlatform?: string;
 
 export type GetDashboardActivityParams = {
 limit?: number;
+};
+
+export type GetRuntimeMonitoringParams = {
+app?: GetRuntimeMonitoringApp;
+environment?: GetRuntimeMonitoringEnvironment;
+/**
+ * @maxLength 40
+ */
+release?: string;
+};
+
+export type GetRuntimeMonitoringApp = typeof GetRuntimeMonitoringApp[keyof typeof GetRuntimeMonitoringApp];
+
+
+export const GetRuntimeMonitoringApp = {
+  companion: 'companion',
+  projecthub: 'projecthub',
+} as const;
+
+export type GetRuntimeMonitoringEnvironment = typeof GetRuntimeMonitoringEnvironment[keyof typeof GetRuntimeMonitoringEnvironment];
+
+
+export const GetRuntimeMonitoringEnvironment = {
+  production: 'production',
+  development: 'development',
+  preview: 'preview',
+} as const;
+
+export type GetRuntimeMonitoring200 = { [key: string]: unknown };
+
+export type ConfigureRuntimeAlertsBodyMode = typeof ConfigureRuntimeAlertsBodyMode[keyof typeof ConfigureRuntimeAlertsBodyMode];
+
+
+export const ConfigureRuntimeAlertsBodyMode = {
+  off: 'off',
+  'dry-run': 'dry-run',
+  live: 'live',
+} as const;
+
+export type ConfigureRuntimeAlertsBodyDestination = typeof ConfigureRuntimeAlertsBodyDestination[keyof typeof ConfigureRuntimeAlertsBodyDestination];
+
+
+export const ConfigureRuntimeAlertsBodyDestination = {
+  slack: 'slack',
+  email: 'email',
+} as const;
+
+export type ConfigureRuntimeAlertsBody = {
+  mode: ConfigureRuntimeAlertsBodyMode;
+  destination: ConfigureRuntimeAlertsBodyDestination;
 };
 
 export type ListNotificationLogsParams = {

@@ -1,4 +1,5 @@
 import path from 'path';
+import { execFileSync } from 'node:child_process';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
@@ -28,6 +29,13 @@ if (!basePath) {
 }
 
 export default defineConfig({
+  define: {
+    // Build-time source identity; never an API-fetched "latest" release.
+    'import.meta.env.VITE_RUNTIME_RELEASE': JSON.stringify((() => {
+      try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); }
+      catch { return 'unknown'; }
+    })()),
+  },
   base: basePath,
   plugins: [
     react(),

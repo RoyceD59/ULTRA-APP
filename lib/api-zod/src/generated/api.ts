@@ -3590,14 +3590,16 @@ export const GetMonitoringSnapshotResponse = zod.object({
   "key": zod.string(),
   "label": zod.string(),
   "url": zod.string(),
-  "ok": zod.boolean(),
+  "ok": zod.boolean().nullable(),
   "httpStatus": zod.number().nullish(),
   "responseMs": zod.number().nullish(),
-  "checkedAt": zod.string(),
+  "checkedAt": zod.string().nullable(),
+  "freshness": zod.enum(['current', 'stale']).optional(),
+  "coverage": zod.string().optional(),
   "error": zod.string().nullish(),
   "history": zod.array(zod.object({
   "at": zod.string(),
-  "ok": zod.boolean(),
+  "ok": zod.boolean().nullable(),
   "responseMs": zod.number().nullish()
 }))
 })),
@@ -3613,10 +3615,80 @@ export const GetMonitoringSnapshotResponse = zod.object({
   "detail": zod.string()
 })),
   "problems": zod.object({
-  "recoveryOrders": zod.number(),
-  "notificationFailures7d": zod.number()
+  "recoveryOrders": zod.number().nullable(),
+  "notificationFailures7d": zod.number().nullable()
 })
 })
+
+
+/**
+ * @summary Best-effort privacy-safe JavaScript diagnostic (3 KB, server rate limited)
+ */
+export const collectRuntimeDiagnosticBodyReleaseRegExp = new RegExp('^(?:unknown|development|[0-9]{10,16}-[0-9]{1,10}|[a-f0-9]{40})$');
+export const collectRuntimeDiagnosticBodyCorrelationIdRegExp = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
+export const collectRuntimeDiagnosticBodyFramesMax = 5;
+export const collectRuntimeDiagnosticBodyFramesItemLineMin = 0;
+export const collectRuntimeDiagnosticBodyFramesItemLineMax = 10000000;
+export const collectRuntimeDiagnosticBodyFramesItemColumnMin = 0;
+export const collectRuntimeDiagnosticBodyFramesItemColumnMax = 10000000;
+
+export const CollectRuntimeDiagnosticBody = zod.object({
+  "schema": zod.literal(1),
+  "app": zod.enum(['companion', 'projecthub']),
+  "environment": zod.enum(['production', 'development', 'preview']),
+  "platform": zod.enum(['web', 'android', 'ios', 'other']),
+  "browser": zod.enum(['chrome', 'safari', 'firefox', 'edge', 'other', 'native']),
+  "release": zod.string().regex(collectRuntimeDiagnosticBodyReleaseRegExp),
+  "routeClass": zod.enum(['home', 'catalogue', 'product', 'cart', 'checkout', 'orders', 'account', 'auth', 'care', 'guides', 'impact', 'rewards', 'support', 'admin', 'monitoring', 'projects', 'tasks', 'other']),
+  "category": zod.enum(['render', 'unhandled_error', 'unhandled_rejection', 'api_read_failed', 'api_read_timeout']),
+  "correlationId": zod.string().regex(collectRuntimeDiagnosticBodyCorrelationIdRegExp).optional(),
+  "frames": zod.array(zod.object({
+  "asset": zod.enum(['application', 'vendor', 'bundle', 'unknown']),
+  "line": zod.number().min(collectRuntimeDiagnosticBodyFramesItemLineMin).max(collectRuntimeDiagnosticBodyFramesItemLineMax),
+  "column": zod.number().min(collectRuntimeDiagnosticBodyFramesItemColumnMin).max(collectRuntimeDiagnosticBodyFramesItemColumnMax)
+})).max(collectRuntimeDiagnosticBodyFramesMax)
+})
+
+export const CollectRuntimeDiagnosticResponse = zod.void()
+
+
+/**
+ * @summary Timeout-bounded essential database readiness; public status only
+ */
+export const GetRuntimeReadinessResponse = zod.unknown()
+
+
+/**
+ * @summary Live Monitoring permission required; recent groups and 15-minute API aggregates
+ */
+export const getRuntimeMonitoringQueryReleaseMax = 40;
+
+
+
+export const GetRuntimeMonitoringQueryParams = zod.object({
+  "app": zod.enum(['companion', 'projecthub']).optional(),
+  "environment": zod.enum(['production', 'development', 'preview']).optional(),
+  "release": zod.coerce.string().max(getRuntimeMonitoringQueryReleaseMax).optional()
+})
+
+export const GetRuntimeMonitoringResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Live Monitoring edit permission required; defaults off, no new destinations
+ */
+export const ConfigureRuntimeAlertsBody = zod.object({
+  "mode": zod.enum(['off', 'dry-run', 'live']),
+  "destination": zod.enum(['slack', 'email'])
+})
+
+export const ConfigureRuntimeAlertsResponse = zod.unknown()
+
+
+/**
+ * @summary Monitoring edit permission required; preview only, never dispatches
+ */
+export const DryRunRuntimeAlertResponse = zod.unknown()
 
 
 /**

@@ -64,6 +64,7 @@ import type {
   CommitCustomerOfflineFilterBody,
   CompanionCheckoutQuote,
   CompanionCheckoutQuoteInput,
+  ConfigureRuntimeAlertsBody,
   ConfirmCustomerAssignmentLinkBody,
   Contact,
   ContactInput,
@@ -94,6 +95,8 @@ import type {
   GetLocationAssessment200,
   GetPublishedCompanionBlogArticle200,
   GetPublishedUcGuide200,
+  GetRuntimeMonitoring200,
+  GetRuntimeMonitoringParams,
   GetUcAdminGuide200,
   GetUcLocationRatingAggregateParams,
   HealthStatus,
@@ -190,6 +193,7 @@ import type {
   RewardsQrCandidate,
   RewardsQrInspection,
   RewardsQrRecovery,
+  RuntimeDiagnosticEnvelope,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
   StaffLegacyRegistrationReview,
@@ -9109,6 +9113,380 @@ export function useGetMonitoringSnapshot<TData = Awaited<ReturnType<typeof getMo
 
 
 
+
+export const getCollectRuntimeDiagnosticUrl = () => {
+
+
+
+
+  return `/api/diagnostics`
+}
+
+/**
+ * @summary Best-effort privacy-safe JavaScript diagnostic (3 KB, server rate limited)
+ */
+export const collectRuntimeDiagnostic = async (runtimeDiagnosticEnvelope: RuntimeDiagnosticEnvelope, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getCollectRuntimeDiagnosticUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runtimeDiagnosticEnvelope)
+  }
+);}
+
+
+
+
+
+export const getCollectRuntimeDiagnosticMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof collectRuntimeDiagnostic>>, TError,{data: BodyType<RuntimeDiagnosticEnvelope>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof collectRuntimeDiagnostic>>, TError,{data: BodyType<RuntimeDiagnosticEnvelope>}, TContext> => {
+
+const mutationKey = ['collectRuntimeDiagnostic'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof collectRuntimeDiagnostic>>, {data: BodyType<RuntimeDiagnosticEnvelope>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  collectRuntimeDiagnostic(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CollectRuntimeDiagnosticMutationResult = NonNullable<Awaited<ReturnType<typeof collectRuntimeDiagnostic>>>
+    export type CollectRuntimeDiagnosticMutationBody = BodyType<RuntimeDiagnosticEnvelope>
+    export type CollectRuntimeDiagnosticMutationError = ErrorType<void>
+
+    /**
+ * @summary Best-effort privacy-safe JavaScript diagnostic (3 KB, server rate limited)
+ */
+export const useCollectRuntimeDiagnostic = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof collectRuntimeDiagnostic>>, TError,{data: BodyType<RuntimeDiagnosticEnvelope>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof collectRuntimeDiagnostic>>,
+        TError,
+        {data: BodyType<RuntimeDiagnosticEnvelope>},
+        TContext
+      > => {
+      return useMutation(getCollectRuntimeDiagnosticMutationOptions(options));
+    }
+
+export const getGetRuntimeReadinessUrl = () => {
+
+
+
+
+  return `/api/readyz`
+}
+
+/**
+ * @summary Timeout-bounded essential database readiness; public status only
+ */
+export const getRuntimeReadiness = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getGetRuntimeReadinessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRuntimeReadinessQueryKey = () => {
+    return [
+    `/api/readyz`
+    ] as const;
+    }
+
+
+export const getGetRuntimeReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getRuntimeReadiness>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRuntimeReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRuntimeReadinessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRuntimeReadiness>>> = ({ signal }) => getRuntimeReadiness({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRuntimeReadiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRuntimeReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getRuntimeReadiness>>>
+export type GetRuntimeReadinessQueryError = ErrorType<void>
+
+
+/**
+ * @summary Timeout-bounded essential database readiness; public status only
+ */
+
+export function useGetRuntimeReadiness<TData = Awaited<ReturnType<typeof getRuntimeReadiness>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRuntimeReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRuntimeReadinessQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetRuntimeMonitoringUrl = (params?: GetRuntimeMonitoringParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/monitoring/runtime?${stringifiedParams}` : `/api/admin/monitoring/runtime`
+}
+
+/**
+ * @summary Live Monitoring permission required; recent groups and 15-minute API aggregates
+ */
+export const getRuntimeMonitoring = async (params?: GetRuntimeMonitoringParams, options?: RequestInit): Promise<GetRuntimeMonitoring200> => {
+
+  return customFetch<GetRuntimeMonitoring200>(getGetRuntimeMonitoringUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRuntimeMonitoringQueryKey = (params?: GetRuntimeMonitoringParams,) => {
+    return [
+    `/api/admin/monitoring/runtime`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetRuntimeMonitoringQueryOptions = <TData = Awaited<ReturnType<typeof getRuntimeMonitoring>>, TError = ErrorType<void>>(params?: GetRuntimeMonitoringParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRuntimeMonitoring>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRuntimeMonitoringQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRuntimeMonitoring>>> = ({ signal }) => getRuntimeMonitoring(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRuntimeMonitoring>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRuntimeMonitoringQueryResult = NonNullable<Awaited<ReturnType<typeof getRuntimeMonitoring>>>
+export type GetRuntimeMonitoringQueryError = ErrorType<void>
+
+
+/**
+ * @summary Live Monitoring permission required; recent groups and 15-minute API aggregates
+ */
+
+export function useGetRuntimeMonitoring<TData = Awaited<ReturnType<typeof getRuntimeMonitoring>>, TError = ErrorType<void>>(
+ params?: GetRuntimeMonitoringParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRuntimeMonitoring>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRuntimeMonitoringQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConfigureRuntimeAlertsUrl = () => {
+
+
+
+
+  return `/api/admin/monitoring/runtime/config`
+}
+
+/**
+ * @summary Live Monitoring edit permission required; defaults off, no new destinations
+ */
+export const configureRuntimeAlerts = async (configureRuntimeAlertsBody: ConfigureRuntimeAlertsBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getConfigureRuntimeAlertsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(configureRuntimeAlertsBody)
+  }
+);}
+
+
+
+
+
+export const getConfigureRuntimeAlertsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof configureRuntimeAlerts>>, TError,{data: BodyType<ConfigureRuntimeAlertsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof configureRuntimeAlerts>>, TError,{data: BodyType<ConfigureRuntimeAlertsBody>}, TContext> => {
+
+const mutationKey = ['configureRuntimeAlerts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof configureRuntimeAlerts>>, {data: BodyType<ConfigureRuntimeAlertsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  configureRuntimeAlerts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfigureRuntimeAlertsMutationResult = NonNullable<Awaited<ReturnType<typeof configureRuntimeAlerts>>>
+    export type ConfigureRuntimeAlertsMutationBody = BodyType<ConfigureRuntimeAlertsBody>
+    export type ConfigureRuntimeAlertsMutationError = ErrorType<void>
+
+    /**
+ * @summary Live Monitoring edit permission required; defaults off, no new destinations
+ */
+export const useConfigureRuntimeAlerts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof configureRuntimeAlerts>>, TError,{data: BodyType<ConfigureRuntimeAlertsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof configureRuntimeAlerts>>,
+        TError,
+        {data: BodyType<ConfigureRuntimeAlertsBody>},
+        TContext
+      > => {
+      return useMutation(getConfigureRuntimeAlertsMutationOptions(options));
+    }
+
+export const getDryRunRuntimeAlertUrl = () => {
+
+
+
+
+  return `/api/admin/monitoring/runtime/test`
+}
+
+/**
+ * @summary Monitoring edit permission required; preview only, never dispatches
+ */
+export const dryRunRuntimeAlert = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDryRunRuntimeAlertUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDryRunRuntimeAlertMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dryRunRuntimeAlert>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dryRunRuntimeAlert>>, TError,void, TContext> => {
+
+const mutationKey = ['dryRunRuntimeAlert'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dryRunRuntimeAlert>>, void> = () => {
+
+
+          return  dryRunRuntimeAlert(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DryRunRuntimeAlertMutationResult = NonNullable<Awaited<ReturnType<typeof dryRunRuntimeAlert>>>
+
+    export type DryRunRuntimeAlertMutationError = ErrorType<void>
+
+    /**
+ * @summary Monitoring edit permission required; preview only, never dispatches
+ */
+export const useDryRunRuntimeAlert = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dryRunRuntimeAlert>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dryRunRuntimeAlert>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDryRunRuntimeAlertMutationOptions(options));
+    }
 
 export const getListSystemStatusUrl = () => {
 

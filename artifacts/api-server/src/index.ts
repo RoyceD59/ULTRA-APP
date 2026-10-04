@@ -19,6 +19,8 @@ import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
 import { ensureHydrateTreeSchema } from "./lib/hydrate-tree-schema.js";
 import { ensureCustomerAssignmentTables } from "./lib/customer-assignment-rollout.js";
 import { ensureCheckoutBenefitsSchema } from "./lib/checkout-benefits-schema.js";
+import { ensureRuntimeSchema, flushRuntimeMetrics } from "./lib/runtime-observability.js";
+import { sampleOperationalHealth } from "./lib/runtime-health.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -40,8 +42,10 @@ process.on("uncaughtException", (err) => {
 function shutdown(server: ReturnType<typeof app.listen>, signal: string) {
   logger.info({ signal }, "Shutdown signal received — closing server");
   server.close(() => {
-    logger.info("All connections drained — exiting cleanly");
-    process.exit(0);
+    void flushRuntimeMetrics().finally(() => {
+      logger.info("All connections drained — exiting cleanly");
+      process.exit(0);
+    });
   });
   // Hard-kill after 10 s if connections don't drain in time
   setTimeout(() => {
@@ -54,6 +58,7 @@ function shutdown(server: ReturnType<typeof app.listen>, signal: string) {
 // Add any new columns to sheet_syncs that may not exist on older deployments.
 // Uses IF NOT EXISTS so it is safe to run on every startup.
 async function applyStartupMigrations(): Promise<void> {
+  await ensureRuntimeSchema();
   await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
   // Guide metadata is also created here for existing deployments that predate
   // migration 0045. Keep this DDL in lockstep with lib/db/migrations/0045.
@@ -2421,7 +2426,6 @@ applyStartupMigrations()
       logger.info("Startup migrations completed in migration-only mode");
       process.exit(0);
     }
-
     if (process.env["PREVIEW_SAFE_MODE"] === "1") {
       const server = app.listen(port, (err?: Error) => {
         if (err) {
@@ -2434,6 +2438,11 @@ applyStartupMigrations()
       process.on("SIGINT", () => shutdown(server, "SIGINT"));
       return;
     }
+
+    // Observability is independent of business workers and is disabled in
+    // listener-only isolated preview, just like all other background work.
+    setInterval(() => { void flushRuntimeMetrics(); void sampleOperationalHealth(); }, 60_000).unref();
+    void sampleOperationalHealth();
 
     // Fire-and-forget — a failure here must not prevent the server from starting.
     checkProductionSecurityConfig().catch((err) => {

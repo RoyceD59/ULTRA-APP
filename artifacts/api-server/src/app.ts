@@ -14,8 +14,11 @@ import router from "./routes";
 import { rejectDeletedUcAccounts } from "./lib/uc-deleted-guard.js";
 import productImagesRouter from "./routes/product-images";
 import { logger } from "./lib/logger";
+import { runtimeRequestMiddleware, boundedApiRoute } from "./lib/runtime-observability.js";
+import runtimeDiagnosticsRouter from "./routes/runtime-diagnostics.js";
 
 const app: Express = express();
+app.use(runtimeRequestMiddleware);
 
 // ─── Raw-body capture for routes that need HMAC verification ─────────────────
 // express.json() replaces the readable stream, so we must buffer the raw bytes
@@ -61,12 +64,13 @@ app.use(
 app.use(
   pinoHttp({
     logger,
+      genReqId: (_req, res) => res.locals.correlationId,
     serializers: {
       req(req) {
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          route: boundedApiRoute(req.url || ""),
         };
       },
       res(res) {
@@ -90,6 +94,7 @@ if (process.env.PREVIEW_SAFE_MODE !== "1") {
 // Origin list is built by buildCorsOrigins() so the same logic can be tested
 // without duplicating it.
 app.use((req, res, next) => {
+  res.setHeader("Access-Control-Expose-Headers", "X-Correlation-ID");
   if (req.path === "/api/uc/impact/forest" &&
       (req.method === "GET" || req.method === "HEAD" ||
        (req.method === "OPTIONS" && ["GET", "HEAD"].includes(String(req.headers["access-control-request-method"]))))) {
@@ -97,6 +102,7 @@ app.use((req, res, next) => {
   }
   return cors({ origin: buildCorsOrigins(process.env) })(req, res, next);
 });
+app.use("/api/diagnostics", runtimeDiagnosticsRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

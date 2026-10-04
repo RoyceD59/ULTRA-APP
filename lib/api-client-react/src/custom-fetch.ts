@@ -1,3 +1,4 @@
+import { reportRuntimeReadFailure } from "./runtime-diagnostics";
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
@@ -375,9 +376,19 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response: Response;
+  try { response = await fetch(input, { ...init, method, headers }); }
+  catch (error) {
+    if ((method === "GET" || method === "HEAD") && !init.signal?.aborted) {
+      reportRuntimeReadFailure((error as { name?: string })?.name === "TimeoutError" ? "api_read_timeout" : "api_read_failed");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
+    if ((method === "GET" || method === "HEAD") && response.status >= 500) {
+      reportRuntimeReadFailure("api_read_failed", response.headers.get("X-Correlation-ID") || undefined);
+    }
     // Notify auth-aware components so expired/revoked sessions redirect to /login
     if (response.status === 401 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("projecthub:unauthorized"));
@@ -393,5 +404,12 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  try {
+    return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  } catch (error) {
+    if ((method === "GET" || method === "HEAD") && !init.signal?.aborted) {
+      reportRuntimeReadFailure("api_read_failed", response.headers.get("X-Correlation-ID") || undefined);
+    }
+    throw error;
+  }
 }

@@ -579,6 +579,8 @@ async function main() {
   const expoPublicReplId = getExpoPublicReplId();
   const baseUrl = `https://${domain}`;
   const timestamp = `${Date.now()}-${process.pid}`;
+  // Reuse release-consistency identity; do not create an update channel.
+  process.env.EXPO_PUBLIC_COMPANION_BUILD_ID = timestamp;
 
   prepareDirectories(timestamp);
   clearMetroCache();

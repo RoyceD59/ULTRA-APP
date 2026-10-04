@@ -9,6 +9,7 @@
  */
 
 import { apiUrl } from "./api-base";
+import { reportRuntimeReadFailure } from "@workspace/api-client-react/config";
 
 const TOKEN_KEY = "projecthub:token";
 const USER_KEY  = "projecthub:user";
@@ -200,7 +201,13 @@ export async function apiFetch<T = unknown>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(apiUrl(path), { ...opts, headers });
+  let res: Response;
+  try { res = await fetch(apiUrl(path), { ...opts, headers }); }
+  catch (error) {
+    if ((!opts.method || opts.method === "GET") && !opts.signal?.aborted) reportRuntimeReadFailure("api_read_failed");
+    throw error;
+  }
+  if ((!opts.method || opts.method === "GET") && res.status >= 500) reportRuntimeReadFailure("api_read_failed", res.headers.get("X-Correlation-ID") || undefined);
   if (!res.ok) {
     if (res.status === 401) handleUnauthorizedResponse();
     const data = await res.json().catch(() => ({})) as { error?: string };

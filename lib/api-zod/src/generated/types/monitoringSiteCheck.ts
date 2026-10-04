@@ -6,17 +6,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MonitoringHistoryPoint } from './monitoringHistoryPoint';
+import type { MonitoringSiteCheckFreshness } from './monitoringSiteCheckFreshness';
 
 export interface MonitoringSiteCheck {
   key: string;
   label: string;
   url: string;
-  ok: boolean;
+  /** @nullable */
+  ok: boolean | null;
   /** @nullable */
   httpStatus?: number | null;
   /** @nullable */
   responseMs?: number | null;
-  checkedAt: string;
+  /** @nullable */
+  checkedAt: string | null;
+  freshness?: MonitoringSiteCheckFreshness;
+  coverage?: string;
   /** @nullable */
   error?: string | null;
   history: MonitoringHistoryPoint[];

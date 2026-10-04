@@ -84,3 +84,4 @@
 - [Customer signup reporting](customer-signup-reporting.md) — user chose Africa/Nairobi; Monday and first-of-month midnight resets must not follow database timezone settings.
 - [Field-review reminder policy](field-review-reminder-policy.md) — warn once per review cycle; becoming overdue alone does not authorize a second reminder.
 - [Page loader presentation](page-loader-presentation.md) — user chose a single blue droplet with visible loading text; future artwork restyles must retain the text.
+- [Runtime observability policy](runtime-observability-policy.md) — public diagnostics are untrusted operational evidence; ambiguous alert delivery must not be silently replayed.

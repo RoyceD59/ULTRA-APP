@@ -4,7 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { TouchableOpacity, Text, AppState, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as SplashScreen from 'expo-splash-screen';
@@ -24,6 +24,7 @@ import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
 import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
 import { installQueryConnectivity } from '@/lib/queryConnectivity';
 import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
+import { installCompanionDiagnostics, setDiagnosticRoute } from '@/lib/runtimeDiagnostics';
 
 // Set API base URL before any component renders
 import ConnectionStatusFrame from '@/components/ConnectionStatusFrame';
@@ -61,6 +62,8 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
+  const pathname = usePathname();
+  useEffect(() => setDiagnosticRoute(pathname), [pathname]);
   usePublicWebDocument();
   const router = useRouter();
   const { token, mustChangePassword } = useAuth();
@@ -156,6 +159,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  useEffect(() => installCompanionDiagnostics(), []);
   useEffect(() => {
     if (Platform.OS === 'web') webAnalyticsLoader.initialize();
     if (Platform.OS === 'web') initializeCompanionFieldVitals();

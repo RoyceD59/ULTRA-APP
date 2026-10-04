@@ -1,3 +1,4 @@
+import { reportRuntimeReadFailure } from '@workspace/api-client-react/config';
 import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
@@ -491,11 +492,20 @@ export function useApi() {
       else signal.addEventListener('abort', abort, { once: true });
     }
     const timer = controller ? setTimeout(abort, deadlineMs) : null;
+    let correlationId: string | undefined;
     try {
       const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders(), signal: controller?.signal ?? signal });
+      correlationId = res.headers.get('X-Correlation-ID') || undefined;
+      if (res.status >= 500) reportRuntimeReadFailure('api_read_failed', correlationId);
       if (!res.ok) return await throwResponseError(res);
       // Keep the deadline armed while the response body is arriving too.
       return await res.json() as T;
+    } catch (error) {
+      // User cancellation and expected auth/validation are not operational failures.
+      if (!signal?.aborted && !(error instanceof ApiError)) {
+        reportRuntimeReadFailure(controller?.signal.aborted ? 'api_read_timeout' : 'api_read_failed', correlationId);
+      }
+      throw error;
     } finally {
       if (timer) clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
