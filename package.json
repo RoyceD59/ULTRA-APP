@@ -37,6 +37,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "pnpm --filter @workspace/api-zod run check:phone && tsc --build",
     "test:dependency-security": "node --test scripts/tests/dependency-security.test.mjs",
+    "test:customers-browser": "PROJECTHUB_BROWSER_TEST=1 TEST_GLOB=src/tests/browser/customer-export.test.ts pnpm --filter @workspace/api-server test",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
   "private": true,

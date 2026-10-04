@@ -23,3 +23,14 @@ Intercepted browser fixtures must return each endpoint's actual response shape. 
 **Why:** Broad safe-read fallbacks produced home/tree rendering errors during an isolated Companion check, requiring multiple fixture corrections before the actual changed flow could be verified.
 
 **How to apply:** Map only the required endpoints to contract-shaped synthetic responses, and mark unrelated programme/evidence reads unavailable. Distinguish fixture failures from application defects before editing application code.
+
+Offline browser checks should distinguish optional presentation assets from
+unexpected service calls while still blocking all outbound traffic.
+
+**Why:** A fully successful signed-in export was initially reported as failed
+solely because the page requested optional remote font CSS. That is not evidence
+of an export or authentication failure.
+
+**How to apply:** Explicitly classify known optional assets in isolated checks;
+keep unknown outbound requests as failures. Do not allow real providers just to
+make a test pass, or change product code to fix a test-environment restriction.
