@@ -34,6 +34,7 @@ import assert from 'node:assert/strict';
 // ── AsyncStorage stub ─────────────────────────────────────────────────────────
 // @ts-ignore — stub exposes private helpers not in real package types
 import AsyncStorageStub from '@react-native-async-storage/async-storage';
+import { _setGates } from '@react-native-async-storage/async-storage';
 
 const _resetStorage: () => void = (AsyncStorageStub as any)._reset;
 
@@ -82,6 +83,22 @@ describe('reminderOptInStorage — key builder', () => {
 
 describe('reminderOptInStorage — read / write round-trip', () => {
   beforeEach(() => { _resetStorage(); });
+
+  for (const action of ['Enable Reminders', 'Skip for now']) {
+    it(`rejects a failed seen write for ${action} and allows a durable retry`, async () => {
+      const failure = new Error('Device storage unavailable');
+      _setGates({ set: async () => { throw failure; } });
+      await assert.rejects(
+        markReminderOptInSeen(PRODUCT_ID, ACTIVATED_AT, USER_A),
+        failure,
+      );
+      assert.equal(await wasReminderOptInSeen(PRODUCT_ID, ACTIVATED_AT, USER_A), false);
+      _setGates({});
+      await markReminderOptInSeen(PRODUCT_ID, ACTIVATED_AT, USER_A);
+      assert.equal(await wasReminderOptInSeen(PRODUCT_ID, ACTIVATED_AT, USER_A), true);
+      assert.equal(await wasReminderOptInSeen(PRODUCT_ID, ACTIVATED_AT, USER_B), false);
+    });
+  }
 
   // B. No flag → returns false (fresh device / new registration).
   it('B: wasReminderOptInSeen returns false when no flag has been stored', async () => {

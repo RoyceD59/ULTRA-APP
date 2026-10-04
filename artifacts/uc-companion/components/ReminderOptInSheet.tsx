@@ -9,11 +9,11 @@
  *     fails all three default to OFF so the sheet is still usable.
  *   • Tapping "Enable Reminders" POSTs only the channels the user switched on.
  *   • "Skip for now" and the × dismiss without any network call.
- *   • The sheet is never shown again for the same registration
- *     (dismissal flag stored in AsyncStorage, keyed by productId+activatedAt).
+ *   • Dismissal is persisted per registration and account. Storage failures
+ *     offer retry or an explicit close-without-saving warning.
  *   • Signed-out callers must not render this component.
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity,
   Switch, Platform, ActivityIndicator,
@@ -58,6 +58,8 @@ export default function ReminderOptInSheet({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pendingDismissal, setPendingDismissal] = useState<'enabled' | 'skipped' | null>(null);
+  const busy = useRef(false);
 
   // Pre-fill toggles with the customer's existing channel preferences each time
   // the sheet becomes visible. Falls back to all-OFF if the fetch fails.
@@ -67,6 +69,7 @@ export default function ReminderOptInSheet({
     if (!visible) return;
     let cancelled = false;
     setError('');
+    setPendingDismissal(null);
     void applyReminderPreFill(
       () => api.getServerNotifPrefs(),
       setLoading,
@@ -87,30 +90,64 @@ export default function ReminderOptInSheet({
     [],
   );
 
+  async function persistDismissal(outcome: 'enabled' | 'skipped') {
+    try {
+      await markReminderOptInSeen(productId, activatedAt, userId);
+    } catch {
+      setPendingDismissal(outcome);
+      setError(
+        `${outcome === 'enabled' ? 'Your reminder preferences were saved. ' : ''}` +
+        'Could not save this prompt’s dismissal on your device. Retry saving, or close without saving. ' +
+        'If you close without saving, this prompt may appear again next time.',
+      );
+      return;
+    }
+    onClose();
+  }
+
   async function handleEnable() {
+    if (busy.current || loading || (!pendingDismissal && !anyEnabled)) return;
+    busy.current = true;
     setSaving(true);
     setError('');
     try {
+      if (pendingDismissal) {
+        await persistDismissal(pendingDismissal);
+        return;
+      }
       await api.updatePushPrefs({
         reminderEmail:     channels.reminderEmail,
         reminderSms:       channels.reminderSms,
         reminderWhatsapp:  channels.reminderWhatsapp,
       });
-      await markReminderOptInSeen(productId, activatedAt, userId);
-      onClose();
+      await persistDismissal('enabled');
     } catch {
       setError('Could not save your preferences. Please try again.');
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   }
 
   async function handleSkip() {
-    await markReminderOptInSeen(productId, activatedAt, userId);
-    onClose();
+    if (busy.current) return;
+    // Only offer this escape after explaining that persistence failed.
+    if (pendingDismissal) {
+      onClose();
+      return;
+    }
+    busy.current = true;
+    setSaving(true);
+    setError('');
+    try {
+      await persistDismissal('skipped');
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
   }
 
-  // Reset toggles each time the sheet opens so repeat views start clean.
+  // Android back follows the same guarded dismissal path as Skip and ×.
   const handleRequestClose = () => { void handleSkip(); };
 
   return (
@@ -132,9 +169,10 @@ export default function ReminderOptInSheet({
             </View>
             <TouchableOpacity
               onPress={handleSkip}
+              disabled={saving}
               style={styles.closeBtn}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityLabel="Skip reminder opt-in"
+              accessibilityLabel={pendingDismissal ? 'Close without saving dismissal' : 'Skip reminder opt-in'}
             >
               <Ionicons name="close" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
@@ -164,7 +202,7 @@ export default function ReminderOptInSheet({
                     label="Email reminders"
                     value={channels.reminderEmail}
                     onToggle={v => toggle('reminderEmail', v)}
-                    disabled={saving}
+                     disabled={saving || !!pendingDismissal}
                     colors={colors}
                   />
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -175,7 +213,7 @@ export default function ReminderOptInSheet({
                     label="Text message (SMS)"
                     value={channels.reminderSms}
                     onToggle={v => toggle('reminderSms', v)}
-                    disabled={saving}
+                     disabled={saving || !!pendingDismissal}
                     colors={colors}
                   />
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -186,7 +224,7 @@ export default function ReminderOptInSheet({
                     label="WhatsApp"
                     value={channels.reminderWhatsapp}
                     onToggle={v => toggle('reminderWhatsapp', v)}
-                    disabled={saving}
+                     disabled={saving || !!pendingDismissal}
                     colors={colors}
                   />
                 </>
@@ -194,31 +232,31 @@ export default function ReminderOptInSheet({
             </View>
 
             {!!error && (
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.errorText} accessibilityRole="alert">{error}</Text>
             )}
 
             {/* Enable button — only active when prefs are loaded and something is toggled on */}
             <TouchableOpacity
               onPress={handleEnable}
-              disabled={loading || !anyEnabled || saving}
+               disabled={loading || (!pendingDismissal && !anyEnabled) || saving}
               activeOpacity={0.85}
               style={[
                 styles.enableBtn,
                 {
                   backgroundColor: colors.primary,
-                  opacity: loading || !anyEnabled || saving ? 0.5 : 1,
+                   opacity: loading || (!pendingDismissal && !anyEnabled) || saving ? 0.5 : 1,
                 },
               ]}
             >
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={styles.enableBtnTxt}>Enable Reminders</Text>}
+                 : <Text style={styles.enableBtnTxt}>{pendingDismissal ? 'Retry saving dismissal' : 'Enable Reminders'}</Text>}
             </TouchableOpacity>
 
             {/* Skip link */}
-            <TouchableOpacity onPress={handleSkip} style={styles.skipLink} activeOpacity={0.7}>
+             <TouchableOpacity onPress={handleSkip} disabled={saving} style={styles.skipLink} activeOpacity={0.7}>
               <Text style={[styles.skipTxt, { color: colors.mutedForeground }]}>
-                Skip for now
+                 {pendingDismissal ? 'Close without saving' : 'Skip for now'}
               </Text>
             </TouchableOpacity>
           </View>
