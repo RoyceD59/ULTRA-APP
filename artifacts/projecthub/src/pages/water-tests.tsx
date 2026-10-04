@@ -179,6 +179,7 @@ function AssessmentDetailSheet({
               </section>
 
               {/* Physical Test Info */}
+              {detail.freeWaterTest && <div className="rounded-md border p-3 text-sm"><strong>Free physical water test</strong> · Verified code: {detail.promoCode}. No payment or refund was processed.</div>}
               {(detail.serviceAddress || detail.preferredContactTime) && (
                 <section className="space-y-2 pb-4 border-b">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Physical Test Request</h3>

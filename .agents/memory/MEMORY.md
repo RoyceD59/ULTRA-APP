@@ -66,3 +66,5 @@
 - [Frozen release verification](frozen-release-verification.md) — a successful publish can still serve an older approved package; verify the actual live feature before operational recovery.
 - [Phone validation optimization](phone-validation-optimization.md) — reduce unused code, not country metadata; preserve canonical identity versus legacy form defaults.
 - [Catalogue performance boundaries](catalogue-performance-policy.md) — browsing snapshots never replace transaction-time Woo authority; local gains are not deployed or phone evidence.
+- [Promotions and fulfillment policy](promotions-fulfillment-policy.md) — managed code benefits only; reserve before payment and keep pending outcomes bound to their checkout.
+- [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.

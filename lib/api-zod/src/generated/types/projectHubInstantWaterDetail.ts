@@ -16,6 +16,8 @@ export type ProjectHubInstantWaterDetail = ProjectHubInstantWaterSummary & {
   consentVersion?: string;
   sourceAttribution?: ProjectHubInstantWaterDetailSourceAttribution;
   serviceAddress?: string;
+  promoCode?: string;
+  freeWaterTest?: boolean;
   preferredContactTime?: string;
   mediaReferences?: ProjectHubInstantWaterMediaReference[];
 };

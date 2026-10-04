@@ -87,6 +87,10 @@ function identityError(value: unknown): "INVALID_FIRST_NAME" | "INVALID_PHONE" |
 }
 
 function fail(res: Response, error: unknown): void {
+  const promotionError = (error as { code?: string })?.code;
+  if (promotionError === "INVALID_PROMOTION" || promotionError === "PROMOTION_EXHAUSTED") {
+    res.status(422).json({ error: (error as Error).message }); return;
+  }
   const code = error instanceof Error ? error.message : "";
   const safeCodes = new Set([
     "RATE_LIMITED", "IDEMPOTENCY_CONFLICT", "CONFLICT", "OWNERSHIP_CONFLICT", "NOT_FOUND",
@@ -301,7 +305,7 @@ router.post("/uc/water-check/assessments/:assessmentId/physical-test", async (re
   const params = parsed(RequestInstantWaterPhysicalTestParams, req.params);
   const body = parsed(RequestInstantWaterPhysicalTestBody.strict(), req.body);
   if (!params || !body ||
-      !onlyKeys(req.body, ["actionToken", "idempotencyKey", "serviceAddress", "preferredContactTime", "acknowledgement", "mediaReferences"]) ||
+      !onlyKeys(req.body, ["actionToken", "idempotencyKey", "serviceAddress", "preferredContactTime", "acknowledgement", "mediaReferences", "promoCode"]) ||
       (req.body?.mediaReferences !== undefined &&
        (!Array.isArray(req.body.mediaReferences) ||
         req.body.mediaReferences.some((item: unknown) => !onlyKeys(item, ["reference", "mediaType"]))))) {
@@ -318,6 +322,7 @@ router.post("/uc/water-check/assessments/:assessmentId/physical-test", async (re
       acknowledgement: body.acknowledgement,
       mediaReferences: body.mediaReferences,
        idempotencyKey: body.idempotencyKey,
+      promoCode: body.promoCode,
     });
     res.json(result);
   } catch (error) {

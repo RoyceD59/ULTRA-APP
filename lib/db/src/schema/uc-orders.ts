@@ -1,4 +1,7 @@
-import { pgTable, serial, integer, text, timestamp, json, boolean, uniqueIndex, bigint } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, json, jsonb, boolean, uniqueIndex, bigint, customType } from "drizzle-orm/pg-core";
+const moneyNumber = customType<{ data: number; driverData: string }>({
+  dataType: () => "numeric(12,2)", fromDriver: Number, toDriver: String,
+});
 import { sql } from "drizzle-orm";
 
 /**
@@ -19,6 +22,7 @@ export const ucOrdersTable = pgTable("uc_orders", {
   checkoutIdempotencyKey: text("checkout_idempotency_key").notNull().default(""),
   checkoutClaimId: text("checkout_claim_id"),
   checkoutState: text("checkout_state"),
+  checkoutSnapshot: jsonb("checkout_snapshot"),
   remoteAttemptedAt: timestamp("remote_attempted_at", { withTimezone: true }),
   /** Authoritative provider/local confirmation instant; fill once. */
   paymentConfirmedAt: timestamp("payment_confirmed_at", { withTimezone: true }),
@@ -29,8 +33,8 @@ export const ucOrdersTable = pgTable("uc_orders", {
   // overwritten after it is set.
   mpesaReceipt:     text("mpesa_receipt").notNull().default(""),
   promoCode:        text("promo_code").default(""),
-  discountPercent:  integer("discount_percent").notNull().default(0),
-  discountAmount:   integer("discount_amount").notNull().default(0),
+  discountPercent:  moneyNumber("discount_percent").notNull().default(0),
+  discountAmount:   moneyNumber("discount_amount").notNull().default(0),
   /** Immutable claimed referral discount; unique so it cannot price two orders. */
   referralBenefitId: bigint("referral_benefit_id", { mode: "number" }),
   shippingAddress:  json("shipping_address").$type<Record<string, string>>(),

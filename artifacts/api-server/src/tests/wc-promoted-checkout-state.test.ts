@@ -68,6 +68,10 @@ describe("WC configured durable promoted checkout state machine", () => {
     mode = "success";
     globalThis.fetch = async (url: any, init?: RequestInit) => {
       const value = String(url);
+      if (value.includes("/wp-json/wc/v3/products")) return new Response(JSON.stringify([
+        { id: 22, name: "Live filter 22", price: "1099", stock_status: "instock" },
+        { id: 23, name: "Live filter 23", price: "1999", stock_status: "instock" },
+      ]));
       if (value.includes("/wp-json/wc/v3/orders")) {
         if ((init?.method ?? "GET").toUpperCase() === "POST") {
           const payload = JSON.parse(String(init?.body));
@@ -102,9 +106,10 @@ describe("WC configured durable promoted checkout state machine", () => {
     assert.equal(result.body.id, visibleOrders[0].id);
     assert.equal(wcPosts.length, 1);
     const payload = wcPosts[0];
-    assert.deepEqual(payload.line_items, [{ product_id: 22, quantity: 1 }, { product_id: 23, quantity: 1 }]);
+    assert.deepEqual(payload.line_items, [{ product_id: 22, quantity: 1, subtotal: "1099", total: "1099" }, { product_id: 23, quantity: 1, subtotal: "1999", total: "1999" }]);
     assert.equal(payload.fee_lines.length, 1);
-    assert.equal(payload.fee_lines[0].total, String(-Math.round(1099 * 0.5)));
+    assert.equal(payload.fee_lines[0].total, "-549.5");
+    assert.equal(payload.shipping_lines[0].total, "0");
     assert.equal(payload.fee_lines[0].taxable, false);
     assert.ok(payload.meta_data.some((m: any) => m.key === "uc_checkout_claim_id" && m.value));
     const rows = await pool.query("SELECT o.checkout_state,count(u.id)::int AS uses FROM uc_orders o JOIN uc_promotion_uses u ON u.operation_ref LIKE o.checkout_claim_id || ':%' WHERE o.user_id=$1 AND o.checkout_idempotency_key='success' GROUP BY o.checkout_state", [String(userId)]);

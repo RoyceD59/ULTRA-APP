@@ -219,6 +219,7 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
       const u = String(url);
 
       // Resend email dispatch — count and absorb.
+      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
       if (u.includes("resend.com") && u.includes("/emails")) {
         resendCalls.push(JSON.parse((init?.body as string) ?? "{}"));
         return new Response(JSON.stringify({ id: "re_wc_race_stub" }), { status: 200 });
@@ -407,6 +408,7 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
     const savedFetch = globalThis.fetch;
     globalThis.fetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
       const u = String(url);
+      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
       if (u.includes("/wp-json/wc/v3/orders")) {
         if ((init?.method ?? "GET").toUpperCase() === "POST") {
           wcPostCount++;

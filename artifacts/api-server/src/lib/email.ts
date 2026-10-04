@@ -312,6 +312,7 @@ export function buildWaterTestConfirmationEmail(params: {
   address:   string;
   waterSource: string;
   concerns:  string;
+  freeWaterTest?: boolean;
 }): { subject: string; html: string; text: string } {
   const { testId, firstName, address, waterSource, concerns } = params;
   const html = `<!DOCTYPE html>
@@ -326,8 +327,8 @@ export function buildWaterTestConfirmationEmail(params: {
           <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Certified clean water for every Kenyan</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">Free Water Test Booked 💧</h2>
-          <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">Hi ${firstName}, your free water quality test is booked! We'll call you to confirm the appointment time.</p>
+          <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">${params.freeWaterTest ? "Free " : ""}Water Test Booked 💧</h2>
+          <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">Hi ${firstName}, your ${params.freeWaterTest ? "free " : ""}water quality test is booked! We'll call you to confirm the appointment time.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
             <tr style="background:#f3f4f6;"><td colspan="2" style="padding:12px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;">Booking Details</td></tr>
             <tr><td style="padding:10px 12px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px;width:40%;">Reference</td><td style="padding:10px 12px;border-top:1px solid #e5e7eb;color:#111827;font-size:13px;font-weight:700;">${testId}</td></tr>
@@ -344,8 +345,8 @@ export function buildWaterTestConfirmationEmail(params: {
 </body>
 </html>`;
   const text = [
-    `Ultra Clear Free Water Test — ${testId}`,
-    `Hi ${firstName}, your free water quality test is booked!`,
+    `Ultra Clear ${params.freeWaterTest ? "Free " : ""}Water Test — ${testId}`,
+    `Hi ${firstName}, your ${params.freeWaterTest ? "free " : ""}water quality test is booked!`,
     "",
     `Reference: ${testId}`,
     `Address: ${address}`,
@@ -398,6 +399,8 @@ export function buildOrderReceiptEmail(params: {
   currency:  string;
   paymentMethod: string;
   shippingAddress?: {
+    fulfillment?: string;
+    shippingAmount?: string;
     firstName?: string;
     lastName?:  string;
     address1?:  string;
@@ -462,7 +465,8 @@ export function buildOrderReceiptEmail(params: {
     : "";
 
   const addr = shippingAddress;
-  const addrText = addr
+  const collection = addr?.fulfillment === "collection";
+  const addrText = collection ? "Free collection" : addr
     ? [addr.address1, addr.city, addr.country].filter(Boolean).join(", ")
     : "To be confirmed";
 
@@ -584,7 +588,7 @@ export function buildOrderReceiptEmail(params: {
               </tr>
               ${payRefRow}
               <tr>
-                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top;">Delivery to</td>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top;">${collection ? "Fulfillment" : "Delivery to"}</td>
                 <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${addrText}</td>
               </tr>
             </table>
@@ -644,7 +648,8 @@ export function buildOrderReceiptEmail(params: {
     `Order date: ${orderDate}`,
     `Payment: ${payLabel}`,
     ...(paymentReference ? [`${payRefLabel}: ${paymentReference}`] : []),
-    `Delivery to: ${addrText}`,
+    `${collection ? "Fulfillment" : "Delivery to"}: ${addrText}`,
+    ...(addr?.shippingAmount != null ? [`Shipping: ${fmt(addr.shippingAmount)}`] : []),
     "",
     "Items:",
     ...(lineItems.length === 0

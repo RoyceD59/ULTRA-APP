@@ -15,5 +15,7 @@ export interface InstantWaterAssessment {
   bands: InstantWaterBands;
   accountLinkState: string;
   serviceState: string;
+  freeWaterTest?: boolean;
+  promoCode?: string;
   createdAt: Date;
 }

@@ -262,12 +262,13 @@ export function waterTestConfirmationSms(params: {
   testId:    string;
   address:   string;
   firstName: string;
+  freeWaterTest?: boolean;
 }): string {
   const shortAddr = params.address.length > 40
     ? params.address.slice(0, 37) + "…"
     : params.address;
   return (
-    `Hi ${params.firstName}! Your free Ultra Clear water quality test (ref: ${params.testId}) ` +
+    `Hi ${params.firstName}! Your ${params.freeWaterTest ? "free " : ""}Ultra Clear water quality test (ref: ${params.testId}) ` +
     `is booked for ${shortAddr}. ` +
     `We'll call to confirm the appointment time. Questions? Call 0717774049.`
   );

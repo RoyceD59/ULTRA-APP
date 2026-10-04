@@ -63,6 +63,76 @@ export const DecideLibraryKnowledgeResponse = zod.object({
 })
 
 
+export const cancelCompanionCheckoutBodyIdempotencyKeyMin = 8;
+export const cancelCompanionCheckoutBodyIdempotencyKeyMax = 200;
+
+
+
+export const CancelCompanionCheckoutBody = zod.object({
+  "idempotencyKey": zod.string().min(cancelCompanionCheckoutBodyIdempotencyKeyMin).max(cancelCompanionCheckoutBodyIdempotencyKeyMax)
+})
+
+export const CancelCompanionCheckoutResponse = zod.object({
+  "cancelled": zod.boolean()
+})
+
+
+export const quoteCompanionCheckoutBodyCodeMax = 64;
+
+
+export const quoteCompanionCheckoutBodyLineItemsItemQuantityMax = 1000;
+
+export const quoteCompanionCheckoutBodyLineItemsMax = 100;
+
+
+
+export const QuoteCompanionCheckoutBody = zod.object({
+  "fulfillment": zod.enum(['collection', 'delivery']),
+  "code": zod.string().max(quoteCompanionCheckoutBodyCodeMax).optional(),
+  "applyReferralDiscount": zod.boolean().optional(),
+  "lineItems": zod.array(zod.object({
+  "productId": zod.number().min(1),
+  "quantity": zod.number().min(1).max(quoteCompanionCheckoutBodyLineItemsItemQuantityMax)
+})).min(1).max(quoteCompanionCheckoutBodyLineItemsMax)
+})
+
+export const QuoteCompanionCheckoutResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "productId": zod.number(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "subtotal": zod.number()
+})).optional(),
+  "promotion": zod.object({
+  "code": zod.string(),
+  "title": zod.string().optional(),
+  "label": zod.string().optional(),
+  "type": zod.string().optional()
+}),
+  "fulfillment": zod.enum(['collection', 'delivery']),
+  "subtotal": zod.number(),
+  "delivery": zod.number(),
+  "discountAmount": zod.number(),
+  "total": zod.number()
+})
+
+
+export const quotePhysicalTestPromotionBodyCodeMin = 3;
+export const quotePhysicalTestPromotionBodyCodeMax = 64;
+
+
+
+export const QuotePhysicalTestPromotionBody = zod.object({
+  "code": zod.string().min(quotePhysicalTestPromotionBodyCodeMin).max(quotePhysicalTestPromotionBodyCodeMax)
+})
+
+export const QuotePhysicalTestPromotionResponse = zod.object({
+  "promotion": zod.object({
+  "code": zod.string()
+})
+})
+
+
 export const ListCustomerAssignmentsResponseItem = zod.object({
   "id": zod.number(),
   "customerName": zod.string(),
@@ -838,6 +908,8 @@ export const ConsumeInstantWaterAssessmentHandoffResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -890,6 +962,8 @@ export const AttachInstantWaterAssessmentResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -900,6 +974,9 @@ export const AttachInstantWaterAssessmentResponse = zod.object({
 export const RequestInstantWaterPhysicalTestParams = zod.object({
   "assessmentId": zod.coerce.string()
 })
+
+export const requestInstantWaterPhysicalTestBodyPromoCodeMin = 3;
+export const requestInstantWaterPhysicalTestBodyPromoCodeMax = 64;
 
 export const requestInstantWaterPhysicalTestBodyIdempotencyKeyMin = 8;
 export const requestInstantWaterPhysicalTestBodyIdempotencyKeyMax = 200;
@@ -916,6 +993,7 @@ export const requestInstantWaterPhysicalTestBodyMediaReferencesMax = 7;
 
 
 export const RequestInstantWaterPhysicalTestBody = zod.object({
+  "promoCode": zod.string().min(requestInstantWaterPhysicalTestBodyPromoCodeMin).max(requestInstantWaterPhysicalTestBodyPromoCodeMax).optional(),
   "idempotencyKey": zod.string().min(requestInstantWaterPhysicalTestBodyIdempotencyKeyMin).max(requestInstantWaterPhysicalTestBodyIdempotencyKeyMax),
   "actionToken": zod.string().optional(),
   "serviceAddress": zod.string().min(requestInstantWaterPhysicalTestBodyServiceAddressMin).max(requestInstantWaterPhysicalTestBodyServiceAddressMax),
@@ -928,6 +1006,8 @@ export const RequestInstantWaterPhysicalTestBody = zod.object({
 })
 
 export const RequestInstantWaterPhysicalTestResponse = zod.object({
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "serviceState": zod.enum(['instant_result_ready', 'follow_up_requested', 'physical_test_requested', 'scheduled', 'completed', 'closed']),
@@ -975,6 +1055,8 @@ export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -1020,6 +1102,8 @@ export const GetAuthenticatedLatestInstantWaterAssessmentResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 }),zod.null()])
 })
@@ -1126,6 +1210,8 @@ export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
   "consentVersion": zod.string().optional(),
   "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
   "serviceAddress": zod.string().optional(),
+  "promoCode": zod.string().optional(),
+  "freeWaterTest": zod.boolean().optional(),
   "preferredContactTime": zod.string().optional(),
   "mediaReferences": zod.array(zod.object({
   "reference": zod.string().describe('Opaque private evidence reference; never a public object URL.'),
@@ -1201,6 +1287,8 @@ export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
   "consentVersion": zod.string().optional(),
   "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
   "serviceAddress": zod.string().optional(),
+  "promoCode": zod.string().optional(),
+  "freeWaterTest": zod.boolean().optional(),
   "preferredContactTime": zod.string().optional(),
   "mediaReferences": zod.array(zod.object({
   "reference": zod.string().describe('Opaque private evidence reference; never a public object URL.'),

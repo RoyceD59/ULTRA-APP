@@ -81,6 +81,9 @@ import {
 } from "../lib/canonical-purchase-dual-write.js";
 import { isCustomerLifecycleFlagEnabled } from "../lib/customer-lifecycle-flags.js";
 import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
+import { checkoutQuote, claimReferralBenefit, type Fulfillment } from "../lib/checkout-pricing.js";
+import { prepareCheckoutOrder, confirmCheckoutOrder, checkoutOrderResponse } from "../lib/checkout-orders.js";
+import { enqueueReferralSettlement } from "./referrals.js";
 
 class CheckoutKeyOwnershipConflict extends Error {
   readonly code = "CHECKOUT_KEY_OWNERSHIP_CONFLICT";
@@ -457,14 +460,22 @@ export const MOCK_PRODUCTS: Record<string, unknown>[] = [
 /** Single authoritative fallback-catalog pricing implementation for checkout
  * quotes and order creation. Unknown products are rejected rather than priced
  * at zero. */
-export function serverPricedLines(lineItems: { productId: number; quantity: number }[], allowEmpty = false) {
+export async function serverPricedLines(lineItems: { productId: number; quantity: number }[], allowEmpty = false) {
   if (!Array.isArray(lineItems) || (!lineItems.length && !allowEmpty)) return null;
+  if (lineItems.length > 100 || lineItems.some(item => !item || typeof item !== "object" ||
+      !Number.isInteger(item.productId) || item.productId <= 0 ||
+      !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 1000)) return null;
+  const catalogue = hasWCCredentials()
+    ? await wcFetchArray("/products", { include: [...new Set(lineItems.map(i => i.productId))].join(","), per_page: "100" })
+    : MOCK_PRODUCTS;
+  // A live product must never be priced using an unrelated demo ID.
+  if (!catalogue) return null;
   const lines = lineItems.map((item) => {
     const productId = Number(item.productId), quantity = Number(item.quantity);
-    const product = MOCK_PRODUCTS.find((candidate) => candidate["id"] === productId);
+    const product = catalogue.find((candidate) => candidate["id"] === productId);
     if (!product || !Number.isInteger(quantity) || quantity <= 0) return null;
     const price = Number(product["price"]);
-    if (!Number.isFinite(price) || price < 0) return null;
+    if (!Number.isFinite(price) || price <= 0 || product["enquiryOnly"] || product["stock_status"] === "outofstock") return null;
     return { productId, name: String(product["name"]), quantity, subtotal: price * quantity };
   });
   return lines.some((line) => !line) ? null : lines as { productId: number; name: string; quantity: number; subtotal: number }[];
@@ -486,7 +497,7 @@ export async function finalizeRecoveryOrder(params: {
       { code: "RECOVERY_DISCOUNT_REJECTED" },
     );
   }
-  const lines = serverPricedLines(params.lineItems);
+  const lines = await serverPricedLines(params.lineItems);
   if (!lines || lines.reduce((sum, line) => sum + line.subtotal, 0) <= 0) {
     throw Object.assign(
       new Error("Recovery requires known products with positive quantities"),
@@ -494,7 +505,7 @@ export async function finalizeRecoveryOrder(params: {
     );
   }
   const expectedTotal =
-    lines.reduce((sum, line) => sum + line.subtotal, 0) + 500;
+    lines.reduce((sum, line) => sum + line.subtotal, 0) + (params.shippingAddress?.fulfillment === "delivery" ? 500 : 0);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -608,6 +619,16 @@ function wcUrl(path: string, extra: Record<string, string> = {}): string {
   url.searchParams.set("consumer_secret", process.env["WC_CONSUMER_SECRET"]!);
   Object.entries(extra).forEach(([k, v]) => url.searchParams.set(k, v));
   return url.toString();
+}
+
+export async function wcCreateCheckoutOrder(payload: unknown): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await fetch(wcUrl("/orders"), { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(20000) });
+    if (!response.ok) return null;
+    const parsed = parseWcJson(await response.text()) as Record<string, unknown>;
+    return parsed?.id ? parsed : null;
+  } catch { return null; }
 }
 
 /**
@@ -757,6 +778,9 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
 }
 
 function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
+  const meta = Array.isArray(o.meta_data) ? o.meta_data as { key: string; value: unknown }[] : [];
+  const metaValue = (key: string) => meta.find(m => m.key === key)?.value;
+  const shippingLines = Array.isArray(o.shipping_lines) ? o.shipping_lines as { total?: string; method_id?: string }[] : [];
   const li = Array.isArray(o["line_items"])
     ? (o["line_items"] as Record<string, unknown>[]).map((i) => ({
         productId: i["product_id"],
@@ -779,7 +803,11 @@ function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
     total: o["total"],
     currency: o["currency"],
     paymentMethod: o["payment_method"],
-    shippingAddress: o["shipping"],
+    shippingAddress: { ...(o["shipping"] as Record<string, unknown> ?? {}),
+      ...(metaValue("uc_fulfillment") ? { fulfillment: metaValue("uc_fulfillment") } : {}),
+      ...(shippingLines.length ? { shippingAmount: String(shippingLines.reduce((sum, line) => sum + Number(line.total ?? 0), 0)) } : {}) },
+    discountAmount: Number(metaValue("uc_discount_amount") ?? o.discount_total ?? 0),
+    promoCode: metaValue("uc_promo_code") ?? "",
     delivery: {
       method: Array.isArray(o["shipping_lines"])
         ? (o["shipping_lines"] as Record<string, unknown>[]).map(line => line["method_title"]).filter(Boolean).join(", ")
@@ -3907,12 +3935,12 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
 });
 
 // ─── Payment verification helpers (server-side; called before order creation) ─
-async function verifyPaymentOnServer(
+export async function verifyPaymentOnServer(
   method: string,
   reference: string
-): Promise<{ ok: boolean; reason?: string; retryable?: boolean }> {
+): Promise<{ ok: boolean; reason?: string; retryable?: boolean; amount?: number; currency?: string; failureFinal?: boolean }> {
   // COD requires no pre-payment
-  if (method === "cod") return { ok: true };
+  if (method === "cod" || method === "free") return { ok: true };
 
   if (!reference) return { ok: false, reason: "No payment reference provided" };
 
@@ -3945,7 +3973,8 @@ async function verifyPaymentOnServer(
       });
       const qData = (await qRes.json()) as Record<string, string>;
       const ok = qData["ResultCode"] === "0";
-      return ok ? { ok: true } : { ok: false, reason: qData["ResultDesc"] ?? "M-Pesa not confirmed" };
+      const initiation = await pool.query("SELECT expected_amount FROM mpesa_stk_initiations WHERE checkout_request_id=$1", [reference]);
+      return ok ? { ok: true, amount: Number(initiation.rows[0]?.expected_amount), currency: "KES" } : { ok: false, failureFinal: ["1","1032","1037","2001"].includes(String(qData.ResultCode)), reason: qData["ResultDesc"] ?? "M-Pesa not confirmed" };
     } catch {
       return { ok: false, reason: "M-Pesa verification request failed" };
     }
@@ -3963,7 +3992,7 @@ async function verifyPaymentOnServer(
       const stripe = new StripeSDK.default(stripeKey);
       const session = await stripe.checkout.sessions.retrieve(reference);
       const ok = session.payment_status === "paid";
-      return ok ? { ok: true } : { ok: false, reason: `Stripe session status: ${session.payment_status}` };
+      return ok ? { ok: true, amount: Number(session.amount_total) / 100, currency: session.currency?.toUpperCase() } : { ok: false, failureFinal: session.status === "expired", reason: `Stripe session status: ${session.payment_status}` };
     } catch (e: unknown) {
       return { ok: false, reason: (e as Error).message };
     }
@@ -3991,9 +4020,9 @@ async function verifyPaymentOnServer(
           ...(isTransient ? { retryable: true } : {}),
         };
       }
-      const vData = (await vRes.json()) as { status: boolean; data?: { status: string } };
+      const vData = (await vRes.json()) as { status: boolean; data?: { status: string; amount?: number; currency?: string } };
       const ok = vData.status && vData.data?.status === "success";
-      return ok ? { ok: true } : { ok: false, reason: `Paystack status: ${vData.data?.status ?? "unknown"}` };
+      return ok ? { ok: true, amount: Number(vData.data?.amount) / 100, currency: vData.data?.currency } : { ok: false, failureFinal: ["failed","abandoned","reversed"].includes(vData.data?.status ?? ""), reason: `Paystack status: ${vData.data?.status ?? "unknown"}` };
     } catch {
       // Network or timeout — transient; caller should offer a retry path.
       return { ok: false, reason: "Paystack verification request failed", retryable: true };
@@ -5831,6 +5860,22 @@ export function sendOrderConfirmationEmail(
   }).catch(() => {});
 }
 
+export async function notifyConfirmedCheckout(order: any) {
+  await reconcileCanonicalPurchaseDualWrite(order.id, `checkout:${order.id}`);
+  if (order.payment_method !== "cod" && order.payment_method !== "free") {
+    await enqueueReferralSettlement(order.id);
+    const userId = Number(order.user_id);
+    if (Number.isInteger(userId) && userId > 0) await creditQualifyingProductPoints(userId, order.id);
+  }
+  const response = await checkoutOrderResponse(order);
+  sendPushToUser(order.user_id, "Order confirmed", `Order #${response.id} confirmed for ${response.fulfillment === "collection" ? "collection" : "delivery"}.`,
+    { screen: "orders", orderId: String(response.id) }, "orders");
+  sendOrderConfirmationEmail(order.user_id, { orderId: response.id, lineItems: response.lineItems,
+    total: response.total, currency: response.currency, paymentMethod: order.payment_method,
+    shippingAddress: response.shippingAddress, discountAmount: response.discountAmount, promoCode: response.promoCode,
+    dateCreated: response.dateCreated, paymentReference: order.mpesa_receipt || order.payment_reference });
+}
+
 // ─── Filter registration from purchase record ────────────────────────────────
 // POST /api/uc/filters/register-purchase
 //
@@ -6045,8 +6090,26 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const orderUserId = userIdFromBearer(req.headers["authorization"]);
   const orderNumericId = Number(orderUserId);
   if (await guardDeletedAccount(orderNumericId, res)) return;
+  if (req.body?.fulfillment !== undefined) {
+    try {
+      const { paymentMethod, paymentReference = "", ...input } = req.body;
+      const order = await prepareCheckoutOrder(input, orderUserId, paymentMethod);
+      const verification = await verifyPaymentOnServer(paymentMethod, paymentReference);
+      if (!verification.ok) { res.status(verification.retryable ? 503 : 402).json({ error: verification.reason ?? "Payment not confirmed" }); return; }
+      if (verification.amount !== undefined && (!Number.isFinite(verification.amount) ||
+          Math.abs(verification.amount - Number(order.total)) > 0.01 || verification.currency?.toUpperCase() !== "KES")) {
+        res.status(402).json({ error: "Verified payment does not match this checkout total or currency" }); return;
+      }
+      const confirmed = await confirmCheckoutOrder(order.id, paymentReference);
+      if (confirmed.reconciliationRequired) { res.status(202).json({ id: order.id, reconciliationRequired: true }); return; }
+      const response = await checkoutOrderResponse(confirmed.order);
+      if (!confirmed.repeated) await notifyConfirmedCheckout(confirmed.order);
+      res.json(response);
+    } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+    return;
+  }
 
-  let { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey } =
+  let { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey, fulfillment = "collection", applyReferralDiscount } =
     req.body as {
       lineItems: { productId: number; quantity: number }[];
       paymentMethod: string;
@@ -6054,6 +6117,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       shippingAddress?: Record<string, string>;
       promoCode?: string;            // referral or promotion code
       idempotencyKey?: string;
+      fulfillment?: Fulfillment;
+      applyReferralDiscount?: boolean;
     };
   // Guest checkout is supported for orders that carry their own delivery
   // details.  In particular, never pass the sentinel "anonymous" through to
@@ -6291,44 +6356,53 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   }
   // ───────────────────────────────────────────────────────────────────────────
 
-  // Resolve discount from promo/referral code (server re-validates; client cannot fake this)
-  let discountPercent = 0;
-  let discountType: "referral" | "promotion" | null = null;
-  if (promoCode?.trim()) {
-    const validation = await validateCodeForDiscount(promoCode.trim(), userEmail ?? "");
-    if (validation.valid) {
-      discountPercent = validation.discountPercent;
-      discountType = validation.type;
+  // Replay the stored checkout BEFORE quoting a code that might have reached
+  // its cap or expired as a result of the original successful transaction.
+  if (idempotencyKey?.trim()) {
+    // Older clients have an immutable in-flight Woo anchor without the new
+    // claim format. Do not require a fresh catalogue to acknowledge that
+    // already-priced attempt, or let a retry issue another remote POST.
+    const legacyPending = await pool.query(`SELECT id FROM uc_orders
+      WHERE user_id=$1 AND checkout_idempotency_key=$2 AND status='pending-wc'
+        AND checkout_claim_id IS NULL AND date_created > now()-interval '15 minutes' LIMIT 1`,
+      [orderUserId,idempotencyKey.trim()]);
+    if (legacyPending.rows[0]) { res.status(503).json({error:"Order is being processed, please retry shortly",retryable:true}); return; }
+    const prior = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 AND checkout_claim_id IS NOT NULL", [orderUserId, idempotencyKey.trim()]);
+    if (prior.rows[0]) {
+      const row = prior.rows[0];
+      if (hasWCCredentials() && !row.wc_order_id) {
+        const candidates = await wcFetchArray("/orders", { per_page: "100", status: "any", orderby: "date", order: "desc" });
+        const remote = candidates?.find(candidate => Array.isArray(candidate.meta_data) &&
+          (candidate.meta_data as any[]).some(m => m.key === "uc_checkout_claim_id" && m.value === row.checkout_claim_id));
+        if (!remote) { res.status(row.checkout_state ? 202 : 503).json({ id: row.id, retryable: true, reconciliationRequired: true }); return; }
+        await pool.query("UPDATE uc_orders SET wc_order_id=$2,status='processing',checkout_state='remote_confirmed' WHERE id=$1", [row.id, remote.id]);
+        row.wc_order_id = remote.id; row.status = "processing";
+      }
+      res.json(await checkoutOrderResponse(row)); return;
     }
   }
-
+  let pricing;
+  try { pricing = await checkoutQuote({ lineItems, fulfillment, code: promoCode, applyReferralDiscount }, Number.isInteger(orderNumericId) ? orderNumericId : undefined); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); return; }
+  if (fulfillment === "delivery" && (!normalizedShippingAddress.address1?.trim() || !normalizedShippingAddress.city?.trim())) {
+    res.status(400).json({ error: "Delivery address and city are required" }); return;
+  }
+  if (!normalizedShippingAddress.firstName?.trim()) { res.status(400).json({ error: "First name is required" }); return; }
+  shippingAddress = { ...normalizedShippingAddress, fulfillment, shippingAmount: String(pricing.delivery),
+    discountAmount: String(pricing.discountAmount), subtotal: String(pricing.subtotal) };
+  const productLines = pricing.lines;
+  const { subtotal, delivery, discountAmount, discountPercent, total: netTotal } = pricing;
+  const durableCheckoutPromotion = pricing.promotion;
+  const discountType = durableCheckoutPromotion ? "promotion" : discountPercent ? "referral" : null;
+  if ((durableCheckoutPromotion || pricing.referralBenefitId) && !idempotencyKey?.trim()) {
+    res.status(400).json({ error: "idempotencyKey is required when using a code or reward" }); return;
+  }
+  if (pricing.referralBenefitId && paymentMethod === "cod") { res.status(422).json({ error: "Referral rewards require a paid order" }); return; }
+  if (paymentMethod === "free" && netTotal !== 0) { res.status(422).json({ error: "This order requires payment" }); return; }
   const isPaid = paymentMethod !== "cod";
-
-  // Compute order total after discount (500 KES delivery already included by client)
-  const productLines = serverPricedLines(lineItems, true);
-  if (!productLines) { res.status(400).json({ error: "lineItems must contain known products with positive whole quantities" }); return; }
-  const subtotal = productLines.reduce((s, i) => s + i.subtotal, 0);
-  const delivery = 500;
-  const gross = subtotal + delivery;
-  let discountAmount = Math.round((gross * discountPercent) / 100);
-  // The durable promotion engine supersedes legacy in-memory promotions. A
-  // checkout discount is quoted against server-priced eligible product lines;
-  // the submitted client total is never considered.
-  let durableCheckoutPromotion: PromotionQuote | null = null;
-  if (promoCode?.trim() && Number.isInteger(orderNumericId) && orderNumericId > 0) {
-    const engineQuote = await quotePromotion(promoCode, "checkout", productLines.map((line) => line.productId), subtotal, productLines);
-    if (engineQuote) {
-      if (!idempotencyKey?.trim()) { res.status(400).json({ error: "idempotencyKey is required when using a durable promotion" }); return; }
-      durableCheckoutPromotion = engineQuote;
-      discountType = "promotion";
-      discountPercent = engineQuote.effectMode === "percentage" ? engineQuote.effectValue : 0;
-      discountAmount = Math.round(engineQuote.benefit);
-    }
-  }
-  const netTotal = gross - discountAmount;
   // Durable promoted WC checkout uses a local claim before its single remote
   // attempt.  A retry observes that claim and never posts another discount.
-  if (durableCheckoutPromotion && hasWCCredentials()) {
+  if (idempotencyKey?.trim() && hasWCCredentials() && (promoCode || applyReferralDiscount)) {
     const key = idempotencyKey!.trim();
     const prior = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 LIMIT 1", [orderUserId, key]);
     if (prior.rows[0]) {
@@ -6365,8 +6439,11 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         [orderUserId, String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), key, claimId, paymentMethod === "cod" ? "awaiting_collection" : null]);
       anchor = inserted.rows[0];
       for (const line of productLines) await client.query("INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,$2,$3,$4,$5)", [anchor.id,line.productId,line.name,line.quantity,String(line.subtotal)]);
-      const use = await consumePromotionOnClient(client, { quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout", actor: `customer:${orderNumericId}`, idempotencyKey: key, operationRef: `${claimId}:${anchor.id}` });
-      await client.query("UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2", [`${claimId}:${anchor.id}`, use.use.id]);
+      if (durableCheckoutPromotion) {
+        const use = await consumePromotionOnClient(client, { quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout", actor: `customer:${orderNumericId}`, idempotencyKey: key, operationRef: `${claimId}:${anchor.id}` });
+        await client.query("UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2", [`${claimId}:${anchor.id}`, use.use.id]);
+      }
+      await claimReferralBenefit(client, pricing.referralBenefitId, orderNumericId, anchor.id);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined); client.release();
@@ -6377,9 +6454,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     client.release();
     await pool.query("UPDATE uc_orders SET checkout_state='remote_attempted',remote_attempted_at=now() WHERE id=$1", [anchor.id]);
     const payload = { payment_method: paymentMethod, set_paid: isPaid, shipping: shippingAddress,
-      line_items: productLines.map((line) => ({ product_id: line.productId, quantity: line.quantity })),
-      fee_lines: [{ name: `Promotion ${durableCheckoutPromotion.code}`, total: String(-Math.round(durableCheckoutPromotion.benefit)), taxable: false }],
-      meta_data: [{ key: "uc_checkout_claim_id", value: claimId }, { key: "uc_checkout_key", value: key }, { key: "uc_account_id", value: orderUserId }] };
+      billing: { email: userEmail, first_name: shippingAddress?.firstName, last_name: shippingAddress?.lastName,
+        phone: shippingAddress?.phone, country: shippingAddress?.country,
+        address_1: shippingAddress?.address1, city: shippingAddress?.city },
+      line_items: productLines.map((line) => ({ product_id: line.productId, quantity: line.quantity, subtotal: String(line.subtotal), total: String(line.subtotal) })),
+      shipping_lines: [{ method_id: fulfillment === "collection" ? "local_pickup" : "flat_rate", method_title: fulfillment === "collection" ? "Free collection" : "Delivery", total: String(delivery) }],
+      fee_lines: discountAmount ? [{ name: `Companion ${promoCode || "referral reward"}`, total: String(-discountAmount), taxable: false }] : [],
+      meta_data: [{ key: "uc_checkout_claim_id", value: claimId }, { key: "uc_checkout_key", value: key }, { key: "uc_account_id", value: orderUserId }, { key: "payment_reference", value: paymentReference ?? "" }, { key: "uc_fulfillment", value: fulfillment }] };
     try {
       const remote = await fetch(wcUrl("/orders"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!remote.ok) throw new Error(`WC order creation failed with ${remote.status}`);
@@ -6849,14 +6930,16 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           paymentMethod === "paystack" ? "Paystack" : "Cash on Delivery",
         set_paid: isPaid,
         shipping: shippingAddress,
-        line_items: lineItems.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+        line_items: productLines.map((i) => ({ product_id: i.productId, quantity: i.quantity, subtotal: String(i.subtotal), total: String(i.subtotal) })),
+        shipping_lines: [{ method_id: fulfillment === "collection" ? "local_pickup" : "flat_rate", method_title: fulfillment === "collection" ? "Free collection" : "Delivery", total: String(delivery) }],
+        fee_lines: discountAmount ? [{ name: `Companion ${promoCode || "referral reward"}`, total: String(-discountAmount), taxable: false }] : [],
         meta_data: [
           { key: "payment_reference", value: paymentReference ?? "" },
           ...(wcCheckoutKey ? [{ key: "uc_checkout_key", value: wcCheckoutKey }] : []),
           { key: "promo_code", value: promoCode ?? "" },
           { key: "discount_percent", value: String(discountPercent) },
         ],
-        coupon_lines: discountType === "promotion" && discountPercent > 0 && promoCode ? [{ code: promoCode }] : [],
+        coupon_lines: [],
       };
 
       let wcOrder: Record<string, unknown> | null = null;
@@ -6953,7 +7036,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   // Persist order to DB
   try {
     let dbOrder: any;
-    if (durableCheckoutPromotion) {
+    if (idempotencyKey?.trim()) {
       // Local-order path: one transaction owns the order, lines and promotion
       // use.  A cap/validation failure rolls all three back.
       // Claiming the key on the order itself (rather than on promotion use)
@@ -6982,11 +7065,12 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           [orderUserId, paymentMethod === "cod" ? "pending" : "processing", String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), idempotencyKey!.trim(), paymentMethod === "cod" ? "awaiting_collection" : null],
         );
         dbOrder = inserted.rows[0];
-        const promotionUse = await consumePromotionOnClient(client, {
+        const promotionUse = durableCheckoutPromotion ? await consumePromotionOnClient(client, {
           quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout",
           actor: `customer:${orderNumericId}`, idempotencyKey: idempotencyKey!.trim(),
-        });
-        if (promotionUse.repeated) {
+        }) : null;
+        await claimReferralBenefit(client, pricing.referralBenefitId, orderNumericId, dbOrder.id);
+        if (promotionUse?.repeated) {
           const priorOrderId = Number(promotionUse.use.operation_ref);
           const prior = Number.isInteger(priorOrderId)
             ? await client.query("SELECT * FROM uc_orders WHERE id=$1 AND user_id=$2 LIMIT 1", [priorOrderId, orderUserId])
@@ -7015,7 +7099,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         );
         await client.query(
           "UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2",
-          [String(dbOrder.id), promotionUse.use.id],
+          [String(dbOrder.id), promotionUse?.use.id ?? null],
         );
         await client.query("COMMIT");
       } catch (error) {
@@ -7061,7 +7145,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
     // The durable-promotion branch inserted its item rows inside the same
     // transaction as the order and promotion use. Do not duplicate them here.
-    if (dbOrder && productLines.length > 0 && !durableCheckoutPromotion) {
+    if (dbOrder && productLines.length > 0 && !idempotencyKey?.trim()) {
       await db.insert(ucOrderItemsTable).values(
         productLines.map(({ productId, name, quantity, subtotal: t }) => ({
           orderId:   dbOrder.id,

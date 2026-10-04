@@ -28,6 +28,7 @@ if (!basePath) {
 }
 
 export default defineConfig({
+  optimizeDeps: { include: ['@workspace/api-zod/blog-inline-links'] },
   base: basePath,
   plugins: [
     react(),

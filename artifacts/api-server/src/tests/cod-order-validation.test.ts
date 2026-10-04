@@ -145,6 +145,7 @@ describe("COD order input validation", () => {
     // generic empty 200.
     globalThis.fetch = async (url: unknown, init?: RequestInit) => {
       const u = String(url);
+      if (u.includes("/wp-json/wc/v3/products")) return new Response(JSON.stringify([{id:22,name:"Bottle Filter Cartridge",price:"1099",stock_status:"instock"}]));
       if (u.includes("safaricom.co.ke") && u.includes("/oauth/")) {
         return new Response(JSON.stringify({ access_token: "stub-token" }), { status: 200 });
       }

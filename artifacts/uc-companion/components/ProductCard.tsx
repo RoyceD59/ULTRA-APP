@@ -138,7 +138,7 @@ export default function ProductCard({ product, onPress, layout = 'grid', isWishl
           <Text style={styles.saleBadgeText}>TOP</Text>
         </View>
       )}
-      <View style={[styles.imageWrap, { backgroundColor: colors.surface }]}>
+      <View pointerEvents="none" style={[styles.imageWrap, { backgroundColor: colors.surface }]}>
         {product.images[0] ? (
           <Image source={{ uri: resizedImageUrl(product.images[0].src, 200) }} style={styles.image} contentFit="contain" transition={120} recyclingKey={product.images[0].src} />
         ) : (
@@ -177,6 +177,7 @@ export default function ProductCard({ product, onPress, layout = 'grid', isWishl
               </View>
               {inStock ? (
                 <TouchableOpacity onPress={handleAddToCart} activeOpacity={0.8}
+                  accessibilityRole="button" accessibilityLabel={`Add ${product.name} to cart`}
                   style={[styles.cartBtn, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
                   <Ionicons name="cart-outline" size={14} color={colors.primary} />
                   <Text style={[styles.cartBtnText, { color: colors.primary }]}>Add to Cart</Text>

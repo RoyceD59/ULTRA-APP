@@ -24,6 +24,8 @@ import { sendRewardPushNotification } from "../lib/push.js";
 import { normalizeEmail, normalizePhone } from "../lib/customer-identity.js";
 import { consumePromotionOnClient, quotePromotion } from "../lib/reward-promotions.js";
 import { serverPricedLines } from "./uc.js";
+import { checkoutQuote } from "../lib/checkout-pricing.js";
+import { cancelCheckout } from "../lib/checkout-cancellation.js";
 
 const router: IRouter = Router();
 
@@ -612,17 +614,19 @@ router.patch("/uc/admin/rewards/conversion", async (req: Request, res: Response)
 function promotionPayload(body: Record<string, unknown>) {
   const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
   const type = body.type;
-  const effectMode = body.effectMode;
-  const effectValue = Number(body.effectValue);
+  const waived = type === "free_shipping" || type === "free_water_test";
+  const effectMode = waived ? "fixed" : body.effectMode;
+  const effectValue = waived ? 0 : Number(body.effectValue);
   const startsAt = new Date(String(body.startsAt ?? ""));
   const endsAt = body.endsAt == null || body.endsAt === "" ? null : new Date(String(body.endsAt));
   const eligibleProductIds = Array.isArray(body.eligibleProductIds) ? body.eligibleProductIds.map(Number) : [];
   const globalUseLimit = body.globalUseLimit == null || body.globalUseLimit === "" ? null : Number(body.globalUseLimit);
   const perUserUseLimit = body.perUserUseLimit == null || body.perUserUseLimit === "" ? null : Number(body.perUserUseLimit);
-  if (!/^[A-Z0-9_-]{3,64}$/.test(code) || !["bonus_points","redemption_boost","checkout_discount"].includes(String(type)) ||
-      !["fixed","percentage"].includes(String(effectMode)) || !Number.isFinite(effectValue) || effectValue <= 0 ||
+  if (!/^[A-Z0-9_-]{3,64}$/.test(code) || !["bonus_points","redemption_boost","checkout_discount","free_shipping","free_water_test"].includes(String(type)) ||
+      !["fixed","percentage"].includes(String(effectMode)) || !Number.isFinite(effectValue) || (!waived && effectValue <= 0) ||
       (effectMode === "percentage" && effectValue > 100) || isNaN(startsAt.getTime()) ||
       (endsAt && (isNaN(endsAt.getTime()) || endsAt <= startsAt)) || eligibleProductIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+      (type === "free_water_test" && eligibleProductIds.length > 0) ||
       [globalUseLimit, perUserUseLimit].some((n) => n !== null && (!Number.isInteger(n) || n <= 0))) return null;
   return { code, type: String(type), effectMode: String(effectMode), effectValue, startsAt, endsAt, eligibleProductIds: [...new Set(eligibleProductIds)], globalUseLimit, perUserUseLimit };
 }
@@ -662,15 +666,43 @@ router.get("/uc/admin/promotions/:id/usage", async (req,res): Promise<void> => {
   const r=await pool.query(`SELECT operation,count(*)::int AS uses,COALESCE(sum(benefit_amount),0)::text AS benefit FROM uc_promotion_uses WHERE promotion_id=$1 GROUP BY operation`,[id]); res.json({promotionId:id,usage:r.rows});
 });
 
+router.post(["/uc/checkout/quote", "/uc/customer/referrals/discount/quote"], async (req,res): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  const userId = claims?.type !== "team-session" && Number.isInteger(Number(claims?.id)) ? Number(claims?.id) : undefined;
+  try {
+    const quote = await checkoutQuote({ ...req.body, applyReferralDiscount: req.path.includes("/referrals/") || req.body?.applyReferralDiscount === true }, userId);
+    res.json({ ...quote, promotion: quote.promotion ?? { code: quote.code, label: quote.label } });
+  } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
+router.post("/uc/checkout/cancel", async (req,res): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  const userId = claims?.type !== "team-session" && claims ? String(claims.id) : "anonymous";
+  if (typeof req.body?.idempotencyKey !== "string") { res.status(400).json({error:"Checkout key required"}); return; }
+  try { await cancelCheckout(req.body.idempotencyKey,userId); res.json({cancelled:true}); }
+  catch (error) { res.status(409).json({error:(error as Error).message}); }
+});
 router.post("/uc/customer/promotions/:operation/quote", async (req,res): Promise<void> => {
   const userId=await authenticatedCustomer(req,res); if(!userId)return;
-  const op=req.params.operation; if(op!=="checkout"&&op!=="redemption"&&op!=="award"){res.status(400).json({error:"Invalid promotion operation"});return;}
-  const lines = op === "checkout" ? serverPricedLines(req.body?.lineItems) : null;
+  if (req.params.operation === "checkout") {
+    try {
+      const quote = await checkoutQuote({ ...req.body, code: req.body?.code }, userId);
+      res.json({ ...quote, promotion: quote.promotion ?? { code: quote.code, label: quote.label } });
+    } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+    return;
+  }
+  const op=req.params.operation; if(op!=="checkout"&&op!=="redemption"&&op!=="award"&&op!=="water_test"){res.status(400).json({error:"Invalid promotion operation"});return;}
+  const lines = op === "checkout" ? await serverPricedLines(req.body?.lineItems) : null;
   if (op === "checkout" && !lines) { res.status(400).json({ error: "checkout quotes require known lineItems with positive whole quantities" }); return; }
   const subtotal = lines ? lines.reduce((sum, line) => sum + line.subtotal, 0) : Number(req.body?.subtotal ?? 0);
-  const quote=await quotePromotion(String(req.body?.code??""),op,lines ? lines.map((line) => line.productId) : Array.isArray(req.body?.productIds)?req.body.productIds.map(Number):[],subtotal);
+  const quote=await quotePromotion(String(req.body?.code??""),op,lines ? lines.map((line) => line.productId) : Array.isArray(req.body?.productIds)?req.body.productIds.map(Number):[],subtotal, lines ?? undefined, userId);
   if(!quote){res.status(422).json({error:"Promotion is invalid, inactive, ineligible, or expired"});return;}
-  if (op === "checkout") { const delivery = 500; res.json({ promotion: quote, subtotal, delivery, discountAmount: Math.round(quote.benefit), total: Math.max(0, subtotal + delivery - Math.round(quote.benefit)) }); return; }
+  if (op === "checkout") {
+    const fulfillment = req.body?.fulfillment;
+    if (fulfillment !== "collection" && fulfillment !== "delivery") { res.status(400).json({ error: "Choose collection or delivery" }); return; }
+    if (quote.type === "free_shipping" && fulfillment !== "delivery") { res.status(422).json({ error: "Free shipping applies only to delivery" }); return; }
+    const delivery = fulfillment === "delivery" && quote.type !== "free_shipping" ? 500 : 0;
+    res.json({ promotion: quote, fulfillment, subtotal, delivery, discountAmount: Math.round(quote.benefit), total: Math.max(0, subtotal + delivery - Math.round(quote.benefit)) }); return;
+  }
   res.json({promotion:quote});
 });
 // Promotion consumption is intentionally not exposed as a customer operation.

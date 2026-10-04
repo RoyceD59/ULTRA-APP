@@ -736,6 +736,7 @@ function HistoryView({ colors, onBack, token }: HistoryViewProps) {
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.mutedForeground, textTransform: 'uppercase' }}>
                   {item.serviceState ? item.serviceState.replace(/_/g, ' ') : 'UNKNOWN'}
                 </Text>
+                {!!item.freeWaterTest && <Text style={{fontSize:12,fontWeight:'600',color:colors.primary,marginTop:6}}>Verified free water test · {item.promoCode}</Text>}
               </View>
             </View>
           ))}
@@ -759,6 +760,8 @@ interface BookingViewProps {
 }
 
 function BookingView({ colors, api, assessment, actionToken, onBack, onComplete }: BookingViewProps) {
+  const [promoCode, setPromoCode] = useState('');
+  const [promoChecked, setPromoChecked] = useState(false);
   const [address, setAddress] = useState('');
   const [time, setTime] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -795,7 +798,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
           : InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType.mp4
       }));
 
-      await bookMut.mutateAsync({
+      const booking = await bookMut.mutateAsync({
         assessmentId: assessment.assessmentId,
         data: {
           idempotencyKey: idempKeyRef.current,
@@ -803,17 +806,19 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
           serviceAddress: address.trim(),
           preferredContactTime: time.trim(),
           acknowledgement: true,
-          mediaReferences
+          mediaReferences,
+          promoCode: promoCode.trim() || undefined,
         }
       });
       idempKeyRef.current = Crypto.randomUUID(); // reset on success
+      if (booking.freeWaterTest) Alert.alert('Free water test confirmed', `Your request includes the verified benefit from ${booking.promoCode}. No payment or refund was processed.`);
       onComplete();
     } catch (err: any) {
       const status = err instanceof ApiError ? err.status : 0;
       if (status === 400) {
         setError('Please check your booking details and try again.');
       } else {
-        setError('Booking failed to submit securely. Please try again.');
+        setError(err?.body?.error || err?.message || 'Booking failed to submit securely. Please try again.');
       }
     } finally {
       setSubmitting(false);
@@ -832,6 +837,18 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
       </Text>
 
       <View style={styles.formContainer}>
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Free water test code (optional)</Text>
+          <TextInput accessibilityLabel="Free water test code" autoCapitalize="characters" value={promoCode}
+            onChangeText={value => { setPromoCode(value); setPromoChecked(false); }}
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]} />
+          <TouchableOpacity disabled={!promoCode.trim() || submitting} onPress={async () => {
+            try { await api.quoteWaterTestPromotion(promoCode); setPromoChecked(true); setError(''); }
+            catch (err: any) { setError(err.message); setPromoChecked(false); }
+          }}><Text style={{ color: colors.primary, paddingVertical: 12 }}>Check code</Text></TouchableOpacity>
+          {promoChecked && <Text style={{ color: colors.text }}>Free physical test eligible. The code is verified again when you submit.</Text>}
+          <Text style={{ color: colors.mutedForeground }}>Sign in to apply a code. This booking flow does not take a payment.</Text>
+        </View>
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Service Address *</Text>
           <TextInput

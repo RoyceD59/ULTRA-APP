@@ -23,8 +23,12 @@ import type {
   AlisonTurnInput,
   AlisonTurnResponse,
   BlogArticlePage,
+  CancelCompanionCheckout200,
+  CancelCompanionCheckoutBody,
   CanonicalCustomerHistory,
   CanonicalFilterRegistration,
+  CompanionCheckoutQuote,
+  CompanionCheckoutQuoteInput,
   CustomerFilterAssignment,
   CustomerLifecycleFeatureConfig,
   CustomerLifecycleLookup,
@@ -41,6 +45,8 @@ import type {
   ListPublishedUcGuides200,
   ListUcProductsParams,
   LocationTierAnalyticsInput,
+  PhysicalTestPromotionInput,
+  QuotePhysicalTestPromotion200,
   RefillCapabilities,
   UcCodeValidation,
   UcLocationRatingAggregate,
@@ -80,7 +86,199 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getGetMyCustomerAssignmentsUrl = () => {
+export const getCancelCompanionCheckoutUrl = () => {
+
+
+
+
+  return `/api/uc/checkout/cancel`
+}
+
+export const cancelCompanionCheckout = async (cancelCompanionCheckoutBody: CancelCompanionCheckoutBody, options?: RequestInit): Promise<CancelCompanionCheckout200> => {
+
+  return customFetch<CancelCompanionCheckout200>(getCancelCompanionCheckoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cancelCompanionCheckoutBody)
+  }
+);}
+
+
+
+
+
+export const getCancelCompanionCheckoutMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelCompanionCheckout>>, TError,{data: BodyType<CancelCompanionCheckoutBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelCompanionCheckout>>, TError,{data: BodyType<CancelCompanionCheckoutBody>}, TContext> => {
+
+const mutationKey = ['cancelCompanionCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelCompanionCheckout>>, {data: BodyType<CancelCompanionCheckoutBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  cancelCompanionCheckout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelCompanionCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof cancelCompanionCheckout>>>
+    export type CancelCompanionCheckoutMutationBody = BodyType<CancelCompanionCheckoutBody>
+    export type CancelCompanionCheckoutMutationError = ErrorType<void>
+
+    export const useCancelCompanionCheckout = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelCompanionCheckout>>, TError,{data: BodyType<CancelCompanionCheckoutBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelCompanionCheckout>>,
+        TError,
+        {data: BodyType<CancelCompanionCheckoutBody>},
+        TContext
+      > => {
+      return useMutation(getCancelCompanionCheckoutMutationOptions(options));
+    }
+    export const getQuoteCompanionCheckoutUrl = () => {
+
+
+
+
+  return `/api/uc/checkout/quote`
+}
+
+export const quoteCompanionCheckout = async (companionCheckoutQuoteInput: CompanionCheckoutQuoteInput, options?: RequestInit): Promise<CompanionCheckoutQuote> => {
+
+  return customFetch<CompanionCheckoutQuote>(getQuoteCompanionCheckoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(companionCheckoutQuoteInput)
+  }
+);}
+
+
+
+
+
+export const getQuoteCompanionCheckoutMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quoteCompanionCheckout>>, TError,{data: BodyType<CompanionCheckoutQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof quoteCompanionCheckout>>, TError,{data: BodyType<CompanionCheckoutQuoteInput>}, TContext> => {
+
+const mutationKey = ['quoteCompanionCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof quoteCompanionCheckout>>, {data: BodyType<CompanionCheckoutQuoteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  quoteCompanionCheckout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QuoteCompanionCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof quoteCompanionCheckout>>>
+    export type QuoteCompanionCheckoutMutationBody = BodyType<CompanionCheckoutQuoteInput>
+    export type QuoteCompanionCheckoutMutationError = ErrorType<void>
+
+    export const useQuoteCompanionCheckout = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quoteCompanionCheckout>>, TError,{data: BodyType<CompanionCheckoutQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof quoteCompanionCheckout>>,
+        TError,
+        {data: BodyType<CompanionCheckoutQuoteInput>},
+        TContext
+      > => {
+      return useMutation(getQuoteCompanionCheckoutMutationOptions(options));
+    }
+    export const getQuotePhysicalTestPromotionUrl = () => {
+
+
+
+
+  return `/api/uc/customer/promotions/water_test/quote`
+}
+
+export const quotePhysicalTestPromotion = async (physicalTestPromotionInput: PhysicalTestPromotionInput, options?: RequestInit): Promise<QuotePhysicalTestPromotion200> => {
+
+  return customFetch<QuotePhysicalTestPromotion200>(getQuotePhysicalTestPromotionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(physicalTestPromotionInput)
+  }
+);}
+
+
+
+
+
+export const getQuotePhysicalTestPromotionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quotePhysicalTestPromotion>>, TError,{data: BodyType<PhysicalTestPromotionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof quotePhysicalTestPromotion>>, TError,{data: BodyType<PhysicalTestPromotionInput>}, TContext> => {
+
+const mutationKey = ['quotePhysicalTestPromotion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof quotePhysicalTestPromotion>>, {data: BodyType<PhysicalTestPromotionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  quotePhysicalTestPromotion(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QuotePhysicalTestPromotionMutationResult = NonNullable<Awaited<ReturnType<typeof quotePhysicalTestPromotion>>>
+    export type QuotePhysicalTestPromotionMutationBody = BodyType<PhysicalTestPromotionInput>
+    export type QuotePhysicalTestPromotionMutationError = ErrorType<void>
+
+    export const useQuotePhysicalTestPromotion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quotePhysicalTestPromotion>>, TError,{data: BodyType<PhysicalTestPromotionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof quotePhysicalTestPromotion>>,
+        TError,
+        {data: BodyType<PhysicalTestPromotionInput>},
+        TContext
+      > => {
+      return useMutation(getQuotePhysicalTestPromotionMutationOptions(options));
+    }
+    export const getGetMyCustomerAssignmentsUrl = () => {
 
 
 

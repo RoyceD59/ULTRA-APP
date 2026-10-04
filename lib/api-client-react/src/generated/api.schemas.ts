@@ -70,6 +70,76 @@ export interface LibraryKnowledgeMetadata {
   knowledgeReviewedBy: string | null;
 }
 
+export interface PhysicalTestPromotionInput {
+  /**
+     * @minLength 3
+     * @maxLength 64
+     */
+  code: string;
+}
+
+export type CompanionCheckoutQuoteInputFulfillment = typeof CompanionCheckoutQuoteInputFulfillment[keyof typeof CompanionCheckoutQuoteInputFulfillment];
+
+
+export const CompanionCheckoutQuoteInputFulfillment = {
+  collection: 'collection',
+  delivery: 'delivery',
+} as const;
+
+export type CompanionCheckoutQuoteInputLineItemsItem = {
+  /** @minimum 1 */
+  productId: number;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  quantity: number;
+};
+
+export interface CompanionCheckoutQuoteInput {
+  fulfillment: CompanionCheckoutQuoteInputFulfillment;
+  /** @maxLength 64 */
+  code?: string;
+  applyReferralDiscount?: boolean;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lineItems: CompanionCheckoutQuoteInputLineItemsItem[];
+}
+
+export type CompanionCheckoutQuoteLinesItem = {
+  productId: number;
+  name: string;
+  quantity: number;
+  subtotal: number;
+};
+
+export type CompanionCheckoutQuotePromotion = {
+  code: string;
+  title?: string;
+  label?: string;
+  type?: string;
+};
+
+export type CompanionCheckoutQuoteFulfillment = typeof CompanionCheckoutQuoteFulfillment[keyof typeof CompanionCheckoutQuoteFulfillment];
+
+
+export const CompanionCheckoutQuoteFulfillment = {
+  collection: 'collection',
+  delivery: 'delivery',
+} as const;
+
+export interface CompanionCheckoutQuote {
+  lines?: CompanionCheckoutQuoteLinesItem[];
+  promotion: CompanionCheckoutQuotePromotion;
+  fulfillment: CompanionCheckoutQuoteFulfillment;
+  subtotal: number;
+  delivery: number;
+  discountAmount: number;
+  total: number;
+}
+
 export interface CustomerAssignmentInput {
   idempotencyKey: string;
   customerName: string;
@@ -1181,6 +1251,11 @@ export type InstantWaterPhysicalTestRequestInputMediaReferencesItem = {
 
 export interface InstantWaterPhysicalTestRequestInput {
   /**
+     * @minLength 3
+     * @maxLength 64
+     */
+  promoCode?: string;
+  /**
      * @minLength 8
      * @maxLength 200
      */
@@ -1214,6 +1289,8 @@ export const InstantWaterPhysicalTestResponseServiceState = {
 } as const;
 
 export interface InstantWaterPhysicalTestResponse {
+  freeWaterTest?: boolean;
+  promoCode?: string;
   assessmentId: string;
   reference: string;
   serviceState: InstantWaterPhysicalTestResponseServiceState;
@@ -1227,6 +1304,8 @@ export interface InstantWaterAssessment {
   bands: InstantWaterBands;
   accountLinkState: string;
   serviceState: string;
+  freeWaterTest?: boolean;
+  promoCode?: string;
   createdAt: string;
 }
 
@@ -1289,6 +1368,8 @@ export type ProjectHubInstantWaterDetail = ProjectHubInstantWaterSummary & {
   consentVersion?: string;
   sourceAttribution?: ProjectHubInstantWaterDetailSourceAttribution;
   serviceAddress?: string;
+  promoCode?: string;
+  freeWaterTest?: boolean;
   preferredContactTime?: string;
   mediaReferences?: ProjectHubInstantWaterMediaReference[];
 };
@@ -3513,6 +3594,26 @@ export interface AuditEventPage {
   limit: number;
   total: number;
 }
+
+export type CancelCompanionCheckoutBody = {
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+};
+
+export type CancelCompanionCheckout200 = {
+  cancelled: boolean;
+};
+
+export type QuotePhysicalTestPromotion200Promotion = {
+  code: string;
+};
+
+export type QuotePhysicalTestPromotion200 = {
+  promotion: QuotePhysicalTestPromotion200Promotion;
+};
 
 export type CreateCustomerAssignment200 = {
   id: number;

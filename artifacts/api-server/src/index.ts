@@ -17,6 +17,7 @@ import { processPendingReferralSettlements } from "./routes/referrals.js";
 import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
 import { ensureHydrateTreeSchema } from "./lib/hydrate-tree-schema.js";
 import { ensureCustomerAssignmentTables } from "./lib/customer-assignment-rollout.js";
+import { ensureCheckoutBenefitsSchema } from "./lib/checkout-benefits-schema.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -1712,6 +1713,7 @@ async function applyStartupMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS uc_promotion_uses_promotion_user_idx ON uc_promotion_uses (promotion_id,user_id);
   `);
   logger.info("Startup migration: durable rewards promotions ensured");
+  await ensureCheckoutBenefitsSchema();
   await pool.query(`
     ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_idempotency_key text NOT NULL DEFAULT '';
     ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_claim_id text;
@@ -2391,10 +2393,10 @@ applyStartupMigrations()
     if (process.env["PREVIEW_SAFE_MODE"] === "1") {
       const server = app.listen(port, (err?: Error) => {
         if (err) {
-          logger.error({ err }, "Error listening on preview port");
+          logger.error({ err }, "Error listening on port");
           process.exit(1);
         }
-        logger.info({ port }, "Preview server listening; background and outbound startup work disabled");
+        logger.info({ port }, "Server listening");
       });
       process.on("SIGTERM", () => shutdown(server, "SIGTERM"));
       process.on("SIGINT", () => shutdown(server, "SIGINT"));

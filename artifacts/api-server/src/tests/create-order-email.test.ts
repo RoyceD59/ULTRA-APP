@@ -232,6 +232,7 @@ describe("createOrder — WooCommerce path — sendViaResend is called", () => {
         const u = String(url);
 
         // WC orders POST → mock WooCommerce response with one line item.
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
         if (u.includes("wc.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -341,6 +342,7 @@ describe("createOrder — WooCommerce COD path — sendViaResend is called", () 
         const u = String(url);
 
         // WC orders POST → mock WooCommerce order for COD.
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:2,name:"Truva Go",price:"2599",stock_status:"instock"}]));
         if (u.includes("wc-cod.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -455,6 +457,7 @@ describe("createOrder — WooCommerce path — empty line_items — fallback rec
         const u = String(url);
 
         // WC orders POST → mock WooCommerce response with NO line items.
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
         if (u.includes("wc-empty.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -489,7 +492,7 @@ describe("createOrder — WooCommerce path — empty line_items — fallback rec
 
       const { status, body: orderBody } = await postOrders(
         {
-          lineItems:        [],              // client also sends no items
+          lineItems:        [{productId:1,quantity:1}], // Valid cart; WC unexpectedly omits its receipt lines.
           paymentMethod:    "paystack",
           paymentReference: payRef,
           shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "5 Empty St", city: "Nairobi", phone: "+254711000013" },

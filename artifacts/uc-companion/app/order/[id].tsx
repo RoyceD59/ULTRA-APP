@@ -340,7 +340,9 @@ export default function OrderDetailScreen() {
       {/* ── Shipping ────────────────────────────────────────── */}
       {order.shippingAddress && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Delivery Address</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{order.shippingAddress.fulfillment === 'collection' ? 'Free collection' : 'Delivery address'}</Text>
+          {order.shippingAddress.shippingAmount !== undefined && <Text style={{ color: colors.text }}>Shipping: KES {Number(order.shippingAddress.shippingAmount).toLocaleString('en-KE')}</Text>}
+          {!!order.discountAmount && <Text style={{ color: colors.text }}>Discount: KES {order.discountAmount.toLocaleString('en-KE')}</Text>}
           <Text style={[styles.addressText, { color: colors.text }]}>
             {order.shippingAddress.firstName} {order.shippingAddress.lastName}
           </Text>

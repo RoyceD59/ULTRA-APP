@@ -9,6 +9,11 @@ import type { InstantWaterPhysicalTestRequestInputMediaReferencesItem } from './
 
 export interface InstantWaterPhysicalTestRequestInput {
   /**
+     * @minLength 3
+     * @maxLength 64
+     */
+  promoCode?: string;
+  /**
      * @minLength 8
      * @maxLength 200
      */

@@ -164,6 +164,7 @@ describe("WooCommerce path — duplicate delivery when WC is offline on retry", 
     function makeOnlineFetch(): typeof globalThis.fetch {
       return async (url: unknown, init?: RequestInit): Promise<Response> => {
         const u = String(url);
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
 
         if (u.includes("resend.com") && u.includes("/emails")) {
           resendCalls.push(JSON.parse((init?.body as string) ?? "{}"));

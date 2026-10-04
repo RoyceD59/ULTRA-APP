@@ -9,7 +9,6 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
-import { useApi, UCAddress, ApiError, type PaymentsConfig, type CheckoutPromotionQuote } from '@/hooks/useApi';
 import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPicker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
@@ -26,6 +25,8 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
 import { countryCodeFromValue } from '@workspace/api-zod/phone';
 import { trackEvent } from '@/lib/analytics';
+import { useApi, UCAddress, ApiError, type PaymentsConfig, type CheckoutPromotionQuote, type CheckoutPaymentInput } from '@/hooks/useApi';
+import { quoteMatchesCheckout } from '@/hooks/checkoutQuoteIdentity';
 
 const DELIVERY_FEE = 500;
 
@@ -89,16 +90,16 @@ type AddressErrors = Partial<Record<'firstName' | 'lastName' | 'address1' | 'cit
  * server deliberately does not gate paid orders on these heuristics, and the
  * client must not block a customer who is about to pay.
  */
-function checkAddress(address: UCAddress, strict: boolean): AddressErrors {
+function checkAddress(address: UCAddress, strict: boolean, delivery: boolean): AddressErrors {
   const errors: AddressErrors = {};
   if (!address.firstName.trim()) errors.firstName = 'First name is required.';
   else if (strict && !looksLikeRealName(address.firstName)) errors.firstName = 'Please enter your real first name.';
   if (strict) {
     if (!address.lastName.trim()) errors.lastName = 'Last name is required.';
     else if (!looksLikeRealName(address.lastName)) errors.lastName = 'Please enter your real last name.';
-    if (!address.city.trim()) errors.city = 'City is required.';
+    if (delivery && !address.city.trim()) errors.city = 'City is required.';
   }
-  if (!address.address1.trim()) errors.address1 = 'Delivery address is required.';
+  if (delivery && !address.address1.trim()) errors.address1 = 'Delivery address is required.';
   if (!address.phone.trim()) errors.phone = 'Phone number is required.';
   else if (!isValidInstantPhone(address.phone, countryCodeFromValue(address.country) ?? 'KE')) errors.phone = 'Enter a valid phone number for the selected country.';
   return errors;
@@ -202,15 +203,75 @@ export default function CheckoutScreen() {
   const [promoValidating, setPromoValidating] = useState(false);
   const [appliedQuote, setAppliedQuote] = useState<CheckoutPromotionQuote | null>(null);
   const [usingReferralDiscount, setUsingReferralDiscount] = useState(false);
+  const [fulfillment, setFulfillment] = useState<'collection' | 'delivery' | null>(null);
+  const [baseQuote, setBaseQuote] = useState<CheckoutPromotionQuote | null>(null);
+  const [quoteError, setQuoteError] = useState('');
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [promoError, setPromoError] = useState('');
   // A payment confirmation can retry order persistence; keep its key stable
   // until it succeeds so an intermittent connection cannot consume a promo twice.
   const orderIdentityRef = useRef<CheckoutOrderIdentity | null>(null);
+  const paymentInputRef = useRef<CheckoutPaymentInput | null>(null);
+  const [paymentFrozen, setPaymentFrozen] = useState(false);
+  function checkoutPaymentInput(): CheckoutPaymentInput {
+    if (paymentInputRef.current) return paymentInputRef.current;
+    const identity = retainCheckoutOrderIdentity(orderIdentityRef.current);
+    orderIdentityRef.current = identity;
+    const input: CheckoutPaymentInput = {
+      lineItems: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+      fulfillment: fulfillment ?? 'collection', shippingAddress: address,
+      quotedTotal: baseQuote?.total,
+      promoCode: usingReferralDiscount ? undefined : appliedQuote?.promotion.code,
+      applyReferralDiscount: usingReferralDiscount, idempotencyKey: identity.idempotencyKey,
+    };
+    paymentInputRef.current = input;
+    setPaymentFrozen(true);
+    return input;
+  }
 
-  const grossTotal = totalPrice + DELIVERY_FEE;
-  const total = appliedQuote?.total ?? grossTotal;
+  const grossTotal = totalPrice + (fulfillment === 'delivery' ? DELIVERY_FEE : 0);
+  const total = baseQuote?.total ?? grossTotal;
+  const basketKey = JSON.stringify(items.map(i => ({ productId: i.id, quantity: i.quantity })));
+  const activeCode = usingReferralDiscount ? undefined : appliedQuote?.promotion.code;
+  const quoteCurrent = paymentFrozen || quoteMatchesCheckout(baseQuote, {lineItems: items.map(i=>({productId:i.id,quantity:i.quantity})),
+    fulfillment, code:activeCode, applyReferralDiscount:usingReferralDiscount});
+  useEffect(() => {
+    if (paymentFrozen) return;
+    let cancelled = false;
+    setBaseQuote(null);
+    setQuoteError('');
+    if (!paymentInputRef.current) orderIdentityRef.current = null;
+    if (!fulfillment || !items.length) return;
+    setQuoteLoading(true);
+    api.quoteCheckout({ lineItems: JSON.parse(basketKey), fulfillment, code: activeCode, applyReferralDiscount: usingReferralDiscount })
+      .then(quote => { if (!cancelled) setBaseQuote(quote); })
+      .catch(error => { if (!cancelled) setQuoteError(error.message); })
+      .finally(() => { if (!cancelled) setQuoteLoading(false); });
+    return () => { cancelled = true; };
+  }, [basketKey, fulfillment, activeCode, usingReferralDiscount, paymentFrozen]);
+
+  async function changePaymentMethod(method: PaymentMethod) {
+    if (method === paymentMethod || processing) return;
+    if (paymentFrozen && paymentInputRef.current) {
+      try {
+        await api.cancelCheckout(paymentInputRef.current.idempotencyKey);
+        paymentInputRef.current = null;
+        orderIdentityRef.current = null;
+        lastCheckoutRequestIdRef.current = null;
+        setPaymentFrozen(false);
+      } catch (error) {
+        Alert.alert('Payment still pending', error instanceof Error ? error.message : 'Resume the original payment before changing method.');
+        return;
+      }
+    }
+    cancelMpesaPoll(attemptRef, pollRef);
+    setMpesaWaiting(false);
+    setProcessing(false);
+    setPaymentMethod(method);
+  }
 
   function validateAddress(): boolean {
-    const errors = checkAddress(address, paymentMethod === 'cod');
+    const errors = checkAddress(address, paymentMethod === 'cod', fulfillment === 'delivery');
     setAddressErrors(errors);
     const first = Object.values(errors)[0];
     if (first) {
@@ -225,7 +286,9 @@ export default function CheckoutScreen() {
   }
 
   async function handleConfirm() {
+    if (!fulfillment || !baseQuote || !quoteCurrent || quoteLoading || quoteError) { Alert.alert('Check checkout', quoteError || 'Choose collection or delivery and wait for your verified total.'); return; }
     if (!validateAddress()) return;
+    if (total === 0) { await createOrder('free', ''); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (paymentMethod === 'mpesa') { setShowMpesaModal(true); return; }
     if (paymentMethod === 'stripe') { await handleStripeCheckout(); return; }
@@ -281,7 +344,7 @@ export default function CheckoutScreen() {
               // Customer is switching away from M-Pesa — clear the stored ref
               // so a later return to M-Pesa doesn't query a stale push.
               text: 'Pay with COD instead',
-              onPress: () => { lastCheckoutRequestIdRef.current = null; setPaymentMethod('cod'); },
+              onPress: () => { void changePaymentMethod('cod'); },
               style: 'cancel',
             },
           ],
@@ -326,7 +389,7 @@ export default function CheckoutScreen() {
               { text: 'Try again', onPress: () => setShowMpesaModal(true) },
               {
                 text: 'Pay with COD instead',
-                onPress: () => setPaymentMethod('cod'),
+                onPress: () => { void changePaymentMethod('cod'); },
                 style: 'cancel',
               },
             ]);
@@ -417,7 +480,7 @@ export default function CheckoutScreen() {
 
     // ── Issue a new STK push ─────────────────────────────────────────────────
     try {
-      const r = await api.mpesaSTKPush(mpesaPhone, total, `cart_${Date.now()}`);
+      const r = await api.mpesaSTKPush(mpesaPhone, total, `cart_${Date.now()}`, checkoutPaymentInput());
       // Verify this attempt is still active (not cancelled while the request
       // was in-flight).
       if (isCancelledAttempt(thisAttempt, attemptRef)) return;
@@ -443,7 +506,7 @@ export default function CheckoutScreen() {
           { text: 'Try again', onPress: () => handleMpesa() },
           {
             text: 'Pay with COD instead',
-            onPress: () => { setShowMpesaModal(false); setPaymentMethod('cod'); },
+            onPress: () => { setShowMpesaModal(false); void changePaymentMethod('cod'); },
             style: 'cancel',
           },
         ],
@@ -456,7 +519,7 @@ export default function CheckoutScreen() {
     setProcessing(true);
     try {
       const orderId = `cart_${Date.now()}`;
-      const session = await api.stripeSession(total, orderId);
+      const session = await api.stripeSession(total, orderId, checkoutPaymentInput());
       setProcessing(false);
       // Open hosted Stripe checkout — Stripe handles all card data
       await WebBrowser.openBrowserAsync(session.sessionUrl);
@@ -486,7 +549,7 @@ export default function CheckoutScreen() {
             { text: 'Try again', onPress: () => handleStripeCheckout() },
             {
               text: 'Pay with COD instead',
-              onPress: () => setPaymentMethod('cod'),
+              onPress: () => { void changePaymentMethod('cod'); },
               style: 'cancel',
             },
           ],
@@ -586,7 +649,7 @@ export default function CheckoutScreen() {
             },
             {
               text: 'Pay with COD instead',
-              onPress: () => setPaymentMethod('cod'),
+              onPress: () => { void changePaymentMethod('cod'); },
               style: 'cancel',
             },
           ],
@@ -608,6 +671,7 @@ export default function CheckoutScreen() {
       r = await api.paystackInit(
         user?.email ?? 'customer@ucfilters.com',
         total,
+        checkoutPaymentInput(),
       );
       setProcessing(false);
     } catch (e) {
@@ -632,7 +696,7 @@ export default function CheckoutScreen() {
             },
             {
               text: 'Pay with COD instead',
-              onPress: () => setPaymentMethod('cod'),
+              onPress: () => { void changePaymentMethod('cod'); },
               style: 'cancel',
             },
           ],
@@ -668,7 +732,7 @@ export default function CheckoutScreen() {
           },
           {
             text: 'Pay with COD instead',
-            onPress: () => setPaymentMethod('cod'),
+            onPress: () => { void changePaymentMethod('cod'); },
             style: 'cancel',
           },
         ],
@@ -683,18 +747,25 @@ export default function CheckoutScreen() {
   }
 
   async function applyPromoCode() {
+    setPromoError('');
+    if (paymentFrozen || !fulfillment) { setPromoError('Choose collection or delivery before applying a code.'); return; }
+    if (!items.length) { setPromoError('Add a product to your basket before applying a code.'); return; }
     if (!promoInput.trim()) return;
     setPromoValidating(true);
     try {
       const quote = await api.quoteCheckoutPromotion({
         code: promoInput.trim(),
+        fulfillment: fulfillment ?? 'collection',
         lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
       });
       setAppliedQuote(quote);
+      setBaseQuote(quote);
       setUsingReferralDiscount(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       setAppliedQuote(null);
+      setUsingReferralDiscount(false);
+      setPromoError(error instanceof ApiError && error.status === 401 ? 'Sign in to use a promotion or referral code.' : error instanceof Error ? error.message : 'This code is not eligible for your checkout.');
       Alert.alert('Code not applied', error instanceof Error ? error.message : 'Could not validate this code. Please try again.');
     } finally {
       setPromoValidating(false);
@@ -702,6 +773,7 @@ export default function CheckoutScreen() {
   }
 
   async function applyReferralDiscount() {
+    if (paymentFrozen || !fulfillment) return;
     if (!user) {
       Alert.alert('Sign in required', 'Sign in to use a referral reward.');
       return;
@@ -709,14 +781,17 @@ export default function CheckoutScreen() {
     setPromoValidating(true);
     try {
       const quote = await api.quoteReferralDiscount({
+        fulfillment: fulfillment ?? 'collection',
         lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
       });
       setAppliedQuote(quote);
+      setBaseQuote(quote);
       setUsingReferralDiscount(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       setAppliedQuote(null);
       setUsingReferralDiscount(false);
+      setPromoError(error instanceof ApiError && error.status === 401 ? 'Sign in to use a promotion or referral code.' : error instanceof Error ? error.message : 'This code is not eligible for your checkout.');
       Alert.alert('Referral reward unavailable', error instanceof Error ? error.message : 'No referral discount is available for this order.');
     } finally {
       setPromoValidating(false);
@@ -724,6 +799,8 @@ export default function CheckoutScreen() {
   }
 
   function removePromoCode() {
+    if (paymentFrozen) return;
+    setPromoError('');
     setAppliedQuote(null);
     setUsingReferralDiscount(false);
     setPromoInput('');
@@ -764,13 +841,10 @@ export default function CheckoutScreen() {
     setProcessing(true);
     try {
       const order = await api.createOrder({
-        lineItems: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+        ...checkoutPaymentInput(),
         paymentMethod: method,
         paymentReference: stableReference,
-        shippingAddress: normalizedShippingAddress,
-        promoCode: appliedQuote?.promotion.code,
-        applyReferralDiscount: usingReferralDiscount,
-        idempotencyKey: orderIdentity.idempotencyKey,
+        shippingAddress: paymentInputRef.current?.shippingAddress ?? normalizedShippingAddress,
       });
       if (method === 'paystack' || method === 'mpesa' || method === 'cod' || method === 'stripe') {
         trackEvent('order_submitted', {
@@ -879,9 +953,15 @@ export default function CheckoutScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         {/* Keep support in the scroll flow so it never covers address/payment taps. */}
         <AlisonBubble message={alisonGreeting} placement="inline" />
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Address</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Collection or delivery</Text>
+        {(['collection', 'delivery'] as const).map(choice => <TouchableOpacity key={choice}
+          disabled={processing || paymentFrozen} accessibilityRole="radio" accessibilityState={{ selected: fulfillment === choice }}
+          onPress={() => setFulfillment(choice)} style={{ padding: 14, marginBottom: 8, borderWidth: 1, borderRadius: 8, borderColor: fulfillment === choice ? colors.primary : colors.border }}>
+          <Text style={{ color: colors.text }}>{choice === 'collection' ? 'Free collection — KES 0' : 'Delivery — KES 500 (waived with a valid shipping code)'}</Text>
+        </TouchableOpacity>)}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{fulfillment === 'delivery' ? 'Delivery address' : 'Contact details'}</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.field}>
+          <View style={styles.field} pointerEvents={paymentFrozen ? 'none' : 'auto'}>
             <CountryPicker
               value={countryCodeFromValue(address.country) ?? 'KE'}
               onChange={code => setAddress(prev => ({ ...prev, country: code }))}
@@ -889,10 +969,11 @@ export default function CheckoutScreen() {
               label="Phone country"
             />
           </View>
-          {ADDRESS_FIELDS.map(f => (
+          {ADDRESS_FIELDS.filter(f => fulfillment === 'delivery' || (f.key !== 'address1' && f.key !== 'city')).map(f => (
             <View key={f.key} style={styles.field}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{f.label}</Text>
               <TextInput
+                editable={!processing && !paymentFrozen}
                 value={address[f.key]}
                 onChangeText={v => {
                   setAddress(prev => ({ ...prev, [f.key]: v }));
@@ -917,19 +998,7 @@ export default function CheckoutScreen() {
         <PaymentMethodPicker
           selected={paymentMethod}
           enabled={paymentsConfig?.methods}
-          onChange={(method) => {
-            // Only reset state when the user genuinely switches to a different
-            // method.  Tapping the already-selected row must be a no-op so
-            // that an in-flight payment cannot be unlocked by tapping its own
-            // method row.
-            if (method === paymentMethod) return;
-            // Cancel any in-flight M-Pesa poll so stale callbacks don't act
-            // after the method has switched.
-            cancelMpesaPoll(attemptRef, pollRef);
-            setMpesaWaiting(false);
-            setProcessing(false);
-            setPaymentMethod(method);
-          }}
+          onChange={(method) => { void changePaymentMethod(method); }}
         />
 
         {/* Promo / referral code */}
@@ -979,6 +1048,7 @@ export default function CheckoutScreen() {
                       : <Text style={styles.promoApplyText}>Apply</Text>}
                   </TouchableOpacity>
                 </View>
+                {!!promoError && <Text accessibilityLiveRegion="polite" style={{color: colors.destructive, marginTop:8}}>{promoError}</Text>}
               </>
             )}
           </View>
@@ -986,23 +1056,23 @@ export default function CheckoutScreen() {
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Summary</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {items.map(i => (
+          {(paymentFrozen && baseQuote?.lines ? baseQuote.lines.map(line => ({id: line.productId, name: line.name, quantity: line.quantity, price: line.subtotal / line.quantity})) : items).map(i => (
             <View key={i.id} style={styles.sumRow}>
               <Text style={[styles.sumItemName, { color: colors.text }]} numberOfLines={1}>{i.name} ×{i.quantity}</Text>
-              <Text style={[styles.sumItemPrice, { color: colors.text }]}>KES {(i.price * i.quantity).toLocaleString()}</Text>
+              <Text style={[styles.sumItemPrice, { color: colors.text }]}>KES {(baseQuote?.lines?.find(line => line.productId === i.id)?.subtotal ?? i.price * i.quantity).toLocaleString()}</Text>
             </View>
           ))}
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.sumRow}>
-            <Text style={[styles.sumLabel, { color: colors.mutedForeground }]}>Delivery</Text>
-            <Text style={[styles.sumLabel, { color: colors.mutedForeground }]}>KES {DELIVERY_FEE.toLocaleString()}</Text>
+            <Text style={[styles.sumLabel, { color: colors.mutedForeground }]}>{fulfillment === 'delivery' ? 'Delivery' : 'Collection'}</Text>
+            <Text style={[styles.sumLabel, { color: colors.mutedForeground }]}>KES {(baseQuote?.delivery ?? (fulfillment === 'delivery' ? DELIVERY_FEE : 0)).toLocaleString()}</Text>
           </View>
           {appliedQuote && (
             <View style={styles.sumRow}>
               <Text style={[styles.sumLabel, { color: '#005d8f' }]}>
-                Discount ({usingReferralDiscount ? 'Referral reward' : appliedQuote.promotion.code})
+                {appliedQuote.promotion.type === 'free_shipping' ? 'Free shipping' : 'Discount'} ({usingReferralDiscount ? 'Referral reward' : appliedQuote.promotion.code})
               </Text>
-              <Text style={[styles.sumLabel, { color: '#005d8f' }]}>– KES {appliedQuote.discountAmount.toLocaleString('en-KE')}</Text>
+              <Text style={[styles.sumLabel, { color: '#005d8f' }]}>– KES {(baseQuote?.discountAmount ?? 0).toLocaleString('en-KE')}</Text>
             </View>
           )}
           <View style={styles.sumRow}>
@@ -1014,7 +1084,9 @@ export default function CheckoutScreen() {
 
       <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border,
         paddingBottom: Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
-        <TouchableOpacity onPress={handleConfirm} disabled={processing}
+        {!!quoteError && <Text style={{ color: colors.text }}>{quoteError} Remove the code or refresh your basket before payment.</Text>}
+        {quoteLoading && <ActivityIndicator color={colors.primary} />}
+        <TouchableOpacity onPress={handleConfirm} disabled={processing || quoteLoading || !baseQuote || !quoteCurrent || !fulfillment || !!quoteError}
           style={[styles.confirmBtn, { backgroundColor: processing ? colors.muted : colors.primary }]}>
           {processing ? <ActivityIndicator color="#fff" size="small" /> : (
             <Text style={styles.confirmBtnText}>

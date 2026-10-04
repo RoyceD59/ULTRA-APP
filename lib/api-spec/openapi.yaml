@@ -89,6 +89,70 @@ paths:
         "409": { description: Review revision or content hash changed }
         "422": { description: Unsupported or invalid reference text }
         "503": { description: Approval temporarily unavailable }
+  /uc/checkout/cancel:
+    post:
+      operationId: cancelCompanionCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotencyKey]
+              properties:
+                idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        "200":
+          description: Uninitiated or provider-confirmed failed checkout cancelled; benefits released
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cancelled]
+                properties:
+                  cancelled: { type: boolean }
+        "409":
+          description: Payment may still complete; resume the original payment
+  /uc/checkout/quote:
+    post:
+      operationId: quoteCompanionCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanionCheckoutQuoteInput" }
+      responses:
+        "200":
+          description: Server-priced cart, shipping and code benefit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanionCheckoutQuote" }
+        "422":
+          description: Products, fulfillment or benefit cannot be verified
+  /uc/customer/promotions/water_test/quote:
+    post:
+      operationId: quotePhysicalTestPromotion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhysicalTestPromotionInput" }
+      responses:
+        "200":
+          description: Eligible free physical test entitlement; not a payment or refund
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promotion]
+                properties:
+                  promotion:
+                    type: object
+                    required: [code]
+                    properties:
+                      code: { type: string }
+        "422":
+          description: Code inactive, expired, exhausted or ineligible
   /admin/customer-assignments:
     get:
       operationId: listCustomerAssignments
@@ -3539,6 +3603,55 @@ components:
         knowledgeTitle: { type: [string, "null"] }
         knowledgeReviewedAt: { type: [string, "null"], format: date-time }
         knowledgeReviewedBy: { type: [string, "null"] }
+    PhysicalTestPromotionInput:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 3, maxLength: 64 }
+    CompanionCheckoutQuoteInput:
+      type: object
+      required: [lineItems, fulfillment]
+      properties:
+        fulfillment: { type: string, enum: [collection, delivery] }
+        code: { type: string, maxLength: 64 }
+        applyReferralDiscount: { type: boolean }
+        lineItems:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId: { type: integer, minimum: 1 }
+              quantity: { type: integer, minimum: 1, maximum: 1000 }
+    CompanionCheckoutQuote:
+      type: object
+      required: [promotion, fulfillment, subtotal, delivery, discountAmount, total]
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            required: [productId, name, quantity, subtotal]
+            properties:
+              productId: { type: integer }
+              name: { type: string }
+              quantity: { type: integer }
+              subtotal: { type: number }
+        promotion:
+          type: object
+          required: [code]
+          properties:
+            code: { type: string }
+            title: { type: string }
+            label: { type: string }
+            type: { type: string }
+        fulfillment: { type: string, enum: [collection, delivery] }
+        subtotal: { type: number }
+        delivery: { type: number }
+        discountAmount: { type: number }
+        total: { type: number }
     CustomerAssignmentInput:
       type: object
       required: [idempotencyKey, customerName, email, phone, productId, installationDate, orderId, orderItemId]
@@ -4260,6 +4373,7 @@ components:
       additionalProperties: false
       required: [serviceAddress, preferredContactTime, acknowledgement, idempotencyKey]
       properties:
+        promoCode: { type: string, minLength: 3, maxLength: 64 }
         idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
         actionToken: { type: string, writeOnly: true }
         serviceAddress: { type: string, minLength: 5, maxLength: 300 }
@@ -4279,6 +4393,8 @@ components:
       type: object
       required: [assessmentId, reference, serviceState]
       properties:
+        freeWaterTest: { type: boolean }
+        promoCode: { type: string }
         assessmentId: { type: string }
         reference: { type: string }
         serviceState:
@@ -4296,6 +4412,8 @@ components:
         bands: { $ref: "#/components/schemas/InstantWaterBands" }
         accountLinkState: { type: string }
         serviceState: { type: string }
+        freeWaterTest: { type: boolean }
+        promoCode: { type: string }
         createdAt: { type: string, format: date-time }
 
     InstantWaterAssessmentHistory:
@@ -4354,6 +4472,8 @@ components:
             consentVersion: { type: string }
             sourceAttribution: { type: object, additionalProperties: true }
             serviceAddress: { type: string }
+            promoCode: { type: string }
+            freeWaterTest: { type: boolean }
             preferredContactTime: { type: string }
             mediaReferences:
               type: array

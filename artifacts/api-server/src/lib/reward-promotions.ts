@@ -1,10 +1,10 @@
 import { pool } from "@workspace/db";
 
-export type PromotionOperation = "checkout" | "redemption" | "award";
-export type PromotionQuote = { id: number; code: string; type: string; effectMode: string; effectValue: number; benefit: number; subtotal: number; eligibleSubtotal: number; finalSubtotal: number };
+export type PromotionOperation = "checkout" | "redemption" | "award" | "water_test";
+export type PromotionQuote = { id: number; code: string; type: string; effectMode: string; effectValue: number; benefit: number; subtotal: number; eligibleSubtotal: number; finalSubtotal: number; eligibleProductIds?: number[] };
 
 /** Validate a promotion using DB time and product eligibility, never client totals. */
-export async function quotePromotion(code: string, operation: PromotionOperation, productIds: number[], subtotal: number, lines?: { productId: number; subtotal: number }[]): Promise<PromotionQuote | null> {
+export async function quotePromotion(code: string, operation: PromotionOperation, productIds: number[], subtotal: number, lines?: { productId: number; subtotal: number }[], userId?: number): Promise<PromotionQuote | null> {
   const result = await pool.query(
     `SELECT p.id,p.code,p.type,p.effect_mode,p.effect_value::text,
       EXISTS (SELECT 1 FROM uc_promotion_products pp WHERE pp.promotion_id=p.id) AS restricted,
@@ -15,22 +15,28 @@ export async function quotePromotion(code: string, operation: PromotionOperation
     [code.trim(), productIds],
   );
   const row = result.rows[0];
-  if (!row || row.type !== (operation === "checkout" ? "checkout_discount" : operation === "redemption" ? "redemption_boost" : "bonus_points") ||
+  const allowed = operation === "checkout" ? ["checkout_discount", "free_shipping"] : [operation === "water_test" ? "free_water_test" : operation === "redemption" ? "redemption_boost" : "bonus_points"];
+  if (!row || !allowed.includes(row.type) ||
       (row.restricted && !row.eligible)) return null;
+  const limits = await pool.query(`SELECT
+    (global_use_limit IS NULL OR global_use_limit > (SELECT count(*) FROM uc_promotion_uses WHERE promotion_id=p.id)) AND
+    ($2::int IS NULL OR per_user_use_limit IS NULL OR per_user_use_limit > (SELECT count(*) FROM uc_promotion_uses WHERE promotion_id=p.id AND user_id=$2)) AS available
+    FROM uc_promotions p WHERE id=$1`, [row.id, userId ?? null]);
+  if (!limits.rows[0]?.available) return null;
   const value = Number(row.effect_value);
   // Eligibility is evaluated against server-priced lines.  Callers that do
   // not have lines (non-checkout promotions) retain their supplied subtotal.
   const rawEligible = Array.isArray(row.eligible_products)
     ? row.eligible_products
     : String(row.eligible_products ?? "").replace(/[{}]/g, "").split(",").filter(Boolean);
-  const eligibleIds = new Set(rawEligible.map(Number));
+  const eligibleIds = new Set<number>((rawEligible as unknown[]).map(Number));
   const eligibleSubtotal = operation === "checkout" && row.restricted
     ? (lines ?? []).filter((line) => eligibleIds.has(line.productId)).reduce((sum, line) => sum + line.subtotal, 0)
     : subtotal;
-  const benefit = row.effect_mode === "percentage"
+  const benefit = row.type === "free_shipping" || row.type === "free_water_test" ? 0 : row.effect_mode === "percentage"
     ? Math.max(0, Math.min(eligibleSubtotal, eligibleSubtotal * value / 100))
     : Math.max(0, Math.min(eligibleSubtotal, value));
-  return { id: Number(row.id), code: row.code, type: row.type, effectMode: row.effect_mode, effectValue: value, benefit, subtotal, eligibleSubtotal, finalSubtotal: Math.max(0, subtotal - benefit) };
+  return { id: Number(row.id), code: row.code, type: row.type, effectMode: row.effect_mode, effectValue: value, benefit, subtotal, eligibleSubtotal, finalSubtotal: Math.max(0, subtotal - benefit), eligibleProductIds: [...eligibleIds].sort((a,b) => a-b) };
 }
 
 /** Atomically consume one eligible use; retrying the same customer key returns the original use. */
@@ -45,11 +51,21 @@ export async function consumePromotion(input: { quote: PromotionQuote; userId: n
 
 /** Use this inside the caller's order transaction so order and use are indivisible. */
 export async function consumePromotionOnClient(client: { query: (text: string, values?: unknown[]) => Promise<{ rows: any[] }> }, input: { quote: PromotionQuote; userId: number; operation: PromotionOperation; actor: string; idempotencyKey: string; operationRef?: string }) {
-    await client.query("SELECT pg_advisory_xact_lock($1), pg_advisory_xact_lock($2)", [input.quote.id, input.userId]);
+    await client.query("SELECT pg_advisory_xact_lock(860,$1), pg_advisory_xact_lock(861,$2)", [input.quote.id, input.userId]);
     const prior = await client.query(`SELECT * FROM uc_promotion_uses WHERE user_id=$1 AND idempotency_key=$2`, [input.userId, input.idempotencyKey]);
     if (prior.rows[0]) return { use: prior.rows[0], repeated: true };
-    const limits = await client.query(`SELECT global_use_limit,per_user_use_limit FROM uc_promotions WHERE id=$1 AND active AND starts_at<=now() AND (ends_at IS NULL OR ends_at>now()) FOR UPDATE`, [input.quote.id]);
+    const limits = await client.query(`SELECT global_use_limit,per_user_use_limit,type,effect_mode,effect_value FROM uc_promotions WHERE id=$1 AND active AND starts_at<=now() AND (ends_at IS NULL OR ends_at>now()) FOR UPDATE`, [input.quote.id]);
     if (!limits.rows[0]) throw Object.assign(new Error("Promotion is no longer active"), { code: "INVALID_PROMOTION" });
+    if (limits.rows[0].type !== input.quote.type || limits.rows[0].effect_mode !== input.quote.effectMode ||
+        Number(limits.rows[0].effect_value) !== input.quote.effectValue) {
+      throw Object.assign(new Error("Promotion changed; refresh your quote"), { code: "INVALID_PROMOTION" });
+    }
+    if (input.quote.eligibleProductIds) {
+      const products = await client.query("SELECT product_id FROM uc_promotion_products WHERE promotion_id=$1 ORDER BY product_id", [input.quote.id]);
+      if (JSON.stringify(products.rows.map(p => Number(p.product_id))) !== JSON.stringify(input.quote.eligibleProductIds)) {
+        throw Object.assign(new Error("Eligible products changed; refresh your quote"), { code: "INVALID_PROMOTION" });
+      }
+    }
     const counts = await client.query(`SELECT count(*) FILTER (WHERE promotion_id=$1)::int AS global, count(*) FILTER (WHERE promotion_id=$1 AND user_id=$2)::int AS personal FROM uc_promotion_uses`, [input.quote.id, input.userId]);
     const lim = limits.rows[0], count = counts.rows[0];
     if ((lim.global_use_limit != null && Number(count.global) >= Number(lim.global_use_limit)) || (lim.per_user_use_limit != null && Number(count.personal) >= Number(lim.per_user_use_limit))) throw Object.assign(new Error("Promotion use limit reached"), { code: "PROMOTION_EXHAUSTED" });

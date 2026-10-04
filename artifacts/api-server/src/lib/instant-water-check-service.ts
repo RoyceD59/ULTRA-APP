@@ -14,6 +14,8 @@ import {
   type InstantWaterCheckResult,
 } from "./instant-water-check.js";
 import { enqueueLeadDelivery } from "./lead-delivery.js";
+import { quotePromotion, consumePromotionOnClient } from "./reward-promotions.js";
+import { notifyPhysicalTest } from "./physical-test-notifications.js";
 import { withWaterRecommendationTarget, type CatalogueLoader } from "./water-recommendation-targets.js";
 
 const PUBLIC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -961,7 +963,8 @@ export async function requestPhysicalTest(input: {
   acknowledgement: boolean;
   mediaReferences?: Array<{ reference: string; mediaType: string }>;
   idempotencyKey: string;
-}): Promise<{ assessmentId: string; reference: string; serviceState: string; ticketId: string }> {
+  promoCode?: string;
+}): Promise<{ assessmentId: string; reference: string; serviceState: string; ticketId: string; freeWaterTest?: boolean; promoCode?: string }> {
   if (!input.acknowledgement) throw new Error("ACKNOWLEDGEMENT_REQUIRED");
   const media = input.mediaReferences ?? [];
   if (media.length > 7) throw new Error("MEDIA_LIMIT");
@@ -994,10 +997,12 @@ export async function requestPhysicalTest(input: {
     preferredContactTime: input.preferredContactTime.trim(),
     acknowledgement: input.acknowledgement,
     mediaReferences: media,
+    ...(input.promoCode?.trim() ? { promoCode: input.promoCode.trim().toUpperCase() } : {}),
   }));
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`physical-test:${input.assessmentId}`]);
     const prior = await client.query(
       `SELECT id, request_hash, response, expires_at > now() AS active FROM instant_water_idempotency
         WHERE endpoint = 'request-instant-water-physical-test'
@@ -1013,7 +1018,7 @@ export async function requestPhysicalTest(input: {
       }
     }
     const ticket = await client.query(
-      `SELECT id, service_state FROM instant_water_check_tickets WHERE assessment_id = $1 FOR UPDATE`,
+      `SELECT id, service_state, physical_request_acknowledged_at, free_water_test, promo_code FROM instant_water_check_tickets WHERE assessment_id = $1 FOR UPDATE`,
       [input.assessmentId],
     );
     if (!ticket.rows[0]) throw new Error("NOT_FOUND");
@@ -1027,6 +1032,8 @@ export async function requestPhysicalTest(input: {
         reference: row.reference,
         serviceState: String(ticket.rows[0].service_state),
         ticketId: String(ticket.rows[0].id),
+        freeWaterTest: ticket.rows[0].free_water_test,
+        promoCode: ticket.rows[0].promo_code ?? "",
       };
       await client.query(
         `UPDATE instant_water_idempotency
@@ -1040,14 +1047,26 @@ export async function requestPhysicalTest(input: {
     if (ticket.rows[0].service_state !== "instant_result_ready" && ticket.rows[0].service_state !== "follow_up_requested" && ticket.rows[0].service_state !== serviceState) {
       throw new Error("CONFLICT");
     }
+    if (ticket.rows[0].physical_request_acknowledged_at) throw new Error("CONFLICT");
     const mediaPaths = await verifyInstantMediaReferences(input.assessmentId, input.userId, media);
     const ticketId = String(ticket.rows[0].id);
+    const promoCode = input.promoCode?.trim().toUpperCase() ?? "";
+    if (promoCode) {
+      const customerId = Number(input.userId ?? row.customer_user_id);
+      if (!Number.isInteger(customerId) || customerId <= 0) throw Object.assign(new Error("Sign in to apply a free water test code"), { code: "INVALID_PROMOTION" });
+      if (serviceState !== "physical_test_requested") throw Object.assign(new Error("Physical tests are not available in this country"), { code: "INVALID_PROMOTION" });
+      const promotion = await quotePromotion(promoCode, "water_test", [], 0, undefined, customerId);
+      if (!promotion) throw Object.assign(new Error("Water test code is inactive, expired, exhausted, or ineligible"), { code: "INVALID_PROMOTION" });
+      await consumePromotionOnClient(client, { quote: promotion, userId: customerId, operation: "water_test",
+        actor: `customer:${customerId}`, idempotencyKey: `physical-test:${input.assessmentId}`, operationRef: ticketId });
+    }
     await client.query(
       `UPDATE instant_water_check_tickets
           SET service_state = $2, service_address = $3, preferred_contact_time = $4,
               physical_request_acknowledged_at = now(), media_references = $5::jsonb, updated_at = now()
+              , promo_code = $6, free_water_test = $7
         WHERE assessment_id = $1`,
-      [input.assessmentId, serviceState, input.serviceAddress.trim(), input.preferredContactTime.trim(), JSON.stringify(media)],
+      [input.assessmentId, serviceState, input.serviceAddress.trim(), input.preferredContactTime.trim(), JSON.stringify(media), promoCode || null, !!promoCode],
     );
     if (mediaPaths.length) {
       await client.query(
@@ -1063,7 +1082,7 @@ export async function requestPhysicalTest(input: {
         WHERE id = $1`,
       [input.assessmentId, serviceState],
     );
-    const response = { assessmentId: input.assessmentId, reference: row.reference, serviceState, ticketId };
+    const response = { assessmentId: input.assessmentId, reference: row.reference, serviceState, ticketId, freeWaterTest: !!promoCode, promoCode };
     await client.query(
       `INSERT INTO instant_water_idempotency
        (id, endpoint, scope, idempotency_key, request_hash, assessment_id, response, expires_at)
@@ -1071,6 +1090,11 @@ export async function requestPhysicalTest(input: {
       [randomUUID(), input.assessmentId, input.idempotencyKey, requestHash, input.assessmentId, response],
     );
     await client.query("COMMIT");
+    if (serviceState === "physical_test_requested") {
+      void notifyPhysicalTest({ ticketId, userId: input.userId ?? row.customer_user_id ?? undefined,
+        firstName: row.first_name, phone: row.normalized_phone, address: input.serviceAddress.trim(),
+        source: row.source, concerns: row.concern, freeWaterTest: !!promoCode, promoCode }).catch(() => {});
+    }
     return response;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -1101,10 +1125,14 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
   serviceState: string;
   createdAt: Date;
   answers: InstantWaterCheckAnswers;
+  freeWaterTest: boolean;
+  promoCode: string;
 }>> {
   const result = await pool.query(
-    `SELECT id, reference, result, raw_answers, country, area, source, concern, setting, account_link_state, physical_request_state, created_at
-       FROM instant_water_assessments
+    `SELECT id, reference, result, raw_answers, country, area, source, concern, setting, account_link_state, physical_request_state, created_at,
+       COALESCE((SELECT free_water_test FROM instant_water_check_tickets WHERE assessment_id=a.id),false) AS free_water_test,
+       (SELECT promo_code FROM instant_water_check_tickets WHERE assessment_id=a.id) AS promo_code
+       FROM instant_water_assessments a
       WHERE customer_user_id = $1 AND account_link_state = 'attached'
       ORDER BY created_at DESC`,
     [userId],
@@ -1116,6 +1144,8 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
     answers: storedWaterAnswers(row),
     accountLinkState: row.account_link_state,
     serviceState: row.physical_request_state,
+    freeWaterTest: row.free_water_test,
+    promoCode: row.promo_code ?? "",
     createdAt: row.created_at,
   }));
 }
@@ -1190,7 +1220,7 @@ export function buildInstantAssessmentAiContext(assessment: Record<string, unkno
 export async function getAdminAssessment(assessmentId: string): Promise<Record<string, unknown> | null> {
   const result = await pool.query(
     `SELECT a.*, t.id AS ticket_id, t.service_state, t.service_address,
-            t.preferred_contact_time, t.media_references,
+            t.preferred_contact_time, t.media_references, t.promo_code, t.free_water_test,
             GREATEST(a.updated_at, COALESCE(t.updated_at, a.updated_at)) AS concurrency_updated_at
        FROM instant_water_assessments a
        LEFT JOIN instant_water_check_tickets t ON t.assessment_id = a.id
@@ -1218,6 +1248,8 @@ export async function getAdminAssessment(assessmentId: string): Promise<Record<s
     consentVersion: (row as Record<string, unknown>).consent_version,
     sourceAttribution: row.source_attribution,
     serviceAddress: row.service_address,
+    promoCode: row.promo_code,
+    freeWaterTest: row.free_water_test,
     preferredContactTime: row.preferred_contact_time,
     mediaReferences: projectHubMediaReferences(assessmentId, row.media_references),
   };

@@ -11,6 +11,9 @@ import { buildOrderReceiptEmail } from "../lib/email.js";
 import { paymentLimiter } from "../lib/rate-limiters.js";
 import { enqueueReferralSettlement } from "./referrals.js";
 import { reconcileCanonicalPurchaseDualWrite } from "../lib/canonical-purchase-dual-write.js";
+import { prepareCheckoutOrder, bindCheckoutPayment, confirmCheckoutOrder } from "../lib/checkout-orders.js";
+import { notifyConfirmedCheckout, verifyPaymentOnServer } from "./uc.js";
+import { verifyToken } from "../lib/jwt.js";
 
 async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
   // Provider recovery rows carry an email/phone placeholder until /uc/orders
@@ -69,6 +72,80 @@ export function alertTeamRecoveryOrder(params: {
 export const NON_RETRIABLE_CODES = new Set(["1", "1032", "2001"]);
 
 const router = Router();
+export async function recoverSnapshotCheckout(reference: string, amount: number, currency: string, receipt?: string,
+  notify: typeof notifyConfirmedCheckout = notifyConfirmedCheckout): Promise<number | null> {
+  const result = await pool.query("SELECT * FROM uc_orders WHERE payment_reference=$1 AND checkout_snapshot IS NOT NULL", [reference]);
+  const order = result.rows[0];
+  if (!order) return null;
+  if (!Number.isFinite(amount) || Math.abs(Number(order.total) - amount) > 0.01 || currency.toUpperCase() !== "KES") throw new Error("Payment does not match reserved checkout");
+  // Fill the verified receipt before confirmation reads the order and queues
+  // notifications. Empty strings are the schema default, not SQL NULL.
+  if (receipt && order.payment_method === "mpesa") await pool.query(`UPDATE uc_orders SET mpesa_receipt=$2
+    WHERE id=$1 AND (mpesa_receipt='' OR mpesa_receipt IS NULL)`,[order.id,receipt]);
+  const confirmed = await confirmCheckoutOrder(order.id, reference);
+  if (!confirmed.repeated && !confirmed.reconciliationRequired) await notify(confirmed.order);
+  return order.id;
+}
+// Modern checkout supplies the full cart/fulfillment identity. Old payment
+// clients retain their existing contract, but never influence these snapshots.
+router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/session"], async (req, res, next) => {
+  if (!req.body?.checkout) { next(); return; }
+  const claims = verifyToken(req.headers.authorization);
+  if (claims?.type === "team-session") { res.status(403).json({ error: "Customer checkout required" }); return; }
+  const userId = claims ? String(claims.id) : "anonymous";
+  const method = req.path.includes("paystack") ? "paystack" : req.path.includes("mpesa") ? "mpesa" : "stripe";
+  try {
+    let order = await prepareCheckoutOrder(req.body.checkout, userId, method);
+    if (method === "mpesa" && order.checkout_snapshot?.provider && order.payment_reference &&
+        order.status === "pending" && order.checkout_state === "payment_initiating") {
+      const verified = await verifyPaymentOnServer("mpesa", order.payment_reference);
+      if (verified.failureFinal) {
+        // A failed attempt is not a new checkout/redemption. Archive its
+        // identity and retain the immutable order and benefit reservation.
+        // The compare-and-swap permits only one concurrent replacement push.
+        const attempt = JSON.stringify({id:order.checkout_snapshot.paymentAttemptId ?? order.payment_reference,
+          reference:order.payment_reference,provider:order.checkout_snapshot.provider,outcome:"terminal_failure"});
+        const reset = await pool.query(`UPDATE uc_orders SET payment_reference='',checkout_state='payment_pending',
+          checkout_snapshot=checkout_snapshot || jsonb_build_object('provider',NULL,'paymentAttemptId',$4::text,
+            'paymentAttempts',COALESCE(checkout_snapshot->'paymentAttempts','[]'::jsonb) || $3::jsonb)
+          WHERE id=$1 AND payment_reference=$2 AND status='pending' AND checkout_state='payment_initiating'
+            AND payment_confirmed_at IS NULL RETURNING *`,
+          [order.id,order.payment_reference,attempt,randomUUID()]);
+        order = reset.rows[0] ?? (await pool.query("SELECT * FROM uc_orders WHERE id=$1",[order.id])).rows[0];
+      }
+    }
+    if (order.checkout_snapshot?.provider) { res.json(order.checkout_snapshot.provider); return; }
+    const acquired = await pool.query(`UPDATE uc_orders SET checkout_state='payment_initiating'
+      WHERE id=$1 AND checkout_state='payment_pending' RETURNING id`, [order.id]);
+    if (!acquired.rows[0]) { res.status(409).json({ error: "The original payment is being initialized or needs reconciliation. Do not start another charge." }); return; }
+    req.body.amount = Number(order.total);
+    req.body.orderId = String(order.id);
+    if (method === "paystack" && !order.payment_reference) {
+      // Paystack accepts a caller-supplied reference. Persist it before the
+      // provider call so even a webhook arriving before initialize returns
+      // finds the original cart and its atomic benefit, never a recovery shell.
+      const reference = `uc_${order.checkout_claim_id}`;
+      await pool.query("UPDATE uc_orders SET payment_reference=$2 WHERE id=$1", [order.id, reference]);
+      res.locals.checkoutReference = reference;
+    } else if (method === "paystack") res.locals.checkoutReference = order.payment_reference;
+    const send = res.json.bind(res);
+    res.json = ((body: any) => {
+      const reference = body?.reference ?? body?.checkoutRequestId ?? body?.sessionId;
+      if (res.statusCode < 400 && reference) {
+        void bindCheckoutPayment(order.id, reference, body).then(() => send(body)).catch(() => {
+          res.status(503); send({ error: "Payment was initiated but its confirmation could not be saved. Contact the team before trying another payment.", retryable: false });
+        });
+      } else {
+        // Do not retry an ambiguous STK initiation; initialize-only card
+        // sessions can safely be requested again if no reference was returned.
+        if (method !== "mpesa") void pool.query("UPDATE uc_orders SET checkout_state='payment_pending' WHERE id=$1", [order.id]);
+        send(body);
+      }
+      return res;
+    }) as typeof res.json;
+    next();
+  } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
 
 // ─── M-Pesa webhook secret — DB-backed with env-var fallback ──────────────────
 // The secret is read at request time so admins can rotate it from the admin
@@ -558,7 +635,7 @@ router.post(
 
     const secretKey = process.env["PAYSTACK_SECRET_KEY"];
     if (!secretKey) {
-      const ref = `PS_MOCK_${Date.now()}`;
+      const ref = res.locals.checkoutReference ?? `PS_MOCK_${Date.now()}`;
       res.json({
         authorizationUrl: `https://checkout.paystack.com/mock`,
         accessCode: `mock_access_${Date.now()}`,
@@ -578,6 +655,7 @@ router.post(
           email,
           amount: Math.round(amount * 100),
           currency: "KES",
+          ...(res.locals.checkoutReference ? { reference: res.locals.checkoutReference } : {}),
           callback_url: resolvedCallback,
         }),
       });
@@ -714,6 +792,8 @@ router.post(
 
     try {
       // ── Idempotency: look up existing order by payment reference ──────────
+      const snapshotOrderId = await recoverSnapshotCheckout(reference, amountKobo / 100, currency);
+      if (snapshotOrderId) { res.json({ received: true, orderId: snapshotOrderId }); return; }
       const existing = await db
         .select()
         .from(ucOrdersTable)
@@ -1176,6 +1256,10 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
     console.info(
       `[M-Pesa callback] Daraja confirmed payment — ref=${CheckoutRequestID} amount=${paidAmount} receipt=${receiptNum}`
     );
+    const snapshotOrderId = await recoverSnapshotCheckout(CheckoutRequestID, paidAmount, "KES", receiptNum);
+    if (snapshotOrderId) {
+      ack({ orderId: snapshotOrderId }); return;
+    }
 
     if (existing.length > 0) {
       const order = existing[0]!;

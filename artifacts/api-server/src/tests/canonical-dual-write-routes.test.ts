@@ -251,6 +251,7 @@ describe("canonical dual-write HTTP integration", { concurrency: false }, () => 
     };
     globalThis.fetch = async (url: unknown, init?: RequestInit) => {
       const target = String(url);
+      if (target.includes("canonical-cod.test") && target.includes("/products")) return new Response(JSON.stringify([{id:22,name:"Bottle Filter Cartridge",price:"2350",stock_status:"instock"}]));
       if (target.includes("canonical-cod.test") && target.includes("/orders") && init?.method === "POST") {
         wcPostCalls++;
         return new Response(JSON.stringify(remoteOrder), { status: 201 });
@@ -388,6 +389,7 @@ describe("canonical dual-write HTTP integration", { concurrency: false }, () => 
     };
     globalThis.fetch = async (url: unknown, init?: RequestInit) => {
       const target = String(url);
+      if (target.includes("canonical-cross-customer.test") && target.includes("/products")) return new Response(JSON.stringify([{id:22,name:"Bottle Filter Cartridge",price:"2350",stock_status:"instock"}]));
       if (target.includes("canonical-cross-customer.test") && target.includes("/orders") && init?.method === "POST") {
         wcPostCalls++;
         return new Response(JSON.stringify(remoteOrder), { status: 201 });
@@ -513,6 +515,7 @@ describe("canonical dual-write HTTP integration", { concurrency: false }, () => 
     process.env["WC_BASE_URL"] = "https://canonical-concurrent.test";
     globalThis.fetch = async (url: unknown, init?: RequestInit) => {
       const target = String(url);
+      if (target.includes("canonical-concurrent.test") && target.includes("/products")) return new Response(JSON.stringify([{id:22,name:"Bottle Filter Cartridge",price:"2350",stock_status:"instock"}]));
       if (target.includes("canonical-concurrent.test") && target.includes("/orders") && init?.method === "POST") {
         wcPostCalls++;
         await new Promise((resolve) => setTimeout(resolve, 100));

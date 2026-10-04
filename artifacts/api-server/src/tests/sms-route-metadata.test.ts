@@ -168,6 +168,7 @@ describe("route handlers pass customer SMS metadata end-to-end", () => {
 
     globalThis.fetch = async (input, init) => {
       const url = String(input);
+      if (url.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
       if (url.includes("wc.sms-route.test") && url.includes("/orders") && init?.method === "POST") {
         return new Response(JSON.stringify({
           id: wcOrderId,

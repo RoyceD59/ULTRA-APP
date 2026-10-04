@@ -34,6 +34,9 @@ const TOKEN_KEY = "uc_orders_admin_token";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AdminOrder {
+  shippingAddress?: { fulfillment?: string; shippingAmount?: string };
+  discountAmount?: number;
+  promoCode?: string;
   id: number;
   userId: string;
   status: string;
@@ -502,6 +505,7 @@ function OrderCard({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-semibold">Order #{order.id}</span>
+            {!!order.shippingAddress?.fulfillment && <Badge variant="outline">{order.shippingAddress.fulfillment === "collection" ? "Free collection" : "Delivery"}</Badge>}
             {/* Webhook recovery badge — persisted flag, never derived from heuristics */}
             {isRecovery && (
               <Badge className="bg-amber-500 text-white hover:bg-amber-600 gap-1 text-xs font-medium">
@@ -632,6 +636,8 @@ function OrderCard({
           </Button>
           <div className="text-sm font-semibold text-right">
             Total: {order.currency} {order.total}
+            {order.shippingAddress?.shippingAmount !== undefined && <span className="text-xs ml-2">Shipping: KES {order.shippingAddress.shippingAmount}</span>}
+            {!!order.discountAmount && <span className="text-xs ml-2">Discount: KES {order.discountAmount} {order.promoCode}</span>}
           </div>
         </div>
         <OrderActions order={order} token={token} onChanged={onChanged} />

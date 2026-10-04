@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBase } from '@/lib/apiBase';
-import { getHydrateCustomerTree } from '@workspace/api-client-react/companion/customer';
+import { getHydrateCustomerTree, quoteCompanionCheckout, quotePhysicalTestPromotion } from '@workspace/api-client-react/companion/customer';
 import type { HydrateCustomerTree } from '@workspace/api-client-react/companion/models/hydrateCustomerTree';
 import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
 
@@ -127,6 +127,8 @@ export interface UCOrderStatusEvent {
 }
 
 export interface UCOrder {
+  discountAmount?: number;
+  promoCode?: string;
   id: number;
   orderNumber?: number | string;
   status: string;
@@ -146,6 +148,8 @@ export interface UCOrder {
 }
 
 export interface UCAddress {
+  fulfillment?: 'collection' | 'delivery';
+  shippingAmount?: string;
   firstName: string;
   lastName: string;
   address1: string;
@@ -411,8 +415,12 @@ export interface CodeValidationResult {
 
 /** A checkout amount returned by the promotion service. Amounts are server-calculated. */
 export interface CheckoutPromotionQuote {
+  code?: string;
+  referralBenefitId?: number | null;
+  lines?: { productId: number; name: string; quantity: number; subtotal: number }[];
   promotion: {
     code: string;
+    type?: string;
     title?: string;
     label?: string;
   };
@@ -420,6 +428,17 @@ export interface CheckoutPromotionQuote {
   delivery: number;
   discountAmount: number;
   total: number;
+  fulfillment?: 'collection' | 'delivery';
+}
+
+export interface CheckoutPaymentInput {
+  quotedTotal?: number;
+  lineItems: { productId: number; quantity: number }[];
+  fulfillment: 'collection' | 'delivery';
+  promoCode?: string;
+  applyReferralDiscount?: boolean;
+  shippingAddress: UCAddress;
+  idempotencyKey: string;
 }
 /** Server-side notification preferences, including the opt-in flags for
  *  filter-reminder delivery via external channels (email / SMS / WhatsApp). */
@@ -538,12 +557,20 @@ export function useApi() {
       /** Applies the caller's own available referral reward; identity comes from auth. */
       applyReferralDiscount?: boolean;
       idempotencyKey: string;
-    }) => post<UCOrder>('/api/uc/orders', data),
+      fulfillment?: 'collection' | 'delivery';
+    }) => post<UCOrder & { reconciliationRequired?: boolean }>('/api/uc/orders', data).then(order => {
+      if (order.reconciliationRequired) throw new ApiError("Your checkout is saved and awaiting fulfillment reconciliation. Retry this confirmation; do not start another payment.",503,{retryable:true,orderId:order.id});
+      return order;
+    }),
     /** Validates a checkout code and returns its server-calculated quote. */
-    quoteCheckoutPromotion: (data: { code: string; lineItems: { productId: number; quantity: number }[] }) =>
+    quoteCheckout: (data: { code?: string; applyReferralDiscount?: boolean; fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
+      quoteCompanionCheckout(data, { headers: authHeaders() }),
+    quoteWaterTestPromotion: (code: string) => quotePhysicalTestPromotion({ code }, { headers: authHeaders() }),
+    cancelCheckout: (idempotencyKey: string) => post<{cancelled: boolean}>('/api/uc/checkout/cancel',{idempotencyKey}),
+    quoteCheckoutPromotion: (data: { code: string; fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/promotions/checkout/quote', data),
     /** Quote the authenticated customer's available one-time referral reward. */
-    quoteReferralDiscount: (data: { lineItems: { productId: number; quantity: number }[] }) =>
+    quoteReferralDiscount: (data: { fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/referrals/discount/quote', data),
     /**
      * Look up a purchase by receipt/order number + the checkout phone number
@@ -581,18 +608,18 @@ export function useApi() {
     /** Server-driven payment method availability (e.g. Stripe deactivated). */
     getPaymentsConfig: () =>
       get<PaymentsConfig>('/api/payments/config'),
-    mpesaSTKPush: (phone: string, amount: number, orderId: string) =>
-      post<MpesaResponse>('/api/payments/mpesa', { phone, amount, orderId }),
+    mpesaSTKPush: (phone: string, amount: number, orderId: string, checkout?: CheckoutPaymentInput) =>
+      post<MpesaResponse>('/api/payments/mpesa', { phone, amount, orderId, checkout }),
     mpesaStatus: (checkoutRequestId: string) =>
       get<MpesaStatusResult>(`/api/payments/mpesa/status/${checkoutRequestId}`),
-    stripeSession: (amount: number, orderId: string) =>
-      post<StripeSessionResponse>('/api/payments/stripe/session', { amount, currency: 'kes', orderId }),
+    stripeSession: (amount: number, orderId: string, checkout?: CheckoutPaymentInput) =>
+      post<StripeSessionResponse>('/api/payments/stripe/session', { amount, currency: 'kes', orderId, checkout }),
     stripeSessionStatus: (sessionId: string) =>
       get<StripeSessionStatus>(`/api/payments/stripe/session/${sessionId}`),
     paystackVerify: (reference: string) =>
       get<{ success: boolean; status: string }>(`/api/payments/paystack/verify/${encodeURIComponent(reference)}`),
-    paystackInit: (email: string, amount: number) =>
-      post<PaystackInitResponse>('/api/payments/paystack/init', { email, amount }),
+    paystackInit: (email: string, amount: number, checkout?: CheckoutPaymentInput) =>
+      post<PaystackInitResponse>('/api/payments/paystack/init', { email, amount, checkout }),
     verifyPayment: (reference: string, method: string) =>
       post<PaymentVerifyResult>('/api/payments/verify', { reference, method }),
     getMyReferral: () => get<UCReferralInfo>('/api/uc/referrals/my-code'),
