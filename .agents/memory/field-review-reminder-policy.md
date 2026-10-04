@@ -8,3 +8,9 @@ Treat a successful advance warning and an overdue warning as alternatives for th
 **Why:** The requested outcome prioritizes one clear team alert and avoiding repeated noise for the same location. Repeated overdue escalation is a separate product decision, not implicit permission from adding a scheduler.
 
 **How to apply:** Preserve this behavior when extending location reminders. A genuinely revised review schedule or recorded field visit can rearm the reminder; simply passing the warned date must not do so. Any new escalation cadence should be explicitly requested.
+
+Use Africa/Nairobi as the field-review business calendar, including for staff viewing the dashboard from another timezone.
+
+**Why:** Dashboard warnings and scheduled team alerts must agree on the review day; a viewer's device timezone must not change operational dates.
+
+**How to apply:** Compare date-only review values against the Nairobi calendar date, not the UTC date or the viewer's local date. Preserve this boundary when adding location reporting.
