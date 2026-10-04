@@ -27,6 +27,7 @@ import {
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import { OrderDetailsDialog } from "@/components/orders/OrderDetailsDialog";
 
 const BASE      = API_ORIGIN;
 const TOKEN_KEY = "uc_orders_admin_token";
@@ -508,8 +509,8 @@ function OrderCard({
             {!!order.shippingAddress?.fulfillment && <Badge variant="outline">{order.shippingAddress.fulfillment === "collection" ? "Free collection" : "Delivery"}</Badge>}
             {/* Webhook recovery badge — persisted flag, never derived from heuristics */}
             {isRecovery && (
-              <Badge className="bg-amber-500 text-white hover:bg-amber-600 gap-1 text-xs font-medium">
-                <AlertTriangle className="w-3 h-3" />
+              <Badge className="border-amber-300 bg-amber-100 text-amber-950 hover:bg-amber-100 gap-1 text-xs font-medium">
+                <AlertTriangle className="w-3 h-3" aria-hidden="true" />
                 Webhook recovery
               </Badge>
             )}
@@ -535,9 +536,12 @@ function OrderCard({
               </Badge>
             )}
           </div>
-          <span className="text-muted-foreground text-xs">
-            {formatRelativeDate(order.dateCreated)}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground text-xs">
+              {formatRelativeDate(order.dateCreated)}
+            </span>
+            <OrderDetailsDialog order={order} />
+          </div>
         </div>
 
         {/* Customer row */}
