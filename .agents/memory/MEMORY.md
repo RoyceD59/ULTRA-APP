@@ -48,9 +48,11 @@
 - [OpenAPI URI codegen compatibility](openapi-uri-codegen.md) — generated standalone zod.url() can break runtime imports with the installed Zod; verify URI schemas after codegen.
 - [OpenAPI integer validation](openapi-integer-validation.md) — generated numeric query coercion can accept fractions; enforce integer bounds before passing pagination to SQL.
 - [pnpm Nix version switching](pnpm-nix-version-switching.md) — disable automatic version switching here to avoid recursive self-installs; retain the external CI pin.
+- [pnpm workspace-state checks](pnpm-workspace-state-race.md) — a JSON parsing failure before the compiler runs can be transient under parallel validation; retry the exact command in isolation.
 - [Refill preview activation](refill-preview-activation.md) — persisted admin switches activate delivered previews only; unfinished financial and dispensing functions remain unavailable.
 - [Article body links](article-body-links.md) — rendered articles must use descriptive clickable linkpoints, not bare URLs or literal Markdown links.
 - [Alison answer policy](alison-answer-policy.md) — short replies backed by curated agent Markdown and local customer-facing documents.
+- [Alison welcome policy](alison-welcome-policy.md) — user chose a floating brief-welcome bubble to replace the timed Products banner, not to appear alongside it.
 - [Review sentiment policy](review-sentiment-policy.md) — stars and text remain separate; Mixed is not disagreement; staff-only AI must not drive customer decisions.
 - [Hydrate programme policy](hydrate-programme-policy.md) — 3% split equally; refills add no funding; unavailable evidence stays pending; static forest hosting only.
 - [Customer assignment policy](customer-assignment-policy.md) — pre-signup reservations are not accounts or sales; name is not proof; ownership linking never implies COD collection.

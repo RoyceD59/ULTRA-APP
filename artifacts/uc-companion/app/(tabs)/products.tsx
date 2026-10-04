@@ -26,6 +26,8 @@ import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AlisonWelcomeBubble from '@/components/AlisonWelcomeBubble';
+import { useAlisonNudge } from '@/hooks/useAlisonNudge';
 import { STORE_CATEGORIES, visibleStoreCategory, type StoreCategory } from '@/lib/storeCategories';
 import {
   catalogueQueryKey,
@@ -138,10 +140,6 @@ function ProductsScreenContent() {
   const [alisonCollapsed, setAlisonCollapsed] = useState(true); // default collapsed until AsyncStorage resolves
   const [alisonReady, setAlisonReady] = useState(false); // true once AsyncStorage check is done
 
-  // In-grid Alison nudge — session-only dismissal
-  const nudgeDismissedRef = useRef(false);
-  const [nudgeReady, setNudgeReady] = useState(false);
-
   // True when the user has an active filter — suppress Alison surfaces
   const isFiltering = search.length > 0 || category !== 'All';
 
@@ -168,20 +166,6 @@ function ProductsScreenContent() {
       setAlisonCollapsed(false);
       setAlisonReady(true);
     });
-  }, []);
-
-  // Make the inline nudge eligible after 8 seconds of browsing. Filtering only
-  // suppresses its display; clearing the filter can reveal it unless dismissed.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!nudgeDismissedRef.current) setNudgeReady(true);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const dismissNudge = useCallback(() => {
-    nudgeDismissedRef.current = true;
-    setNudgeReady(false);
   }, []);
 
   // Animated transition for the empty-basket view: 1 = visible, 0 = hidden.
@@ -419,37 +403,9 @@ function ProductsScreenContent() {
     </Animated.View>
   );
 
-  // ── In-grid Alison nudge (session-timed) ──────────────────────────────────────
-
-  const showNudge = nudgeReady && !isFiltering && (products?.length ?? 0) > numColumns;
-  const alisonNudge = showNudge ? (
-    <View
-      testID="products-alison-nudge"
-      style={[styles.alisonNudge, { backgroundColor: colors.surface, borderColor: colors.primary + '55' }]}>
-      <View style={[styles.chatAvatar, { backgroundColor: colors.primary }]}>
-        <Text style={styles.chatAvatarText}>A</Text>
-      </View>
-      <TouchableOpacity
-        testID="products-alison-nudge-open"
-        onPress={() => router.push('/ai-chat' as never)}
-        activeOpacity={0.85}
-        style={styles.alisonNudgeContent}>
-        <Text style={[styles.alisonNudgeTitle, { color: colors.text }]}>Not sure which filter fits?</Text>
-        <Text style={[styles.alisonNudgeText, { color: colors.mutedForeground }]}>
-          Ask Alison for a quick recommendation
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        testID="products-alison-nudge-dismiss"
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss filter help"
-        hitSlop={10}
-        onPress={dismissNudge}
-        style={styles.alisonNudgeDismiss}>
-        <Ionicons name="close" size={18} color={colors.mutedForeground} />
-      </TouchableOpacity>
-    </View>
-  ) : null;
+  const { visible: showNudge, dismiss: dismissNudge } = useAlisonNudge(
+    isFiltering, (products?.length ?? 0) > 0,
+  );
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
@@ -555,32 +511,6 @@ function ProductsScreenContent() {
                       {(products ?? []).length} product{(products ?? []).length === 1 ? '' : 's'}
                     </Text>
                   </View>
-                  {showNudge && (
-                    <>
-                      <View style={[styles.row, { flexDirection: 'row', gap: layout.gap }]}>
-                        {(products ?? []).slice(0, numColumns).map(product => {
-                          const isServerWishlisted = wishlist?.some(w => w.productId === product.id) ?? false;
-                          const pendingState = wishlistPendingMap[product.id];
-                          const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
-                          return (
-                            <View key={product.id} style={[styles.cardWrap, { width: layout.cardWidth, marginBottom: 8 }]}>
-                              <ProductCard
-                                product={product}
-                                isWishlisted={isWishlisted}
-                                wishlistPending={pendingState !== undefined}
-                                onToggleWishlist={() => toggleWishlist(product)}
-                                onPress={() => router.push({
-                                  pathname: '/product/[id]',
-                                  params: { id: String(product.id), category },
-                                } as never)}
-                              />
-                            </View>
-                          );
-                        })}
-                      </View>
-                      {alisonNudge}
-                    </>
-                  )}
                 </View>
               }
               ListEmptyComponent={
@@ -615,12 +545,19 @@ function ProductsScreenContent() {
                   </View>
                 );
               }}
-              data={showNudge ? (products ?? []).slice(numColumns) : (products ?? [])}
+              data={products ?? []}
             />
           )}
         </View>
       </Animated.ScrollView>
 
+      {showNudge && (
+        <AlisonWelcomeBubble
+          bottom={Math.max(cartBarInset, layout.size === 'compact' ? 0 : insets.bottom) + 12}
+          onOpen={() => router.push('/ai-chat' as never)}
+          onDismiss={dismissNudge}
+        />
+      )}
     </View>
   );
 }
@@ -759,21 +696,6 @@ const styles = StyleSheet.create({
     borderRadius: 20, borderWidth: 1,
   },
   quickReplyText: { fontSize: 13, fontWeight: '500' as const },
-
-  // ── In-grid Alison nudge ───────────────────────────────────────────────────────
-  alisonNudge: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 8,
-  },
-  alisonNudgeContent: { flex: 1 },
-  alisonNudgeTitle: { fontSize: 14, fontWeight: '700' as const },
-  alisonNudgeText: { fontSize: 12, marginTop: 2 },
-  alisonNudgeDismiss: {
-    width: 32, height: 32,
-    alignItems: 'center', justifyContent: 'center',
-  },
 
   // ── Products catalog ──────────────────────────────────────────────────────────
   catalogHeader: {

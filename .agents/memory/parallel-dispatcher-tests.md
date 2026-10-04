@@ -14,3 +14,14 @@ Tests of a dispatcher protected by one global database advisory lock must not ru
 **Why:** A worker holding the real lock makes another file's job correctly skip, which looks like a test failure rather than independent test execution.
 
 **How to apply:** Put suites exercising the same global job lock in the test runner's serial shared-state phase. Preserve actual overlapping calls inside individual coordination tests.
+
+Background-delivery tests must wait for observable provider and audit completion
+within a bounded deadline, not sleep for barely longer than the retry interval.
+
+**Why:** Under full-suite load, configuration lookup and first-attempt auditing
+delay the start of the retry timer. A fixed sleep can see only one attempt and
+restore the provider stub while the retry is still pending.
+
+**How to apply:** Retain provider stubs until the expected calls and audit records
+are observed, then assert their exact counts and content. Keep a finite deadline
+so a genuinely missing retry still fails.

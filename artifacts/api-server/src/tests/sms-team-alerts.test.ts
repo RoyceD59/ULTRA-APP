@@ -381,7 +381,17 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
         template: "payment_recovery_alert",
         orderId: 10,
       });
-      await waitTick(1_200);
+      // The one-second retry starts after asynchronous configuration and audit
+      // work. A fixed 1.2s sleep races that work under full-suite load. Keep the
+      // provider stub installed until both attempts have actually been audited.
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        const auditCount = capturedInserts.filter((row) =>
+          row["provider"] === "resend" && row["orderId"] === 10
+        ).length;
+        if (keys.length >= 2 && auditCount >= 2) break;
+        await waitTick(25);
+      }
       assert.equal(keys.length, 2);
       assert.ok(keys[0]);
       assert.equal(keys[0], keys[1]);

@@ -34,3 +34,15 @@ of an export or authentication failure.
 **How to apply:** Explicitly classify known optional assets in isolated checks;
 keep unknown outbound requests as failures. Do not allow real providers just to
 make a test pass, or change product code to fix a test-environment restriction.
+
+The documented browser testing worker is not guaranteed to be available in every
+task environment. A locally resolvable Playwright package also does not establish
+that a browser executable is installed.
+
+**Why:** A verification session encountered an unsupported testing-worker
+configuration, missing Chromium, and a timed-out browser setup. None of these
+provided evidence about the application's interactive behavior.
+
+**How to apply:** Check actual tool availability before promising an interactive
+run. Report unavailable execution as blocked, not passed. Browser viewport
+emulation must not be presented as physical-device verification.
