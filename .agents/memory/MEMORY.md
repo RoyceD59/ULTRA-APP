@@ -71,3 +71,4 @@
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
 - [Browser fixture recovery](browser-fixture-recovery.md) — browser worker resets can erase test credentials without removing shared-development DB fixtures.
 - [Swahili guide audience](swahili-guide-audience.md) — Nairobi customers need offline Swahili installation help; guide localization is not a whole-app migration.
+- [Schedule-update deduplication](schedule-update-deduplication.md) — dedupe against the applied activation, not a history of lifespan values; returning to an old value is a new correction.

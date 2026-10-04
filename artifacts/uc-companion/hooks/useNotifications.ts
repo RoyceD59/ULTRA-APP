@@ -163,7 +163,7 @@ export interface FilterActivation {
   activatedAt:    string;               // ISO date — when the filter was installed / activated
   productId:      number;
   productName:    string;
-  lifespanDays:   number;               // total rated lifespan for this product
+  lifespanDays:   number;               // persisted rated lifespan; also the durable catalogue-sync guard
   notifIds:       string[];             // IDs of all scheduled local notifications for this cycle
   // Performance tracking (all optional so old stored records still parse)
   cleanCount?:    number;               // account maintenance count; customer flows never decrease it
@@ -796,6 +796,16 @@ export async function syncActivationWithCatalogue(
 ): Promise<FilterActivation | null> {
   if (catalogueProducts.length === 0) return null;
 
+  // Hold the activation-write lock across BOTH the stored-value check and the
+  // reschedule. A remount can otherwise read the old lifespan while the first
+  // sync is still saving, then reschedule and return a second toast-worthy update.
+  return withActivationWrite(userId, () => syncActivationWithCatalogueUnlocked(catalogueProducts, userId));
+}
+
+async function syncActivationWithCatalogueUnlocked(
+  catalogueProducts: Array<{ id: number; lifespanDays: number; name: string }>,
+  userId: number,
+): Promise<FilterActivation | null> {
   const existing = await getFilterActivation(userId);
   if (!existing) return null;
 
@@ -815,11 +825,15 @@ export async function syncActivationWithCatalogue(
   // even if the lifespan hasn't changed (the store data is trustworthy again).
   await setZeroLifespanNotice(false);
 
+  // Read from AsyncStorage, not component props or a product-list reference:
+  // the saved lifespan survives unmounts and app restarts. Returning null also
+  // keeps FilterTrackerSection from showing the same schedule-update toast.
   if (catalogueProduct.lifespanDays === existing.lifespanDays) return null;
 
   // Lifespan has changed in the catalogue — reschedule with the corrected value,
   // preserving the original activation date so elapsed-time calculations stay correct.
-  const updated = await scheduleAllFilterNotifications({
+  // Already holding the activation-write lock; do not enqueue it again.
+  const updated = await scheduleAllFilterNotificationsUnlocked({
     activatedAt:     existing.activatedAt,
     productId:       existing.productId,
     productName:     catalogueProduct.name,

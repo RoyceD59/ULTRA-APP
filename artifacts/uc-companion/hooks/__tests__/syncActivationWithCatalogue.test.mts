@@ -38,6 +38,8 @@ const _resetStorage: () => void     = (AsyncStorageStub as any)._reset;
 
 // ── Module under test ─────────────────────────────────────────────────────────
 import {
+  filterActivationKey,
+  getFilterActivation,
   getZeroLifespanNotice,
   syncActivationWithCatalogue,
 } from '../useNotifications.js';
@@ -102,6 +104,73 @@ describe('syncActivationWithCatalogue', () => {
       { id: 1, lifespanDays: 90, name: 'Hydra Flux' },
     ]);
     assert.equal(result, null);
+  });
+
+  it('persists the correction and skips a fresh mount with a new catalogue reference', async () => {
+    seedActivation();
+    const userId = 42;
+    const first = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 120, name: 'Hydra Flux' },
+    ], userId);
+    assert.ok(first);
+    const stored = JSON.parse(_storage.get(filterActivationKey(userId))!);
+    assert.equal(stored.lifespanDays, 120);
+    assert.deepEqual((await getFilterActivation(userId))?.notifIds, first.notifIds);
+    const scheduled = [..._scheduledIds];
+    const cancelled = [..._cancelledIds];
+
+    // No component refs survive this call; only the saved activation can guard it.
+    const remounted = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 120, name: 'Hydra Flux' },
+    ], userId);
+    assert.equal(remounted, null, 'no update result means no repeated toast');
+    assert.deepEqual(_scheduledIds, scheduled, 'must not schedule again');
+    assert.deepEqual(_cancelledIds, cancelled, 'must not cancel again');
+  });
+
+  it('applies only one update when a remount sync overlaps the first sync', async () => {
+    const userId = 42;
+    seedActivation();
+    const saved = _storage.get(FILTER_ACTIVATION_KEY)!;
+    _storage.delete(FILTER_ACTIVATION_KEY);
+    _storage.set(filterActivationKey(userId), saved);
+    const [first, overlapping] = await Promise.all([
+      syncActivationWithCatalogue([{ id: 1, lifespanDays: 120, name: 'Hydra Flux' }], userId),
+      syncActivationWithCatalogue([{ id: 1, lifespanDays: 120, name: 'Hydra Flux' }], userId),
+    ]);
+    assert.ok(first);
+    assert.equal(overlapping, null, 'only the first caller may trigger the notice');
+    assert.deepEqual(_cancelledIds, ['old-notif-1', 'old-notif-2']);
+    assert.deepEqual(_scheduledIds, first.notifIds, 'exactly one replacement schedule');
+    assert.equal((await getFilterActivation(userId))?.lifespanDays, 120);
+  });
+
+  it('still applies a later lifespan change, including a return to the original value', async () => {
+    seedActivation();
+    const userId = 42;
+    const first = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 120, name: 'Hydra Flux' },
+    ], userId);
+    assert.ok(first);
+    const next = await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 90, name: 'Hydra Flux' },
+    ], userId);
+    assert.equal(next?.lifespanDays, 90, 'a new correction must not be suppressed');
+    assert.equal((await getFilterActivation(userId))?.lifespanDays, 90);
+  });
+
+  it('does not share the durable guard between accounts', async () => {
+    seedActivation();
+    const saved = _storage.get(FILTER_ACTIVATION_KEY)!;
+    _storage.delete(FILTER_ACTIVATION_KEY);
+    _storage.set(filterActivationKey(42), saved);
+    _storage.set(filterActivationKey(43), saved);
+    assert.ok(await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 120, name: 'Hydra Flux' },
+    ], 42));
+    assert.ok(await syncActivationWithCatalogue([
+      { id: 1, lifespanDays: 120, name: 'Hydra Flux' },
+    ], 43), 'the second account still needs its own correction');
   });
 
   it('persists the untrackable notice after a bad sync and clears it after store data is fixed', async () => {
