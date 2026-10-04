@@ -100,8 +100,10 @@ async function main() {
     await once(server, 'listening');
     const origin = `http://127.0.0.1:${server.address().port}`;
     const exported = spawnSync('pnpm', [
-      'exec', 'expo', 'export', '--platform', 'web', '--clear', '--output-dir', directory,
-    ], { cwd: root, env: exportEnvironment(process.env, origin), stdio: 'inherit', timeout: 180000 });
+      // The host's reported CPU count exceeds this container's budget. Avoid
+      // an oversized Metro pool competing with typechecks and API test workers.
+      'exec', 'expo', 'export', '--platform', 'web', '--max-workers', '2', '--clear', '--output-dir', directory,
+    ], { cwd: root, env: exportEnvironment(process.env, origin), stdio: 'inherit', timeout: 300000 });
     if (exported.error) throw exported.error;
     if (exported.status !== 0) throw new Error(`Production fixture export failed (${exported.status})`);
     browser = await chromium.launch({

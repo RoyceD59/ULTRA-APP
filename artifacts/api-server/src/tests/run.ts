@@ -272,7 +272,8 @@ console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 // connects to the isolated database.
 
 const testGlob = process.env["TEST_GLOB"];
-// These remaining suites share process-wide or account/settlement state.
+// These remaining suites share process-wide or account/settlement state, or
+// exercise bounded parser workers that must not compete with the parallel pool.
 // The default run executes ordinary files in one parallel phase, then these
 // files in a separate serial phase against the same isolated database.
 const SHARED_STATE_FILES = [
@@ -286,6 +287,9 @@ const SHARED_STATE_FILES = [
   // Both files exercise the same global stock-digest advisory lock. Keep
   // unrelated test workers from being mistaken for an overlapping cron run.
   "inventory-integrations",
+  // Keep real PDF worker rejection checks inside their production time budget.
+  // Serialize the CPU-heavy fixture instead of increasing the parser timeout.
+  "library-knowledge",
   "low-stock-alert",
   // Both suites drain the same global order outbox; isolate them from the
   // parallel phase so one worker cannot claim another suite's work.

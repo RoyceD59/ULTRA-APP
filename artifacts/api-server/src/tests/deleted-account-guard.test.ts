@@ -40,6 +40,11 @@ let activeHeader: string;
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-deleted-guard-tests";
+  // This suite tests the account guard, not provider availability. Without this
+  // worker-local isolation, public GET assertions call the real store whenever
+  // workspace WooCommerce credentials happen to be configured.
+  delete process.env["WC_CONSUMER_KEY"];
+  delete process.env["WC_CONSUMER_SECRET"];
   const { default: app } = await import("../app.js");
   await new Promise<void>((resolve, reject) => {
     server = app.listen(0, "127.0.0.1", (err?: Error) => (err ? reject(err) : resolve()));

@@ -48,34 +48,34 @@ args = "companion-startup-fonts"
 name = "typecheck-projecthub"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/projecthub && pnpm exec tsc --noEmit"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs && cd artifacts/projecthub && pnpm exec tsc --noEmit"
 
 [[workflows.workflow]]
 name = "typecheck-uc-companion"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/uc-companion && pnpm exec tsc --noEmit"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs && cd artifacts/uc-companion && pnpm exec tsc --noEmit"
 
 [[workflows.workflow]]
 name = "typecheck-api-server"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/api-server && pnpm exec tsc --noEmit"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs && cd artifacts/api-server && pnpm exec tsc --noEmit"
 
 [[workflows.workflow]]
 name = "typecheck-libs"
