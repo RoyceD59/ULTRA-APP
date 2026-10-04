@@ -3,6 +3,16 @@ name: Expo static production routing
 description: Non-obvious SDK 57 static-web and custom-host proxy requirements for the Companion production build.
 ---
 
+For isolated root-hosted SDK 57 web exports, leave the export base URL unset
+rather than explicitly setting it to `/`.
+
+**Why:** The explicit slash can produce `//assets/...` font URLs, which browsers
+interpret as an external `http://assets` host instead of a local asset path.
+
+**How to apply:** Override an inherited export base path to an empty value for
+root-hosted benchmarks. Keep production's actual prefixed routing unchanged,
+and fail isolated checks if a font attempts to leave the loopback server.
+
 When Expo preview API calls appear to fail CORS, verify the configured development API hostname before changing the CORS allowlist.
 
 **Why:** A stale development-only API-domain override pointed to a retired preview hostname returning 404 without CORS headers; the current workspace API already allowed the Expo origin.

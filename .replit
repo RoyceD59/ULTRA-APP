@@ -40,6 +40,10 @@ args = "expo-doctor-uc-companion"
 task = "workflow.run"
 args = "api-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "companion-startup-fonts"
+
 [[workflows.workflow]]
 name = "typecheck-projecthub"
 author = "agent"
@@ -102,6 +106,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd artifacts/api-server && pnpm test"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "companion-startup-fonts"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/uc-companion run check:startup-fonts"
 
 [workflows.workflow.metadata]
 isValidation = true

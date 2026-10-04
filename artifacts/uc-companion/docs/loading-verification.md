@@ -1,5 +1,70 @@
 # Loading and photo-header verification
 
+## Repeatable startup-font release guard
+
+Run `pnpm --filter @workspace/uc-companion run check:startup-fonts`.
+The named validation `companion-startup-fonts` runs this command alongside the
+existing type/build checks. It first tests the guard itself, then makes a fresh
+production-mode Expo web export in an OS temporary directory. It does **not**
+use `build.js`, select a release, replace `static-build`, or publish anything.
+Fixture exports bypass Clerk only via the existing isolated-preview flag, clear
+inherited public configuration, disable dotenv loading and set both public
+origins to the temporary loopback server.
+
+The browser uses fresh contexts and a 390 × 844 viewport for normal and
+2,000 ms delayed-font startup. All API reads receive local fixture responses;
+mutations and non-loopback asset/analytics requests are blocked and fail the
+check. Service workers are disabled. No live customer writes or published
+fixture builds are involved.
+
+Startup is measured on Home without clicking a later route. Observation
+continues for at least three seconds **after the visible greeting**, then waits
+for network idle and the font set to settle. Transfers already in progress are
+included even when the greeting renders first. A network/font timeout is a
+failure, not a zero-byte pass. This bounded check cannot detect an arbitrary
+timer that starts a font long after startup, or fonts used only on later routes.
+
+The report (default `/tmp/uc-startup-fonts-report.json`) lists **each request**,
+including repeat URLs, request/finish times, status, completion/error and actual
+response body bytes. Detection uses font extensions, browser font resource
+type, and font response MIME types, so extensionless font responses are included.
+Body bytes come from browser response bodies served uncompressed locally;
+they are not HTTP headers, compression estimates, or deployed edge transfers.
+Failed/incomplete fonts retain `null` for an unavailable body, rather than
+pretending they cost zero bytes. The existing paired `measure-loading.cjs`
+benchmark also now records `fonts` across its complete navigation journey.
+
+Only exact `Ionicons.ttf` and `Feather.ttf` asset names (including Expo's optional
+32-character content hash) are allowed by `scripts/startup-fonts.cjs`.
+Ionicons has actual tab/screen consumers; Feather has ErrorFallback consumers.
+The allowlist is not a wildcard for all icon families and does not require
+unused Feather to download on every successful startup. Every other font,
+including Inter, fails pending explicit review. A font with a matching allowed
+name but a failed/empty response also fails.
+
+When it fails, inspect `runs[].fonts` and `fontFamilyConsumers` in the report,
+then trace indirect typography constants and the relevant rendered screens.
+An import, root `useFonts` registration, or a source-map asset alone is not proof
+of a text-font consumer. Remove an unused root download; only extend the
+allowlist after documenting an actual consumer and intentional startup cost.
+The consumer inventory is review evidence, not an automatic proof of font use.
+
+```sh
+# Entire repeatable check, including fresh isolated export:
+pnpm --filter @workspace/uc-companion run check:startup-fonts
+# Optional report destination (still exports only to a temporary directory):
+cd artifacts/uc-companion
+node scripts/check-startup-fonts.cjs /tmp/companion-font-evidence.json
+```
+
+Verified with five guard regression tests and a fresh production export:
+normal and delayed startup each requested one Ionicons body of **389,724 B**,
+with no text-font requests, browser exceptions or isolation violations.
+Feather was retained in the export but not requested on successful Home startup.
+These are local release-check results, not deployed or physical-phone timings.
+The temporary root-hosted export leaves Expo's base URL unset: SDK 57 can
+interpret an explicit `/` as `//assets/...`, which would leave loopback.
+
 ## Customer-only generated API entrypoints — 2026-10-04
 
 This section measures the API-client change separately from the historical

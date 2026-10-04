@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { chromium } = require('@playwright/test');
+const { observeFonts, isFontRequest } = require('./startup-fonts.cjs');
 
 function scriptBytes(directory, urls) {
   return urls.map(url => {
@@ -35,7 +36,7 @@ async function typography(page) {
   });
 }
 
-function serveExport(directory) {
+function serveExport(directory, port = 8098) {
   const root = path.resolve(directory);
   return http.createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -43,7 +44,7 @@ function serveExport(directory) {
     const target = fs.existsSync(file) && fs.statSync(file).isFile() ? file : path.join(root, 'index.html');
     res.setHeader('content-type', ({ '.js': 'text/javascript', '.html': 'text/html', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif' })[path.extname(target)] || 'application/octet-stream');
     res.end(fs.readFileSync(target));
-  }).listen(8098, '127.0.0.1');
+  }).listen(port, '127.0.0.1');
 }
 
 async function main() {
@@ -55,6 +56,7 @@ async function main() {
       for (let run = 0; run < 3; run++) {
         const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
         const page = await context.newPage();
+        const fontObserver = observeFonts(page);
         const profile = await context.newCDPSession(page);
         await profile.send('Performance.enable');
         const errors = [];
@@ -72,7 +74,7 @@ async function main() {
         });
         await page.route('**/*', async route => {
           const url = route.request().url();
-          if (slow && /\.(ttf|otf)(\?|$)/.test(url)) await new Promise(r => setTimeout(r, 2000));
+          if (slow && isFontRequest(route.request())) await new Promise(r => setTimeout(r, 2000));
           if (url.includes('/api/')) {
             if (slow) await new Promise(r => setTimeout(r, 1800));
             const payload = url.includes('/blog') ? {
@@ -116,11 +118,13 @@ async function main() {
         const { metrics } = await profile.send('Performance.getMetrics');
         // Include background font transfers even if navigation finishes first.
         await page.waitForLoadState('networkidle');
+        const fonts = await fontObserver.report();
+        fontObserver.stop();
         const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(r => ({ name: r.name.split('/').pop(), duration: Math.round(r.duration), bytes: r.transferSize, bodyBytes: r.encodedBodySize })));
         const jsWork = Object.fromEntries(metrics.filter(m => ['ScriptDuration', 'TaskDuration', 'JSHeapUsedSize'].includes(m.name)).map(m => [m.name, m.value]));
         // Compression is deliberately outside the timed browser journey.
         const initialScripts = scriptBytes(process.argv[2], initialScriptUrls);
-        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, typography: { home: homeTypography, shop: shopTypography, blog: blogTypography }, errors, errorStacks, failedRequests });
+        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, fonts, typography: { home: homeTypography, shop: shopTypography, blog: blogTypography }, errors, errorStacks, failedRequests });
         // Preserve evidence from failed profiling runs; never label them passes.
         fs.writeFileSync(process.argv[3], JSON.stringify(results, null, 2));
         console.log({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests });
