@@ -220,6 +220,7 @@ describe('syncActivationWithCatalogue', () => {
       lifespanDays:    90,
       activatedAt:     originalActivatedAt,
       productId:       1,
+      registeredFilterId: 91,
       cleanCount:      2,
       lastCleanedAt:   daysAgo(5),
       lastWaterSource: 'borehole',
@@ -241,6 +242,7 @@ describe('syncActivationWithCatalogue', () => {
     assert.ok(result !== null, 'expected a non-null result');
     assert.equal(result.activatedAt,     originalActivatedAt, 'activatedAt must be preserved');
     assert.equal(result.productId,       1,                   'productId must be preserved');
+    assert.equal(result.registeredFilterId, 91, 'capacity cycle identity must survive catalogue sync');
     assert.equal(result.cleanCount,      2,                   'cleanCount must be preserved');
     assert.equal(result.lastWaterSource, 'borehole',          'lastWaterSource must be preserved');
     assert.ok(

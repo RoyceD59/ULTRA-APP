@@ -703,13 +703,18 @@ function AccountScreenContent() {
     data: rewards,
     isLoading: rewardsLoading,
     isError: rewardsError,
+    isFetching: rewardsFetching,
     refetch: refetchRewards,
   } = useQuery({
     queryKey: customerQueryKeys.rewards(user?.id),
     queryFn: () => api.getRewards(),
     enabled: !!user && accountFocused,
     staleTime: 2 * 60 * 1000,
+    refetchInterval: accountFocused ? 60_000 : false,
   });
+  const refreshFilterUsage = useCallback(() => {
+    void refetchRewards();
+  }, [refetchRewards]);
 
   const {
     data: waterTests,
@@ -1076,6 +1081,10 @@ function AccountScreenContent() {
           <FilterTrackerSection
             key={user.id}
             activation={filterActivationOwner === user.id ? filterActivation : null}
+            impact={rewards?.impact}
+            usageLoading={rewardsFetching}
+            usageUnavailable={rewardsError || (!rewards && !rewardsLoading)}
+            onUsageRefresh={refreshFilterUsage}
             onActivationChange={a => {
               setFilterActivation(a);
               setFilterActivationOwner(user.id);

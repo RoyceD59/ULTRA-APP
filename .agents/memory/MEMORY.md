@@ -60,3 +60,4 @@
 - [Public SEO evidence](public-seo-evidence.md) — public access is not publication evidence; demo fallbacks cannot support sale claims or location verification.
 - [Native reconnect safety](native-reconnect-policy.md) — reconnect recovery is read-only; keep explicit offline failures and never queue or replay writes.
 - [Companion analytics provider](companion-analytics-provider.md) — user chose separate Umami collection for Companion web; preserve native behavior and current hosting.
+- [Filter gauge policy](filter-gauge-policy.md) — display-only status; recorded refills are not sensor measurements; require exact customer/purchase/cycle linkage.

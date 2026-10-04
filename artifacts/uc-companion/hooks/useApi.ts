@@ -360,6 +360,9 @@ export interface RegisterPurchaseResult {
 
 export interface RegisteredImpactFilter {
   id: number;
+  userId?: number;
+  verificationStatus?: string;
+  capacityUsageValid?: boolean;
   productId: number;
   productName: string;
   ratedCapacityLitres: number;

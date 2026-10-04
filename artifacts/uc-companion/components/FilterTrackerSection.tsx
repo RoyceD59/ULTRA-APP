@@ -15,17 +15,19 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
-  Platform, ActivityIndicator, TextInput, KeyboardAvoidingView,
+  Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { commitPurchaseBackedRegistration } from '@/lib/filterRegistrationCommit';
-import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem } from '@/hooks/useApi';
+import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem, type PersonalImpact } from '@/hooks/useApi';
+import FilterLifeGauge from '@/components/FilterLifeGauge';
+import { calculateRemainingLife, resolveCapacityCycle } from '@/lib/filterRemainingLife';
 import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
@@ -53,32 +55,13 @@ interface Props {
   onActivationChange: (a: FilterActivation | null) => void;
   /** Receipt registration also creates a server-side capacity-tracked filter. */
   onRegistrationCommitted?: () => void;
+  impact?: PersonalImpact;
+  usageLoading?: boolean;
+  usageUnavailable?: boolean;
+  onUsageRefresh?: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function daysRemainingRated(activation: FilterActivation): number {
-  const elapsed = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-  return activation.lifespanDays - elapsed;
-}
-
-function daysRemainingEffective(activation: FilterActivation): number {
-  const elapsed  = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-  return effectiveLifespanDays(activation) - elapsed;
-}
-
-function progressPercent(activation: FilterActivation): number {
-  const elapsed   = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-  const lifespan  = effectiveLifespanDays(activation);
-  return Math.min(100, Math.max(0, Math.round((elapsed / lifespan) * 100)));
-}
-
-function statusColor(daysLeft: number, primary: string, warning: string, destructive: string): string {
-  if (daysLeft <= 0)  return destructive;
-  if (daysLeft <= 21) return destructive;
-  if (daysLeft <= 45) return warning;
-  return primary;
-}
-
 const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; icon: string }> = {
   good:    { label: 'Performing well',    color: '#22C55E', icon: 'checkmark-circle' },
   clean:   { label: 'Clean recommended',  color: '#F59E0B', icon: 'construct'        },
@@ -86,10 +69,28 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function FilterTrackerSection({ activation, onActivationChange, onRegistrationCommitted }: Props) {
+export default function FilterTrackerSection({ activation, onActivationChange, onRegistrationCommitted,
+  impact, usageLoading = false, usageUnavailable = false, onUsageRefresh }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { token, user } = useAuth();
+  const [now, setNow] = useState(Date.now);
+  useFocusEffect(useCallback(() => {
+    setNow(Date.now());
+    onUsageRefresh?.();
+  }, [onUsageRefresh]));
+  useEffect(() => {
+    // Only display time and GET refresh: never schedule, cancel or sync reminders.
+    const refresh = () => { setNow(Date.now()); onUsageRefresh?.(); };
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    if (Platform.OS === 'web') document.addEventListener('visibilitychange', visible);
+    return () => {
+      clearInterval(timer); sub.remove();
+      if (Platform.OS === 'web') document.removeEventListener('visibilitychange', visible);
+    };
+  }, [onUsageRefresh]);
   const [showRegisterModal,   setShowRegisterModal]   = useState(false);
   const [showPerfModal,       setShowPerfModal]       = useState(false);
   const [toastMessage,        setToastMessage]        = useState('');
@@ -156,17 +157,20 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
     onActivationChange(null);
   }
 
-  const effDaysLeft  = activation ? daysRemainingEffective(activation) : null;
-  const ratedDaysLeft = activation ? daysRemainingRated(activation) : null;
+  const capacity = activation && !usageUnavailable
+    ? resolveCapacityCycle(activation, impact?.filters, user?.id) : null;
+  const life = activation
+    ? calculateRemainingLife(activation, effectiveLifespanDays(activation), capacity, now) : null;
+  const effDaysLeft = life?.remainingDays === null || !life ? null : Math.ceil(life.remainingDays);
+  const ratedDaysLeft = activation
+    ? calculateRemainingLife(activation, activation.lifespanDays, null, now).remainingDays : null;
   const showEffWarning = activation &&
     effDaysLeft !== null && ratedDaysLeft !== null &&
     effDaysLeft < ratedDaysLeft - 5; // effective lifespan is meaningfully shorter
 
-  const pct      = activation ? progressPercent(activation) : 0;
   const daysLeft = effDaysLeft; // progress bar and main status use effective
-  const barColor = daysLeft !== null
-    ? statusColor(daysLeft, colors.primary, '#F59E0B', '#EF4444')
-    : colors.primary;
+  const barColor = life?.status === 'green' ? '#22C55E' : life?.status === 'amber' ? '#F59E0B'
+    : life?.status === 'red' ? '#EF4444' : colors.mutedForeground;
 
   const lastRec  = activation?.lastCheckIn?.recommendation as PerfRecommendation | undefined;
   const perfBadge = lastRec ? PERF_BADGE[lastRec] : null;
@@ -195,35 +199,41 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                   <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
                     {activation.productName}
                   </Text>
-                  <Text style={[styles.daysText, { color: barColor }]}>
-                    {daysLeft !== null && daysLeft > 0
-                      ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`
-                      : 'Filter replacement overdue'}
-                  </Text>
                 </View>
                 <TouchableOpacity onPress={openRegisterModal} style={[styles.replaceBtn, { borderColor: colors.primary }]}>
                   <Text style={[styles.replaceBtnTxt, { color: colors.primary }]}>Replace</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Progress bar */}
-              <View style={[styles.progressTrack, { backgroundColor: colors.surface }]}>
-                <View style={[styles.progressFill, { width: `${pct}%` as unknown as number, backgroundColor: barColor }]} />
-              </View>
-              <View style={styles.progressLabels}>
-                <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>Installed</Text>
-                <Text style={[styles.progressLabel, { color: showEffWarning ? '#F59E0B' : colors.mutedForeground }]}>
-                  {showEffWarning
-                    ? `~${effDaysLeft! + (daysLeft! < 0 ? 0 : 0)}d eff. / ${activation!.lifespanDays}d rated`
-                    : `${activation!.lifespanDays}d rated life`}
-                </Text>
+              <View testID="filter-lifespan-gauge" style={[styles.row, { marginVertical: 12, alignItems: 'center' }]}>
+                <FilterLifeGauge percent={life?.percent ?? null} color={barColor}
+                  label={`${life?.percent === null ? 'Percentage unavailable' : `${Math.floor(life?.percent ?? 0)} percent remaining`}. ${life?.description}. ${life?.basis}`} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: colors.text, fontSize: 24, fontWeight: '700' }}>
+                    {life?.percent === null ? '—' : `${Math.floor(life?.percent ?? 0)}%`} remaining
+                  </Text>
+                  <Text style={[styles.daysText, { color: colors.text }]}>{life?.description}</Text>
+                  <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>{life?.basis}</Text>
+                  <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
+                    {daysLeft === null ? 'Time unavailable' : `${daysLeft} days remaining · ${effectiveLifespanDays(activation)}d effective life`}
+                  </Text>
+                  <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
+                    {life?.remainingLitres != null
+                      ? `${life.remainingLitres.toLocaleString()} L left of ${capacity!.ratedCapacityLitres.toLocaleString()} L · customer/staff recorded`
+                      : usageLoading ? 'Refreshing capacity…' : usageUnavailable ? 'Capacity unavailable · could not refresh (possibly offline)' : 'Capacity unavailable · no verified cycle link or rating'}
+                  </Text>
+                  {usageLoading && life?.remainingLitres != null ? <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>Refreshing recorded usage…</Text> : null}
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh filter usage" onPress={onUsageRefresh}>
+                    <Text style={[styles.progressLabel, { color: colors.primary }]}>Refresh usage</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View testID="filter-life-summary" style={[styles.lifeSummary, { backgroundColor: colors.surface }]}>
                 <View style={styles.lifeSummaryItem}>
                   <Ionicons name="time-outline" size={15} color={barColor} />
                   <Text style={[styles.lifeSummaryValue, { color: colors.text }]}>
-                    {daysLeft !== null && daysLeft > 0 ? `${daysLeft} days` : 'Due now'}
+                    {daysLeft === null ? 'Unavailable' : daysLeft > 0 ? `${daysLeft} days` : 'Due now'}
                   </Text>
                   <Text style={[styles.lifeSummaryLabel, { color: colors.mutedForeground }]}>life remaining</Text>
                 </View>
@@ -506,12 +516,13 @@ export function RegisterModal({
           productId: item.productId,
           activatedAt,
         }),
-        () => scheduleAllFilterNotifications({
+        committed => scheduleAllFilterNotifications({
           activatedAt,
           productId:     item.productId,
           productName:   item.name,
           lifespanDays:  item.lifespanDays,
           sourceOrderId: purchase.orderId,
+          registeredFilterId: committed.registration?.id,
         }, userId),
         onSave,
       );

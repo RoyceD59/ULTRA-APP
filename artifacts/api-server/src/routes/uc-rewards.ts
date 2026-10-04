@@ -72,12 +72,15 @@ async function personalImpact(userId: number) {
   const result = await pool.query<{
     id: number; product_id: number; product_name: string; rated_capacity_litres: number;
     activated_at: Date; source_order_id: number | null; used_litres: string;
+    user_id: number; verification_status: string;
+    capacity_usage_valid: boolean;
   }>(`
     SELECT rf.id, rf.product_id, rf.product_name, rf.rated_capacity_litres,
-           rf.activated_at, rf.source_order_id,
-           COALESCE(SUM(w.litres), 0)::text AS used_litres
+            rf.activated_at, rf.source_order_id, rf.user_id, rf.verification_status,
+            COALESCE(SUM(w.litres), 0)::text AS used_litres,
+            COALESCE(BOOL_AND(w.created_at >= rf.activated_at), true) AS capacity_usage_valid
     FROM uc_registered_filters rf
-    LEFT JOIN uc_water_impact_ledger w ON w.registered_filter_id = rf.id
+    LEFT JOIN uc_water_impact_ledger w ON w.registered_filter_id = rf.id AND w.user_id = rf.user_id
     WHERE rf.user_id = $1 AND rf.active = true
     GROUP BY rf.id
     ORDER BY rf.created_at DESC
@@ -86,6 +89,9 @@ async function personalImpact(userId: number) {
     const usedLitres = Number(row.used_litres);
     return {
       id: row.id,
+      userId: row.user_id,
+      verificationStatus: row.verification_status,
+      capacityUsageValid: row.capacity_usage_valid,
       productId: row.product_id,
       productName: row.product_name,
       ratedCapacityLitres: row.rated_capacity_litres,
