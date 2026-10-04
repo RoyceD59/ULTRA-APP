@@ -69,11 +69,14 @@ describe("durable referral lifecycle", { concurrency: false }, () => {
     if (orderIds.length) await pool.query("DELETE FROM uc_orders WHERE id=ANY($1::int[])", [orderIds]);
     if (ids.length) await pool.query("DELETE FROM uc_users WHERE id=ANY($1::int[])", [ids]);
     if (teamUserIds.length) {
+      // Audited actors must remain referenced until the temporary DB is dropped.
       await pool.query(
-        "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id=ANY($1::text[])",
+        `DELETE FROM team_users WHERE id=ANY($1::text[])
+         AND NOT EXISTS (
+           SELECT 1 FROM referral_alert_threshold_changes WHERE actor_team_user_id=team_users.id
+         )`,
         [teamUserIds],
       );
-      await db.delete(teamUsersTable).where(inArray(teamUsersTable.id, teamUserIds));
     }
   });
 

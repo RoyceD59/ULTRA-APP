@@ -13,6 +13,15 @@ description: How api-server tests isolate from the live dev database, and the dr
 - Never execute an API test file directly with `tsx --test`: it inherits the development `DATABASE_URL`, and destructive failure-injection tests can mutate live development tables. Always enter through the package test wrapper, including focused runs.
 - For long runs, use managed validation or the tool's supported background-task mode and collect its result before finishing. Do not rely on shell-detached `nohup`/`setsid` processes.
 
+For append-only audit tables, retain fixture rows and any referenced actors until
+the isolated test database is dropped; do not disable protection for cleanup.
+
+**Why:** Keeping the real protection active throughout the suite verifies the
+production invariant without introducing a maintenance-style bypass.
+
+**How to apply:** Adjust fixture ordering and cleanup to preserve immutable
+history rather than weakening its database trigger.
+
 Per-run database isolation does not isolate test identities between files in that run.
 
 **Why:** Fixed customer IDs inherited other suites' deleted-account state, causing a signed push-auth test to return 401 instead of its expected no-token 404.

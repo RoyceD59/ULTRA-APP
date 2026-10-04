@@ -258,6 +258,9 @@ try {
   await reviewMigrationDb.query(await readFile(
     new URL("../../../../lib/db/migrations/0061_uc_customer_statistics.sql", import.meta.url), "utf8",
   ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0062_referral_threshold_audit_append_only.sql", import.meta.url), "utf8",
+  ));
 } finally { await reviewMigrationDb.end(); }
 
 console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
@@ -290,6 +293,8 @@ const SHARED_STATE_FILES = [
   "order-status-pipeline",
   "orders-csv-export",
   "paystack-retryable",
+  // Threshold audit and lifecycle tests both mutate singleton referral settings.
+  "referral-alert-threshold-audit",
   "referral-lifecycle",
   "reminder-checkin-sent-stages",
   "reminder-good-checkin-revert",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import supertest from "supertest";
+import { readFile } from "node:fs/promises";
 import { pool } from "@workspace/db";
 import app from "../app.js";
 import { issueToken } from "../lib/jwt.js";
@@ -36,10 +37,6 @@ async function auditCount(actorId?: string): Promise<number> {
 }
 
 before(async () => {
-  await pool.query(
-    "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id = ANY($1::text[])",
-    [[ADMIN_ID, MEMBER_ID, FAILING_ADMIN_ID]],
-  );
   await pool.query("DELETE FROM team_users WHERE id = ANY($1::text[])", [
     [ADMIN_ID, MEMBER_ID, FAILING_ADMIN_ID],
   ]);
@@ -65,11 +62,12 @@ after(async () => {
   await pool.query("DROP FUNCTION IF EXISTS fail_referral_conversion_test()");
   await pool.query("DROP TRIGGER IF EXISTS referral_threshold_audit_test_failure ON referral_alert_threshold_changes");
   await pool.query("DROP FUNCTION IF EXISTS fail_referral_threshold_audit_test()");
-  await pool.query(
-    "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id = ANY($1::text[])",
-    [[ADMIN_ID, MEMBER_ID, FAILING_ADMIN_ID]],
-  );
-  await pool.query("DELETE FROM team_users WHERE id = ANY($1::text[])", [
+  // Immutable audit fixtures and their referenced actors live until run.ts
+  // drops the isolated test database. Do not disable the production trigger.
+  await pool.query(`DELETE FROM team_users WHERE id = ANY($1::text[])
+    AND NOT EXISTS (
+      SELECT 1 FROM referral_alert_threshold_changes WHERE actor_team_user_id=team_users.id
+    )`, [
     [ADMIN_ID, MEMBER_ID, FAILING_ADMIN_ID],
   ]);
   await pool.query("DELETE FROM uc_referral_settlements WHERE order_id BETWEEN 617000000 AND 617000099");
@@ -115,10 +113,6 @@ describe("referral alert threshold audit", () => {
 
   it("returns threshold history to admins in stable, paginated reverse chronology", async () => {
     await pool.query(
-      "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id=$1",
-      [ADMIN_ID],
-    );
-    await pool.query(
       `INSERT INTO referral_alert_threshold_changes(
          actor_team_user_id,actor_name,actor_email,previous_value,new_value,changed_at
        ) VALUES
@@ -135,12 +129,12 @@ describe("referral alert threshold audit", () => {
     assert.deepEqual(firstPage.body.pagination, {
       page: 1,
       pageSize: 2,
-      total: 3,
+      total: 4,
       totalPages: 2,
     });
     assert.deepEqual(
       firstPage.body.changes.map((change: { new_value: number }) => Number(change.new_value)),
-      [4, 3],
+      [11, 4],
     );
 
     const secondPage = await supertest(app)
@@ -149,8 +143,56 @@ describe("referral alert threshold audit", () => {
     assert.equal(secondPage.status, 200);
     assert.deepEqual(
       secondPage.body.changes.map((change: { new_value: number }) => Number(change.new_value)),
-      [2],
+      [3, 2],
     );
+  });
+
+  it("rejects direct updates and deletes while preserving rows and allowing inserts", async () => {
+    const inserted = await pool.query(
+      `INSERT INTO referral_alert_threshold_changes(
+         actor_team_user_id,actor_name,actor_email,previous_value,new_value
+       ) VALUES($1,'Referral Audit Admin',$2,11,12) RETURNING *`,
+      [ADMIN_ID, `${ADMIN_ID}@test.invalid`],
+    );
+    const original = inserted.rows[0];
+    assert.ok(original);
+    for (const statement of [
+      "UPDATE referral_alert_threshold_changes SET new_value=99 WHERE id=$1",
+      "UPDATE referral_alert_threshold_changes SET new_value=new_value WHERE id=$1",
+      "DELETE FROM referral_alert_threshold_changes WHERE id=$1",
+    ]) {
+      await assert.rejects(pool.query(statement, [original.id]), (error: unknown) => {
+        const pgError = error as { code?: string; message?: string };
+        assert.equal(pgError.code, "55000");
+        assert.match(pgError.message ?? "", /append-only/);
+        return true;
+      });
+      const preserved = await pool.query(
+        "SELECT * FROM referral_alert_threshold_changes WHERE id=$1", [original.id],
+      );
+      assert.deepEqual(preserved.rows, [original]);
+    }
+
+    // Reapplying the migration must preserve existing history and protection.
+    await pool.query(await readFile(
+      new URL("../../../../lib/db/migrations/0062_referral_threshold_audit_append_only.sql", import.meta.url),
+      "utf8",
+    ));
+    await assert.rejects(
+      pool.query("DELETE FROM referral_alert_threshold_changes WHERE id=$1", [original.id]),
+      /append-only/,
+    );
+    const preserved = await pool.query(
+      "SELECT * FROM referral_alert_threshold_changes WHERE id=$1", [original.id],
+    );
+    assert.deepEqual(preserved.rows, [original]);
+    const next = await pool.query(
+      `INSERT INTO referral_alert_threshold_changes(
+         actor_team_user_id,actor_name,actor_email,previous_value,new_value
+       ) VALUES($1,'Referral Audit Admin',$2,12,13) RETURNING id`,
+      [ADMIN_ID, `${ADMIN_ID}@test.invalid`],
+    );
+    assert.equal(next.rowCount, 1);
   });
 
   it("protects threshold history and rejects invalid pagination", async () => {

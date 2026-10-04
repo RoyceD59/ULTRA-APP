@@ -389,6 +389,23 @@ async function applyStartupMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS referral_alert_threshold_changes_latest_idx
       ON referral_alert_threshold_changes (changed_at DESC, id DESC);
   `);
+  // Keep in sync with migration 0062; existing deployments use startup DDL.
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION reject_referral_threshold_audit_mutation()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'referral_alert_threshold_changes is append-only: % is not permitted', TG_OP
+        USING ERRCODE = '55000';
+    END;
+    $$;
+
+    DROP TRIGGER IF EXISTS referral_threshold_audit_append_only ON referral_alert_threshold_changes;
+    CREATE TRIGGER referral_threshold_audit_append_only
+      BEFORE UPDATE OR DELETE ON referral_alert_threshold_changes
+      FOR EACH STATEMENT EXECUTE FUNCTION reject_referral_threshold_audit_mutation();
+  `);
   logger.info("Startup migration: referral alert threshold audit ensured");
   await pool.query(`
     CREATE TABLE IF NOT EXISTS uc_referral_settlements (
