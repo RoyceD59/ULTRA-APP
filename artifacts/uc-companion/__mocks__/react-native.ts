@@ -5,6 +5,14 @@ export const PixelRatio = { get: () => 1 };
 export const Text = 'Text';
 export const TouchableOpacity = 'TouchableOpacity';
 export const View = 'View';
+export const Linking = { openURL: async (_url: string): Promise<void> => {} };
+let colorScheme: 'light' | 'dark' = 'light';
+export function __setColorScheme(next: 'light' | 'dark'): void {
+  colorScheme = next;
+}
+export function useColorScheme(): 'light' | 'dark' {
+  return colorScheme;
+}
 export const StyleSheet = {
   create: <T extends Record<string, unknown>>(styles: T): T => styles,
 };

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import ImpactBubble from '@/components/ImpactBubble';
 import ForestLink from '@/components/ForestLink';
+import AboutSocialLinks from '@/components/AboutSocialLinks';
 import publicPages from '@/data/public-pages.json';
 import { headingProps } from '@/lib/accessibility';
 
@@ -70,6 +71,7 @@ export default function AboutScreen() {
           <Ionicons name="open-outline" size={20} color={UC_SKY} />
         </TouchableOpacity>
         {!!websiteError && <Text accessibilityRole="alert" style={{ color: colors.destructive }}>{websiteError}</Text>}
+        <AboutSocialLinks />
       </View>
     </ScrollView>
   );

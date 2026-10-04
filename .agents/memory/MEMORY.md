@@ -57,6 +57,7 @@
 - [Companion SEO scope](companion-seo-scope.md) — distinguish audit targets; source and local fixtures do not establish production gains or authorize host/deployment changes.
 - [Companion build publication](companion-build-publication.md) — retained assets are not activation; test both legacy and migrated native/browser rollout boundaries.
 - [Web heading semantics](react-native-web-heading-semantics.md) — use explicit web levels; wrap accordion buttons in headings; send aria-expanded explicitly.
+- [Web external-link keyboard activation](web-external-link-keyboard.md) — link-role touchables need real web hrefs for Enter; prevent default when opening through Linking.
 - [Public SEO evidence](public-seo-evidence.md) — public access is not publication evidence; demo fallbacks cannot support sale claims or location verification.
 - [Native reconnect safety](native-reconnect-policy.md) — reconnect recovery is read-only; keep explicit offline failures and never queue or replay writes.
 - [Companion analytics provider](companion-analytics-provider.md) — user chose separate Umami collection for Companion web; preserve native behavior and current hosting.
