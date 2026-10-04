@@ -7,7 +7,7 @@ import { renderAlisonCatalogue, type AlisonCatalogue } from "./alison-catalogue.
 export type AlisonSource = {
   id: string;
   title: string;
-  kind: "local" | "guide" | "article";
+  kind: "local" | "guide" | "article" | "library";
   body: string;
 };
 type PublishedRow = { id: string; snapshot: unknown };
@@ -32,12 +32,12 @@ function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-export function sourceFromSnapshot(row: PublishedRow, kind: "guide" | "article"): AlisonSource | null {
+export function sourceFromSnapshot(row: PublishedRow, kind: "guide" | "article" | "library"): AlisonSource | null {
   const snapshot = object(row.snapshot);
   const title = text(snapshot.title);
   if (!title) return null;
   let body = text(snapshot.summary);
-  if (kind === "article") body += `\n\n${text(snapshot.body)}`;
+  if (kind === "article" || kind === "library") body += `\n\n${text(snapshot.body)}`;
   else if (Array.isArray(snapshot.sections)) {
     for (const raw of snapshot.sections) {
       const section = object(raw);
@@ -129,7 +129,7 @@ export async function loadAlisonKnowledge(
   try {
     // Retrieval is bounded and only sees the public published snapshots, never draft columns.
     const patterns = terms.map((term) => `%${term}%`);
-    const [local, guides, catalogue, articles] = await Promise.all([
+    const [local, guides, catalogue, articles, library] = await Promise.all([
       (dependencies.readLocal ?? readLocalAlisonSources)(),
       dependencies.query(
         `SELECT id,published_snapshot AS snapshot FROM uc_guides
@@ -146,11 +146,19 @@ export async function loadAlisonKnowledge(
            AND published_snapshot::text ILIKE ANY($1::text[])
          ORDER BY (CASE WHEN published_snapshot->>'title' ILIKE ANY($1::text[]) THEN 1 ELSE 0 END) DESC,published_at DESC,id
          LIMIT 12`, [patterns]),
+      dependencies.query(
+        `SELECT id,jsonb_build_object('title',knowledge_title,'body',knowledge_text) AS snapshot
+         FROM team_library_docs
+         WHERE knowledge_status='approved' AND knowledge_text IS NOT NULL AND knowledge_title IS NOT NULL
+           AND (knowledge_title ILIKE ANY($1::text[]) OR knowledge_text ILIKE ANY($1::text[]))
+         ORDER BY (CASE WHEN knowledge_title ILIKE ANY($1::text[]) THEN 1 ELSE 0 END) DESC,knowledge_reviewed_at DESC,id
+         LIMIT 12`, [patterns]),
     ]);
     const sources = [
       ...local,
       ...guides.rows.map((row) => sourceFromSnapshot(row, "guide")),
       ...articles.rows.map((row) => sourceFromSnapshot(row, "article")),
+      ...library.rows.map((row) => sourceFromSnapshot(row, "library")),
     ].filter((source): source is AlisonSource => source !== null);
     const context = renderKnowledgeContext(selectKnowledgeSources(sources, terms), terms);
     if (context.length > MAX_KNOWLEDGE_CHARS) throw new AlisonKnowledgeError();

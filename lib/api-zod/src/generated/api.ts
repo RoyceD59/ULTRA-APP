@@ -9,6 +9,60 @@ import * as zod from 'zod';
 import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant-water-identity.js';
 
 
+/**
+ * @summary Review bounded extracted text for customer knowledge (active team admin only)
+ */
+export const PreviewLibraryKnowledgeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const previewLibraryKnowledgeResponseTextMax = 16000;
+
+export const previewLibraryKnowledgeResponseRevisionMin = 0;
+
+
+
+export const PreviewLibraryKnowledgeResponse = zod.object({
+  "text": zod.string().max(previewLibraryKnowledgeResponseTextMax),
+  "hash": zod.string(),
+  "revision": zod.number().min(previewLibraryKnowledgeResponseRevisionMin),
+  "status": zod.enum(['private', 'approved', 'revoked']),
+  "title": zod.string(),
+  "approvedText": zod.string().nullable()
+})
+
+
+/**
+ * @summary Approve the reviewed text snapshot or revoke it (active team admin only)
+ */
+export const DecideLibraryKnowledgeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const decideLibraryKnowledgeBodyRevisionMin = 0;
+
+export const decideLibraryKnowledgeBodyTitleMax = 160;
+
+
+
+export const DecideLibraryKnowledgeBody = zod.object({
+  "action": zod.enum(['approve', 'revoke']),
+  "revision": zod.number().min(decideLibraryKnowledgeBodyRevisionMin),
+  "hash": zod.string().optional().describe('Preview hash required on approval'),
+  "title": zod.string().max(decideLibraryKnowledgeBodyTitleMax).optional().describe('Public source title required on approval'),
+  "publicReferenceConfirmed": zod.boolean().optional().describe('Must be true to approve; confirms no private or customer information')
+})
+
+export const DecideLibraryKnowledgeResponse = zod.object({
+  "id": zod.string(),
+  "knowledgeStatus": zod.enum(['private', 'approved', 'revoked']),
+  "knowledgeRevision": zod.number(),
+  "knowledgeTitle": zod.string().nullable(),
+  "knowledgeReviewedAt": zod.coerce.date().nullable(),
+  "knowledgeReviewedBy": zod.string().nullable()
+})
+
+
 export const ListCustomerAssignmentsResponseItem = zod.object({
   "id": zod.number(),
   "customerName": zod.string(),

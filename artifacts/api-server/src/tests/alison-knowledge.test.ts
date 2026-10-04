@@ -90,8 +90,13 @@ test("retrieval reads only published snapshots with bounded parameterized querie
     readLocal: async () => [],
     query: async (sql, values) => {
       calls++;
-      assert.match(sql, /status='published' AND published_snapshot IS NOT NULL/);
-      assert.match(sql, /SELECT id,published_snapshot AS snapshot/);
+      if (sql.includes("team_library_docs")) {
+        assert.match(sql, /knowledge_status='approved'/);
+        assert.doesNotMatch(sql, /object_path|uploaded_by|file_name/);
+      } else {
+        assert.match(sql, /status='published' AND published_snapshot IS NOT NULL/);
+        assert.match(sql, /SELECT id,published_snapshot AS snapshot/);
+      }
       assert.match(sql, /LIMIT 12/);
       assert.doesNotMatch(sql, /zeolite/);
       assert.deepEqual(values, [["%explain%", "%zeolite%", "%maintenance%"]]);
@@ -100,7 +105,7 @@ test("retrieval reads only published snapshots with bounded parameterized querie
       }] : [] };
     },
   });
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   assert.match(context, /Reviewed Markdown advice/);
 });
 

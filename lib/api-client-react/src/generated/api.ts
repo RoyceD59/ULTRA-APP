@@ -118,6 +118,9 @@ import type {
   LegacyRegistrationStatus,
   LegacyRegistrationSubmissionInput,
   LegacyReviewDecisionInput,
+  LibraryKnowledgeDecision,
+  LibraryKnowledgeMetadata,
+  LibraryKnowledgePreview,
   ListAgentAlisonChatsParams,
   ListCompanionBlogEditorialRuns200,
   ListCustomerLifecycleAuditEventsParams,
@@ -252,6 +255,155 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getPreviewLibraryKnowledgeUrl = (id: string,) => {
+
+
+
+
+  return `/api/library/docs/${id}/knowledge`
+}
+
+/**
+ * @summary Review bounded extracted text for customer knowledge (active team admin only)
+ */
+export const previewLibraryKnowledge = async (id: string, options?: RequestInit): Promise<LibraryKnowledgePreview> => {
+
+  return customFetch<LibraryKnowledgePreview>(getPreviewLibraryKnowledgeUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPreviewLibraryKnowledgeQueryKey = (id: string,) => {
+    return [
+    `/api/library/docs/${id}/knowledge`
+    ] as const;
+    }
+
+
+export const getPreviewLibraryKnowledgeQueryOptions = <TData = Awaited<ReturnType<typeof previewLibraryKnowledge>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof previewLibraryKnowledge>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPreviewLibraryKnowledgeQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof previewLibraryKnowledge>>> = ({ signal }) => previewLibraryKnowledge(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof previewLibraryKnowledge>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type PreviewLibraryKnowledgeQueryResult = NonNullable<Awaited<ReturnType<typeof previewLibraryKnowledge>>>
+export type PreviewLibraryKnowledgeQueryError = ErrorType<void>
+
+
+/**
+ * @summary Review bounded extracted text for customer knowledge (active team admin only)
+ */
+
+export function usePreviewLibraryKnowledge<TData = Awaited<ReturnType<typeof previewLibraryKnowledge>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof previewLibraryKnowledge>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getPreviewLibraryKnowledgeQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideLibraryKnowledgeUrl = (id: string,) => {
+
+
+
+
+  return `/api/library/docs/${id}/knowledge`
+}
+
+/**
+ * @summary Approve the reviewed text snapshot or revoke it (active team admin only)
+ */
+export const decideLibraryKnowledge = async (id: string,
+    libraryKnowledgeDecision: LibraryKnowledgeDecision, options?: RequestInit): Promise<LibraryKnowledgeMetadata> => {
+
+  return customFetch<LibraryKnowledgeMetadata>(getDecideLibraryKnowledgeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(libraryKnowledgeDecision)
+  }
+);}
+
+
+
+
+
+export const getDecideLibraryKnowledgeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideLibraryKnowledge>>, TError,{id: string;data: BodyType<LibraryKnowledgeDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideLibraryKnowledge>>, TError,{id: string;data: BodyType<LibraryKnowledgeDecision>}, TContext> => {
+
+const mutationKey = ['decideLibraryKnowledge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideLibraryKnowledge>>, {id: string;data: BodyType<LibraryKnowledgeDecision>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideLibraryKnowledge(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideLibraryKnowledgeMutationResult = NonNullable<Awaited<ReturnType<typeof decideLibraryKnowledge>>>
+    export type DecideLibraryKnowledgeMutationBody = BodyType<LibraryKnowledgeDecision>
+    export type DecideLibraryKnowledgeMutationError = ErrorType<void>
+
+    /**
+ * @summary Approve the reviewed text snapshot or revoke it (active team admin only)
+ */
+export const useDecideLibraryKnowledge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideLibraryKnowledge>>, TError,{id: string;data: BodyType<LibraryKnowledgeDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideLibraryKnowledge>>,
+        TError,
+        {id: string;data: BodyType<LibraryKnowledgeDecision>},
+        TContext
+      > => {
+      return useMutation(getDecideLibraryKnowledgeMutationOptions(options));
+    }
 
 export const getListCustomerAssignmentsUrl = () => {
 

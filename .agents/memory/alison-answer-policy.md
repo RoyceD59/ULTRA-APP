@@ -22,3 +22,14 @@ can look authoritative even when the store has changed.
 
 **How to apply:** Keep live commerce facts separate from curated product-use and
 maintenance guidance; explicitly mark unknown fields and store unavailability.
+
+Team Library approval is permission to use reviewed public reference text, not
+permission to publish the uploaded file. The original remains private; customer
+retrieval must not acquire object URLs, uploader details, or customer records.
+Revocation stops future retrieval; it cannot erase prior or in-flight answers.
+
+**Why:** The requested upload review workflow extends Alison's curated-public
+scope without opening the private Team Library to customers.
+
+**How to apply:** Keep the public-text approval boundary separate from storage
+visibility, and require a new review before replacing approved reference text.

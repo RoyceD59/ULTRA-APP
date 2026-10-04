@@ -43,6 +43,52 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /library/docs/{id}/knowledge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: previewLibraryKnowledge
+      summary: Review bounded extracted text for customer knowledge (active team admin only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Inert text preview; never returns a private object URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryKnowledgePreview"
+        "401": { description: Team authentication required }
+        "403": { description: Active administrator required }
+        "404": { description: Document not found }
+        "422": { description: "Unsupported, oversized, binary, or invalid UTF-8 document" }
+        "503": { description: Review temporarily unavailable }
+    post:
+      operationId: decideLibraryKnowledge
+      summary: Approve the reviewed text snapshot or revoke it (active team admin only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryKnowledgeDecision"
+      responses:
+        "200":
+          description: Persisted approval or revocation metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryKnowledgeMetadata"
+        "400": { description: Invalid decision or missing public-reference confirmation }
+        "401": { description: Team authentication required }
+        "403": { description: Active administrator required }
+        "404": { description: Document not found }
+        "409": { description: Review revision or content hash changed }
+        "422": { description: Unsupported or invalid reference text }
+        "503": { description: Approval temporarily unavailable }
   /admin/customer-assignments:
     get:
       operationId: listCustomerAssignments
@@ -3462,6 +3508,37 @@ components:
       bearerFormat: opaque
 
   schemas:
+    LibraryKnowledgePreview:
+      type: object
+      required: [text, hash, revision, status, title, approvedText]
+      properties:
+        text: { type: string, maxLength: 16000 }
+        hash: { type: string }
+        revision: { type: integer, minimum: 0 }
+        status: { type: string, enum: [private, approved, revoked] }
+        title: { type: string }
+        approvedText: { type: [string, "null"] }
+    LibraryKnowledgeDecision:
+      type: object
+      required: [action, revision]
+      properties:
+        action: { type: string, enum: [approve, revoke] }
+        revision: { type: integer, minimum: 0 }
+        hash: { type: string, description: Preview hash required on approval }
+        title: { type: string, maxLength: 160, description: Public source title required on approval }
+        publicReferenceConfirmed:
+          type: boolean
+          description: Must be true to approve; confirms no private or customer information
+    LibraryKnowledgeMetadata:
+      type: object
+      required: [id, knowledgeStatus, knowledgeRevision, knowledgeTitle, knowledgeReviewedAt, knowledgeReviewedBy]
+      properties:
+        id: { type: string }
+        knowledgeStatus: { type: string, enum: [private, approved, revoked] }
+        knowledgeRevision: { type: integer }
+        knowledgeTitle: { type: [string, "null"] }
+        knowledgeReviewedAt: { type: [string, "null"], format: date-time }
+        knowledgeReviewedBy: { type: [string, "null"] }
     CustomerAssignmentInput:
       type: object
       required: [idempotencyKey, customerName, email, phone, productId, installationDate, orderId, orderItemId]

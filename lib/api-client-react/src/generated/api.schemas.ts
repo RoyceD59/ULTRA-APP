@@ -5,6 +5,71 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type LibraryKnowledgePreviewStatus = typeof LibraryKnowledgePreviewStatus[keyof typeof LibraryKnowledgePreviewStatus];
+
+
+export const LibraryKnowledgePreviewStatus = {
+  private: 'private',
+  approved: 'approved',
+  revoked: 'revoked',
+} as const;
+
+export interface LibraryKnowledgePreview {
+  /** @maxLength 16000 */
+  text: string;
+  hash: string;
+  /** @minimum 0 */
+  revision: number;
+  status: LibraryKnowledgePreviewStatus;
+  title: string;
+  /** @nullable */
+  approvedText: string | null;
+}
+
+export type LibraryKnowledgeDecisionAction = typeof LibraryKnowledgeDecisionAction[keyof typeof LibraryKnowledgeDecisionAction];
+
+
+export const LibraryKnowledgeDecisionAction = {
+  approve: 'approve',
+  revoke: 'revoke',
+} as const;
+
+export interface LibraryKnowledgeDecision {
+  action: LibraryKnowledgeDecisionAction;
+  /** @minimum 0 */
+  revision: number;
+  /** Preview hash required on approval */
+  hash?: string;
+  /**
+     * Public source title required on approval
+     * @maxLength 160
+     */
+  title?: string;
+  /** Must be true to approve; confirms no private or customer information */
+  publicReferenceConfirmed?: boolean;
+}
+
+export type LibraryKnowledgeMetadataKnowledgeStatus = typeof LibraryKnowledgeMetadataKnowledgeStatus[keyof typeof LibraryKnowledgeMetadataKnowledgeStatus];
+
+
+export const LibraryKnowledgeMetadataKnowledgeStatus = {
+  private: 'private',
+  approved: 'approved',
+  revoked: 'revoked',
+} as const;
+
+export interface LibraryKnowledgeMetadata {
+  id: string;
+  knowledgeStatus: LibraryKnowledgeMetadataKnowledgeStatus;
+  knowledgeRevision: number;
+  /** @nullable */
+  knowledgeTitle: string | null;
+  /** @nullable */
+  knowledgeReviewedAt: string | null;
+  /** @nullable */
+  knowledgeReviewedBy: string | null;
+}
+
 export interface CustomerAssignmentInput {
   idempotencyKey: string;
   customerName: string;

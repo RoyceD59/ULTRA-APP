@@ -59,6 +59,8 @@ export const ALLOWED_MIME_TYPES: ReadonlySet<string> = new Set([
   "application/vnd.oasis.opendocument.spreadsheet",
   "application/vnd.oasis.opendocument.presentation",
   "text/plain",
+  "text/markdown",
+  "text/x-markdown",
   "text/csv",
   "image/png",
   "image/jpeg",

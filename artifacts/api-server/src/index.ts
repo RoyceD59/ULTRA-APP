@@ -748,6 +748,16 @@ async function applyStartupMigrations(): Promise<void> {
     )
   `);
   logger.info("Startup migration: team_library_docs table ensured");
+  await pool.query(`
+    ALTER TABLE team_library_docs
+      ADD COLUMN IF NOT EXISTS knowledge_status text NOT NULL DEFAULT 'private',
+      ADD COLUMN IF NOT EXISTS knowledge_revision integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS knowledge_title text,
+      ADD COLUMN IF NOT EXISTS knowledge_text text,
+      ADD COLUMN IF NOT EXISTS knowledge_hash text,
+      ADD COLUMN IF NOT EXISTS knowledge_reviewed_by text,
+      ADD COLUMN IF NOT EXISTS knowledge_reviewed_at timestamptz
+  `);
 
   // Pending upload slots — server-issued records that bind a presigned GCS path
   // to the member who requested it.  POST /library/docs validates the uploadId

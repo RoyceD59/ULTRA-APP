@@ -30,6 +30,8 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { randomUUID } from "node:crypto";
+import { pool } from "@workspace/db";
 import {
   finalizeUpload,
   validateMagicBytes,
@@ -526,6 +528,7 @@ describe("finalizeUpload — exact-MIME bypass prevention (p)", () => {
 describe("DELETE /api/library/docs/:id — admin-only enforcement", () => {
   let server: http.Server;
   let base: string;
+  const adminId = `library-delete-${randomUUID()}`;
 
   before(
     () => new Promise<void>((resolve, reject) => {
@@ -544,14 +547,22 @@ describe("DELETE /api/library/docs/:id — admin-only enforcement", () => {
   );
 
   after(
-    () => new Promise<void>((resolve) => server.close(() => resolve())),
+    async () => {
+      await pool.query("DELETE FROM team_users WHERE id=$1", [adminId]);
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
     { timeout: 5_000 },
   );
 
   async function memberToken(role: "admin" | "member"): Promise<string> {
     const { issueToken } = await import("../lib/jwt.js");
+    if (role === "admin") {
+      await pool.query(`INSERT INTO team_users (id,email,name,password_hash,role,is_active)
+        VALUES ($1,$2,'Library delete fixture','unused','admin',true) ON CONFLICT (id) DO NOTHING`,
+        [adminId, `${adminId}@example.test`]);
+    }
     const exp = Math.floor(Date.now() / 1000) + 3600;
-    return issueToken({ id: `test-${role}`, email: `${role}@ucfilters.com`,
+    return issueToken({ id: role === "admin" ? adminId : `test-${role}`, email: `${role}@ucfilters.com`,
       name: `Test ${role}`, type: "team-session", role, exp });
   }
 
