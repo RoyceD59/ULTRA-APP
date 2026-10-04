@@ -32,3 +32,9 @@ Set a test-only `RESEND_BASE_URL` when intercepting order emails with `globalThi
 **Why:** Without an explicit direct-API base URL, Resend uses its connector's proxy fetch, which bypasses the global stub and can reach the live provider from a regression test.
 
 **How to apply:** Route Resend to a reserved `.invalid` host, stub that exact endpoint, and wait for background provider calls before restoring fetch. Fail on unexpected outbound requests.
+
+Negative alert assertions in multi-case route suites must be scoped to the fixture's order/reference, not every outbound call observed while the test runs.
+
+**Why:** Fire-and-forget recovery emails from an earlier test can reach a later test's fetch stub, producing a false failure even when the later webhook sent no alert.
+
+**How to apply:** Keep the reserved direct Resend transport configured throughout the suite, identify captured alert payloads by the fixture's unique reference, and also check order-scoped notification audit rows.
