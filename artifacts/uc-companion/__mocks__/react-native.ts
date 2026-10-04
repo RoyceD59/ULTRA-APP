@@ -1,6 +1,7 @@
 /** Minimal react-native stub for the Node.js test runner. */
 export const Platform: { OS: 'ios' | 'android' | 'web' } = { OS: 'ios' };
 export const Alert    = { alert: () => {} };
+export const Share = { share: async () => ({}) };
 export const PixelRatio = { get: () => 1 };
 export const Text = 'Text';
 export const TouchableOpacity = 'TouchableOpacity';

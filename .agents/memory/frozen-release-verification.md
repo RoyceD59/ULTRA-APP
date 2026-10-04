@@ -14,3 +14,9 @@ Background-task changes must be applied to the main project before asking the us
 **Why:** a user successfully republished, but the build still produced the old bundle because the tested packaging correction existed only in the task's isolated copy. Publishing success did not mean that task's changes were deployed.
 
 **How to apply:** separate code/package preparation from post-apply production operations when a task requires both. Agree on that scope with the user rather than repeatedly asking them to republish changes not yet applied. Consult the task-system documentation if unsure which project copy publishing uses.
+
+Compile the frozen candidate itself, including the shared callback and component dependencies used by the new flow; a working-tree typecheck is not enough.
+
+**Why:** The archived registration helper had an older callback contract and lacked newer shared loading components, despite the working tree compiling and the changed files fitting the intended allowlist.
+
+**How to apply:** Prepare an additive candidate without selecting it, typecheck its consumer apps, and verify its actually selected manifest/launch bytes separately from signed-in working-preview behavior.

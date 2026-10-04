@@ -11,6 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
+import OfflinePurchasesSection from '@/components/OfflinePurchasesSection';
 import CareOverviewEntry from '@/components/CareOverviewEntry';
 import * as Haptics from 'expo-haptics';
 import RewardsQrDisplay from '@/components/RewardsQrDisplay';
@@ -1051,7 +1052,7 @@ function AccountScreenContent() {
             {assignmentsQuery.isError ? <PageDataError title="Assigned filters unavailable" error={assignmentsQuery.error} onRetry={assignmentsQuery.refetch} /> : null}
             {!assignmentsQuery.isLoading && !assignmentsQuery.isError && !assignmentsQuery.data?.length &&
               <Text style={{ color: colors.mutedForeground }}>No staff-assigned filters on this account.</Text>}
-            {(assignmentsQuery.data ?? []).map(assignment => <View key={assignment.id} style={{ paddingVertical: 12 }}>
+            {(assignmentsQuery.data ?? []).map(assignment => <View key={`assignment:${assignment.id}`} style={{ paddingVertical: 12 }}>
               <Text style={{ color: colors.text, fontWeight: '600' }}>{assignment.productName}</Text>
               <Text style={{ color: colors.mutedForeground }}>Installed {String(assignment.activatedAt ?? assignment.installationDate).slice(0, 10)} · Order #{assignment.orderReference}</Text>
               <Text style={{ color: colors.mutedForeground }}>
@@ -1060,6 +1061,11 @@ function AccountScreenContent() {
               </Text>
             </View>)}
           </View>
+          <OfflinePurchasesSection key={`offline-purchases:${user.id}`} userId={user.id} focused={accountFocused}
+            onRegistered={a => {
+              setFilterActivation(a); setFilterActivationOwner(user.id); refreshNotifStatus();
+              void queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) });
+            }} />
           <FilterTrackerSection
             key={`water-tests:${user.id}`}
             activation={filterActivationOwner === user.id ? filterActivation : null}

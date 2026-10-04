@@ -14,6 +14,9 @@ export const ucRegisteredFiltersTable = pgTable("uc_registered_filters", {
   activatedAt: timestamp("activated_at", { withTimezone: true }).notNull(),
   sourceOrderId: integer("source_order_id"),
   source: text("source").notNull().default("legacy"),
+  offlineSaleId: integer("offline_sale_id"),
+  offlineUnitId: text("offline_unit_id"),
+  offlineLifespanDays: integer("offline_lifespan_days"),
   active: boolean("active").notNull().default(true),
   verificationStatus: text("verification_status").notNull().default("approved"),
   lifecycleStatus: text("lifecycle_status").notNull().default("active"),
@@ -25,6 +28,7 @@ export const ucRegisteredFiltersTable = pgTable("uc_registered_filters", {
   deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  uniqueIndex("uc_registered_filters_offline_unit_unique").on(t.offlineUnitId),
   uniqueIndex("uc_registered_filters_source_order_product_idx")
     .on(t.source, t.sourceOrderId, t.productId),
   uniqueIndex("uc_registered_filters_verified_purchase_line_unique")

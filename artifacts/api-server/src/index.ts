@@ -1014,6 +1014,10 @@ async function applyStartupMigrations(): Promise<void> {
   logger.info("Startup migration: rewards, registered filters, impact ledger, customer-stage, and COD collection columns ensured");
   await pool.query(`
     ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'legacy';
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS offline_sale_id integer;
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS offline_unit_id text;
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS offline_lifespan_days integer;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_offline_unit_unique ON uc_registered_filters(offline_unit_id);
     DROP INDEX IF EXISTS uc_registered_filters_user_order_product_idx;
     CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_source_order_product_idx
       ON uc_registered_filters (source, source_order_id, product_id)

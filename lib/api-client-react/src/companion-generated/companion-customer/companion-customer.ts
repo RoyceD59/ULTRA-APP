@@ -27,11 +27,14 @@ import type {
   CancelCompanionCheckoutBody,
   CanonicalCustomerHistory,
   CanonicalFilterRegistration,
+  CommitCustomerOfflineFilter200,
+  CommitCustomerOfflineFilterBody,
   CompanionCheckoutQuote,
   CompanionCheckoutQuoteInput,
   CustomerFilterAssignment,
   CustomerLifecycleFeatureConfig,
   CustomerLifecycleLookup,
+  CustomerOfflinePurchaseList,
   GetPublishedCompanionBlogArticle200,
   GetPublishedUcGuide200,
   GetUcLocationRatingAggregateParams,
@@ -93,7 +96,153 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getValidateCustomerRewardsQrUrl = () => {
+export const getListCustomerOfflinePurchasesUrl = () => {
+
+
+
+
+  return `/api/uc/purchases/offline`
+}
+
+/**
+ * @summary Read only this account's durably linked offline sales
+ */
+export const listCustomerOfflinePurchases = async ( options?: RequestInit): Promise<CustomerOfflinePurchaseList> => {
+
+  return customFetch<CustomerOfflinePurchaseList>(getListCustomerOfflinePurchasesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerOfflinePurchasesQueryKey = () => {
+    return [
+    `/api/uc/purchases/offline`
+    ] as const;
+    }
+
+
+export const getListCustomerOfflinePurchasesQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerOfflinePurchases>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerOfflinePurchases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerOfflinePurchasesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerOfflinePurchases>>> = ({ signal }) => listCustomerOfflinePurchases({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerOfflinePurchases>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerOfflinePurchasesQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerOfflinePurchases>>>
+export type ListCustomerOfflinePurchasesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read only this account's durably linked offline sales
+ */
+
+export function useListCustomerOfflinePurchases<TData = Awaited<ReturnType<typeof listCustomerOfflinePurchases>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerOfflinePurchases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerOfflinePurchasesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getCommitCustomerOfflineFilterUrl = () => {
+
+
+
+
+  return `/api/uc/filters/register-offline-purchase`
+}
+
+/**
+ * @summary Register one owned offline sale unit without a receipt or financial writes
+ */
+export const commitCustomerOfflineFilter = async (commitCustomerOfflineFilterBody: CommitCustomerOfflineFilterBody, options?: RequestInit): Promise<CommitCustomerOfflineFilter200> => {
+
+  return customFetch<CommitCustomerOfflineFilter200>(getCommitCustomerOfflineFilterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(commitCustomerOfflineFilterBody)
+  }
+);}
+
+
+
+
+
+export const getCommitCustomerOfflineFilterMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitCustomerOfflineFilter>>, TError,{data: BodyType<CommitCustomerOfflineFilterBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitCustomerOfflineFilter>>, TError,{data: BodyType<CommitCustomerOfflineFilterBody>}, TContext> => {
+
+const mutationKey = ['commitCustomerOfflineFilter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitCustomerOfflineFilter>>, {data: BodyType<CommitCustomerOfflineFilterBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  commitCustomerOfflineFilter(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CommitCustomerOfflineFilterMutationResult = NonNullable<Awaited<ReturnType<typeof commitCustomerOfflineFilter>>>
+    export type CommitCustomerOfflineFilterMutationBody = BodyType<CommitCustomerOfflineFilterBody>
+    export type CommitCustomerOfflineFilterMutationError = ErrorType<void>
+
+    /**
+ * @summary Register one owned offline sale unit without a receipt or financial writes
+ */
+export const useCommitCustomerOfflineFilter = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitCustomerOfflineFilter>>, TError,{data: BodyType<CommitCustomerOfflineFilterBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof commitCustomerOfflineFilter>>,
+        TError,
+        {data: BodyType<CommitCustomerOfflineFilterBody>},
+        TContext
+      > => {
+      return useMutation(getCommitCustomerOfflineFilterMutationOptions(options));
+    }
+    export const getValidateCustomerRewardsQrUrl = () => {
 
 
 

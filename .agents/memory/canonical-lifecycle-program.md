@@ -44,3 +44,9 @@ Staff fulfillment actions must preserve independently established payment classi
 **Why:** Legacy paid orders may have no confirmation timestamp. Reclassifying them as pending when shipping can reverse their Hydrate contributions, while inventing a timestamp would falsely strengthen receipt evidence.
 
 **How to apply:** Preserve payment classification before replacing payment-bearing legacy statuses with fulfillment statuses. Map collection readiness explicitly in canonical fulfillment, and test legacy paid and uncollected COD orders with canonical dual writes enabled.
+
+Linked offline sales are an authoritative product ledger, not financial-order or cash-collection evidence. Visibility and filter registration must not invent a receipt, paid classification, monetary totals, reward/referral eligibility or extra verified impact.
+
+**Why:** The user explicitly required previously recorded ProjectHub products to be registerable in linked Companion accounts without fabricating financial records or enabling shadow lifecycle flags globally.
+
+**How to apply:** Preserve the established account link across contact edits, keep offline source identity distinct from app/Woo orders, and retain registered history when staff change or remove the product ledger.

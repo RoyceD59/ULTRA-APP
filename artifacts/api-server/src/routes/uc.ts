@@ -75,6 +75,7 @@ import {
 } from "../lib/wishlist-demand.js";
 import { quotePromotion, consumePromotionOnClient, type PromotionQuote } from "../lib/reward-promotions.js";
 import { appPurchaseOwnedBy, storePurchaseOwnedBy } from "../lib/purchase-ownership.js";
+import { listOfflinePurchases, registerOfflinePurchase, OfflinePurchaseError } from "../lib/offline-purchases.js";
 import { transitionOrderStatus, ORDER_CUSTOMER_STAGES } from "../lib/order-status-pipeline.js";
 import {
   reconcileCanonicalPurchaseDualWrite,
@@ -5972,6 +5973,32 @@ export async function notifyConfirmedCheckout(order: any) {
 
 // ─── Filter registration from purchase record ────────────────────────────────
 // POST /api/uc/filters/register-purchase
+router.get("/uc/purchases/offline", lookupLimiter, async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const claims = verifyToken(req.headers.authorization);
+  const id = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    const [lifespans, capacities] = await Promise.all([getProductLifespanMap(), getProductCapacityMap()]);
+    res.json(await listOfflinePurchases(id, { lifespans, capacities }));
+  } catch (error) {
+    if (error instanceof OfflinePurchaseError) res.status(error.status).json({ error: error.message });
+    else { logger.error({ error }, "Offline purchases unavailable"); res.status(500).json({ error: "Offline purchases unavailable. Retry later." }); }
+  }
+});
+router.post("/uc/filters/register-offline-purchase", lookupLimiter, async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const claims = verifyToken(req.headers.authorization);
+  const id = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    const [lifespans, capacities] = await Promise.all([getProductLifespanMap(), getProductCapacityMap()]);
+    res.json(await registerOfflinePurchase(id, req.body ?? {}, { lifespans, capacities }));
+  } catch (error) {
+    if (error instanceof OfflinePurchaseError) res.status(error.status).json({ error: error.message });
+    else { logger.error({ error }, "Offline registration failed"); res.status(500).json({ error: "Registration could not be completed. Retry later." }); }
+  }
+});
 //
 // A customer registers their installed filter with the receipt/order number
 // plus the phone number used at checkout. Deliberately NO new table: the

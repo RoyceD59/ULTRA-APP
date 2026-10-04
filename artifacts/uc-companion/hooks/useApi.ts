@@ -348,11 +348,30 @@ export interface UCBlogPage {
 }
 
 export interface RegisterPurchaseItem {
+  /** App/store purchase item. Offline sale units use OfflinePurchaseItem. */
   productId:    number;
   name:         string;
   quantity:     number;
   lifespanDays: number; // 0 = not trackable (no catalogue lifespan — never guessed)
   capacityLitres?: number;
+}
+export interface OfflinePurchaseItem {
+  lineId: string;
+  productId: number | null;
+  name: string;
+  quantity: number;
+  lifespanDays: number;
+  capacityLitres: number;
+  unavailableReason: string | null;
+  availableUnitIds: string[];
+  registeredUnits: { unitId: string; installationDate: string; active: boolean }[];
+}
+export interface OfflinePurchase {
+  source: 'offline';
+  saleId: number;
+  saleDate: string;
+  label: string;
+  items: OfflinePurchaseItem[];
 }
 
 export interface RegisterPurchaseResult {
@@ -576,6 +595,10 @@ export function useApi() {
      * Look up a purchase by receipt/order number + the checkout phone number
      * so the buyer can register their filter from the purchase record.
      */
+    getOfflinePurchases: (signal?: AbortSignal) => get<{ purchases: OfflinePurchase[] }>('/api/uc/purchases/offline', signal),
+    registerOfflinePurchase: (saleId: number, unitId: string, installationDate: string) =>
+      post<{ registration: RegisteredImpactFilter & { lifespanDays: number; offlineUnitId: string; maintenanceCount: number } }>(
+        '/api/uc/filters/register-offline-purchase', { saleId, unitId, installationDate }),
     registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string }) =>
       post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone, ...registration }),
     getLocations: () => get<MapLocation[]>('/api/uc/locations'),

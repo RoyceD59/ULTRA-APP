@@ -179,6 +179,8 @@ export interface FilterActivation {
   sourceOrderId?: number;
   /** Exact capacity-ledger identity; gauge reads never change reminder state. */
   registeredFilterId?: number;
+  /** Offline source identity is not a financial order number. */
+  offlineUnitId?: string;
   /**
    * Day-offsets (from activatedAt) for the two replacement-reminder stages,
    * computed at check-in time when a performance check-in shortens the filter's
@@ -849,6 +851,7 @@ async function syncActivationWithCatalogueUnlocked(
     // line be registered again after a catalogue lifespan correction.
     sourceOrderId:   existing.sourceOrderId,
     registeredFilterId: existing.registeredFilterId,
+    offlineUnitId: existing.offlineUnitId,
     // Preserve check-in-derived offsets so the rescheduled local notifications
     // fire on the same dates as the server dispatch.  A degradation result
     // takes precedence over a catalogue correction for replace30/replace15.

@@ -97,6 +97,22 @@ async function settle() {
 }
 
 describe('FilterTrackerSection account-scoped catalogue results', () => {
+  it('account 4 can open Register Filter without a duplicate row or omitted modal', () => {
+    auth.setUser(4);
+    notifications.configure(async () => null, async () => false);
+    const root = __testRender(() => ({
+      props: { value: FilterTrackerSection({ activation: null, onActivationChange() {} }) },
+    }), {});
+    roots.push(root); root.flush();
+    function all(tree: any): any[] {
+      if (!tree || typeof tree !== 'object') return [];
+      return [tree, ...[tree.props?.children].flat(Infinity).flatMap(all)];
+    }
+    const open = all(root.value).find(n => n.props?.onPress && all(n).some(c => c.props?.children === 'Register your filter'));
+    assert.ok(open);
+    open.props.onPress(); root.flush();
+    assert.ok(all(root.value).some(n => n.props?.visible === true && n.props?.userId === 4));
+  });
   it('delivers an in-flight sync to the latest callback after a same-account rerender', async () => {
     auth.setUser(41);
     const request = deferred<FilterActivation | null>();

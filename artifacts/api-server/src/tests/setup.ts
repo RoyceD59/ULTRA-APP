@@ -562,6 +562,7 @@ await pool.query(`
 for (const migrationPath of [
   "../../../../lib/db/migrations/0054_uc_refill_governance.sql",
   "../../../../lib/db/migrations/0055_refill_preview_flags.sql",
+  "../../../../lib/db/migrations/0065_offline_filter_registration.sql",
 ]) {
   const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
   await pool.query(migration);

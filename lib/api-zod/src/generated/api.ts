@@ -10,6 +10,65 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Read only this account's durably linked offline sales
+ */
+export const ListCustomerOfflinePurchasesResponse = zod.object({
+  "purchases": zod.array(zod.object({
+  "source": zod.enum(['offline']),
+  "saleId": zod.number(),
+  "saleDate": zod.string(),
+  "label": zod.string(),
+  "items": zod.array(zod.object({
+  "lineId": zod.string(),
+  "productId": zod.number().nullable(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "unavailableReason": zod.string().nullable(),
+  "availableUnitIds": zod.array(zod.string()),
+  "registeredUnits": zod.array(zod.object({
+  "unitId": zod.string(),
+  "installationDate": zod.string(),
+  "active": zod.boolean()
+})).optional()
+}))
+}))
+})
+
+
+/**
+ * @summary Register one owned offline sale unit without a receipt or financial writes
+ */
+
+export const commitCustomerOfflineFilterBodyUnitIdMax = 100;
+
+export const commitCustomerOfflineFilterBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CommitCustomerOfflineFilterBody = zod.object({
+  "saleId": zod.number().min(1),
+  "unitId": zod.string().max(commitCustomerOfflineFilterBodyUnitIdMax),
+  "installationDate": zod.string().regex(commitCustomerOfflineFilterBodyInstallationDateRegExp)
+})
+
+export const CommitCustomerOfflineFilterResponse = zod.object({
+  "registration": zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "ratedCapacityLitres": zod.number(),
+  "activatedAt": zod.string(),
+  "sourceOrderId": zod.number().nullish(),
+  "offlineUnitId": zod.string(),
+  "lifespanDays": zod.number(),
+  "maintenanceCount": zod.number().optional()
+})
+})
+
+
+/**
  * @summary Read-only account-bound QR verification
  */
 export const validateCustomerRewardsQrBodyQrTokenRegExp = new RegExp('^[A-Za-z0-9_-]{40,64}$');
@@ -2575,6 +2634,7 @@ export const ListUcOfflineClientsResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -2613,6 +2673,7 @@ export const CreateUcOfflineClientBody = zod.object({
   "phone": zod.string().optional().describe('International phone number'),
   "email": zod.string().optional().describe('Case-insensitive email address'),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -2635,6 +2696,7 @@ export const CreateUcOfflineClientResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -2673,6 +2735,7 @@ export const UpdateUcOfflineClientBody = zod.object({
   "phone": zod.string().optional().describe('International phone number'),
   "email": zod.string().optional().describe('Case-insensitive email address'),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -2694,6 +2757,7 @@ export const UpdateUcOfflineClientResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -2733,6 +2797,7 @@ export const RetryUcOfflineClientDeliveryResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),

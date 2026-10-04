@@ -43,6 +43,65 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/purchases/offline:
+    get:
+      operationId: listCustomerOfflinePurchases
+      tags: [uc]
+      summary: Read only this account's durably linked offline sales
+      responses:
+        "200":
+          description: Safe source-aware purchase records, never financial orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerOfflinePurchaseList"
+        "401": { description: Authentication required }
+        "500": { description: Purchase read unavailable }
+  /uc/filters/register-offline-purchase:
+    post:
+      operationId: commitCustomerOfflineFilter
+      tags: [uc]
+      summary: Register one owned offline sale unit without a receipt or financial writes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [saleId, unitId, installationDate]
+              properties:
+                saleId: { type: integer, minimum: 1 }
+                unitId: { type: string, maxLength: 100 }
+                installationDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+      responses:
+        "200":
+          description: Durable registration including exact retries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registration]
+                properties:
+                  registration:
+                    type: object
+                    required: [id, userId, productId, productName, ratedCapacityLitres, activatedAt, offlineUnitId, lifespanDays]
+                    properties:
+                      id: { type: integer }
+                      userId: { type: integer }
+                      productId: { type: integer }
+                      productName: { type: string }
+                      ratedCapacityLitres: { type: integer }
+                      activatedAt: { type: string }
+                      sourceOrderId: { type: integer, nullable: true }
+                      offlineUnitId: { type: string }
+                      lifespanDays: { type: integer }
+                      maintenanceCount: { type: integer }
+        "400": { description: Invalid installation date or source input }
+        "401": { description: Authentication required }
+        "404": { description: Owned linked purchase not found }
+        "409": { description: Unit or quantity no longer available }
+        "422": { description: Product lacks confirmed catalogue filter metadata }
+        "503": { description: Catalogue unavailable - retry later }
   /uc/customer/rewards/qr/validate:
     post:
       operationId: validateCustomerRewardsQr
@@ -6131,10 +6190,51 @@ components:
       type: object
       required: [productName, quantity]
       properties:
+        lineId: { type: string, description: Stable server-issued source line; retained on edits }
         productId: { type: integer }
         productName: { type: string }
         quantity: { type: integer, minimum: 1 }
         litresPerUnit: { type: number, minimum: 0 }
+
+    CustomerOfflinePurchaseList:
+      type: object
+      required: [purchases]
+      properties:
+        purchases:
+          type: array
+          items:
+            type: object
+            required: [source, saleId, saleDate, label, items]
+            properties:
+              source: { type: string, enum: [offline] }
+              saleId: { type: integer }
+              saleDate: { type: string }
+              label: { type: string }
+              items:
+                type: array
+                items:
+                  type: object
+                  required: [lineId, productId, name, quantity, lifespanDays, capacityLitres, unavailableReason, availableUnitIds]
+                  properties:
+                    lineId: { type: string }
+                    productId: { type: integer, nullable: true }
+                    name: { type: string }
+                    quantity: { type: integer }
+                    lifespanDays: { type: integer }
+                    capacityLitres: { type: integer }
+                    unavailableReason: { type: string, nullable: true }
+                    availableUnitIds:
+                      type: array
+                      items: { type: string }
+                    registeredUnits:
+                      type: array
+                      items:
+                        type: object
+                        required: [unitId, installationDate, active]
+                        properties:
+                          unitId: { type: string }
+                          installationDate: { type: string }
+                          active: { type: boolean }
 
     UcOfflineClientInput:
       type: object

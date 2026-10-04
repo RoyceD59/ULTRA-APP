@@ -2991,12 +2991,51 @@ export interface UcPasswordChangeResult {
 }
 
 export interface UcOfflineProduct {
+  /** Stable server-issued source line; retained on edits */
+  lineId?: string;
   productId?: number;
   productName: string;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */
   litresPerUnit?: number;
+}
+
+export type CustomerOfflinePurchaseListPurchasesItemSource = typeof CustomerOfflinePurchaseListPurchasesItemSource[keyof typeof CustomerOfflinePurchaseListPurchasesItemSource];
+
+
+export const CustomerOfflinePurchaseListPurchasesItemSource = {
+  offline: 'offline',
+} as const;
+
+export type CustomerOfflinePurchaseListPurchasesItemItemsItemRegisteredUnitsItem = {
+  unitId: string;
+  installationDate: string;
+  active: boolean;
+};
+
+export type CustomerOfflinePurchaseListPurchasesItemItemsItem = {
+  lineId: string;
+  productId: number | null;
+  name: string;
+  quantity: number;
+  lifespanDays: number;
+  capacityLitres: number;
+  unavailableReason: string | null;
+  availableUnitIds: string[];
+  registeredUnits?: CustomerOfflinePurchaseListPurchasesItemItemsItemRegisteredUnitsItem[];
+};
+
+export type CustomerOfflinePurchaseListPurchasesItem = {
+  source: CustomerOfflinePurchaseListPurchasesItemSource;
+  saleId: number;
+  saleDate: string;
+  label: string;
+  items: CustomerOfflinePurchaseListPurchasesItemItemsItem[];
+};
+
+export interface CustomerOfflinePurchaseList {
+  purchases: CustomerOfflinePurchaseListPurchasesItem[];
 }
 
 export interface UcOfflineClientInput {
@@ -3762,6 +3801,32 @@ export interface AuditEventPage {
   limit: number;
   total: number;
 }
+
+export type CommitCustomerOfflineFilterBody = {
+  /** @minimum 1 */
+  saleId: number;
+  /** @maxLength 100 */
+  unitId: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  installationDate: string;
+};
+
+export type CommitCustomerOfflineFilter200Registration = {
+  id: number;
+  userId: number;
+  productId: number;
+  productName: string;
+  ratedCapacityLitres: number;
+  activatedAt: string;
+  sourceOrderId?: number | null;
+  offlineUnitId: string;
+  lifespanDays: number;
+  maintenanceCount?: number;
+};
+
+export type CommitCustomerOfflineFilter200 = {
+  registration: CommitCustomerOfflineFilter200Registration;
+};
 
 export type ListUcEnquiriesParams = {
 /**

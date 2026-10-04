@@ -14,6 +14,7 @@ import { sendViaResend } from "./resend.js";
 import { sendWhatsAppMessage } from "./whatsapp.js";
 import { logger } from "./logger.js";
 import { resolveCustomerIdentity } from "./customer-identity-resolution.js";
+import { reconcileOfflineProducts } from "./offline-purchases.js";
 
 const TEMPORARY_PASSWORD_DAYS = 14;
 const COMPANION_URL = "https://app.ucfilters.com";
@@ -153,6 +154,7 @@ export async function provisionOfflineSale(input: OfflineProvisioningInput): Pro
   row: PublicOfflineSale;
   created: boolean;
 }> {
+  input = { ...input, products: reconcileOfflineProducts(input.products) };
   const normalizedEmail = input.email ? normalizeEmail(input.email) : null;
   const normalizedPhone = input.phone ? normalizePhone(input.phone) : null;
   if (!normalizedEmail && !normalizedPhone) {

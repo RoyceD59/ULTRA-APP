@@ -25,7 +25,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { commitPurchaseBackedRegistration } from '@/lib/filterRegistrationCommit';
-import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem, type PersonalImpact } from '@/hooks/useApi';
+import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem, type PersonalImpact, type OfflinePurchaseItem } from '@/hooks/useApi';
 import FilterLifeGauge from '@/components/FilterLifeGauge';
 import { calculateRemainingLife, resolveCapacityCycle } from '@/lib/filterRemainingLife';
 import { useAuth } from '@/context/AuthContext';
@@ -431,6 +431,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
 
 // ── Registration modal ────────────────────────────────────────────────────────
 interface ModalProps {
+  offlineSelection?: { saleId: number; saleDate: string; item: OfflinePurchaseItem; unitId: string; registeredInstallationDate?: string } | null;
   visible: boolean;
   existingActivation: FilterActivation | null;
   filterProducts: ReturnType<typeof useFilterProducts>['products'];
@@ -448,11 +449,16 @@ interface ModalProps {
 export function RegisterModal({
   visible, existingActivation, filterProducts, productsLoading, userId, onClose, onSave,
   initialProductId = null, initialDayOffset = 0,
+  offlineSelection = null,
 }: ModalProps) {
   const colors = useColors();
   const api = useApi();
   const queryClient = useQueryClient();
   const [saving, setSaving]     = useState(false);
+  const [installationDate, setInstallationDate] = useState('');
+  const current = useRef(true);
+  useEffect(() => { current.current = true; return () => { current.current = false; lookupSeq.current++; }; }, []);
+  useEffect(() => { setInstallationDate(offlineSelection?.registeredInstallationDate ?? ''); setLookupError(''); }, [offlineSelection?.unitId, offlineSelection?.registeredInstallationDate, visible]);
 
   // ── Receipt-based registration state ──────────────────────────────────────
   // There is deliberately no catalogue mode: all registration side effects
@@ -573,7 +579,38 @@ export function RegisterModal({
     if (purchase) setPurchase(null);
   }
 
-  function handleClose() { reset(); onClose(); }
+  async function handleOfflineSave() {
+    if (!offlineSelection || savingRef.current) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(installationDate)) {
+      setLookupError('Confirm the installation date as YYYY-MM-DD. The sale date is not the installation date.');
+      return;
+    }
+    savingRef.current = true; setSaving(true); setLookupError('');
+    try {
+      await commitPurchaseBackedRegistration(
+        () => api.registerOfflinePurchase(offlineSelection.saleId, offlineSelection.unitId, installationDate),
+        async committed => {
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          const r = committed.registration;
+          const status = await getNotificationPermissionStatus();
+          if (status !== 'granted') await requestNotificationPermission();
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          return scheduleAllFilterNotifications({
+            activatedAt: r.activatedAt, productId: r.productId, productName: r.productName,
+            lifespanDays: r.lifespanDays, registeredFilterId: r.id, offlineUnitId: r.offlineUnitId,
+            cleanCount: r.maintenanceCount,
+          }, userId);
+        },
+        activation => { if (current.current) onSave(activation); },
+      );
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
+      await queryClient.invalidateQueries({ queryKey: ['offline-purchases', userId] });
+    } catch (e) {
+      if (current.current) setLookupError(e instanceof Error ? e.message : 'Registration failed. Retry when connected.');
+    } finally { savingRef.current = false; if (current.current) setSaving(false); }
+  }
+
+  function handleClose() { if (savingRef.current) return; reset(); onClose(); }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
@@ -590,14 +627,34 @@ export function RegisterModal({
               </TouchableOpacity>
             )}
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              {purchase ? 'Select Your Filter' : 'Register with Receipt'}
+              {offlineSelection ? 'Register Offline Filter' : purchase ? 'Select Your Filter' : 'Register with Receipt'}
             </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          {purchase === null ? (
+          {offlineSelection ? (
+            <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.productName, { color: colors.text }]}>{offlineSelection.item.name}</Text>
+              <Text style={[styles.receiptMeta, { color: colors.mutedForeground }]}>
+                Offline Sale · {offlineSelection.saleDate}
+              </Text>
+              <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
+                {offlineSelection.registeredInstallationDate
+                  ? 'Restore reminders using the original registration. The installation date and filter history will not be changed.'
+                  : 'When did you install this filter? Confirm the actual installation date, not the sale date.'}
+              </Text>
+              <TextInput testID="offline-installation-date" value={installationDate} onChangeText={setInstallationDate}
+                placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} editable={!saving && !offlineSelection.registeredInstallationDate}
+                accessibilityLabel="Installation date YYYY-MM-DD" style={[styles.input, { color: colors.text }]} />
+              {!!lookupError && <Text style={[styles.errorText, { color: '#EF4444' }]}>{lookupError}</Text>}
+              <TouchableOpacity testID="offline-register-confirm" onPress={handleOfflineSave} disabled={saving}
+                style={[styles.productRow, { backgroundColor: colors.primary }]}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>{offlineSelection.registeredInstallationDate ? 'Restore existing registration' : 'Confirm installation and register'}</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          ) : purchase === null ? (
               /* Receipt step A: receipt number + phone */
               <KeyboardAwareScrollViewCompat
                 style={{ flex: 1 }}

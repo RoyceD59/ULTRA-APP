@@ -41,6 +41,7 @@ const TOKEN_KEY = 'uc_impact_admin_token';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OfflineProduct {
+  lineId?: string;
   productId?:     number;
   productName:    string;
   quantity:       number;
@@ -642,7 +643,7 @@ export function ImpactDashboard({
   }
 
   function addProductRow()                                       { setFormProducts(prev => [...prev, { productName: '', quantity: 1 }]); }
-  function updateProductRow(i: number, updated: OfflineProduct) { setFormProducts(prev => prev.map((p, j) => j === i ? updated : p)); }
+  function updateProductRow(i: number, updated: OfflineProduct) { setFormProducts(prev => prev.map((p, j) => j === i ? { ...updated, lineId: p.lineId } : p)); }
   function removeProductRow(i: number)                          { setFormProducts(prev => prev.filter((_, j) => j !== i)); }
 
   async function saveClient() {
