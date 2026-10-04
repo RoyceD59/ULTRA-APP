@@ -344,11 +344,41 @@ declarations must be built (`pnpm run typecheck:libs`) before running a standalo
 Companion typecheck in a newly extracted package. Bundle success is not a
 physical-device or native sign-in result.
 
-The new UI is **not yet published to `app.ucfilters.com`**. After this task merges,
-the owner must use Replit Publishing. No new schema/data replacement is needed for
-these UI changes. Production customer card/account-switch verification and
-restoration of normal production commands remain pending; do not claim those
-passed merely because the refreshed package builds.
+Production recheck on 2026-10-04 confirms `app.ucfilters.com/version.json`
+reports the manifest's current integration revision. The approved UI is now
+published; another publication is not needed solely to activate these links.
+All four frozen-package checks pass, including the archive checksum and
+unrelated-source preservation guards.
+
+A production Chromium check confirms direct and in-app About navigation,
+the public forest link without customer query parameters, and the programme
+copy (3% split equally, no refill funding, pending field evidence). After
+the 1.6-second count-up animation settles, Home and About both show
+2 users, 450 litres, 900 bottles avoided and 0 clean-water days, matching
+their HTTP 200 `/api/uc/impact` responses. Browser About navigation returns
+HTTP 200; command-line requests without HTML acceptance return 404, so
+those requests alone do not establish browser route failure.
+
+Signed-in checks remain blocked: the browser automation runtime cannot securely
+access the existing dedicated login secrets. No credentials were submitted
+in this verification pass, and the preceding invalid-credentials result is
+not a successful login. Personal litres/CO2e/milestones/history, personal
+card-to-forest links, no-tree/error fallback, logout clearing and two-customer
+switching remain unverified. No second dedicated customer was supplied.
+Do not substitute dev/admin/Clerk bypasses or claim native/physical-phone
+verification from this browser check.
+
+Keep API, Companion and ProjectHub frozen production commands until successful
+production customer verification. These UI changes require no new schema/data
+replacement. Do not change managed Clerk keys, DNS or production data to
+unblock testing without separate guidance and approval.
+
+On 2026-10-04 the owner selected “Pause until test-account access is fixed”.
+Do not continue login investigation or retry unchanged credentials while paused.
+Resume the outstanding production checks only when dedicated test-account
+access is fixed and secure browser access is available; the pause is not
+evidence that the signed-in release checks passed.
+
 ### Dependency security refresh
 
 The frozen release archive also includes the workspace dependency-security
