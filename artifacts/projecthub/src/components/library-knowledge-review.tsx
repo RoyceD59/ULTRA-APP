@@ -54,6 +54,9 @@ export function LibraryKnowledgeReview({ doc, request, onClose, onChanged }: {
         <DialogDescription>
           {doc.title}. Only the text below and your public source title will be available to Alison.
           The original file remains private. Links, images, HTML and metadata are removed.
+          Text-based PDFs are limited to 5 MB and 40 pages; all previews are limited to 16,000 characters.
+          Scanned, image-only, encrypted PDFs and Word files are unsupported.
+          Check PDF reading order and any tables carefully before approving.
         </DialogDescription>
       </DialogHeader>
       {error && <div role="alert" className="text-sm text-destructive">{error}

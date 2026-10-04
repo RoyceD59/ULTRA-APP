@@ -9,6 +9,7 @@ import { issueToken } from "../lib/jwt.js";
 import { createLibraryRouter } from "../routes/library.js";
 import { loadAlisonKnowledge } from "../lib/alison-knowledge.js";
 import type { ObjectStorageService } from "../lib/objectStorage.js";
+import { makeManualPdf } from "./fixtures/library-manual-pdf.js";
 
 const prefix = `knowledge-${randomUUID()}`;
 const adminId = `${prefix}-admin`;
@@ -139,4 +140,37 @@ test("oversize, unsupported metadata and binary content cannot be reviewed", asy
   await request(app).get(endpoint).set("Authorization", auth()).expect(422);
   bytes = Buffer.from("binary\0data");
   await request(app).get(endpoint).set("Authorization", auth()).expect(422);
+});
+
+test("PDF preview and exact approval preserve privacy, admin gates, snapshot retrieval and revocation", async () => {
+  const endpoint = `/api/library/docs/${privateId}/knowledge`;
+  mime = "application/pdf";
+  bytes = makeManualPdf(["Aquazetaprivate PDF manual. Wash gently.", "Allow cartridge to dry."]);
+  await pool.query("UPDATE team_library_docs SET file_type=$2,file_size=$3 WHERE id=$1", [privateId, mime, bytes.length]);
+  assert.doesNotMatch(await context(), /Wash gently/);
+  await request(app).get(endpoint).set("Authorization", token(memberId)).expect(403);
+  const preview = await request(app).get(endpoint).set("Authorization", auth()).expect(200);
+  assert.match(preview.body.text, /Wash gently[\s\S]*Allow cartridge to dry/);
+  assert.doesNotMatch(JSON.stringify(preview.body), /objects\/|PRIVATE_|embedded action|https:/);
+  const decision = { action: "approve", revision: preview.body.revision, hash: preview.body.hash,
+    title: "Aquazetaprivate manual", publicReferenceConfirmed: true };
+  await request(app).post(endpoint).set("Authorization", token(memberId)).send(decision).expect(403);
+  await request(app).post(endpoint).set("Authorization", auth()).send({ ...decision, publicReferenceConfirmed: false }).expect(400);
+  await request(app).post(endpoint).set("Authorization", auth()).send({ ...decision, hash: "stale" }).expect(409);
+  const original = bytes;
+  bytes = makeManualPdf(["Changed Aquazetaprivate manual"]);
+  await request(app).post(endpoint).set("Authorization", auth()).send(decision).expect(409);
+  bytes = original;
+  const approved = await request(app).post(endpoint).set("Authorization", auth()).send(decision).expect(200);
+  const knowledge = await context();
+  assert.match(knowledge, /Wash gently/);
+  assert.doesNotMatch(knowledge, /objects\/|PRIVATE_|embedded action|https:/);
+  // Unsupported replacement must not prevent revoking the approved snapshot.
+  bytes = makeManualPdf([""]);
+  const scanned = await request(app).get(endpoint).set("Authorization", auth()).expect(422);
+  assert.match(scanned.body.error, /Scanned or image-only/);
+  await request(app).post(endpoint).set("Authorization", auth()).send({
+    action: "revoke", revision: approved.body.knowledgeRevision,
+  }).expect(200);
+  assert.doesNotMatch(await context(), /Wash gently/);
 });

@@ -33,3 +33,13 @@ scope without opening the private Team Library to customers.
 
 **How to apply:** Keep the public-text approval boundary separate from storage
 visibility, and require a new review before replacing approved reference text.
+
+PDF manual support is text-only, not OCR or permission to publish images,
+attachments or originals. Scanned and mixed image-only pages require staff to
+provide reviewed text instead of approving a partial extraction.
+
+**Why:** The approved extension is bounded inert text extraction, not automatic
+interpretation of scanned manuals or diagrams.
+
+**How to apply:** Do not add OCR, image interpretation or Word conversion as an
+implicit fallback; treat those as separate scope requiring approval.

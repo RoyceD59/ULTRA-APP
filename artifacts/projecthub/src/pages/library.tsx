@@ -367,7 +367,7 @@ export default function LibraryPage() {
             Team document repository — SOPs, reports, guides, and reference files.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Uploads are private by default. Administrators can review UTF-8 Markdown/text (up to 32 KB) for Alison.
+            Uploads are private by default. Administrators can review UTF-8 Markdown/text (32 KB) or text-based PDFs (5 MB, 40 pages) for Alison. Extracted text is limited to 16,000 characters.
           </p>
         </div>
         <Button onClick={() => setShowUpload(true)}>
@@ -459,11 +459,11 @@ export default function LibraryPage() {
                   {doc.knowledgeTitle ? ` · ${doc.knowledgeTitle}` : ""}
                 </p>}
                 {admin && <Button size="sm" variant="outline" className="w-full" onClick={() => setReviewDoc(doc)}
-                  disabled={doc.knowledgeStatus !== "approved" && (!["text/plain", "text/markdown", "text/x-markdown"].includes(doc.fileType) || doc.fileSize > 32 * 1024)}>
+                  disabled={doc.knowledgeStatus !== "approved" && (doc.fileType === "application/pdf" ? doc.fileSize > 5 * 1024 * 1024 : !["text/plain", "text/markdown", "text/x-markdown"].includes(doc.fileType) || doc.fileSize > 32 * 1024)}>
                   {doc.knowledgeStatus === "approved" ? "Review / revoke Alison approval" : "Review for Alison"}
                 </Button>}
-                {admin && (!["text/plain", "text/markdown", "text/x-markdown"].includes(doc.fileType) || doc.fileSize > 32 * 1024)
-                  && <p className="text-xs text-muted-foreground">For Alison, upload a public Markdown/text version, up to 32 KB.</p>}
+                {admin && (doc.fileType === "application/pdf" ? doc.fileSize > 5 * 1024 * 1024 : !["text/plain", "text/markdown", "text/x-markdown"].includes(doc.fileType) || doc.fileSize > 32 * 1024)
+                  && <p className="text-xs text-muted-foreground">For Alison, upload public Markdown/text (32 KB) or a text-based PDF (5 MB, 40 pages). Word and scanned PDFs are unsupported.</p>}
               </div>
               <div className="flex gap-2 pt-1">
                 <Button

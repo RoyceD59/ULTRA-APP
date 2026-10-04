@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { ObjectStorageService } from "../lib/objectStorage.js";
 import { verifyToken } from "../lib/jwt.js";
 import { isLibraryPath, normalizeMime } from "../lib/libraryFinalizer.js";
-import { extractLibraryReference, MAX_REFERENCE_BYTES, readReferenceStream, ReferenceExtractionError } from "../lib/library-knowledge.js";
+import { extractLibraryReference, referenceByteLimit, readReferenceStream, ReferenceExtractionError } from "../lib/library-knowledge.js";
 
 export async function requireLibraryAdmin(req: Request, res: Response) {
   const claims = verifyToken(req.headers.authorization);
@@ -29,13 +29,14 @@ export function createLibraryKnowledgeRouter(storage: Pick<ObjectStorageService,
 
   async function extract(doc: typeof teamLibraryDocsTable.$inferSelect) {
     if (!isLibraryPath(doc.objectPath)) throw new ReferenceExtractionError("Unexpected document storage path.");
+    const byteLimit = referenceByteLimit(normalizeMime(doc.fileType));
     const file = await storage.getObjectEntityFile(doc.objectPath);
     const [meta] = await file.getMetadata();
-    if (Number(meta.size) > MAX_REFERENCE_BYTES) throw new ReferenceExtractionError("Alison references must be at most 32 KB.");
+    if (Number(meta.size) > byteLimit) throw new ReferenceExtractionError("Document exceeds the review byte limit (32 KB text / 5 MB PDF).");
     if (normalizeMime(String(meta.contentType ?? "")) !== normalizeMime(doc.fileType)) {
       throw new ReferenceExtractionError("Document content type changed; upload a new document.");
     }
-    return extractLibraryReference(await readReferenceStream(file.createReadStream()), String(meta.contentType ?? ""));
+    return extractLibraryReference(await readReferenceStream(file.createReadStream(), byteLimit), String(meta.contentType ?? ""));
   }
 
   router.get("/library/docs/:id/knowledge", async (req, res) => {
