@@ -9290,6 +9290,9 @@ router.get("/uc/admin/customers/export", async (req: Request, res: Response): Pr
 // Any logged-in team member (admin or regular) can read this count.
 // UC-only credentials are not accepted; the endpoint uses the ProjectHub
 // team-session JWT issued by POST /api/auth/login.
+// Reporting contract: Africa/Nairobi; weeks start Monday at 00:00 and months
+// start on the first at 00:00. Convert local boundaries back to absolute instants
+// so PostgreSQL's session timezone cannot change signup classification.
 router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
   const claims = verifyToken(req.headers["authorization"]);
   if (!claims || claims.type !== "team-session") {
@@ -9300,8 +9303,8 @@ router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
     const { rows } = await pool.query<{ count: number; new_this_week: number; new_this_month: number }>(
       `SELECT
          COUNT(*)::int                                                        AS count,
-         COUNT(*) FILTER (WHERE created_at >= date_trunc('week',  now()))::int AS new_this_week,
-         COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int AS new_this_month
+         COUNT(*) FILTER (WHERE created_at >= (date_trunc('week', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi'))::int AS new_this_week,
+         COUNT(*) FILTER (WHERE created_at >= (date_trunc('month', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi'))::int AS new_this_month
        FROM uc_users
        WHERE deleted_at IS NULL`
     );

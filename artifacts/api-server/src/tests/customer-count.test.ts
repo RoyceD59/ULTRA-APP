@@ -8,6 +8,7 @@
  *   4. Re-registering (clearing deleted_at) a user increments the count back
  *   5. The active-customer partial index exists and serves the endpoint query
  *   6. Weekly and monthly sub-counts classify rows on both sides of each boundary
+ *   7. Nairobi midnight resets are independent of PostgreSQL's session timezone
  *
  * Isolation strategy
  * ------------------
@@ -199,8 +200,8 @@ describe("GET /uc/admin/customers/count — count accuracy", () => {
     }>(
       `WITH boundaries AS (
          SELECT
-           date_trunc('week', now()) AS week_start,
-           date_trunc('month', now()) AS month_start
+           date_trunc('week', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi' AS week_start,
+           date_trunc('month', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi' AS month_start
        ),
        seed(email, created_at, deleted_at) AS (
          SELECT 'ccount-week-before-${suffix}@test.internal', week_start - interval '1 millisecond', NULL::timestamptz FROM boundaries
@@ -285,6 +286,84 @@ describe("GET /uc/admin/customers/count — count accuracy", () => {
       }
     }
   });
+
+  it("keeps Nairobi reset instants unchanged across database session timezones", async () => {
+    // Literal UTC fixtures are independent of the SQL boundary implementation.
+    // Nairobi midnight on Oct 1 / Monday Oct 5 is 21:00 UTC the preceding day.
+    const client = await pool.connect();
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let queryMock: ReturnType<typeof mock.method> | undefined;
+    try {
+      await client.query("BEGIN");
+      const seeded = await client.query<{ id: number }>(
+        `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone, created_at, deleted_at)
+         SELECT 'ccount-zone-' || ord || '-' || $1 || '@test.internal',
+                'x', 'Timezone', 'Tester', '', instant,
+                CASE WHEN ord = 7 THEN '2026-10-05T09:00:00Z'::timestamptz ELSE NULL END
+         FROM unnest(ARRAY[
+           '2026-09-30T20:59:59.999Z'::timestamptz,
+           '2026-09-30T21:00:00Z'::timestamptz,
+           '2026-09-30T21:00:00.001Z'::timestamptz,
+           '2026-10-04T20:59:59.999Z'::timestamptz,
+           '2026-10-04T21:00:00Z'::timestamptz,
+           '2026-10-04T21:00:00.001Z'::timestamptz,
+           '2026-10-04T21:00:00.001Z'::timestamptz
+         ]) WITH ORDINALITY AS fixtures(instant, ord)
+         RETURNING id`,
+        [suffix]
+      );
+      const boundaryIds = seeded.rows.map(row => row.id);
+      const realQuery = pool.query.bind(pool);
+      let clock = "";
+      let countQueries = 0;
+      queryMock = mock.method(pool, "query", async (queryText: string, values?: unknown[]) => {
+        if (typeof queryText === "string" &&
+            queryText.includes("AS new_this_week") &&
+            queryText.includes("AS new_this_month")) {
+          countQueries++;
+          // Execute the actual endpoint SQL on our transaction-local session.
+          // Only time and fixture scope are injected, never the boundary logic.
+          return client.query(
+            queryText.replaceAll("now()", "$1::timestamptz").replace(
+              "WHERE deleted_at IS NULL",
+              "WHERE deleted_at IS NULL AND id = ANY($2::int[])"
+            ),
+            [clock, boundaryIds]
+          );
+        }
+        return realQuery(queryText, values);
+      });
+
+      const resets = [
+        // The endpoint retains its existing lower-bound-only semantics:
+        // future-dated fixtures also count until the boundary passes them.
+        { clock: "2026-09-30T20:59:59.999Z", week: 6, month: 6 },
+        { clock: "2026-09-30T21:00:00Z", week: 6, month: 5 },
+        { clock: "2026-10-04T20:59:59.999Z", week: 6, month: 5 },
+        { clock: "2026-10-04T21:00:00Z", week: 2, month: 5 },
+      ];
+      for (const timezone of ["UTC", "Africa/Nairobi", "America/Los_Angeles", "Asia/Tokyo"]) {
+        await client.query("SELECT set_config('TimeZone', $1, true)", [timezone]);
+        for (const reset of resets) {
+          clock = reset.clock;
+          const { status, body } = await apiFetch(server, "/api/uc/admin/customers/count", {
+            headers: { authorization: teamHeader },
+          });
+          assert.equal(status, 200, JSON.stringify(body));
+          assert.deepEqual(body, {
+            count: 6,
+            newThisWeek: reset.week,
+            newThisMonth: reset.month,
+          }, `session ${timezone} at ${clock} must use Nairobi boundaries (inclusive midnight)`);
+        }
+      }
+      assert.equal(countQueries, 16, "every endpoint request must execute the production count query");
+    } finally {
+      queryMock?.mock.restore();
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  });
 });
 
 describe("GET /uc/admin/customers/count — query performance", () => {
@@ -321,8 +400,8 @@ describe("GET /uc/admin/customers/count — query performance", () => {
         EXPLAIN (COSTS OFF)
         SELECT
           COUNT(*)::int,
-          COUNT(*) FILTER (WHERE created_at >= date_trunc('week', now()))::int,
-          COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int
+          COUNT(*) FILTER (WHERE created_at >= (date_trunc('week', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi'))::int,
+          COUNT(*) FILTER (WHERE created_at >= (date_trunc('month', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi'))::int
         FROM uc_users
         WHERE deleted_at IS NULL
       `);
