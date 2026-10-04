@@ -371,7 +371,8 @@ export default function GuideDetailScreen() {
     queryKey: ['companion', 'guide', id],
     queryFn: () => fetchPublishedGuide(String(id)),
     placeholderData: () => GUIDES.find((guide) => guide.id === id),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
   const guide = guidesQuery.data;
   useEffect(() => {

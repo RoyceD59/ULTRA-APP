@@ -210,6 +210,12 @@ test("public blog exposes published snapshots only and is insulated from draft e
   articleIds.push(draftId, liveId);
   const listResponse = await fetch(`${baseUrl}/uc/blog`);
   assert.equal(listResponse.status, 200);
+  assert.equal(listResponse.headers.get("cache-control"), "public, max-age=30, must-revalidate");
+  assert.ok(listResponse.headers.get("etag"));
+  const unchanged = await fetch(`${baseUrl}/uc/blog`, {
+    headers: { "If-None-Match": listResponse.headers.get("etag")! },
+  });
+  assert.equal(unchanged.status, 304);
   const list = await listResponse.json() as { articles: Array<{ id: string; slug: string; title: string; body?: string }> };
   assert.equal(list.articles.some((article) => article.slug === snapshot.slug), true);
   assert.equal(list.articles.some((article) => article.slug.includes(draftId)), false);

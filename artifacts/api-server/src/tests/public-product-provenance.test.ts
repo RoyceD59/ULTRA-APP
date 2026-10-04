@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { before, after, test } from "node:test";
 import type http from "node:http";
+import { invalidateCatalogueCache } from "../routes/uc.js";
 
 let server: http.Server;
 let base: string;
@@ -41,6 +42,9 @@ test("product details distinguish published WooCommerce, unpublished and demo fa
 
 test("catalogue requests published products and refuses to attest a mixed private list", async () => {
   for (const [status, expected] of [["publish", "woocommerce-published"], ["private", "unverified"]]) {
+    // Each fixture is a new upstream snapshot; bypass the previous scenario's
+    // valid browsing TTL without changing production cache semantics.
+    invalidateCatalogueCache();
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
       const url = new URL(String(input));
       assert.equal(url.searchParams.get("status"), "publish");

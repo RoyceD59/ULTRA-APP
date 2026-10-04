@@ -89,7 +89,8 @@ function BlogScreenContent() {
       signal,
     ),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 

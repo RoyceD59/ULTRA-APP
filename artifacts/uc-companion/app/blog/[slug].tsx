@@ -201,7 +201,8 @@ export default function BlogArticleScreen() {
       (requestSignal) => api.getBlogArticle(String(slug), requestSignal),
       signal,
     ),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
     enabled: Boolean(slug),
   });

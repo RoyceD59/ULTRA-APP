@@ -17,6 +17,7 @@ import { isAdminRequest } from "../lib/adminAuth.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
 import { remoteImageProxyPath } from "./product-images.js";
+import { CatalogueCache } from "../lib/catalogue-cache.js";
 import { authLimiter, lookupLimiter, locationQualityLimiter } from "../lib/rate-limiters.js";
 import { getWhatsAppStatus, sendWhatsAppMessage } from "../lib/whatsapp.js";
 import {
@@ -669,6 +670,7 @@ const MAX_WC_PAGES = 50;
 export async function wcFetchAllPages(
   path: string,
   extra: Record<string, string> = {},
+  signal: AbortSignal = AbortSignal.timeout(12_000),
 ): Promise<Record<string, unknown>[] | null> {
   const all: Record<string, unknown>[] = [];
   for (let page = 1; page <= MAX_WC_PAGES; page++) {
@@ -676,7 +678,7 @@ export async function wcFetchAllPages(
       ...extra,
       per_page: String(WC_PAGE_SIZE),
       page: String(page),
-    });
+    }, signal);
     if (!batch) return null;
     all.push(...batch);
     if (batch.length < WC_PAGE_SIZE) return all;
@@ -831,7 +833,17 @@ function applyProductMedia(
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
+const catalogueCache = new CatalogueCache<{
+  payload: Record<string, unknown>[];
+  publishedSource: boolean;
+}>();
+
+export function invalidateCatalogueCache(): void {
+  catalogueCache.invalidate();
+}
+
 router.get("/uc/products", async (req: Request, res: Response): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
   const publicationSafe = req.query["publicationSafe"] === "true";
   if (publicationSafe) {
     res.setHeader("Cache-Control", "no-store");
@@ -844,25 +856,27 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
     let payload: Record<string, unknown>[] | null = null;
     let publishedSource = false;
     if (hasWCCredentials()) {
-      const extra: Record<string, string> = { per_page: "50", status: "publish" };
       const requestedCategory = typeof req.query["category"] === "string"
-        ? req.query["category"]
+        ? req.query["category"].trim()
         : "";
-      let categoryId: number | null = null;
-      if (requestedCategory) {
-        categoryId = await resolveWcCategoryId(requestedCategory);
+      const search = typeof req.query["search"] === "string" ? req.query["search"].trim() : "";
+      const start = performance.now();
+      const result = await catalogueCache.read(JSON.stringify([requestedCategory, search]), async () => {
+        // One provider budget covers category discovery and ALL product pages,
+        // leaving room inside the client's 15s timeout for response/media work.
+        const signal = AbortSignal.timeout(12_000);
+        const extra: Record<string, string> = { status: "publish" };
+        const categoryId = requestedCategory ? await resolveWcCategoryId(requestedCategory, signal) : null;
         if (categoryId) extra["category"] = String(categoryId);
-      }
-      if (req.query["search"]) extra["search"] = req.query["search"] as string;
-      const products = await wcFetchAllPages("/products", extra);
-      if (products) {
-        payload = products.map(normalizeProduct);
-        publishedSource = products.every(product => product["status"] === "publish");
+        if (search) extra["search"] = search;
+        const products = await wcFetchAllPages("/products", extra, signal);
+        if (!products) throw new Error("WooCommerce catalogue unavailable or incomplete");
+        let normalized = products.map(normalizeProduct);
         // If the category lookup was unavailable, fetch-all + normalized
         // filtering is safer than sending a label to WooCommerce and showing
         // an accidental blank grid.
         if (requestedCategory && !categoryId) {
-          payload = payload.filter(product => {
+          normalized = normalized.filter(product => {
             const categories = Array.isArray(product["categories"])
               ? product["categories"] as { name?: unknown }[]
               : [];
@@ -870,10 +884,12 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
               categoryNameMatches(requestedCategory, String(category?.name ?? "")));
           });
         }
-      } else {
-        res.status(502).json({ error: "The product catalogue is temporarily unavailable" });
-        return;
-      }
+        return { payload: normalized, publishedSource: products.every(product => product["status"] === "publish") };
+      });
+      payload = result.value.payload;
+      publishedSource = result.value.publishedSource;
+      res.setHeader("Server-Timing", `catalogue;dur=${(performance.now() - start).toFixed(1)};desc="${result.source}"`);
+      res.setHeader("X-UC-Catalogue-Cache", result.source);
     }
     if (!payload) {
       let data = MOCK_PRODUCTS;
@@ -903,8 +919,9 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
     if (publicationSafe) res.setHeader("X-UC-Catalogue-Provenance", "woocommerce-published");
     res.setHeader("X-UC-Product-Source", publishedSource ? "woocommerce-published" : "unverified");
     res.json(payload.map((p) => applyProductMedia(p, mediaMap.get(Number(p["id"])))));
-  } catch {
-    res.status(500).json({ error: "Failed to fetch products" });
+  } catch (error) {
+    req.log?.warn({ err: error }, "Product catalogue refresh failed");
+    res.status(502).json({ error: "The product catalogue is temporarily unavailable" });
   }
 });
 
@@ -948,7 +965,7 @@ export function categoryNameMatches(requested: string, actual: string): boolean 
     aliases.some(alias => got.includes(alias) || alias.includes(got));
 }
 
-async function getWcCategoryMap(): Promise<Map<string, number> | null> {
+async function getWcCategoryMap(signal?: AbortSignal): Promise<Map<string, number> | null> {
   if (_categoryCache && Date.now() - _categoryCache.at < CATEGORY_CACHE_TTL_MS) {
     return _categoryCache.byName;
   }
@@ -957,7 +974,7 @@ async function getWcCategoryMap(): Promise<Map<string, number> | null> {
     try {
       const categories = await wcFetchAllPages("/products/categories", {
         hide_empty: "false",
-      });
+      }, signal);
       if (!categories) return _categoryCache?.byName ?? null;
       const byName = new Map<string, number>();
       for (const category of categories) {
@@ -974,8 +991,8 @@ async function getWcCategoryMap(): Promise<Map<string, number> | null> {
   return _categoryRefresh;
 }
 
-export async function resolveWcCategoryId(category: string): Promise<number | null> {
-  const map = await getWcCategoryMap();
+export async function resolveWcCategoryId(category: string, signal?: AbortSignal): Promise<number | null> {
+  const map = await getWcCategoryMap(signal);
   if (!map) return null;
   const requested = normalizeStoreCategory(category);
   const direct = map.get(requested);
@@ -8648,6 +8665,7 @@ router.patch("/uc/admin/products/:id", async (req, res): Promise<void> => {
     }
 
     logger.info({ productId, updated: Object.keys(wcPayload) }, "[product-edit] product updated in WooCommerce");
+    invalidateCatalogueCache();
     res.json({ ok: true, productId, updated: Object.keys(wcPayload), source: "woocommerce" });
   } catch (err) {
     logger.error({ err, productId }, "[product-edit] WooCommerce PUT error");
@@ -8698,6 +8716,7 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
 
     const confirmedQty: number =
       typeof data["stock_quantity"] === "number" ? data["stock_quantity"] : stockQuantity;
+    invalidateCatalogueCache();
 
     // ── Immediate low-stock alert ─────────────────────────────────────────
     // Fire an email when the newly confirmed quantity is at or below the

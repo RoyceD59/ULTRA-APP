@@ -65,3 +65,4 @@
 - [Filter gauge policy](filter-gauge-policy.md) — display-only status; recorded refills are not sensor measurements; require exact customer/purchase/cycle linkage.
 - [Frozen release verification](frozen-release-verification.md) — a successful publish can still serve an older approved package; verify the actual live feature before operational recovery.
 - [Phone validation optimization](phone-validation-optimization.md) — reduce unused code, not country metadata; preserve canonical identity versus legacy form defaults.
+- [Catalogue performance boundaries](catalogue-performance-policy.md) — browsing snapshots never replace transaction-time Woo authority; local gains are not deployed or phone evidence.

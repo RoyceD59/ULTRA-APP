@@ -84,7 +84,7 @@ function HomeScreenContent() {
   const { data: products, isLoading, isError, error: productError, refetch: retryProducts } = useQuery({
     queryKey: catalogueQueryKey(),
     queryFn: ({ signal }) => api.getProducts(undefined, signal),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
   });
 
   const { data: promotions, isLoading: promotionsLoading, isError: promotionsError, error: promotionFailure, refetch: retryPromotions } = useQuery({
@@ -102,7 +102,8 @@ function HomeScreenContent() {
       { limit: 3 },
       signal,
     ),
-    staleTime: 3 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 

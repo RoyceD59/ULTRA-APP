@@ -125,7 +125,8 @@ function SupportScreenContent() {
     queryKey: ['companion', 'guides'],
     queryFn: fetchPublishedGuides,
     placeholderData: GUIDES,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     gcTime: 24 * 60 * 60 * 1000,
   });
   const cachedGuidesQuery = useQuery({

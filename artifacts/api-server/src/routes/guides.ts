@@ -124,7 +124,7 @@ router.get("/uc/guides", async (_req, res): Promise<void> => {
   res.setHeader("ETag", etag);
   const latest = result.rows.reduce((value, row) => Math.max(value, new Date(String(row.updatedAt)).getTime()), 0);
   if (latest) res.setHeader("Last-Modified", new Date(latest).toUTCString());
-  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.setHeader("Cache-Control", "public, max-age=30, must-revalidate");
   if (res.req.headers["if-none-match"] === etag) { res.status(304).end(); return; }
   res.json(JSON.parse(body));
 });
@@ -142,7 +142,7 @@ router.get("/uc/guides/:slug", async (req, res): Promise<void> => {
   const etag = `"${createHash("sha256").update(body).digest("hex")}"`;
   res.setHeader("ETag", etag);
   res.setHeader("Last-Modified", new Date(String(guide.updatedAt)).toUTCString());
-  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.setHeader("Cache-Control", "public, max-age=30, must-revalidate");
   if (res.req.headers["if-none-match"] === etag) { res.status(304).end(); return; }
   res.json(JSON.parse(body));
 });

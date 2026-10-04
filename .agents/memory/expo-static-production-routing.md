@@ -112,3 +112,14 @@ readiness; experimental tree shaking changes the entire graph.
 **How to apply:** Profile actual initial script requests with source maps,
 distinguish source inventory from delivered bytes, and verify native exports
 when changing shared imports. Do not treat a smaller entry file as sufficient.
+
+For root-mounted local profiling exports, leave the Expo web base URL unset;
+do not explicitly set it to `/`. Keep the real artifact prefix for packaging.
+
+**Why:** With SDK 57 an explicit `/` base produced `//assets/...` font URLs,
+which browsers interpreted as an `assets` hostname. That made a synthetic
+benchmark fail despite the prefixed production export remaining valid.
+
+**How to apply:** Record profiling failures rather than ignoring them, and use
+an unset base URL for the root-mounted fixture server. Do not change published
+hostnames or artifact routing to repair a local benchmark configuration.

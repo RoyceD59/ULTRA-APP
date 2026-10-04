@@ -58,7 +58,10 @@ async function main() {
         const profile = await context.newCDPSession(page);
         await profile.send('Performance.enable');
         const errors = [];
-        page.on('pageerror', e => errors.push(e.message));
+        const errorStacks = [];
+        const failedRequests = [];
+        page.on('pageerror', e => { errors.push(e.message); errorStacks.push(e.stack); });
+        page.on('requestfailed', r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
         page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });
         let requests = 0;
         const scripts = new Set();
@@ -117,7 +120,9 @@ async function main() {
         const jsWork = Object.fromEntries(metrics.filter(m => ['ScriptDuration', 'TaskDuration', 'JSHeapUsedSize'].includes(m.name)).map(m => [m.name, m.value]));
         // Compression is deliberately outside the timed browser journey.
         const initialScripts = scriptBytes(process.argv[2], initialScriptUrls);
-        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, typography: { home: homeTypography, shop: shopTypography, blog: blogTypography }, errors });
+        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, typography: { home: homeTypography, shop: shopTypography, blog: blogTypography }, errors, errorStacks, failedRequests });
+        // Preserve evidence from failed profiling runs; never label them passes.
+        fs.writeFileSync(process.argv[3], JSON.stringify(results, null, 2));
         console.log({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests });
         if (errors.length) throw new Error(JSON.stringify(errors));
         await context.close();
