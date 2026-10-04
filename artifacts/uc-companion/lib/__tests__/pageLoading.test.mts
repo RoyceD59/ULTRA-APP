@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
-import { pageDataState, animatePageLoader, pageFailureCopy, startupReady, FONT_STARTUP_BUDGET_MS } from '../pageLoading.ts';
+import { pageDataState, animatePageLoader, pageFailureCopy } from '../pageLoading.ts';
 
 describe('initial page loading lifecycle', () => {
   it('shows loading only without data, never on a cached/background refresh', () => {
@@ -18,25 +18,14 @@ describe('initial page loading lifecycle', () => {
       assert.equal(animatePageLoader(reduced, focused, active), !reduced && focused && active);
     }
   });
-  it('allows fonts to succeed/error early and never waits beyond the startup budget', () => {
-    assert.equal(FONT_STARTUP_BUDGET_MS, 600);
-    assert.equal(startupReady(false, null, false), false);
-    assert.equal(startupReady(true, null, false), true);
-    assert.equal(startupReady(false, new Error('missing font'), false), true);
-    assert.equal(startupReady(false, null, true), true);
-  });
-  it('never gates web content on delayed, failed, or missing fonts', () => {
-    for (const loaded of [false, true]) for (const expired of [false, true]) {
-      assert.equal(startupReady(loaded, null, expired, 'web'), true);
-      assert.equal(startupReady(loaded, new Error('font error'), expired, 'web'), true);
-    }
-    for (const platform of ['android', 'ios']) {
-      assert.equal(startupReady(false, null, false, platform), false);
-      assert.equal(startupReady(false, null, true, platform), true);
-    }
+  it('mounts providers without unused text fonts or a startup timer and retains the native splash', () => {
     const source = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8');
-    assert.match(source, /startupReady\(fontsLoaded, fontError, fontBudgetExpired, Platform.OS\)/);
-    assert.equal((source.match(/display: FontDisplay.SWAP/g) || []).length, 4);
+    assert.doesNotMatch(source, /Inter_|useFonts|FontDisplay|fontBudget|startupReady|setTimeout|if \(!ready\)/);
+    assert.match(source, /if \(Platform.OS !== 'web'\) void SplashScreen.preventAutoHideAsync\(\)/);
+    assert.match(source, /useEffect\(\(\) => \{\s*if \(Platform.OS !== 'web'\) \{\s*void SplashScreen.hideAsync\(\).catch\(\(\) => \{\}\);\s*\}\s*\}, \[\]\)/);
+    assert.match(source, /<AuthProvider>\s*<CartProvider>/);
+    assert.match(source, /<Ionicons name="chevron-back"/);
+    assert.match(source, /accessibilityLabel="Back to previous screen or shop"/);
   });
 });
 

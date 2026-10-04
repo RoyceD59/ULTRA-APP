@@ -23,6 +23,18 @@ function scriptBytes(directory, urls) {
   });
 }
 
+async function typography(page) {
+  return page.evaluate(() => {
+    const texts = ['Your water, your health', 'Benchmark filter', 'Read article', 'Home', 'Products', 'Blog'];
+    return [...document.querySelectorAll('*')].filter(el =>
+      el.children.length === 0 && texts.includes(el.textContent) && el.getBoundingClientRect().width > 0
+    ).map(el => {
+      const style = getComputedStyle(el);
+      return { text: el.textContent, family: style.fontFamily, weight: style.fontWeight, size: style.fontSize };
+    });
+  });
+}
+
 function serveExport(directory) {
   const root = path.resolve(directory);
   return http.createServer((req, res) => {
@@ -82,25 +94,30 @@ async function main() {
           .map(m => [m.name, m.value]));
         await page.getByText('Benchmark filter', { exact: true }).first().waitFor();
         const homeProductsMs = Date.now() - start;
+        const homeTypography = await typography(page);
         let t = Date.now();
         await page.getByRole('tab', { name: 'Products', exact: true }).click();
         await page.getByPlaceholder('Search filters, systems…').waitFor();
         await page.getByText('Benchmark filter', { exact: true }).first().waitFor();
         const shopMs = Date.now() - t;
+        const shopTypography = await typography(page);
         t = Date.now();
         await page.getByRole('tab', { name: 'Blog', exact: true }).click();
         await page.getByText('Read article', { exact: true }).first().waitFor();
         const blogMs = Date.now() - t;
+        const blogTypography = await typography(page);
         t = Date.now();
         await page.getByRole('tab', { name: 'Home', exact: true }).click();
         await page.getByText('Your water, your health', { exact: true }).waitFor();
         const warmHomeMs = Date.now() - t;
-        const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(r => ({ name: r.name.split('/').pop(), duration: Math.round(r.duration), bytes: r.transferSize })));
         const { metrics } = await profile.send('Performance.getMetrics');
+        // Include background font transfers even if navigation finishes first.
+        await page.waitForLoadState('networkidle');
+        const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(r => ({ name: r.name.split('/').pop(), duration: Math.round(r.duration), bytes: r.transferSize, bodyBytes: r.encodedBodySize })));
         const jsWork = Object.fromEntries(metrics.filter(m => ['ScriptDuration', 'TaskDuration', 'JSHeapUsedSize'].includes(m.name)).map(m => [m.name, m.value]));
         // Compression is deliberately outside the timed browser journey.
         const initialScripts = scriptBytes(process.argv[2], initialScriptUrls);
-        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, errors });
+        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, typography: { home: homeTypography, shop: shopTypography, blog: blogTypography }, errors });
         console.log({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests });
         if (errors.length) throw new Error(JSON.stringify(errors));
         await context.close();

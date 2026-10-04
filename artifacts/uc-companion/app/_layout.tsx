@@ -1,16 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from '@expo-google-fonts/inter';
 import { Stack, useRouter } from 'expo-router';
 import { TouchableOpacity, Text, AppState, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -27,20 +20,18 @@ import { webAnalyticsLoader } from '@/lib/umamiWeb';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
-import { FONT_STARTUP_BUDGET_MS, startupReady } from '@/lib/pageLoading';
 import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
 import { installQueryConnectivity } from '@/lib/queryConnectivity';
 import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
 
 // Set API base URL before any component renders
-import { FontDisplay } from 'expo-font';
 const apiBase = getApiBase();
 if (apiBase) {
   setBaseUrl(apiBase);
 }
 
-// Static native splash: retain font gating, but never let slow optional fonts
-// hold navigation indefinitely. Existing screens already use system font weights.
+// Screens and navigation use system typography, so no text fonts need loading.
+// Keep the static native splash until the root mounts; icons load independently.
 if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync();
 
 // Clerk (social sign-in). Env vars are injected by the dev script in
@@ -160,26 +151,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') webAnalyticsLoader.initialize();
   }, []);
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular: { uri: Inter_400Regular, display: FontDisplay.SWAP },
-    Inter_500Medium: { uri: Inter_500Medium, display: FontDisplay.SWAP },
-    Inter_600SemiBold: { uri: Inter_600SemiBold, display: FontDisplay.SWAP },
-    Inter_700Bold: { uri: Inter_700Bold, display: FontDisplay.SWAP },
-  });
-  const [fontBudgetExpired, setFontBudgetExpired] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setFontBudgetExpired(true), FONT_STARTUP_BUDGET_MS);
-    return () => clearTimeout(timer);
-  }, []);
-  const ready = startupReady(fontsLoaded, fontError, fontBudgetExpired, Platform.OS);
-
-  useEffect(() => {
-    if (ready && Platform.OS !== 'web') {
+    if (Platform.OS !== 'web') {
       void SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError, ready]);
-
-  if (!ready) return null;
+  }, []);
 
   const app = (
     <QueryClientProvider client={queryClient}>

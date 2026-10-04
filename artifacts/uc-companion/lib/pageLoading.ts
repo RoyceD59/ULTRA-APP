@@ -20,8 +20,3 @@ export function pageFailureCopy(error: unknown) {
   }
   return 'This information couldn’t be loaded. Please try again. Your other Companion features are still available.';
 }
-
-export const FONT_STARTUP_BUDGET_MS = 600;
-export function startupReady(loaded: boolean, error: unknown, budgetExpired: boolean, platform = 'native') {
-  return platform === 'web' || loaded || !!error || budgetExpired;
-}

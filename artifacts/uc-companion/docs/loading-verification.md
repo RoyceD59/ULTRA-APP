@@ -45,11 +45,12 @@ path: Home is usable **58% sooner** in the delayed-font/data condition. The norm
 network time and slow-condition CPU work are effectively unchanged; there is no
 claim that photographs speed network requests or JavaScript execution.
 
-Fonts still load in the background. The four Inter files total about 1.37 MB;
+At this measurement point, fonts still loaded in the background. The four Inter files total about 1.37 MB;
 Ionicons is about 390 KB. Existing screens use system font weights rather than
 an Inter fontFamily, so the 600 ms startup budget provides a safe bounded
 fallback without replacing typography. Removing unused font downloads or
-splitting the existing route bundle should be evaluated separately.
+splitting the existing route bundle should be evaluated separately. See the
+2026-10-04 font audit below for the subsequent removal of unused Inter files.
 
 ## Payload and requests
 
@@ -132,6 +133,9 @@ node artifacts/uc-companion/scripts/check-page-loading.cjs /tmp/uc-web /tmp/chec
 The clear-cache flag matters when changing Expo public environment variables.
 Set `CHROMIUM_PATH` if the workspace's Chromium executable is located elsewhere.
 Do not publish a fixture/isolated-preview export.
+
+
+## Unused-font audit and paired export comparison — 2026-10-04
 
 ## Initial JavaScript reduction (2026-10-04)
 
@@ -270,3 +274,102 @@ node scripts/check-page-loading.cjs /tmp/uc-payload /tmp/uc-payload-checks.json
 CI=1 NODE_ENV=production pnpm exec expo export \
   --platform android --platform ios --output-dir /tmp/uc-native --clear
 ```
+
+### Typography audit
+
+- The official brand guidance specifies Gotham for print and Century Gothic
+  for digital, with Barlow/Montserrat heading and Nunito Sans/system body
+  substitutes for mobile. It does **not** specify Inter. Introducing those
+  heading substitutes across existing screens would be a separate typography
+  redesign, not part of removing unused downloads.
+- Searching Companion's application, component and navigation sources found
+  no Inter `fontFamily` consumers or global Text defaults. Text uses unchanged
+  sizes/weights with the platform's default family. Stack headers have no
+  custom family; custom cart Back text and tab labels likewise use system
+  typography. Native therefore continues to use iOS/Android system fonts;
+  registering Inter never made it the default.
+- The only explicit component family is the error-details system monospace
+  fallback. The downloadable SVG impact badge specifies Arial/sans-serif.
+  The separate server landing page uses Barlow/Nunito Sans, and the standalone
+  forest page has its own CSS typography. None consumes the root Inter
+  registration, and all are unchanged.
+- Ionicons remains in use and is **not removed**. Keep `expo-font` and its
+  config plugin for icon fonts. Only the root's four unused Inter registrations
+  and their now-unnecessary startup timer/gate were removed. The installed
+  Inter package is not imported or exported into the app.
+- The static native splash config and native-only `preventAutoHideAsync`
+  remain. The mount effect now hides it without waiting for unused text fonts.
+  No screen styles, accessibility props, Clerk/session providers, cart
+  providers or their hydration logic were changed.
+
+
+### Method and results
+
+Export the task-start source and updated source sequentially with the same
+dependencies, production mode, clear cache and benchmark environment from
+Reproduce above. Run the same measurement script on each retained export:
+390 × 844, three fresh contexts per normal/slow condition, same API fixtures
+and delay rules. No deployment, customer writes or live payment tests.
+
+Raw evidence: `loading-fonts-before.json` and `loading-fonts-after.json`.
+The measurement script now records computed text typography and encoded body
+bytes, and waits for background transfers to settle **after** timing the
+journey. Compare these two files to each other, not directly to the older
+October 2 bundle: the current checkout already has split routes and other
+merged changes. The total initial JavaScript below includes runtime, shared,
+root/tab layout and Home chunks, not just the entry file.
+
+| Payload / requests | Paired before | Paired after |
+|---|---:|---:|
+| Inter requests, every sample | 4 | 0 |
+| Inter body bytes, every sample | 1,373,004 B | 0 B |
+| Initial Home JS, uncompressed sum | 4,236,873 B | 4,226,466 B |
+| Initial Home JS, summed gzip estimate | 1,032,596 B | 1,030,288 B |
+| Journey requests, normal median | 28 | 24 |
+| Journey requests, slow median | 28 | 23 |
+| Journey transfer, normal median | 6,749,416 B | 4,976,455 B |
+| Journey transfer, slow median | 6,365,005 B | 4,974,447 B |
+
+The guaranteed reduction is four font requests and 1,373,004 body bytes
+(1,374,204 B including the local server's resource-timing overhead), plus
+10,407 B of initial JavaScript. Do not attribute the entire journey transfer
+delta to Inter: the normal baseline also fetched Ionicons twice while the
+updated samples fetched it once, and fixture request counts can vary.
+These are local uncompressed transfers/gzip estimates, not production savings.
+
+| Median, milliseconds | Before normal | After normal | Before slow | After slow |
+|---|---:|---:|---:|---:|
+| Home usable | 1,154 | 1,182 | 1,163 | 1,245 |
+| First Home product content | 1,158 | 1,219 | 2,971 | 3,045 |
+| Shop content after Home | 849 | 398 | 389 | 857 |
+| Blog content | 841 | 839 | 2,364 | 2,371 |
+| Warm return to Home | 61 | 61 | 67 | 62 |
+
+Timing varies with the container and deferred routes. This change removes
+unused downloads; it does **not** demonstrate a navigation speedup.
+
+Computed family, weight and size for the greeting, fixture products/article
+CTA and Home/Products/Blog labels matched exactly for all six paired samples.
+The browser family remains `-apple-system, BlinkMacSystemFont, "Segoe UI",
+Roboto, Helvetica, Arial, sans-serif`. No browser exceptions occurred.
+
+
+### Verification and limits
+
+- Companion TypeScript passed; **608 tests passed**, including auth/session,
+  cart hydration/races, checkout and loading/accessibility regressions.
+- A root-layout contract test checks no text-font registration/timer/gate,
+  retained native-only splash calls, auth/cart nesting, icon use and the
+  accessible cart Back label.
+- Production-mode Android and iOS Hermes exports passed; exported asset lists
+  retain Ionicons and contain no Inter files. Benchmark exports are temporary,
+  isolated fixtures and must never be published.
+- The Expo workflow restarted and bundled successfully. The quick preview
+  capture caught a blank first paint and optional API 502s with the API
+  workflow stopped; it is not used as typography or timing evidence.
+  A subsequent direct browser check waited for the live greeting and confirmed
+  it was visible with zero page exceptions and zero Inter resource requests.
+- No phone/emulator verification or signed-in/live checkout claim is made.
+  Native splash handoff and native visual typography remain physical-device
+  checks already tracked separately. Existing regression tests, unchanged
+  providers/styles and native exports are the evidence available here.

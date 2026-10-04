@@ -39,6 +39,19 @@ Weights: Regular (body), Bold (emphasis, CTAs)
 
 **Why:** Gotham is a licensed desktop font; mobile apps need web-safe or downloadable alternatives that share the same geometric, all-caps-friendly character.
 
+Register downloadable text fonts only for deliberate screen `fontFamily`
+consumers; font registration alone does not change React Native's default
+typography. A startup-payload optimization is not approval to replace existing
+screen typography with brand substitutes.
+
+**Why:** An unused Inter registration transferred roughly 1.37 MB while screens
+kept rendering system fonts. Brand substitutes require an intentional visual
+decision, not merely a font-loading change.
+
+**How to apply:** Audit screen and navigation consumers before adding or
+removing font loads; preserve system fallback and separately scope any visual
+typography migration.
+
 ---
 
 ## Logo
