@@ -1,4 +1,4 @@
-import type { CustomerFilterAssignment } from '@workspace/api-client-react';
+import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
 import type { FilterActivation } from '@/hooks/useNotifications';
 
 /** The primary tracker stays local; additional server assignments are listed separately. */

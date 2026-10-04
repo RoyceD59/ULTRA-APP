@@ -3,10 +3,10 @@ import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
-import { useConsumeInstantWaterAssessmentHandoff } from '@workspace/api-client-react';
+import { useConsumeInstantWaterAssessmentHandoff } from '@workspace/api-client-react/companion/water-check';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/hooks/apiError';
-import type { InstantWaterAssessment } from '@workspace/api-client-react';
+import type { InstantWaterAssessment } from '@workspace/api-client-react/companion/models/instantWaterAssessment';
 
 export const HANDOFF_STORAGE_KEY = 'water_check_pending_handoff';
 

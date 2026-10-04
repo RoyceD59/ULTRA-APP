@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { getUcDailyHydration } from '@workspace/api-client-react';
+import { getUcDailyHydration } from '@workspace/api-client-react/companion/hydration';
 import { useAuth } from '@/context/AuthContext';
 import { localCalendarDate } from '@/lib/hydration';
 

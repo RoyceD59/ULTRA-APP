@@ -2,7 +2,9 @@ import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBase } from '@/lib/apiBase';
-import { getHydrateCustomerTree, type HydrateCustomerTree, type CustomerFilterAssignment } from '@workspace/api-client-react';
+import { getHydrateCustomerTree } from '@workspace/api-client-react/companion/customer';
+import type { HydrateCustomerTree } from '@workspace/api-client-react/companion/models/hydrateCustomerTree';
+import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
 
 import { ApiError } from './apiError';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';

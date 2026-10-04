@@ -23,17 +23,15 @@ import {
   useRequestInstantWaterPhysicalTest,
   useListAuthenticatedInstantWaterAssessments,
   useConsumeInstantWaterAssessmentHandoff,
-  InstantWaterSource,
-  InstantWaterConcern,
-  InstantWaterSetting,
-  InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType
-} from '@workspace/api-client-react';
-import type {
-  InstantWaterAssessmentCreated,
-  AuthenticatedInstantWaterAssessmentCreated,
-  InstantWaterAssessment,
-  PublicInstantWaterAssessmentResult
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react/companion/water-check';
+import { InstantWaterSource } from '@workspace/api-client-react/companion/models/instantWaterSource';
+import { InstantWaterConcern } from '@workspace/api-client-react/companion/models/instantWaterConcern';
+import { InstantWaterSetting } from '@workspace/api-client-react/companion/models/instantWaterSetting';
+import { InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType } from '@workspace/api-client-react/companion/models/instantWaterPhysicalTestRequestInputMediaReferencesItemMediaType';
+import type { InstantWaterAssessmentCreated } from '@workspace/api-client-react/companion/models/instantWaterAssessmentCreated';
+import type { AuthenticatedInstantWaterAssessmentCreated } from '@workspace/api-client-react/companion/models/authenticatedInstantWaterAssessmentCreated';
+import type { InstantWaterAssessment } from '@workspace/api-client-react/companion/models/instantWaterAssessment';
+import type { PublicInstantWaterAssessmentResult } from '@workspace/api-client-react/companion/models/publicInstantWaterAssessmentResult';
 import { useQueryClient } from '@tanstack/react-query';
 import { HANDOFF_STORAGE_KEY, useConsumeHandoff } from '@/hooks/useWaterTestHandoff';
 import { ApiError } from '@/hooks/apiError';

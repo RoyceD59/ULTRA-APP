@@ -1,5 +1,125 @@
 # Loading and photo-header verification
 
+## Customer-only generated API entrypoints — 2026-10-04
+
+This section measures the API-client change separately from the historical
+font/icon work below. No backend contracts, provider readiness, catalogue keys,
+native route settings, hosting, or publication settings changed.
+
+### Choice and compatibility
+
+Orval 8.22 supports `tags-split` React Query output and input tag filtering with
+referenced-schema pruning. The backend's existing tags are not a reliable
+customer boundary: password change is tagged `uc-admin`, hydration is untagged,
+and water-check tags include team operations. A second, generation-only input
+transform assigns customer domains to public/customer paths. It excludes admin,
+editor and offline-client-management paths without editing the OpenAPI document.
+Exact domain filters also exclude the original `companion-blog` editorial tag.
+
+The existing ProjectHub generated client and root exports remain compatible.
+The additional Orval output has its own workspace; the legacy output uses an
+absolute target without an auto-appended workspace barrel. All output is
+reproducible through the existing codegen command; no generated files were
+edited by hand.
+
+Companion uses public `/config`, `/companion/auth`, `/companion/customer`,
+`/companion/hydration`, `/companion/water-check` and individual
+`/companion/models/*` package subpaths. Every domain imports the **same**
+`custom-fetch.ts`; root configuration re-exports that same instance. There is
+no duplicated auth/base-URL state or new request implementation. Types and enum
+values, requests, query keys, query/mutation options and hooks are token-identical
+to their legacy generated counterparts. Home/Products still use their existing
+shared catalogue cache and request path.
+
+Separate filtered output was chosen over replacing ProjectHub's generated
+surface, manually splitting generated functions, graph-wide experimental
+tree-shaking, or deferring root providers. The tradeoff is extra generated
+source on disk, not extra startup scripts. The customer domain still includes
+some optional customer operations; this is not a claim of perfect dead-code
+elimination.
+
+### Actual initial requests
+
+Fresh sequential production-mode web exports, source maps, identical local
+fixtures/public environment, Chromium and 390 × 844 viewport; three normal and
+three delayed-font/API runs per export. The initial script list was captured
+at Home's visible greeting, before later tab clicks. Every sample requested six
+initial scripts: runtime, common, entry, root layout, tab layout and Home. No
+cart, checkout, rewards or admin route script was requested initially.
+
+| All initial JavaScript | Before | After | Reduction |
+|---|---:|---:|---:|
+| Raw | 3,811,073 B | 3,667,734 B | 143,339 B (3.76%) |
+| gzip level 9 estimate | 898,439 B | 884,771 B | 13,668 B (1.52%) |
+| Brotli quality 9 estimate | 777,548 B | 765,297 B | 12,251 B (1.58%) |
+| Initial script requests | 6 | 6 | No additional request |
+
+The initial API source inventory falls from **523,317 to 116,191 source bytes**.
+The legacy `generated/api.ts` (423,134 B) and `generated/api.schemas.ts`
+(88,309 B) are both absent from the after graph. Remaining API modules are
+customer (60,484 B), water-check (31,450 B), auth (6,442 B), hydration (6,011 B),
+shared fetch (11,606 B) and configuration (198 B). Source inventory is **not**
+attributed minified cost. Compression is an estimate computed from the actual
+requested files, not measured edge transfer.
+
+| Local median, ms | Before normal | After normal | Before delayed | After delayed |
+|---|---:|---:|---:|---:|
+| Home usable | 1,126 | 1,032 | 1,066 | 1,071 |
+| Home product content | 1,131 | 1,035 | 2,858 | 2,871 |
+| Products after Home | 851 | 422 | 838 | 848 |
+| Blog | 851 | 847 | 2,369 | 2,359 |
+| Warm Home return | 62 | 68 | 63 | 59 |
+
+These timings are a navigation regression check, **not evidence of a CPU or
+physical-phone speedup**. Deferred-route scheduling and container load affect
+small samples. The byte reduction is repeatable; all six samples per export
+had the same initial byte total and no browser exceptions.
+
+Evidence: `api-payload-before-timings.json`, `api-payload-after-timings.json`,
+`api-payload-before-profile.json`, `api-payload-after-profile.json`. Saved
+profiles keep the top 20 modules per chunk plus the complete API inventory.
+
+### Verification and reproduction
+
+- Codegen and shared-library TypeScript passed. Regeneration produced exactly
+  the same generated-client file hashes and left the public index unchanged.
+- Companion and ProjectHub TypeScript passed.
+- Companion suite: **634 tests passed**, including new generated contract/model
+  parity, request/auth singleton, import-boundary and source-profile guards,
+  plus existing catalogue/cache, handoff, hydration, auth, cart and checkout
+  regressions.
+- Browser fixtures reached Home → Products → Blog → Home with no exceptions
+  in all normal and delayed runs. Catalogue cache implementation is unchanged.
+- Production-mode Android and iOS Hermes exports passed, with one synchronous
+  native bundle per platform; the all-platform export also passed for web.
+  Exports were temporary and did not overwrite retained build assets.
+- Restarted development Metro served a populated Home screen and navigation
+  without a JavaScript exception. The stopped API workflow caused explicit
+  unavailable/retry states for 502 responses. The existing container-only
+  React Native DevTools installation warning did not prevent bundling.
+- No production build activation, live checkout, signed-in browser session or
+  phone timing is implied. Those are not measured by fixture exports or
+  generated-contract tests.
+
+```sh
+pnpm --filter @workspace/api-spec run codegen
+cd artifacts/uc-companion
+CI=1 NODE_ENV=production EXPO_PUBLIC_PREVIEW_SAFE_MODE=1 \
+  EXPO_PUBLIC_DOMAIN=localhost:8098 EXPO_PUBLIC_API_DOMAIN=localhost:8098 \
+  pnpm exec expo export --platform web --source-maps --clear \
+  --output-dir /tmp/uc-api-payload
+node scripts/measure-loading.cjs /tmp/uc-api-payload /tmp/uc-api-timings.json
+node scripts/profile-web-payload.cjs /tmp/uc-api-payload \
+  /tmp/uc-api-timings.json /tmp/uc-api-profile.json --assert-companion-only
+```
+
+The profiler includes every initial requested chunk and the API inventory. Its
+optional guard fails explicitly if either legacy generated module returns to
+the initial graph or API source maps cannot be found. Run the same export and
+measurement commands on the pre-change source without the after-only guard to
+reproduce the comparison. Temporary benchmark exports use the existing isolated
+preview flag only; they must not be published or replace retained build assets.
+
 Measured on 2026-10-02. These are development-container measurements, **not
 physical-phone timings or a production deployment**.
 

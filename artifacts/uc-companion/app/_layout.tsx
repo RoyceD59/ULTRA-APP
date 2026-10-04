@@ -10,7 +10,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useNativeNotificationRouting, usePushTokenSync } from '@/hooks/useNativeNotifications';
 import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
@@ -26,6 +25,7 @@ import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
 
 // Set API base URL before any component renders
 import ConnectionStatusFrame from '@/components/ConnectionStatusFrame';
+import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react/config';
 const apiBase = getApiBase();
 if (apiBase) {
   setBaseUrl(apiBase);

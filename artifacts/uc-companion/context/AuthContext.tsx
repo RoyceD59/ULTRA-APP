@@ -9,7 +9,7 @@ import {
   type PersistedSession,
 } from '@/lib/sessionPersistence';
 import { getApiBase } from '@/lib/apiBase';
-import { completeUcTemporaryPasswordChange } from '@workspace/api-client-react';
+import { completeUcTemporaryPasswordChange } from '@workspace/api-client-react/companion/auth';
 import { useHydrationReminder } from '@/hooks/useHydrationReminder';
 import { reconcileHydrationReminder } from '@/lib/hydrationReminder';
 

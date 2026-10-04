@@ -30,6 +30,10 @@ function profilePayload(directory, initialScripts) {
     });
     return { ...script, packages, modules: modules.sort((a, b) => b.sourceBytes - a.sourceBytes) };
   });
+  const apiModules = chunks.flatMap(chunk => chunk.modules)
+    .filter(module => /lib\/api-client-react\/src\//.test(module.source));
+  const legacyApiModules = apiModules.filter(module =>
+    /\/generated\/api(?:\.schemas)?\.ts$/.test(module.source));
   return {
     note: 'Source bytes describe the graph, not minified/encoded cost. Initial script sizes come from browser requests.',
     initialBytes: chunks.reduce((sum, chunk) => {
@@ -38,15 +42,28 @@ function profilePayload(directory, initialScripts) {
     }, { raw: 0, gzip: 0, brotli: 0 }),
     packages: Object.entries(totals).sort((a, b) => b[1] - a[1])
       .map(([name, sourceBytes]) => ({ name, sourceBytes })),
+    apiClient: {
+      sourceBytes: apiModules.reduce((sum, module) => sum + module.sourceBytes, 0),
+      modules: apiModules,
+      legacyApiModules: legacyApiModules.map(module => module.source),
+    },
     chunks,
   };
 }
 
-module.exports = { packageName, profilePayload };
+function assertCompanionOnly(report) {
+  if (!report.apiClient.modules.length) throw new Error('No API client modules found; check source maps');
+  if (report.apiClient.legacyApiModules.length) {
+    throw new Error(`Initial scripts still contain the team API barrel: ${report.apiClient.legacyApiModules.join(', ')}`);
+  }
+}
+
+module.exports = { packageName, profilePayload, assertCompanionOnly };
 if (require.main === module) {
   const timings = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
   const report = profilePayload(process.argv[2], timings[0].initialScripts);
   fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2));
+  if (process.argv.includes('--assert-companion-only')) assertCompanionOnly(report);
   console.log(report.initialBytes);
   console.table(report.packages.slice(0, 20));
 }

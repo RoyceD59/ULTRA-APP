@@ -2,6 +2,7 @@
 - [Credential mutation concurrency](credential-mutation-concurrency.md) — temporary issuance and self-service resets must share one per-user lock across provider delivery.
 - [Orval date fields vs Drizzle string-mode dates](orval-drizzle-date-mismatch.md) — Zod coerces `format: date` to JS Date; string-mode Drizzle date columns need manual YYYY-MM-DD conversion at the DB boundary.
 - [Orval schema naming collision with operationId](orval-schema-naming-collision.md) — rename any openapi.yaml schema whose name matches an operationId-derived response/body type before codegen.
+- [Orval output isolation](orval-output-isolation.md) — workspace barrels auto-append exports; separate filtered clients and preserve hand-maintained public indexes.
 - [Ultra Clear Brand Guidelines](uc-brand-guidelines.md) — official colours, typography, logo rules, and digital layout rules for all UCFilters / Ultra Clear designs.
 - [Expo web Metro stubs](expo-web-metro-stubs.md) — native-only modules that must be stubbed to empty on web to prevent crash at bundle load time.
 - [Release versioning](release-versioning.md) — Alpha/Beta/v1.0 ladder; all deferred "out of scope" items are v1.0 targets, tracked in that file.

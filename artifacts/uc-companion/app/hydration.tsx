@@ -4,7 +4,7 @@ import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { saveUcDailyHydration } from '@workspace/api-client-react';
+import { saveUcDailyHydration } from '@workspace/api-client-react/companion/hydration';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useHydration, hydrationKey } from '@/hooks/useHydration';

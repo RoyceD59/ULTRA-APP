@@ -18,7 +18,7 @@ import { handleRejectedSessionResponse } from './deletedAccountResponse';
 import { getApiBase } from '@/lib/apiBase';
 import { loadPersistedSession } from '@/lib/sessionPersistence';
 import { assignedPrimaryActivation } from '@/lib/assignedFilterHydration';
-import type { CustomerFilterAssignment } from '@workspace/api-client-react';
+import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
 if (Platform.OS !== 'web') {
