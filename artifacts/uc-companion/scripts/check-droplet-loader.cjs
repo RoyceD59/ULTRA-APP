@@ -41,10 +41,14 @@ async function main() {
         const loader = page.getByTestId('page-data-loader').first();
         await loader.waitFor({ timeout: 90000 });
         assert.equal(await loader.getAttribute('aria-busy'), 'true');
-        assert.ok(await loader.getAttribute('aria-label'));
+        const label = await loader.getAttribute('aria-label');
+        assert.ok(label);
+        assert.ok((await loader.innerText()).includes(label), 'loading text stays visible');
+        assert.equal(await loader.getAttribute('aria-live'), 'polite');
         const id = scenario === 'asset-failure' ? 'filter-drop-fallback'
           : scenario === 'reduced' ? 'water-loader-still' : 'water-loader-animated';
         await page.getByTestId(id).first().waitFor();
+        assert.equal(await loader.getByTestId(id).count(), 1, 'one shared illustration beside text');
         if (scenario !== 'asset-failure') {
           await page.waitForFunction(testId => {
             const root = document.querySelector(`[data-testid="${testId}"]`);

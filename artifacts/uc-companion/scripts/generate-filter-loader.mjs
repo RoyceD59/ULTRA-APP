@@ -3,23 +3,16 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const out = fileURLToPath(new URL('../assets/loading/', import.meta.url));
-const temp = mkdtempSync(join(tmpdir(), 'uc-droplets-'));
-const frames = [];
-try {
-  for (let frame = 0; frame < 24; frame++) {
-    const droplets = [
-      { x: 20, y: 66, size: 0.88 },
-      { x: 48, y: 44, size: 1.08 },
-      { x: 76, y: 66, size: 0.88 },
-    ].map(({ x, y, size }, index) => {
-      // Smooth 2.4-second loop, offset per drop; no flashing or large travel.
-      const pulse = (1 - Math.cos(2 * Math.PI * (frame / 24 - index / 3))) / 2;
-      const scale = size * (0.94 + 0.06 * pulse);
-      return `<g transform="translate(${x} ${y - pulse}) scale(${scale})">
+export const FRAME_COUNT = 24;
+
+export function renderDropletFrame(frame) {
+  // Smooth 2.4-second loop: 6% growth about the visual centre, no travel or flashing.
+  const pulse = (1 - Math.cos(2 * Math.PI * ((frame % FRAME_COUNT) / FRAME_COUNT))) / 2;
+  const scale = 1.65 * (0.94 + 0.06 * pulse);
+  const droplet = `<g data-droplet="single" transform="translate(48 56) scale(${scale}) translate(0 4)">
         <path d="M0 -26 C-3 -18 -14 -8 -14 3 C-14 22 14 22 14 3 C14 -8 3 -18 0 -26Z"
           fill="url(#water)" stroke="#005d8f" stroke-width="1.4"/>
         <path d="M0 -23 C-3 -15 -11 -7 -11 2" fill="none"
@@ -30,27 +23,38 @@ try {
         <path d="M1 14 C6 14 10 10 11 6" fill="none"
           stroke="#52b6dc" stroke-width="1.5" stroke-linecap="round"/>
       </g>`;
-    }).join('');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 0 96 112">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 0 96 112">
       <defs><linearGradient id="water" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#52b6dc"/>
         <stop offset="0.4" stop-color="#52b6dc"/>
         <stop offset="1" stop-color="#005d8f"/>
       </linearGradient></defs>
-      ${droplets}
+      ${droplet}
       </svg>`;
-    const source = join(temp, `${frame}.svg`);
-    const png = join(temp, `${frame}.png`);
-    writeFileSync(source, svg);
-    execFileSync('convert', ['-background', 'none', '-density', '288', source,
-      '-resize', '96x112', '-strip', png]);
-    frames.push(png);
-  }
-  execFileSync('convert', [frames[0], '-strip', join(out, 'water-still.png')]);
-  // Full transparent frames with background disposal avoid trails on dark UI.
-  execFileSync('convert', ['-delay', '10', '-dispose', 'Background', ...frames,
-    '-channel', 'A', '-threshold', '50%', '+channel', '-loop', '0', '-colors', '64',
-    join(out, 'water.gif')]);
-} finally {
-  rmSync(temp, { recursive: true, force: true });
 }
+
+export function generateArtwork() {
+  const out = fileURLToPath(new URL('../assets/loading/', import.meta.url));
+  const temp = mkdtempSync(join(tmpdir(), 'uc-droplet-'));
+  const frames = [];
+  try {
+    for (let frame = 0; frame < FRAME_COUNT; frame++) {
+      const svg = renderDropletFrame(frame);
+      const source = join(temp, `${frame}.svg`);
+      const png = join(temp, `${frame}.png`);
+      writeFileSync(source, svg);
+      execFileSync('convert', ['-background', 'none', '-density', '288', source,
+        '-resize', '96x112', '-strip', png]);
+      frames.push(png);
+    }
+    execFileSync('convert', [frames[0], '-strip', join(out, 'water-still.png')]);
+    // Full transparent frames with background disposal avoid trails on dark UI.
+    execFileSync('convert', ['-delay', '10', '-dispose', 'Background', ...frames,
+      '-channel', 'A', '-threshold', '50%', '+channel', '-loop', '0', '-colors', '64',
+      join(out, 'water.gif')]);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) generateArtwork();

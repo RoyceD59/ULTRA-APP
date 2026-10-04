@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 
-/** Three bundled crystal-blue droplets. Error feedback always uses the still frame. */
+/** One bundled glossy blue water droplet. Error feedback always uses the still frame. */
 export default function FilterDropIllustration({ animate = false }: { animate?: boolean }) {
   const colors = useColors();
   const [failed, setFailed] = useState(false);

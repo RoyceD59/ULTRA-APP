@@ -123,6 +123,8 @@ describe('local media and non-blocking fallback contracts', () => {
     assert.match(source, /accessibilityRole="progressbar"/);
     assert.match(source, /accessibilityState=\{\{ busy: true \}\}/);
     assert.match(source, /aria-busy=\{true\}/);
+    assert.match(source, /accessibilityLiveRegion="polite"/);
+    assert.match(source, /<Text[^>]*>\{label\}<\/Text>/, 'retains visible loading text');
     assert.match(source, /minHeight: 76/);
   });
   it('keeps motion preference, focus and platform visibility wired to the shared policy', () => {
