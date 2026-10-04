@@ -149,8 +149,8 @@ export async function sendSms(
 
 /**
  * Awaitable variant of sendSms — resolves to `true` when AT accepts the
- * message (HTTP 2xx) and `false` otherwise (non-2xx, network error, or
- * missing credentials / phone).
+ * message (HTTP 2xx and successful recipient status) and `false` otherwise
+ * (provider rejection, network error, or missing credentials / phone).
  *
  * Unlike `sendSms` this awaits the AT fetch so callers that need to know
  * whether the channel succeeded can react accordingly.  The same
@@ -165,6 +165,7 @@ export async function sendSmsAwaitable(
     ticketId?: string;
     testId?:   string;
   },
+  signal?: AbortSignal,
 ): Promise<boolean> {
   if (!hasATCredentials()) {
     console.log("[sms] AT credentials absent — skipping SMS to", to);
@@ -201,6 +202,7 @@ export async function sendSmsAwaitable(
 
   try {
     const res = await fetch(AT_BASE, {
+      signal,
       method: "POST",
       headers: {
         "Accept":       "application/json",
@@ -221,8 +223,16 @@ export async function sendSmsAwaitable(
       return false;
     }
 
-    const data = await res.json().catch(() => null);
-    console.log("[sms] sent to", phone, "—", JSON.stringify(data));
+    const data = await res.json().catch(() => null) as {
+      SMSMessageData?: { Recipients?: { statusCode?: number }[] };
+    } | null;
+    const recipients = data?.SMSMessageData?.Recipients;
+    if (!Array.isArray(recipients) || recipients.length === 0 ||
+        recipients.some((recipient: { statusCode?: number }) => ![100, 101, 102].includes(Number(recipient.statusCode)))) {
+      logSmsAttempt({ ...logMeta, status: "failed", errorMessage: "Africa's Talking did not accept the recipient" });
+      return false;
+    }
+    console.log("[sms] sent to", phone);
     logSmsAttempt({ ...logMeta, status: "sent" });
     return true;
   } catch (err: unknown) {
@@ -234,6 +244,27 @@ export async function sendSmsAwaitable(
 }
 
 // ─── Message templates ─────────────────────────────────────────────────────────
+
+export type OrderFulfillmentDetails = {
+  estimatedDelivery?: string;
+  trackingUrl?: string;
+  trackingNumber?: string;
+  collectionLocation?: string;
+  note?: string;
+};
+
+export function orderShippedSms(params: OrderFulfillmentDetails & { orderId: string | number }): string {
+  return `Your Ultra Clear order #${params.orderId} is on its way!` +
+    (params.estimatedDelivery ? ` Estimated delivery: ${params.estimatedDelivery}.` : "") +
+    (params.trackingUrl ? ` Track your driver: ${params.trackingUrl}` : "") +
+    (params.trackingNumber ? ` Tracking number: ${params.trackingNumber}.` : "") +
+    (params.note ? ` ${params.note}` : "");
+}
+
+export function orderReadyToCollectSms(params: OrderFulfillmentDetails & { orderId: string | number; collectionLocation: string }): string {
+  return `Your Ultra Clear order #${params.orderId} is ready to collect from ${params.collectionLocation}.` +
+    (params.note ? ` ${params.note}` : "");
+}
 
 export function orderConfirmationSms(params: {
   orderId:   string | number;

@@ -867,6 +867,7 @@ async function applyStartupMigrations(): Promise<void> {
       ON uc_users (rewards_qr_hash) WHERE rewards_qr_hash IS NOT NULL;
     ALTER TABLE uc_orders
       ADD COLUMN IF NOT EXISTS customer_stage text,
+      ADD COLUMN IF NOT EXISTS fulfillment_payment_status text,
       ADD COLUMN IF NOT EXISTS customer_stage_updated_at timestamptz,
       ADD COLUMN IF NOT EXISTS woo_status_modified_at timestamptz,
       ADD COLUMN IF NOT EXISTS woo_status_version text;

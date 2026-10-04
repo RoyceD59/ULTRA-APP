@@ -1404,6 +1404,76 @@ export interface ProjectHubInstantWaterUpdateInput {
   internalNote?: string;
 }
 
+export type UcOrderFulfillmentInputStatus = typeof UcOrderFulfillmentInputStatus[keyof typeof UcOrderFulfillmentInputStatus];
+
+
+export const UcOrderFulfillmentInputStatus = {
+  shipped: 'shipped',
+  'ready-to-collect': 'ready-to-collect',
+} as const;
+
+export interface UcOrderFulfillmentInput {
+  status: UcOrderFulfillmentInputStatus;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  idempotencyKey?: string;
+  /** @maxLength 100 */
+  trackingNumber?: string;
+  /**
+     * HTTP or HTTPS tracking link without embedded credentials
+     * @maxLength 2048
+     */
+  trackingUrl?: string;
+  /**
+     * Valid calendar date in YYYY-MM-DD format
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  estimatedDelivery?: string;
+  /**
+     * Required when status is ready-to-collect
+     * @maxLength 300
+     */
+  collectionLocation?: string;
+  /**
+     * Customer-visible fulfillment note
+     * @maxLength 500
+     */
+  note?: string;
+}
+
+export type UcOrderFulfillmentResultNotificationStatus = typeof UcOrderFulfillmentResultNotificationStatus[keyof typeof UcOrderFulfillmentResultNotificationStatus];
+
+
+export const UcOrderFulfillmentResultNotificationStatus = {
+  queued: 'queued',
+  skipped: 'skipped',
+} as const;
+
+export type UcOrderFulfillmentResultNotificationChannelsItem = typeof UcOrderFulfillmentResultNotificationChannelsItem[keyof typeof UcOrderFulfillmentResultNotificationChannelsItem];
+
+
+export const UcOrderFulfillmentResultNotificationChannelsItem = {
+  sms: 'sms',
+  push: 'push',
+  email: 'email',
+} as const;
+
+export type UcOrderFulfillmentResultNotification = {
+  status: UcOrderFulfillmentResultNotificationStatus;
+  channels: UcOrderFulfillmentResultNotificationChannelsItem[];
+};
+
+export interface UcOrderFulfillmentResult {
+  ok: boolean;
+  id: number;
+  status: string;
+  customerStage: string | null;
+  repeated: boolean;
+  notification: UcOrderFulfillmentResultNotification;
+}
+
 export type UcOrderCustomerStageInputStage = typeof UcOrderCustomerStageInputStage[keyof typeof UcOrderCustomerStageInputStage];
 
 

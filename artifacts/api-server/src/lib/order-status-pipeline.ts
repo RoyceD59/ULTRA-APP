@@ -3,6 +3,8 @@ import { pool } from "@workspace/db";
 import { callExpoPushApi, removePushTokenIfCurrent } from "./push.js";
 import { logger } from "./logger.js";
 import { reconcileCanonicalPurchaseDualWrite } from "./canonical-purchase-dual-write.js";
+import { sendSmsAwaitable, orderShippedSms, orderReadyToCollectSms, type OrderFulfillmentDetails } from "./sms.js";
+import { sendViaResend } from "./resend.js";
 
 export const ORDER_CUSTOMER_STAGES = ["accepted", "shipped", "delivered"] as const;
 export type OrderCustomerStage = (typeof ORDER_CUSTOMER_STAGES)[number];
@@ -83,7 +85,7 @@ export type TransitionResult = {
 
 /**
  * Apply a Woo/manual status transition.  The order projection, immutable
- * event, and notification outbox are one database transaction.  A row lock
+ * event, and per-channel notification outbox are one database transaction. A row lock
  * makes two concurrent/replayed webhooks resolve to one transition.
  */
 export async function transitionOrderStatus(input: {
@@ -96,6 +98,7 @@ export async function transitionOrderStatus(input: {
   actor?: string;
   source?: "woocommerce" | "staff" | "reconciliation";
   customerStage?: OrderCustomerStage;
+  fulfillment?: OrderFulfillmentDetails;
 }): Promise<TransitionResult> {
   const client = await pool.connect();
   const normalizedStatus = input.status.trim().toLowerCase();
@@ -110,13 +113,16 @@ export async function transitionOrderStatus(input: {
   try {
     await client.query("BEGIN");
     const locked = await client.query(
-      `SELECT id,user_id,status,customer_stage,wc_order_id,
+      `SELECT id,user_id,status,customer_stage,wc_order_id,payment_method,
+              payment_confirmed_at,cod_collection_status,fulfillment_payment_status,
               woo_status_modified_at,woo_status_version
        FROM uc_orders WHERE id=$1 FOR UPDATE`,
       [input.orderId],
     );
     const order = locked.rows[0] as {
       id: number; user_id: string; status: string; customer_stage: string | null; wc_order_id: number | null;
+      payment_method: string; payment_confirmed_at: Date | string | null;
+      cod_collection_status: string | null; fulfillment_payment_status: string | null;
       woo_status_modified_at: Date | string | null; woo_status_version: string | null;
     } | undefined;
     if (!order) {
@@ -140,6 +146,13 @@ export async function transitionOrderStatus(input: {
         outboxCreated: false,
         stale: false,
       };
+    }
+
+    if (input.fulfillment && ["refunded", "cancelled", "declined", "completed", "delivered"].includes(order.status)) {
+      throw Object.assign(new Error("This order cannot be dispatched or marked ready to collect"), { code: "INVALID_STAGE_TRANSITION" });
+    }
+    if (input.fulfillment && order.customer_stage === "delivered") {
+      throw Object.assign(new Error("Delivered orders cannot be dispatched again"), { code: "INVALID_STAGE_TRANSITION" });
     }
 
     const sourceModified = input.modifiedAt && !Number.isNaN(Date.parse(input.modifiedAt))
@@ -258,6 +271,17 @@ export async function transitionOrderStatus(input: {
     }
     const stageChanged = requestedIndex > currentIndex;
     const nextStage = stageChanged ? requestedStage : order.customer_stage;
+    if (input.fulfillment) {
+      // Preserve legacy payment evidence without inventing a payment timestamp.
+      // Dispatching a COD order does not mean staff have collected its cash.
+      const paymentStatus = order.payment_confirmed_at || order.cod_collection_status === "collected"
+        ? "paid"
+        : order.payment_method === "cod" ? "pending"
+        : order.fulfillment_payment_status ??
+          (["processing", "completed", "paid"].includes(order.status) ? "paid" :
+            ["failed", "cancelled"].includes(order.status) ? "failed" : "pending");
+      await client.query("UPDATE uc_orders SET fulfillment_payment_status=$2 WHERE id=$1", [input.orderId, paymentStatus]);
+    }
 
     if (sourceIsWoo && sourceModified) {
       await client.query(
@@ -292,7 +316,12 @@ export async function transitionOrderStatus(input: {
     );
 
     let outboxCreated = false;
-    if (stageChanged && order.user_id) {
+    if ((input.fulfillment ? normalizedStatus !== order.status : stageChanged) && order.user_id) {
+      const message = input.fulfillment
+        ? normalizedStatus === "ready-to-collect"
+          ? orderReadyToCollectSms({ orderId: order.wc_order_id ?? input.orderId, ...input.fulfillment, collectionLocation: input.fulfillment.collectionLocation! })
+          : orderShippedSms({ orderId: order.wc_order_id ?? input.orderId, ...input.fulfillment })
+        : undefined;
       const outbox = await client.query(
         `INSERT INTO uc_order_notification_outbox
           (event_key,order_id,user_id,stage,payload)
@@ -309,10 +338,21 @@ export async function transitionOrderStatus(input: {
             orderId: input.orderId,
             stage: nextStage,
             status: normalizedStatus,
+            ...(input.fulfillment ? { fulfillment: input.fulfillment, message } : {}),
           }),
         ],
       );
       outboxCreated = Boolean(outbox.rows[0]);
+      if (input.fulfillment) {
+        for (const channel of ["sms", "email"]) {
+          await client.query(
+            `INSERT INTO uc_order_notification_outbox (event_key,order_id,user_id,stage,payload)
+             VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT (event_key) DO NOTHING`,
+            [`${eventKey}:${channel}`, input.orderId, order.user_id, nextStage,
+              JSON.stringify({ channel, fulfillment: input.fulfillment, status: normalizedStatus, message })],
+          );
+        }
+      }
     }
     await reconcileCanonicalPurchaseDualWrite(input.orderId, eventKey, client);
     await client.query("COMMIT");
@@ -392,6 +432,7 @@ export async function processOrderNotificationOutbox(limit = 50): Promise<Outbox
 
     result.processed++;
     const attempt = row.attempt_count + 1;
+    const channel = row.payload.channel === "sms" || row.payload.channel === "email" ? row.payload.channel : "push";
     const finish = async (
       status: "sent" | "failed" | "skipped",
       deliveryEvent: string,
@@ -408,11 +449,15 @@ export async function processOrderNotificationOutbox(limit = 50): Promise<Outbox
         [row!.id, retryable ? "failed" : status, errorMessage ?? null, retryable, delaySeconds, row!.claim_token],
       );
       if (completed.rowCount !== 1) return;
+      // SMS/email helpers already audit the real recipient and full message.
+      // A synthetic user-id audit would be unsafe for the staff retry endpoint.
+      if (channel !== "push") return;
       await pool.query(
         `INSERT INTO uc_notification_log
           (channel,provider,recipient,template,message_body,order_id,status,delivery_event,delivery_event_at,error_message)
-         VALUES ('push','expo',$1,'order-customer-stage',$2,$3,$4,$5,now(),$6)`,
-        [row!.user_id, `order ${row!.order_id}: ${row!.stage}`, row!.order_id, status, deliveryEvent, errorMessage ?? null],
+         VALUES ($7,$8,$1,'order-customer-stage',$2,$3,$4,$5,now(),$6)`,
+        [row!.user_id, `order ${row!.order_id}: ${row!.stage}`, row!.order_id, status, deliveryEvent, errorMessage ?? null,
+          channel, "expo"],
       ).catch((error) => logger.warn({ err: error, outboxId: row!.id }, "Order notification audit write failed"));
     };
 
@@ -427,6 +472,38 @@ export async function processOrderNotificationOutbox(limit = 50): Promise<Outbox
     if (prefs.rows[0]?.pref_opt_out || prefs.rows[0]?.token_opt_out) {
       await finish("skipped", "opted_out");
       result.skipped++;
+      continue;
+    }
+    if (channel !== "push") {
+      const contact = await boundedQuery(
+        "SELECT phone,email FROM uc_users WHERE id::text=$1 AND deleted_at IS NULL",
+        [row.user_id],
+      );
+      const recipient = contact.rows[0]?.[channel === "sms" ? "phone" : "email"];
+      if (!recipient) {
+        await finish("skipped", "no_contact");
+        result.skipped++;
+        continue;
+      }
+      const renewed = await boundedQuery(
+        `UPDATE uc_order_notification_outbox SET lease_expires_at=now() + interval '45 seconds'
+         WHERE id=$1 AND status='sending' AND claim_token=$2 AND lease_expires_at > now() RETURNING id`,
+        [row.id, row.claim_token],
+      );
+      if (renewed.rowCount !== 1) { result.skipped++; continue; }
+      const message = String(row.payload.message);
+      const meta = { template: `order_${row.payload.status}`, orderId: row.order_id };
+      const signal = AbortSignal.timeout(20_000);
+      const accepted = channel === "sms"
+        ? await sendSmsAwaitable(recipient, message, meta, signal)
+        : await sendViaResend({
+          from: "orders@contacts.ucfilters.com", to: recipient,
+          subject: row.payload.status === "ready-to-collect" ? "Your Ultra Clear order is ready to collect" : "Your Ultra Clear order is on its way",
+          text: message, meta, signal, idempotencyKey: `order-fulfillment-${row.id}`,
+        });
+      await finish(accepted ? "sent" : "failed", accepted ? "accepted" : "provider_failure",
+        accepted ? undefined : `${channel} provider did not accept the notification`);
+      if (accepted) result.sent++; else result.failed++;
       continue;
     }
     const tokenResult = await boundedQuery(
@@ -455,7 +532,7 @@ export async function processOrderNotificationOutbox(limit = 50): Promise<Outbox
     const sent = await callExpoPushApi(
       token.pushToken,
       "Your order update",
-      `Your order is ${row.stage.replaceAll("_", " ")}.`,
+      typeof row.payload.message === "string" ? row.payload.message : `Your order is ${row.stage.replaceAll("_", " ")}.`,
       row.payload,
     );
     if (sent.staleToken) {

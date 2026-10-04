@@ -210,6 +210,8 @@ import type {
   UcOfflineClientResponse,
   UcOfflineClientUpdateInput,
   UcOrderCustomerStageInput,
+  UcOrderFulfillmentInput,
+  UcOrderFulfillmentResult,
   UcPasswordChangeResult,
   UcPermanentPasswordInput,
   UcProduct,
@@ -2584,6 +2586,78 @@ export const useUpdateProjectHubInstantWaterAssessment = <TError = ErrorType<voi
         TContext
       > => {
       return useMutation(getUpdateProjectHubInstantWaterAssessmentMutationOptions(options));
+    }
+
+export const getUpdateUcOrderFulfillmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/orders/${id}/status`
+}
+
+/**
+ * @summary Mark an order shipped or ready to collect and queue SMS, push, and email
+ */
+export const updateUcOrderFulfillment = async (id: number,
+    ucOrderFulfillmentInput: UcOrderFulfillmentInput, options?: RequestInit): Promise<UcOrderFulfillmentResult> => {
+
+  return customFetch<UcOrderFulfillmentResult>(getUpdateUcOrderFulfillmentUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucOrderFulfillmentInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcOrderFulfillmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderFulfillment>>, TError,{id: number;data: BodyType<UcOrderFulfillmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderFulfillment>>, TError,{id: number;data: BodyType<UcOrderFulfillmentInput>}, TContext> => {
+
+const mutationKey = ['updateUcOrderFulfillment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcOrderFulfillment>>, {id: number;data: BodyType<UcOrderFulfillmentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcOrderFulfillment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcOrderFulfillmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcOrderFulfillment>>>
+    export type UpdateUcOrderFulfillmentMutationBody = BodyType<UcOrderFulfillmentInput>
+    export type UpdateUcOrderFulfillmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark an order shipped or ready to collect and queue SMS, push, and email
+ */
+export const useUpdateUcOrderFulfillment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcOrderFulfillment>>, TError,{id: number;data: BodyType<UcOrderFulfillmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcOrderFulfillment>>,
+        TError,
+        {id: number;data: BodyType<UcOrderFulfillmentInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcOrderFulfillmentMutationOptions(options));
     }
 
 export const getUpdateUcOrderCustomerStageUrl = (id: number,) => {

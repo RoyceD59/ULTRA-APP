@@ -39,7 +39,8 @@ export const ucCustomerStageEventsTable = pgTable(
   ],
 );
 
-/** Durable push work item.  The row is created in the same transaction as the
+/** Durable notification work item (push by default; SMS/email in payload.channel).
+ * The row is created in the same transaction as the
  * order projection and event, so a provider outage cannot lose an update. */
 export const ucOrderNotificationOutboxTable = pgTable(
   "uc_order_notification_outbox",

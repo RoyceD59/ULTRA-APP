@@ -1326,6 +1326,46 @@ export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
 
 
 /**
+ * @summary Mark an order shipped or ready to collect and queue SMS, push, and email
+ */
+
+
+
+export const UpdateUcOrderFulfillmentParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const updateUcOrderFulfillmentBodyIdempotencyKeyMax = 200;
+export const updateUcOrderFulfillmentBodyTrackingNumberMax = 100;
+export const updateUcOrderFulfillmentBodyTrackingUrlMax = 2048;
+export const updateUcOrderFulfillmentBodyEstimatedDeliveryRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateUcOrderFulfillmentBodyCollectionLocationMax = 300;
+export const updateUcOrderFulfillmentBodyNoteMax = 500;
+
+export const UpdateUcOrderFulfillmentBody = zod.object({
+  "status": zod.enum(['shipped', 'ready-to-collect']),
+  "idempotencyKey": zod.string().min(1).max(updateUcOrderFulfillmentBodyIdempotencyKeyMax).optional(),
+  "trackingNumber": zod.string().max(updateUcOrderFulfillmentBodyTrackingNumberMax).optional(),
+  "trackingUrl": zod.string().max(updateUcOrderFulfillmentBodyTrackingUrlMax).optional().describe('HTTP or HTTPS tracking link without embedded credentials'),
+  "estimatedDelivery": zod.string().regex(updateUcOrderFulfillmentBodyEstimatedDeliveryRegExp).optional().describe('Valid calendar date in YYYY-MM-DD format'),
+  "collectionLocation": zod.string().max(updateUcOrderFulfillmentBodyCollectionLocationMax).optional().describe('Required when status is ready-to-collect'),
+  "note": zod.string().max(updateUcOrderFulfillmentBodyNoteMax).optional().describe('Customer-visible fulfillment note')
+})
+
+export const UpdateUcOrderFulfillmentResponse = zod.object({
+  "ok": zod.boolean(),
+  "id": zod.number(),
+  "status": zod.string(),
+  "customerStage": zod.string().nullable(),
+  "repeated": zod.boolean(),
+  "notification": zod.object({
+  "status": zod.enum(['queued', 'skipped']),
+  "channels": zod.array(zod.enum(['sms', 'push', 'email']))
+})
+})
+
+
+/**
  * @summary Advance an order's customer-visible status and send one audited push
  */
 export const UpdateUcOrderCustomerStageParams = zod.object({

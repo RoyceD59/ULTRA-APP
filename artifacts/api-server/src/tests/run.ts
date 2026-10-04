@@ -275,6 +275,10 @@ const SHARED_STATE_FILES = [
   "canonical-dual-write-routes",
   "cod-order-validation",
   "dual-failure-alert",
+  // Both suites drain the same global order outbox; isolate them from the
+  // parallel phase so one worker cannot claim another suite's work.
+  "order-fulfillment",
+  "order-status-pipeline",
   "orders-csv-export",
   "paystack-retryable",
   "referral-lifecycle",

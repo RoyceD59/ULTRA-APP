@@ -38,3 +38,9 @@ Nearby location tiers are calculated on the device at 0–2 km, then 2–5 km, t
 **Why:** The user wants proximity-based results, while the approved design requires privacy-safe location handling.
 
 **How to apply:** Fetch active verified location coordinates, calculate and sort locally, emit only coarse tier outcomes, and provide manual city/country search when permission is unavailable.
+
+Staff fulfillment actions must preserve independently established payment classification. Shipping or readiness for collection never proves COD cash collection, and legacy paid status must not be replaced by a fabricated provider-confirmation timestamp.
+
+**Why:** Legacy paid orders may have no confirmation timestamp. Reclassifying them as pending when shipping can reverse their Hydrate contributions, while inventing a timestamp would falsely strengthen receipt evidence.
+
+**How to apply:** Preserve payment classification before replacing payment-bearing legacy statuses with fulfillment statuses. Map collection readiness explicitly in canonical fulfillment, and test legacy paid and uncollected COD orders with canonical dual writes enabled.

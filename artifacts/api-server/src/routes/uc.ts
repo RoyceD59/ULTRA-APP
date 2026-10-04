@@ -4702,6 +4702,71 @@ router.post("/uc/admin/orders/:id/cod-collection", async (req: Request, res: Res
   }
 });
 
+// Dispatch/collection is separate from payment classification and COD collection.
+router.patch("/uc/orders/:id/status", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(403).json({ error: "Admin access required" }); return;
+  }
+  const id = Number(req.params["id"]);
+  const body = req.body ?? {};
+  if (!Number.isSafeInteger(id) || id <= 0 || !["shipped", "ready-to-collect"].includes(body.status)) {
+    res.status(400).json({ error: "A valid order id and status (shipped or ready-to-collect) are required" }); return;
+  }
+  const details: Record<string, string> = {};
+  for (const [key, max] of Object.entries({
+    trackingNumber: 100, trackingUrl: 2048, estimatedDelivery: 10, collectionLocation: 300, note: 500,
+  })) {
+    if (body[key] === undefined) continue;
+    if (typeof body[key] !== "string" || body[key].length > max || /[\u0000-\u001f\u007f]/.test(body[key])) {
+      res.status(400).json({ error: `Invalid ${key}` }); return;
+    }
+    const value = body[key].trim();
+    if (value) details[key] = value;
+  }
+  if (details.estimatedDelivery &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(details.estimatedDelivery) ||
+       Number.isNaN(Date.parse(details.estimatedDelivery)) ||
+       new Date(details.estimatedDelivery).toISOString().slice(0, 10) !== details.estimatedDelivery)) {
+    res.status(400).json({ error: "estimatedDelivery must be a valid YYYY-MM-DD date" }); return;
+  }
+  if (details.trackingUrl) {
+    try {
+      const url = new URL(details.trackingUrl);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error();
+    } catch {
+      res.status(400).json({ error: "trackingUrl must be an HTTP or HTTPS URL without credentials" }); return;
+    }
+  }
+  if (body.status === "ready-to-collect" && !details.collectionLocation) {
+    res.status(400).json({ error: "collectionLocation is required for ready-to-collect orders" }); return;
+  }
+  if (body.idempotencyKey !== undefined &&
+      (typeof body.idempotencyKey !== "string" || !body.idempotencyKey.trim() || body.idempotencyKey.length > 200)) {
+    res.status(400).json({ error: "Invalid idempotencyKey" }); return;
+  }
+  try {
+    const saved = await transitionOrderStatus({
+      orderId: id, status: body.status, customerStage: "shipped",
+      fulfillment: details,
+      eventKey: `fulfillment:${id}:${body.idempotencyKey?.trim() ?? body.status}`,
+      actor: String(verifyToken(req.headers["authorization"])?.id ?? "admin"),
+      source: "staff",
+    });
+    res.json({
+      ok: true, id, status: saved.status, customerStage: saved.customerStage, repeated: saved.repeated,
+      notification: { status: saved.outboxCreated ? "queued" : "skipped", channels: ["sms", "push", "email"] },
+    });
+  } catch (err) {
+    const error = err as Error & { code?: string };
+    if (error.code === "NOT_FOUND") res.status(404).json({ error: error.message });
+    else if (error.code === "INVALID_STAGE_TRANSITION") res.status(409).json({ error: error.message });
+    else {
+      logger.error({ err, orderId: id }, "Failed to update order fulfillment");
+      res.status(500).json({ error: "Failed to update order fulfillment" });
+    }
+  }
+});
+
 router.patch("/uc/admin/orders/:id/customer-stage", async (req: Request, res: Response): Promise<void> => {
   if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
   const id = Number(req.params["id"]);
@@ -5664,6 +5729,25 @@ router.post("/uc/admin/notification-logs/:id/retry", async (req: Request, res: R
       res.status(409).json({
         error: "ProjectHub recovery emails must be reissued from User Management so a fresh secure link is created",
       });
+      return;
+    }
+
+    // Fulfillment attempts belong to a durable work item. Retry that item,
+    // never send alongside the scheduler or replay a synthetic audit record.
+    if (row.orderId && ["order_shipped", "order_ready-to-collect"].includes(row.template) &&
+        ["sms", "email"].includes(row.channel)) {
+      const status = row.template.slice("order_".length);
+      const queued = await pool.query(
+        `UPDATE uc_order_notification_outbox SET next_attempt_at=now()
+         WHERE order_id=$1 AND payload->>'channel'=$2 AND payload->>'status'=$3
+           AND status IN ('pending','failed') RETURNING id`,
+        [row.orderId, row.channel, status],
+      );
+      if (!queued.rowCount) {
+        res.status(409).json({ error: "This fulfillment notification is already sent, being sent, skipped, or no longer available" });
+        return;
+      }
+      res.json({ ok: true, message: "Retry queued", notification: { status: "queued", deliveryEvent: "outbox" } });
       return;
     }
 

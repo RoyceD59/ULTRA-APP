@@ -59,6 +59,9 @@ export const ucOrdersTable = pgTable("uc_orders", {
   codWcSyncAttemptedAt: timestamp("cod_wc_sync_attempted_at", { withTimezone: true }),
   codWcSyncAttemptCount: integer("cod_wc_sync_attempt_count").notNull().default(0),
   customerStage:    text("customer_stage"),
+  /** Payment classification captured before a staff fulfillment status replaces
+   * legacy payment-bearing status; never fabricates a provider confirmation time. */
+  fulfillmentPaymentStatus: text("fulfillment_payment_status"),
   customerStageUpdatedAt: timestamp("customer_stage_updated_at", { withTimezone: true }),
   /** Monotonic WooCommerce source version used to reject delayed webhooks. */
   wooStatusModifiedAt: timestamp("woo_status_modified_at", { withTimezone: true }),
