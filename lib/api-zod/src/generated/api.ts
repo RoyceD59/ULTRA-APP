@@ -10,6 +10,33 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * Returns all persisted enquiries, newest first. ADMIN_SECRET must be
+ * configured on the server. Date bounds are inclusive UTC calendar days.
+ * @summary List customer enquiries (admin secret required)
+ */
+export const listUcEnquiriesQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listUcEnquiriesQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListUcEnquiriesQueryParams = zod.object({
+  "from": zod.coerce.string().regex(listUcEnquiriesQueryFromRegExp).optional().describe('First UTC date to include (YYYY-MM-DD).'),
+  "to": zod.coerce.string().regex(listUcEnquiriesQueryToRegExp).optional().describe('Last UTC date to include (YYYY-MM-DD).')
+})
+
+export const ListUcEnquiriesResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.string(),
+  "productName": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListUcEnquiriesResponse = zod.array(ListUcEnquiriesResponseItem)
+
+
+/**
  * @summary Review bounded extracted text for customer knowledge (active team admin only)
  */
 export const PreviewLibraryKnowledgeParams = zod.object({

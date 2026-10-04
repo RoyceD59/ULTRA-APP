@@ -5,6 +5,17 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface UcEnquirySubmission {
+  id: number;
+  productId: string;
+  productName: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  createdAt: string;
+}
+
 export type LibraryKnowledgePreviewStatus = typeof LibraryKnowledgePreviewStatus[keyof typeof LibraryKnowledgePreviewStatus];
 
 
@@ -3594,6 +3605,19 @@ export interface AuditEventPage {
   limit: number;
   total: number;
 }
+
+export type ListUcEnquiriesParams = {
+/**
+ * First UTC date to include (YYYY-MM-DD).
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * Last UTC date to include (YYYY-MM-DD).
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
+};
 
 export type CancelCompanionCheckoutBody = {
   /**

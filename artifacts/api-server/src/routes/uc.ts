@@ -84,6 +84,7 @@ import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
 import { checkoutQuote, claimReferralBenefit, type Fulfillment } from "../lib/checkout-pricing.js";
 import { prepareCheckoutOrder, confirmCheckoutOrder, checkoutOrderResponse } from "../lib/checkout-orders.js";
 import { enqueueReferralSettlement } from "./referrals.js";
+import enquiriesAdminRouter from "./uc-enquiries-admin.js";
 
 class CheckoutKeyOwnershipConflict extends Error {
   readonly code = "CHECKOUT_KEY_OWNERSHIP_CONFLICT";
@@ -94,6 +95,7 @@ class CheckoutKeyOwnershipConflict extends Error {
 }
 
 const router = Router();
+router.use(enquiriesAdminRouter);
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 // Real Ultra Clear 2026 product catalogue — 5 segments, 27 products.

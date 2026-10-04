@@ -142,6 +142,7 @@ import type {
   ListUcAdminGuides200,
   ListUcAdminLocations200,
   ListUcCustomersParams,
+  ListUcEnquiriesParams,
   ListUcOfflineClients200,
   ListUcProductsParams,
   ListUnsyncedRegistrations200,
@@ -198,6 +199,7 @@ import type {
   UcCustomersCount,
   UcDailyHydration,
   UcDailyHydrationInput,
+  UcEnquirySubmission,
   UcGuideInput,
   UcLocationAssessmentInput,
   UcLocationInput,
@@ -261,6 +263,92 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListUcEnquiriesUrl = (params?: ListUcEnquiriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/enquiries?${stringifiedParams}` : `/api/uc/enquiries`
+}
+
+/**
+ * Returns all persisted enquiries, newest first. ADMIN_SECRET must be
+ * configured on the server. Date bounds are inclusive UTC calendar days.
+ * @summary List customer enquiries (admin secret required)
+ */
+export const listUcEnquiries = async (params?: ListUcEnquiriesParams, options?: RequestInit): Promise<UcEnquirySubmission[]> => {
+
+  return customFetch<UcEnquirySubmission[]>(getListUcEnquiriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcEnquiriesQueryKey = (params?: ListUcEnquiriesParams,) => {
+    return [
+    `/api/uc/enquiries`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListUcEnquiriesQueryOptions = <TData = Awaited<ReturnType<typeof listUcEnquiries>>, TError = ErrorType<void>>(params?: ListUcEnquiriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcEnquiries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcEnquiriesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcEnquiries>>> = ({ signal }) => listUcEnquiries(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcEnquiries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcEnquiriesQueryResult = NonNullable<Awaited<ReturnType<typeof listUcEnquiries>>>
+export type ListUcEnquiriesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List customer enquiries (admin secret required)
+ */
+
+export function useListUcEnquiries<TData = Awaited<ReturnType<typeof listUcEnquiries>>, TError = ErrorType<void>>(
+ params?: ListUcEnquiriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcEnquiries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcEnquiriesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getPreviewLibraryKnowledgeUrl = (id: string,) => {
 
