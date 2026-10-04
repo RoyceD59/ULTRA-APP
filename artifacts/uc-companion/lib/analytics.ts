@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { webAnalyticsLoader } from './umamiWeb';
 
 export type AnalyticsEvent =
   | 'water_check_started'
@@ -150,9 +151,9 @@ function sanitizePayload<E extends AnalyticsEvent>(
 }
 
 /**
- * Replit injects Umami only for published websites. Native builds and local
- * development remain safe no-ops; only explicitly allowlisted scalar fields
- * can leave this wrapper.
+ * Companion loads its separate Umami tracker on its public browser domain.
+ * Native builds and local development remain safe no-ops; only explicitly
+ * allowlisted scalar fields can leave this wrapper.
  */
 type PayloadEvent = Exclude<AnalyticsEvent, 'alison_message_sent' | 'alison_reply_received'>;
 export function trackEvent<E extends PayloadEvent>(
@@ -168,12 +169,17 @@ export function trackEvent(
   try {
     const payload = sanitizePayload(name, data);
     if (name !== 'alison_message_sent' && name !== 'alison_reply_received' && !payload) return;
-    const result = window.umami?.track(name, payload);
-    if (result && typeof (result as Promise<void>).then === 'function') {
-      void Promise.resolve(result).catch(() => {
-        // A rejected analytics request must never interrupt a customer action.
-      });
-    }
+    const send = () => {
+      try {
+        const result = window.umami?.track(name, payload);
+        if (result && typeof (result as Promise<void>).then === 'function') {
+          void Promise.resolve(result).catch(() => {
+            // A rejected analytics request must never interrupt a customer action.
+          });
+        }
+      } catch { /* Analytics must never interrupt a customer action. */ }
+    };
+    if (!webAnalyticsLoader.queueUntilReady(send)) send();
   } catch {
     // Analytics must never interrupt a customer action.
   }

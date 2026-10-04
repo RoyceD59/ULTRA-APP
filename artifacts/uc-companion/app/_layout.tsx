@@ -23,6 +23,7 @@ import { useNativeNotificationRouting, usePushTokenSync } from '@/hooks/useNativ
 import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
 import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
+import { webAnalyticsLoader } from '@/lib/umamiWeb';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
@@ -156,6 +157,9 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (Platform.OS === 'web') webAnalyticsLoader.initialize();
+  }, []);
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular: { uri: Inter_400Regular, display: FontDisplay.SWAP },
     Inter_500Medium: { uri: Inter_500Medium, display: FontDisplay.SWAP },
