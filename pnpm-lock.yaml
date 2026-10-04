@@ -675,6 +675,9 @@ importers:
       expo-notifications:
         specifier: ~57.0.21
         version: 57.0.21(expo@57.0.26)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      expo-print:
+        specifier: ~57.0.2
+        version: 57.0.2(expo@57.0.26)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))
       expo-sharing:
         specifier: ~57.0.22
         version: 57.0.22(expo@57.0.26)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -5472,6 +5475,12 @@ packages:
     peerDependencies:
       expo: '*'
       react: '*'
+      react-native: '*'
+
+  expo-print@57.0.2:
+    resolution: {integrity: sha512-jEbUqtH59xT42dCrmVVrg9Ct1ofD5GAHdQmUiu0EkHdzvqop7G6dt7rCXpq0iUYbu8ow6HH8yLRPbd3VMdTUug==}
+    peerDependencies:
+      expo: '*'
       react-native: '*'
 
   expo-router@57.0.24:
@@ -13129,6 +13138,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-print@57.0.2(expo@57.0.26)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)):
+    dependencies:
+      expo: 57.0.26(@babel/core@7.29.7)(@expo/metro-runtime@57.0.16)(expo-router@57.0.24)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.1(@babel/core@7.29.7)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      react-native: 0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
 
   expo-router@57.0.24(18ea251f1d395cd147a50a9e82145f16):
     dependencies:

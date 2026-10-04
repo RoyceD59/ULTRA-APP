@@ -1,8 +1,8 @@
 import { headingProps } from '@/lib/accessibility';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, LayoutAnimation, UIManager, TextInput, Linking, Pressable,
+  Platform, LayoutAnimation, UIManager, TextInput, Linking, Pressable, ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchPublishedGuide } from '@/lib/guideContent';
 import { resolveMediaUrl } from '@/hooks/useApi';
 import { trackEvent } from '@/lib/analytics';
+import { shareGuidePdf } from '@/utils/guideToPdf';
 import GuideLanguageToggle from '@/components/GuideLanguageToggle';
 import { useGuideLanguage } from '@/hooks/useGuideLanguage';
 import { localizeGuide } from '@/lib/guideLanguage';
@@ -379,6 +380,23 @@ export default function GuideDetailScreen() {
     refetchInterval: 30_000,
   });
   const guide = guidesQuery.data ? localizeGuide(guidesQuery.data, language) : undefined;
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const shareInProgress = useRef(false);
+  const shareGuide = async () => {
+    if (!guide || shareInProgress.current) return;
+    shareInProgress.current = true;
+    setSharing(true);
+    setShareError(null);
+    try {
+      await shareGuidePdf(guide, resolveMediaUrl);
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'Unable to share this guide. Please try again.');
+    } finally {
+      shareInProgress.current = false;
+      setSharing(false);
+    }
+  };
   useEffect(() => {
     if (guide) trackEvent('guide_opened', { guideId: guide.id });
   }, [guide?.id]);
@@ -418,7 +436,25 @@ export default function GuideDetailScreen() {
           </View>
         </View>
         <Text style={[styles.readTime, { color: colors.mutedForeground }]}>{guide.readTime}</Text>
+        <TouchableOpacity onPress={shareGuide} disabled={sharing}
+          accessibilityRole="button" accessibilityLabel="Share / Save PDF"
+          accessibilityHint={Platform.OS === 'web' ? 'Print the complete guide or save it as a PDF' : 'Create a PDF and open sharing options'}
+          accessibilityState={{ disabled: sharing, busy: sharing }}
+          style={styles.headerShare}>
+          {sharing ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Ionicons name="share-outline" size={22} color={colors.primary} />}
+        </TouchableOpacity>
       </View>
+      {shareError ? (
+        <View style={[styles.shareError, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text accessibilityRole="alert" style={{ color: colors.text, flex: 1 }}>
+            Could not share the guide. {shareError}
+          </Text>
+          <TouchableOpacity onPress={shareGuide} disabled={sharing} accessibilityRole="button" accessibilityLabel="Retry sharing PDF">
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: Platform.OS === 'web' ? 40 : 80 }]}
@@ -492,6 +528,8 @@ const styles = StyleSheet.create({
 
   header:           { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   headerBack:       { padding: 4 },
+  headerShare:      { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  shareError:       { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1 },
   categoryPill:     { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   categoryPillText: { fontSize: 11, fontWeight: '700' as const, textTransform: 'uppercase', letterSpacing: 0.5 },
   readTime:         { fontSize: 12 },
