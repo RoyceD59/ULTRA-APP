@@ -64,6 +64,74 @@ async function fixture() {
 }
 
 describe("instant verification 30-day retry-key expiry", () => {
+  it("rejects expired or used code replays without delivery, renewal, or accounting changes", async t => {
+    for (const status of ["pending", "failed", "sending", "sent"]) {
+      for (const state of ["expired", "used", "expired-and-used"]) {
+        await t.test(`${status} / ${state}`, async () => {
+          const f = await fixture();
+          try {
+            await requestVerification(f.input);
+            await pool.query(
+              `UPDATE instant_water_verification_challenges
+               SET delivery_status=$2, delivery_attempts=1,
+                   delivery_claimed_at=now()-interval '6 minutes',
+                   delivery_next_retry_at=now()-interval '1 second',
+                   expires_at=CASE WHEN $3 THEN now()-interval '1 second' ELSE now()+interval '10 minutes' END,
+                   used_at=CASE WHEN $4 THEN now() ELSE NULL END
+               WHERE assessment_id=$1`,
+              [f.assessmentId, status, state !== "used", state !== "expired"],
+            );
+            const challenges = await f.challenges();
+            const retries = await f.retryRows();
+            const buckets = (await pool.query(
+              "SELECT * FROM instant_water_rate_limits WHERE key_hash=ANY($1::text[]) ORDER BY key_hash",
+              [f.bucketHashes],
+            )).rows;
+            const errorCode = state === "expired" ? "VERIFICATION_EXPIRED" : "VERIFICATION_USED";
+            await assert.rejects(requestVerification(f.input), (e: Error) => e.message === errorCode);
+            assert.equal(f.delivered.length, 1, "an unusable code must never be redelivered");
+            assert.deepEqual(await f.challenges(), challenges);
+            assert.deepEqual(await f.retryRows(), retries);
+            assert.deepEqual((await pool.query(
+              "SELECT * FROM instant_water_rate_limits WHERE key_hash=ANY($1::text[]) ORDER BY key_hash",
+              [f.bucketHashes],
+            )).rows, buckets);
+
+            // Replacement is explicit and subject to the normal safeguards.
+            await assert.rejects(
+              requestVerification({ ...f.input, idempotencyKey: randomUUID(), channel: "sms" }),
+              /SMS_CONSENT_REQUIRED/,
+            );
+            await pool.query(
+              "UPDATE instant_water_rate_limits SET request_count=5 WHERE key_hash=ANY($1::text[])",
+              [f.bucketHashes],
+            );
+            await assert.rejects(
+              requestVerification({ ...f.input, idempotencyKey: randomUUID() }),
+              /RATE_LIMITED/,
+            );
+            assert.deepEqual(await f.challenges(), challenges);
+            assert.deepEqual(await f.retryRows(), retries);
+            assert.equal(f.delivered.length, 1);
+            await pool.query(
+              "DELETE FROM instant_water_rate_limits WHERE key_hash=ANY($1::text[])",
+              [f.bucketHashes],
+            );
+            await requestVerification({
+              ...f.input, idempotencyKey: randomUUID(), channel: "sms", smsConsent: true,
+            });
+            assert.equal(f.delivered.length, 2);
+            const replacementChallenges = await f.challenges();
+            assert.equal(replacementChallenges.length, 2);
+            assert.deepEqual(replacementChallenges.find(c => c.id === challenges[0].id), challenges[0]);
+          } finally {
+            await f.cleanup();
+          }
+        });
+      }
+    }
+  });
+
   it("reuses an expired key for identical or changed requests while preserving historical challenges", async t => {
     for (const channel of ["whatsapp", "sms"] as const) {
       await t.test(channel, async () => {

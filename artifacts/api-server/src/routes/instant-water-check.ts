@@ -97,7 +97,7 @@ function fail(res: Response, error: unknown): void {
     "ACTION_UNAUTHORIZED", "OTP_LOCKED", "INVALID_CODE", "SMS_CONSENT_REQUIRED",
      "INVALID_FIRST_NAME", "INVALID_PHONE", "MEDIA_LIMIT", "INVALID_MEDIA_REFERENCE", "ACKNOWLEDGEMENT_REQUIRED",
     "EXPECTED_UPDATED_AT_REQUIRED", "INVALID_STATE_TRANSITION", "MEDIA_OWNERSHIP_INVALID",
-    "DELIVERY_RETRYABLE", "DELIVERY_IN_PROGRESS",
+    "DELIVERY_RETRYABLE", "DELIVERY_IN_PROGRESS", "VERIFICATION_EXPIRED", "VERIFICATION_USED",
     "MEDIA_METADATA_INVALID",
   ]);
   if (safeCodes.has(code)) logger.warn({ code }, "Instant water check request rejected");
@@ -109,12 +109,16 @@ function fail(res: Response, error: unknown): void {
     code === "OTP_LOCKED" ? 429 :
     code === "DELIVERY_RETRYABLE" ? 503 :
     code === "DELIVERY_IN_PROGRESS" ? 409 :
+    code === "VERIFICATION_EXPIRED" ? 410 :
+    code === "VERIFICATION_USED" ? 409 :
     code === "HANDOFF_INVALID" ? 403 :
     code === "INVALID_CODE" ? 400 :
      code === "SMS_CONSENT_REQUIRED" || code.endsWith("_REQUIRED") || code === "INVALID_FIRST_NAME" || code === "INVALID_PHONE" || code === "MEDIA_LIMIT" || code === "INVALID_MEDIA_REFERENCE" || code === "MEDIA_OWNERSHIP_INVALID" || code === "MEDIA_METADATA_INVALID" || code === "INVALID_STATE_TRANSITION" ? 400 : 500;
   const messages: Record<string, string> = {
     INVALID_FIRST_NAME: "Please enter a valid first name",
     INVALID_PHONE: "Please enter a valid phone number for the selected country",
+    VERIFICATION_EXPIRED: "This verification code has expired. Request a new code with a new idempotency key.",
+    VERIFICATION_USED: "This verification code has already been used. Request a new code with a new idempotency key if verification is still needed.",
   };
   res.status(status).json({ error: status === 500 ? "Water assessment operation failed" : messages[code] ?? code.toLowerCase().replaceAll("_", " ") });
 }

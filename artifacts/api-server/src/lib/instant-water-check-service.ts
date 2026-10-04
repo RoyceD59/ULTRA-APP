@@ -639,6 +639,7 @@ async function dispatchOtpChallenge(
         SET delivery_status = 'sending', delivery_attempts = delivery_attempts + 1,
             delivery_claimed_at = now(), delivery_error_category = NULL
       WHERE id = $1 AND delivery_attempts < 3
+        AND used_at IS NULL AND expires_at > now()
         AND (delivery_status = 'pending'
           OR (delivery_status = 'failed' AND (delivery_next_retry_at IS NULL OR delivery_next_retry_at <= now()))
           OR (delivery_status = 'sending' AND delivery_claimed_at < now() - interval '5 minutes'))
@@ -647,9 +648,14 @@ async function dispatchOtpChallenge(
   );
   if (!claimed.rowCount) {
     const current = await pool.query(
-      `SELECT delivery_status FROM instant_water_verification_challenges WHERE id = $1`,
+      `SELECT delivery_status, used_at, expires_at <= now() AS expired
+         FROM instant_water_verification_challenges WHERE id = $1`,
       [challengeId],
     );
+    // The request key lasts longer than the code. Never renew a challenge on
+    // replay: a fresh request must pass consent and rate-limit checks again.
+    if (current.rows[0]?.used_at) throw new Error("VERIFICATION_USED");
+    if (current.rows[0]?.expired) throw new Error("VERIFICATION_EXPIRED");
     if (current.rows[0]?.delivery_status === "sent") return { channel };
     throw new Error("DELIVERY_IN_PROGRESS");
   }

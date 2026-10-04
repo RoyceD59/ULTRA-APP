@@ -9,6 +9,12 @@ Assessment-creation and verification-request keys become reusable after the 30-d
 
 **How to apply:** Keep key retirement transactional and narrowly scoped. Preserve active replay/conflict behavior and rollback safety. When extending this policy to other endpoints, decide what a new submission means for that endpoint's side effects; never assume a reusable request key is a reusable delivery identity.
 
+An active verification-request key stays bound to its original challenge even after the code expires or is consumed. Reject that replay explicitly rather than silently issuing a replacement; a new code requires a new request key and the normal consent and rate-limit checks.
+
+**Why:** The 30-day retry window is for request deduplication, not an authorization to extend a 10-minute code or reuse a completed verification.
+
+**How to apply:** Check challenge usability when claiming a retry, including stale delivery-lease recovery and previously sent responses. Never treat a delivery success as proof that its code is still usable.
+
 Persisted rate-limit accounting is an exception to normal rollback on rejection: do not retire expired keys before checks that can commit counters and reject creation.
 
 **Why:** Otherwise a rejected attempt erases the evidence of key reuse; a subsequent successful submission can reuse the old delivery identity and silently lose its lead notification.
