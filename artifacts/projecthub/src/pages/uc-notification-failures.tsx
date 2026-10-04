@@ -260,6 +260,7 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [channelFilter, setChannelFilter] = useState<"all" | "sms" | "email">("all");
+  const [searchText, setSearchText] = useState("");
   // Track IDs that have been successfully retried so we can dim/hide them
   const [retriedIds, setRetriedIds] = useState<Set<number>>(new Set());
 
@@ -326,9 +327,11 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
     refetchOnWindowFocus: false,
   });
 
+  const searchQuery = searchText.trim().toLowerCase();
   const filtered = logs?.filter(log => {
     if (channelFilter !== "all" && log.channel !== channelFilter) return false;
-    return true;
+    return log.recipient.toLowerCase().includes(searchQuery)
+      || log.template.toLowerCase().includes(searchQuery);
   }) ?? [];
 
   const smsCount   = logs?.filter(l => l.channel === "sms").length   ?? 0;
@@ -393,9 +396,21 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
         </div>
       )}
 
-      {/* Channel filter */}
+      {/* Search and channel filters */}
       {logs && logs.length > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="space-y-1.5 max-w-md">
+          <Label htmlFor="notification-failures-search">Search recipient or template</Label>
+          <Input
+            id="notification-failures-search"
+            type="search"
+            placeholder="Phone, email, or template name"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+          />
+        </div>
+      )}
+      {logs && logs.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-4 h-4 text-muted-foreground" />
           {(["all", "sms", "email"] as const).map(ch => (
             <Button
@@ -454,7 +469,9 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
 
       {logs && logs.length > 0 && filtered.length === 0 && (
         <div className="text-muted-foreground text-sm py-8 text-center">
-          No {channelFilter} failures found.
+          {searchQuery
+            ? "No failures match your search and channel filter."
+            : `No ${channelFilter === "all" ? "" : `${channelFilter} `}failures found.`}
         </div>
       )}
     </div>
