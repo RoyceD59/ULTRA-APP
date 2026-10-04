@@ -42,6 +42,7 @@ export default function MapScreen() {
   const colors   = useColors();
   const api      = useApi();
   const mapRef   = useRef<MapView>(null);
+  const locationRefreshState = useRef({ pending: false });
   const [filter,   setFilter]   = useState<LocationMapFilter>('All');
   const [selected, setSelected] = useState<MapLocation | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -61,7 +62,11 @@ export default function MapScreen() {
   const visible = useMemo(() => filterMapLocations(locations, filter), [filter, locations]);
 
   useFocusEffect(useCallback(() => {
-    return startFocusedLocationRefresh(refetch);
+    return startFocusedLocationRefresh(
+      () => refetch({ cancelRefetch: false }),
+      undefined,
+      locationRefreshState.current,
+    );
   }, [refetch]));
 
   useEffect(() => {

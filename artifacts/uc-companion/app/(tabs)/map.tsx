@@ -1,6 +1,6 @@
 // Web fallback — react-native-maps only works on native.
 // This screen shows a location list on web; map.native.tsx has the MapView.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Linking } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
@@ -63,6 +63,7 @@ export default function MapScreen() {
   const [directionsError, setDirectionsError] = useState('');
   const [selected, setSelected] = useState<MapLocation | null>(null);
   const cartBarInset = useCartBarInset();
+  const locationRefreshState = useRef({ pending: false });
 
   const { data: locationData, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
@@ -74,7 +75,11 @@ export default function MapScreen() {
   const visible = filterMapLocations(locations, filter);
 
   useFocusEffect(useCallback(() => {
-    return startFocusedLocationRefresh(refetch);
+    return startFocusedLocationRefresh(
+      () => refetch({ cancelRefetch: false }),
+      undefined,
+      locationRefreshState.current,
+    );
   }, [refetch]));
 
   useEffect(() => {
