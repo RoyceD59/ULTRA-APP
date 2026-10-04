@@ -4,6 +4,9 @@ const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const { writeBuildInfo } = require('./build-info');
+
+const { exportWeb, precompressAssets } = require('./web-export');
+const { preserveLegacyManifests } = require('./build-retention');
 const { publishWebIcon } = require('./publish-web-icon.cjs');
 const { prepareStaticBuild } = require('./prepare-static-build.cjs');
 const { activateStaticBuild, stagePlatformManifest } = require('./active-static-build.cjs');
@@ -98,6 +101,7 @@ function getApiDomain() {
 
 function prepareDirectories(timestamp) {
   console.log('Preparing build directories...');
+  preserveLegacyManifests(path.join(projectRoot, 'static-build'));
   prepareStaticBuild(projectRoot, timestamp);
 
   console.log('Build:', timestamp);
@@ -323,7 +327,6 @@ async function downloadBundlesAndManifests(timestamp) {
     // without stalling. Manifests are cheap and run in parallel after.
     await downloadBundle('ios', timestamp);
     await downloadBundle('android', timestamp);
-    await downloadBundle('web', timestamp);
 
     const [iosManifest, androidManifest] = await Promise.all([
       downloadManifest('ios'),
@@ -360,18 +363,6 @@ function extractAssets(timestamp) {
         'static',
         'js',
         'android',
-        'bundle.js',
-      ),
-      'utf-8',
-    ),
-    web: fs.readFileSync(
-      path.join(
-        staticBuild,
-        timestamp,
-        '_expo',
-        'static',
-        'js',
-        'web',
         'bundle.js',
       ),
       'utf-8',
@@ -415,7 +406,6 @@ function extractAssets(timestamp) {
 
   extractFromBundle(bundles.ios, 'ios');
   extractFromBundle(bundles.android, 'android');
-  extractFromBundle(bundles.web, 'web');
 
   return Array.from(assetsMap.values());
 }
@@ -536,7 +526,6 @@ function updateBundleUrls(timestamp, baseUrl) {
 
   updateForPlatform('ios');
   updateForPlatform('android');
-  updateForPlatform('web');
   console.log('Updated bundle URLs');
 }
 
@@ -580,7 +569,6 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
   updateForPlatform('android', manifests.android);
   console.log('Manifests updated');
 }
-
 async function main() {
   console.log('Building static Expo Go deployment...');
 
@@ -634,6 +622,15 @@ async function main() {
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
   writeBuildInfo(projectRoot, timestamp);
   publishWebIcon(projectRoot);
+  await exportWeb(projectRoot, timestamp, basePath, {
+    ...process.env,
+    EXPO_PUBLIC_DOMAIN: domain,
+    EXPO_PUBLIC_API_DOMAIN: apiDomain,
+    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || '',
+    EXPO_PUBLIC_CLERK_PROXY_URL: process.env.CLERK_PROXY_URL
+      ? `${baseUrl}${process.env.CLERK_PROXY_URL}` : '',
+  });
+  precompressAssets(path.join(projectRoot, 'static-build', timestamp));
   activateStaticBuild(projectRoot, timestamp);
 
   console.log('Build complete! Deploy to:', baseUrl);
@@ -651,3 +648,4 @@ main().catch((error) => {
   }
   process.exit(1);
 });
+

@@ -6,6 +6,56 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 const { activateStaticBuild, stagePlatformManifest } = createRequire(import.meta.url)('../active-static-build.cjs');
 
+test('split exports activate with native platforms while preserving public HTML and metadata', async () => {
+  const server = await startFixture();
+  try {
+    const id = '200-2';
+    const directory = join(server.root, id, 'web/_expo/static/js/web');
+    mkdirSync(directory, { recursive: true });
+    for (const name of ['runtime', 'entry']) writeFileSync(join(directory, `${name}.js`), `window.${name}=true;`);
+    const resourceBase = `/uc-companion/${id}/web/_expo/static/js/web`;
+    writeFileSync(join(server.root, id, 'web/index.html'), `<html><head><title>Generic export</title><style>body{margin:0}</style></head><body><div id="root"></div><script defer src="${resourceBase}/runtime.js"></script><script defer src="${resourceBase}/entry.js"></script></body></html>`);
+    writeFileSync(join(server.root, id, 'build-info.json'), JSON.stringify({ buildId: id }));
+    assert.throws(() => activateStaticBuild(server.projectRoot, id), /Incomplete ios/);
+    assert.equal((await (await fetch(`${server.base}/version.json`)).json()).buildId, '100-1');
+    for (const platform of ['ios', 'android']) {
+      const native = join(server.root, id, '_expo/static/js', platform);
+      mkdirSync(native, { recursive: true });
+      writeFileSync(join(native, 'bundle.js'), `${platform} bundle`);
+      stagePlatformManifest(server.projectRoot, id, platform, {
+        launchAsset: { key: `bundle-${id}`, url: `${server.base}/${id}/_expo/static/js/${platform}/bundle.js` },
+      });
+      if (platform === 'ios') assert.throws(() => activateStaticBuild(server.projectRoot, id), /Incomplete android/);
+      assert.equal((await (await fetch(`${server.base}/version.json`)).json()).buildId, '100-1');
+    }
+    activateStaticBuild(server.projectRoot, id);
+    const response = await fetch(`${server.base}/product/101`);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.match(html, /Published Filter/);
+    assert.match(html, /rel="canonical" href="https:\/\/public\.example\/product\/101"/);
+    assert.match(html, /id="uc-public-content"/);
+    assert.match(html, /uc-public-meta-endpoint/);
+    assert.match(html, /body\{margin:0\}/);
+    assert.doesNotMatch(html, /Generic export/);
+    assert.ok(html.indexOf(`${resourceBase}/runtime.js`) < html.indexOf(`${resourceBase}/entry.js`));
+    for (const name of ['runtime', 'entry']) {
+      const script = await fetch(`${server.base}/${id}/web/_expo/static/js/web/${name}.js`);
+      assert.equal(script.status, 200);
+      assert.match(script.headers.get('cache-control'), /immutable/);
+    }
+    const missing = await fetch(`${server.base}/${id}/web/_expo/static/js/web/missing.js`, { headers: { Accept: 'text/html' } });
+    assert.equal(missing.status, 404);
+    assert.equal((await (await fetch(`${server.base}/version.json`)).json()).buildId, id);
+    for (const platform of ['ios', 'android']) {
+      const manifest = await (await fetch(`${server.base}/manifest`, { headers: { 'expo-platform': platform } })).json();
+      assert.equal(manifest.launchAsset.key, `bundle-${id}`);
+    }
+    assert.equal((await fetch(`${server.base}/checkout`)).headers.get('x-robots-tag'), 'noindex, follow');
+  } finally { await server.close(); }
+});
+
 test('cold legacy startup ignores a newer staged bundle and follows the live native release', async () => {
   const server = await startFixture({ prepareBuild: ({ root }) => {
     const directory = join(root, '200-2/_expo/static/js/web');

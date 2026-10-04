@@ -2,6 +2,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const POINTER = 'active-build.json';
 
+function hasWebEntry(buildRoot) {
+  return fs.existsSync(path.join(buildRoot, 'web/index.html'))
+    || fs.existsSync(path.join(buildRoot, '_expo/static/js/web/bundle.js'));
+}
+
 function stagePlatformManifest(projectRoot, buildId, platform, manifest) {
   if (!/^\d+-\d+$/.test(buildId) || !['ios', 'android'].includes(platform)
       || manifest.launchAsset?.key !== `bundle-${buildId}`) {
@@ -21,7 +26,7 @@ function readActiveBuild(staticRoot) {
   }
   const root = path.join(staticRoot, buildId);
   const info = JSON.parse(fs.readFileSync(path.join(root, 'build-info.json'), 'utf8'));
-  if (info.buildId !== buildId || !fs.existsSync(path.join(root, '_expo/static/js/web/bundle.js'))) {
+  if (info.buildId !== buildId || !hasWebEntry(root)) {
     throw new Error('Active Companion build is incomplete');
   }
   return buildId;
@@ -34,14 +39,13 @@ function activateStaticBuild(projectRoot, buildId) {
   const buildRoot = path.join(staticRoot, buildId);
   const info = JSON.parse(fs.readFileSync(path.join(buildRoot, 'build-info.json'), 'utf8'));
   if (info.buildId !== buildId) throw new Error('Build metadata does not match release');
-  for (const platform of ['web', 'ios', 'android']) {
+  if (!hasWebEntry(buildRoot)) throw new Error('Incomplete web build');
+  for (const platform of ['ios', 'android']) {
     if (!fs.existsSync(path.join(buildRoot, '_expo/static/js', platform, 'bundle.js'))) {
       throw new Error(`Incomplete ${platform} build`);
     }
-    if (platform !== 'web') {
-      const manifest = JSON.parse(fs.readFileSync(path.join(buildRoot, platform, 'manifest.json'), 'utf8'));
-      if (manifest.launchAsset?.key !== `bundle-${buildId}`) throw new Error(`Mismatched ${platform} manifest`);
-    }
+    const manifest = JSON.parse(fs.readFileSync(path.join(buildRoot, platform, 'manifest.json'), 'utf8'));
+    if (manifest.launchAsset?.key !== `bundle-${buildId}`) throw new Error(`Mismatched ${platform} manifest`);
   }
   const temporary = path.join(staticRoot, `${POINTER}.${process.pid}.tmp`);
   fs.writeFileSync(temporary, JSON.stringify({ buildId }));

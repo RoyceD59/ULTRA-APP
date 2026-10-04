@@ -151,7 +151,7 @@ function HomeScreenContent() {
       showsVerticalScrollIndicator={false}>
 
       {/* Header */}
-      <PhotoHeader source={require('@/assets/headers/home-water.jpg')} photoHeight={128} position="center">
+      <PhotoHeader initialView source={require('@/assets/headers/home-water.jpg')} photoHeight={128} position="center">
       <View style={[styles.header, { backgroundColor: UC_DEEP, paddingTop: topPad + 16 }]}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.greeting}>{greeting()}{user ? `, ${user.firstName}` : ''}</Text>

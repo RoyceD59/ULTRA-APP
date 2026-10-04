@@ -25,6 +25,19 @@ describe('initial page loading lifecycle', () => {
     assert.equal(startupReady(false, new Error('missing font'), false), true);
     assert.equal(startupReady(false, null, true), true);
   });
+  it('never gates web content on delayed, failed, or missing fonts', () => {
+    for (const loaded of [false, true]) for (const expired of [false, true]) {
+      assert.equal(startupReady(loaded, null, expired, 'web'), true);
+      assert.equal(startupReady(loaded, new Error('font error'), expired, 'web'), true);
+    }
+    for (const platform of ['android', 'ios']) {
+      assert.equal(startupReady(false, null, false, platform), false);
+      assert.equal(startupReady(false, null, true, platform), true);
+    }
+    const source = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8');
+    assert.match(source, /startupReady\(fontsLoaded, fontError, fontBudgetExpired, Platform.OS\)/);
+    assert.equal((source.match(/display: FontDisplay.SWAP/g) || []).length, 4);
+  });
 });
 
 describe('local media and non-blocking fallback contracts', () => {
@@ -45,6 +58,17 @@ describe('local media and non-blocking fallback contracts', () => {
     assert.match(source, /!failed &&/);
     assert.match(source, /<View style=\{\[styles.panel, panelStyle\]\}>\{children\}<\/View>/);
     assert.doesNotMatch(source, /onLoad.*setReady|prefetch/);
+  });
+  it('eagerly prioritizes only initial-view headers and reserves their layout', () => {
+    const source = readFileSync(new URL('components/PhotoHeader.tsx', base), 'utf8');
+    assert.match(source, /initialView = false/);
+    assert.match(source, /priority=\{initialView \? 'high' : 'low'\}/);
+    assert.match(source, /loading=\{initialView \? 'eager' : 'lazy'\}/);
+    assert.match(source, /height: photoHeight/);
+    for (const route of ['index', 'products', 'blog']) {
+      const page = readFileSync(new URL(`app/(tabs)/${route}.tsx`, base), 'utf8');
+      assert.match(page, /<PhotoHeader initialView /);
+    }
   });
   it('unmounts GIF when not animating and exposes an accessible loading label', () => {
     const source = readFileSync(new URL('components/PageDataLoader.tsx', base), 'utf8');

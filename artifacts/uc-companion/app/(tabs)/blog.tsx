@@ -122,7 +122,7 @@ function BlogScreenContent() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={(
           <View style={styles.listHeader}>
-            <PhotoHeader source={require('@/assets/headers/blog-water.jpg')} photoHeight={112} position="top" style={{ marginHorizontal: -14 }}>
+            <PhotoHeader initialView source={require('@/assets/headers/blog-water.jpg')} photoHeight={112} position="top" style={{ marginHorizontal: -14 }}>
             <View style={[styles.header, { backgroundColor: '#005d8f', marginHorizontal: 0, paddingTop: topPad + 18 }]}>
               <View style={[styles.headerIcon, { backgroundColor: colors.primaryForeground }]}>
                 <Ionicons name="book-outline" size={23} color={colors.primary} />

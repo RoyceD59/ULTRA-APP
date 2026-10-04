@@ -13,6 +13,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+const { deliverStatic } = require('./static-delivery.cjs');
 const { browserEntryRedirect } = require('./browser-entry.cjs');
 
 const { isWebAppRoute, classifyWebRoute } = require('./web-routes.cjs');
@@ -20,7 +21,7 @@ const { createPublicData } = require('./public-content.cjs');
 const { createPublicRenderer, renderHead, escapeHtml } = require('./public-rendering.cjs');
 const { readActiveBuild } = require('../scripts/active-static-build.cjs');
 const STATIC_ROOT =
-  process.env.STATIC_ROOT || path.resolve(__dirname, '..', 'static-build');
+  path.resolve(process.env.STATIC_ROOT || path.resolve(__dirname, '..', 'static-build'));
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
 // Explicit opt-in: do not change published canonicals or renderer on merge.
@@ -47,6 +48,8 @@ const MIME_TYPES = {
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
   '.map': 'application/json',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
 };
 
 function getAppName() {
@@ -72,7 +75,7 @@ function serveManifest(platform, res) {
     : path.join(STATIC_ROOT, platform, 'manifest.json');
 
   if (!fs.existsSync(manifestPath)) {
-    res.writeHead(404, { 'content-type': 'application/json' });
+    res.writeHead(404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(
       JSON.stringify({ error: `Manifest not found for platform: ${platform}` }),
     );
@@ -82,6 +85,7 @@ function serveManifest(platform, res) {
   const manifest = fs.readFileSync(manifestPath, 'utf-8');
   res.writeHead(200, {
     'content-type': 'application/json',
+    'cache-control': 'no-store',
     'expo-protocol-version': '1',
     'expo-sfv-version': '0',
   });
@@ -104,7 +108,7 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
     )
     .replace(/APP_NAME_PLACEHOLDER/g, appName);
 
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
   res.end(html);
 }
 
@@ -171,7 +175,9 @@ function getWebBundlePath() {
   try {
     const activeBuild = readActiveBuild(STATIC_ROOT);
     if (activeBuild) {
-      _cachedWebBundlePath = path.join(STATIC_ROOT, activeBuild, '_expo/static/js/web/bundle.js');
+      const entry = path.join(STATIC_ROOT, activeBuild, 'web/index.html');
+      _cachedWebBundlePath = fs.existsSync(entry) ? entry
+        : path.join(STATIC_ROOT, activeBuild, '_expo/static/js/web/bundle.js');
       return _cachedWebBundlePath;
     }
   } catch {
@@ -206,6 +212,16 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
     .split(path.sep)
     .join('/') : '';
   const scriptUrl = `${basePath}/${relativeBundlePath}`;
+  // Keep Expo's ordered runtime/shared/entry tags, but use the route-aware
+  // public document and metadata rather than serving its generic index shell.
+  const exported = webBundlePath && path.extname(webBundlePath) === '.html'
+    ? fs.readFileSync(webBundlePath, 'utf8') : '';
+  const scripts = exported
+    ? (exported.match(/<script\b[^>]*\bsrc="[^"]+"[^>]*>[\s\S]*?<\/script>/gi) || []).join('')
+    : webBundlePath ? `<script defer src="${escapeHtml(scriptUrl)}"></script>` : '';
+  const exportStyles = exported
+    ? (exported.match(/<style\b[^>]*>[\s\S]*?<\/style>|<link\b[^>]*\brel="(?:stylesheet|preload|modulepreload)"[^>]*>/gi) || []).join('')
+    : '';
   const html = `<!doctype html>
 <html lang="en">
   <head>
@@ -219,6 +235,7 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
     }, page?.schemas)}
     ${publicRenderer ? `<meta name="uc-public-meta-endpoint" content="${escapeHtml(basePath)}/public-page-meta" />
     <meta name="uc-public-document-path" content="${escapeHtml(pathname)}" />` : ''}
+    ${exportStyles}
     <style>
       html, body, #root {
         width: 100%;
@@ -246,7 +263,7 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
   <body>
     <div id="root"></div>
     ${page?.body ? `<div id="uc-public-content"><main>${page.body}</main></div>` : ''}
-    ${webBundlePath ? `<script defer src="${escapeHtml(scriptUrl)}"></script>` : ''}
+    ${scripts}
     ${page?.body && webBundlePath ? `<script>
       // Works with the previous bundle as well as the enhanced client.
       // Never hide the public document until the app actually paints content.
@@ -275,7 +292,7 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
   return true;
 }
 
-function serveStaticFile(urlPath, res) {
+function serveStaticFile(urlPath, req, res) {
   if (urlPath === '/favicon.png') {
     const publishedIcon = path.join(STATIC_ROOT, 'favicon.png');
     // Compatibility with the last-known-good build during rollout.
@@ -286,10 +303,11 @@ function serveStaticFile(urlPath, res) {
     res.end(fs.readFileSync(iconPath));
     return true;
   }
-  const safePath = path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, '');
-  const filePath = path.join(STATIC_ROOT, safePath);
+  let decodedPath;
+  try { decodedPath = decodeURIComponent(urlPath); } catch { return false; }
+  const filePath = path.resolve(STATIC_ROOT, `.${decodedPath}`);
 
-  if (!filePath.startsWith(STATIC_ROOT)) {
+  if (!filePath.startsWith(`${STATIC_ROOT}${path.sep}`)) {
     res.writeHead(403);
     res.end('Forbidden');
     return true;
@@ -301,9 +319,7 @@ function serveStaticFile(urlPath, res) {
 
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-  const content = fs.readFileSync(filePath);
-  res.writeHead(200, { 'content-type': contentType });
-  res.end(content);
+  deliverStatic(req, res, filePath, contentType, urlPath);
   return true;
 }
 
@@ -339,7 +355,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/version.json') {
     // Resolve metadata from the SAME build as the served script, never a
     // separate latest-file pointer that could disagree during deployment.
-    const infoPath = webBundlePath && path.resolve(path.dirname(webBundlePath), '../../../..', 'build-info.json');
+    const buildId = webBundlePath && path.relative(STATIC_ROOT, webBundlePath).split(path.sep)[0];
+    const infoPath = buildId && path.join(STATIC_ROOT, buildId, 'build-info.json');
     res.setHeader('cache-control', 'no-store');
     res.setHeader('content-type', 'application/json; charset=utf-8');
     if (!infoPath || !fs.existsSync(infoPath)) {
@@ -410,7 +427,14 @@ const server = http.createServer(async (req, res) => {
   const platformManifest = pathname.match(/^\/(ios|android)\/manifest\.json$/);
   if (platformManifest) return serveManifest(platformManifest[1], res);
 
-  if (serveStaticFile(pathname, res)) return;
+  if (serveStaticFile(pathname, req, res)) return;
+
+  // Missing versioned resources must never become public-page HTML.
+  if (/\/(?:_expo|assets)\//.test(pathname)) {
+    res.writeHead(404, { 'cache-control': 'no-store' });
+    res.end('Not Found');
+    return;
+  }
 
   if (publicRenderer && (req.method === 'GET' || req.method === 'HEAD') && !req.headers['expo-platform']) {
     const route = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
@@ -448,5 +472,5 @@ const server = http.createServer(async (req, res) => {
 
 const port = parseInt(process.env.PORT || '3000', 10);
 server.listen(port, '0.0.0.0', () => {
-  console.log(`Serving static Expo build on port ${port}`);
+  console.log(`Serving static Expo build on port ${server.address().port}`);
 });

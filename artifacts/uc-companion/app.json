@@ -63,7 +63,8 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://replit.com/",
+          "asyncRoutes": { "web": true, "default": false }
         }
       ],
       "expo-font",

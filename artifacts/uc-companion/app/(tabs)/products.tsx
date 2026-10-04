@@ -459,7 +459,7 @@ function ProductsScreenContent() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
 
       {/* ── Branded header bar ── */}
-      <PhotoHeader source={require('@/assets/headers/shop-filter.jpg')} photoHeight={104} position="center">
+      <PhotoHeader initialView source={require('@/assets/headers/shop-filter.jpg')} photoHeight={104} position="center">
       <View style={[styles.brandHeader, { paddingTop: headerTop + 10 }]}>
         <View style={[styles.brandHeaderInner, contentBound]}>
           <Image

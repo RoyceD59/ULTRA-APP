@@ -30,6 +30,7 @@ import { FONT_STARTUP_BUDGET_MS, startupReady } from '@/lib/pageLoading';
 import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
 
 // Set API base URL before any component renders
+import { FontDisplay } from 'expo-font';
 const apiBase = getApiBase();
 if (apiBase) {
   setBaseUrl(apiBase);
@@ -37,7 +38,7 @@ if (apiBase) {
 
 // Static native splash: retain font gating, but never let slow optional fonts
 // hold navigation indefinitely. Existing screens already use system font weights.
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync();
 
 // Clerk (social sign-in). Env vars are injected by the dev script in
 // development and by scripts/build.js in production builds.
@@ -149,20 +150,20 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    Inter_400Regular: { uri: Inter_400Regular, display: FontDisplay.SWAP },
+    Inter_500Medium: { uri: Inter_500Medium, display: FontDisplay.SWAP },
+    Inter_600SemiBold: { uri: Inter_600SemiBold, display: FontDisplay.SWAP },
+    Inter_700Bold: { uri: Inter_700Bold, display: FontDisplay.SWAP },
   });
   const [fontBudgetExpired, setFontBudgetExpired] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setFontBudgetExpired(true), FONT_STARTUP_BUDGET_MS);
     return () => clearTimeout(timer);
   }, []);
-  const ready = startupReady(fontsLoaded, fontError, fontBudgetExpired);
+  const ready = startupReady(fontsLoaded, fontError, fontBudgetExpired, Platform.OS);
 
   useEffect(() => {
-    if (ready) {
+    if (ready && Platform.OS !== 'web') {
       void SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError, ready]);

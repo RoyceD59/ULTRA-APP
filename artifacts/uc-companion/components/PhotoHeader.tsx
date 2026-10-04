@@ -7,6 +7,7 @@ const UC_DEEP = '#005d8f';
 type Props = {
   source: ImageSource | number;
   photoHeight?: number;
+  initialView?: boolean;
   position?: 'top' | 'center' | 'bottom';
   style?: StyleProp<ViewStyle>;
   panelStyle?: StyleProp<ViewStyle>;
@@ -14,7 +15,7 @@ type Props = {
 };
 
 /** Photo band over a brand-colour fallback; content sits on an opaque Deep Ocean panel so contrast never depends on the image. */
-export default function PhotoHeader({ source, photoHeight = 112, position = 'center', style, panelStyle, children }: Props) {
+export default function PhotoHeader({ source, photoHeight = 112, initialView = false, position = 'center', style, panelStyle, children }: Props) {
   const [failed, setFailed] = useState(false);
   return (
     <View style={[styles.wrap, style]}>
@@ -26,7 +27,8 @@ export default function PhotoHeader({ source, photoHeight = 112, position = 'cen
             contentFit="cover"
             contentPosition={position}
             transition={0}
-            priority="low"
+            priority={initialView ? 'high' : 'low'}
+            loading={initialView ? 'eager' : 'lazy'}
             accessible={false}
             onError={() => setFailed(true)}
           />

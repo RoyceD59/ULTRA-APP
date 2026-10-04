@@ -78,3 +78,25 @@ failure.
 **How to apply:** Compare browser and shell preflight results and a same-origin
 request before changing backend permissions. Keep native and physical-device
 verification separate from the browser result.
+
+Expo's web export base URL also controls router pathname normalization; version
+prefixes for resources must not become the router's logical base path.
+
+**Why:** The browser navigates stable deep links while dynamically imported
+chunks must remain pinned to the build that produced the document. Treating the
+build ID as a route prefix would make these two URL contracts disagree.
+
+**How to apply:** Keep stable route prefixes and versioned resource prefixes
+separate when adapting Expo exports to custom static hosting. Verify actual
+browser deep links and deferred navigation, not just whether chunk files exist.
+
+Include shared/runtime/layout chunks when reporting the initial JavaScript
+payload of an Expo split export, not just the file named entry.
+
+**Why:** Expo can emit a large shared chunk required on the first screen even
+when individual route modules load asynchronously. Entry-file size alone
+overstates the initial delivery improvement.
+
+**How to apply:** Use the browser's initial script requests to identify the
+complete initial set; distinguish local encoded sizes from deployed transfer
+and unused-code measurements.

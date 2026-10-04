@@ -22,6 +22,6 @@ export function pageFailureCopy(error: unknown) {
 }
 
 export const FONT_STARTUP_BUDGET_MS = 600;
-export function startupReady(loaded: boolean, error: unknown, budgetExpired: boolean) {
-  return loaded || !!error || budgetExpired;
+export function startupReady(loaded: boolean, error: unknown, budgetExpired: boolean, platform = 'native') {
+  return platform === 'web' || loaded || !!error || budgetExpired;
 }
