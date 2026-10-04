@@ -70,12 +70,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onUnauthorized = () => {
       clearTeamAuth();
-      navigate(`/login?next=${encodeURIComponent(location)}`, { replace: true });
+      navigate(`/login?next=${encodeURIComponent(location + window.location.search)}`, { replace: true });
     };
     window.addEventListener('projecthub:unauthorized', onUnauthorized);
     return () => window.removeEventListener('projecthub:unauthorized', onUnauthorized);
   }, [location, navigate]);
-  if (!isTeamAuthenticated()) return <Redirect to={`/login?next=${encodeURIComponent(location)}`} />;
+  if (!isTeamAuthenticated()) return <Redirect to={`/login?next=${encodeURIComponent(location + window.location.search)}`} />;
   return <>{children}</>;
 }
 

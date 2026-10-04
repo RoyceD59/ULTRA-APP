@@ -73,3 +73,4 @@
 - [Expo guide printing](expo-guide-printing.md) — web printing ignores supplied HTML; article exports must print an isolated complete document, not the collapsed screen.
 - [Swahili guide audience](swahili-guide-audience.md) — Nairobi customers need offline Swahili installation help; guide localization is not a whole-app migration.
 - [Schedule-update deduplication](schedule-update-deduplication.md) — dedupe against the applied activation, not a history of lifespan values; returning to an old value is a new correction.
+- [Google Sheets reconnect](google-sheet-reconnect.md) — revoked grants must remain actionable failures; public-sheet fallback must not hide the reconnect reason.

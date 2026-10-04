@@ -74,6 +74,7 @@ interface SheetStatus {
   lastSyncedAt?: string | null;
   lastError?: string | null;
   lastErrorAt?: string | null;
+  reconnectRequired?: boolean;
 }
 
 function useSheetSyncStatus() {
@@ -94,7 +95,11 @@ function useSheetSyncStatus() {
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return { status, loading, refresh };
 }
@@ -108,7 +113,9 @@ export default function Contacts() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [sheetDialogOpen, setSheetDialogOpen] = useState(false);
+  const [sheetDialogOpen, setSheetDialogOpen] = useState(
+    () => new URLSearchParams(window.location.search).get("reconnectGoogle") === "1",
+  );
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -184,6 +191,7 @@ export default function Contacts() {
         description: `${result.created} created, ${result.updated} updated, ${result.skipped} skipped${result.failed > 0 ? `, ${result.failed} failed` : ""}.`,
       });
     } catch (err) {
+      void refreshSheetStatus();
       toast({
         title: "Sync failed",
         description: err instanceof Error ? err.message : "Unknown error",
@@ -236,15 +244,22 @@ export default function Contacts() {
                 <div className="flex items-start gap-2 mt-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800 text-sm">
                   <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium text-amber-800 dark:text-amber-300">Last sync failed</span>
+                    <span className="font-medium text-amber-800 dark:text-amber-300">
+                      {sheetStatus.reconnectRequired ? "Your Google account needs to be reconnected" : "Last sync failed"}
+                    </span>
                     {sheetStatus.lastErrorAt && (
                       <span className="text-amber-700 dark:text-amber-400 text-xs ml-2">
                         {new Date(sheetStatus.lastErrorAt).toLocaleString()}
                       </span>
                     )}
                     <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 truncate">
-                      {sheetStatus.lastError}
+                      {sheetStatus.reconnectRequired ? "Google access was revoked or expired. Reconnect to resume contacts sync." : sheetStatus.lastError}
                     </p>
+                    {sheetStatus.reconnectRequired && (
+                      <Button data-testid="button-reconnect-google" className="mt-2 gap-2" size="sm" onClick={() => setSheetDialogOpen(true)}>
+                        <RefreshCw className="w-4 h-4" /> Reconnect Google account
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}

@@ -22,6 +22,7 @@ import { sendViaResend } from "./resend.js";
 import { sendSms, sendSmsAwaitable } from "./sms.js";
 import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
+import { needsGoogleReconnect, buildSheetSyncFailureEmail } from "./google-reconnect.js";
 import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
 import { sendPushToUser } from "./push.js";
 import { processLeadDeliveryOutbox } from "./lead-delivery.js";
@@ -472,73 +473,7 @@ export function startScheduler() {
   // Reads the most-recently-configured sheet_syncs row and applies creates/updates
   // to the contacts table. Skips silently if no sheet is connected.
   // On failure: records the error in sheet_syncs and emails all team members.
-  cron.schedule("0 6 * * *", async () => {
-    logger.info("Scheduler: starting daily Google Sheets contacts sync");
-    try {
-      const [sync] = await db
-        .select()
-        .from(sheetSyncsTable)
-        .orderBy(desc(sheetSyncsTable.createdAt))
-        .limit(1);
-
-      if (!sync) {
-        logger.info("Scheduler: no Google Sheet connected — skipping contacts sync");
-        return;
-      }
-
-      const gidMatch = sync.sheetUrl.match(/[#&?]gid=(\d+)/);
-      const gid = gidMatch?.[1];
-
-      // Get OAuth access token for private sheets (falls back to null = public mode)
-      let accessToken: string | null = null;
-      try {
-        accessToken = await getValidAccessToken();
-        if (accessToken) {
-          logger.info("Scheduler: using Google OAuth token for private sheet access");
-        }
-      } catch (tokenErr) {
-        logger.warn({ err: tokenErr }, "Scheduler: could not get OAuth token, trying public access");
-      }
-
-      let result: Awaited<ReturnType<typeof runSheetSync>>;
-      try {
-        result = await runSheetSync(sync.sheetUrl, gid, accessToken);
-      } catch (syncErr) {
-        const errorMessage = syncErr instanceof Error ? syncErr.message : String(syncErr);
-        const errorAt = new Date();
-
-        logger.error({ err: syncErr }, "Scheduler: Google Sheets contacts sync failed");
-
-        // Record failure in the database
-        await db
-          .update(sheetSyncsTable)
-          .set({ lastError: errorMessage, lastErrorAt: errorAt })
-          .where(eq(sheetSyncsTable.id, sync.id));
-
-        // Notify all team members by email
-        await notifySyncFailure({
-          sheetLabel: sync.sheetLabel || sync.sheetUrl,
-          errorMessage,
-          errorAt,
-        });
-
-        return;
-      }
-
-      // Success — clear any previous error state and update lastSyncedAt
-      await db
-        .update(sheetSyncsTable)
-        .set({ lastSyncedAt: new Date(), lastError: null, lastErrorAt: null })
-        .where(eq(sheetSyncsTable.id, sync.id));
-
-      logger.info(
-        { created: result.created, updated: result.updated, skipped: result.skipped, failed: result.failed },
-        "Scheduler: Google Sheets contacts sync complete",
-      );
-    } catch (err) {
-      logger.error({ err }, "Scheduler: Google Sheets contacts sync job error");
-    }
-  }, { timezone: "UTC" });
+  cron.schedule("0 6 * * *", () => runDailyContactsSync(), { timezone: "UTC" });
 
   logger.info("Scheduler: daily Google Sheets contacts sync registered (06:00 UTC)");
 
@@ -1349,6 +1284,52 @@ export async function runStaleRecoveryOrderDigest(
   }
 }
 
+/** Daily sync entry point; injectable providers avoid live Google/email calls in tests. */
+export async function runDailyContactsSync(deps: {
+  getToken?: typeof getValidAccessToken;
+  runSync?: typeof runSheetSync;
+  notifyFailure?: typeof notifySyncFailure;
+} = {}): Promise<void> {
+  logger.info("Scheduler: starting daily Google Sheets contacts sync");
+  try {
+    const [sync] = await db.select().from(sheetSyncsTable)
+      .orderBy(desc(sheetSyncsTable.createdAt)).limit(1);
+    if (!sync) return;
+
+    const gid = sync.sheetUrl.match(/[#&?]gid=(\d+)/)?.[1];
+    let result: Awaited<ReturnType<typeof runSheetSync>>;
+    try {
+      let accessToken: string | null = null;
+      try {
+        accessToken = await (deps.getToken ?? getValidAccessToken)();
+      } catch (tokenErr) {
+        // Do not mask revoked access with an unrelated public-sheet failure.
+        if (needsGoogleReconnect(tokenErr)) throw tokenErr;
+        logger.warn({ err: tokenErr }, "Scheduler: could not get OAuth token, trying public access");
+      }
+      result = await (deps.runSync ?? runSheetSync)(sync.sheetUrl, gid, accessToken);
+    } catch (syncErr) {
+      const errorMessage = syncErr instanceof Error ? syncErr.message : String(syncErr);
+      const errorAt = new Date();
+      logger.error({ err: syncErr }, "Scheduler: Google Sheets contacts sync failed");
+      await db.update(sheetSyncsTable)
+        .set({ lastError: errorMessage, lastErrorAt: errorAt })
+        .where(eq(sheetSyncsTable.id, sync.id));
+      await (deps.notifyFailure ?? notifySyncFailure)({
+        sheetLabel: sync.sheetLabel || sync.sheetUrl, errorMessage, errorAt,
+      });
+      return;
+    }
+
+    await db.update(sheetSyncsTable)
+      .set({ lastSyncedAt: new Date(), lastError: null, lastErrorAt: null })
+      .where(eq(sheetSyncsTable.id, sync.id));
+    logger.info(result, "Scheduler: Google Sheets contacts sync complete");
+  } catch (err) {
+    logger.error({ err }, "Scheduler: Google Sheets contacts sync job error");
+  }
+}
+
 // ─── Sync-failure notification ────────────────────────────────────────────────
 
 async function notifySyncFailure(params: {
@@ -1372,16 +1353,12 @@ async function notifySyncFailure(params: {
   }
 
   const from = "ProjectHub <notifications@contacts.ucfilters.com>";
-  const subject = `⚠️ Google Sheets sync failed — ${sheetLabel}`;
-  const text = [
-    `The daily Google Sheets contacts sync failed at ${errorAt.toUTCString()}.`,
-    "",
-    `Sheet: ${sheetLabel}`,
-    `Error: ${errorMessage}`,
-    "",
-    "Please check that the sheet is still published and the URL is correct.",
-    "You can re-run the sync from the ProjectHub Contacts page once the issue is resolved.",
-  ].join("\n");
+  const configured = process.env["PROJECTHUB_URL"]?.trim() || "https://app.ucfilters.com";
+  const base = /^https?:\/\//i.test(configured) ? configured : `https://${configured}`;
+  const { subject, text } = buildSheetSyncFailureEmail({
+    sheetLabel, errorMessage, errorAt,
+    contactsUrl: `${base.replace(/\/+$/, "")}/contacts`,
+  });
 
   const results = await Promise.allSettled(
     members.map((m) =>
