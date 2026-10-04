@@ -26,13 +26,14 @@ import {
   issueUcTemporaryPassword,
   useListProjectHubInstantWaterAssessments,
   getListProjectHubInstantWaterAssessmentsQueryKey,
-  useListCustomerAssignments,
-  getListCustomerAssignmentsQueryKey,
+  useListCustomerAccountAssignments,
+  getListCustomerAccountAssignmentsQueryKey,
   type UcTemporaryPasswordInputChannel,
   type UcTemporaryPasswordResult,
   type UcCustomerDetail,
 } from "@workspace/api-client-react";
 import { API_ORIGIN } from "@/lib/api-base";
+import { AssignmentAudit } from "@/components/assignment-audit";
 
 const API = API_ORIGIN;
 const PAGE_LIMIT = 50;
@@ -366,10 +367,14 @@ function CustomerDetailPanel({
     { query: { enabled: open && customerId !== null, queryKey: getListProjectHubInstantWaterAssessmentsQueryKey(params) } }
   );
 
-  const assignmentsQuery = useListCustomerAssignments({
-    query: { enabled: open && customerId !== null, queryKey: getListCustomerAssignmentsQueryKey() },
+  const [assignmentPaging, setAssignmentPaging] = useState({ customerId, page: 1 });
+  const [auditOpen, setAuditOpen] = useState<number | null>(null);
+  const assignmentPage = assignmentPaging.customerId === customerId ? assignmentPaging.page : 1;
+  const assignmentParams = { page: assignmentPage, limit: 10 };
+  const assignmentsQuery = useListCustomerAccountAssignments(customerId ?? 0, assignmentParams, {
+    query: { enabled: open && customerId !== null && isTeamAdmin(), queryKey: getListCustomerAccountAssignmentsQueryKey(customerId ?? 0, assignmentParams), refetchInterval: 30000 },
   });
-  const linkedAssignments = (assignmentsQuery.data ?? []).filter((a) => a.linkedAccountId === customerId && a.status === "linked");
+  const linkedAssignments = assignmentsQuery.data?.items ?? [];
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -496,14 +501,14 @@ function CustomerDetailPanel({
               )}
             </section>
 
-            <section className="pt-4 pb-5 border-b space-y-3" data-testid="section-linked-assignments">
+            {isTeamAdmin() && <section className="pt-4 pb-5 border-b space-y-3" data-testid="section-linked-assignments">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Package className="w-3.5 h-3.5" /> Linked filter assignments ({linkedAssignments.length})
+                <Package className="w-3.5 h-3.5" /> Linked filter assignments ({assignmentsQuery.data?.total ?? "…"})
               </h3>
               {assignmentsQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
               ) : assignmentsQuery.isError ? (
-                <p role="alert" className="text-sm text-destructive">Failed to load assignments.</p>
+                <div role="alert" className="text-sm text-destructive">Failed to load assignments. <Button size="sm" variant="outline" onClick={() => void assignmentsQuery.refetch()}>Retry</Button></div>
               ) : linkedAssignments.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No linked filter assignments.</p>
               ) : linkedAssignments.map((a) => (
@@ -511,9 +516,16 @@ function CustomerDetailPanel({
                   <div className="text-sm font-medium">{a.productName}</div>
                   <div className="text-muted-foreground">{a.orderReference} · installed {a.installationDate}</div>
                   <div className="text-muted-foreground">{a.cashCollectionState === "collected" ? "Cash collected" : a.cashCollectionState === "awaiting_collection" ? "Awaiting collection" : "Collection unknown"}</div>
+                  <Button size="sm" variant="ghost" aria-expanded={auditOpen === a.id} onClick={() => setAuditOpen(auditOpen === a.id ? null : a.id)}>Audit history</Button>
+                  {auditOpen === a.id && <AssignmentAudit key={a.id} assignmentId={a.id} />}
                 </div>
               ))}
-            </section>
+              {assignmentsQuery.data && <div className="flex items-center gap-2 text-xs">
+                <Button size="sm" variant="outline" disabled={assignmentPage === 1 || assignmentsQuery.isFetching} onClick={() => { setAssignmentPaging({ customerId, page: assignmentPage - 1 }); setAuditOpen(null); }}>Previous</Button>
+                <span>Page {assignmentPage}</span>
+                <Button size="sm" variant="outline" disabled={assignmentPage * assignmentParams.limit >= assignmentsQuery.data.total || assignmentsQuery.isFetching} onClick={() => { setAssignmentPaging({ customerId, page: assignmentPage + 1 }); setAuditOpen(null); }}>Next</Button>
+              </div>}
+            </section>}
 
             {/* Orders */}
             <section className="pt-4 pb-5 border-b space-y-3">

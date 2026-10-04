@@ -1,5 +1,5 @@
 /** Customer filter assignments: staff-recorded ownership, saved pending until explicitly linked. */
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ChevronDown, ChevronRight, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,15 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { AssignmentAudit } from "@/components/assignment-audit";
+import { invalidateAssignmentQueries } from "@/lib/assignment-queries";
 import {
   confirmCustomerAssignmentLink, createCustomerAssignment, getListCustomerAssignmentsQueryKey,
   getListUcCustomersQueryKey, getFindAssignmentOrderLinesQueryKey, previewCustomerAssignment,
   retryCustomerAssignment, useFindAssignmentOrderLines, useListCustomerAssignments,
   useListUcCustomers,
   type AssignmentOrderLine, type CustomerAssignmentInput, type CustomerFilterAssignment,
-  type PreviewCustomerAssignment200, type UcCustomerSummary,
+  type PreviewCustomerAssignment200, type UcCustomerSummary, type ListCustomerAssignmentsStatus,
 } from "@workspace/api-client-react";
 
 function errText(error: unknown) {
@@ -25,7 +27,6 @@ function errText(error: unknown) {
   if (error instanceof TypeError) return "Network error — check your connection and retry.";
   return error instanceof Error ? error.message : "The server could not complete this action.";
 }
-const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
 const collectionLabel: Record<string, string> = { collected: "Cash collected", awaiting_collection: "Awaiting collection", unknown: "Collection unknown" };
 
 function CustomerPicker({ id, onPick, testid }: { id: string; onPick: (c: UcCustomerSummary) => void; testid: string }) {
@@ -94,7 +95,7 @@ function AssignmentDialog({ onClose }: { onClose: () => void }) {
   const create = useMutation({
     mutationFn: (input: CustomerAssignmentInput) => createCustomerAssignment(input),
     onSuccess: (res) => {
-      void qc.invalidateQueries({ queryKey: getListCustomerAssignmentsQueryKey() });
+      void invalidateAssignmentQueries(qc);
       setError("");
       if (targetAccountId) setCreated(res);
       else { toast({ title: "Assignment saved as pending", description: "Ownership is not linked until staff confirm an account." }); onClose(); }
@@ -104,7 +105,7 @@ function AssignmentDialog({ onClose }: { onClose: () => void }) {
   const link = useMutation({
     mutationFn: (id: number) => confirmCustomerAssignmentLink(id, { accountId: targetAccountId!, confirm: true }),
     onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: getListCustomerAssignmentsQueryKey() });
+      void invalidateAssignmentQueries(qc);
       if (result.status !== "linked") { setError(`Assignment remains ${result.status}: ${result.reviewReason?.replaceAll("_", " ") ?? "staff review required"}.`); return; }
       toast({ title: "Filter linked", description: `Ownership confirmed for account #${targetAccountId}.` });
       onClose();
@@ -206,7 +207,7 @@ function LinkDialog({ row, onClose }: { row: CustomerFilterAssignment; onClose: 
   const [error, setError] = useState("");
   const link = useMutation({
     mutationFn: () => confirmCustomerAssignmentLink(row.id, { accountId: account!.id, confirm: true }),
-    onSuccess: (result) => { void qc.invalidateQueries({ queryKey: getListCustomerAssignmentsQueryKey() }); if (result.status !== "linked") { setError(`Assignment remains ${result.status}: ${result.reviewReason?.replaceAll("_", " ") ?? "staff review required"}.`); return; } toast({ title: "Filter linked", description: `Account #${account!.id} now owns this filter.` }); onClose(); },
+    onSuccess: (result) => { void invalidateAssignmentQueries(qc); if (result.status !== "linked") { setError(`Assignment remains ${result.status}: ${result.reviewReason?.replaceAll("_", " ") ?? "staff review required"}.`); return; } toast({ title: "Filter linked", description: `Account #${account!.id} now owns this filter.` }); onClose(); },
     onError: (e) => setError(errText(e)),
   });
   return (
@@ -237,11 +238,16 @@ export function CustomerAssignmentsSection() {
   const [creating, setCreating] = useState(false);
   const [linking, setLinking] = useState<CustomerFilterAssignment | null>(null);
   const [open, setOpen] = useState<number | null>(null);
-  const query = useListCustomerAssignments({ query: { queryKey: getListCustomerAssignmentsQueryKey(), refetchInterval: 30000 } });
-  const rows = useMemo(() => query.data ?? [], [query.data]);
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState<ListCustomerAssignmentsStatus | "">("");
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const params = { page, limit: 25, status: status || undefined, q: q || undefined };
+  const query = useListCustomerAssignments(params, { query: { queryKey: getListCustomerAssignmentsQueryKey(params), refetchInterval: 30000 } });
+  const rows = query.data?.items ?? [];
   const retry = useMutation({
     mutationFn: (id: number) => retryCustomerAssignment(id),
-    onSuccess: () => { toast({ title: "Retry submitted" }); void qc.invalidateQueries({ queryKey: getListCustomerAssignmentsQueryKey() }); },
+    onSuccess: () => { toast({ title: "Retry submitted" }); void invalidateAssignmentQueries(qc); },
     onError: (e) => toast({ title: "Retry failed", description: errText(e), variant: "destructive" }),
   });
   return (
@@ -258,6 +264,14 @@ export function CustomerAssignmentsSection() {
           <Button size="sm" data-testid="button-new-assignment" onClick={() => setCreating(true)}><Plus className="mr-1 h-4 w-4" />New assignment</Button>
         </div>
       </div>
+      <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); setQ(search.trim()); setPage(1); setOpen(null); }}>
+        <Input className="max-w-sm" aria-label="Search assignment contacts" placeholder="Search name, email or phone" maxLength={200} value={search} onChange={e => setSearch(e.target.value)} />
+        <select className="rounded-md border bg-background px-3 text-sm" aria-label="Assignment status" value={status} onChange={e => { setStatus(e.target.value as ListCustomerAssignmentsStatus | ""); setPage(1); setOpen(null); }}>
+          <option value="">All statuses</option><option value="pending">Pending</option><option value="linked">Linked</option><option value="review">Review</option>
+        </select>
+        <Button type="submit" variant="outline">Search</Button>
+        {(q || status || search) && <Button type="button" variant="ghost" onClick={() => { setSearch(""); setQ(""); setStatus(""); setPage(1); setOpen(null); }}>Clear filters</Button>}
+      </form>
       {query.isLoading && <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />)}</div>}
       {query.isError && (
         <div role="alert" className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 p-3 text-sm text-destructive">
@@ -265,7 +279,7 @@ export function CustomerAssignmentsSection() {
           <Button size="sm" variant="outline" onClick={() => void query.refetch()}>Retry</Button>
         </div>
       )}
-      {!query.isLoading && !query.isError && rows.length === 0 && <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-assignments">No customer assignments yet. Create one from an existing order line.</div>}
+      {!query.isLoading && !query.isError && rows.length === 0 && <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-assignments">{q || status ? "No assignments match these filters." : page > 1 ? "No assignments on this page. Go back to an earlier page." : "No customer assignments yet. Create one from an existing order line."}</div>}
       {rows.length > 0 && (
         <ul className="divide-y rounded-lg border">
           {rows.map((r) => (
@@ -278,7 +292,7 @@ export function CustomerAssignmentsSection() {
                     {collectionLabel[r.cashCollectionState] ?? "Collection unknown"}
                     {r.linkedAccountId ? ` · owner: account #${r.linkedAccountId}` : r.targetAccountId ? ` · targeted account #${r.targetAccountId} (not confirmed)` : " · no owner linked"}
                   </p>
-                  {r.status === "review" && <p role="status" className="mt-1 text-xs text-destructive">Needs review: {r.reviewReason ?? "reason not recorded"}</p>}
+                  {r.reviewReason && <p role="status" className={`mt-1 text-xs ${r.status === "review" ? "text-destructive" : "text-muted-foreground"}`}>{r.status === "review" ? "Needs review" : "Pending reason"}: {r.reviewReason.replaceAll("_", " ")}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   {r.status === "linked" ? <Badge variant="outline" className="border-green-600 text-green-700">Linked</Badge> : r.status === "review" ? <Badge variant="destructive">Review</Badge> : <Badge variant="secondary">Pending</Badge>}
@@ -287,19 +301,18 @@ export function CustomerAssignmentsSection() {
                 </div>
               </div>
               <button type="button" className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" aria-expanded={open === r.id} data-testid={`button-toggle-audit-${r.id}`} onClick={() => setOpen(open === r.id ? null : r.id)}>
-                {open === r.id ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}Audit ({r.audit?.length ?? 0})
+                {open === r.id ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}Audit history
               </button>
-              {open === r.id && (
-                <ul className="mt-1 space-y-0.5 border-l pl-3 text-xs text-muted-foreground">
-                  {(r.audit ?? []).length === 0 && <li>No audit entries.</li>}
-                  {(r.audit ?? []).map((a, i) => <li key={i}>{fmt(a.createdAt)} · {a.action ?? "event"} · {a.actor ?? "system"}</li>)}
-                </ul>
-              )}
+              {open === r.id && <AssignmentAudit key={r.id} assignmentId={r.id} />}
             </li>
           ))}
         </ul>
       )}
-      <div className="text-xs text-muted-foreground">{rows.length} assignment{rows.length === 1 ? "" : "s"}</div>
+      {query.data && <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <Button size="sm" variant="outline" disabled={page === 1 || query.isFetching} onClick={() => { setPage(p => p - 1); setOpen(null); }}>Previous</Button>
+        <span>Page {page} · {query.data.total} matching assignments</span>
+        <Button size="sm" variant="outline" disabled={page * params.limit >= query.data.total || query.isFetching} onClick={() => { setPage(p => p + 1); setOpen(null); }}>Next</Button>
+      </div>}
     </section>
   );
 }

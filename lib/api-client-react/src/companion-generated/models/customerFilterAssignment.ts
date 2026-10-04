@@ -5,7 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { CustomerFilterAssignmentAuditItem } from './customerFilterAssignmentAuditItem';
 import type { CustomerFilterAssignmentStatus } from './customerFilterAssignmentStatus';
 
 export interface CustomerFilterAssignment {
@@ -40,5 +39,4 @@ export interface CustomerFilterAssignment {
   createdAt?: string;
   /** @nullable */
   linkedAt?: string | null;
-  audit?: CustomerFilterAssignmentAuditItem[];
 }

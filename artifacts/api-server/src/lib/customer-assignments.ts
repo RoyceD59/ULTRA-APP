@@ -303,16 +303,29 @@ async function reconcileAccount(accountId: number) {
   } catch { logger.warn({ accountId, event: "assignment_retry_deferred" }, "Customer assignments remain pending for retry"); }
 }
 
-export async function listAssignments(accountId?: number) {
+type AssignmentReadParams = { page: number; limit: number; status?: string; q?: string };
+
+async function readAssignments(accountId?: number, assignmentId?: number, paging?: AssignmentReadParams) {
+  const values: unknown[] = [];
+  const clauses: string[] = [];
+  const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
+  if (accountId !== undefined) clauses.push(`a.linked_account_id=${bind(accountId)} AND a.status='linked'`);
+  if (assignmentId !== undefined) clauses.push(`a.id=${bind(assignmentId)}`);
+  if (paging?.status) clauses.push(`a.status=${bind(paging.status)}`);
+  if (paging?.q) {
+    const term = bind(`%${paging.q.replace(/[\\%_]/g, "\\$&")}%`);
+    clauses.push(`(a.customer_name ILIKE ${term} OR a.email ILIKE ${term} OR a.phone ILIKE ${term})`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const total = paging ? Number((await pool.query(`SELECT count(*) FROM uc_customer_assignments a ${where}`, values)).rows[0].count) : 0;
+  const bounds = paging ? `LIMIT ${bind(paging.limit)} OFFSET ${bind((paging.page - 1) * paging.limit)}` : "";
   const result = await pool.query(
-    `SELECT a.*, o.wc_order_id,o.cod_collection_status, f.activated_at,f.maintenance_count,f.active,
-      COALESCE((SELECT json_agg(json_build_object('actor',h.actor,'action',h.action,'details',h.details,'createdAt',h.created_at)
-        ORDER BY h.id) FROM uc_customer_assignment_audit h WHERE h.assignment_id=a.id),'[]') AS audit
+    `SELECT a.*, o.wc_order_id,o.cod_collection_status, f.activated_at,f.maintenance_count,f.active
      FROM uc_customer_assignments a JOIN uc_orders o ON o.id=a.order_id
      LEFT JOIN uc_registered_filters f ON f.id=a.filter_id
-     ${accountId === undefined ? "" : "WHERE a.linked_account_id=$1 AND a.status='linked'"}
-     ORDER BY a.id DESC`, accountId === undefined ? [] : [accountId]);
-  return result.rows.map(r => ({
+     ${where}
+     ORDER BY a.id DESC ${bounds}`, values);
+  const items = result.rows.map(r => ({
     id: r.id, customerName: r.customer_name, email: r.email, phone: r.phone,
     productId: r.product_id, productName: r.product_name, lifespanDays: r.lifespan_days,
     capacityLitres: r.capacity_litres, installationDate: dateOnly(r.installation_date),
@@ -320,8 +333,34 @@ export async function listAssignments(accountId?: number) {
     cashCollectionState: r.cod_collection_status ?? "unknown", status: r.status, reviewReason: r.review_reason,
     targetAccountId: r.target_account_id, linkedAccountId: r.linked_account_id, filterId: r.filter_id,
     activatedAt: r.activated_at, maintenanceCount: r.maintenance_count, active: r.active,
-    createdAt: r.created_at, linkedAt: r.linked_at, audit: accountId === undefined ? r.audit : undefined,
+    createdAt: r.created_at, linkedAt: r.linked_at,
   }));
+  return { items, total };
+}
+
+/** Existing customer mobile read; deliberately contains no staff audit history. */
+export async function listAssignments(accountId?: number) {
+  return (await readAssignments(accountId)).items;
+}
+
+export async function listAssignmentPage(params: AssignmentReadParams, accountId?: number) {
+  return { ...await readAssignments(accountId, undefined, params), page: params.page, limit: params.limit };
+}
+
+export async function getAssignment(id: number) {
+  const assignment = (await readAssignments(undefined, id)).items[0];
+  if (!assignment) throw new AssignmentError("NOT_FOUND", "Assignment not found.", 404);
+  return assignment;
+}
+
+export async function assignmentAudit(id: number, page: number, limit: number) {
+  if (!(await pool.query("SELECT id FROM uc_customer_assignments WHERE id=$1", [id])).rowCount)
+    throw new AssignmentError("NOT_FOUND", "Assignment not found.", 404);
+  const total = Number((await pool.query("SELECT count(*) FROM uc_customer_assignment_audit WHERE assignment_id=$1", [id])).rows[0].count);
+  const items = (await pool.query(`SELECT id,actor,action,details,created_at AS "createdAt"
+    FROM uc_customer_assignment_audit WHERE assignment_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3`,
+    [id, limit, (page - 1) * limit])).rows;
+  return { items, total, page, limit };
 }
 
 export async function assignmentOrderLines(q: string) {

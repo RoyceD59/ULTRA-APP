@@ -75,6 +75,7 @@ import type {
   CreateUcAdminGuide201,
   CreateUcAdminLocation201,
   CustomerAssignmentInput,
+  CustomerAssignmentPage,
   CustomerFilterAssignment,
   CustomerLifecycleFeatureConfig,
   CustomerLifecycleLookup,
@@ -127,6 +128,10 @@ import type {
   LibraryKnowledgePreview,
   ListAgentAlisonChatsParams,
   ListCompanionBlogEditorialRuns200,
+  ListCustomerAccountAssignmentsParams,
+  ListCustomerAssignmentAudit200,
+  ListCustomerAssignmentAuditParams,
+  ListCustomerAssignmentsParams,
   ListCustomerLifecycleAuditEventsParams,
   ListCustomerReviewsParams,
   ListEditorialBlogArticles200,
@@ -842,17 +847,24 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getQuotePhysicalTestPromotionMutationOptions(options));
     }
 
-export const getListCustomerAssignmentsUrl = () => {
+export const getListCustomerAssignmentsUrl = (params?: ListCustomerAssignmentsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/admin/customer-assignments`
+  return stringifiedParams.length > 0 ? `/api/admin/customer-assignments?${stringifiedParams}` : `/api/admin/customer-assignments`
 }
 
-export const listCustomerAssignments = async ( options?: RequestInit): Promise<CustomerFilterAssignment[]> => {
+export const listCustomerAssignments = async (params?: ListCustomerAssignmentsParams, options?: RequestInit): Promise<CustomerAssignmentPage> => {
 
-  return customFetch<CustomerFilterAssignment[]>(getListCustomerAssignmentsUrl(),
+  return customFetch<CustomerAssignmentPage>(getListCustomerAssignmentsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -865,23 +877,23 @@ export const listCustomerAssignments = async ( options?: RequestInit): Promise<C
 
 
 
-export const getListCustomerAssignmentsQueryKey = () => {
+export const getListCustomerAssignmentsQueryKey = (params?: ListCustomerAssignmentsParams,) => {
     return [
-    `/api/admin/customer-assignments`
+    `/api/admin/customer-assignments`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListCustomerAssignmentsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerAssignments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListCustomerAssignmentsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerAssignments>>, TError = ErrorType<unknown>>(params?: ListCustomerAssignmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListCustomerAssignmentsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerAssignmentsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerAssignments>>> = ({ signal }) => listCustomerAssignments({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerAssignments>>> = ({ signal }) => listCustomerAssignments(params, { signal, ...requestOptions });
 
 
 
@@ -896,11 +908,11 @@ export type ListCustomerAssignmentsQueryError = ErrorType<unknown>
 
 
 export function useListCustomerAssignments<TData = Awaited<ReturnType<typeof listCustomerAssignments>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListCustomerAssignmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListCustomerAssignmentsQueryOptions(options)
+  const queryOptions = getListCustomerAssignmentsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -977,6 +989,184 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateCustomerAssignmentMutationOptions(options));
     }
+
+export const getListCustomerAccountAssignmentsUrl = (accountId: number,
+    params?: ListCustomerAccountAssignmentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/customer-assignments/customer/${accountId}?${stringifiedParams}` : `/api/admin/customer-assignments/customer/${accountId}`
+}
+
+/**
+ * @summary Team-admin read of linked assignments owned by one customer
+ */
+export const listCustomerAccountAssignments = async (accountId: number,
+    params?: ListCustomerAccountAssignmentsParams, options?: RequestInit): Promise<CustomerAssignmentPage> => {
+
+  return customFetch<CustomerAssignmentPage>(getListCustomerAccountAssignmentsUrl(accountId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerAccountAssignmentsQueryKey = (accountId: number,
+    params?: ListCustomerAccountAssignmentsParams,) => {
+    return [
+    `/api/admin/customer-assignments/customer/${accountId}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCustomerAccountAssignmentsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerAccountAssignments>>, TError = ErrorType<void>>(accountId: number,
+    params?: ListCustomerAccountAssignmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAccountAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerAccountAssignmentsQueryKey(accountId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerAccountAssignments>>> = ({ signal }) => listCustomerAccountAssignments(accountId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: accountId !== null && accountId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerAccountAssignments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerAccountAssignmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerAccountAssignments>>>
+export type ListCustomerAccountAssignmentsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Team-admin read of linked assignments owned by one customer
+ */
+
+export function useListCustomerAccountAssignments<TData = Awaited<ReturnType<typeof listCustomerAccountAssignments>>, TError = ErrorType<void>>(
+ accountId: number,
+    params?: ListCustomerAccountAssignmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAccountAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerAccountAssignmentsQueryOptions(accountId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListCustomerAssignmentAuditUrl = (id: number,
+    params?: ListCustomerAssignmentAuditParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/customer-assignments/${id}/audit?${stringifiedParams}` : `/api/admin/customer-assignments/${id}/audit`
+}
+
+/**
+ * @summary Read a page of retained audit history, newest first
+ */
+export const listCustomerAssignmentAudit = async (id: number,
+    params?: ListCustomerAssignmentAuditParams, options?: RequestInit): Promise<ListCustomerAssignmentAudit200> => {
+
+  return customFetch<ListCustomerAssignmentAudit200>(getListCustomerAssignmentAuditUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerAssignmentAuditQueryKey = (id: number,
+    params?: ListCustomerAssignmentAuditParams,) => {
+    return [
+    `/api/admin/customer-assignments/${id}/audit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCustomerAssignmentAuditQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerAssignmentAudit>>, TError = ErrorType<void>>(id: number,
+    params?: ListCustomerAssignmentAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignmentAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerAssignmentAuditQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerAssignmentAudit>>> = ({ signal }) => listCustomerAssignmentAudit(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignmentAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerAssignmentAuditQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerAssignmentAudit>>>
+export type ListCustomerAssignmentAuditQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read a page of retained audit history, newest first
+ */
+
+export function useListCustomerAssignmentAudit<TData = Awaited<ReturnType<typeof listCustomerAssignmentAudit>>, TError = ErrorType<void>>(
+ id: number,
+    params?: ListCustomerAssignmentAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerAssignmentAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerAssignmentAuditQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getPreviewCustomerAssignmentUrl = () => {
 

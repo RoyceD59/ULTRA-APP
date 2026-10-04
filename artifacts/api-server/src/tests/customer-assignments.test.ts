@@ -17,7 +17,7 @@ delete process.env["MPESA_CONSUMER_SECRET"];
 process.env["SESSION_SECRET"] ??= "assignment-test-session";
 const recordsDir = await mkdtemp(join(tmpdir(), "assignment-records-"));
 process.env["UC_ACCOUNTS_DATA_DIR"] = recordsDir;
-const { createAssignment, linkAssignment, listAssignments, reconcileAssignmentsForAccount, previewAssignment, normalizedAssignment } =
+const { createAssignment, linkAssignment, listAssignments, assignmentAudit, reconcileAssignmentsForAccount, previewAssignment, normalizedAssignment } =
   await import("../lib/customer-assignments.js");
 const { clearResolvedRegistrations } = await import("../lib/account-records.js");
 const { default: app } = await import("../app.js");
@@ -68,6 +68,83 @@ after(async () => {
 });
 
 describe("durable customer assignments", () => {
+  it("pages and filters the admin queue without embedding audit history", async () => {
+    const marker = `page-${randomUUID()}`;
+    const created: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const input = await fixture();
+      created.push(await createAssignment({ ...input, customerName: `${marker} ${i}` }, teamId));
+    }
+    await pool.query("UPDATE uc_customer_assignments SET status='review',review_reason='contact_conflict' WHERE id=$1", [created[0]]);
+    const first = await api(`/admin/customer-assignments?q=${marker}&page=1&limit=2`, undefined, staffToken());
+    const second = await api(`/admin/customer-assignments?q=${marker}&page=2&limit=2`, undefined, staffToken());
+    const third = await api(`/admin/customer-assignments?q=${marker}&page=3&limit=2`, undefined, staffToken());
+    assert.equal(first.status,200); assert.equal(first.body.total,5);
+    assert.equal(first.body.page,1); assert.equal(first.body.limit,2);
+    assert.deepEqual([...first.body.items, ...second.body.items, ...third.body.items].map(a => a.id), created.toReversed());
+    assert.ok(first.body.items.every((a: Record<string, unknown>) => !("audit" in a)));
+    const review = await api(`/admin/customer-assignments?q=${marker}&status=review`, undefined, staffToken());
+    assert.equal(review.body.total,1); assert.equal(review.body.items[0].reviewReason,"contact_conflict");
+    const pending = await api(`/admin/customer-assignments?q=${marker}&status=pending`, undefined, staffToken());
+    assert.equal(pending.body.total,4); assert.equal(pending.body.items[0].cashCollectionState,"awaiting_collection");
+    const row = await getAssignment(created[1]!);
+    for (const q of [row.email.toUpperCase(), row.phone, `${marker} 1`]) {
+      const match = await api(`/admin/customer-assignments?q=${encodeURIComponent(q)}`, undefined, staffToken());
+      assert.equal(match.body.items[0].id, row.id);
+    }
+    const literal = await api("/admin/customer-assignments?q=%25", undefined, staffToken());
+    assert.equal(literal.body.total,0);
+    const empty = await api(`/admin/customer-assignments?q=${marker}&page=100`, undefined, staffToken());
+    assert.equal(empty.body.total,5); assert.deepEqual(empty.body.items,[]);
+    const defaults = await api("/admin/customer-assignments", undefined, staffToken());
+    assert.equal(defaults.body.limit,25); assert.ok(defaults.body.items.length <= 25);
+    for (const query of ["page=0","page=-1","page=1.5","page=1000001","limit=0","limit=101","status=invalid", `q=${"x".repeat(201)}`]) {
+      assert.equal((await api(`/admin/customer-assignments?${query}`, undefined, staffToken())).status,400);
+    }
+  });
+  it("reads only one customer's linked assignments with independent pagination", async () => {
+    const input = await fixture(), userId = await account(input,true);
+    const first = await createAssignment(input,teamId);
+    const secondInput = { ...await fixture(), email:input.email, phone:input.phone };
+    const second = await createAssignment(secondInput,teamId);
+    await linkAssignment(first,userId,teamId,true);
+    await linkAssignment(second,userId,teamId,true);
+    const pending = await createAssignment({ ...await fixture(), email:input.email, phone:input.phone },teamId);
+    const other = await account(contacts(),true);
+    for (const [page, expected] of [[1,second],[2,first]] as const) {
+      const read = await api(`/admin/customer-assignments/customer/${userId}?page=${page}&limit=1`,undefined,staffToken());
+      assert.equal(read.status,200); assert.equal(read.body.total,2);
+      assert.equal(read.body.items[0].id,expected); assert.equal(read.body.items[0].status,"linked");
+      assert.equal(read.body.items[0].linkedAccountId,userId); assert.equal("audit" in read.body.items[0],false);
+      assert.notEqual(read.body.items[0].id,pending);
+    }
+    const empty = await api(`/admin/customer-assignments/customer/${other}`,undefined,staffToken());
+    assert.equal(empty.body.total,0); assert.deepEqual(empty.body.items,[]);
+    assert.equal((await api("/admin/customer-assignments/customer/0",undefined,staffToken())).status,400);
+    assert.equal((await api(`/admin/customer-assignments/customer/${userId}?limit=101`,undefined,staffToken())).status,400);
+  });
+  it("retains and pages every audit event with deterministic ordering and full details", async () => {
+    const input = await fixture(), id = await createAssignment(input,teamId);
+    await pool.query(`INSERT INTO uc_customer_assignment_audit(assignment_id,actor,action,details,created_at)
+      SELECT $1,$2,'retained_event',jsonb_build_object('sequence',n),'2026-01-01'::timestamptz FROM generate_series(1,63) n`, [id,teamId]);
+    const stored = (await pool.query("SELECT id FROM uc_customer_assignment_audit WHERE assignment_id=$1 ORDER BY id DESC",[id])).rows.map(a => a.id);
+    const readIds: number[] = [];
+    for (let page = 1; page <= 3; page++) {
+      const read = await api(`/admin/customer-assignments/${id}/audit?page=${page}&limit=25`,undefined,staffToken());
+      assert.equal(read.status,200); assert.equal(read.body.total,stored.length);
+      assert.ok(read.body.items.length <= 25);
+      readIds.push(...read.body.items.map((a: { id: number }) => a.id));
+      assert.equal(read.body.items[0].actor,teamId);
+    }
+    assert.deepEqual(readIds,stored);
+    const first = await api(`/admin/customer-assignments/${id}/audit?limit=1`,undefined,staffToken());
+    assert.equal(first.body.items[0].details.sequence,63);
+    await clearResolvedRegistrations();
+    assert.equal((await assignmentAudit(id,1,100)).total,stored.length);
+    assert.equal((await api(`/admin/customer-assignments/${id}/audit?page=0`,undefined,staffToken())).status,400);
+    assert.equal((await api(`/admin/customer-assignments/${id}/audit?limit=101`,undefined,staffToken())).status,400);
+    assert.equal((await api("/admin/customer-assignments/2147483647/audit",undefined,staffToken())).status,404);
+  });
   it("saves before signup without a placeholder account or filter", async () => {
     const input = await fixture(), id = await createAssignment(input,teamId);
     const assignment = await getAssignment(id);
@@ -111,7 +188,7 @@ describe("durable customer assignments", () => {
     assert.equal((await getAssignment(id)).status,"pending");
     await linkAssignment(id,userId,teamId,true);
     assert.equal((await getAssignment(id)).linkedAccountId,userId);
-    assert.equal((await getAssignment(id)).audit.at(-1).action,"staff_linked");
+    assert.equal((await assignmentAudit(id,1,25)).items[0].action,"staff_linked");
   });
   it("guest email COD principals associate only after trusted proof", async () => {
     const input = await fixture();
@@ -248,15 +325,20 @@ describe("durable customer assignments", () => {
         ["/admin/customer-assignments",input],
         ["/admin/customer-assignments/preview",input],
         ["/admin/customer-assignments/order-lines?q=1",undefined],
+        ["/admin/customer-assignments/customer/1",undefined],
+        [`/admin/customer-assignments/${id}/audit`,undefined],
         [`/admin/customer-assignments/${id}/link`,{accountId:1,confirm:true}],
         [`/admin/customer-assignments/${id}/retry`,{}],
       ] as const) assert.ok([401,403].includes((await api(path,body,token)).status));
     }
     assert.equal((await api("/admin/customer-assignments",undefined,staffToken())).status,200);
     await pool.query("UPDATE team_users SET role='member' WHERE id=$1",[teamId]);
-    assert.equal((await api("/admin/customer-assignments",undefined,staffToken())).status,403);
+    for (const path of ["/admin/customer-assignments","/admin/customer-assignments/customer/1",`/admin/customer-assignments/${id}/audit`])
+      assert.equal((await api(path,undefined,staffToken())).status,403);
     await pool.query("UPDATE team_users SET role='admin' WHERE id=$1",[teamId]);
     const stranger = await account(contacts(),true);
+    for (const path of ["/admin/customer-assignments","/admin/customer-assignments/customer/1",`/admin/customer-assignments/${id}/audit`])
+      assert.equal((await api(path,undefined,issueToken({id:stranger,email:"stranger@example.test",credentialVersion:0}))).status,401);
     const read = await api("/uc/customer/assignments",undefined,issueToken({ id:stranger,email:"stranger@example.test",credentialVersion:0 }));
     assert.equal(read.status,200); assert.equal(read.body.some((a: { id: number }) => a.id === id),false);
   });

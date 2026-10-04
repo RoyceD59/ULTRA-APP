@@ -46,6 +46,7 @@
 - [Parallel dispatcher tests](parallel-dispatcher-tests.md) — inject providers, shared configuration, and recipient scope; a shared test DB alone does not isolate broad dispatch scans.
 - [Cross-path alert timestamps](cross-path-alert-timestamps.md) — when manual and scheduled sends share dedupe state, timestamp upserts must be monotonic and occur only after successful delivery.
 - [OpenAPI URI codegen compatibility](openapi-uri-codegen.md) — generated standalone zod.url() can break runtime imports with the installed Zod; verify URI schemas after codegen.
+- [OpenAPI integer validation](openapi-integer-validation.md) — generated numeric query coercion can accept fractions; enforce integer bounds before passing pagination to SQL.
 - [pnpm Nix version switching](pnpm-nix-version-switching.md) — disable automatic version switching here to avoid recursive self-installs; retain the external CI pin.
 - [Refill preview activation](refill-preview-activation.md) — persisted admin switches activate delivered previews only; unfinished financial and dispensing functions remain unavailable.
 - [Article body links](article-body-links.md) — rendered articles must use descriptive clickable linkpoints, not bare URLs or literal Markdown links.

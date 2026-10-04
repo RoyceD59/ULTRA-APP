@@ -1,11 +1,15 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
-import { CreateCustomerAssignmentBody, ConfirmCustomerAssignmentLinkBody } from "@workspace/api-zod";
+import {
+  CreateCustomerAssignmentBody, ConfirmCustomerAssignmentLinkBody,
+  ListCustomerAssignmentsQueryParams, ListCustomerAccountAssignmentsQueryParams,
+  ListCustomerAssignmentAuditQueryParams,
+} from "@workspace/api-zod";
 import { requireTeamAdmin } from "./auth.js";
 import { verifyToken } from "../lib/jwt.js";
 import {
   AssignmentError, createAssignment, previewAssignment, linkAssignment, listAssignments,
-  assignmentOrderLines, reconcileAssignmentsForAccount,
+  assignmentOrderLines, reconcileAssignmentsForAccount, assignmentAudit, listAssignmentPage, getAssignment,
 } from "../lib/customer-assignments.js";
 
 const router = Router();
@@ -16,8 +20,30 @@ function assignmentId(value: string): number {
     throw new AssignmentError("INVALID_ID", "Select a valid assignment.", 400);
   return Number(value);
 }
+// Orval's number coercion does not enforce OpenAPI integer semantics.
+function validQuery(query: import("express").Request["query"], params?: { page?: number; limit?: number }) {
+  return Object.values(query).every(value => typeof value === "string")
+    && Number.isSafeInteger(params?.page ?? 1) && Number.isSafeInteger(params?.limit ?? 25);
+}
 router.use(base, requireTeamAdmin);
-router.get(base, async (_req, res) => { res.json(await listAssignments()); });
+router.get(base, async (req, res) => {
+  const parsed = ListCustomerAssignmentsQueryParams.safeParse(req.query);
+  if (!parsed.success || !validQuery(req.query, parsed.data)) { res.status(400).json({ error: "Invalid assignment filters or pagination." }); return; }
+  const params = { ...parsed.data, q: parsed.data.q?.trim(), page: parsed.data.page ?? 1, limit: parsed.data.limit ?? 25 };
+  res.json(await listAssignmentPage(params));
+});
+router.get(`${base}/customer/:accountId`, async (req, res) => {
+  const parsed = ListCustomerAccountAssignmentsQueryParams.safeParse(req.query);
+  if (!parsed.success || !validQuery(req.query, parsed.data)) { res.status(400).json({ error: "Invalid pagination." }); return; }
+  const id = assignmentId(String(req.params["accountId"]));
+  const params = { page: parsed.data.page ?? 1, limit: parsed.data.limit ?? 25 };
+  res.json(await listAssignmentPage(params, id));
+});
+router.get(`${base}/:id/audit`, async (req, res) => {
+  const parsed = ListCustomerAssignmentAuditQueryParams.safeParse(req.query);
+  if (!parsed.success || !validQuery(req.query, parsed.data)) { res.status(400).json({ error: "Invalid pagination." }); return; }
+  res.json(await assignmentAudit(assignmentId(String(req.params["id"])), parsed.data.page ?? 1, parsed.data.limit ?? 25));
+});
 router.get(`${base}/order-lines`, async (req, res) => {
   res.json(await assignmentOrderLines(String(req.query["q"] ?? "")));
 });
@@ -40,12 +66,12 @@ router.post(`${base}/:id/link`, async (req, res) => {
   }
   const id = assignmentId(String(req.params["id"]));
   await linkAssignment(id, parsed.data.accountId, (req as StaffRequest).teamUser!.id, true);
-  res.json((await listAssignments()).find(a => a.id === id));
+  res.json(await getAssignment(id));
 });
 router.post(`${base}/:id/retry`, async (req, res) => {
   const id = assignmentId(String(req.params["id"]));
   await linkAssignment(id, undefined, (req as StaffRequest).teamUser!.id);
-  res.json((await listAssignments()).find(a => a.id === id));
+  res.json(await getAssignment(id));
 });
 router.get("/uc/customer/assignments", async (req, res) => {
   const claims = verifyToken(req.headers.authorization), id = Number(claims?.id);

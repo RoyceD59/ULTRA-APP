@@ -198,7 +198,23 @@ export const QuotePhysicalTestPromotionResponse = zod.object({
 })
 
 
-export const ListCustomerAssignmentsResponseItem = zod.object({
+export const listCustomerAssignmentsQueryPageMax = 1000000;
+
+export const listCustomerAssignmentsQueryLimitMax = 100;
+
+export const listCustomerAssignmentsQueryQMax = 200;
+
+
+
+export const ListCustomerAssignmentsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerAssignmentsQueryPageMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCustomerAssignmentsQueryLimitMax).optional(),
+  "status": zod.enum(['pending', 'linked', 'review']).optional(),
+  "q": zod.coerce.string().max(listCustomerAssignmentsQueryQMax).optional()
+})
+
+export const ListCustomerAssignmentsResponse = zod.object({
+  "items": zod.array(zod.object({
   "id": zod.number(),
   "customerName": zod.string(),
   "email": zod.string(),
@@ -221,15 +237,12 @@ export const ListCustomerAssignmentsResponseItem = zod.object({
   "maintenanceCount": zod.number().nullish(),
   "active": zod.boolean().nullish(),
   "createdAt": zod.string().optional(),
-  "linkedAt": zod.string().nullish(),
-  "audit": zod.array(zod.object({
-  "actor": zod.string().optional(),
-  "action": zod.string().optional(),
-  "createdAt": zod.string().optional(),
-  "details": zod.record(zod.string(), zod.unknown()).optional()
-})).optional()
+  "linkedAt": zod.string().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
 })
-export const ListCustomerAssignmentsResponse = zod.array(ListCustomerAssignmentsResponseItem)
 
 
 export const createCustomerAssignmentBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -249,6 +262,94 @@ export const CreateCustomerAssignmentBody = zod.object({
 
 export const CreateCustomerAssignmentResponse = zod.object({
   "id": zod.number()
+})
+
+
+/**
+ * @summary Team-admin read of linked assignments owned by one customer
+ */
+
+
+
+export const ListCustomerAccountAssignmentsParams = zod.object({
+  "accountId": zod.coerce.number().min(1)
+})
+
+export const listCustomerAccountAssignmentsQueryPageMax = 1000000;
+
+export const listCustomerAccountAssignmentsQueryLimitMax = 100;
+
+
+
+export const ListCustomerAccountAssignmentsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerAccountAssignmentsQueryPageMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCustomerAccountAssignmentsQueryLimitMax).optional()
+})
+
+export const ListCustomerAccountAssignmentsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Read a page of retained audit history, newest first
+ */
+
+
+
+export const ListCustomerAssignmentAuditParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const listCustomerAssignmentAuditQueryPageMax = 1000000;
+
+export const listCustomerAssignmentAuditQueryLimitMax = 100;
+
+
+
+export const ListCustomerAssignmentAuditQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerAssignmentAuditQueryPageMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCustomerAssignmentAuditQueryLimitMax).optional()
+})
+
+export const ListCustomerAssignmentAuditResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "actor": zod.string(),
+  "action": zod.string(),
+  "createdAt": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown())
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
 })
 
 
@@ -326,13 +427,7 @@ export const ConfirmCustomerAssignmentLinkResponse = zod.object({
   "maintenanceCount": zod.number().nullish(),
   "active": zod.boolean().nullish(),
   "createdAt": zod.string().optional(),
-  "linkedAt": zod.string().nullish(),
-  "audit": zod.array(zod.object({
-  "actor": zod.string().optional(),
-  "action": zod.string().optional(),
-  "createdAt": zod.string().optional(),
-  "details": zod.record(zod.string(), zod.unknown()).optional()
-})).optional()
+  "linkedAt": zod.string().nullish()
 })
 
 
@@ -363,13 +458,7 @@ export const RetryCustomerAssignmentResponse = zod.object({
   "maintenanceCount": zod.number().nullish(),
   "active": zod.boolean().nullish(),
   "createdAt": zod.string().optional(),
-  "linkedAt": zod.string().nullish(),
-  "audit": zod.array(zod.object({
-  "actor": zod.string().optional(),
-  "action": zod.string().optional(),
-  "createdAt": zod.string().optional(),
-  "details": zod.record(zod.string(), zod.unknown()).optional()
-})).optional()
+  "linkedAt": zod.string().nullish()
 })
 
 
@@ -396,13 +485,7 @@ export const GetMyCustomerAssignmentsResponseItem = zod.object({
   "maintenanceCount": zod.number().nullish(),
   "active": zod.boolean().nullish(),
   "createdAt": zod.string().optional(),
-  "linkedAt": zod.string().nullish(),
-  "audit": zod.array(zod.object({
-  "actor": zod.string().optional(),
-  "action": zod.string().optional(),
-  "createdAt": zod.string().optional(),
-  "details": zod.record(zod.string(), zod.unknown()).optional()
-})).optional()
+  "linkedAt": zod.string().nullish()
 })
 export const GetMyCustomerAssignmentsResponse = zod.array(GetMyCustomerAssignmentsResponseItem)
 

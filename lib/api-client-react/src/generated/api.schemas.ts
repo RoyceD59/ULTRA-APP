@@ -224,15 +224,6 @@ export const CustomerFilterAssignmentStatus = {
   review: 'review',
 } as const;
 
-export type CustomerFilterAssignmentAuditItemDetails = { [key: string]: unknown };
-
-export type CustomerFilterAssignmentAuditItem = {
-  actor?: string;
-  action?: string;
-  createdAt?: string;
-  details?: CustomerFilterAssignmentAuditItemDetails;
-};
-
 export interface CustomerFilterAssignment {
   id: number;
   customerName: string;
@@ -265,7 +256,23 @@ export interface CustomerFilterAssignment {
   createdAt?: string;
   /** @nullable */
   linkedAt?: string | null;
-  audit?: CustomerFilterAssignmentAuditItem[];
+}
+
+export interface CustomerAssignmentPage {
+  items: CustomerFilterAssignment[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type CustomerAssignmentAuditEntryDetails = { [key: string]: unknown };
+
+export interface CustomerAssignmentAuditEntry {
+  id: number;
+  actor: string;
+  action: string;
+  createdAt: string;
+  details: CustomerAssignmentAuditEntryDetails;
 }
 
 export interface UcDailyHydrationInput {
@@ -3789,8 +3796,68 @@ export type QuotePhysicalTestPromotion200 = {
   promotion: QuotePhysicalTestPromotion200Promotion;
 };
 
+export type ListCustomerAssignmentsParams = {
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+status?: ListCustomerAssignmentsStatus;
+/**
+ * @maxLength 200
+ */
+q?: string;
+};
+
+export type ListCustomerAssignmentsStatus = typeof ListCustomerAssignmentsStatus[keyof typeof ListCustomerAssignmentsStatus];
+
+
+export const ListCustomerAssignmentsStatus = {
+  pending: 'pending',
+  linked: 'linked',
+  review: 'review',
+} as const;
+
 export type CreateCustomerAssignment200 = {
   id: number;
+};
+
+export type ListCustomerAccountAssignmentsParams = {
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListCustomerAssignmentAuditParams = {
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListCustomerAssignmentAudit200 = {
+  items: CustomerAssignmentAuditEntry[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 export type PreviewCustomerAssignment200 = {

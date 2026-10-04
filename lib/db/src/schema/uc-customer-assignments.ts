@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, date, jsonb, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, date, jsonb, uniqueIndex, index, check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { ucUsersTable } from "./uc-users";
 import { ucOrdersTable, ucOrderItemsTable } from "./uc-orders";
@@ -30,6 +30,8 @@ export const ucCustomerAssignmentsTable = pgTable("uc_customer_assignments", {
 }, t => [
   uniqueIndex("uc_customer_assignments_key_unique").on(t.idempotencyKey),
   uniqueIndex("uc_customer_assignments_line_unique").on(t.orderItemId),
+  index("uc_customer_assignments_status_id_idx").on(t.status, t.id),
+  index("uc_customer_assignments_account_status_id_idx").on(t.linkedAccountId, t.status, t.id),
   check("uc_customer_assignments_status_check", sql`${t.status} IN ('pending','linked','review')`),
 ]);
 
@@ -40,4 +42,6 @@ export const ucCustomerAssignmentAuditTable = pgTable("uc_customer_assignment_au
   action: text("action").notNull(),
   details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, t => [
+  index("uc_customer_assignment_audit_assignment_id_idx").on(t.assignmentId, t.id),
+]);

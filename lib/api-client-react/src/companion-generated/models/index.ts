@@ -33,8 +33,6 @@ export * from './companionCheckoutQuoteInputLineItemsItem';
 export * from './companionCheckoutQuoteLinesItem';
 export * from './companionCheckoutQuotePromotion';
 export * from './customerFilterAssignment';
-export * from './customerFilterAssignmentAuditItem';
-export * from './customerFilterAssignmentAuditItemDetails';
 export * from './customerFilterAssignmentStatus';
 export * from './customerLifecycleFeatureConfig';
 export * from './customerLifecycleIdentity';

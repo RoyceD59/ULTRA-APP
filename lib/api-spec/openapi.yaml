@@ -229,14 +229,18 @@ paths:
     get:
       operationId: listCustomerAssignments
       tags: [uc-admin]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: status, in: query, schema: { type: string, enum: [pending, linked, review] } }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
       responses:
         '200':
           description: Durable assignments separate from recovery logs
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+                $ref: '#/components/schemas/CustomerAssignmentPage'
     post:
       operationId: createCustomerAssignment
       tags: [uc-admin]
@@ -255,6 +259,52 @@ paths:
                 required: [id]
                 properties:
                   id: { type: integer }
+  /admin/customer-assignments/customer/{accountId}:
+    get:
+      operationId: listCustomerAccountAssignments
+      tags: [uc-admin]
+      summary: Team-admin read of linked assignments owned by one customer
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200':
+          description: Linked assignments for this account, without audit payloads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerAssignmentPage' }
+        '400': { description: Invalid account or pagination }
+        '401': { description: Team sign-in required }
+        '403': { description: Live team-admin permission required }
+  /admin/customer-assignments/{id}/audit:
+    get:
+      operationId: listCustomerAssignmentAudit
+      tags: [uc-admin]
+      summary: Read a page of retained audit history, newest first
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200':
+          description: Audit page with stable ID ordering
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, limit]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CustomerAssignmentAuditEntry' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400': { description: Invalid assignment or pagination }
+        '401': { description: Team sign-in required }
+        '403': { description: Live team-admin permission required }
+        '404': { description: Assignment not found }
   /admin/customer-assignments/preview:
     post:
       operationId: previewCustomerAssignment
@@ -3869,15 +3919,25 @@ components:
         active: { type: [boolean, 'null'] }
         createdAt: { type: string }
         linkedAt: { type: [string, 'null'] }
-        audit:
+    CustomerAssignmentPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
           type: array
-          items:
-            type: object
-            properties:
-              actor: { type: string }
-              action: { type: string }
-              createdAt: { type: string }
-              details: { type: object, additionalProperties: true }
+          items: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+    CustomerAssignmentAuditEntry:
+      type: object
+      required: [id, actor, action, createdAt, details]
+      properties:
+        id: { type: integer }
+        actor: { type: string }
+        action: { type: string }
+        createdAt: { type: string }
+        details: { type: object, additionalProperties: true }
     UcDailyHydrationInput:
       type: object
       additionalProperties: false
