@@ -14,6 +14,7 @@ import {
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
+import { getCustomerStatistics } from "../lib/customer-statistics.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
 import { remoteImageProxyPath } from "./product-images.js";
@@ -9300,20 +9301,7 @@ router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { rows } = await pool.query<{ count: number; new_this_week: number; new_this_month: number }>(
-      `SELECT
-         COUNT(*)::int                                                        AS count,
-         COUNT(*) FILTER (WHERE created_at >= (date_trunc('week', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi'))::int AS new_this_week,
-         COUNT(*) FILTER (WHERE created_at >= (date_trunc('month', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi'))::int AS new_this_month
-       FROM uc_users
-       WHERE deleted_at IS NULL`
-    );
-    const row = rows[0];
-    res.json({
-      count:        row?.count         ?? 0,
-      newThisWeek:  row?.new_this_week  ?? 0,
-      newThisMonth: row?.new_this_month ?? 0,
-    });
+    res.json(await getCustomerStatistics());
   } catch (err) {
     logger.error({ err }, "[customers/count] query failed");
     res.status(500).json({ error: "Internal server error" });

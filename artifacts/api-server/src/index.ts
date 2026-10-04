@@ -4,6 +4,7 @@ import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
 import { assertPreviewIsolation } from "./lib/preview-safety.js";
 import { ensureReviewAnalysisSchema } from "./lib/review-analysis-schema.js";
+import { ensureCustomerStatisticsSchema } from "./lib/customer-statistics.js";
 import { startReviewAnalysisWorker } from "./lib/review-analysis-worker.js";
 
 if (process.env.NODE_ENV === "production" &&
@@ -660,6 +661,8 @@ async function applyStartupMigrations(): Promise<void> {
       WHERE deleted_at IS NULL;
   `);
   logger.info("Startup migration: covering active customer count index ensured");
+  await ensureCustomerStatisticsSchema();
+  logger.info("Startup migration: transactional customer statistics ensured");
 
   // Add credential_version for post-password-reset session revocation.
   // Incrementing it on reset invalidates bearer tokens minted before the reset.

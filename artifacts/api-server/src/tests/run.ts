@@ -255,6 +255,9 @@ try {
   await reviewMigrationDb.query(await readFile(
     new URL("../../../../lib/db/migrations/0056_review_analysis.sql", import.meta.url), "utf8",
   ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0061_uc_customer_statistics.sql", import.meta.url), "utf8",
+  ));
 } finally { await reviewMigrationDb.end(); }
 
 console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);

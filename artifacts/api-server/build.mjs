@@ -124,6 +124,8 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   );
   await cp(path.resolve(artifactDir, "../../lib/db/migrations/0056_review_analysis.sql"),
     path.resolve(distDir, "0056_review_analysis.sql"));
+  await cp(path.resolve(artifactDir, "../../lib/db/migrations/0061_uc_customer_statistics.sql"),
+    path.resolve(distDir, "0061_uc_customer_statistics.sql"));
 }
 
 buildAll().catch((err) => {

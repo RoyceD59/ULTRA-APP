@@ -29,6 +29,7 @@ export * from "./uc-push-tokens";
 export * from "./uc-enquiries";
 export * from "./uc-notif-prefs";
 export * from "./uc-users";
+export * from "./uc-customer-statistics";
 export * from "./uc-orders";
 export * from "./uc-order-status";
 export * from "./uc-cod-collection-events";
