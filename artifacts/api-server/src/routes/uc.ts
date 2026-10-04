@@ -9108,7 +9108,8 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
                'g'
              ) ILIKE $${pi})`
       );
-      params.push(`%${q}%`);
+      // PostgreSQL LIKE treats %, _ and backslash specially; search text is literal.
+      params.push(`%${q.replace(/[\\%_]/g, "\\$&")}%`);
       pi++;
     }
     if (from) {

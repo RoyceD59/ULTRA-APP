@@ -1,5 +1,5 @@
 /**
- * Regression coverage for GET /uc/admin/customers name and email search.
+ * Regression coverage for GET /uc/admin/customers name, email and phone search.
  *
  * Run with:
  *   TEST_GLOB='src/tests/customer-search.test.ts' pnpm test
@@ -72,14 +72,24 @@ before(async () => {
     ["empty-last", `search-empty-${suffix}@test.internal`, "Johnny", ""],
     ["spaced", `search-spaced-${suffix}@test.internal`, "  John  ", "  Doe  "],
     ["email-only", `unique-email-${suffix}@test.internal`, "Unrelated", "Person"],
+    ["percent-name", `percent-name-${suffix}@test.internal`, "Rate%Name", "Person"],
+    ["percent-email", `literal%email-${suffix}@test.internal`, "Unrelated", "Person"],
+    ["underscore-name", `underscore-name-${suffix}@test.internal`, "Under", "Score_Name"],
+    ["underscore-email", `literal_email-${suffix}@test.internal`, "Unrelated", "Person"],
+    ["backslash-name", `backslash-name-${suffix}@test.internal`, "Back\\Slash", "Person"],
+    ["phone-only", `phone-only-${suffix}@test.internal`, "Unrelated", "Person", "+254712345678"],
+    ["percent-phone", `percent-phone-${suffix}@test.internal`, "Unrelated", "Person", "phone%value"],
+    ["underscore-phone", `underscore-phone-${suffix}@test.internal`, "Unrelated", "Person", "phone_value"],
   ] as const;
 
-  for (const [key, email, firstName, lastName] of rows) {
+  for (const row of rows) {
+    const [key, email, firstName, lastName] = row;
+    const phone = row.length > 4 ? row[4] : "";
     const inserted = await pool.query<{ id: number }>(
       `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone)
-       VALUES ($1, 'x', $2, $3, '')
+       VALUES ($1, 'x', $2, $3, $4)
        RETURNING id`,
-      [email, firstName, lastName],
+      [email, firstName, lastName, phone],
     );
     const id = inserted.rows[0]!.id;
     insertedIds.push(id);
@@ -127,5 +137,43 @@ describe("GET /uc/admin/customers — search", () => {
   it("searches email independently of unrelated name fields", async () => {
     const response = await search("unique-email-");
     assert.deepEqual(matchingTestCustomerKeys(response), ["email-only"]);
+  });
+
+  it("still matches a partial phone number", async () => {
+    const response = await search("712345");
+    assert.deepEqual(matchingTestCustomerKeys(response), ["phone-only"]);
+    assert.equal(response.total, 1);
+  });
+
+  for (const [character, keys] of [
+    ["%", ["percent-email", "percent-name", "percent-phone"]],
+    ["_", ["underscore-email", "underscore-name", "underscore-phone"]],
+  ] as const) {
+    it(`matches ${character} literally in names, emails and phones, not as a wildcard`, async () => {
+      const response = await search(character);
+      assert.deepEqual(matchingTestCustomerKeys(response), keys);
+      assert.equal(response.total, keys.length);
+    });
+  }
+
+  it("matches literal wildcard characters within partial queries", async () => {
+    for (const [query, key] of [
+      ["rate%na", "percent-name"],
+      ["literal%email-", "percent-email"],
+      ["score_na", "underscore-name"],
+      ["literal_email-", "underscore-email"],
+      ["phone%val", "percent-phone"],
+      ["phone_val", "underscore-phone"],
+    ]) {
+      const response = await search(query!);
+      assert.deepEqual(matchingTestCustomerKeys(response), [key], query);
+      assert.equal(response.total, 1, query);
+    }
+  });
+
+  it("treats backslash literally rather than as a pattern escape", async () => {
+    const response = await search("Back\\Slash");
+    assert.deepEqual(matchingTestCustomerKeys(response), ["backslash-name"]);
+    assert.equal(response.total, 1);
   });
 });
