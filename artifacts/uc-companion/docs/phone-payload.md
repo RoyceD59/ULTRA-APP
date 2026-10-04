@@ -26,6 +26,76 @@ metadata. `check:phone` compares deterministic output with the installed
 dependency; root `typecheck:libs` runs this freshness gate so a dependency
 upgrade cannot silently keep an old facade.
 
+## Web release graph gate
+
+The generator only checks its own retained graph. A new app import from the
+broad `libphonenumber-js` barrel can still add unused code outside the facade.
+Before accepting a web release, export with source maps, collect the scripts
+actually requested on a fresh Home load, and run the separate phone gate:
+
+```sh
+cd artifacts/uc-companion
+# Use the candidate release's production bundling settings.
+CI=1 NODE_ENV=production pnpm exec expo export --platform web \
+  --source-maps --clear --output-dir /tmp/uc-phone-release
+node scripts/measure-loading.cjs /tmp/uc-phone-release \
+  /tmp/uc-phone-release-timings.json
+node scripts/profile-web-payload.cjs /tmp/uc-phone-release \
+  /tmp/uc-phone-release-timings.json /tmp/uc-phone-release-profile.json \
+  --assert-phone-graph
+node --test scripts/__tests__/profile-web-payload.test.mjs
+```
+
+Keep the export, timing inventory and profile from the same candidate. This is
+an explicit release-acceptance command, not a flag automatically run by
+`scripts/build.js`. An unflagged profile is only an inventory, not a phone-gate
+pass. Use the local benchmark-safe export below for regression measurements,
+not as approval of different published bytes.
+
+`--assert-phone-graph` exits nonzero when:
+
+- Initially requested maps contain upstream `AsYouType*`,
+  `PhoneNumberMatcher*`, `findNumbers`, `searchNumbers`,
+  `findPhoneNumbers*` or `searchPhoneNumbers*` modules, including nested search
+  helpers and pnpm/Windows paths. It checks module names, not strings in source
+  text; the facade's attribution banner and ordinary `PhoneNumber` formatting
+  remain allowed.
+- The initial inventory is empty, duplicated, names a missing script/map, or
+  omits the shared facade chunk.
+- Any exported web script lacks a readable, nonempty source map. All exported
+  maps are inspected for sharing, including deferred checkout/registration.
+- There is not exactly one facade, shared phone helper, instant-water identity
+  helper, checkout module and registration module in the export, or any of
+  these lacks embedded source content.
+- Checkout or registration stops importing both shared normalization/validity
+  helpers; either shared helper stops importing the facade parser; or one of
+  these consumers adds a runtime upstream barrel import. These checks parse
+  source syntax, so comments cannot substitute for imports and type-only
+  upstream imports remain allowed.
+
+On success, the JSON report's `phoneGraph` records the checked initial
+filenames, exported script count and the single chunk/source location of each
+shared module. The unused-module assertion is scoped to initially requested
+scripts; it does not claim that all deferred routes are free of unused phone
+code. Singleton facade and consumer-import assertions cover deferred routes.
+
+This is independent of the existing team-API download guard.
+`--assert-companion-only` still checks the API graph, not the phone graph.
+Pass both flags to run both gates; neither one substitutes for the other.
+Missing or corrupt evidence must be corrected rather than disabling a gate.
+Source maps and profiling reports are local evidence and must not be published.
+
+The guard's fixtures cover broad-barrel regressions, ordinary formatting,
+type-only imports, commented-out imports, duplicate/missing facades, missing
+route evidence, damaged maps, missing source content, incomplete inventories,
+and successful/failing CLI exit status. A fresh production-settings,
+benchmark-safe export passed the gate with six initially requested scripts and
+38 exported web scripts. Checkout and registration were separate deferred
+chunks; the facade and both helpers occurred once in the initially requested
+shared chunk. All six fixture-backed browser measurement runs had zero page
+errors, and the existing six phone-policy differential tests passed. These are
+local graph/behavior results, not production or physical-phone evidence.
+
 ## Paired web measurements
 
 Use the commands below with the pre-change tree for the before export and
@@ -122,7 +192,8 @@ CI=1 NODE_ENV=production EXPO_PUBLIC_PREVIEW_SAFE_MODE=1 \
   --output-dir /tmp/uc-phone-after
 node scripts/measure-loading.cjs /tmp/uc-phone-after /tmp/uc-phone-after-timings.json
 node scripts/profile-web-payload.cjs /tmp/uc-phone-after \
-  /tmp/uc-phone-after-timings.json /tmp/uc-phone-after-profile.json
+  /tmp/uc-phone-after-timings.json /tmp/uc-phone-after-profile.json \
+  --assert-phone-graph
 
 CI=1 NODE_ENV=production pnpm exec expo export \
   --platform android --platform ios --source-maps --clear \
