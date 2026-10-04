@@ -73,7 +73,7 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
     [userId, String(pricing.total), method, input.promoCode ?? "", pricing.discountPercent, pricing.discountAmount,
       JSON.stringify(normalizedAddress), input.idempotencyKey, randomUUID(),
        JSON.stringify({ hash, input, pricing, provider: null, accountEmail: account?.rows[0]?.email,
-         paymentAttemptId: randomUUID(), paymentAttempts: [] }), method === "cod" ? "awaiting_collection" : null]);
+         paymentAttemptId: randomUUID(), paymentAttempts: [], paymentNotStarted: true }), method === "cod" ? "awaiting_collection" : null]);
     const order = inserted.rows[0];
     for (const line of pricing.lines) await client.query(`INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,$2,$3,$4,$5)`,
       [order.id, line.productId, line.name, line.quantity, String(line.subtotal)]);
@@ -89,7 +89,8 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
 export async function bindCheckoutPayment(orderId: number, reference: string, provider: unknown) {
   const result = await pool.query(`UPDATE uc_orders SET payment_reference=$2,
     checkout_snapshot=jsonb_set(checkout_snapshot,'{provider}',$3::jsonb)
-    WHERE id=$1 AND (payment_reference='' OR payment_reference IS NULL OR payment_reference=$2) RETURNING id`,
+    WHERE id=$1 AND status<>'cancelled' AND checkout_state<>'cancelled'
+      AND (payment_reference='' OR payment_reference IS NULL OR payment_reference=$2) RETURNING id`,
     [orderId, reference, JSON.stringify(provider)]);
   if (!result.rows[0]) throw new Error("This checkout already has a payment attempt. Resume that payment instead.");
 }
@@ -111,6 +112,7 @@ export async function confirmCheckoutOrder(orderId: number, reference: string) {
     const result = await client.query("SELECT * FROM uc_orders WHERE id=$1 FOR UPDATE", [orderId]);
     let order = result.rows[0];
     if (!order?.checkout_snapshot) throw new Error("Checkout snapshot is missing");
+    if (order.status === "cancelled" || order.checkout_state === "cancelled") throw new Error("This checkout was cancelled; payment requires staff reconciliation");
     if (order.payment_method !== "cod" && order.payment_method !== "free" && order.payment_reference !== reference) throw new Error("Payment reference does not belong to this checkout");
     if (order.checkout_state === "confirmed") { await client.query("COMMIT"); return { order, repeated: true }; }
     const { pricing } = order.checkout_snapshot;

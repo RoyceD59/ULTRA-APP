@@ -10,6 +10,9 @@ import { requestPhysicalTest } from "../lib/instant-water-check-service.js";
 import { setPhysicalTestNotificationSenderForTests, type PhysicalTestNotification } from "../lib/physical-test-notifications.js";
 import { quoteMatchesCheckout } from "../../../uc-companion/hooks/checkoutQuoteIdentity.js";
 import { recoverSnapshotCheckout } from "../routes/payments.js";
+import { reconcileAbandonedCheckouts } from "../lib/abandoned-checkouts.js";
+import { releaseUnsuccessfulCheckout, type PaymentVerifier } from "../lib/checkout-cancellation.js";
+import { verifyPaymentOnServer } from "../routes/uc.js";
 
 describe("authoritative checkout and managed waived-service benefits", () => {
   let server: http.Server, base = "", uid = 0, otherId = 0, token = "";
@@ -110,6 +113,7 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     await pool.query("DELETE FROM uc_promotion_uses WHERE user_id=ANY($1::int[])", [[uid,otherId]]);
     await pool.query("DELETE FROM uc_promotions WHERE code LIKE $1", [`${prefix}%`]);
     await pool.query("DELETE FROM uc_orders WHERE user_id=ANY($1::text[])", [[String(uid),String(otherId)]]);
+    await pool.query("DELETE FROM uc_referral_benefits WHERE user_id=ANY($1::int[])", [[uid,otherId]]);
     await pool.query("DELETE FROM uc_rewards_ledger WHERE user_id=ANY($1::int[])", [[uid,otherId]]);
     await pool.query("DELETE FROM uc_users WHERE id=ANY($1::int[])", [[uid,otherId]]);
   });
@@ -203,6 +207,192 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     providerStatus = "success"; delete process.env.PAYSTACK_SECRET_KEY;
     await assert.rejects(prepareCheckoutOrder(fixture(randomUUID(),{quotedTotal:1}) as any,String(uid),"paystack"),/Prices changed/);
     assert.ok(order.id);
+  });
+  it("reconciles old Paystack and M-Pesa failures against their saved references and restores the final use exactly once", async () => {
+    const code = await promo("free_shipping",0,1);
+    const input = fixture(randomUUID(),{fulfillment:"delivery",shippingAddress:{...address,address1:"A road",city:"Nairobi"},promoCode:code});
+    const order = await prepareCheckoutOrder(input as any,String(uid),"paystack");
+    await bindCheckoutPayment(order.id,"abandoned-paystack",{reference:"abandoned-paystack"});
+    await pool.query("UPDATE uc_orders SET date_created=now()-interval '2 days' WHERE id=$1",[order.id]);
+    process.env.PAYSTACK_SECRET_KEY="fixture-key";
+    providerStatus="failed";
+    const runs = await Promise.all([
+      reconcileAbandonedCheckouts({userIds:[String(uid)]}),
+      reconcileAbandonedCheckouts({userIds:[String(uid)]}),
+    ]);
+    assert.equal(runs.reduce((n,r)=>n+r.released,0),1,"concurrent cleanup releases once");
+    const cancelled = (await pool.query("SELECT * FROM uc_orders WHERE id=$1",[order.id])).rows[0];
+    assert.equal(cancelled.status,"cancelled");
+    assert.equal(cancelled.payment_reference,"abandoned-paystack");
+    assert.equal(cancelled.checkout_snapshot.provider.reference,"abandoned-paystack");
+    assert.equal(cancelled.checkout_snapshot.benefitRelease.reference,"abandoned-paystack");
+    assert.equal(cancelled.checkout_snapshot.benefitRelease.outcome,"terminal_failure");
+    assert.equal(cancelled.checkout_snapshot.benefitRelease.promotionUses.length,1);
+    assert.equal((await pool.query("SELECT count(*)::int n FROM uc_order_items WHERE order_id=$1",[order.id])).rows[0].n,2);
+    assert.equal((await reconcileAbandonedCheckouts({userIds:[String(uid)]})).released,0);
+    await assert.rejects(confirmCheckoutOrder(order.id,"abandoned-paystack"),/cancelled/);
+    await assert.rejects(bindCheckoutPayment(order.id,"abandoned-paystack",{}),/payment attempt/);
+    await assert.rejects(recoverSnapshotCheckout("abandoned-paystack",2000,"KES",undefined,async()=>{}),/cancelled/);
+    const uses = await Promise.allSettled([
+      prepareCheckoutOrder({...input,idempotencyKey:randomUUID()} as any,String(uid),"mpesa"),
+      prepareCheckoutOrder({...input,idempotencyKey:randomUUID()} as any,String(otherId),"mpesa"),
+    ]);
+    assert.equal(uses.filter(r=>r.status==="fulfilled").length,1,"the final released use has exactly one new owner");
+    const replacement = (uses.find(r=>r.status==="fulfilled") as PromiseFulfilledResult<any>).value;
+    for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY"]) process.env[key]="fixture";
+    process.env.MPESA_SHORTCODE="174379";
+    const ref=`FAILED_${randomUUID()}`;
+    mpesaStatuses.set(ref,"1032");
+    await bindCheckoutPayment(replacement.id,ref,{checkoutRequestId:ref});
+    await pool.query("UPDATE uc_orders SET date_created=now()-interval '2 days' WHERE id=$1",[replacement.id]);
+    const mpesa = await reconcileAbandonedCheckouts({userIds:[replacement.user_id]});
+    assert.equal(mpesa.released,1);
+    assert.equal((await pool.query("SELECT count(*)::int n FROM uc_promotion_uses WHERE operation_ref=$1",[String(replacement.id)])).rows[0].n,0);
+    for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY","MPESA_SHORTCODE"]) delete process.env[key];
+    providerStatus="success"; delete process.env.PAYSTACK_SECRET_KEY;
+  });
+  it("uses age only for selection and keeps unknown, paid, remotely attempted and ambiguous initiation reservations", async () => {
+    const rows: any[] = [];
+    async function reserved(method="paystack") {
+      const code=await promo("free_shipping",0,1);
+      const order=await prepareCheckoutOrder(fixture(randomUUID(),{fulfillment:"delivery",
+        shippingAddress:{...address,address1:"A road",city:"Nairobi"},promoCode:code}) as any,String(uid),method);
+      rows.push(order); return order;
+    }
+    const fresh=await reserved();
+    const never=await reserved();
+    const failedStripe=await reserved("stripe");
+    await bindCheckoutPayment(failedStripe.id,"expired-stripe",{sessionId:"expired-stripe"});
+    const protectedIds: number[]=[fresh.id];
+    for (const state of ["pending","unknown","paid","throws","initializing","legacy","remote_attempted","remote_unknown","remote_total_mismatch","confirmed","paid_marker","receipt","remote_marker","wc_marker"]) {
+      const order=await reserved();
+      protectedIds.push(order.id);
+      if (!["initializing","legacy"].includes(state)) await bindCheckoutPayment(order.id,`keep-${state}`,{reference:`keep-${state}`});
+      if (["remote_attempted","remote_unknown","remote_total_mismatch","confirmed"].includes(state)) {
+        await pool.query("UPDATE uc_orders SET checkout_state=$2 WHERE id=$1",[order.id,state]);
+      }
+      if (state==="initializing") await pool.query(`UPDATE uc_orders SET checkout_state='payment_pending',
+        checkout_snapshot=checkout_snapshot || '{"paymentStartedAt":"saved-before-request","paymentNotStarted":false}'::jsonb WHERE id=$1`,[order.id]);
+      if (state==="legacy") await pool.query("UPDATE uc_orders SET checkout_snapshot=checkout_snapshot-'paymentNotStarted' WHERE id=$1",[order.id]);
+      if (state==="paid_marker") await pool.query("UPDATE uc_orders SET payment_confirmed_at=now() WHERE id=$1",[order.id]);
+      if (state==="receipt") await pool.query("UPDATE uc_orders SET mpesa_receipt='PAID_RECEIPT' WHERE id=$1",[order.id]);
+      if (state==="remote_marker") await pool.query("UPDATE uc_orders SET remote_attempted_at=now() WHERE id=$1",[order.id]);
+      if (state==="wc_marker") await pool.query("UPDATE uc_orders SET wc_order_id=99999 WHERE id=$1",[order.id]);
+    }
+    await pool.query("UPDATE uc_orders SET date_created=now()-interval '2 days' WHERE id=ANY($1::int[])",
+      [rows.filter(r=>r.id!==fresh.id).map(r=>r.id)]);
+    const calls: [string,string][]=[];
+    const verify: PaymentVerifier=async (method,reference)=>{
+      calls.push([method,reference]);
+      if (reference==="expired-stripe") return {ok:false,failureFinal:true,reason:"Expired session"};
+      if (reference==="keep-throws") throw new Error("Provider offline");
+      if (reference==="keep-paid") return {ok:true};
+      return {ok:false};
+    };
+    const result=await reconcileAbandonedCheckouts({userIds:[String(uid)],verify});
+    assert.equal(result.released,2);
+    assert.equal(result.errors,1,"provider failures retain the reservation and do not abort the run");
+    assert.ok(calls.some(([m,r])=>m==="stripe" && r==="expired-stripe"));
+    for (const id of protectedIds) {
+      const row=(await pool.query("SELECT status FROM uc_orders WHERE id=$1",[id])).rows[0];
+      assert.equal(row.status,"pending",`protected order ${id} must remain untouched`);
+      assert.equal((await pool.query("SELECT count(*)::int n FROM uc_promotion_uses WHERE operation_ref=$1",[String(id)])).rows[0].n,1);
+    }
+    assert.equal((await pool.query("SELECT checkout_snapshot FROM uc_orders WHERE id=$1",[never.id])).rows[0].checkout_snapshot.benefitRelease.outcome,"never_initiated");
+  });
+  it("lets recovery win while cleanup verifies and rejects stale failure evidence after attempt replacement", async () => {
+    const code=await promo("free_shipping",0,1);
+    const order=await prepareCheckoutOrder(fixture(randomUUID(),{fulfillment:"delivery",
+      shippingAddress:{...address,address1:"A road",city:"Nairobi"},promoCode:code}) as any,String(uid),"paystack");
+    await bindCheckoutPayment(order.id,"racing-recovery",{reference:"racing-recovery"});
+    const snapshot=(await pool.query("SELECT * FROM uc_orders WHERE id=$1",[order.id])).rows[0];
+    let started!: ()=>void, finish!: ()=>void;
+    const entered=new Promise<void>(r=>started=r);
+    const waiting=new Promise<void>(r=>finish=r);
+    const cleanup=releaseUnsuccessfulCheckout(snapshot,"abandoned_cleanup",async(method,reference)=>{
+      assert.equal(method,"paystack"); assert.equal(reference,"racing-recovery");
+      started(); await waiting; return {ok:false,failureFinal:true};
+    });
+    await entered;
+    const recovered=await recoverSnapshotCheckout("racing-recovery",2000,"KES",undefined,async()=>{});
+    assert.equal(recovered,order.id);
+    finish();
+    assert.equal(await cleanup,"retained");
+    assert.equal((await pool.query("SELECT count(*)::int n FROM uc_promotion_uses WHERE operation_ref=$1",[String(order.id)])).rows[0].n,1);
+    const changing=await prepareCheckoutOrder(fixture() as any,String(uid),"mpesa");
+    await bindCheckoutPayment(changing.id,"old-attempt",{checkoutRequestId:"old-attempt"});
+    const prior=(await pool.query("SELECT * FROM uc_orders WHERE id=$1",[changing.id])).rows[0];
+    assert.equal(await releaseUnsuccessfulCheckout(prior,"abandoned_cleanup",async()=>{
+      await pool.query(`UPDATE uc_orders SET payment_reference='new-attempt',
+        checkout_snapshot=jsonb_set(checkout_snapshot,'{paymentAttemptId}','"replacement"') WHERE id=$1`,[changing.id]);
+      return {ok:false,failureFinal:true};
+    }),"retained");
+    assert.equal((await pool.query("SELECT payment_reference,status FROM uc_orders WHERE id=$1",[changing.id])).rows[0].status,"pending");
+    const initiating=await prepareCheckoutOrder(fixture() as any,String(uid),"stripe");
+    assert.equal(await releaseUnsuccessfulCheckout(initiating,"abandoned_cleanup",async()=>{throw new Error("Must not verify");}),"released");
+  });
+  it("restores a reserved referral benefit once, retains its order audit, and allows exactly one new claim", async () => {
+    const inserted=await pool.query(`INSERT INTO uc_referral_benefits(conversion_id,user_id,kind,discount_percent)
+      VALUES($1,$2,'discount',10) RETURNING id`,[Date.now(),uid]);
+    const benefitId=inserted.rows[0].id;
+    const input=fixture(randomUUID(),{applyReferralDiscount:true});
+    const order=await prepareCheckoutOrder(input as any,String(uid),"paystack");
+    assert.equal(Number((await pool.query("SELECT referral_benefit_id FROM uc_orders WHERE id=$1",[order.id])).rows[0].referral_benefit_id),Number(benefitId));
+    await bindCheckoutPayment(order.id,"failed-referral",{reference:"failed-referral"});
+    const snapshot=(await pool.query("SELECT * FROM uc_orders WHERE id=$1",[order.id])).rows[0];
+    const verify:PaymentVerifier=async(m,r)=>{
+      assert.equal(m,"paystack"); assert.equal(r,"failed-referral"); return {ok:false,failureFinal:true};
+    };
+    const outcomes=await Promise.all([
+      releaseUnsuccessfulCheckout(snapshot,"abandoned_cleanup",verify),
+      releaseUnsuccessfulCheckout(snapshot,"abandoned_cleanup",verify),
+    ]);
+    assert.equal(outcomes.filter(o=>o==="released").length,1);
+    const benefit=(await pool.query("SELECT * FROM uc_referral_benefits WHERE id=$1",[benefitId])).rows[0];
+    assert.equal(benefit.status,"available"); assert.equal(benefit.used_order_id,null); assert.equal(benefit.used_at,null);
+    const cancelled=(await pool.query("SELECT * FROM uc_orders WHERE id=$1",[order.id])).rows[0];
+    assert.equal(cancelled.referral_benefit_id,null,"release the unique active entitlement link while retaining the link in the audit");
+    assert.equal(Number(cancelled.checkout_snapshot.benefitRelease.referralBenefitId),Number(benefitId));
+    assert.equal(cancelled.checkout_snapshot.benefitRelease.referralRestored,true);
+    const claims=await Promise.allSettled([
+      prepareCheckoutOrder({...input,idempotencyKey:randomUUID()} as any,String(uid),"paystack"),
+      prepareCheckoutOrder({...input,idempotencyKey:randomUUID()} as any,String(uid),"paystack"),
+    ]);
+    assert.equal(claims.filter(o=>o.status==="fulfilled").length,1,
+      claims.filter(o=>o.status==="rejected").map(o=>String((o as PromiseRejectedResult).reason)).join("; "));
+    assert.equal(await releaseUnsuccessfulCheckout(snapshot,"abandoned_cleanup",verify),"already_cancelled");
+    assert.equal((await pool.query("SELECT status FROM uc_referral_benefits WHERE id=$1",[benefitId])).rows[0].status,"used","repeated old cleanup cannot restore a newly claimed benefit");
+  });
+  it("keeps reservations when initiation wins a release race and rejects untrusted failure-shaped provider responses", async () => {
+    const order=await prepareCheckoutOrder(fixture() as any,String(uid),"paystack");
+    const lock=await pool.connect();
+    try {
+      await lock.query("BEGIN");
+      await lock.query("SELECT id FROM uc_orders WHERE id=$1 FOR UPDATE",[order.id]);
+      const release=releaseUnsuccessfulCheckout(order,"abandoned_cleanup");
+      await lock.query(`UPDATE uc_orders SET checkout_state='payment_initiating',
+        checkout_snapshot=checkout_snapshot || '{"paymentNotStarted":false,"paymentStartedAt":"persisted-before-request"}'::jsonb WHERE id=$1`,[order.id]);
+      await lock.query("COMMIT");
+      assert.equal(await release,"retained");
+    } finally { await lock.query("ROLLBACK"); lock.release(); }
+    const mockFetch=globalThis.fetch;
+    try {
+      process.env.PAYSTACK_SECRET_KEY="fixture-key";
+      globalThis.fetch=async()=>new Response(JSON.stringify({status:false,data:{status:"failed"}}));
+      assert.notEqual((await verifyPaymentOnServer("paystack","untrusted-failure")).failureFinal,true);
+      globalThis.fetch=async()=>new Response(JSON.stringify({status:true,data:{status:"failed"}}),{status:503});
+      assert.notEqual((await verifyPaymentOnServer("paystack","provider-offline")).failureFinal,true);
+      for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY"]) process.env[key]="fixture";
+      process.env.MPESA_SHORTCODE="174379";
+      globalThis.fetch=async(url:any)=>String(url).includes("/oauth/")
+        ?new Response(JSON.stringify({access_token:"fixture"}))
+        :new Response(JSON.stringify({ResultCode:"1032"}),{status:503});
+      assert.notEqual((await verifyPaymentOnServer("mpesa","provider-offline")).failureFinal,true);
+    } finally {
+      globalThis.fetch=mockFetch;
+      delete process.env.PAYSTACK_SECRET_KEY;
+      for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY","MPESA_SHORTCODE"]) delete process.env[key];
+    }
   });
   it("requires fulfillment, waives selected delivery only and rejects stacked or wrong-operation benefits", async () => {
     assert.equal((await api("/uc/checkout/quote",{lineItems:cart})).status,422);

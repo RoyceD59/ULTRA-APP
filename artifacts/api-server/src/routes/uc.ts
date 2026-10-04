@@ -3959,8 +3959,9 @@ export async function verifyPaymentOnServer(
       const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
       const tokenRes = await fetch(
         `https://${env}.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials`,
-        { headers: { Authorization: `Basic ${creds}` } }
+        { headers: { Authorization: `Basic ${creds}` }, signal: AbortSignal.timeout(10_000) }
       );
+      if (!tokenRes.ok) return { ok: false, reason: "M-Pesa token request failed" };
       const tokenData = (await tokenRes.json()) as { access_token?: string };
       const token = tokenData.access_token;
       if (!token) return { ok: false, reason: "Failed to get M-Pesa token" };
@@ -3970,7 +3971,9 @@ export async function verifyPaymentOnServer(
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ BusinessShortCode: shortcode, Password: password, Timestamp: timestamp, CheckoutRequestID: reference }),
+        signal: AbortSignal.timeout(10_000),
       });
+      if (!qRes.ok) return { ok: false, reason: "M-Pesa verification request failed" };
       const qData = (await qRes.json()) as Record<string, string>;
       const ok = qData["ResultCode"] === "0";
       const initiation = await pool.query("SELECT expected_amount FROM mpesa_stk_initiations WHERE checkout_request_id=$1", [reference]);
@@ -3989,7 +3992,7 @@ export async function verifyPaymentOnServer(
     }
     try {
       const StripeSDK = await import("stripe");
-      const stripe = new StripeSDK.default(stripeKey);
+      const stripe = new StripeSDK.default(stripeKey, { timeout: 10_000, maxNetworkRetries: 0 });
       const session = await stripe.checkout.sessions.retrieve(reference);
       const ok = session.payment_status === "paid";
       return ok ? { ok: true, amount: Number(session.amount_total) / 100, currency: session.currency?.toUpperCase() } : { ok: false, failureFinal: session.status === "expired", reason: `Stripe session status: ${session.payment_status}` };
@@ -4008,7 +4011,7 @@ export async function verifyPaymentOnServer(
     try {
       const vRes = await fetch(
         `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-        { headers: { Authorization: `Bearer ${secretKey}` } }
+        { headers: { Authorization: `Bearer ${secretKey}` }, signal: AbortSignal.timeout(10_000) }
       );
       // Treat upstream 5xx / 429 as a transient outage — Paystack blips commonly
       // manifest as a non-2xx HTTP response rather than a thrown exception.
@@ -4022,7 +4025,7 @@ export async function verifyPaymentOnServer(
       }
       const vData = (await vRes.json()) as { status: boolean; data?: { status: string; amount?: number; currency?: string } };
       const ok = vData.status && vData.data?.status === "success";
-      return ok ? { ok: true, amount: Number(vData.data?.amount) / 100, currency: vData.data?.currency } : { ok: false, failureFinal: ["failed","abandoned","reversed"].includes(vData.data?.status ?? ""), reason: `Paystack status: ${vData.data?.status ?? "unknown"}` };
+      return ok ? { ok: true, amount: Number(vData.data?.amount) / 100, currency: vData.data?.currency } : { ok: false, failureFinal: vData.status === true && ["failed","abandoned","reversed"].includes(vData.data?.status ?? ""), reason: `Paystack status: ${vData.data?.status ?? "unknown"}` };
     } catch {
       // Network or timeout — transient; caller should offer a retry path.
       return { ok: false, reason: "Paystack verification request failed", retryable: true };

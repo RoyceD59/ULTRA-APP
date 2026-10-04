@@ -36,6 +36,7 @@ import {
 } from "../routes/referrals.js";
 import { processOrderNotificationOutbox, reconcileWooOrderStatuses } from "./order-status-pipeline.js";
 import { queueBlogRun, resumeQueuedBlogRuns, weeklyBlogRunKey } from "./blog-editorial.js";
+import { reconcileAbandonedCheckouts } from "./abandoned-checkouts.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -253,6 +254,20 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  let checkoutCleanupRunning = false;
+  cron.schedule("17 * * * *", async () => {
+    if (checkoutCleanupRunning) return;
+    checkoutCleanupRunning = true;
+    try {
+      const result = await reconcileAbandonedCheckouts();
+      logger.info(result, "Scheduler: abandoned checkouts reconciled");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: abandoned checkout reconciliation failed");
+    } finally {
+      checkoutCleanupRunning = false;
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: abandoned checkout reconciliation registered (hourly; 24-hour candidate age, provider-confirmed release only)");
   void resumeQueuedBlogRuns()
     .then((resumed) => {
       if (resumed) logger.info({ resumed }, "Scheduler: resuming queued Companion editorial runs");

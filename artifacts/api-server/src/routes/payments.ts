@@ -80,8 +80,14 @@ export async function recoverSnapshotCheckout(reference: string, amount: number,
   if (!Number.isFinite(amount) || Math.abs(Number(order.total) - amount) > 0.01 || currency.toUpperCase() !== "KES") throw new Error("Payment does not match reserved checkout");
   // Fill the verified receipt before confirmation reads the order and queues
   // notifications. Empty strings are the schema default, not SQL NULL.
-  if (receipt && order.payment_method === "mpesa") await pool.query(`UPDATE uc_orders SET mpesa_receipt=$2
-    WHERE id=$1 AND (mpesa_receipt='' OR mpesa_receipt IS NULL)`,[order.id,receipt]);
+  // Latch verified payment before fulfillment, so cleanup cannot release a
+  // benefit during the gap between provider recovery and order confirmation.
+  const latched = await pool.query(`UPDATE uc_orders SET payment_confirmed_at=COALESCE(payment_confirmed_at,now()),
+    mpesa_receipt=CASE WHEN payment_method='mpesa' AND (mpesa_receipt='' OR mpesa_receipt IS NULL)
+      THEN COALESCE($3,mpesa_receipt) ELSE mpesa_receipt END
+    WHERE id=$1 AND payment_reference=$2 AND status<>'cancelled' AND checkout_state<>'cancelled' RETURNING id`,
+    [order.id, reference, receipt ?? null]);
+  if (!latched.rows[0]) throw new Error("This checkout was cancelled or its attempt changed; payment requires staff reconciliation");
   const confirmed = await confirmCheckoutOrder(order.id, reference);
   if (!confirmed.repeated && !confirmed.reconciliationRequired) await notify(confirmed.order);
   return order.id;
@@ -107,6 +113,7 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
           reference:order.payment_reference,provider:order.checkout_snapshot.provider,outcome:"terminal_failure"});
         const reset = await pool.query(`UPDATE uc_orders SET payment_reference='',checkout_state='payment_pending',
           checkout_snapshot=checkout_snapshot || jsonb_build_object('provider',NULL,'paymentAttemptId',$4::text,
+            'paymentNotStarted',true,'paymentStartedAt',NULL,
             'paymentAttempts',COALESCE(checkout_snapshot->'paymentAttempts','[]'::jsonb) || $3::jsonb)
           WHERE id=$1 AND payment_reference=$2 AND status='pending' AND checkout_state='payment_initiating'
             AND payment_confirmed_at IS NULL RETURNING *`,
@@ -115,8 +122,9 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
       }
     }
     if (order.checkout_snapshot?.provider) { res.json(order.checkout_snapshot.provider); return; }
-    const acquired = await pool.query(`UPDATE uc_orders SET checkout_state='payment_initiating'
-      WHERE id=$1 AND checkout_state='payment_pending' RETURNING id`, [order.id]);
+    const acquired = await pool.query(`UPDATE uc_orders SET checkout_state='payment_initiating',
+      checkout_snapshot=checkout_snapshot || jsonb_build_object('paymentStartedAt',now(),'paymentNotStarted',false)
+      WHERE id=$1 AND status='pending' AND checkout_state='payment_pending' RETURNING id`, [order.id]);
     if (!acquired.rows[0]) { res.status(409).json({ error: "The original payment is being initialized or needs reconciliation. Do not start another charge." }); return; }
     req.body.amount = Number(order.total);
     req.body.orderId = String(order.id);

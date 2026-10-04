@@ -15,6 +15,12 @@ Reserve the benefit atomically with the immutable pending checkout before reques
 
 **How to apply:** Release a payment reservation only when no attempt began or the provider independently confirms a terminal failure. Pending or unknown provider outcomes must remain bound to the original checkout.
 
+Elapsed time may select abandoned checkouts for reconciliation, but never proves payment failure. Missing legacy initiation evidence is an unknown outcome, not proof that no attempt began.
+
+**Why:** An app can close after the provider receives a payment request; returning the final promotion use by age alone could promise the same benefit twice.
+
+**How to apply:** Verify the original saved provider reference and recheck the same attempt against payment recovery before restoring an abandoned checkout's benefit.
+
 Retry a definitively failed M-Pesa push as a new payment attempt on the same reserved checkout, retaining the previous attempt identity rather than replaying its failed provider response.
 
 **Why:** Reusing a saved failed push response sends the customer back to polling a payment that can never complete.
