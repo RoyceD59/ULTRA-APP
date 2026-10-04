@@ -14,6 +14,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import { classifyMpesaStatus, pollSettleClearsRef } from '@/hooks/mpesaStatusClassifier';
 import { decideRetryGuard } from '@/hooks/mpesaRetryGuard';
+import { delayMpesaRetryCheckIndicator } from '@/hooks/mpesaRetryCheckIndicator';
 import { cancelMpesaPoll, isCancelledAttempt } from '@/hooks/mpesaPollManager';
 import { classifyPaymentInitError, RATE_LIMIT_TITLE, RATE_LIMIT_MESSAGE } from '@/hooks/rateLimitAlert';
 import {
@@ -180,6 +181,9 @@ export default function CheckoutScreen() {
   // See docs/checkout-retry-test-plan.md §§ 8-10 for the manual test checklist.
   const [processing, setProcessing] = useState(false);
   const [mpesaWaiting, setMpesaWaiting] = useState(false);
+  const [mpesaCheckingPrevious, setMpesaCheckingPrevious] = useState(false);
+  const [mpesaCheckVisible, setMpesaCheckVisible] = useState(false);
+  const mpesaCheckCleanupRef = useRef<(() => void) | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Monotonically incrementing attempt counter.  Each call to handleMpesa captures
   // its own `thisAttempt` value in closure scope.  Every async step checks
@@ -192,6 +196,18 @@ export default function CheckoutScreen() {
   // original push completed while the user was on the timeout screen, we create
   // the order from it instead of charging the customer a second time.
   const lastCheckoutRequestIdRef = useRef<string | null>(null);
+
+  function clearMpesaRetryCheck() {
+    mpesaCheckCleanupRef.current?.();
+    mpesaCheckCleanupRef.current = null;
+    setMpesaCheckingPrevious(false);
+    setMpesaCheckVisible(false);
+  }
+
+  useEffect(() => () => {
+    mpesaCheckCleanupRef.current?.();
+    cancelMpesaPoll(attemptRef, pollRef);
+  }, []);
 
   // Alison greeting — variant chosen once per checkout visit (stable seed)
   const greetingSeedRef = useRef(Math.random());
@@ -265,6 +281,7 @@ export default function CheckoutScreen() {
       }
     }
     cancelMpesaPoll(attemptRef, pollRef);
+    clearMpesaRetryCheck();
     setMpesaWaiting(false);
     setProcessing(false);
     setPaymentMethod(method);
@@ -402,6 +419,7 @@ export default function CheckoutScreen() {
   }
 
   async function handleMpesa() {
+    if (processing || mpesaCheckCleanupRef.current) return;
     if (!mpesaPhone || mpesaPhone.length < 9) {
       Alert.alert('Invalid number', 'Enter a valid Safaricom number (e.g. 0712 345 678)');
       return;
@@ -441,10 +459,20 @@ export default function CheckoutScreen() {
       //   fresh_push  → push definitively failed; safe to send a new push
       let guardResult: Awaited<ReturnType<typeof api.mpesaStatus>> | null = null;
       let queryFailed = false;
+      setMpesaCheckingPrevious(true);
+      setMpesaCheckVisible(false);
+      const stopIndicator = delayMpesaRetryCheckIndicator(() => {
+        if (!isCancelledAttempt(thisAttempt, attemptRef)) setMpesaCheckVisible(true);
+      });
+      mpesaCheckCleanupRef.current = stopIndicator;
       try {
         guardResult = await api.mpesaStatus(priorRef);
       } catch {
         queryFailed = true;
+      } finally {
+        stopIndicator();
+        // A cancelled query must not clear a newer retry's indicator.
+        if (mpesaCheckCleanupRef.current === stopIndicator) clearMpesaRetryCheck();
       }
       if (isCancelledAttempt(thisAttempt, attemptRef)) return; // cancelled while querying
 
@@ -1131,7 +1159,14 @@ export default function CheckoutScreen() {
             />
             <TouchableOpacity onPress={handleMpesa} disabled={processing}
               style={[styles.modalBtn, { backgroundColor: '#00A651' }]}>
-              {processing ? <ActivityIndicator color="#fff" size="small" /> :
+              {mpesaCheckingPrevious ? (
+                mpesaCheckVisible ? (
+                  <View style={styles.mpesaCheckStatus} accessibilityLiveRegion="polite">
+                    <ActivityIndicator color="#fff" size="small" />
+                    <Text style={styles.modalBtnText}>Checking your previous payment…</Text>
+                  </View>
+                ) : <Text style={styles.modalBtnText}>Send Payment Request</Text>
+              ) : processing ? <ActivityIndicator color="#fff" size="small" /> :
                 <Text style={styles.modalBtnText}>Send Payment Request</Text>}
             </TouchableOpacity>
             <TouchableOpacity
@@ -1139,6 +1174,7 @@ export default function CheckoutScreen() {
                 // Invalidate any in-flight STK-push request so its async
                 // callbacks are discarded when they eventually resolve.
                 cancelMpesaPoll(attemptRef, pollRef);
+                clearMpesaRetryCheck();
                 setProcessing(false);
                 setShowMpesaModal(false);
               }}
@@ -1154,6 +1190,7 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
+  mpesaCheckStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
   screen: { flex: 1 },
   content: { padding: 16, gap: 14, paddingBottom: 120 },
   sectionTitle: { fontSize: 17, fontWeight: '700' as const },
