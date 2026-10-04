@@ -11,3 +11,7 @@ description: Where Baileys session credentials live and the git-history leak cav
 - Do not assume the preview's WhatsApp session storage is isolated from the published service. Confirm the target instance and storage isolation before any operational reset; UI recovery tests should mock all WhatsApp operations.
 - **Why:** the preview has been observed restoring a configured remote WhatsApp session despite the documented local-only development default. Resetting the preview is not a safe substitute for resetting production.
 - **How to apply:** use the target's existing authorized team session for real disconnect/connect operations; never delete preview session files or remote objects as a shortcut to a live reset.
+
+- Production session persistence across republishing has been confirmed by the user: WhatsApp reconnected without another QR scan.
+- **Why:** restoring stored files alone does not establish that WhatsApp accepts the session after container replacement; the user confirmed the live reconnect after being asked to republish.
+- **How to apply:** preserve the established pairing for future deployment checks. Distinguish a full republish from pressing Connect; use storage checks as supporting evidence, not a substitute for live connection status.
