@@ -28,10 +28,11 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { createHmac } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 
 import app from "../app.js";
-import { db, pool, ucOrdersTable } from "@workspace/db";
-import { eq, like } from "drizzle-orm";
+import { db, pool, ucOrdersTable, ucNotificationLogTable } from "@workspace/db";
+import { and, eq, like } from "drizzle-orm";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -179,6 +180,95 @@ after(async () => {
 // ── Suite ─────────────────────────────────────────────────────────────────────
 
 describe("Paystack webhook — recovery order correctness", () => {
+  it("emails the recovered order details exactly once when a signed webhook is delivered twice", async () => {
+    const reference = nextRef();
+    const customerEmail = `${reference.toLowerCase()}@example.com`;
+    const event = chargeSuccessEvent({
+      reference,
+      amountKobo: 350_000,
+      currency: "KES",
+      customerEmail,
+    });
+    const emails: Array<{ subject: string; text: string; to: string }> = [];
+    const savedFetch = globalThis.fetch;
+    const savedResendBaseUrl = process.env["RESEND_BASE_URL"];
+    const resendBaseUrl = "https://paystack-recovery-resend.test.invalid";
+    // Force the direct test transport, never the authenticated connector.
+    process.env["RESEND_BASE_URL"] = resendBaseUrl;
+    globalThis.fetch = async (url, init) => {
+      if (String(url) === `${resendBaseUrl}/emails`) {
+        assert.equal(init?.method, "POST");
+        assert.equal(typeof init?.body, "string");
+        emails.push(JSON.parse(init!.body as string));
+        return new Response(JSON.stringify({ id: `recovery-${reference}` }), { status: 200 });
+      }
+      // SMS and other outbound providers must also remain local stubs.
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+
+    let orderId: number | undefined;
+    try {
+      const existing = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
+        .where(eq(ucOrdersTable.paymentReference, reference));
+      assert.equal(existing.length, 0, "the webhook must start without a matching order");
+
+      const first = await postWebhook(event);
+      assert.equal(first.status, 200);
+      assert.equal(first.body["received"], true);
+      assert.equal(first.body["recovered"], true);
+      assert.ok(typeof first.body["orderId"] === "number" && first.body["orderId"] > 0);
+      orderId = first.body["orderId"];
+
+      // Email is fire-and-forget. Its audit row proves the background send
+      // finished, rather than assuming it finished with the webhook response.
+      const deadline = Date.now() + 5_000;
+      let sent = false;
+      while (Date.now() < deadline) {
+        const logs = await db.select({ id: ucNotificationLogTable.id })
+          .from(ucNotificationLogTable).where(and(
+            eq(ucNotificationLogTable.orderId, orderId),
+            eq(ucNotificationLogTable.template, "payment_recovery_alert"),
+            eq(ucNotificationLogTable.channel, "email"),
+            eq(ucNotificationLogTable.status, "sent"),
+          ));
+        if (logs.length > 0) {
+          sent = true;
+          break;
+        }
+        await delay(10);
+      }
+      assert.ok(sent, "the recovery alert must complete its email delivery");
+      assert.equal(emails.length, 1, "the first webhook must send one recovery email");
+      const alert = emails[0]!;
+      assert.equal(alert.subject, `⚠️ Webhook recovery order #${orderId} needs fulfilment`);
+      assert.ok(alert.to, "the recovery email must have a team recipient");
+      const lines = alert.text.split("\n");
+      assert.ok(lines.includes(`Order ID:   ${orderId}`), "alert must contain the recovered order ID");
+      assert.ok(lines.includes(`Reference:  ${reference}`), "alert must contain the Paystack reference");
+      assert.ok(lines.includes("Amount:     KES 3,500"), "alert must convert kobo to the correct amount and currency");
+      assert.ok(lines.includes(`Customer:   ${customerEmail}`), "alert must contain the paying customer's email");
+
+      const duplicate = await postWebhook(event);
+      assert.equal(duplicate.status, 200);
+      assert.equal(duplicate.body["received"], true);
+      assert.equal(duplicate.body["orderId"], orderId);
+      assert.notEqual(duplicate.body["recovered"], true);
+      // Let any accidentally scheduled background send reach the transport.
+      await delay(100);
+      assert.equal(emails.length, 1, "a duplicate webhook must not send a second recovery alert");
+      const orders = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
+        .where(eq(ucOrdersTable.paymentReference, reference));
+      assert.deepEqual(orders, [{ id: orderId }], "both deliveries must resolve to the same order");
+    } finally {
+      globalThis.fetch = savedFetch;
+      if (savedResendBaseUrl === undefined) delete process.env["RESEND_BASE_URL"];
+      else process.env["RESEND_BASE_URL"] = savedResendBaseUrl;
+      if (orderId !== undefined) {
+        await db.delete(ucNotificationLogTable).where(eq(ucNotificationLogTable.orderId, orderId));
+      }
+    }
+  });
+
   it(
     "charge.success with no existing order inserts recovery row with correct customer, amount, currency, and paymentMethod",
     async () => {
