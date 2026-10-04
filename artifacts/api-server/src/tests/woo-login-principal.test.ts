@@ -15,11 +15,14 @@
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
-import { describe, it, before, after } from "node:test";
+import { describe, it, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, ucUsersTable } from "@workspace/db";
+import bcryptjs from "bcryptjs";
+import { authLimiter } from "../lib/rate-limiters.js";
+import { verifyToken } from "../lib/jwt.js";
 
 // ── Stub WordPress JWT endpoint ──────────────────────────────────────────────
 // Mimics the wp-json/jwt-auth/v1/token response shape; echoes the username
@@ -33,13 +36,22 @@ const wooEmails = {
   stable: `woo-stable-${suffix}@example.com`,
   nonadmin: `woo-nonadmin-${suffix}@example.com`,
   profile: `woo-profile-${suffix}@example.com`,
+  password: `woo-password-${suffix}@example.com`,
 };
+let wooRequests = 0;
+const originalWcBaseUrl = process.env["WC_BASE_URL"];
+
+beforeEach(() => {
+  authLimiter.resetKey("127.0.0.1");
+  wooRequests = 0;
+});
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-woo-principal-tests";
 
   wooStub = http.createServer((req, res) => {
     if (req.method === "POST" && req.url === "/wp-json/jwt-auth/v1/token") {
+      wooRequests += 1;
       let raw = "";
       req.on("data", c => { raw += c; });
       req.on("end", () => {
@@ -70,7 +82,8 @@ before(async () => {
 });
 
 after(async () => {
-  delete process.env["WC_BASE_URL"];
+  if (originalWcBaseUrl === undefined) delete process.env["WC_BASE_URL"];
+  else process.env["WC_BASE_URL"] = originalWcBaseUrl;
   await db.delete(ucUsersTable).where(inArray(ucUsersTable.email, [
     ...Object.values(wooEmails),
   ]));
@@ -102,6 +115,41 @@ async function wooLogin(email: string): Promise<{ token: string; user: { id: num
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 describe("WooCommerce login principal identity", () => {
+  it("rejects a Woo password for an existing password account without changing its identity", async () => {
+    const password = "companion-only-password";
+    const [account] = await db.insert(ucUsersTable).values({
+      email: wooEmails.password,
+      passwordHash: await bcryptjs.hash(password, 10),
+      firstName: "Password",
+      lastName: "Customer",
+      authProvider: "password",
+    }).returning();
+    assert.ok(account);
+
+    const denied = await apiFetch("/api/uc/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: wooEmails.password, password: "woo-account-password" }),
+    });
+    assert.equal(denied.status, 401);
+    assert.equal((denied.body as { token?: string }).token, undefined);
+    assert.equal(wooRequests, 0, "a password mismatch must not fall back to Woo");
+    const [unchanged] = await db.select().from(ucUsersTable)
+      .where(eq(ucUsersTable.email, wooEmails.password));
+    assert.deepEqual(unchanged, account, "denied login must not mutate the account");
+
+    const accepted = await apiFetch("/api/uc/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: wooEmails.password, password }),
+    });
+    assert.equal(accepted.status, 200);
+    const body = accepted.body as { token: string; user: { id: number } };
+    assert.equal(body.user.id, account.id);
+    assert.equal(verifyToken(`Bearer ${body.token}`)?.id, account.id);
+    assert.equal(wooRequests, 0);
+  });
+
   it("provisions distinct DB-backed Companion identities for Woo users", async () => {
     const a = await wooLogin(wooEmails.alice);
     const b = await wooLogin(wooEmails.bob);
@@ -114,6 +162,18 @@ describe("WooCommerce login principal identity", () => {
     const first = await wooLogin(wooEmails.stable);
     const second = await wooLogin(wooEmails.stable);
     assert.equal(first.user.id, second.user.id, "principal id must be stable per email");
+    assert.equal(wooRequests, 2, "each Woo login must verify provider credentials again");
+    const rows = await db.select().from(ucUsersTable)
+      .where(eq(ucUsersTable.email, wooEmails.stable));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.id, first.user.id);
+    assert.equal(rows[0]!.authProvider, "woocommerce");
+    assert.equal(rows[0]!.clerkUserId, null);
+    for (const login of [first, second]) {
+      const claims = verifyToken(`Bearer ${login.token}`);
+      assert.equal(claims?.id, first.user.id);
+      assert.equal(claims?.src, "woo");
+    }
   });
 
   it("denies a Woo-authenticated token on /uc/admin/* routes", async () => {
@@ -161,8 +221,10 @@ describe("WooCommerce login principal identity", () => {
     assert.equal((recovered.body as { userId: number }).userId, user.id);
     assert.match(qrToken, /^[A-Za-z0-9_-]{43}$/);
 
+    const repeat = await wooLogin(wooEmails.alice);
+    assert.equal(repeat.user.id, user.id);
     const second = await apiFetch("/api/uc/customer/rewards", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${repeat.token}` },
     });
     assert.equal(second.status, 200);
     assert.equal((second.body as { qrToken: string }).qrToken, qrToken);
