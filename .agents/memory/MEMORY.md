@@ -58,3 +58,4 @@
 - [Companion build publication](companion-build-publication.md) — retained assets are not activation; test both legacy and migrated native/browser rollout boundaries.
 - [Web heading semantics](react-native-web-heading-semantics.md) — use explicit web levels; wrap accordion buttons in headings; send aria-expanded explicitly.
 - [Public SEO evidence](public-seo-evidence.md) — public access is not publication evidence; demo fallbacks cannot support sale claims or location verification.
+- [Native reconnect safety](native-reconnect-policy.md) — reconnect recovery is read-only; keep explicit offline failures and never queue or replay writes.

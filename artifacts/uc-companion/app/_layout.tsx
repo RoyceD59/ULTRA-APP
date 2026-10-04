@@ -28,6 +28,8 @@ import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
 import { FONT_STARTUP_BUDGET_MS, startupReady } from '@/lib/pageLoading';
 import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
+import { installQueryConnectivity } from '@/lib/queryConnectivity';
+import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
 
 // Set API base URL before any component renders
 import { FontDisplay } from 'expo-font';
@@ -46,9 +48,12 @@ const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
 const isolatedPreview = process.env.EXPO_PUBLIC_PREVIEW_SAFE_MODE === '1';
+const recoveryDefaults = nativeRecoveryDefaults(Platform.OS);
 const queryClient = new QueryClient({
   defaultOptions: {
+    ...recoveryDefaults,
     queries: {
+      ...recoveryDefaults.queries,
       staleTime: 2 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
       retry: 1,
@@ -72,6 +77,8 @@ function RootLayoutNav() {
   useNativeNotificationRouting();
 
   useWaterTestHandoffCapture();
+
+  useEffect(() => installQueryConnectivity(), []);
 
   useEffect(() => {
     // React Query already handles browser visibility; native needs AppState.
