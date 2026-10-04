@@ -4,18 +4,22 @@ import http from "node:http";
 import express from "express";
 import { pool } from "@workspace/db";
 import { issueToken } from "../lib/jwt.js";
-import router, { _aiClient, _knowledgeClient, SYSTEM_PROMPT, type AiChatParams } from "../routes/uc-water-chat.js";
+import router, { _aiClient, _knowledgeClient, _catalogueClient, SYSTEM_PROMPT, type AiChatParams } from "../routes/uc-water-chat.js";
 import { AlisonKnowledgeError } from "../lib/alison-knowledge.js";
+import { createAlisonCatalogueLoader } from "../lib/alison-catalogue.js";
+import { wcFetchArray, fetchAllPublishedProducts } from "../routes/uc.js";
 
 const prefix = "alison-knowledge-fixture";
 const originalCreate = _aiClient.create;
 const originalLoad = _knowledgeClient.load;
+const originalCatalogue = _catalogueClient.load;
 let server: http.Server;
 let baseUrl: string;
 let sequence = 0;
 const savedSecret = process.env.SESSION_SECRET;
 
 before(async () => {
+  _catalogueClient.load = async () => ({ state: "unavailable", reason: "not_configured" });
   process.env.SESSION_SECRET = "alison-knowledge-test-secret";
   for (const status of ["published", "draft"]) {
     await pool.query(
@@ -51,11 +55,13 @@ before(async () => {
 afterEach(() => {
   _aiClient.create = originalCreate;
   _knowledgeClient.load = originalLoad;
+  _catalogueClient.load = async () => ({ state: "unavailable", reason: "not_configured" });
 });
 
 after(async () => {
   _aiClient.create = originalCreate;
   _knowledgeClient.load = originalLoad;
+  _catalogueClient.load = originalCatalogue;
   if (savedSecret === undefined) delete process.env.SESSION_SECRET;
   else process.env.SESSION_SECRET = savedSecret;
   await pool.query("DELETE FROM uc_alison_conversations WHERE id=$1", [`${prefix}-conversation`]);
@@ -115,6 +121,73 @@ test("unpublishing a document removes it from the next lookup", async () => {
     return { content: [{ type: "text", text: "Guide-only advice." }] };
   };
   assert.equal((await send()).status, 200);
+});
+
+test("chat passes live store facts to AI, and an outage keeps guidance without old prices", async () => {
+  _catalogueClient.load = async () => ({
+    state: "available", checkedAt: new Date().toISOString(), currency: "KES",
+    products: [{ id: 941, name: "Aquazeta", price: "5200", priceKind: "listed", availability: "outofstock" }],
+  });
+  _aiClient.create = async params => {
+    assert.match(params.system, /"id":941/);
+    assert.match(params.system, /"price":"5200"/);
+    assert.match(params.system, /"availability":"outofstock"/);
+    assert.match(params.system, /APPROVED_GUIDE_FACT/);
+    return { content: [{ type: "text", text: "Aquazeta is currently out of stock." }] };
+  };
+  assert.equal((await send()).status, 200);
+  _catalogueClient.load = async () => ({ state: "unavailable", reason: "lookup_failed" });
+  _aiClient.create = async params => {
+    assert.match(params.system, /"state":"unavailable"/);
+    assert.doesNotMatch(params.system, /"price":"5200"/);
+    assert.match(params.system, /APPROVED_GUIDE_FACT/);
+    return { content: [{ type: "text", text: "Current prices and stock cannot be checked." }] };
+  };
+  assert.equal((await send()).status, 200);
+});
+
+test("live adapter reuses complete paging, PHP-notice parsing and rejects HTTP or oversized responses", async () => {
+  const originalFetch = globalThis.fetch;
+  let mode: "success" | "http_error" | "oversized" | "later_page_error" = "success";
+  const pages: number[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    assert.equal(init?.method ?? "GET", "GET", "enrichment cannot mutate WooCommerce");
+    assert.ok(init?.signal);
+    const url = new URL(String(input));
+    if (mode === "http_error") return new Response("[]", { status: 503 });
+    if (mode === "oversized") return new Response("x".repeat(256 * 1024 + 1));
+    if (url.pathname.endsWith("/settings/general")) {
+      return new Response(JSON.stringify([{ id: "woocommerce_currency", value: "KES" }]));
+    }
+    assert.equal(url.pathname.endsWith("/products"), true);
+    assert.equal(url.searchParams.get("status"), "publish");
+    const page = Number(url.searchParams.get("page"));
+    pages.push(page);
+    if (page === 2 && mode === "later_page_error") return new Response("[]", { status: 502 });
+    const rows = page === 1
+      ? Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1, name: `Filter ${i}`, status: "publish", price: "123", stock_status: "instock",
+      }))
+      : [{ id: 1001, name: "Aquazeta", status: "publish", price: "4321", stock_status: "outofstock" }];
+    return new Response("<br /><b>Notice</b>: store notice\n" + JSON.stringify(rows));
+  }) as typeof fetch;
+  const freshLoader = () => createAlisonCatalogueLoader({
+    configured: () => true, allPublished: fetchAllPublishedProducts,
+    read: (path, parameters, signal) => wcFetchArray(path, parameters, signal, 256 * 1024),
+  });
+  try {
+    const result = await freshLoader()();
+    assert.equal(result.state, "available");
+    if (result.state === "available") {
+      assert.equal(result.products.length, 101);
+      assert.equal(result.products.at(-1)?.id, 1001);
+    }
+    assert.deepEqual(pages, [1, 2]);
+    for (const failure of ["http_error", "oversized", "later_page_error"] as const) {
+      mode = failure;
+      assert.deepEqual(await freshLoader()(), { state: "unavailable", reason: "lookup_failed" });
+    }
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("reference failure returns a clear 503 without calling AI or storing an invented answer", async () => {

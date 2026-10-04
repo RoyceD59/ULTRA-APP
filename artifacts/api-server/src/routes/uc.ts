@@ -624,10 +624,33 @@ export async function wcFetchArray(
   path: string,
   extra: Record<string, string> = {},
   signal?: AbortSignal,
+  maxResponseBytes?: number,
 ): Promise<Record<string, unknown>[] | null> {
   try {
     const res = await fetch(wcUrl(path, extra), { signal });
-    const text = await res.text();
+    if (!res.ok) return null;
+    let text: string;
+    if (maxResponseBytes !== undefined) {
+      if (!res.body) return null;
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let bytes = 0;
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          bytes += chunk.value.byteLength;
+          if (bytes > maxResponseBytes) {
+            await reader.cancel();
+            return null;
+          }
+          chunks.push(chunk.value);
+        }
+        text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+      } finally { reader.releaseLock(); }
+    } else {
+      text = await res.text();
+    }
     const data: unknown = parseWcJson(text);
     return Array.isArray(data) ? (data as Record<string, unknown>[]) : null;
   } catch {

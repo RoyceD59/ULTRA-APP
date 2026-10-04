@@ -2,6 +2,7 @@ import { open, realpath } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderAlisonCatalogue, type AlisonCatalogue } from "./alison-catalogue.js";
 
 export type AlisonSource = {
   id: string;
@@ -118,14 +119,17 @@ export function renderKnowledgeContext(sources: AlisonSource[], terms: string[])
 
 export async function loadAlisonKnowledge(
   messages: Array<{ role: string; content: string }>,
-  dependencies: { query: KnowledgeQuery; readLocal?: () => Promise<AlisonSource[]> },
+  dependencies: {
+    query: KnowledgeQuery; readLocal?: () => Promise<AlisonSource[]>;
+    catalogue?: () => Promise<AlisonCatalogue>;
+  },
 ): Promise<string> {
   const userMessages = messages.filter((message) => message.role === "user").slice(-3).reverse();
   const terms = questionTerms(userMessages.map((message) => message.content).join(" "));
   try {
     // Retrieval is bounded and only sees the public published snapshots, never draft columns.
     const patterns = terms.map((term) => `%${term}%`);
-    const [local, guides, articles] = await Promise.all([
+    const [local, guides, catalogue, articles] = await Promise.all([
       (dependencies.readLocal ?? readLocalAlisonSources)(),
       dependencies.query(
         `SELECT id,published_snapshot AS snapshot FROM uc_guides
@@ -133,6 +137,9 @@ export async function loadAlisonKnowledge(
            AND published_snapshot::text ILIKE ANY($1::text[])
          ORDER BY (CASE WHEN published_snapshot->>'title' ILIKE ANY($1::text[]) THEN 1 ELSE 0 END) DESC,updated_at DESC,id
          LIMIT 12`, [patterns]),
+      dependencies.catalogue
+        ? dependencies.catalogue().catch((): AlisonCatalogue => ({ state: "unavailable", reason: "lookup_failed" }))
+        : Promise.resolve<AlisonCatalogue>({ state: "unavailable", reason: "not_configured" }),
       dependencies.query(
         `SELECT id,published_snapshot AS snapshot FROM uc_blog_articles
          WHERE status='published' AND published_snapshot IS NOT NULL
@@ -147,6 +154,6 @@ export async function loadAlisonKnowledge(
     ].filter((source): source is AlisonSource => source !== null);
     const context = renderKnowledgeContext(selectKnowledgeSources(sources, terms), terms);
     if (context.length > MAX_KNOWLEDGE_CHARS) throw new AlisonKnowledgeError();
-    return context;
+    return `${context}\n\n${renderAlisonCatalogue(catalogue, terms)}`;
   } catch { throw new AlisonKnowledgeError(); }
 }

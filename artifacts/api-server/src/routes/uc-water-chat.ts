@@ -18,6 +18,8 @@ import { db, pool, ucUsersTable, ucAiFeedbackTable, ucAlisonConversationsTable, 
 import { eq, desc, gte, lte, and, ilike } from "drizzle-orm";
 import { buildInstantAssessmentAiContext, latestOwnedAssessmentSummary } from "../lib/instant-water-check-service.js";
 import { AlisonKnowledgeError, loadAlisonKnowledge } from "../lib/alison-knowledge.js";
+import { createAlisonCatalogueLoader } from "../lib/alison-catalogue.js";
+import { hasWCCredentials, wcFetchArray, fetchAllPublishedProducts } from "./uc.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
@@ -91,7 +93,7 @@ You are warm, curious, and genuinely helpful. You listen before you advise. You 
 - Briefly name the relevant source when using document-specific advice, for example "The Sweet Home guide recommends…". Do not append a long bibliography.
 - Only use source links actually supplied in the references. Never invent URLs or product IDs.
 - When recommending a specific product, include its supplied tappable link [Product Name](product:ID).
-- Local catalogue prices are reference values, not live prices or stock; direct the customer to the product page for current pricing.
+- Only LIVE_CATALOGUE_DATA may supply current product IDs, names, prices and stock; it overrides documents and earlier messages. Never reuse old prices or placeholder IDs. If live data is unavailable or a field is unknown, say so when relevant and direct the customer to the store or support. Never invent a price, currency, availability or product link.
 
 ## Reply length
 - Default to 2–4 short sentences, usually 40–80 words, in one short paragraph.
@@ -248,9 +250,18 @@ export const _aiClient: {
 };
 
 /** Injectable approved-source lookup; tests never need to mock the global pool. */
+const loadLiveCatalogue = createAlisonCatalogueLoader({
+  configured: hasWCCredentials,
+  read: (path, parameters, signal) => wcFetchArray(path, parameters, signal, 256 * 1024),
+  allPublished: fetchAllPublishedProducts,
+});
+
+export const _catalogueClient = { load: loadLiveCatalogue };
+
 export const _knowledgeClient = {
   load: (messages: AiChatParams["messages"]) => loadAlisonKnowledge(messages, {
     query: (sql, values) => pool.query(sql, values),
+    catalogue: () => _catalogueClient.load(),
   }),
 };
 
