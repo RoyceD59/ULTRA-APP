@@ -26,3 +26,9 @@ Physical-test retry keys remain bound to the original payload after expiry. An a
 **Why:** Physical requests act on a ticket already created with the assessment. Treating expiry as a fresh submission could reopen completed service or erase staff-corrected service details and evidence. This differs intentionally from assessment-creation key reuse.
 
 **How to apply:** Preserve active response replay and payload conflicts. For expired physical retries, read the current ticket state under lock and renew only the retry record transactionally; missing tickets and failed renewals must leave the old record intact.
+
+A new physical-test request key is not a customer edit mechanism. Customer submission is permitted only before acknowledgement while the ticket remains result-ready; submitted and staff-managed requests are immutable through this endpoint.
+
+**Why:** Staff can take responsibility for a ticket without a customer acknowledgement timestamp, and a state reset alone must not erase a prior submission. Neither changing keys nor a missing legacy timestamp establishes permission to replace service details, evidence or benefits.
+
+**How to apply:** Keep customer changes separate from staff-managed service updates. Both the ticket state and acknowledgement must be checked under the ticket lock before any submission side effects; preserve original-key retry semantics.

@@ -1,14 +1,22 @@
-import { after, describe, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { pool } from "@workspace/db";
 import { hashInstantSecurityKey, requestPhysicalTest } from "../lib/instant-water-check-service.js";
+import { setPhysicalTestNotificationSenderForTests } from "../lib/physical-test-notifications.js";
 
 // Run through pnpm test so all fixtures and failure injection stay in the
 // per-run database. Each fixture owns its identities, records, and cleanup.
 describe("physical water-test retry keys", () => {
   const ids: string[] = [];
+  const notifications: string[] = [];
+  before(() => {
+    // Do not contact real customer/team delivery providers from this suite.
+    setPhysicalTestNotificationSenderForTests(async input => { notifications.push(input.ticketId); });
+  });
   after(async () => {
+    setPhysicalTestNotificationSenderForTests();
     await pool.query("DELETE FROM instant_water_idempotency WHERE assessment_id = ANY($1::text[])", [ids]);
     await pool.query("DELETE FROM instant_water_assessments WHERE id = ANY($1::text[])", [ids]);
   });
@@ -65,8 +73,183 @@ describe("physical water-test retry keys", () => {
     const assessment = await pool.query("SELECT * FROM instant_water_assessments WHERE id=$1", [assessmentId]);
     const tickets = await pool.query("SELECT * FROM instant_water_check_tickets WHERE assessment_id=$1", [assessmentId]);
     const keys = await pool.query("SELECT * FROM instant_water_idempotency WHERE assessment_id=$1 ORDER BY id", [assessmentId]);
-    return { assessment: assessment.rows, tickets: tickets.rows, keys: keys.rows };
+    const uploads = await pool.query("SELECT * FROM instant_water_media_uploads WHERE assessment_id=$1 ORDER BY object_path", [assessmentId]);
+    const ticketIds = new Set(tickets.rows.map(ticket => ticket.id));
+    return {
+      assessment: assessment.rows, tickets: tickets.rows, keys: keys.rows, uploads: uploads.rows,
+      notifications: notifications.filter(ticketId => ticketIds.has(ticketId)),
+    };
   }
+
+  async function retainStaffDetails(ticketId: string, state: string) {
+    await pool.query(
+      `UPDATE instant_water_check_tickets SET service_state=$2,
+        service_address='Staff corrected address', preferred_contact_time='Afternoon',
+        media_references='[{"reference":"retained-evidence","mediaType":"jpg"}]',
+        internal_notes='Keep this history', promo_code='STAFF-CODE', free_water_test=true
+       WHERE id=$1`,
+      [ticketId, state],
+    );
+  }
+
+  it("accepts a first submission only from an unacknowledged result-ready ticket", async () => {
+    for (const country of ["Kenya", "Tanzania"]) {
+      const f = await fixture(country);
+      const first = await requestPhysicalTest(f.request);
+      const state = country === "Kenya" ? "physical_test_requested" : "follow_up_requested";
+      assert.equal(first.serviceState, state);
+      const saved = await snapshot(f.assessmentId);
+      assert.equal(saved.tickets.length, 1);
+      assert.equal(saved.keys.length, 1);
+      assert.equal(saved.tickets[0].service_address, f.request.serviceAddress);
+      assert.equal(saved.tickets[0].preferred_contact_time, f.request.preferredContactTime);
+      assert.ok(saved.tickets[0].physical_request_acknowledged_at instanceof Date);
+      assert.equal(saved.assessment[0].physical_request_state, state);
+      assert.equal(saved.notifications.length, country === "Kenya" ? 1 : 0);
+    }
+  });
+
+  it("rejects new keys on acknowledged tickets and preserves staff details, evidence and benefits", async t => {
+    for (const country of ["Kenya", "Tanzania"]) {
+      for (const guest of [false, true]) {
+        for (const state of ["instant_result_ready", "physical_test_requested", "follow_up_requested", "scheduled", "completed", "closed"]) {
+          await t.test(`${country}: ${state}, ${guest ? "guest" : "owner"}`, async () => {
+            const f = await fixture(country, guest);
+            await requestPhysicalTest(f.request);
+            await retainStaffDetails(f.ticketId, state);
+            const uploadPath = `/objects/water-tests/${f.assessmentId}/${randomUUID()}`;
+            await pool.query(
+              `INSERT INTO instant_water_media_uploads
+                (object_path, uploader_user_id, assessment_id, declared_type, declared_size, expires_at)
+               VALUES ($1,$2,$3,'image/jpeg',128,now() + interval '1 hour')`,
+              [uploadPath, guest ? null : f.userId, f.assessmentId],
+            );
+            const before = await snapshot(f.assessmentId);
+            // Even an identical payload under a different key is a new action,
+            // not replay. Changed details must fail before media/promo checks.
+            for (const change of [
+              {},
+              { serviceAddress: "Customer changed address", preferredContactTime: "Evening" },
+              { mediaReferences: [{ reference: uploadPath, mediaType: "jpg" }] },
+              { promoCode: "NEW-CODE" },
+            ]) {
+              await assert.rejects(
+                requestPhysicalTest({ ...f.request, ...change, idempotencyKey: randomUUID() }),
+                (error: Error) => error.message === "CONFLICT",
+              );
+            }
+            assert.deepEqual(await snapshot(f.assessmentId), before);
+          });
+        }
+      }
+    }
+  });
+
+  it("preserves submitted and staff-managed states even without an acknowledgement timestamp", async () => {
+    for (const state of ["physical_test_requested", "follow_up_requested", "scheduled", "completed", "closed"]) {
+      const f = await fixture();
+      await retainStaffDetails(f.ticketId, state);
+      const before = await snapshot(f.assessmentId);
+      assert.equal(before.tickets[0].physical_request_acknowledged_at, null);
+      await assert.rejects(
+        requestPhysicalTest({ ...f.request, idempotencyKey: randomUUID() }),
+        (error: Error) => error.message === "CONFLICT",
+      );
+      assert.deepEqual(await snapshot(f.assessmentId), before);
+    }
+  });
+
+  it("rejects simultaneous different keys against an acknowledged request without any writes", async () => {
+    for (const country of ["Kenya", "Tanzania"]) {
+      const f = await fixture(country);
+      const first = await requestPhysicalTest(f.request);
+      await retainStaffDetails(f.ticketId, first.serviceState);
+      const before = await snapshot(f.assessmentId);
+      const results = await Promise.allSettled(Array.from({ length: 6 }, (_, index) =>
+        requestPhysicalTest({ ...f.request, serviceAddress: `New address ${index}`, idempotencyKey: randomUUID() }),
+      ));
+      for (const result of results) {
+        assert.equal(result.status, "rejected");
+        if (result.status === "rejected") assert.equal(result.reason.message, "CONFLICT");
+      }
+      assert.deepEqual(await snapshot(f.assessmentId), before);
+    }
+  });
+
+  it("checks the locked ticket after a simultaneous staff change commits", async () => {
+    for (const acknowledgementOnly of [false, true]) {
+      const f = await fixture();
+      const staff = await pool.connect();
+      let pending: Promise<PromiseSettledResult<Awaited<ReturnType<typeof requestPhysicalTest>>>[]> | undefined;
+      try {
+        await staff.query("BEGIN");
+        const pid = (await staff.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+        await staff.query(
+          `UPDATE instant_water_check_tickets
+              SET service_state=$2, physical_request_acknowledged_at=$3,
+                  service_address='Staff locked address', internal_notes='Staff work in progress'
+            WHERE id=$1`,
+          [f.ticketId, acknowledgementOnly ? "instant_result_ready" : "scheduled",
+            acknowledgementOnly ? new Date() : null],
+        );
+        // Await the actual row-lock wait, not a timing-dependent sleep, so the
+        // request necessarily observes the post-commit ticket state.
+        pending = Promise.allSettled([requestPhysicalTest(f.request)]);
+        let blocked = false;
+        const deadline = Date.now() + 5000;
+        while (!blocked && Date.now() < deadline) {
+          const waiting = await pool.query(
+            `SELECT 1 FROM pg_stat_activity WHERE $1::integer = ANY(pg_blocking_pids(pid))`,
+            [pid],
+          );
+          blocked = !!waiting.rowCount;
+          if (!blocked) await delay(10);
+        }
+        assert.ok(blocked, "customer request should wait for the staff-held ticket lock");
+        await staff.query("COMMIT");
+        const [result] = await pending;
+        assert.equal(result.status, "rejected");
+        if (result.status === "rejected") assert.equal(result.reason.message, "CONFLICT");
+        const saved = await snapshot(f.assessmentId);
+        assert.equal(saved.tickets[0].service_address, "Staff locked address");
+        assert.equal(saved.tickets[0].internal_notes, "Staff work in progress");
+        assert.equal(saved.assessment[0].physical_request_state, "instant_result_ready");
+        assert.equal(saved.keys.length, 0);
+        assert.equal(saved.notifications.length, 0);
+      } finally {
+        await staff.query("ROLLBACK");
+        staff.release();
+        await pending;
+      }
+    }
+  });
+
+  it("accepts just one simultaneous first submission with different keys and preserves the winning payload", async () => {
+    for (const country of ["Kenya", "Tanzania"]) {
+      const f = await fixture(country);
+      const requests = Array.from({ length: 6 }, (_, index) => ({
+        ...f.request, serviceAddress: `Address ${index}`,
+        preferredContactTime: `Time ${index}`, idempotencyKey: randomUUID(),
+      }));
+      const results = await Promise.allSettled(requests.map(request => requestPhysicalTest(request)));
+      const winners = results.flatMap((result, index) => result.status === "fulfilled" ? [index] : []);
+      assert.equal(winners.length, 1);
+      for (const result of results) {
+        if (result.status === "rejected") assert.equal(result.reason.message, "CONFLICT");
+      }
+      const winner = requests[winners[0]];
+      const saved = await snapshot(f.assessmentId);
+      assert.equal(saved.tickets.length, 1);
+      assert.equal(saved.keys.length, 1);
+      assert.equal(saved.keys[0].idempotency_key, winner.idempotencyKey);
+      assert.equal(saved.notifications.length, country === "Kenya" ? 1 : 0);
+      assert.equal(saved.tickets[0].service_address, winner.serviceAddress);
+      assert.equal(saved.tickets[0].preferred_contact_time, winner.preferredContactTime);
+      assert.ok(saved.tickets[0].physical_request_acknowledged_at instanceof Date);
+      assert.deepEqual(await requestPhysicalTest(winner), saved.keys[0].response);
+      assert.deepEqual(await snapshot(f.assessmentId), saved);
+    }
+  });
 
   it("replays active requests unchanged and rejects changed payloads", async () => {
     const f = await fixture();

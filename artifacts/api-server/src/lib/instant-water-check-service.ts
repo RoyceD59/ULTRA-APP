@@ -1050,10 +1050,15 @@ export async function requestPhysicalTest(input: {
       await client.query("COMMIT");
       return response;
     }
-    if (ticket.rows[0].service_state !== "instant_result_ready" && ticket.rows[0].service_state !== "follow_up_requested" && ticket.rows[0].service_state !== serviceState) {
+    // Customers may supply details only before submission. A new key is not
+    // permission to edit a submitted request, even if a legacy/staff-managed
+    // ticket has no acknowledgement timestamp. Conversely, resetting the state
+    // does not reopen an acknowledged request. Use both values from the locked
+    // ticket, before media consumption, promotion redemption or any writes.
+    if (ticket.rows[0].service_state !== "instant_result_ready" ||
+        ticket.rows[0].physical_request_acknowledged_at !== null) {
       throw new Error("CONFLICT");
     }
-    if (ticket.rows[0].physical_request_acknowledged_at) throw new Error("CONFLICT");
     const mediaPaths = await verifyInstantMediaReferences(input.assessmentId, input.userId, media);
     const ticketId = String(ticket.rows[0].id);
     const promoCode = input.promoCode?.trim().toUpperCase() ?? "";
