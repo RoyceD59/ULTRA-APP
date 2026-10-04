@@ -102,7 +102,14 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 function tokenExp(token: string): number | null {
   const p = decodeJwtPayload(token);
-  return typeof p?.exp === "number" ? p.exp : null;
+  return typeof p?.exp === "number" && Number.isFinite(p.exp) ? p.exp : null;
+}
+
+/** Milliseconds until JWT expiry; unknown/missing expiry must not invent a countdown. */
+export function getTeamSessionRemainingMs(now = Date.now()): number | null {
+  const token = getTeamToken();
+  const exp = token ? tokenExp(token) : null;
+  return exp === null ? null : Math.max(0, exp * 1000 - now);
 }
 
 export function getTeamUser(): TeamUser | null {
@@ -240,6 +247,34 @@ export async function resetPassword(token: string, newPassword: string): Promise
 }
 
 // ─── Authenticated flows ──────────────────────────────────────────────────────
+
+/** Re-authenticate the current account without a login navigation or a 401 logout. */
+export async function renewTeamSession(password: string): Promise<TeamUser> {
+  const user = getTeamUser();
+  const previousToken = getTeamToken();
+  if (!user || !previousToken) throw new Error("No team session is available to renew.");
+
+  // Do not use apiFetch: incorrect credentials must leave the current session intact.
+  const res = await fetch(apiUrl("/auth/login"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: user.email, password }),
+  });
+  const data = await res.json().catch(() => ({})) as {
+    error?: string; token?: string; user?: TeamUserPayload;
+  };
+  if (!res.ok) throw new Error(data.error ?? `Could not renew session (${res.status}).`);
+  if (!data.token || !data.user || data.user.id !== user.id ||
+      (tokenExp(data.token) ?? 0) * 1000 <= Date.now()) {
+    throw new Error("The server did not return a valid renewed session.");
+  }
+  // A sign-out or account switch in another tab must not be overwritten by this response.
+  if (getTeamToken() !== previousToken) {
+    throw new Error("Your session changed. Close this dialog and try again.");
+  }
+  setTeamToken(data.token);
+  return setStoredUser(data.user);
+}
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch("/auth/change-password", {

@@ -63,3 +63,11 @@ All under `/api/auth/`. See `artifacts/api-server/src/routes/auth.ts` for full d
 - Team/admin accounts live in `team_users` and log in via `POST /api/auth/login` → JWT with `type:"team-session"` + `role`. Admin-gated UC routes accept team-session role:"admin" directly.
 - `POST /api/uc/auth/login` is the **customer** (companion app) login backed by `uc_users`, with a dev fallback that can mint tokens for arbitrary emails — those tokens correctly fail the DB-anchored admin check (403).
 - **How to apply:** when smoke-testing admin endpoints, always authenticate via `/api/auth/login`; a 403 after a "successful" `/api/uc/auth/login` is the fail-closed design working, not a bug.
+
+## In-place session re-authentication
+
+Incorrect password responses during session renewal must remain local to the renewal dialog, not trigger the ordinary unauthorized-response logout.
+
+**Why:** The team may still have a valid session and unsaved work; rejecting a password confirmation is not evidence that their current JWT is invalid.
+
+**How to apply:** Keep re-authentication separate from the protected-request 401 handler, and do not let a delayed renewal response restore a session after a concurrent sign-out or account switch.
