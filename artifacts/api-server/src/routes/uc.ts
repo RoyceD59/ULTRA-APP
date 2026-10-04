@@ -9181,17 +9181,21 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
       }
     }
 
-    const customers = custRes.rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      firstName: r.first_name,
-      lastName: r.last_name,
-      name: `${r.first_name} ${r.last_name}`.trim(),
-      phone: r.phone,
-      joinedAt: r.created_at,
-      orderCount: orderCountMap[r.id] ?? 0,
-      products: productNamesMap[r.id] ?? [],
-    }));
+    const customers = custRes.rows.map((r) => {
+      const firstName = r.first_name.trim().replace(/\s+/g, " ");
+      const lastName = r.last_name.trim().replace(/\s+/g, " ");
+      return {
+        id: r.id,
+        email: r.email,
+        firstName,
+        lastName,
+        name: [firstName, lastName].filter(Boolean).join(" "),
+        phone: r.phone,
+        joinedAt: r.created_at,
+        orderCount: orderCountMap[r.id] ?? 0,
+        products: productNamesMap[r.id] ?? [],
+      };
+    });
 
     res.json({ customers, total, page, limit });
   } catch (err) {

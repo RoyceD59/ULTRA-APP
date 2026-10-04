@@ -15,6 +15,7 @@ type Customer = {
   email: string;
   firstName: string;
   lastName: string;
+  name: string;
 };
 
 type CustomerSearchResponse = {
@@ -80,6 +81,9 @@ before(async () => {
     ["phone-only", `phone-only-${suffix}@test.internal`, "Unrelated", "Person", "+254712345678"],
     ["percent-phone", `percent-phone-${suffix}@test.internal`, "Unrelated", "Person", "phone%value"],
     ["underscore-phone", `underscore-phone-${suffix}@test.internal`, "Unrelated", "Person", "phone_value"],
+    ["irregular", `search-irregular-${suffix}@test.internal`, "\t  María\u00a0  José \n", "  O’Neill-\t李  "],
+    ["blank-first", `search-blank-first-${suffix}@test.internal`, " \t\n ", "  李  "],
+    ["blank-names", `search-blank-names-${suffix}@test.internal`, " \t ", "\n  "],
   ] as const;
 
   for (const row of rows) {
@@ -175,5 +179,36 @@ describe("GET /uc/admin/customers — search", () => {
     const response = await search("Back\\Slash");
     assert.deepEqual(matchingTestCustomerKeys(response), ["backslash-name"]);
     assert.equal(response.total, 1);
+  });
+  it("normalizes stored whitespace while preserving punctuation and non-ASCII names", async () => {
+    const response = await search("search-irregular-");
+    const customer = response.customers.find((row) => row.id === testCustomers.get("irregular"));
+    assert.ok(customer);
+    assert.equal(customer.firstName, "María José");
+    assert.equal(customer.lastName, "O’Neill- 李");
+    assert.equal(customer.name, "María José O’Neill- 李");
+
+    const stored = await pool.query<{ first_name: string; last_name: string }>(
+      "SELECT first_name, last_name FROM uc_users WHERE id = $1",
+      [customer.id],
+    );
+    assert.equal(stored.rows[0]!.first_name, "\t  María\u00a0  José \n");
+    assert.equal(stored.rows[0]!.last_name, "  O’Neill-\t李  ");
+  });
+
+  it("does not add spaces around empty or whitespace-only name fields", async () => {
+    for (const [key, query, firstName, lastName, name] of [
+      ["empty-last", "search-empty-", "Johnny", "", "Johnny"],
+      ["blank-first", "search-blank-first-", "", "李", "李"],
+      ["blank-names", "search-blank-names-", "", "", ""],
+      ["spaced", "search-spaced-", "John", "Doe", "John Doe"],
+    ]) {
+      const response = await search(query);
+      const customer = response.customers.find((row) => row.id === testCustomers.get(key));
+      assert.ok(customer);
+      assert.equal(customer.firstName, firstName);
+      assert.equal(customer.lastName, lastName);
+      assert.equal(customer.name, name);
+    }
   });
 });
