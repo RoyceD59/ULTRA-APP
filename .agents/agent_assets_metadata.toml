@@ -37,3 +37,17 @@ mtime_ms = 1791057841958
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/f1ae9f72-a696-4449-b535-ef618cf26a2b/4c035ea1-1a7d-489b-be71-df22d5c31c35"
 storage_version_token = "1791057977320285"
 content_type = "image/png"
+
+[[outputs]]
+id = "a8KqJtQMNkj-2hHmVutOp"
+uri = "file://.local/outputs/weekly-analytics.chart.html"
+type = "text"
+title = "Recorded traffic peaked on October 3"
+description = "Recorded project pageviews in the requested seven-day window. Only dates with recorded events are plotted; October 4 is partial."
+logical_id = "f310e14b-641a-476c-adc9-1dc283dc0be4"
+content_hash = "sha256:e0999b8869964050c2e915b2939edb9156270b12a165fe0b68288fa987a529e2"
+size = 3103
+mtime_ms = 1791113767404
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/f310e14b-641a-476c-adc9-1dc283dc0be4/f89d12af-df4e-4af7-bbd0-791fab3a7a0a"
+storage_version_token = "1791113767739002"
+content_type = "text/html;profile=replit-chart"
