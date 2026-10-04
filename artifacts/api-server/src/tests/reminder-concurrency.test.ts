@@ -102,6 +102,7 @@ after(async () => {
 async function seedReminder(
   activatedAt: Date,
   sentStages: string[] = [],
+  adjustedReplaceOffsets: { replace30?: number | null; replace15?: number | null } | null = null,
 ): Promise<void> {
   await db
     .insert(ucFilterRemindersTable)
@@ -112,6 +113,7 @@ async function seedReminder(
       lifespanDays: 90,
       activatedAt,
       sentStages,
+      adjustedReplaceOffsets,
       active: true,
     })
     .onConflictDoUpdate({
@@ -122,6 +124,7 @@ async function seedReminder(
         lifespanDays: 90,
         activatedAt,
         sentStages,
+        adjustedReplaceOffsets,
         active: true,
         updatedAt: new Date(),
       },
@@ -181,31 +184,50 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
     stage,
     daysSinceActivation,
     previouslyHandled,
+    adjustedReplaceOffsets,
   } of [
     {
       stage: "day30",
       daysSinceActivation: 31,
       previouslyHandled: ["activation"],
+      adjustedReplaceOffsets: null,
     },
     {
       stage: "day60",
       daysSinceActivation: 61,
       previouslyHandled: ["activation", "day30", "replace30"],
+      adjustedReplaceOffsets: null,
     },
     {
       stage: "replace30",
       daysSinceActivation: 61,
       previouslyHandled: ["activation", "day30", "day60"],
+      adjustedReplaceOffsets: null,
     },
     {
       stage: "replace15",
       daysSinceActivation: 76,
       previouslyHandled: ["activation", "day30", "day60", "replace30"],
+      adjustedReplaceOffsets: null,
+    },
+    {
+      stage: "replace30",
+      daysSinceActivation: 43,
+      previouslyHandled: ["activation", "day30", "day60"],
+      adjustedReplaceOffsets: { replace30: 42, replace15: 50 },
+    },
+    {
+      stage: "replace15",
+      daysSinceActivation: 51,
+      previouslyHandled: ["activation", "day30", "day60", "replace30"],
+      adjustedReplaceOffsets: { replace30: 42, replace15: 50 },
     },
   ] as const) {
-    it(`two concurrent runs claim ${stage} exactly once and a third run sends nothing`, async () => {
+    it(`two concurrent runs claim ${adjustedReplaceOffsets ? "adjusted " : ""}${stage} exactly once and a third run sends nothing`, async () => {
       const activatedAt = new Date(Date.now() - daysSinceActivation * 86_400_000);
-      await seedReminder(activatedAt, [...previouslyHandled]);
+      // Adjusted cases are due well before the normal 90-day lifespan's
+      // replacement offsets (60/75), so ignoring stored offsets cannot pass.
+      await seedReminder(activatedAt, [...previouslyHandled], adjustedReplaceOffsets);
       resetCounter();
 
       const [first, second] = await Promise.all([
@@ -256,7 +278,7 @@ describe("dispatchFilterReminders — concurrent-claim idempotency", () => {
     const newActivatedAt = new Date();
     await db
       .update(ucFilterRemindersTable)
-      .set({ activatedAt: newActivatedAt, sentStages: [], updatedAt: new Date() })
+      .set({ activatedAt: newActivatedAt, sentStages: [], adjustedReplaceOffsets: null, updatedAt: new Date() })
       .where(eq(ucFilterRemindersTable.userId, String(testUserId)));
 
     resetCounter();
