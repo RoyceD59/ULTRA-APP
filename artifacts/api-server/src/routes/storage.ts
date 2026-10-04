@@ -17,8 +17,8 @@ import {
   ObjectStorageService,
 } from "../lib/objectStorage";
 
-const router: IRouter = Router();
-const objectStorageService = new ObjectStorageService();
+type StorageAdapter = Pick<ObjectStorageService,
+  "getPrivateUploadURL" | "normalizeObjectEntityPath" | "getObjectEntityFile" | "downloadObject">;
 
 /** Disposable per-instance cache of resized upload thumbnails (see image-derivatives). */
 const STORAGE_THUMB_CACHE_DIR = path.join(os.tmpdir(), "uc-storage-thumb-cache");
@@ -45,6 +45,10 @@ const VIDEO_TYPES = new Set([
   "video/3gpp",
 ]);
 const PDF_TYPES = new Set(["application/pdf"]);
+
+/** Instance-local adapter keeps route tests independent of real object storage. */
+export function createStorageRouter(objectStorageService: StorageAdapter = new ObjectStorageService()): IRouter {
+const router: IRouter = Router();
 
 /**
  * POST /api/uc/uploads/request-url
@@ -322,4 +326,7 @@ router.get("/storage/private/water-tests/*path", async (req: Request, res: Respo
   }
 });
 
-export default router;
+return router;
+}
+
+export default createStorageRouter();
