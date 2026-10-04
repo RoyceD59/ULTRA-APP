@@ -2,7 +2,7 @@
 // This screen shows a location list on web; map.native.tsx has the MapView.
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import PageDataLoader from '@/components/PageDataLoader';

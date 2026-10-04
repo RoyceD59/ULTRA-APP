@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useApi, MapLocation, LocationRatingAggregate, LocationRating } from '@/hooks/useApi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

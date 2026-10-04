@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity,
   Modal, TextInput, Alert, ActivityIndicator, Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

@@ -10,7 +10,7 @@
  */
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useGlobalImpact } from '@/hooks/useGlobalImpact';
 import ForestLink from '@/components/ForestLink';
 

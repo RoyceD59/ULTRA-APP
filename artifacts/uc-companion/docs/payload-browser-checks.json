@@ -1,0 +1,27 @@
+[
+  {
+    "scenario": "slow",
+    "passed": true,
+    "catalogueRequests": 4
+  },
+  {
+    "scenario": "reduced",
+    "passed": true,
+    "catalogueRequests": 4
+  },
+  {
+    "scenario": "error",
+    "passed": true,
+    "catalogueRequests": 6
+  },
+  {
+    "scenario": "empty",
+    "passed": true,
+    "catalogueRequests": 2
+  },
+  {
+    "scenario": "wide-dark",
+    "passed": true,
+    "catalogueRequests": 4
+  }
+]

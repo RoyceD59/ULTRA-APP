@@ -13,7 +13,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack, useRouter } from 'expo-router';
 import { TouchableOpacity, Text, AppState, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';

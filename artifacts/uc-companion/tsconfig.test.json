@@ -7,6 +7,8 @@
       "react/jsx-runtime":                         ["./__mocks__/react-jsx-runtime.ts"],
       "react-native":                              ["./__mocks__/react-native.ts"],
       "@expo/vector-icons":                        ["./__mocks__/@expo-vector-icons.ts"],
+      "@expo/vector-icons/Ionicons":               ["./__mocks__/ionicons.ts"],
+      "@expo/vector-icons/Feather":                ["./__mocks__/feather.ts"],
       "expo-constants":                            ["./__mocks__/expo-constants.ts"],
       "expo-notifications":                        ["./__mocks__/expo-notifications.ts"],
       "expo-linking":                              ["./__mocks__/expo-linking.ts"],

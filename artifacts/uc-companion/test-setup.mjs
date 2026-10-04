@@ -31,6 +31,10 @@ const STUBS = {
     path.join(mocks, 'react-native.ts'),
   '@expo/vector-icons':
     path.join(mocks, '@expo-vector-icons.ts'),
+  '@expo/vector-icons/Ionicons':
+    path.join(mocks, 'ionicons.ts'),
+  '@expo/vector-icons/Feather':
+    path.join(mocks, 'feather.ts'),
   'expo-notifications':
     path.join(mocks, 'expo-notifications.ts'),
   'expo-linking':

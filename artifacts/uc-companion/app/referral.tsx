@@ -8,7 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
 import * as Contacts from 'expo-contacts';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import PageDataLoader from '@/components/PageDataLoader';

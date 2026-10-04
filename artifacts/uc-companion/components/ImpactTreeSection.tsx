@@ -11,7 +11,7 @@ import {
   AccessibilityInfo, ActivityIndicator, Animated, Easing, Linking, Modal,
   ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';

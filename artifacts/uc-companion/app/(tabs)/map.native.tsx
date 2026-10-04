@@ -6,7 +6,7 @@ import {
   ActivityIndicator, Linking, Platform,
 } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import PageDataLoader from '@/components/PageDataLoader';

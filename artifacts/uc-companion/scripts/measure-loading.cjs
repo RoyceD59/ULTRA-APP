@@ -6,7 +6,22 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { chromium } = require('@playwright/test');
+
+function scriptBytes(directory, urls) {
+  return urls.map(url => {
+    const bytes = fs.readFileSync(path.join(directory, decodeURIComponent(url)));
+    return {
+      name: path.basename(url),
+      raw: bytes.length,
+      gzip: zlib.gzipSync(bytes, { level: 9 }).length,
+      brotli: zlib.brotliCompressSync(bytes, {
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9 },
+      }).length,
+    };
+  });
+}
 
 function serveExport(directory) {
   const root = path.resolve(directory);
@@ -34,7 +49,12 @@ async function main() {
         page.on('pageerror', e => errors.push(e.message));
         page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });
         let requests = 0;
-        page.on('request', () => requests++);
+        const scripts = new Set();
+        page.on('request', request => {
+          requests++;
+          const url = new URL(request.url());
+          if (url.pathname.endsWith('.js')) scripts.add(url.pathname);
+        });
         await page.route('**/*', async route => {
           const url = route.request().url();
           if (slow && /\.(ttf|otf)(\?|$)/.test(url)) await new Promise(r => setTimeout(r, 2000));
@@ -53,6 +73,13 @@ async function main() {
         await page.goto('http://localhost:8098/', { waitUntil: 'domcontentloaded' });
         await page.getByText('Your water, your health', { exact: true }).waitFor();
         const homeUsableMs = Date.now() - start;
+        // Count all initially requested runtime/shared/layout/route scripts,
+        // not just entry.js. Encoded bytes are estimates, not edge transfers.
+        const initialScriptUrls = [...scripts];
+        const startupMetrics = await profile.send('Performance.getMetrics');
+        const startupJsWork = Object.fromEntries(startupMetrics.metrics
+          .filter(m => ['ScriptDuration', 'TaskDuration'].includes(m.name))
+          .map(m => [m.name, m.value]));
         await page.getByText('Benchmark filter', { exact: true }).first().waitFor();
         const homeProductsMs = Date.now() - start;
         let t = Date.now();
@@ -71,7 +98,9 @@ async function main() {
         const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(r => ({ name: r.name.split('/').pop(), duration: Math.round(r.duration), bytes: r.transferSize })));
         const { metrics } = await profile.send('Performance.getMetrics');
         const jsWork = Object.fromEntries(metrics.filter(m => ['ScriptDuration', 'TaskDuration', 'JSHeapUsedSize'].includes(m.name)).map(m => [m.name, m.value]));
-        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, jsWork, resources, errors });
+        // Compression is deliberately outside the timed browser journey.
+        const initialScripts = scriptBytes(process.argv[2], initialScriptUrls);
+        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, errors });
         console.log({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests });
         if (errors.length) throw new Error(JSON.stringify(errors));
         await context.close();

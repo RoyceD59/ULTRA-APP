@@ -100,3 +100,15 @@ overstates the initial delivery improvement.
 **How to apply:** Use the browser's initial script requests to identify the
 complete initial set; distinguish local encoded sizes from deployed transfer
 and unused-code measurements.
+
+Prefer measured, public package entrypoint reductions before enabling Metro's
+experimental graph optimizers for Companion.
+
+**Why:** Route splitting alone still places dependencies shared by optional
+screens in the first-load common chunk. Targeted barrel-import reductions can
+remove unused modules without adding navigation waits or changing provider
+readiness; experimental tree shaking changes the entire graph.
+
+**How to apply:** Profile actual initial script requests with source maps,
+distinguish source inventory from delivered bytes, and verify native exports
+when changing shared imports. Do not treat a smaller entry file as sufficient.

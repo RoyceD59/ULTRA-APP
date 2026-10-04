@@ -12,7 +12,7 @@ import { View, Text, TouchableOpacity, Platform, ActivityIndicator, StyleSheet, 
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { ClerkLoaded, useSSO } from '@clerk/expo';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';

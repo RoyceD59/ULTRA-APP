@@ -5,7 +5,7 @@ import {
   Platform, LayoutAnimation, UIManager, TextInput, Linking, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { GUIDES, GuideSection } from '@/data/guides';
 import { Image } from 'expo-image';

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 
 /** Decorative bundled media. Error feedback always requests the still frame. */

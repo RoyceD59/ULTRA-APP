@@ -17,7 +17,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
   Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, AppState,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
 import { useRouter, useFocusEffect } from 'expo-router';

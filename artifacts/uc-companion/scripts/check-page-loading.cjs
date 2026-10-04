@@ -60,7 +60,7 @@ async function main() {
         await page.getByText('Read article', { exact: true }).waitFor();
         assert.equal(await page.getByTestId('page-data-loader').count(), 0);
       } else if (scenario === 'error') {
-        await page.getByText("Products couldn't load. Tap to retry.", { exact: true }).waitFor();
+        await page.getByText('Products couldn’t load', { exact: true }).waitFor();
         assert.equal(await page.getByTestId('page-data-loader').count(), 0);
         await page.getByRole('tab', { name: 'Blog', exact: true }).click();
         await page.getByTestId('blog-retry').waitFor();
@@ -95,7 +95,7 @@ async function main() {
         refreshFails = true;
         await page.evaluate(() => window.dispatchEvent(new Event('offline')));
         await page.evaluate(() => window.dispatchEvent(new Event('online')));
-        await page.getByText('Showing saved products. Tap to retry the update.', { exact: true }).first().waitFor();
+        await page.getByText('Your saved products are shown below.', { exact: true }).first().waitFor();
         await page.getByText('Benchmark filter', { exact: true }).first().waitFor();
         assert.equal(await page.getByTestId('page-data-loader').count(), 0);
       }

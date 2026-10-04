@@ -4,7 +4,7 @@ import {
   View, Text, StyleSheet, FlatList, TextInput, Platform,
    RefreshControl, ScrollView, TouchableOpacity, Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';

@@ -1,0 +1,1 @@
+export { Ionicons as default } from './@expo-vector-icons';

@@ -3,7 +3,7 @@ import {
   View, Text, Image, ScrollView, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
