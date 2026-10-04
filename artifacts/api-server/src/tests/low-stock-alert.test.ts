@@ -2,14 +2,133 @@
  * Scheduler-level stock alerts, including unmanaged WooCommerce stock and
  * the 24-hour per-product quiet period.
  */
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { db, ucLowStockAlertsTable } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 
 import { runLowStockAlert } from "../lib/scheduler.js";
 
 const now = new Date("2026-09-12T04:30:00.000Z");
 const emptyHistory = async () => new Set<number>();
 const noRecord = async () => {};
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+describe("runLowStockAlert — database coordination", () => {
+  // Dedicated product IDs; the test wrapper creates an isolated database.
+  const ids = [1764600030, 1764600031, 1764600032, 1764600033];
+  after(async () => {
+    await db.delete(ucLowStockAlertsTable).where(inArray(ucLowStockAlertsTable.productId, ids));
+  });
+
+  it("allows only one overlapping run to send and persists its quiet period", { timeout: 10_000 }, async () => {
+    const enteredSend = deferred();
+    const finishSend = deferred();
+    let sendCount = 0;
+    let fetchCount = 0;
+    const deps = {
+      isWcConfigured: () => true,
+      threshold: 5,
+      now,
+      fetchProducts: async () => {
+        fetchCount++;
+        return [{ id: ids[0]!, name: "Concurrent stock", stock_quantity: 2, stock_status: "instock" }];
+      },
+      sendEmail: async () => {
+        sendCount++;
+        enteredSend.resolve();
+        await finishSend.promise;
+        return true;
+      },
+    };
+    const first = runLowStockAlert(deps);
+    try {
+      await enteredSend.promise;
+      const second = await runLowStockAlert(deps);
+      assert.deepEqual(second, { outOfStock: 0, lowStock: 0, emailed: false });
+      assert.equal(sendCount, 1);
+      assert.equal(fetchCount, 1, "contender must skip before doing provider work");
+    } finally {
+      finishSend.resolve();
+      await first;
+    }
+    assert.equal((await first).emailed, true);
+    assert.equal((await runLowStockAlert(deps)).emailed, false);
+    assert.equal(sendCount, 1, "next run must observe the committed history");
+    const [row] = await db.select().from(ucLowStockAlertsTable)
+      .where(inArray(ucLowStockAlertsTable.productId, [ids[0]!]));
+    assert.equal(row?.alertedAt.toISOString(), now.toISOString());
+  });
+
+  for (const throws of [false, true]) {
+    it(`releases the claim after ${throws ? "a thrown" : "a rejected"} send so a later run can retry`,
+      { timeout: 10_000 }, async () => {
+        const enteredSend = deferred();
+        const finishSend = deferred();
+        let attempts = 0;
+        const productId = ids[throws ? 2 : 1]!;
+        const deps = {
+          isWcConfigured: () => true,
+          threshold: 5,
+          now,
+          fetchProducts: async () => [
+            { id: productId, name: "Retry stock", stock_quantity: 0, stock_status: "outofstock" },
+          ],
+          sendEmail: async () => {
+            attempts++;
+            if (attempts > 1) return true;
+            enteredSend.resolve();
+            await finishSend.promise;
+            if (throws) throw new Error("provider unavailable");
+            return false;
+          },
+        };
+        const first = runLowStockAlert(deps);
+        // Attach the rejection handler before releasing the provider barrier.
+        const settled = throws
+          ? assert.rejects(first, /provider unavailable/)
+          : first.then((result) => { assert.equal(result.emailed, false); });
+        try {
+          await enteredSend.promise;
+          assert.equal((await runLowStockAlert(deps)).emailed, false);
+          assert.equal(attempts, 1);
+        } finally {
+          finishSend.resolve();
+          await settled;
+        }
+        const history = await db.select().from(ucLowStockAlertsTable)
+          .where(inArray(ucLowStockAlertsTable.productId, [productId]));
+        assert.equal(history.length, 0, "failed delivery must not start a quiet period");
+        assert.equal((await runLowStockAlert(deps)).emailed, true);
+        assert.equal(attempts, 2);
+      });
+  }
+
+  it("releases the claim after a failed history lookup without sending", async () => {
+    let attempts = 0;
+    const deps = {
+      isWcConfigured: () => true,
+      threshold: 5,
+      now,
+      fetchProducts: async () => [
+        { id: ids[3]!, name: "History failure", stock_quantity: 1, stock_status: "instock" },
+      ],
+      sendEmail: async () => { attempts++; return true; },
+    };
+    assert.equal((await runLowStockAlert({
+      ...deps,
+      getRecentlyAlertedProductIds: async () => { throw new Error("history unavailable"); },
+    })).emailed, false);
+    assert.equal(attempts, 0);
+    assert.equal((await runLowStockAlert(deps)).emailed, true);
+    assert.equal(attempts, 1);
+  });
+});
 
 describe("runLowStockAlert — daily alert behavior", () => {
   it("does not email when WooCommerce is unreachable", async () => {

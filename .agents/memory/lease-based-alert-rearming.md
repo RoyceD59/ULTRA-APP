@@ -19,3 +19,15 @@ instead leave a sent marker suppressing every later cycle.
 **How to apply:** For any alert shared by request and scheduled paths, test the
 live-claim reset, completion-between-transition, thrown-send retry, and
 lease-boundary orderings deterministically.
+
+For a low-volume digest, a transaction-owned advisory lock is an acceptable
+alternative to an expiring lease. Keep the successful-delivery history inside
+that transaction, and accept holding one database connection during the run.
+
+**Why:** This avoids letting a second instance take over simply because a slow
+provider request outlasted a lease. It does not solve the separate crash window
+between provider acceptance and committing delivery history.
+
+**How to apply:** Prefer this approach for short, infrequent jobs where one
+held connection is affordable. Use durable delivery identities when recovery
+must also absorb accepted emails whose history was never committed.

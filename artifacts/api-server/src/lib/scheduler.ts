@@ -529,7 +529,31 @@ export function startScheduler() {
  * @internal — exported for the scheduler cron job and inventory PATCH handler.
  */
 export async function runLowStockAlert(
-  deps: {
+  deps: LowStockAlertDependencies = {},
+): Promise<LowStockAlertResult> {
+  if (!(deps.isWcConfigured ?? hasWCCredentials)()) {
+    logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
+    return { outOfStock: 0, lowStock: 0, emailed: false };
+  }
+
+  return db.transaction(async (tx) => {
+    // Transaction-owned lock: shared by every server instance, released on
+    // commit, rollback, or disconnect. Never expire a claim during delivery.
+    // Non-blocking acquisition keeps overlapping cron runs from queueing.
+    const claim = await tx.execute<{ claimed: boolean }>(sql`
+      SELECT pg_try_advisory_xact_lock(hashtextextended('uc-low-stock-digest', 0)) AS claimed
+    `);
+    if (!claim.rows[0]?.claimed) {
+      logger.info("Low-stock alert: another instance is already running — skipping");
+      return { outOfStock: 0, lowStock: 0, emailed: false };
+    }
+    return runClaimedLowStockAlert(deps, tx);
+  });
+}
+
+type LowStockAlertResult = { outOfStock: number; lowStock: number; emailed: boolean };
+
+type LowStockAlertDependencies = {
     fetchProducts?: typeof fetchAllPublishedProducts;
     sendEmail?: typeof sendViaResend;
     /** Test seam: avoid reading process-wide Woo credentials. */
@@ -544,16 +568,19 @@ export async function runLowStockAlert(
     recordAlertedProductIds?: (productIds: number[], alertedAt: Date) => Promise<void>;
     /** Test seam: deterministic 24-hour cutoff and recorded timestamp. */
     now?: Date;
-  } = {},
-): Promise<{ outOfStock: number; lowStock: number; emailed: boolean }> {
+};
+
+async function runClaimedLowStockAlert(
+  deps: LowStockAlertDependencies,
+  historyDb: Pick<typeof db, "select" | "insert">,
+): Promise<LowStockAlertResult> {
   const fetchProducts = deps.fetchProducts ?? fetchAllPublishedProducts;
   const sendEmail     = deps.sendEmail     ?? sendViaResend;
-  const isWcConfigured = deps.isWcConfigured ?? hasWCCredentials;
   const skipIfEmpty   = deps.skipIfEmpty   ?? true;
   const checkTime = deps.now ?? new Date();
   const getRecentlyAlertedProductIds = deps.getRecentlyAlertedProductIds ?? (async (productIds, cutoff) => {
     if (productIds.length === 0) return new Set<number>();
-    const rows = await db
+    const rows = await historyDb
       .select({ productId: ucLowStockAlertsTable.productId })
       .from(ucLowStockAlertsTable)
       .where(and(
@@ -564,7 +591,7 @@ export async function runLowStockAlert(
   });
   const recordAlertedProductIds = deps.recordAlertedProductIds ?? (async (productIds, alertedAt) => {
     if (productIds.length === 0) return;
-    await db
+    await historyDb
       .insert(ucLowStockAlertsTable)
       .values(productIds.map((productId) => ({ productId, alertedAt })))
       .onConflictDoUpdate({
@@ -574,11 +601,6 @@ export async function runLowStockAlert(
         },
       });
   });
-
-  if (!isWcConfigured()) {
-    logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
-    return { outOfStock: 0, lowStock: 0, emailed: false };
-  }
 
   // Read threshold from DB (admin-configurable), fall back to default of 5.
   let threshold = deps.threshold ?? 5;
@@ -726,6 +748,7 @@ export async function runLowStockAlert(
     subject,
     text:    emailBody,
     meta:    { template: "low_stock_alert" },
+    signal:  AbortSignal.timeout(30_000),
   });
 
   if (emailOk) {
