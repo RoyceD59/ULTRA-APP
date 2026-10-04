@@ -25,8 +25,8 @@ export function initializeCompanionFieldVitals(): void {
     const send = () => {
       if (!fieldVitalsAllowed(window, enabled, production)) return;
       try {
-        // The before-send hook reconstructs the entire field envelope.
-        const tracker = window.umami as unknown as {
+        // The dedicated sender reconstructs the entire field envelope.
+        const tracker = window.companionUmami as unknown as {
           track(name: string, payload: VitalPayload): void | Promise<void>;
         } | undefined;
         void Promise.resolve(tracker?.track(FIELD_VITAL_EVENT, data)).catch(() => {});

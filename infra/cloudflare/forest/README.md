@@ -398,6 +398,29 @@ audit still flags the three locally patched upstream versions; see
 `patches/README.md`. Build success does not prove native-device or signed-in
 production behavior.
 
+### Companion event analytics preparation
+
+The owner approved a narrow analytics-only correction and frozen-package
+preparation, not automatic publication or field-vitals activation.
+The separate Umami Cloud sender does not reuse or replace Replit's
+`window.umami`. It sends approved event dimensions with fixed event URLs,
+an empty referrer and a generic title; requests omit cookies and referrer
+headers. Native remains a no-op. Replit/ProjectHub analytics is unchanged.
+
+`include-companion-analytics.mjs` records the archive predecessor and permits
+only four source changes: a web-only root initializer, a narrow change to the
+archived event wrapper, the dedicated sender and its pure metadata policy.
+Package tests check every other file byte-for-byte against the predecessor.
+Use `--refresh-collector` only when correcting that already-approved sender;
+other release updates require their own scope review.
+
+The isolated package built successfully, but **real published event ingestion
+has not been verified**. Publish only after explicit approval, verify the live
+bundle and its destination, then confirm `product_viewed` and
+`checkout_started` in the separate Umami reports. Do not invent test counts or
+post synthetic events into production reports. Keep signed-in checks paused
+until the dedicated test-account access is restored, as described above.
+
 ### Publishing certified evidence later
 
 1. Obtain documented programme dates, partner details, donation records, certification

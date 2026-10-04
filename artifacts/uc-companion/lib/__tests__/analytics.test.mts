@@ -31,7 +31,7 @@ test('analytics exposes only the privacy-safe event contract', () => {
 test('article and wishlist dimensions exclude link text, URLs, titles and customer identity', () => {
   __setPlatform('web');
   const calls: unknown[] = [];
-  Object.assign(globalThis, { window: { umami: { track: (...args: unknown[]) => calls.push(args) } } });
+  Object.assign(globalThis, { window: { companionUmami: { track: (...args: unknown[]) => calls.push(args) } } });
   trackEvent('article_opened', { articleId: 'article-123', title: 'Private draft' } as never);
   trackEvent('article_source_clicked', {
     articleId: 'article-123', placement: 'body', url: 'https://example.test/?token=private', text: 'Private link',
@@ -61,7 +61,7 @@ test('analytics forwards only runtime-allowlisted properties and remains safe wh
   __setPlatform('web');
   const calls: unknown[] = [];
   Object.assign(globalThis, {
-    window: { umami: { track: (...args: unknown[]) => calls.push(args) } },
+    window: { companionUmami: { track: (...args: unknown[]) => calls.push(args) } },
   });
   trackEvent('signup_completed', { countryCode: 'KE' });
   trackEvent('cart_item_added', {
@@ -93,16 +93,16 @@ test('analytics forwards only runtime-allowlisted properties and remains safe wh
 test('native platforms and missing trackers are no-ops; sync and async tracker errors are swallowed', async () => {
   const calls: unknown[] = [];
   __setPlatform('android');
-  Object.assign(globalThis, { window: { umami: { track: (...args: unknown[]) => calls.push(args) } } });
+  Object.assign(globalThis, { window: { companionUmami: { track: (...args: unknown[]) => calls.push(args) } } });
   trackEvent('product_viewed', { productId: 10 });
   assert.deepEqual(calls, []);
 
   __setPlatform('web');
-  Object.assign(globalThis, { window: { umami: { track: () => { throw new Error('sync analytics error'); } } } });
+  Object.assign(globalThis, { window: { companionUmami: { track: () => { throw new Error('sync analytics error'); } } } });
   assert.doesNotThrow(() => trackEvent('product_viewed', { productId: 10 }));
 
   Object.assign(globalThis, {
-    window: { umami: { track: () => Promise.reject(new Error('async analytics error')) } },
+    window: { companionUmami: { track: () => Promise.reject(new Error('async analytics error')) } },
   });
   assert.doesNotThrow(() => trackEvent('product_viewed', { productId: 10 }));
   await new Promise(resolve => setImmediate(resolve));

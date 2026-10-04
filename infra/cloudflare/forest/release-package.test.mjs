@@ -27,6 +27,12 @@ const dependencySecurityPaths = [
   'patches/README.md',
   'scripts/tests/dependency-security.test.mjs',
 ];
+const companionAnalyticsPaths = [
+  'artifacts/uc-companion/app/_layout.tsx',
+  'artifacts/uc-companion/lib/analytics.ts',
+  'artifacts/uc-companion/lib/umamiWeb.ts',
+  'artifacts/uc-companion/lib/fieldVitalsPolicy.ts',
+];
 
 test('isolated release is pinned, contains source only, and preserves already published features', async () => {
   const manifest = JSON.parse(await readFile(resolve(here, 'release-manifest.json'), 'utf8'));
@@ -91,6 +97,7 @@ test('the approved UI refresh preserves every unrelated archived source file', a
     'artifacts/uc-companion/lib/__tests__/sessionPersistence.test.mts',
     ...dependencySecurityPaths,
     ...whatsappRecoveryPaths,
+    ...companionAnalyticsPaths,
   ]);
   try {
     const old = resolve(work, 'before.tar.gz');
@@ -138,7 +145,7 @@ test('dependency security refresh changes only approved packaging sources', asyn
       .split('\n').filter(path => path && !path.endsWith('/'));
     const oldPaths = list(oldArchive);
     const newPaths = new Set(list(archive));
-    const allowed = new Set([...dependencySecurityPaths, ...whatsappRecoveryPaths]);
+    const allowed = new Set([...dependencySecurityPaths, ...whatsappRecoveryPaths, ...companionAnalyticsPaths]);
     const oldDir = resolve(work, 'old');
     const newDir = resolve(work, 'new');
     await Promise.all([mkdir(oldDir), mkdir(newDir)]);
@@ -226,7 +233,7 @@ test('WhatsApp packaging preserves every newer non-recovery release source', asy
       .split('\n').filter(path => path && !path.endsWith('/')));
     const oldPaths = list(old);
     const newPaths = list(current);
-    const allowed = new Set(whatsappRecoveryPaths);
+    const allowed = new Set([...whatsappRecoveryPaths, ...companionAnalyticsPaths]);
     for (const path of oldPaths) {
       assert.ok(newPaths.has(path), `Recovery release must retain ${path}`);
       if (!allowed.has(path)) {
@@ -237,5 +244,58 @@ test('WhatsApp packaging preserves every newer non-recovery release source', asy
     for (const path of newPaths) {
       assert.ok(oldPaths.has(path) || allowed.has(path), `Unexpected recovery source: ${path}`);
     }
+  } finally { await rm(work, { recursive: true, force: true }); }
+});
+
+test('analytics packaging changes only its four approved sources and does not activate other work', async () => {
+  const manifest = JSON.parse(await readFile(resolve(here, 'release-manifest.json'), 'utf8'));
+  assert.deepEqual(manifest.companionAnalyticsPaths, companionAnalyticsPaths);
+  const old = execFileSync('git', ['show',
+    `${manifest.companionAnalyticsSourceBaseRevision}:infra/cloudflare/forest/release-sources.tar.gz`],
+  { maxBuffer: 40 * 1024 * 1024 });
+  assert.equal(createHash('sha256').update(old).digest('hex'), manifest.companionAnalyticsSourceArchiveSha256);
+  const work = await mkdtemp(resolve(tmpdir(), 'analytics-package-test-'));
+  try {
+    const oldArchive = resolve(work, 'old.tar.gz');
+    await writeFile(oldArchive, old);
+    const archive = resolve(here, 'release-sources.tar.gz');
+    const files = path => execFileSync('tar', ['-tzf', path], { encoding: 'utf8' })
+      .split('\n').filter(path => path && !path.endsWith('/'));
+    const oldPaths = files(oldArchive), newPaths = files(archive);
+    const oldDir = resolve(work, 'old'), newDir = resolve(work, 'new');
+    await Promise.all([mkdir(oldDir), mkdir(newDir)]);
+    execFileSync('tar', ['-xzf', oldArchive, '-C', oldDir]);
+    execFileSync('tar', ['-xzf', archive, '-C', newDir]);
+    for (const path of oldPaths) {
+      assert.ok(newPaths.includes(path), `Analytics package must retain ${path}`);
+      if (!companionAnalyticsPaths.includes(path)) {
+        assert.ok((await readFile(resolve(oldDir, path))).equals(
+          await readFile(resolve(newDir, path))), `Unapproved analytics change: ${path}`);
+      }
+    }
+    for (const path of newPaths) {
+      assert.ok(oldPaths.includes(path) || companionAnalyticsPaths.includes(path), `Unapproved module: ${path}`);
+    }
+    const originalLayout = await readFile(resolve(oldDir, companionAnalyticsPaths[0]), 'utf8');
+    const initializer = "\n  useEffect(() => {\n    if (Platform.OS === 'web') webAnalyticsLoader.initialize();\n  }, []);";
+    const expectedLayout = "import { webAnalyticsLoader } from '@/lib/umamiWeb';\n" +
+      originalLayout.replace('export default function RootLayout() {', 'export default function RootLayout() {' + initializer);
+    assert.equal(await readFile(resolve(newDir, companionAnalyticsPaths[0]), 'utf8'), expectedLayout);
+    const originalAnalytics = await readFile(resolve(oldDir, companionAnalyticsPaths[1]), 'utf8');
+    const expectedAnalytics = "import { webAnalyticsLoader } from './umamiWeb';\n" +
+      originalAnalytics.replace('  interface Window {',
+        '  interface Window {\n    companionUmami?: {\n      track(name: string, data?: Record<string, unknown>): void | Promise<void>;\n    };')
+        .replace('const result = window.umami?.track(name, payload);',
+          'webAnalyticsLoader.initialize();\n    const result = window.companionUmami?.track(name, payload);');
+    assert.equal(await readFile(resolve(newDir, companionAnalyticsPaths[1]), 'utf8'), expectedAnalytics);
+    for (const path of companionAnalyticsPaths.slice(2)) {
+      assert.ok((await readFile(resolve(newDir, path))).equals(await readFile(path)), `Collector differs: ${path}`);
+    }
+    assert.ok(!newPaths.includes('artifacts/uc-companion/lib/companionFieldVitals.web.ts'),
+      'Field-vitals activation must not enter this package');
+    const collector = await readFile(resolve(newDir, companionAnalyticsPaths[2]), 'utf8');
+    assert.match(collector, /https:\/\/gateway\.umami\.is\/api\/send/);
+    assert.match(collector, /credentials: 'omit', referrerPolicy: 'no-referrer'/);
+    assert.ok(!collector.includes('browser.umami'));
   } finally { await rm(work, { recursive: true, force: true }); }
 });

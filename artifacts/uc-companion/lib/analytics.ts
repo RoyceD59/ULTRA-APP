@@ -54,6 +54,9 @@ declare global {
     umami?: {
       track(name: string, data?: AnalyticsPayloadMap[AnalyticsEvent]): void | Promise<void>;
     };
+    companionUmami?: {
+      track(name: string, data?: Record<string, unknown>): void | Promise<void>;
+    };
   }
 }
 
@@ -171,7 +174,7 @@ export function trackEvent(
     if (name !== 'alison_message_sent' && name !== 'alison_reply_received' && !payload) return;
     const send = () => {
       try {
-        const result = window.umami?.track(name, payload);
+        const result = window.companionUmami?.track(name, payload);
         if (result && typeof (result as Promise<void>).then === 'function') {
           void Promise.resolve(result).catch(() => {
             // A rejected analytics request must never interrupt a customer action.
