@@ -254,7 +254,14 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
       });
     });
 
-    await waitTick(120);
+    // Keep the provider stub installed until the background email retry finishes.
+    await waitTick(1_200);
+
+    assert.equal(
+      capturedRequests.filter((r) => r.url.includes("resend.com")).length,
+      2,
+      "A Resend outage should trigger exactly one email retry",
+    );
 
     const atRequests = capturedRequests.filter((r) =>
       r.url.includes("africastalking.com")
@@ -269,6 +276,40 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
 
     globalThis.fetch = savedFetch;
     delete process.env["RESEND_BASE_URL"];
+  });
+
+  it("retries a temporary Resend HTTP failure and audits both attempts", async () => {
+    delete process.env["TEAM_ALERT_PHONE"];
+    process.env["RESEND_BASE_URL"] = "https://api.resend.com";
+    const savedFetch = globalThis.fetch;
+    const keys: string[] = [];
+    globalThis.fetch = async (_input, init) => {
+      keys.push(new Headers(init?.headers).get("Idempotency-Key") ?? "");
+      return keys.length === 1
+        ? new Response(JSON.stringify({ name: "service_unavailable" }), { status: 503 })
+        : new Response(JSON.stringify({ id: "re_recovery_retry" }), { status: 200 });
+    };
+    try {
+      const { alertTeamRecoveryOrder } = await import("../routes/payments.js");
+      alertTeamRecoveryOrder({
+        subject: "Test recovery alert retry",
+        body: "Order details here",
+        smsText: "Recovery order needs fulfilment.",
+        template: "payment_recovery_alert",
+        orderId: 10,
+      });
+      await waitTick(1_200);
+      assert.equal(keys.length, 2);
+      assert.ok(keys[0]);
+      assert.equal(keys[0], keys[1]);
+      const attempts = capturedInserts.filter((row) =>
+        row["provider"] === "resend" && row["orderId"] === 10
+      );
+      assert.deepEqual(attempts.map((row) => row["status"]), ["failed", "sent"]);
+    } finally {
+      globalThis.fetch = savedFetch;
+      delete process.env["RESEND_BASE_URL"];
+    }
   });
 
   it("(i) uses DB phone number instead of env var when team_settings has one", async () => {

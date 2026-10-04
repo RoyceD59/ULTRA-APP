@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { decryptSecret } from "../lib/secret-crypto.js";
 import type Stripe from "stripe";
 import { sendViaResend } from "../lib/resend.js";
+import { sendRecoveryAlertEmail } from "../lib/recovery-alert-email.js";
 import { sendSms } from "../lib/sms.js";
 import { buildOrderReceiptEmail } from "../lib/email.js";
 import { paymentLimiter } from "../lib/rate-limiters.js";
@@ -28,8 +29,9 @@ async function enqueueReferralSettlementIfReady(order: { id: number; userId: str
 
 /**
  * Send a recovery-order alert to the team via email (primary) and SMS (fallback).
- * The email is fire-and-forget; SMS fires unconditionally so the team is reached
- * even when Resend is temporarily unavailable.
+ * Email runs in the background with one retry after a short backoff. SMS fires
+ * independently, including while email is retrying. Exhausted email attempts
+ * produce an explicit error rather than relying on optional SMS configuration.
  *
  * The team phone number is read from the DB (team_settings.team_alert_phone) first,
  * falling back to the TEAM_ALERT_PHONE env var so existing deployments are unaffected.
@@ -46,21 +48,27 @@ export function alertTeamRecoveryOrder(params: {
   const { subject, body, smsText, template, orderId } = params;
 
   // Primary: email
-  sendViaResend({
+  void sendRecoveryAlertEmail({
     from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
     to:      "info@ucfilters.com",
     subject,
     text:    body,
     meta:    { template, orderId },
-  }).catch(() => { /* already logged inside sendViaResend */ });
+  }, sendViaResend).catch(() => {
+    console.error(`[payments] RECOVERY_ALERT_EMAIL_FAILED: unexpected retry failure; check recovery order ${orderId} for manual fulfilment`);
+  });
 
   // Fallback: SMS (fires regardless of email success so the team is reached
   // even when Resend is down). Phone is resolved from DB first, then env var.
   getTeamAlertPhone().then((teamPhone) => {
     if (teamPhone) {
-      sendSms(teamPhone, smsText, { template, orderId }).catch(() => {});
+      sendSms(teamPhone, smsText, { template, orderId }).catch(() => {
+        console.error(`[payments] Recovery alert SMS failed (orderId=${orderId})`);
+      });
     }
-  }).catch(() => {});
+  }).catch(() => {
+    console.error(`[payments] Recovery alert phone lookup failed (orderId=${orderId})`);
+  });
 }
 
 // Exported so tests can import the live set instead of duplicating it.
