@@ -35,7 +35,7 @@ export default function ForgotPasswordScreen() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/uc/auth/forgot-password`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/reset-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: email.trim(), channel }),
@@ -66,7 +66,7 @@ export default function ForgotPasswordScreen() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/uc/auth/reset-password`, {
+      const res = await fetch(`${getApiBase()}/api/uc/auth/reset-confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: resetToken, newPassword }),
@@ -233,7 +233,7 @@ export default function ForgotPasswordScreen() {
 
             <TouchableOpacity
               testID="reset-back"
-              onPress={() => router.back()}
+              onPress={() => router.replace('/auth/login' as never)}
               style={styles.cancelBtn}
             >
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Back to Sign In</Text>

@@ -2653,7 +2653,7 @@ async function issueCompanionReset(
   }
   const rawToken = randomUUID();
   const tokenHash = hashResetToken(rawToken);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   // A newly-issued reset supersedes every previous outstanding link.
   await db.transaction(async (tx) => {
     await tx.update(passwordResetTokensTable)
@@ -2671,8 +2671,8 @@ async function issueCompanionReset(
       from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
       to: user.email,
       subject: "Reset your Ultra-Clear password",
-      text: `Use this one-time link to choose a new password (valid for 24 hours):\n${companionResetUrl}\n\nWeb alternative:\n${webResetUrl}`,
-      html: `<p>Use this one-time link to choose a new password (valid for 24 hours).</p><p><a href="${companionResetUrl}">Reset in the Ultra-Clear app</a></p><p><a href="${webResetUrl}">Reset on the web</a></p>`,
+      text: `Use this one-time link to choose a new password (valid for 1 hour):\n${companionResetUrl}\n\nWeb alternative:\n${webResetUrl}`,
+      html: `<p>Use this one-time link to choose a new password (valid for 1 hour).</p><p><a href="${companionResetUrl}">Reset in the Ultra-Clear app</a></p><p><a href="${webResetUrl}">Reset on the web</a></p>`,
       meta: { template: "uc-password-reset" },
       logBody: "Password reset email dispatched (reset URL redacted)",
     });
@@ -2680,7 +2680,7 @@ async function issueCompanionReset(
     const phone = normalizePhone(user.phone);
     if (phone) {
       try {
-        await sendWhatsAppMessage(phone, `Ultra-Clear password reset (valid for 24 hours): ${companionResetUrl}`);
+        await sendWhatsAppMessage(phone, `Ultra-Clear password reset (valid for 1 hour): ${companionResetUrl}`);
         sent = true;
       } catch {
         sent = false;
@@ -2699,7 +2699,7 @@ async function issueCompanionReset(
 }
 
 /** POST /uc/auth/forgot-password — always 200 to prevent account enumeration */
-router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+router.post(["/uc/auth/reset-request", "/uc/auth/forgot-password"], authLimiter, async (req: Request, res: Response): Promise<void> => {
   const { email, phone, identifier, channel } = req.body ?? {};
   const supplied = typeof identifier === "string" ? identifier : typeof email === "string" ? email : phone;
   if (!supplied || typeof supplied !== "string") {
@@ -2992,7 +2992,7 @@ router.get("/uc/auth/reset-password", async (req: Request, res: Response): Promi
  * The conditional UPDATE returns 0 rows if the token was already consumed or has
  * expired, making the entire operation idempotent and race-free.
  */
-router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+router.post(["/uc/auth/reset-confirm", "/uc/auth/reset-password"], authLimiter, async (req: Request, res: Response): Promise<void> => {
   const { token, newPassword } = req.body ?? {};
   if (!token || typeof token !== "string" || !newPassword) {
     res.status(400).json({ error: "token and newPassword are required." });
