@@ -1366,6 +1366,43 @@ export const UpdateUcOrderFulfillmentResponse = zod.object({
 
 
 /**
+ * @summary Update internal status, shipping details and confirmed order items
+ */
+
+
+
+export const UpdateUcAdminOrderParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const updateUcAdminOrderBodyShippingAddressMaxOne = 1000;
+
+export const updateUcAdminOrderBodyLineItemsItemProductIdMax = 2147483647;
+
+export const updateUcAdminOrderBodyLineItemsItemNameMax = 300;
+
+export const updateUcAdminOrderBodyLineItemsItemQuantityMax = 1000;
+
+export const updateUcAdminOrderBodyLineItemsItemTotalRegExp = new RegExp('^\\d{1,10}(\\.\\d{1,2})?$');
+export const updateUcAdminOrderBodyLineItemsMax = 100;
+
+
+
+export const UpdateUcAdminOrderBody = zod.object({
+  "status": zod.enum(['pending', 'processing', 'paid', 'declined', 'completed', 'cancelled', 'dispatched']).optional(),
+  "shippingAddress": zod.record(zod.string(), zod.string().max(updateUcAdminOrderBodyShippingAddressMaxOne)).optional(),
+  "lineItems": zod.array(zod.object({
+  "productId": zod.number().min(1).max(updateUcAdminOrderBodyLineItemsItemProductIdMax),
+  "name": zod.string().min(1).max(updateUcAdminOrderBodyLineItemsItemNameMax),
+  "quantity": zod.number().min(1).max(updateUcAdminOrderBodyLineItemsItemQuantityMax),
+  "total": zod.string().regex(updateUcAdminOrderBodyLineItemsItemTotalRegExp)
+})).min(1).max(updateUcAdminOrderBodyLineItemsMax).optional()
+})
+
+export const UpdateUcAdminOrderResponse = zod.unknown()
+
+
+/**
  * @summary Advance an order's customer-visible status and send one audited push
  */
 export const UpdateUcOrderCustomerStageParams = zod.object({

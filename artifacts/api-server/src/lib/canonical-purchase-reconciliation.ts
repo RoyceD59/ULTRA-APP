@@ -67,7 +67,7 @@ function customer(value: string): number | null {
 }
 function providerStatus(order: Order): string {
   const status = order.status.toLowerCase();
-  if (["shipped", "ready-to-collect", "delivered", "out-for-delivery"].includes(status) &&
+  if (["dispatched", "shipped", "ready-to-collect", "delivered", "out-for-delivery"].includes(status) &&
       ["paid", "pending", "failed"].includes(order.fulfillment_payment_status ?? "")) {
     return order.fulfillment_payment_status!;
   }
@@ -77,7 +77,7 @@ function providerStatus(order: Order): string {
 function fulfilmentStatus(order: Order): string {
   const status = order.status.toLowerCase();
   return ["completed", "delivered"].includes(status) ? "completed"
-    : ["processing", "shipped", "ready-to-collect", "out-for-delivery"].includes(status) ? "processing" : "pending";
+    : ["processing", "dispatched", "shipped", "ready-to-collect", "out-for-delivery"].includes(status) ? "processing" : "pending";
 }
 async function advisory(client: PoolClient, key: string) {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]);
@@ -240,7 +240,9 @@ export async function reconcileCanonicalPurchase(
       if (candidate.customer_id !== null && sourceCustomer === null) {
         reasons.push(RECONCILIATION_REASONS.UNKNOWN_SOURCE_OWNER, RECONCILIATION_REASONS.CROSS_CUSTOMER);
       }
-      if (candidate.customer_id === null && sourceCustomer === null) {
+      // Refreshing the same unresolved source does not claim customer ownership.
+      // Unresolved identities still cannot adopt a purchase selected by another key.
+      if (candidate.customer_id === null && sourceCustomer === null && candidate.companion_order_id !== order.id) {
         reasons.push(RECONCILIATION_REASONS.UNKNOWN_SOURCE_OWNER);
       }
       if (candidate.woocommerce_order_id !== null && order.wc_order_id !== null &&

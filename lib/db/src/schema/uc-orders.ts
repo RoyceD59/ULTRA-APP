@@ -48,6 +48,8 @@ export const ucOrdersTable = pgTable("uc_orders", {
   // path (customer paid but the app lost connectivity before createOrder fired).
   // Set at insert time — never derived from userId heuristics.
   webhookRecovery:  boolean("webhook_recovery").notNull().default(false),
+  /** Staff confirmed items and delivery details; recovery provenance is retained. */
+  recoveryEnrichedAt: timestamp("recovery_enriched_at", { withTimezone: true }),
   // COD collection is deliberately separate from the general order status:
   // "awaiting_collection" means no cash has been received; "collected" is
   // set only by the staff-only confirmation endpoint.

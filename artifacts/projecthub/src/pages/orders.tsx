@@ -28,6 +28,7 @@ import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
 import { OrderDetailsDialog } from "@/components/orders/OrderDetailsDialog";
+import { RecoveryEnrichmentDialog } from "@/components/orders/RecoveryEnrichmentDialog";
 
 const BASE      = API_ORIGIN;
 const TOKEN_KEY = "uc_orders_admin_token";
@@ -35,7 +36,8 @@ const TOKEN_KEY = "uc_orders_admin_token";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AdminOrder {
-  shippingAddress?: { fulfillment?: string; shippingAmount?: string };
+  shippingAddress?: Record<string, string>;
+  recoveryEnrichedAt?: string | null;
   discountAmount?: number;
   promoCode?: string;
   id: number;
@@ -172,6 +174,7 @@ function statusColor(status: string) {
   switch (status) {
     case "pending":    return "bg-amber-100 text-amber-800";
     case "processing": return "bg-blue-100 text-blue-800";
+    case "dispatched": return "bg-blue-100 text-blue-800";
     case "paid":       return "bg-emerald-100 text-emerald-800";
     case "completed":  return "bg-emerald-100 text-emerald-800";
     case "declined":   return "bg-red-100 text-red-800";
@@ -261,7 +264,7 @@ function OrderActions({
 
   async function setStatus(status: string) {
     setBusy(status);
-    await call("PATCH", "/status", { status });
+    await call("PATCH", "", { status });
     setBusy(null);
   }
 
@@ -287,7 +290,18 @@ function OrderActions({
   return (
     <div className="mt-3 pt-3 border-t space-y-2">
       <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
-        {!isRefunded && order.status !== "paid" && (
+        {order.webhookRecovery && (
+          <RecoveryEnrichmentDialog order={order} token={token} onChanged={onChanged} disabled={busy !== null || isRefunded} />
+        )}
+        {!isRefunded && !["dispatched", "completed", "cancelled", "declined"].includes(order.status) && (
+          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-7 text-xs"
+            disabled={busy !== null || (order.webhookRecovery && !order.recoveryEnrichedAt)}
+            onClick={() => setStatus("dispatched")}>
+            <Package className="w-3.5 h-3.5 mr-1" />
+            {busy === "dispatched" ? "Saving…" : "Mark dispatched"}
+          </Button>
+        )}
+        {!isRefunded && !["paid", "dispatched", "completed"].includes(order.status) && (
           <Button
             variant="outline" size="sm"
             onClick={() => setStatus("paid")}
@@ -413,6 +427,12 @@ function OrderActions({
           </AlertDialogContent>
         </AlertDialog>
       </div>
+      {order.webhookRecovery && <p className="text-xs text-muted-foreground">
+        {order.recoveryEnrichedAt
+          ? `Enriched ${new Date(order.recoveryEnrichedAt).toLocaleString()}${order.status === "dispatched" ? " — dispatched." : ["paid", "pending", "processing"].includes(order.status) ? " — ready to dispatch." : " — details confirmed."}`
+          : "Save enrichment to confirm items and shipping before dispatch."}
+        {" "}Internal status only; customer delivery updates are separate.
+      </p>}
 
       {error && (
         <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-md p-2">
@@ -702,6 +722,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
   const { data: orders, isLoading, isError, refetch, isFetching } = useQuery<AdminOrder[]>({
     queryKey: ["admin-orders", token, fromDate, toDate],
+    refetchInterval: 30_000,
     queryFn: async () => {
       const params = buildParams();
       const url = `${BASE}/api/uc/admin/orders${params.size ? `?${params}` : ""}`;

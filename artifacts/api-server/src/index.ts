@@ -244,6 +244,7 @@ async function applyStartupMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS webhook_recovery boolean NOT NULL DEFAULT false;
   `);
   logger.info("Startup migration: uc_orders webhook_recovery column ensured");
+  await pool.query(`ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS recovery_enriched_at timestamptz`);
 
   // Add mpesa_receipt column (M-Pesa confirmation code from the Daraja callback,
   // persisted for bookkeeping/statement reconciliation) on older deployments.
@@ -2397,7 +2398,7 @@ applyStartupMigrations()
           logger.error({ err }, "Error listening on port");
           process.exit(1);
         }
-        logger.info({ port }, "Server listening");
+        logger.info({ port }, "Isolated preview server listening");
       });
       process.on("SIGTERM", () => shutdown(server, "SIGTERM"));
       process.on("SIGINT", () => shutdown(server, "SIGINT"));

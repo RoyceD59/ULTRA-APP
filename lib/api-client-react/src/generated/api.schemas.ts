@@ -1474,6 +1474,51 @@ export interface UcOrderFulfillmentResult {
   notification: UcOrderFulfillmentResultNotification;
 }
 
+export type UcAdminOrderUpdateStatus = typeof UcAdminOrderUpdateStatus[keyof typeof UcAdminOrderUpdateStatus];
+
+
+export const UcAdminOrderUpdateStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  paid: 'paid',
+  declined: 'declined',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  dispatched: 'dispatched',
+} as const;
+
+export type UcAdminOrderUpdateShippingAddress = {[key: string]: string};
+
+export interface UcAdminOrderLineInput {
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  productId: number;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  quantity: number;
+  /** @pattern ^\d{1,10}(\.\d{1,2})?$ */
+  total: string;
+}
+
+export interface UcAdminOrderUpdate {
+  status?: UcAdminOrderUpdateStatus;
+  shippingAddress?: UcAdminOrderUpdateShippingAddress;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lineItems?: UcAdminOrderLineInput[];
+}
+
 export type UcOrderCustomerStageInputStage = typeof UcOrderCustomerStageInputStage[keyof typeof UcOrderCustomerStageInputStage];
 
 

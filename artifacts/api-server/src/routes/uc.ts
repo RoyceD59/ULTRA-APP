@@ -85,6 +85,7 @@ import { checkoutQuote, claimReferralBenefit, type Fulfillment } from "../lib/ch
 import { prepareCheckoutOrder, confirmCheckoutOrder, checkoutOrderResponse } from "../lib/checkout-orders.js";
 import { enqueueReferralSettlement } from "./referrals.js";
 import enquiriesAdminRouter from "./uc-enquiries-admin.js";
+import ordersAdminRouter from "./uc-orders-admin.js";
 
 class CheckoutKeyOwnershipConflict extends Error {
   readonly code = "CHECKOUT_KEY_OWNERSHIP_CONFLICT";
@@ -96,6 +97,7 @@ class CheckoutKeyOwnershipConflict extends Error {
 
 const router = Router();
 router.use(enquiriesAdminRouter);
+router.use(ordersAdminRouter);
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 // Real Ultra Clear 2026 product catalogue — 5 segments, 27 products.
@@ -4512,6 +4514,7 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
       // True only for orders inserted by the webhook recovery path —
       // persisted at insert time, never derived from userId heuristics.
       webhookRecovery:  o.webhookRecovery ?? false,
+      recoveryEnrichedAt: o.recoveryEnrichedAt ?? null,
       codCollectionStatus: o.codCollectionStatus ?? null,
       codCollectedBy: o.codCollectedBy ?? null,
       codCollectedAt: o.codCollectedAt ?? null,

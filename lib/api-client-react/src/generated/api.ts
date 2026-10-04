@@ -193,6 +193,7 @@ import type {
   TaskUpdate,
   TeamTokenRequest,
   TeamTokenResponse,
+  UcAdminOrderUpdate,
   UcCodeValidation,
   UcCustomerDetail,
   UcCustomerList,
@@ -2658,6 +2659,78 @@ export const useUpdateUcOrderFulfillment = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateUcOrderFulfillmentMutationOptions(options));
+    }
+
+export const getUpdateUcAdminOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/orders/${id}`
+}
+
+/**
+ * @summary Update internal status, shipping details and confirmed order items
+ */
+export const updateUcAdminOrder = async (id: number,
+    ucAdminOrderUpdate: UcAdminOrderUpdate, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUpdateUcAdminOrderUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ucAdminOrderUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcAdminOrderMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminOrder>>, TError,{id: number;data: BodyType<UcAdminOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminOrder>>, TError,{id: number;data: BodyType<UcAdminOrderUpdate>}, TContext> => {
+
+const mutationKey = ['updateUcAdminOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcAdminOrder>>, {id: number;data: BodyType<UcAdminOrderUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcAdminOrder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcAdminOrderMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcAdminOrder>>>
+    export type UpdateUcAdminOrderMutationBody = BodyType<UcAdminOrderUpdate>
+    export type UpdateUcAdminOrderMutationError = ErrorType<void>
+
+    /**
+ * @summary Update internal status, shipping details and confirmed order items
+ */
+export const useUpdateUcAdminOrder = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcAdminOrder>>, TError,{id: number;data: BodyType<UcAdminOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcAdminOrder>>,
+        TError,
+        {id: number;data: BodyType<UcAdminOrderUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcAdminOrderMutationOptions(options));
     }
 
 export const getUpdateUcOrderCustomerStageUrl = (id: number,) => {
