@@ -5,7 +5,7 @@
   "previousIntegrationRevision": "a20475fad106ff663dc1cf674c8b9e5ad0720f79",
   "uiSourceBaseRevision": "9e69cc283ac035fd68d742f14202565176e315ec",
   "previousSourceArchiveSha256": "5d68f7031cd4da4ac2e312b5b5240a18ba63cbab87ab199ecb2fe4a747a10bed",
-  "sourceArchiveSha256": "9d99f9eacbcb390a02c0df574c2fabaad4ede037501fb917fc9b00c8ee9471ec",
+  "sourceArchiveSha256": "8030f8b220ff148cd9ec28710dd46f471ef3b376a839f586fe769025c52b7d29",
   "dependencySecuritySourceBaseRevision": "370ff0164879b5414e205e1ed278a4f522c2b0f8",
   "dependencySecuritySourceArchiveSha256": "d3f181e02ff4d3ac05b3d5c2bd98d12ca5b746edf11c25ac4b3e1fc3d8566aab",
   "dependencySecurityPaths": [
@@ -21,5 +21,8 @@
   "forestUrl": "https://uc-hydrate-forest.pages.dev/",
   "customDomainApproved": false,
   "fieldEvidenceStatus": "pending",
-  "previousLiveBaseRevision": "9cf3861de793aab6322038f4affa4b51316b432a"
+  "previousLiveBaseRevision": "9cf3861de793aab6322038f4affa4b51316b432a",
+  "whatsappRecoveryRevision": "c1c0ca700e5a339e53841ae8ee7d4fdb9b436422",
+  "whatsappRecoverySourceBaseRevision": "061df4b75d0c79ec3b9821777ed1bf9ea95b84fd",
+  "whatsappRecoverySourceArchiveSha256": "9d99f9eacbcb390a02c0df574c2fabaad4ede037501fb917fc9b00c8ee9471ec"
 }

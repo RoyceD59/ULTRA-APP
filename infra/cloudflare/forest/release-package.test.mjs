@@ -7,6 +7,16 @@ import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
+const whatsappRecoveryPaths = [
+  'artifacts/api-server/src/lib/whatsapp-operations.ts',
+  'artifacts/api-server/src/lib/whatsapp.ts',
+  'artifacts/api-server/src/routes/whatsapp.ts',
+  'artifacts/api-server/src/tests/whatsapp-operations.test.ts',
+  'artifacts/projecthub/src/components/whatsapp-qr-card.test.tsx',
+  'artifacts/projecthub/src/components/whatsapp-qr-card.tsx',
+  'artifacts/projecthub/src/lib/whatsapp-request.test.ts',
+  'artifacts/projecthub/src/lib/whatsapp-request.ts',
+];
 const dependencySecurityPaths = [
   'package.json',
   'pnpm-lock.yaml',
@@ -80,6 +90,7 @@ test('the approved UI refresh preserves every unrelated archived source file', a
     'artifacts/uc-companion/lib/__tests__/queryFreshness.test.mts',
     'artifacts/uc-companion/lib/__tests__/sessionPersistence.test.mts',
     ...dependencySecurityPaths,
+    ...whatsappRecoveryPaths,
   ]);
   try {
     const old = resolve(work, 'before.tar.gz');
@@ -127,7 +138,7 @@ test('dependency security refresh changes only approved packaging sources', asyn
       .split('\n').filter(path => path && !path.endsWith('/'));
     const oldPaths = list(oldArchive);
     const newPaths = new Set(list(archive));
-    const allowed = new Set(dependencySecurityPaths);
+    const allowed = new Set([...dependencySecurityPaths, ...whatsappRecoveryPaths]);
     const oldDir = resolve(work, 'old');
     const newDir = resolve(work, 'new');
     await Promise.all([mkdir(oldDir), mkdir(newDir)]);
@@ -181,5 +192,50 @@ test('dependency security refresh changes only approved packaging sources', asyn
     assert.match(lock, /braces@3\.0\.3\(patch_hash=/);
     assert.match(lock, /http-cache-semantics@4\.2\.0\(patch_hash=/);
     assert.match(lock, /node-forge@1\.4\.0\(patch_hash=/);
+  } finally { await rm(work, { recursive: true, force: true }); }
+});
+
+test('published package includes the approved WhatsApp recovery UI and cleanup implementation', async () => {
+  const manifest = JSON.parse(await readFile(resolve(here, 'release-manifest.json'), 'utf8'));
+  assert.match(manifest.whatsappRecoveryRevision, /^[a-f0-9]{40}$/);
+  const archive = resolve(here, 'release-sources.tar.gz');
+  for (const path of whatsappRecoveryPaths) {
+    const packed = execFileSync('tar', ['-xOzf', archive, path]);
+    const approved = execFileSync('git', ['show', `${manifest.whatsappRecoveryRevision}:${path}`]);
+    assert.ok(packed.equals(approved), `${path} must match the approved recovery change`);
+  }
+});
+
+test('WhatsApp packaging preserves every newer non-recovery release source', async () => {
+  const manifest = JSON.parse(await readFile(resolve(here, 'release-manifest.json'), 'utf8'));
+  const before = execFileSync('git', ['show',
+    `${manifest.whatsappRecoverySourceBaseRevision}:infra/cloudflare/forest/release-sources.tar.gz`],
+  { maxBuffer: 40 * 1024 * 1024 });
+  assert.equal(createHash('sha256').update(before).digest('hex'), manifest.whatsappRecoverySourceArchiveSha256);
+  const work = await mkdtemp(resolve(tmpdir(), 'whatsapp-package-test-'));
+  try {
+    const old = resolve(work, 'before.tar.gz');
+    await writeFile(old, before);
+    const current = resolve(here, 'release-sources.tar.gz');
+    const oldDir = resolve(work, 'old');
+    const newDir = resolve(work, 'new');
+    await Promise.all([mkdir(oldDir), mkdir(newDir)]);
+    execFileSync('tar', ['-xzf', old, '-C', oldDir]);
+    execFileSync('tar', ['-xzf', current, '-C', newDir]);
+    const list = archive => new Set(execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' })
+      .split('\n').filter(path => path && !path.endsWith('/')));
+    const oldPaths = list(old);
+    const newPaths = list(current);
+    const allowed = new Set(whatsappRecoveryPaths);
+    for (const path of oldPaths) {
+      assert.ok(newPaths.has(path), `Recovery release must retain ${path}`);
+      if (!allowed.has(path)) {
+        assert.ok((await readFile(resolve(oldDir, path))).equals(
+          await readFile(resolve(newDir, path))), `Unrelated recovery release change: ${path}`);
+      }
+    }
+    for (const path of newPaths) {
+      assert.ok(oldPaths.has(path) || allowed.has(path), `Unexpected recovery source: ${path}`);
+    }
   } finally { await rm(work, { recursive: true, force: true }); }
 });
