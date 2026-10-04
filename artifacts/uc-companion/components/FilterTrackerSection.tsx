@@ -95,7 +95,8 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
   const [showPerfModal,       setShowPerfModal]       = useState(false);
   const [toastMessage,        setToastMessage]        = useState('');
   const [toastVisible,        setToastVisible]        = useState(false);
-  const [zeroLifespanNotice,  setZeroLifespanNotice]  = useState(false);
+  const [zeroLifespanNotice, setZeroLifespanNotice] = useState<{ userId: number; active: boolean } | null>(null);
+  const userId = user?.id;
   // Pending reminder opt-in prompt, set after a successful registration for
   // signed-in users who haven't been shown the prompt for this activation yet.
   const [reminderOptIn, setReminderOptIn] = useState<{ productId: number; activatedAt: string } | null>(null);
@@ -104,34 +105,47 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
   // share the same data without triggering two independent API calls.
   const { products: filterProducts, loading: productsLoading, source: productsSource } = useFilterProducts();
 
-  // ── Zero-lifespan notice: load on mount and whenever activation changes ────────
+  // ── Zero-lifespan notice: reload when the account or activation changes ────────
   useEffect(() => {
-    if (!activation) {
-      setZeroLifespanNotice(false);
+    let cancelled = false;
+    setZeroLifespanNotice(null);
+    if (!activation || userId == null) {
       return;
     }
-    getZeroLifespanNotice().then(setZeroLifespanNotice);
-  }, [activation]);
+    getZeroLifespanNotice(userId).then(active => {
+      if (!cancelled) setZeroLifespanNotice({ userId, active });
+    });
+    return () => { cancelled = true; };
+  }, [activation, userId]);
 
   // ── Catalogue lifespan sync ──────────────────────────────────────────────────
   // Runs only when the product list came directly from the live API ('live').
   // Cache and fallback data must never overwrite a stored activation — they may
   // themselves be stale and would corrupt the reminder schedule offline.
-  const lastSyncedProductsRef = useRef<typeof filterProducts | null>(null);
+  const lastSyncedProductsRef = useRef<{ products: typeof filterProducts; userId: number } | null>(null);
+  const onActivationChangeRef = useRef(onActivationChange);
+  onActivationChangeRef.current = onActivationChange;
   useEffect(() => {
     if (productsSource !== 'live') return;  // offline/cache/fallback — hard no-op
     if (!activation)               return;  // nothing registered — no sync needed
-    if (filterProducts === lastSyncedProductsRef.current) return; // same reference, skip
-    lastSyncedProductsRef.current = filterProducts;
+    if (userId == null) return;
+    if (filterProducts === lastSyncedProductsRef.current?.products
+      && userId === lastSyncedProductsRef.current.userId) return; // same account and reference, skip
+    const syncIdentity = { products: filterProducts, userId };
+    lastSyncedProductsRef.current = syncIdentity;
+    let cancelled = false;
 
     const oldLifespan = activation.lifespanDays;
     const oldName     = activation.productName;
-    syncActivationWithCatalogue(filterProducts, user!.id).then(updated => {
+    syncActivationWithCatalogue(filterProducts, userId).then(updated => {
+      if (cancelled) return;
       // Refresh the notice flag regardless of whether the lifespan changed —
       // the sync may have set or cleared it based on the catalogue data.
-      getZeroLifespanNotice().then(setZeroLifespanNotice);
+      getZeroLifespanNotice(userId).then(active => {
+        if (!cancelled) setZeroLifespanNotice({ userId, active });
+      });
       if (updated) {
-        onActivationChange(updated);
+        onActivationChangeRef.current(updated);
         // Notify the user that the schedule was silently updated.
         setToastMessage(
           `${oldName} reminders updated: ${oldLifespan} → ${updated.lifespanDays} days`
@@ -139,7 +153,14 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
         setToastVisible(true);
       }
     });
-  }, [filterProducts, productsSource, activation, onActivationChange]);
+    return () => {
+      cancelled = true;
+      // An invalidated in-flight sync must not suppress its replacement.
+      if (lastSyncedProductsRef.current === syncIdentity) {
+        lastSyncedProductsRef.current = null;
+      }
+    };
+  }, [filterProducts, productsSource, activation, userId]);
 
   function openRegisterModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -266,7 +287,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
               {/* Zero-lifespan notice — shown when the catalogue no longer carries
                   a valid lifespan for this product (meta removed / bad store data).
                   Non-blocking: reminders are preserved from the last known lifespan. */}
-              {zeroLifespanNotice && (
+              {zeroLifespanNotice?.userId === userId && zeroLifespanNotice?.active && (
                 <View style={[styles.effWarning, { backgroundColor: '#FFF1F2', borderColor: '#FECDD3' }]}>
                   <Ionicons name="warning-outline" size={14} color="#E11D48" />
                   <Text style={[styles.effWarningText, { color: '#9F1239' }]}>

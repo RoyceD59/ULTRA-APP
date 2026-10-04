@@ -47,7 +47,7 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const FILTER_ACTIVATION_KEY = 'uc_filter_activation';
-const ZERO_LIFESPAN_KEY = 'uc_zero_lifespan_notice';
+const ZERO_LIFESPAN_KEY = 'uc_zero_lifespan_notice_0';
 
 /** ISO timestamp for N days ago. */
 function daysAgo(n: number): string {
@@ -178,7 +178,7 @@ describe('syncActivationWithCatalogue', () => {
 
     const badSync = await syncActivationWithCatalogue([
       { id: 1, lifespanDays: 0, name: 'Hydra Flux' },
-    ]);
+    ], 0);
 
     assert.equal(badSync, null, 'a zero lifespan must not replace the valid activation');
     assert.equal(
@@ -187,14 +187,14 @@ describe('syncActivationWithCatalogue', () => {
       'the bad sync must persist the notice for a later app session',
     );
     assert.equal(
-      await getZeroLifespanNotice(),
+      await getZeroLifespanNotice(0),
       true,
       'a fresh notice read after the sync must see the persisted flag',
     );
 
     const correctiveSync = await syncActivationWithCatalogue([
       { id: 1, lifespanDays: 90, name: 'Hydra Flux' },
-    ]);
+    ], 0);
 
     assert.equal(correctiveSync, null, 'matching restored data needs no reschedule');
     assert.equal(
@@ -203,7 +203,7 @@ describe('syncActivationWithCatalogue', () => {
       'the corrective sync must remove the persisted notice flag',
     );
     assert.equal(
-      await getZeroLifespanNotice(),
+      await getZeroLifespanNotice(0),
       false,
       'a fresh notice read must reflect that the store data is valid again',
     );

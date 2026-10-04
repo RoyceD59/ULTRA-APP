@@ -50,7 +50,9 @@ const NOTIF_PREFS_KEY            = 'uc_notif_prefs';
 // Set to 'true' when a catalogue sync detects the registered product's
 // filter_lifespan_days meta has been removed (lifespan <= 0). Cleared when
 // the catalogue restores a valid lifespan, or when the user re-registers.
-const ZERO_LIFESPAN_KEY          = 'uc_zero_lifespan_notice';
+export function zeroLifespanKey(userId: number): string {
+  return `uc_zero_lifespan_notice_${userId}`;
+}
 
 /**
  * Per-user AsyncStorage key for the filter activation record.
@@ -109,19 +111,19 @@ const DEFAULT_PREFS: NotifPrefs = { orderUpdates: true, filterReminders: true };
  * product's lifespan meta was removed (lifespanDays <= 0). The UI uses this
  * to show a non-blocking notice on the filter status card.
  */
-export async function getZeroLifespanNotice(): Promise<boolean> {
+export async function getZeroLifespanNotice(userId: number): Promise<boolean> {
   try {
-    return (await AsyncStorage.getItem(ZERO_LIFESPAN_KEY)) === 'true';
+    return (await AsyncStorage.getItem(zeroLifespanKey(userId))) === 'true';
   } catch { return false; }
 }
 
 /** Internal: write or clear the zero-lifespan notice flag. */
-async function setZeroLifespanNotice(active: boolean): Promise<void> {
+async function setZeroLifespanNotice(active: boolean, userId: number): Promise<void> {
   try {
     if (active) {
-      await AsyncStorage.setItem(ZERO_LIFESPAN_KEY, 'true');
+      await AsyncStorage.setItem(zeroLifespanKey(userId), 'true');
     } else {
-      await AsyncStorage.removeItem(ZERO_LIFESPAN_KEY);
+      await AsyncStorage.removeItem(zeroLifespanKey(userId));
     }
   } catch { /* non-critical */ }
 }
@@ -643,7 +645,7 @@ async function scheduleAllFilterNotificationsUnlocked(
   // persist the activation but never schedule offers at nonsensical dates.
   // Set the notice flag so the UI can inform the user.
   if (!(normalizedParams.lifespanDays > 0)) {
-    await setZeroLifespanNotice(true);
+    await setZeroLifespanNotice(true, userId);
     const activation: FilterActivation = { ...normalizedParams, notifIds: [] };
     await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
     await AsyncStorage.setItem(lastChangedKey, new Date(normalizedParams.activatedAt).getTime().toString());
@@ -651,7 +653,7 @@ async function scheduleAllFilterNotificationsUnlocked(
     return activation;
   }
   // Positive lifespan — this is a trackable registration, clear any previous notice.
-  await setZeroLifespanNotice(false);
+  await setZeroLifespanNotice(false, userId);
 
   const [status, prefs] = await Promise.all([
     getNotificationPermissionStatus(),
@@ -817,13 +819,13 @@ async function syncActivationWithCatalogueUnlocked(
   // lifespan and offers at nonsensical dates. Set the notice flag so the UI
   // can warn the user; the previous schedule is left intact.
   if (!(catalogueProduct.lifespanDays > 0)) {
-    await setZeroLifespanNotice(true);
+    await setZeroLifespanNotice(true, userId);
     return null;
   }
 
   // Catalogue has a valid lifespan — clear any previous zero-lifespan notice,
   // even if the lifespan hasn't changed (the store data is trustworthy again).
-  await setZeroLifespanNotice(false);
+  await setZeroLifespanNotice(false, userId);
 
   // Read from AsyncStorage, not component props or a product-list reference:
   // the saved lifespan survives unmounts and app restarts. Returning null also
@@ -870,7 +872,7 @@ export async function clearFilterActivation(userId: number): Promise<void> {
   await cancelAllFilterNotifications(userId);
   await AsyncStorage.removeItem(filterActivationKey(userId));
   await AsyncStorage.removeItem(filterLastChangedKey(userId));
-  await setZeroLifespanNotice(false);
+  await setZeroLifespanNotice(false, userId);
   // Stop server-side email/SMS/WhatsApp reminders for the cleared filter too.
   void syncReminderToServer(null);
 }
