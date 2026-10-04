@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
+import { ApiError } from '../apiError.ts';
+import { classifyPaymentInitError } from '../rateLimitAlert.ts';
 
 // Execute the screen's actual handler with boundary stubs, without rendering
 // the entire checkout or opening a real payment page.
@@ -13,14 +15,49 @@ const handler = ts.transpileModule(screen.slice(start, end), {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-class ApiError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+// Exercise the real POST/error deserialization and Stripe endpoint wrapper,
+// replacing only fetch and hook dependencies. No Stripe account is contacted.
+const apiSource = readFileSync(new URL('../useApi.ts', import.meta.url), 'utf8');
+function apiSection(from: string, to: string) {
+  const start = apiSource.indexOf(from);
+  const end = apiSource.indexOf(to, start);
+  assert.ok(start >= 0 && end > start, `Missing API section: ${from}`);
+  return apiSource.slice(start, end);
+}
+const transport = ts.transpileModule([
+  apiSection('  const throwResponseError =', '  const get ='),
+  apiSection('  const post =', '  const put ='),
+  `return { ${apiSection('    stripeSession:', '    stripeSessionStatus:')} };`,
+].join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+
+function failingSessionEndpoint(status: number, body: Record<string, unknown>) {
+  return new Function(
+    'fetch', 'getApiBase', 'authHeaders', 'useCallback', 'ApiError',
+    'token', 'handleRejectedSessionResponse', transport,
+  )(
+    async (url: string, options: RequestInit) => {
+      assert.equal(url, 'https://api.example.test/api/payments/stripe/session');
+      assert.equal(options.method, 'POST');
+      const request = JSON.parse(String(options.body));
+      assert.equal(request.amount, 100);
+      assert.match(request.orderId, /^cart_\d+$/);
+      assert.equal(request.checkout.idempotencyKey, 'stable-checkout');
+      return new Response(JSON.stringify(body), {
+        status, headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    () => 'https://api.example.test',
+    () => ({ 'Content-Type': 'application/json' }),
+    (callback: unknown) => callback,
+    ApiError, null, async () => {},
+  ).stripeSession as (...args: unknown[]) => Promise<never>;
 }
 
-function harness(error: Error, initFails = false) {
+function harness(error: Error, initFails = false, sessionEndpoint?: (...args: unknown[]) => Promise<never>) {
   const alerts: { title: string; message: string; buttons: { text: string; onPress: () => unknown; style?: string }[] }[] = [];
   const processing: boolean[] = [];
   const methods: string[] = [];
+  const initiationErrors: unknown[] = [];
   let sessions = 0;
   let browserOpens = 0;
   const references: string[] = [];
@@ -29,8 +66,12 @@ function harness(error: Error, initFails = false) {
     'total', 'Alert', 'changePaymentMethod', 'classifyPaymentInitError', 'ApiError',
     `${handler}\nreturn handleStripeCheckout;`,
   )(
-    { stripeSession: async () => {
+    { stripeSession: async (...args: unknown[]) => {
       sessions++;
+      if (sessionEndpoint) {
+        try { return await sessionEndpoint(...args); }
+        catch (error) { initiationErrors.push(error); throw error; }
+      }
       if (initFails) throw error;
       return { sessionUrl: 'https://checkout.stripe.com/test', sessionId: 'cs_test' };
     } },
@@ -45,16 +86,16 @@ function harness(error: Error, initFails = false) {
     100,
     { alert: (title: string, message: string, buttons: typeof alerts[number]['buttons']) => alerts.push({ title, message, buttons }) },
     async (method: string) => { methods.push(method); },
-    () => ({ kind: 'retry_dialog' }),
+    classifyPaymentInitError,
     ApiError,
   ) as () => Promise<void>;
-  return { run, alerts, processing, methods, references,
+  return { run, alerts, processing, methods, references, initiationErrors,
     get sessions() { return sessions; }, get browserOpens() { return browserOpens; } };
 }
 
 test('unpaid Stripe checkout offers a working retry and guarded COD switch', async () => {
   for (const reason of ['Stripe session status: unpaid', 'Stripe payment was not completed. No order was created.']) {
-    const h = harness(new ApiError(reason, 402));
+    const h = harness(new ApiError(reason, 402, {}));
     await h.run();
     const alert = h.alerts[0];
     assert.equal(alert.title, 'Payment not confirmed');
@@ -73,7 +114,7 @@ test('unpaid Stripe checkout offers a working retry and guarded COD switch', asy
 });
 
 test('other verification errors do not claim the customer closed without paying', async () => {
-  const h = harness(new ApiError('Verified payment does not match this checkout total or currency', 402));
+  const h = harness(new ApiError('Verified payment does not match this checkout total or currency', 402, {}));
   await h.run();
   assert.equal(h.alerts[0].message, 'Verified payment does not match this checkout total or currency');
   assert.doesNotMatch(h.alerts[0].message, /closed|No order/);
@@ -88,6 +129,49 @@ test('Stripe initiation connection failure retains distinct unavailable copy', a
   assert.doesNotMatch(h.alerts[0].message, /closed|No order/);
   assert.equal(h.browserOpens, 0);
   assert.equal(h.processing.at(-1), false);
+});
+
+test('Stripe session 503 with retryable true offers Try again and COD', async () => {
+  const h = harness(new Error('Order creation must not run'), false,
+    failingSessionEndpoint(503, { error: 'Stripe is temporarily down', retryable: true }));
+  await h.run();
+  assert.ok(h.initiationErrors[0] instanceof ApiError);
+  assert.equal(h.initiationErrors[0].status, 503);
+  assert.equal(h.initiationErrors[0].retryable, true);
+  assert.equal(h.alerts.length, 1);
+  const alert = h.alerts[0];
+  assert.equal(alert.title, 'Stripe Unavailable');
+  assert.equal(alert.message,
+    'Stripe checkout could not be opened. You can try again or place your order with Cash on Delivery.');
+  assert.deepEqual(alert.buttons.map(button => button.text), ['Try again', 'Pay with COD instead']);
+  assert.deepEqual(h.processing, [true, false]);
+  assert.equal(h.browserOpens, 0);
+  assert.deepEqual(h.references, []);
+  await alert.buttons[0].onPress();
+  assert.equal(h.sessions, 2);
+  assert.equal(h.alerts[1].title, 'Stripe Unavailable');
+  await alert.buttons[1].onPress();
+  assert.deepEqual(h.methods, ['cod']);
+});
+
+test('Stripe session 402 with retryable false shows card guidance without retry buttons', async () => {
+  const message = 'Your payment could not be completed. Please check your card details and try a different payment method.';
+  const h = harness(new Error('Order creation must not run'), false,
+    failingSessionEndpoint(402, { error: message, retryable: false }));
+  await h.run();
+  assert.ok(h.initiationErrors[0] instanceof ApiError);
+  assert.equal(h.initiationErrors[0].status, 402);
+  assert.equal(h.initiationErrors[0].retryable, false);
+  assert.equal(h.alerts.length, 1);
+  assert.equal(h.alerts[0].title, 'Payment Declined');
+  assert.equal(h.alerts[0].message, message);
+  // Omitting the button argument leaves only React Native's default dismissal.
+  assert.equal(h.alerts[0].buttons, undefined);
+  assert.deepEqual(h.processing, [true, false]);
+  assert.equal(h.sessions, 1);
+  assert.equal(h.browserOpens, 0);
+  assert.deepEqual(h.references, []);
+  assert.deepEqual(h.methods, []);
 });
 
 test('actual COD method-change guard retains an open unpaid Stripe checkout', async () => {
@@ -137,7 +221,7 @@ test('actual COD method-change guard retains an open unpaid Stripe checkout', as
       cancellations++;
       const result = await release(order, 'customer');
       assert.equal(result, 'retained');
-      throw new ApiError('Resume the original payment before changing method.', 409);
+      throw new ApiError('Resume the original payment before changing method.', 409, {});
     } },
     { alert: (title: string) => alerts.push(title) },
     unexpectedMutation, unexpectedMutation, { current: 0 }, { current: null },
