@@ -285,6 +285,8 @@ const SHARED_STATE_FILES = [
   "reminder-checkin-sent-stages",
   "reminder-good-checkin-revert",
   "reminder-sync-first-insert",
+  // Seeds the legacy singleton passcode hash; do not race other settings tests.
+  "session-secret-rotation",
   "wishlist-restock-check",
 ];
 const testNamePattern = process.env["TEST_NAME_PATTERN"];
