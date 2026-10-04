@@ -19,6 +19,8 @@ import {
   ucUsersTable,
 } from "@workspace/db";
 import socialAuthRouter from "../routes/uc-social-auth.js";
+import rewardsRouter from "../routes/uc-rewards.js";
+import { assertRewardsQrIdentity } from "./helpers/assert-rewards-qr.js";
 import { verifyToken } from "../lib/jwt.js";
 
 type ClerkUserFixture = {
@@ -83,6 +85,7 @@ app.use((req, _res, next) => {
   next();
 });
 app.use(socialAuthRouter);
+app.use("/api", rewardsRouter);
 
 const clerkLookupMock = mock.method(
   clerkClient.users,
@@ -232,6 +235,7 @@ describe("social sign-in email delivery", () => {
     assert.equal(response.status, 200);
     assert.equal(response.body.user.email, currentClerkUser.emailAddresses[0]!.emailAddress);
     assert.equal(typeof response.body.token, "string");
+    await assertRewardsQrIdentity(app, response.body.token, response.body.user.id);
     assert.equal(capturedEmails.length, 1, "welcome email should be dispatched");
     assert.equal(capturedEmails[0]!.subject, "Welcome to Ultra-Clear");
     assert.match(capturedEmails[0]!.text, /Welcome to Ultra-Clear/);
@@ -260,6 +264,7 @@ describe("social sign-in email delivery", () => {
     assert.equal(response.body.user.email, currentClerkUser.emailAddresses[0]!.emailAddress);
     assert.equal(capturedEmails.length, 1);
     assert.equal(capturedEmails[0]!.subject, "New sign-in to your Ultra-Clear account");
+    await assertRewardsQrIdentity(app, response.body.token, response.body.user.id);
     assert.match(capturedEmails[0]!.text, /Google or Apple/);
     assertNoCredentialsOrResetTokens(capturedEmails);
 

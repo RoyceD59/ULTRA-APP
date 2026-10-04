@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   FlatList,
   Platform,
@@ -8,15 +8,14 @@ import {
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import QRCode from 'react-native-qrcode-svg';
+import RewardsQrDisplay from '@/components/RewardsQrDisplay';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import { useColors } from '@/hooks/useColors';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
-import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
@@ -81,6 +80,11 @@ export default function RewardsScreen() {
   const insets = useSafeAreaInsets();
   const { user, isLoading: authLoading } = useAuth();
   const api = useApi();
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(useCallback(() => {
+    setFocused(true);
+    return () => setFocused(false);
+  }, []));
   const {
     data: rewards,
     isLoading,
@@ -90,15 +94,14 @@ export default function RewardsScreen() {
     refetch,
   } = useQuery({
     queryKey: customerQueryKeys.rewards(user?.id),
-    queryFn: () => api.getRewards(),
-    enabled: !!user,
+    queryFn: ({ signal }) => api.getRewards(signal),
+    enabled: !!user && focused,
     staleTime: 0,
     refetchOnMount: 'always',
   });
-  const { token: qrToken, loading: qrLoading, error: qrError, retry: retryQr } =
-    useRewardsQrToken(user?.id, rewards);
-  const qrBadge = rewards?.snapshot?.qrBadge
-    ?? (qrError ? 'refresh_required' : qrToken ? 'ready' : undefined);
+  const qr = useRewardsQrToken(user?.id, focused);
+  const qrBadge = qr.token ? 'ready' : qr.loading ? undefined : 'refresh_required';
+  const refreshRewards = async () => { await Promise.all([refetch(), qr.retry()]); };
 
   const webBottomInset = Platform.OS === 'web' ? 34 : 0;
 
@@ -158,7 +161,7 @@ export default function RewardsScreen() {
       data={rewards.ledger}
       keyExtractor={(entry) => String(entry.id)}
       refreshing={isRefetching}
-      onRefresh={refetch}
+      onRefresh={refreshRewards}
       ListHeaderComponent={(
         <>
           {isError ? <PageDataError title="Rewards could not refresh" message="Your last loaded balance is shown below. Refresh before using rewards." onRetry={refetch} /> : null}
@@ -200,11 +203,7 @@ export default function RewardsScreen() {
               )}
             </View>
             <View style={[styles.qrWrap, { borderColor: colors.border }]}>
-              {qrLoading ? <PageDataLoader label="Loading rewards QR…" /> : qrError || !qrToken ? (
-                <PageDataError title="Rewards QR unavailable" onRetry={retryQr} testID="retry-rewards-qr" />
-              ) : (
-                <QRCode testID="rewards-qr" value={buildRewardsQrPayload(qrToken)} size={150} color="#1a1a1a" backgroundColor="#fff" />
-              )}
+              <RewardsQrDisplay state={qr} size={150} testID="rewards-qr" />
             </View>
           </View>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent activity</Text>

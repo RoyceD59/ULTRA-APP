@@ -26,7 +26,7 @@ export default function AboutScreen() {
         <Text style={styles.kicker}>ABOUT US</Text>
         <Text {...headingProps(1)} style={styles.title}>Ultra Clear Companion</Text>
         <Text style={styles.lead}>
-          Helping Kenyan Ultra Clear filter owners keep their filters working, log the water they filter and see the difference it makes.
+          Helping Ultra Clear filter owners in our communities keep their filters working, log the water they filter and see the difference it makes.
         </Text>
       </View>
 
@@ -49,12 +49,15 @@ export default function AboutScreen() {
             <Text {...headingProps(2)} style={[styles.h3, { color: colors.text }]}>Hydrate the Future</Text>
           </View>
           <Text style={[styles.p, { color: colors.mutedForeground }]}>
-            3% of eligible paid purchases goes to Hydrate the Future, split equally between planting trees and access to clean water.
+            Part of the 3% allocated from eligible paid purchases goes towards afforestation in our community. Through Hydrate the Future™, the 3% contribution is shared equally between tree growing and clean-water access.
           </Text>
           <Text style={[styles.p, { color: colors.mutedForeground }]}>
             Logging refills in the app does not add any funding. The digital trees you see are illustrative and are not verified field outcomes. Where field evidence is not yet available, it stays marked as pending.
           </Text>
-          <ForestLink label="Learn about the programme" testID="about-forest-link" />
+          <Text style={[styles.p, { color: colors.mutedForeground }]}>
+            Explore how contributions are allocated, follow verified progress as it becomes available, and join our mission to support healthier communities.
+          </Text>
+          <ForestLink label="Explore our mission" testID="about-forest-link" />
         </View>
 
         <TouchableOpacity accessibilityRole="link" accessibilityLabel="Visit the official Ultra Clear website"

@@ -11,7 +11,7 @@
  * Customer route (Bearer token — any authenticated UC user):
  *   GET    /uc/customer/rewards          — returns spendable balance, lifetime redeemed, and last 20 ledger entries
  */
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   db, pool, ucNotificationLogTable, ucRewardsRulesTable, ucRewardsLedgerTable,
@@ -26,6 +26,7 @@ import { consumePromotionOnClient, quotePromotion } from "../lib/reward-promotio
 import { serverPricedLines } from "./uc.js";
 import { checkoutQuote } from "../lib/checkout-pricing.js";
 import { cancelCheckout } from "../lib/checkout-cancellation.js";
+import { hashQrToken, inspectRewardsQr, recoverRewardsQr } from "../lib/rewards-qr.js";
 
 const router: IRouter = Router();
 
@@ -52,14 +53,6 @@ async function adminActor(req: Request): Promise<string> {
 async function isPrimaryAdmin(req: Request): Promise<boolean> {
   const primary = (process.env["PROJECTHUB_ADMIN_EMAIL"] ?? adminEmailList()[0] ?? "").trim().toLowerCase();
   return !!primary && (await adminActor(req)).toLowerCase() === primary;
-}
-
-function hashQrToken(token: string): string {
-  return createHash("sha256").update(token, "utf8").digest("hex");
-}
-
-function newQrToken(): string {
-  return randomBytes(32).toString("base64url");
 }
 
 function starLevel(litres: number): number {
@@ -179,24 +172,13 @@ router.get("/uc/customer/rewards", async (req: Request, res: Response): Promise<
       .orderBy(desc(ucRewardsLedgerTable.createdAt))
       .limit(20);
 
-    const [user] = await db.select({
-      rewardsQrHash: ucUsersTable.rewardsQrHash,
-      rewardsQrRevokedAt: ucUsersTable.rewardsQrRevokedAt,
-    }).from(ucUsersTable).where(eq(ucUsersTable.id, userId)).limit(1);
-    let qrToken: string | null = null;
-    if (!user?.rewardsQrHash || user.rewardsQrRevokedAt) {
-      const token = newQrToken();
-      await db.update(ucUsersTable).set({
-        rewardsQrHash: hashQrToken(token),
-        rewardsQrRevokedAt: null,
-      }).where(eq(ucUsersTable.id, userId));
-      qrToken = token;
-    }
+    const qr = await inspectRewardsQr(userId);
+    res.setHeader("Cache-Control", "no-store");
     res.json({
       balance: Number(balanceRow?.balance ?? 0),
       lifetimeRedeemed: Number(balanceRow?.lifetimeRedeemed ?? 0),
       ledger,
-      qrToken,
+      qrToken: qr?.qrToken ?? null,
       impact: await personalImpact(userId),
     });
   } catch (err) {
@@ -208,12 +190,38 @@ router.get("/uc/customer/rewards", async (req: Request, res: Response): Promise<
 router.post("/uc/customer/rewards/qr/rotate", async (req: Request, res: Response): Promise<void> => {
   const userId = await authenticatedCustomer(req, res);
   if (!userId) return;
-  const token = newQrToken();
-  await db.update(ucUsersTable).set({
-    rewardsQrHash: hashQrToken(token),
-    rewardsQrRevokedAt: null,
-  }).where(eq(ucUsersTable.id, userId));
-  res.json({ qrToken: token });
+  const version = req.body?.expectedVersion;
+  if (version !== null && (typeof version !== "string" || !/^[a-f0-9]{64}$/.test(version))) {
+    res.status(400).json({ error: "Refresh QR status before recovering your code" }); return;
+  }
+  try {
+    const result = await recoverRewardsQr(userId, version);
+    if (!result) { res.status(401).json({ error: "Authentication required" }); return; }
+    if ("conflict" in result) { res.status(409).json({ error: "QR status changed. Refresh before trying again." }); return; }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(result);
+  } catch {
+    req.log.error("Rewards QR recovery failed");
+    res.status(503).json({ error: "QR recovery unavailable. Please retry." });
+  }
+});
+
+router.post("/uc/customer/rewards/qr/validate", async (req: Request, res: Response): Promise<void> => {
+  const userId = await authenticatedCustomer(req, res);
+  if (!userId) return;
+  const candidate = req.body?.qrToken;
+  if (candidate !== null && (typeof candidate !== "string" || !/^[A-Za-z0-9_-]{40,64}$/.test(candidate))) {
+    res.status(400).json({ error: "Invalid QR token format" }); return;
+  }
+  try {
+    const result = await inspectRewardsQr(userId, candidate ?? undefined);
+    if (!result) { res.status(401).json({ error: "Authentication required" }); return; }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(result);
+  } catch {
+    req.log.error("Rewards QR validation failed");
+    res.status(503).json({ error: "QR verification unavailable. Please retry." });
+  }
 });
 
 router.get("/uc/customer/impact", async (req: Request, res: Response): Promise<void> => {

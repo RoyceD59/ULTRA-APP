@@ -9,6 +9,8 @@ export const customerQueryKeys = {
     ['customer', customerId, 'order', orderId] as const,
   rewards: (customerId: CustomerId) =>
     ['customer', customerId, 'rewards'] as const,
+  rewardsQr: (customerId: CustomerId) =>
+    ['customer', customerId, 'rewards-qr'] as const,
   referral: (customerId: CustomerId) =>
     ['customer', customerId, 'referral'] as const,
   profile: (customerId: CustomerId) =>

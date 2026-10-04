@@ -401,7 +401,7 @@ export interface CustomerRewards {
   /** Single server snapshot used by balance, tier/status labels, and QR badge. */
   snapshot?: { balance: number; tier: 'starter' | 'silver' | 'gold'; status: 'active' | 'ready'; qrBadge: 'ready' | 'refresh_required' };
   ledger: Array<{ id: number; points: number; reason: string; eventType: string; createdAt: string }>;
-  /** Returned only when the API has just assigned/reassigned the opaque token. */
+  /** Read-only current server token where recoverable; display still requires validation. */
   qrToken: string | null;
   impact: PersonalImpact;
 }
@@ -786,10 +786,20 @@ export function useApi() {
     ) => post<{ ok: boolean }>('/api/uc/impact/override', { litresOffset, usersOffset, updatedBy }),
 
     /** Fetch the current user's loyalty-points balance and recent ledger. */
-    getRewards: () => get<CustomerRewards>('/api/uc/customer/rewards'),
+    getRewards: (signal?: AbortSignal) => get<CustomerRewards>('/api/uc/customer/rewards', signal, 12000),
     getRefillCapabilities: () => get<unknown>('/api/uc/refill/capabilities'),
-    /** Explicit recovery action; normally the issued token is reused from SecureStore. */
-    rotateRewardsQr: () => post<{ qrToken: string }>('/api/uc/customer/rewards/qr/rotate'),
+    /** These read-only POSTs keep opaque candidates out of URLs and access logs. */
+    validateRewardsQr: (qrToken: string | null, signal?: AbortSignal) =>
+      post<import('@workspace/api-client-react/companion/models/rewardsQrInspection').RewardsQrInspection>(
+        '/api/uc/customer/rewards/qr/validate', { qrToken }, signal),
+    /** Deliberate recovery only; never scheduled by reconnect or foreground. */
+    rotateRewardsQr: (expectedVersion: string | null) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      return post<import('@workspace/api-client-react/companion/models/rewardsQrInspection').RewardsQrInspection>(
+        '/api/uc/customer/rewards/qr/rotate', { expectedVersion }, controller.signal)
+        .finally(() => clearTimeout(timer));
+    },
     /** Acknowledge the push lifecycle for this account; no device token is sent. */
     acknowledgeRewardsQrRequest: (requestId: number, event: 'delivered' | 'opened') =>
       post<{ ok: boolean }>('/api/uc/customer/rewards/qr/request-events', { requestId, event }),

@@ -863,6 +863,7 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(`
     ALTER TABLE uc_users
       ADD COLUMN IF NOT EXISTS rewards_qr_hash text,
+      ADD COLUMN IF NOT EXISTS rewards_qr_nonce text,
       ADD COLUMN IF NOT EXISTS rewards_qr_revoked_at timestamptz;
     CREATE UNIQUE INDEX IF NOT EXISTS uc_users_rewards_qr_hash_idx
       ON uc_users (rewards_qr_hash) WHERE rewards_qr_hash IS NOT NULL;

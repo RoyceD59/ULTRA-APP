@@ -5,6 +5,41 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface RewardsQrCandidate {
+  /**
+     * @nullable
+     * @pattern ^[A-Za-z0-9_-]{40,64}$
+     */
+  qrToken: string | null;
+}
+
+export interface RewardsQrRecovery {
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  expectedVersion: string | null;
+}
+
+export type RewardsQrInspectionStatus = typeof RewardsQrInspectionStatus[keyof typeof RewardsQrInspectionStatus];
+
+
+export const RewardsQrInspectionStatus = {
+  active: 'active',
+  revoked: 'revoked',
+  missing: 'missing',
+} as const;
+
+export interface RewardsQrInspection {
+  userId: number;
+  status: RewardsQrInspectionStatus;
+  /** @nullable */
+  version: string | null;
+  valid: boolean;
+  /** @nullable */
+  qrToken: string | null;
+}
+
 export interface UcEnquirySubmission {
   id: number;
   productId: string;

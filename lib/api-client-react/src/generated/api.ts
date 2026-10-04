@@ -179,6 +179,9 @@ import type {
   RefillFeaturesUpdate,
   RetryCustomerReviewAnalysis200,
   RetryUcOfflineClientDelivery200,
+  RewardsQrCandidate,
+  RewardsQrInspection,
+  RewardsQrRecovery,
   SendWhatsAppQuickMessage400,
   SendWhatsAppQuickMessage503,
   StaffLegacyRegistrationReview,
@@ -266,6 +269,148 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getValidateCustomerRewardsQrUrl = () => {
+
+
+
+
+  return `/api/uc/customer/rewards/qr/validate`
+}
+
+/**
+ * @summary Read-only account-bound QR verification
+ */
+export const validateCustomerRewardsQr = async (rewardsQrCandidate: RewardsQrCandidate, options?: RequestInit): Promise<RewardsQrInspection> => {
+
+  return customFetch<RewardsQrInspection>(getValidateCustomerRewardsQrUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rewardsQrCandidate)
+  }
+);}
+
+
+
+
+
+export const getValidateCustomerRewardsQrMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateCustomerRewardsQr>>, TError,{data: BodyType<RewardsQrCandidate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateCustomerRewardsQr>>, TError,{data: BodyType<RewardsQrCandidate>}, TContext> => {
+
+const mutationKey = ['validateCustomerRewardsQr'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateCustomerRewardsQr>>, {data: BodyType<RewardsQrCandidate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  validateCustomerRewardsQr(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateCustomerRewardsQrMutationResult = NonNullable<Awaited<ReturnType<typeof validateCustomerRewardsQr>>>
+    export type ValidateCustomerRewardsQrMutationBody = BodyType<RewardsQrCandidate>
+    export type ValidateCustomerRewardsQrMutationError = ErrorType<void>
+
+    /**
+ * @summary Read-only account-bound QR verification
+ */
+export const useValidateCustomerRewardsQr = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateCustomerRewardsQr>>, TError,{data: BodyType<RewardsQrCandidate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof validateCustomerRewardsQr>>,
+        TError,
+        {data: BodyType<RewardsQrCandidate>},
+        TContext
+      > => {
+      return useMutation(getValidateCustomerRewardsQrMutationOptions(options));
+    }
+
+export const getRecoverCustomerRewardsQrUrl = () => {
+
+
+
+
+  return `/api/uc/customer/rewards/qr/rotate`
+}
+
+/**
+ * @summary Explicit concurrency-safe QR issuance or recovery
+ */
+export const recoverCustomerRewardsQr = async (rewardsQrRecovery: RewardsQrRecovery, options?: RequestInit): Promise<RewardsQrInspection> => {
+
+  return customFetch<RewardsQrInspection>(getRecoverCustomerRewardsQrUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rewardsQrRecovery)
+  }
+);}
+
+
+
+
+
+export const getRecoverCustomerRewardsQrMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recoverCustomerRewardsQr>>, TError,{data: BodyType<RewardsQrRecovery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recoverCustomerRewardsQr>>, TError,{data: BodyType<RewardsQrRecovery>}, TContext> => {
+
+const mutationKey = ['recoverCustomerRewardsQr'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recoverCustomerRewardsQr>>, {data: BodyType<RewardsQrRecovery>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recoverCustomerRewardsQr(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecoverCustomerRewardsQrMutationResult = NonNullable<Awaited<ReturnType<typeof recoverCustomerRewardsQr>>>
+    export type RecoverCustomerRewardsQrMutationBody = BodyType<RewardsQrRecovery>
+    export type RecoverCustomerRewardsQrMutationError = ErrorType<void>
+
+    /**
+ * @summary Explicit concurrency-safe QR issuance or recovery
+ */
+export const useRecoverCustomerRewardsQr = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recoverCustomerRewardsQr>>, TError,{data: BodyType<RewardsQrRecovery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recoverCustomerRewardsQr>>,
+        TError,
+        {data: BodyType<RewardsQrRecovery>},
+        TContext
+      > => {
+      return useMutation(getRecoverCustomerRewardsQrMutationOptions(options));
+    }
 
 export const getListUcEnquiriesUrl = (params?: ListUcEnquiriesParams,) => {
   const normalizedParams = new URLSearchParams();

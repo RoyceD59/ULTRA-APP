@@ -10,6 +10,44 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Read-only account-bound QR verification
+ */
+export const validateCustomerRewardsQrBodyQrTokenRegExp = new RegExp('^[A-Za-z0-9_-]{40,64}$');
+
+
+export const ValidateCustomerRewardsQrBody = zod.object({
+  "qrToken": zod.string().regex(validateCustomerRewardsQrBodyQrTokenRegExp).nullable()
+})
+
+export const ValidateCustomerRewardsQrResponse = zod.object({
+  "userId": zod.number(),
+  "status": zod.enum(['active', 'revoked', 'missing']),
+  "version": zod.string().nullable(),
+  "valid": zod.boolean(),
+  "qrToken": zod.string().nullable()
+})
+
+
+/**
+ * @summary Explicit concurrency-safe QR issuance or recovery
+ */
+export const recoverCustomerRewardsQrBodyExpectedVersionRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const RecoverCustomerRewardsQrBody = zod.object({
+  "expectedVersion": zod.string().regex(recoverCustomerRewardsQrBodyExpectedVersionRegExp).nullable()
+})
+
+export const RecoverCustomerRewardsQrResponse = zod.object({
+  "userId": zod.number(),
+  "status": zod.enum(['active', 'revoked', 'missing']),
+  "version": zod.string().nullable(),
+  "valid": zod.boolean(),
+  "qrToken": zod.string().nullable()
+})
+
+
+/**
  * Returns all persisted enquiries, newest first. ADMIN_SECRET must be
  * configured on the server. Date bounds are inclusive UTC calendar days.
  * @summary List customer enquiries (admin secret required)

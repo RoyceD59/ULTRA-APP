@@ -6,9 +6,9 @@
  * with uc_users serial id 1 (identity confusion / potential privilege
  * escalation via the DB-anchored admin check).
  *
- * Now each Woo login derives a stable per-email principal id offset by 1e9 so
- * it can never collide with a DB serial id. Verifies:
- *   1. Two distinct Woo users get distinct principal ids, both >= 1e9.
+ * Each verified Woo login now provisions or reuses a canonical database
+ * customer instead of assigning a synthetic principal. Verifies:
+ *   1. Two distinct Woo users get distinct database-backed principal ids.
  *   2. The same Woo user gets the SAME id across logins (stable identity).
  *   3. A Woo-authenticated token is denied on /uc/admin/* routes.
  *   4. Profile resolution for a Woo token never reports isAdmin: true.
@@ -139,17 +139,32 @@ describe("WooCommerce login principal identity", () => {
     assert.notEqual(profile.isAdmin, true, "Woo principal must never resolve as admin");
   });
 
-  it("lets a provisioned Woo customer load rewards and a QR token", async () => {
-    const { token } = await wooLogin(wooEmails.alice);
+  it("lets a provisioned Woo customer explicitly create and then read a stable QR token", async () => {
+    const { token, user } = await wooLogin(wooEmails.alice);
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     const first = await apiFetch("/api/uc/customer/rewards", {
       headers: { Authorization: `Bearer ${token}` },
     });
     assert.equal(first.status, 200);
-    assert.match(String((first.body as { qrToken?: string }).qrToken), /^[A-Za-z0-9_-]{40,64}$/);
+    assert.equal((first.body as { qrToken: string | null }).qrToken, null, "a read must not issue credentials");
+    const inspected = await apiFetch("/api/uc/customer/rewards/qr/validate", {
+      method: "POST", headers, body: JSON.stringify({ qrToken: null }),
+    });
+    assert.equal(inspected.status, 200);
+    assert.equal((inspected.body as { userId: number }).userId, user.id);
+    const recovered = await apiFetch("/api/uc/customer/rewards/qr/rotate", {
+      method: "POST", headers,
+      body: JSON.stringify({ expectedVersion: (inspected.body as { version: string | null }).version }),
+    });
+    assert.equal(recovered.status, 200);
+    const qrToken = (recovered.body as { qrToken: string; userId: number }).qrToken;
+    assert.equal((recovered.body as { userId: number }).userId, user.id);
+    assert.match(qrToken, /^[A-Za-z0-9_-]{43}$/);
 
     const second = await apiFetch("/api/uc/customer/rewards", {
       headers: { Authorization: `Bearer ${token}` },
     });
     assert.equal(second.status, 200);
+    assert.equal((second.body as { qrToken: string }).qrToken, qrToken);
   });
 });

@@ -43,6 +43,46 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/customer/rewards/qr/validate:
+    post:
+      operationId: validateCustomerRewardsQr
+      tags: [customer]
+      summary: Read-only account-bound QR verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewardsQrCandidate"
+      responses:
+        "200":
+          description: Current account QR state, without issuing or rotating
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardsQrInspection"
+        "401":
+          description: Authentication required
+  /uc/customer/rewards/qr/rotate:
+    post:
+      operationId: recoverCustomerRewardsQr
+      tags: [customer]
+      summary: Explicit concurrency-safe QR issuance or recovery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewardsQrRecovery"
+      responses:
+        "200":
+          description: Recovered or concurrently issued QR
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardsQrInspection"
+        "409":
+          description: QR state changed; refresh before recovery
   /uc/enquiries:
     get:
       operationId: listUcEnquiries
@@ -3660,6 +3700,29 @@ components:
       bearerFormat: opaque
 
   schemas:
+    RewardsQrCandidate:
+      type: object
+      required: [qrToken]
+      properties:
+        qrToken:
+          type: [string, "null"]
+          pattern: "^[A-Za-z0-9_-]{40,64}$"
+    RewardsQrRecovery:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: [string, "null"]
+          pattern: "^[a-f0-9]{64}$"
+    RewardsQrInspection:
+      type: object
+      required: [userId, status, version, valid, qrToken]
+      properties:
+        userId: { type: integer }
+        status: { type: string, enum: [active, revoked, missing] }
+        version: { type: [string, "null"] }
+        valid: { type: boolean }
+        qrToken: { type: [string, "null"] }
     UcEnquirySubmission:
       type: object
       required: [id, productId, productName, name, email, phone, message, createdAt]

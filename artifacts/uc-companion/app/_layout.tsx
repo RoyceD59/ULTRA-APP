@@ -91,8 +91,13 @@ function RootLayoutNav() {
     // Update API client auth token for this session
     setAuthTokenGetter(token ? () => Promise.resolve(token) : null);
 
-    if (shouldRedirectToLogin(tokenBeforeUpdate, token)) {
+    if (tokenBeforeUpdate !== token) {
+      // A replacement session (including same-account re-login) must not keep
+      // a prior session's validated QR, balances, or in-flight personalized reads.
+      void client.cancelQueries();
       client.clear();
+    }
+    if (shouldRedirectToLogin(tokenBeforeUpdate, token)) {
       router.replace('/auth/login' as never);
     }
   }, [client, router, token]);

@@ -13,7 +13,7 @@ import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
 import CareOverviewEntry from '@/components/CareOverviewEntry';
 import * as Haptics from 'expo-haptics';
-import QRCode from 'react-native-qrcode-svg';
+import RewardsQrDisplay from '@/components/RewardsQrDisplay';
 import {
   getNotificationPermissionStatus,
   requestNotificationPermission,
@@ -25,7 +25,6 @@ import { useCartBarInset } from '@/hooks/useCartBarInset';
 import SwipeTabs from '@/components/SwipeTabs';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
-import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 import PersonalImpactSection from '@/components/PersonalImpactSection';
 import {
   clearProfileDraft,
@@ -707,9 +706,10 @@ function AccountScreenContent() {
     refetch: refetchRewards,
   } = useQuery({
     queryKey: customerQueryKeys.rewards(user?.id),
-    queryFn: () => api.getRewards(),
+    queryFn: ({ signal }) => api.getRewards(signal),
     enabled: !!user && accountFocused,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
     refetchInterval: accountFocused ? 60_000 : false,
   });
   const refreshFilterUsage = useCallback(() => {
@@ -735,12 +735,7 @@ function AccountScreenContent() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const {
-    token: rewardsQrToken,
-    loading: qrLoading,
-    error: qrError,
-    retry: retryQr
-  } = useRewardsQrToken(user?.id, rewards);
+  const qr = useRewardsQrToken(user?.id, accountFocused);
 
   async function shareCompanionApp() {
     await Share.share({
@@ -780,8 +775,7 @@ function AccountScreenContent() {
 
   const initials     = `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() || '?';
   const recentOrders = orders?.slice(0, 3) ?? [];
-  const rewardsQrBadge = rewards?.snapshot?.qrBadge
-    ?? (qrError ? 'refresh_required' : rewardsQrToken ? 'ready' : undefined);
+  const rewardsQrBadge = qr.token ? 'ready' : qr.loading ? undefined : 'refresh_required';
 
   const editInitial: EditProfileForm = {
     firstName: user.firstName,
@@ -988,19 +982,7 @@ function AccountScreenContent() {
                     )}
                   </View>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
-                    {qrLoading ? (
-                      <PageDataLoader label="Loading rewards QR…" />
-                    ) : qrError || !rewardsQrToken ? (
-                      <PageDataError title="Rewards QR unavailable" onRetry={retryQr} />
-                    ) : (
-                      <QRCode
-                        testID="account-rewards-qr"
-                        value={buildRewardsQrPayload(rewardsQrToken)}
-                        size={120}
-                        color="#1a1a1a"
-                        backgroundColor="#ffffff"
-                      />
-                    )}
+                    <RewardsQrDisplay state={qr} size={120} testID="account-rewards-qr" />
                   </View>
                   {rewards?.impact.hasRefilled ? <View style={[rewardStyles.refilledBadge, { backgroundColor: colors.primaryLight }]}><Ionicons name="water" size={13} color={colors.primary} /><Text style={[rewardStyles.refilledText, { color: colors.primary }]}>I refilled</Text></View> : null}
                   {rewards ? <Text style={[rewardStyles.impactSummary, { color: colors.mutedForeground }]}>{rewards.impact.totalLitres} L refilled · {rewards.impact.starLevel} ★ private level</Text> : null}
@@ -1036,7 +1018,7 @@ function AccountScreenContent() {
             </View>
           )}
 
-          {rewards ? <PersonalImpactSection key={user.id} impact={rewards.impact} onUpdated={impact => {
+          {rewards ? <PersonalImpactSection key={`personal-impact:${user.id}`} impact={rewards.impact} onUpdated={impact => {
             queryClient.setQueryData<CustomerRewards>(customerQueryKeys.rewards(user.id), current => current ? { ...current, impact } : current);
           }} /> : <View style={styles.section} testID="personal-impact-unavailable">
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Ultra Clear Impact</Text>
@@ -1079,7 +1061,7 @@ function AccountScreenContent() {
             </View>)}
           </View>
           <FilterTrackerSection
-            key={user.id}
+            key={`water-tests:${user.id}`}
             activation={filterActivationOwner === user.id ? filterActivation : null}
             impact={rewards?.impact}
             usageLoading={rewardsFetching}

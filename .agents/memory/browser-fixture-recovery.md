@@ -17,3 +17,9 @@ records, or explicitly recover those fixture accounts. Never reset existing
 customer credentials, delete by a broad name/email match, or assume fresh
 browser state implies fresh database state. Keep credentials out of reports and
 project memory.
+
+Intercepted browser fixtures must return each endpoint's actual response shape. Unknown reads should fail explicitly; never reuse a generic profile or empty-object response for unrelated list and aggregate endpoints.
+
+**Why:** Broad safe-read fallbacks produced home/tree rendering errors during an isolated Companion check, requiring multiple fixture corrections before the actual changed flow could be verified.
+
+**How to apply:** Map only the required endpoints to contract-shaped synthetic responses, and mark unrelated programme/evidence reads unavailable. Distinguish fixture failures from application defects before editing application code.

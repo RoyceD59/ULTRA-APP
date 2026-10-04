@@ -15,6 +15,12 @@ Hydrate the Future allocates 3% of eligible paid purchases, split equally betwee
 
 **How to apply:** Keep the card, forest and methodology consistent. Missing programme evidence or an unavailable totals API must show pending/unavailable, not substitute demonstration figures. Anonymous forest links illustrate a growth stage; they do not independently verify field status.
 
+Programme statements must say that part of the 3% goes towards afforestation in "our community", not frame the mission as Kenya-only. Make the copy transparent and invite people to explore and join the mission.
+
+**Why:** The owner stated the business will operate internationally and requested this wording.
+
+**How to apply:** Use inclusive community wording in mission and allocation statements. Preserve the approved allocation rules and current eligibility limits; a copy change does not authorize changing currency handling or claiming verified work in new locations.
+
 Preserve the supplied forest design. Cloudflare hosting is for this static forest only, not a move of the Companion, ProjectHub or API.
 
 **Why:** The approved scope excludes rebuilding the supplied design and moving unrelated services.

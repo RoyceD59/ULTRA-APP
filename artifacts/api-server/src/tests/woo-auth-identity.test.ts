@@ -5,6 +5,7 @@ import http from "node:http";
 import bcryptjs from "bcryptjs";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, ucUsersTable } from "@workspace/db";
+import { assertRewardsQrIdentity } from "./helpers/assert-rewards-qr.js";
 
 const { default: app } = await import("../app.js");
 const originalFetch = globalThis.fetch;
@@ -91,5 +92,6 @@ describe("Woo verified identity gates", () => {
       .where(and(eq(ucUsersTable.email, email), eq(ucUsersTable.authProvider, "woocommerce")));
     assert.equal(rows.length, 1);
     createdIds.push(rows[0]!.id);
+    await assertRewardsQrIdentity(app, results[0]!.body.token as string, rows[0]!.id);
   });
 });

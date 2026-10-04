@@ -1,88 +1,68 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveRewardsQrToken } from '../../lib/rewardsQrResolution';
 
-describe('resolveRewardsQrToken', () => {
-  let apiRotate: ReturnType<typeof mock.fn>;
-  let readLocal: ReturnType<typeof mock.fn>;
-  let storeLocal: ReturnType<typeof mock.fn>;
-
-  beforeEach(() => {
-    apiRotate = mock.fn();
-    readLocal = mock.fn();
-    storeLocal = mock.fn();
+const saved = 's'.repeat(43), fresh = 'f'.repeat(43);
+const signal = () => new AbortController().signal;
+function state(overrides: Record<string, unknown> = {}) {
+  return { userId: 2, status: 'active' as const, version: 'a'.repeat(64), valid: false, qrToken: fresh, ...overrides } as any;
+}
+describe('server-authoritative rewards QR resolution', () => {
+  it('validates a saved candidate before display; the server replacement always wins', async () => {
+    const writes: unknown[] = [];
+    const result = await resolveRewardsQrToken(2, null, async (candidate) => {
+      assert.equal(candidate, saved);
+      return state();
+    }, async () => saved, async (...args) => { writes.push(args); }, signal());
+    assert.equal(result.token, fresh);
+    assert.deepEqual(writes, [[2, fresh]]);
   });
-
-  it('uses rewards.qrToken if provided, ignoring local token (authoritative server)', async () => {
-    readLocal.mock.mockImplementation(async () => 'stale-local-123');
-    
-    const result = await resolveRewardsQrToken(2, 'fresh-rewards-token', apiRotate as any, readLocal as any, storeLocal as any);
-    
-    assert.equal(result.token, 'fresh-rewards-token');
-    assert.equal(result.source, 'rewards');
-    
-    // We shouldn't even read local if server token is provided
-    assert.equal(readLocal.mock.callCount(), 0);
-    assert.equal(apiRotate.mock.callCount(), 0);
-    
-    assert.equal(storeLocal.mock.callCount(), 1);
-    assert.deepEqual(storeLocal.mock.calls[0].arguments, [2, 'fresh-rewards-token']);
+  it('revalidates even a rewards response token instead of trusting a stale snapshot', async () => {
+    let inspected = false;
+    const result = await resolveRewardsQrToken(2, saved, async (candidate) => {
+      inspected = true; assert.equal(candidate, saved);
+      return state({ status: 'revoked', qrToken: null });
+    }, async () => { throw new Error('should not read local'); }, async () => {}, signal());
+    assert.equal(inspected, true);
+    assert.equal(result.token, null);
+    assert.equal(result.recoveryRequired, true);
   });
-
-  it('returns local token if present and no rewards token is provided', async () => {
-    readLocal.mock.mockImplementation(async () => 'local-token-123');
-    const result = await resolveRewardsQrToken(1, undefined, apiRotate as any, readLocal as any, storeLocal as any);
-    
-    assert.equal(result.token, 'local-token-123');
-    assert.equal(result.source, 'local');
-    assert.equal(apiRotate.mock.callCount(), 0);
-    assert.equal(storeLocal.mock.callCount(), 0);
+  it('keeps a valid legacy token only when server hash validation succeeds', async () => {
+    const valid = await resolveRewardsQrToken(2, null, async () => state({ valid: true, qrToken: null }),
+      async () => saved, async () => {}, signal());
+    assert.equal(valid.token, saved);
+    const invalid = await resolveRewardsQrToken(2, null, async () => state({ valid: false, qrToken: null }),
+      async () => saved, async () => {}, signal());
+    assert.equal(invalid.token, null);
+    assert.equal(invalid.recoveryRequired, true);
   });
-
-  it('calls rotate API if local is empty and rewards payload provides no token, then stores it', async () => {
-    readLocal.mock.mockImplementation(async () => null);
-    apiRotate.mock.mockImplementation(async () => ({ qrToken: 'rotated-token-789' }));
-    
-    const result = await resolveRewardsQrToken(3, null, apiRotate as any, readLocal as any, storeLocal as any);
-    
-    assert.equal(result.token, 'rotated-token-789');
-    assert.equal(result.source, 'rotated');
-    assert.equal(apiRotate.mock.callCount(), 1);
-    
-    assert.equal(storeLocal.mock.callCount(), 1);
-    assert.deepEqual(storeLocal.mock.calls[0].arguments, [3, 'rotated-token-789']);
+  it('does not return local credentials on network failure or issue/rotate on missing state', async () => {
+    await assert.rejects(resolveRewardsQrToken(2, null, async () => { throw new Error('offline'); },
+      async () => saved, async () => {}, signal()), /offline/);
+    const missing = await resolveRewardsQrToken(2, null, async () => state({ status: 'missing', qrToken: null, version: null }),
+      async () => null, async () => { throw new Error('must not write a missing token'); }, signal());
+    assert.equal(missing.token, null);
+    assert.equal(missing.version, null);
+    assert.equal(missing.recoveryRequired, true);
   });
-
-  it('rotates a token when secure storage cannot be read', async () => {
-    readLocal.mock.mockImplementation(async () => { throw new Error('Storage unavailable'); });
-    apiRotate.mock.mockImplementation(async () => ({ qrToken: 'rotated-without-storage' }));
-    storeLocal.mock.mockImplementation(async () => { throw new Error('Storage unavailable'); });
-
-    const result = await resolveRewardsQrToken(5, null, apiRotate as any, readLocal as any, storeLocal as any);
-
-    assert.equal(result.token, 'rotated-without-storage');
-    assert.equal(result.source, 'rotated');
-    assert.equal(apiRotate.mock.callCount(), 1);
+  it('tolerates disabled secure storage and reports non-persistence without replacing a valid code', async () => {
+    const result = await resolveRewardsQrToken(2, null, async () => state(),
+      async () => { throw new Error('blocked'); }, async () => { throw new Error('blocked'); }, signal());
+    assert.equal(result.token, fresh);
+    assert.equal(result.persistenceWarning, true);
   });
-
-  it('still returns a server-issued token when secure storage cannot persist it', async () => {
-    storeLocal.mock.mockImplementation(async () => { throw new Error('Storage unavailable'); });
-
-    const result = await resolveRewardsQrToken(6, 'server-token', apiRotate as any, readLocal as any, storeLocal as any);
-
-    assert.equal(result.token, 'server-token');
-    assert.equal(result.source, 'rewards');
+  it('rejects account mismatch, ignores malformed local candidates, and never persists wrong-owner results', async () => {
+    let stored = false;
+    await assert.rejects(resolveRewardsQrToken(2, null, async candidate => {
+      assert.equal(candidate, null);
+      return state({ userId: 3 });
+    }, async () => 'corrupt', async () => { stored = true; }, signal()), /account/);
+    assert.equal(stored, false);
   });
-  
-  it('throws if rotate API throws, and does not store', async () => {
-    readLocal.mock.mockImplementation(async () => null);
-    apiRotate.mock.mockImplementation(async () => { throw new Error('API down'); });
-    
-    await assert.rejects(
-      resolveRewardsQrToken(4, undefined, apiRotate as any, readLocal as any, storeLocal as any),
-      /API down/
-    );
-    
-    assert.equal(storeLocal.mock.callCount(), 0);
+  it('bounded secure-storage reads cannot trap loading indefinitely', async () => {
+    const result = await resolveRewardsQrToken(2, null, async () => state(),
+      () => new Promise(() => {}), async () => {}, signal());
+    assert.equal(result.token, fresh);
+    assert.equal(result.persistenceWarning, true);
   });
 });

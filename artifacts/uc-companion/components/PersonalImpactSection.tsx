@@ -252,7 +252,7 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
           />
           <View style={styles.hydrateContainer}>
             <Text style={[styles.hydrateText, { color: colors.mutedForeground }]}>
-              Hydrate the Future™ receives 3% of eligible purchases, split equally between trees in Kenya and clean-water access. Logged refills do not add funding.
+              Part of the 3% allocated from eligible paid purchases goes towards afforestation in our community. Hydrate the Future™ shares the full 3% contribution equally between tree growing and clean-water access. Explore the programme and join our mission. Logged refills do not add funding.
             </Text>
           </View>
 

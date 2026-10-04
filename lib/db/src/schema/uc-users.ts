@@ -40,6 +40,8 @@ export const ucUsersTable = pgTable("uc_users", {
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   /** SHA-256 of the permanent, opaque Rewards QR token. */
   rewardsQrHash:     text("rewards_qr_hash"),
+  /** Non-secret generation nonce; the opaque QR is derived with the server key. */
+  rewardsQrNonce:    text("rewards_qr_nonce"),
   rewardsQrRevokedAt: timestamp("rewards_qr_revoked_at", { withTimezone: true }),
 }, (table) => [
   uniqueIndex("uc_users_rewards_qr_hash_idx")
