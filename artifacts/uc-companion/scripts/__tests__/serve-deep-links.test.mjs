@@ -27,7 +27,7 @@ test('production Companion server resolves deep links without an HTML Accept hea
   writeFileSync(bundlePath, 'console.log("preview fixture")');
   const port = await openPort();
   const child = spawn(process.execPath, [serverFile], {
-    env: { ...process.env, PORT: String(port), BASE_PATH: '/uc-companion', STATIC_ROOT: tempRoot },
+    env: { ...process.env, PORT: String(port), BASE_PATH: '/uc-companion', STATIC_ROOT: tempRoot, EXPO_PUBLIC_API_DOMAIN: 'http://127.0.0.1:1' },
     stdio: 'ignore',
   });
   try {

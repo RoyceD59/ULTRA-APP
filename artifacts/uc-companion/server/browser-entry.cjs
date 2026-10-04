@@ -21,4 +21,4 @@ function browserEntryRedirect(req, pathname, search) {
   return `https://${APP_HOST}${pathname}${search}`;
 }
 
-module.exports = { browserEntryRedirect };
+module.exports = { APP_HOST, browserEntryRedirect };

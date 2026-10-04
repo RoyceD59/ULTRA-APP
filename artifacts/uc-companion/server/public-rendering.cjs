@@ -1,6 +1,7 @@
 const pages = require('../data/public-pages.json');
 const { PublicDataError } = require('./public-content.cjs');
 const { articleInlineLinks } = require('@workspace/api-zod/blog-inline-links-core');
+const { identity, breadcrumbs, productModel, articleModel, guideModel, itemList } = require('./public-schema.cjs');
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -10,7 +11,6 @@ const jsonScript = value => JSON.stringify(value).replace(/</g, '\\u003c')
   .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 const text = value => String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value);
-const date = value => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toISOString() : null;
 
 function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
   // No Host-header-derived canonicals; explicit owner-approved origin only.
@@ -63,22 +63,32 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
       let body = page ? paragraph(page.description) : '';
       let meta;
       let schemas = [];
+      const crumbs = [{ name: 'Home', path: '/' }];
       if (route === '/' || route === '/products') {
         const products = await data.products();
+        const entries = [];
         body += `<h2>Products</h2><ul>${products.map(product => {
           if (!Number.isSafeInteger(Number(product.id)) || Number(product.id) <= 0 || !product.name) throw new PublicDataError();
+          entries.push({ name: product.name, path: `/product/${product.id}` });
           return `<li>${link(`/product/${product.id}`, product.name)}${paragraph(text(product.shortDescription))}</li>`;
         }).join('')}</ul>`;
+        schemas.push(itemList(entries, origin.href));
       } else if (route === '/blog') {
+        const entries = [];
         body += `<ul>${(await data.articles()).map(article => {
           if (!identifier(article.slug) || !article.title) throw new PublicDataError();
+          entries.push({ name: article.title, path: `/blog/${article.slug}` });
           return `<li>${link(`/blog/${article.slug}`, article.title)}${paragraph(article.summary)}</li>`;
         }).join('')}</ul>`;
+        schemas.push(itemList(entries, origin.href));
       } else if (route === '/support') {
+        const entries = [];
         body += `<ul>${(await data.guides()).map(guide => {
           if (!identifier(guide.slug) || !guide.title) throw new PublicDataError();
+          entries.push({ name: guide.title, path: `/guide/${guide.slug}` });
           return `<li>${link(`/guide/${guide.slug}`, guide.title)}${paragraph(guide.summary)}</li>`;
         }).join('')}</ul>`;
+        schemas.push(itemList(entries, origin.href));
       } else if (route === '/map') {
         body += (await data.locations()).map(location =>
           `<section><h2>${escapeHtml(location.name)}</h2>${paragraph(location.address)}${paragraph(location.hours)}${paragraph(location.accessNotes)}</section>`).join('');
@@ -88,24 +98,19 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
         const product = (await data.products()).find(item => String(item.id) === route.split('/')[2]);
         if (!product) return errorPage(404);
         if (!product.name) throw new PublicDataError();
+        const model = productModel(product, route, data.mediaOrigin || origin.href, origin.href);
         page = { title: text(product.name), description: text(product.shortDescription || product.description) || text(product.name) };
-        const photos = Array.isArray(product.images) ? product.images : [];
+        const photos = model.images;
         body = paragraph(page.description) + photos.map(photo => image(photo.src, photo.alt || product.name)).join('')
-          + `<h2>Product details</h2>${paragraph(text(product.description))}`;
-        if (typeof product.price === 'string' && product.price !== '') {
-          body += paragraph(`Price: ${product.price}`);
-        }
+          + `<h2>Product details</h2>${paragraph(model.description)}`
+          + (model.sku ? paragraph(`SKU: ${model.sku}`) : '')
+          + (model.enquiryOnly ? paragraph('Pricing on request') : model.price !== null ? paragraph(`KES ${model.price}`) : '')
+          + (!model.enquiryOnly && model.availability ? paragraph(model.availability === 'InStock' ? 'In Stock' : 'Out of Stock') : '');
         body += link(`/enquiry?productId=${encodeURIComponent(product.id)}`, 'Enquire about this product');
         meta = metadata(route, page.title, page.description, 'product',
           safeUrl(photos[0]?.src) || absolute('/favicon.png'));
-        // Currency isn't in the public payload: never invent offers, ratings,
-        // certifications or availability. Product schema supports no-offer data.
-        schemas = [{
-          '@context': 'https://schema.org', '@type': 'Product', name: page.title,
-          description: text(product.description || page.description), url: meta.url,
-          ...(product.sku ? { sku: String(product.sku) } : {}),
-          ...(photos.some(photo => safeUrl(photo.src)) ? { image: photos.map(photo => safeUrl(photo.src)).filter(Boolean) } : {}),
-        }];
+        schemas = [model.schema];
+        crumbs.push({ name: 'Products', path: '/products' });
       } else if (/^\/blog\/[^/]+$/.test(route)) {
         const slug = route.split('/')[2];
         if (!identifier(slug)) return errorPage(404);
@@ -125,30 +130,27 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
           }).join('') + '</ul>';
         }
         meta = metadata(route, page.title, page.description, 'article');
-        schemas = [{
-          '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.title,
-          description: text(article.summary), articleBody: article.body, url: meta.url,
-          ...(date(article.publishedAt) ? { datePublished: date(article.publishedAt) } : {}),
-        }];
+        const model = articleModel(article, route, origin.href);
+        if (model.publishedAt) body = `<time datetime="${escapeHtml(model.publishedAt)}">${escapeHtml(model.publishedAt)}</time>` + body;
+        schemas = [model.schema];
+        crumbs.push({ name: 'Blog', path: '/blog' });
       } else if (/^\/guide\/[^/]+$/.test(route)) {
         const slug = route.split('/')[2];
         if (!identifier(slug)) return errorPage(404);
         const guide = await data.guide(slug);
         if (guide.slug !== slug) return errorPage(404);
+        const model = guideModel(guide, route, data.mediaOrigin || origin.href, origin.href);
         page = { title: guide.title, description: guide.summary || guide.title };
-        body = paragraph(guide.summary) + guide.sections.map(section =>
+        body = paragraph(guide.summary) + model.sections.map(section =>
           `<section><h2>${escapeHtml(section.heading)}</h2>${paragraph(section.body)}`
           + (Array.isArray(section.steps) ? `<ol>${section.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>` : '')
           + paragraph(section.tip) + paragraph(section.warning)
-          + (Array.isArray(section.media) ? section.media.filter(media => media.kind !== 'video')
-            .map(media => image(media.url, media.altText)).join('') : '')
+          + section.media.map(media => `<figure>${media.kind === 'video'
+            ? `<video controls preload="none" src="${escapeHtml(media.url)}"${media.posterUrl ? ` poster="${escapeHtml(media.posterUrl)}"` : ''} aria-label="${escapeHtml(media.altText)}"></video>`
+            : image(media.url, media.altText)}${media.caption ? `<figcaption>${escapeHtml(media.caption)}</figcaption>` : ''}</figure>`).join('')
           + '</section>').join('');
-        const steps = guide.sections.flatMap(section => Array.isArray(section.steps) ? section.steps : []).filter(step => String(step).trim());
-        if (steps.length) schemas = [{
-          '@context': 'https://schema.org', '@type': 'HowTo', name: guide.title,
-          description: text(guide.summary), url: absolute(route),
-          step: steps.map(step => ({ '@type': 'HowToStep', text: String(step) })),
-        }];
+        if (model.schema) schemas = [model.schema];
+        crumbs.push({ name: 'Support', path: '/support' });
       } else if (!page) return errorPage(404);
 
       meta ||= metadata(route, page.title, page.description);
@@ -156,10 +158,17 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
         '@context': 'https://schema.org', '@type': 'WebPage', name: page.title,
         description: meta.description, url: meta.url,
       }];
-      if (route === '/') schemas.push({
-        '@context': 'https://schema.org', '@type': 'WebSite', name: 'Ultra-Clear Companion', url: absolute('/'),
-      });
-      return { status: 200, meta, body: `<h1>${escapeHtml(page.title)}</h1>${body}${nav}`, schemas };
+      if (route !== '/') {
+        crumbs.push({ name: page.title, path: route });
+        schemas.push(breadcrumbs(crumbs, origin.href));
+        body = `<nav aria-label="Breadcrumb">${crumbs.map(crumb => link(crumb.path, crumb.name)).join(' / ')}</nav>` + body;
+      }
+      // One graph binds the site's verified identity to every eligible template.
+      schemas = [{ '@context': 'https://schema.org', '@graph': [...identity(origin.href), ...schemas.map(schema => {
+        const { '@context': _context, ...node } = schema;
+        return node;
+      })] }];
+      return { status: 200, meta, body: `<header><a href="https://ucfilters.com/">Ultra Clear</a></header><h1>${escapeHtml(page.title)}</h1>${body}${nav}`, schemas };
     } catch (error) {
       if (!(error instanceof PublicDataError)) console.error('Public rendering failed:', error.message);
       return errorPage(error instanceof PublicDataError ? error.status : 503);

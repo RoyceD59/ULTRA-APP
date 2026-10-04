@@ -15,6 +15,7 @@ const { prepareStaticBuild } = require('../prepare-static-build.cjs');
 const renderer = overrides => createPublicRenderer({
   canonicalOrigin: 'https://public.example', basePath: '/uc-companion', data: { ...data, ...overrides },
 });
+const schemaOf = (page, type) => page.schemas[0]['@graph'].find(node => node['@type'] === type);
 
 test('every represented public template has initial primary content, unique metadata and links', async () => {
   const titles = new Set();
@@ -40,24 +41,31 @@ test('every represented public template has initial primary content, unique meta
 });
 test('public schemas reflect available data, never fabricate offers or guide steps', async () => {
   const product = await renderer().render('/product/101');
-  assert.equal(product.schemas[0].sku, 'FILTER-101');
-  assert.equal(product.schemas[0].name, fixtures.products[0].name);
-  assert.ok(!('offers' in product.schemas[0]));
+  assert.equal(schemaOf(product, 'Product').sku, 'FILTER-101');
+  assert.equal(schemaOf(product, 'Product').name, fixtures.products[0].name);
+  assert.equal(schemaOf(product, 'Product').offers.priceCurrency, 'KES');
+  assert.match(product.body, /KES /);
+  const quoteOnly = await renderer({
+    products: async () => [{ ...fixtures.products[0], enquiryOnly: true }],
+  }).render('/product/101');
+  assert.equal(schemaOf(quoteOnly, 'Product').offers, undefined);
+  assert.match(quoteOnly.body, /Pricing on request/);
   assert.match(product.body, /Filter front view/);
   const withoutImages = await renderer({
     products: async () => [{ ...fixtures.products[0], images: [] }],
   }).render('/product/101');
   assert.equal(withoutImages.meta.image, 'https://public.example/favicon.png');
-  assert.ok(!('image' in withoutImages.schemas[0]));
+  assert.ok(!('image' in schemaOf(withoutImages, 'Product')));
   const article = await renderer().render('/blog/water-care');
-  assert.equal(article.schemas[0].datePublished, fixtures.article.publishedAt.replace('Z', '.000Z'));
+  assert.equal(schemaOf(article, 'BlogPosting').datePublished, fixtures.article.publishedAt);
   assert.match(article.body, /href="https:\/\/example.org\/water">Water guidance/);
   assert.doesNotMatch(article.body, /\[Water guidance\]/);
   const howTo = await renderer().render('/guide/filter-care');
-  assert.equal(howTo.schemas[0]['@type'], 'HowTo');
-  assert.deepEqual(howTo.schemas[0].step.map(step => step.text), fixtures.guide.sections[0].steps);
+  assert.equal(schemaOf(howTo, 'HowTo')['@type'], 'HowTo');
+  assert.deepEqual(schemaOf(howTo, 'HowTo').step.flatMap(section => section.itemListElement.map(step => step.text)), fixtures.guide.sections[0].steps);
   const noSteps = await renderer({ guide: async () => ({ ...fixtures.guide, sections: [{ heading: 'Overview', body: 'Information only' }] }) }).render('/guide/filter-care');
-  assert.equal(noSteps.schemas[0]['@type'], 'WebPage');
+  assert.equal(schemaOf(noSteps, 'HowTo'), undefined);
+  assert.ok(schemaOf(noSteps, 'WebPage'));
 });
 test('unknown, invalid and unpublished identifiers are actual 404s', async () => {
   for (const route of ['/missing', '/product/999', '/product/101garbage', '/product/-1', '/blog/missing', '/guide/missing', '/guide/filter-care/nested', '/blog/%2f']) {
@@ -81,7 +89,7 @@ test('escaping keeps untrusted HTML, metadata and JSON non-executable', async ()
   const head = renderHead(page.meta, page.schemas);
   assert.doesNotMatch(head, /<script>alert/);
   const json = [...head.matchAll(/type="application\/ld\+json">([\s\S]*?)<\/script>/g)][0][1];
-  assert.equal(JSON.parse(json).headline, hostile);
+  assert.equal(JSON.parse(json)['@graph'].find(node => node['@type'] === 'BlogPosting').headline, hostile);
   assert.match(head, /&quot; onload=&quot;evil/);
 });
 test('sitemap lists only canonical public inventory and never generates modification dates', async () => {

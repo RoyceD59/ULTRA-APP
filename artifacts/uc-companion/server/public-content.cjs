@@ -36,6 +36,7 @@ function createPublicData(apiOrigin, fetchImpl = fetch) {
     return value;
   }
   return {
+    mediaOrigin: origin.origin,
     products: async () => array(await read('products?publicationSafe=true', 'woocommerce-published')),
     guides: async () => array((await read('guides')).guides),
     guide: async slug => {

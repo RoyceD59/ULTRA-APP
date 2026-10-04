@@ -819,6 +819,7 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
   }
   try {
     let payload: Record<string, unknown>[] | null = null;
+    let publishedSource = false;
     if (hasWCCredentials()) {
       const extra: Record<string, string> = { per_page: "50", status: "publish" };
       const requestedCategory = typeof req.query["category"] === "string"
@@ -833,6 +834,7 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
       const products = await wcFetchAllPages("/products", extra);
       if (products) {
         payload = products.map(normalizeProduct);
+        publishedSource = products.every(product => product["status"] === "publish");
         // If the category lookup was unavailable, fetch-all + normalized
         // filtering is safer than sending a label to WooCommerce and showing
         // an accidental blank grid.
@@ -870,8 +872,13 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
       payload = data;
     }
     warnForMissingProductLifespans(payload);
+    if (publicationSafe && !publishedSource) {
+      res.status(503).json({ error: "Published product catalogue could not be verified" });
+      return;
+    }
     const mediaMap = await fetchProductMediaMap(payload.map((p) => Number(p["id"])));
     if (publicationSafe) res.setHeader("X-UC-Catalogue-Provenance", "woocommerce-published");
+    res.setHeader("X-UC-Product-Source", publishedSource ? "woocommerce-published" : "unverified");
     res.json(payload.map((p) => applyProductMedia(p, mediaMap.get(Number(p["id"])))));
   } catch {
     res.status(500).json({ error: "Failed to fetch products" });
@@ -1381,9 +1388,13 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
   const id = parseInt(String(req.params["id"]));
   try {
     let payload: Record<string, unknown> | null = null;
+    let publishedSource = false;
     if (hasWCCredentials()) {
       const product = await wcFetchOne(`/products/${id}`);
-      if (product) payload = normalizeProduct(product);
+      if (product) {
+        payload = normalizeProduct(product);
+        publishedSource = product["status"] === "publish";
+      }
     }
     if (!payload) {
       const product = MOCK_PRODUCTS.find((p) => p["id"] === id);
@@ -1394,6 +1405,7 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
       payload = product;
     }
     const mediaMap = await fetchProductMediaMap([id]);
+    res.setHeader("X-UC-Product-Source", publishedSource ? "woocommerce-published" : "unverified");
     res.json(applyProductMedia(payload, mediaMap.get(id)));
   } catch {
     res.status(500).json({ error: "Failed to fetch product" });

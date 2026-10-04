@@ -18,8 +18,8 @@ test("anonymous catalogue requests only published WooCommerce products on every 
     assert.equal(url.searchParams.get("status"), "publish");
     const page = Number(url.searchParams.get("page"));
     const products = page === 1
-      ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `Published ${index + 1}`, price: "100", images: [] }))
-      : [{ id: 101, name: "Published 101", price: "100", images: [] }];
+      ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `Published ${index + 1}`, status: "publish", price: "100", images: [] }))
+      : [{ id: 101, name: "Published 101", status: "publish", price: "100", images: [] }];
     return new Response(JSON.stringify(products), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
   const app = express();
