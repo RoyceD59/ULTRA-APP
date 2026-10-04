@@ -16,6 +16,7 @@ import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
 import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
 import { webAnalyticsLoader } from '@/lib/umamiWeb';
+import { initializeCompanionFieldVitals } from '@/lib/companionFieldVitals';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
 import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
@@ -151,6 +152,7 @@ function RootLayoutNav() {
 export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') webAnalyticsLoader.initialize();
+    if (Platform.OS === 'web') initializeCompanionFieldVitals();
   }, []);
   useEffect(() => {
     if (Platform.OS !== 'web') {

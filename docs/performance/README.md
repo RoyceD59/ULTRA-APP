@@ -186,6 +186,103 @@ published snapshots remain unchanged; failed editorial revisions do not
 replace live snapshots. Conditional blog and guide reads returned 304 in tests
 and workspace HTTP checks. No production publish was used to test this.
 
+## Privacy-reviewed field web vitals (prepared, not activated)
+
+Companion's current approved provider is the separate Umami service wired through
+`lib/analytics.ts` and `lib/umamiWeb.ts`, not the proposed
+`companion-analytics-provider.web.tsx`. The optional collector is
+`lib/companionFieldVitals.web.ts`; the native counterpart is an empty function.
+No native observer, metric or behavior is added.
+
+**Activation status:** off by default. No environment setting, production build,
+publication, hosting migration or live telemetry activation is authorized by this
+work. After explicit approval, a production web build must set
+`EXPO_PUBLIC_COMPANION_FIELD_VITALS_ENABLED=true` and retain the existing served
+`uc-build-id` meta tag. Activation is a build-time choice, not a runtime admin
+switch. Missing/invalid build IDs fail closed. Only `app.ucfilters.com` is eligible.
+Development mode, localhost/previews, preview-safe-mode builds, automated browsers,
+marked performance fixtures, Do Not Track and Global Privacy Control are excluded.
+Turning the flag off in a separately approved replacement build disables collection.
+The existing non-vitals analytics configuration is unchanged.
+
+### Explicit privacy review
+
+The single event `companion_web_vital` has an allowlisted scalar contract:
+
+| Field | Meaning |
+|---|---|
+| `schema` | Fixed `1`; separate incompatible future schemas in reports. |
+| `environment` | Fixed `production`; never combine with lab or fixture data. |
+| `build` | Served release build ID, not a customer/session ID. |
+| `routeClass` | Document-entry route only: home, catalogue, product, blog, article, support, guide, other. |
+| `browserProfile` | Chromium/WebKit/Firefox/other × mobile/desktop; no version or device model. |
+| `metric` | LCP, INP or CLS only. |
+| `value` | LCP/INP rounded to whole milliseconds; CLS rounded to 0.001. |
+
+Review result: application payloads contain no customer, account, order, session,
+interaction or metric identifiers; no tokens, email, input text, selectors, DOM
+nodes, attribution entries, request/resource URLs, query strings, fragments,
+raw user agents, precise screen dimensions, language or referring sites.
+`fieldVitalsPolicy.ts` constructs the allowed fields; `umamiWeb.ts` reconstructs
+the **whole field-event envelope**, including a synthetic
+`/field-vitals/<routeClass>` URL and empty referrer. Extra tracker metadata is
+discarded, rather than relying only on callers to omit it. The required Umami
+website ID and fixed public hostname identify the service, not a visitor.
+No customer auth context, cookie, local storage or persisted retry queue is read
+by this collector. Metric IDs are used transiently for deduplication, never sent.
+
+This is privacy-minimized aggregate analytics, **not a claim that the provider
+receives no personal/network data**: browsers still connect to Umami, which sees
+network metadata and may use its existing anonymous analytics session/cache
+mechanism. This change does not alter Umami retention, geography, access controls
+or the application's existing pageview/business-event collection. Before
+activation, the owner must approve the provider's processing/retention and any
+required privacy notice or consent policy, and verify one synthetic field-event
+envelope with all identity/URL fields absent. No customer activity is needed for
+that verification. Do not use visitor/session reports to associate field samples
+with customers.
+
+### Metric semantics and reporting
+
+The non-attribution `web-vitals` package supplies standard LCP, INP and
+session-window CLS calculations. It is dynamically imported only after the
+production/approval/privacy gates pass. Unsupported browser metrics remain
+missing; a page without an interaction emits **no INP**, not zero.
+The latest readings are buffered as scalars, then emitted once per metric ID at
+the first hidden/pagehide boundary. BFCache restores have new metric IDs and
+can contribute another sample. Repeated hiding/unloading does not count the same
+metric twice; later activity after the first hidden boundary is not another
+sample for that ID. This first-hidden sampling boundary must stay consistent
+across comparisons. Failed or blocked sends are dropped, not retried or replayed.
+Abrupt browser termination, blockers and unsupported APIs cause missing data.
+
+Metrics span a browser document, **not each Expo Router transition**. Route class
+means the initial document route, including SPA activity before first hiding;
+it is not a product/guide identifier or a route-specific readiness timer.
+LCP is a visual startup measure, not auth-ready, content-ready or native startup.
+Browser profiles are broad local classifications, not the lab throttling profiles.
+
+In Umami filter to `companion_web_vital`, `schema=1`, `environment=production`
+and the actual approved live build, then split by metric, route class and browser
+profile. Report sample count and collection window with every p50/p75/p95.
+For a controlled property export, use only the allowlisted fields above and
+nearest-rank percentiles: sorted values at `ceil(p * n) - 1`. Never average
+percentiles across builds/profiles or pool CLS with milliseconds. Umami event
+counts alone do not establish a percentile; an aggregate property export/query
+is needed. Keep small cohorts explicitly provisional; use at least 100 received
+samples per cohort before a release comparison and still disclose selection
+bias. Do not claim representative visitor performance solely from this threshold.
+INP's denominator is documents with a measured interaction, not all visits.
+Collection rates are unknown without a separately reviewed denominator.
+
+`scripts/measure-canonical.cjs` marks browser visits as fixtures, blocks Umami
+network requests and labels output `evidence: lab`, `analyticsSuppressed: true`.
+Its resource URLs/text stay in local lab reports, never in field events.
+Existing lab observations remain separate; no field percentiles have been
+collected or claimed in this report. Ongoing field monitoring does **not**
+replace the existing signed-in/physical Android and iPhone usability checks or
+authorize a production release.
+
 ## Named target register
 
 | Report target | Evidence and status |

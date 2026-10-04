@@ -1,3 +1,5 @@
+import { FIELD_VITAL_EVENT, sanitizeVitalPayload } from './fieldVitalsPolicy';
+
 // Public tracking configuration supplied by the website owner; not credentials.
 export const UMAMI_SCRIPT_URL = 'https://cloud.umami.is/script.js';
 export const UMAMI_WEBSITE_ID = '77362539-d1a3-4668-913a-c115c512fa09';
@@ -13,6 +15,17 @@ declare global {
 
 /** Tracker metadata must not expose reset tokens, search text, or page titles. */
 export function sanitizeTrackerMetadata(_type: string, payload: Record<string, unknown>) {
+  if (payload.name === FIELD_VITAL_EVENT) {
+    const data = sanitizeVitalPayload(payload.data);
+    if (_type !== 'event' || !data) return false;
+    // Reconstruct, do not spread: discard Umami URL/referrer, screen resolution,
+    // language, distinct ID, tags, titles and any unexpected tracker metadata.
+    return {
+      website: UMAMI_WEBSITE_ID, hostname: PUBLIC_HOST,
+      url: `/field-vitals/${data.routeClass}`, referrer: '',
+      title: 'Companion field vitals', name: FIELD_VITAL_EVENT, data,
+    };
+  }
   const clean = { ...payload, title: 'Ultra-Clear Companion' };
   for (const key of ['url', 'referrer'] as const) {
     if (typeof payload[key] !== 'string') continue;

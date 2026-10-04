@@ -18,6 +18,9 @@ async function main() {
     for (const throttled of [false, true]) {
       for (let run = 0; run < Number(process.argv[5] || 3); run++) {
         const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+        // Lab visits must never contaminate production analytics, even when a
+        // field collector is approved later. Block the existing tracker too.
+        await context.route(/https:\/\/(?:[^/]+\.)?umami\.is\//, route => route.abort());
         const page = await context.newPage();
         const cdp = await context.newCDPSession(page);
         await cdp.send('Performance.enable');
@@ -30,6 +33,7 @@ async function main() {
           });
         }
         await page.addInitScript(() => {
+          window.companionPerformanceFixture = true;
           window.__speed = { lcp: null, cls: 0, interactions: [] };
           for (const type of ['largest-contentful-paint', 'layout-shift', 'event']) {
             try {
@@ -68,6 +72,7 @@ async function main() {
                 .filter(m => ['ScriptDuration', 'TaskDuration'].includes(m.name))
                 .map(m => [m.name, m.value])) });
             fs.writeFileSync(process.argv[3], JSON.stringify({ measuredAt: new Date().toISOString(), origin,
+              evidence: 'lab', analyticsSuppressed: true,
               note: 'Workspace Chromium; browser-cold/warm only, not CDN cold or physical phone. INP not established without representative interactions.',
               samples }, null, 2));
             page.off('pageerror', onError);
@@ -80,6 +85,7 @@ async function main() {
   } finally {
     fs.writeFileSync(process.argv[3], JSON.stringify({
       measuredAt: new Date().toISOString(), origin,
+      evidence: 'lab', analyticsSuppressed: true,
       note: 'Chromium workspace simulation. Cold/warm refer to browser cache only. LCP/CLS are lab observations; INP requires representative interactions/field data. No physical Android/iPhone claims.',
       samples,
     }, null, 2));
