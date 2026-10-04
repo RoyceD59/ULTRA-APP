@@ -48,6 +48,7 @@ function harness() {
     pollRef: { current: null as ReturnType<typeof setInterval> | null },
     paystackVerifyAttemptRef: { current: 0 },
     paystackVerifyingRef: { current: false },
+    pendingPaystackReferenceRef: { current: null as string | null },
     paymentMethodChangingRef: { current: false },
     setProcessing(value: boolean) { resets++; state.processing = value; },
     setMpesaWaiting(value: boolean) { resets++; state.mpesaWaiting = value; },

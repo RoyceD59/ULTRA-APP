@@ -43,6 +43,7 @@ function harness() {
     lastCheckoutRequestIdRef: { current: null },
     paystackVerifyAttemptRef: { current: 0 },
     paystackVerifyingRef: { current: false },
+    pendingPaystackReferenceRef: { current: null as string | null },
     paymentMethodChangingRef: { current: false },
     attemptRef: { current: 0 }, pollRef: { current: null },
     total: 100, user: { email: 'customer@example.test' },

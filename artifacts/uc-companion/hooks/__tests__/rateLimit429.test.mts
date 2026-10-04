@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 import { ApiError } from '../apiError.js';
 import {
   RATE_LIMIT_MESSAGE,
@@ -114,6 +116,97 @@ describe('classifyPaymentInitError — Paystack verify path', () => {
     });
     assert.equal(originalReference, 'paystack_verify_ref_123');
   });
+});
+
+// Execute the production screen handlers, not a copy of their retry logic.
+// Only API, browser and UI boundaries are stubbed; no payment is issued.
+const checkoutSource = readFileSync(new URL('../../app/checkout.tsx', import.meta.url), 'utf8');
+const checkoutAst = ts.createSourceFile('checkout.tsx', checkoutSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const handlerNames = new Set(['handleConfirm', 'handlePaystack', 'handlePaystackVerify']);
+const handlerSource: string[] = [];
+function collectHandlers(node: ts.Node) {
+  if (ts.isFunctionDeclaration(node) && node.name && handlerNames.has(node.name.text)) {
+    handlerSource.push(node.getText(checkoutAst));
+  }
+  ts.forEachChild(node, collectHandlers);
+}
+collectHandlers(checkoutAst);
+assert.equal(handlerSource.length, handlerNames.size, 'All checkout handlers must be present');
+const checkoutHandlers = ts.transpileModule(handlerSource.join('\n'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022 },
+}).outputText;
+
+describe('checkout handlers — Paystack verification 429 recovery', () => {
+  for (const body of [{}, { retryable: true }]) {
+    it(`dismisses 429 with default OK and manually verifies the original reference (${JSON.stringify(body)})`, async () => {
+      const originalReference = 'paystack_original_payment_123';
+      const alerts: unknown[][] = [];
+      const verifications: string[] = [];
+      const orders: { method: string; reference: string }[] = [];
+      let initializations = 0;
+      let browserOpens = 0;
+      const state = {
+        processing: false, paymentMethod: 'paystack', total: 100,
+        fulfillment: 'collection', baseQuote: { total: 100 }, quoteCurrent: true,
+        quoteLoading: false, quoteError: '', user: { email: 'customer@example.test' },
+        paystackVerifyAttemptRef: { current: 0 },
+        paystackVerifyingRef: { current: false },
+        pendingPaystackReferenceRef: { current: null as string | null },
+        paymentMethodChangingRef: { current: false },
+        validateAddress: () => true,
+        checkoutPaymentInput: () => ({ idempotencyKey: 'original-checkout' }),
+        setProcessing(value: boolean) { state.processing = value; },
+        Haptics: { ImpactFeedbackStyle: { Medium: 'medium' }, impactAsync() {} },
+        Alert: { alert(...args: unknown[]) { alerts.push(args); } },
+        ApiError, classifyPaymentInitError,
+        changePaymentMethod: () => assert.fail('429 must not offer a payment-method switch'),
+        createOrder: async (method: string, reference: string) => {
+          orders.push({ method, reference });
+          return true;
+        },
+        WebBrowser: { openBrowserAsync: async () => { browserOpens++; } },
+        api: {
+          paystackInit: async () => {
+            initializations++;
+            return { authorizationUrl: 'https://paystack.example.test/checkout', reference: originalReference };
+          },
+          paystackVerify: async (reference: string) => {
+            verifications.push(reference);
+            // Two rate limits ensure the ref also survives repeated manual retries.
+            if (verifications.length <= 2) throw new ApiError('Too many requests', 429, body);
+            return { success: true, status: 'success' };
+          },
+        },
+      };
+      // Mutable scope models checkout re-renders while refs persist.
+      const { handleConfirm } = new Function('scope', `with (scope) {
+        ${checkoutHandlers}
+        return { handleConfirm };
+      }`)(state);
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        await handleConfirm(); // The real checkout button path, not the verify helper.
+        assert.deepEqual(alerts[attempt - 1], [RATE_LIMIT_TITLE, RATE_LIMIT_MESSAGE],
+          'Exactly two alert arguments: default OK, no Try again or COD buttons');
+        assert.equal(state.processing, false, 'Manual retry must be available after dismissal');
+        assert.equal(state.paystackVerifyingRef.current, false);
+        assert.equal(state.pendingPaystackReferenceRef.current, originalReference);
+        assert.deepEqual(orders, [], 'A rate limit cannot create an order');
+        assert.equal(initializations, 1, 'Manual retry must not initialize another payment');
+        assert.equal(browserOpens, 1, 'Manual retry must not reopen hosted checkout');
+        assert.deepEqual(verifications, Array(attempt).fill(originalReference));
+      }
+
+      await handleConfirm(); // A later manual retry after the wait succeeds.
+      assert.deepEqual(verifications, [originalReference, originalReference, originalReference]);
+      assert.equal(initializations, 1);
+      assert.equal(browserOpens, 1);
+      assert.equal(alerts.length, 2);
+      assert.deepEqual(orders, [{ method: 'paystack', reference: originalReference }]);
+      assert.equal(state.pendingPaystackReferenceRef.current, null);
+      assert.equal(state.processing, false);
+    });
+  }
 });
 
 // ── Login / register screens (AuthContext → Alert with default OK button) ────

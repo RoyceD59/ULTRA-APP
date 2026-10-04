@@ -193,6 +193,8 @@ export default function CheckoutScreen() {
   const attemptRef = useRef(0);
   const paystackVerifyAttemptRef = useRef(0);
   const paystackVerifyingRef = useRef(false);
+  // Keep unresolved hosted payments across manual checkout-button retries.
+  const pendingPaystackReferenceRef = useRef<string | null>(null);
   const paymentMethodChangingRef = useRef(false);
   // Persists the CheckoutRequestID of the most recent STK push across retries.
   // Before issuing a new push, handleMpesa queries this ID's status — if the
@@ -291,6 +293,7 @@ export default function CheckoutScreen() {
       cancelMpesaPoll(attemptRef, pollRef);
       clearMpesaRetryCheck();
       setMpesaWaiting(false);
+      pendingPaystackReferenceRef.current = null;
       setPaymentMethod(method);
     } catch (error) {
       Alert.alert('Payment still pending', error instanceof Error ? error.message : 'Resume the original payment before changing method.');
@@ -675,13 +678,18 @@ export default function CheckoutScreen() {
       setProcessing(false);
 
       if (verified.success && verified.status === 'success') {
-        await createOrder('paystack', reference);
+        if (await createOrder('paystack', reference)) {
+          pendingPaystackReferenceRef.current = null;
+        }
       } else {
         // Branch on the specific Paystack status to give the right advice:
         //   abandoned / null  → user closed the browser; silent, no error shown
         //   failed            → card/mobile-money decline; ask them to check details
         //   anything else     → unexpected non-success; generic "not confirmed" message
         const st = verified.status;
+        if (st === 'abandoned' || st === 'failed') {
+          pendingPaystackReferenceRef.current = null;
+        }
         if (!st || st === 'abandoned') {
           // User cancelled — nothing to do; checkout form returns to idle
         } else if (st === 'failed') {
@@ -738,6 +746,10 @@ export default function CheckoutScreen() {
   }
 
   async function handlePaystack() {
+    if (pendingPaystackReferenceRef.current) {
+      await handlePaystackVerify(pendingPaystackReferenceRef.current);
+      return;
+    }
     setProcessing(true);
     let r: { authorizationUrl: string; reference: string } | null = null;
     try {
@@ -746,6 +758,7 @@ export default function CheckoutScreen() {
         total,
         checkoutPaymentInput(),
       );
+      pendingPaystackReferenceRef.current = r.reference;
       setProcessing(false);
     } catch (e) {
       setProcessing(false);
