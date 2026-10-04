@@ -79,3 +79,4 @@
 - [Account-scoped async effects](account-scoped-async-effects.md) — callback churn must not invalidate pending account work; cancellation must release any deduplication marker.
 - [Companion session rejection](companion-session-rejection.md) — exact forced-sign-out contracts only; preserve request-token provenance and synchronous duplicate protection.
 - [Customer signup reporting](customer-signup-reporting.md) — user chose Africa/Nairobi; Monday and first-of-month midnight resets must not follow database timezone settings.
+- [Field-review reminder policy](field-review-reminder-policy.md) — warn once per review cycle; becoming overdue alone does not authorize a second reminder.

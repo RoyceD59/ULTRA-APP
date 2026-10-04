@@ -1625,6 +1625,11 @@ async function applyStartupMigrations(): Promise<void> {
       OR last_field_verified_on IS NULL
       OR next_review_on >= last_field_verified_on
     );
+    CREATE TABLE IF NOT EXISTS uc_location_review_alerts (
+      location_id text PRIMARY KEY REFERENCES uc_locations(id) ON DELETE CASCADE,
+      review_key text NOT NULL,
+      notified_at timestamptz
+    );
   `);
   const legacyLocations = [
     ["loc1", "experience_centre", "UC Experience Centre Westlands", "Woodvale Groove, Westlands, Nairobi", -1.2633, 36.8072, "Mon–Sat 8am–6pm, Sun 10am–4pm", "+254 700 123456"],

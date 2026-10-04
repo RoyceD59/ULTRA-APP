@@ -38,6 +38,7 @@ import {
 import { processOrderNotificationOutbox, reconcileWooOrderStatuses } from "./order-status-pipeline.js";
 import { queueBlogRun, resumeQueuedBlogRuns, weeklyBlogRunKey } from "./blog-editorial.js";
 import { reconcileAbandonedCheckouts } from "./abandoned-checkouts.js";
+import { deliverReviewAlert, runLocationReviewReminders } from "./location-review-reminders.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -255,6 +256,30 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  cron.schedule("0 9 * * *", async () => {
+    try {
+      await runLocationReviewReminders({
+        sendAlert: (alert) => deliverReviewAlert(
+          alert,
+          async (message) => sendViaResend({
+            from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+            to: await getTeamAlertEmail(),
+            subject: message.subject,
+            text: message.text,
+            meta: { template: message.template },
+            signal: AbortSignal.timeout(30_000),
+          }),
+          async (message) => {
+            const phone = await getTeamAlertPhone();
+            return phone ? sendSmsAwaitable(phone, message.sms, { template: message.template }, AbortSignal.timeout(30_000)) : false;
+          },
+        ),
+      });
+    } catch (err) {
+      logger.error({ err }, "Scheduler: water point field-review reminder failed");
+    }
+  }, { timezone: "Africa/Nairobi" });
+  logger.info("Scheduler: daily water point field-review reminders registered (09:00 Africa/Nairobi)");
   let checkoutCleanupRunning = false;
   cron.schedule("17 * * * *", async () => {
     if (checkoutCleanupRunning) return;
