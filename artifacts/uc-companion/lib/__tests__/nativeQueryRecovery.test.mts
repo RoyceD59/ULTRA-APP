@@ -5,6 +5,11 @@ import { createRequire } from 'node:module';
 import { connectionOnline, installNativeQueryRecovery, nativeRecoveryDefaults, type ConnectionState } from '../nativeQueryRecovery';
 import { pageDataState } from '../pageLoading';
 import { preferenceReadBlocked } from '../notificationPreferenceState';
+import {
+  getNativeConnectionStatus,
+  subscribeNativeConnectionStatus,
+  publishNativeConnectionStatus,
+} from '../nativeConnectionStatus';
 
 // The app's .ts helpers compile as CJS in this Node harness. Use the same
 // package instance so the onlineManager singleton is shared (Metro has one).
@@ -46,6 +51,50 @@ function harness() {
 }
 
 describe('native read-only reconnect recovery', () => {
+  it('keeps the offline notice through unknown reachability until confirmed recovery', () => {
+    let emit!: (state: ConnectionState) => void;
+    publishNativeConnectionStatus(undefined);
+    let changes = 0;
+    const unsubscribe = subscribeNativeConnectionStatus(() => { changes++; });
+    const stop = installNativeQueryRecovery(listener => {
+      emit = listener;
+      return () => {};
+    }, publishNativeConnectionStatus);
+    try {
+      assert.equal(getNativeConnectionStatus(), undefined);
+      emit({ isConnected: true, isInternetReachable: null });
+      assert.equal(getNativeConnectionStatus(), undefined);
+      emit({ isConnected: false, isInternetReachable: null });
+      assert.equal(getNativeConnectionStatus(), false);
+      emit({ isConnected: true, isInternetReachable: null });
+      assert.equal(getNativeConnectionStatus(), false);
+      emit({ isConnected: true, isInternetReachable: false });
+      assert.equal(changes, 1);
+      emit({ isConnected: true, isInternetReachable: true });
+      assert.equal(getNativeConnectionStatus(), true);
+      assert.equal(changes, 2);
+      unsubscribe();
+      publishNativeConnectionStatus(false);
+      assert.equal(changes, 2);
+    } finally {
+      unsubscribe();
+      stop();
+      publishNativeConnectionStatus(undefined);
+    }
+  });
+
+  it('keeps the notice native-only and outside navigation without blocking touches', () => {
+    const web = readFileSync(new URL('../../components/ConnectionStatusFrame.tsx', import.meta.url), 'utf8');
+    assert.doesNotMatch(web, /NetInfo|useSyncExternalStore|react-native|nativeConnectionStatus/);
+    assert.match(web, /return <>\{children\}<\/>/);
+    const native = readFileSync(new URL('../../components/ConnectionStatusFrame.native.tsx', import.meta.url), 'utf8');
+    assert.match(native, /online === false/);
+    assert.match(native, /pointerEvents="none"/);
+    assert.match(native, /accessibilityLiveRegion="polite"/);
+    const layout = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8');
+    assert.match(layout, /<ConnectionStatusFrame>\s*<RootLayoutNav \/>\s*<\/ConnectionStatusFrame>/);
+  });
+
   it('ignores unknown reachability and preserves browser defaults', () => {
     assert.equal(connectionOnline({ isConnected: null, isInternetReachable: null }), undefined);
     assert.equal(connectionOnline({ isConnected: true, isInternetReachable: null }), undefined);

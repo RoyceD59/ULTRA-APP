@@ -25,6 +25,7 @@ import { installQueryConnectivity } from '@/lib/queryConnectivity';
 import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
 
 // Set API base URL before any component renders
+import ConnectionStatusFrame from '@/components/ConnectionStatusFrame';
 const apiBase = getApiBase();
 if (apiBase) {
   setBaseUrl(apiBase);
@@ -163,7 +164,9 @@ export default function RootLayout() {
         <CartProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
-              <RootLayoutNav />
+              <ConnectionStatusFrame>
+                <RootLayoutNav />
+              </ConnectionStatusFrame>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </CartProvider>

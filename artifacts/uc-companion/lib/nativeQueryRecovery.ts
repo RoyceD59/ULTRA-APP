@@ -14,10 +14,14 @@ export function connectionOnline(state: ConnectionState): boolean | undefined {
 
 export function installNativeQueryRecovery(
   subscribe: (listener: (state: ConnectionState) => void) => () => void,
+  onConfirmedConnection?: (online: boolean) => void,
 ) {
   onlineManager.setEventListener(setOnline => subscribe(state => {
     const online = connectionOnline(state);
-    if (online !== undefined) setOnline(online);
+    if (online !== undefined) {
+      onConfirmedConnection?.(online);
+      setOnline(online);
+    }
   }));
   return () => {
     onlineManager.setEventListener(() => undefined);
