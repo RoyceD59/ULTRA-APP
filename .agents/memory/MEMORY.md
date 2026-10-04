@@ -64,3 +64,4 @@
 - [Companion analytics provider](companion-analytics-provider.md) — user chose separate Umami collection for Companion web; preserve native behavior and current hosting.
 - [Filter gauge policy](filter-gauge-policy.md) — display-only status; recorded refills are not sensor measurements; require exact customer/purchase/cycle linkage.
 - [Frozen release verification](frozen-release-verification.md) — a successful publish can still serve an older approved package; verify the actual live feature before operational recovery.
+- [Phone validation optimization](phone-validation-optimization.md) — reduce unused code, not country metadata; preserve canonical identity versus legacy form defaults.

@@ -871,6 +871,13 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+    devDependencies:
+      esbuild:
+        specifier: 0.25.8
+        version: 0.25.8
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.0
 
   lib/db:
     dependencies:

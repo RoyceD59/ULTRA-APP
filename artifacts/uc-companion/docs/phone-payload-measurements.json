@@ -1,0 +1,1211 @@
+{
+  "note": "Local production-export fixtures, three fresh browser contexts per condition. Compression estimates at level/quality 9 are not live network bytes. Source-byte totals are graph inventories, not attributed minified cost. The generated facade is classified as workspace, not libphonenumber-js.",
+  "conditions": {
+    "previewSafeMode": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "slow": "API fixtures delayed 1800 ms and fonts 2000 ms; no CPU/network throttling"
+  },
+  "stages": {
+    "before": {
+      "initialBytes": {
+        "raw": 3811489,
+        "gzip": 898503,
+        "brotli": 777507
+      },
+      "phoneGraph": [
+        {
+          "source": "libphonenumber-js/metadata.min.json.js",
+          "sourceBytes": 84166
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeFormatter.js",
+          "sourceBytes": 36616
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouType.js",
+          "sourceBytes": 25715
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeParser.js",
+          "sourceBytes": 24617
+        },
+        {
+          "source": "libphonenumber-js/es6/metadata.js",
+          "sourceBytes": 23292
+        },
+        {
+          "source": "libphonenumber-js/es6/PhoneNumberMatcher.js",
+          "sourceBytes": 17046
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/Leniency.js",
+          "sourceBytes": 15873
+        },
+        {
+          "source": "libphonenumber-js/es6/parse.js",
+          "sourceBytes": 14506
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/utf-8.js",
+          "sourceBytes": 9981
+        },
+        {
+          "source": "libphonenumber-js/es6/format.js",
+          "sourceBytes": 9872
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeState.js",
+          "sourceBytes": 9667
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeFormatter.PatternMatcher.js",
+          "sourceBytes": 9047
+        },
+        {
+          "source": "libphonenumber-js/es6/PhoneNumber.js",
+          "sourceBytes": 8925
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extractCountryCallingCode.js",
+          "sourceBytes": 7165
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeFormatter.PatternParser.js",
+          "sourceBytes": 6868
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extractNationalNumber.js",
+          "sourceBytes": 6479
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/checkNumberLength.js",
+          "sourceBytes": 6410
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeFormatter.complete.js",
+          "sourceBytes": 5926
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extractNationalNumberFromPossiblyIncompleteNumber.js",
+          "sourceBytes": 5674
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/PhoneNumberSearch.js",
+          "sourceBytes": 5602
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extension/createExtensionPattern.js",
+          "sourceBytes": 5338
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/getCountryByNationalNumber.js",
+          "sourceBytes": 4917
+        },
+        {
+          "source": "libphonenumber-js/es6/ParseError.js",
+          "sourceBytes": 4894
+        },
+        {
+          "source": "libphonenumber-js/es6/normalizeArguments.js",
+          "sourceBytes": 4743
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/getNumberType.js",
+          "sourceBytes": 4639
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeFormatter.util.js",
+          "sourceBytes": 4605
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/LRUCache.js",
+          "sourceBytes": 4352
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/isViablePhoneNumber.js",
+          "sourceBytes": 4269
+        },
+        {
+          "source": "libphonenumber-js/es6/parseIncompletePhoneNumber.js",
+          "sourceBytes": 4119
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/parseDigits.js",
+          "sourceBytes": 4002
+        },
+        {
+          "source": "libphonenumber-js/index.js",
+          "sourceBytes": 3967
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/RFC3966.js",
+          "sourceBytes": 3687
+        },
+        {
+          "source": "libphonenumber-js/es6/isPossible.js",
+          "sourceBytes": 3449
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/getNumberType.js",
+          "sourceBytes": 3389
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extractPhoneContext.js",
+          "sourceBytes": 3388
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extractCountryCallingCodeFromInternationalNumberWithoutPlusSign.js",
+          "sourceBytes": 3213
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/isValidCandidate.js",
+          "sourceBytes": 3048
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extractFormattedPhoneNumberFromPossibleRfc3966NumberUri.js",
+          "sourceBytes": 2953
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/findPhoneNumbersInitialImplementation.js",
+          "sourceBytes": 2930
+        },
+        {
+          "source": "libphonenumber-js/es6/validatePhoneNumberLength.js",
+          "sourceBytes": 2848
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/format.js",
+          "sourceBytes": 2835
+        },
+        {
+          "source": "libphonenumber-js/es6/isValid.js",
+          "sourceBytes": 2566
+        },
+        {
+          "source": "libphonenumber-js/es6/searchPhoneNumbersInText.js",
+          "sourceBytes": 2460
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/isValidNumberForRegion.js",
+          "sourceBytes": 2430
+        },
+        {
+          "source": "libphonenumber-js/es6/parsePhoneNumber_.js",
+          "sourceBytes": 2380
+        },
+        {
+          "source": "libphonenumber-js/core/index.js",
+          "sourceBytes": 2288
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/matchPhoneNumberStringAgainstPhoneNumber.js",
+          "sourceBytes": 2268
+        },
+        {
+          "source": "libphonenumber-js/es6/findPhoneNumbersInText.js",
+          "sourceBytes": 2255
+        },
+        {
+          "source": "libphonenumber-js/es6/isPossiblePhoneNumber.js",
+          "sourceBytes": 2228
+        },
+        {
+          "source": "libphonenumber-js/es6/isValidPhoneNumber.js",
+          "sourceBytes": 2219
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/RegExpCache.js",
+          "sourceBytes": 2188
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/applyInternationalSeparatorStyle.js",
+          "sourceBytes": 2044
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/formatNationalNumberUsingFormat.js",
+          "sourceBytes": 1976
+        },
+        {
+          "source": "libphonenumber-js/es6/parsePhoneNumberWithError_.js",
+          "sourceBytes": 1887
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/searchNumbers.js",
+          "sourceBytes": 1733
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/mergeArrays.js",
+          "sourceBytes": 1720
+        },
+        {
+          "source": "libphonenumber-js/es6/constants.js",
+          "sourceBytes": 1447
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/getCountryByCallingCode.js",
+          "sourceBytes": 1377
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/getIddPrefix.js",
+          "sourceBytes": 1228
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/stripIddPrefix.js",
+          "sourceBytes": 1153
+        },
+        {
+          "source": "libphonenumber-js/min/exports/PhoneNumber.js",
+          "sourceBytes": 1103
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/getPossibleCountriesForNumber.js",
+          "sourceBytes": 1071
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/extension/extractExtension.js",
+          "sourceBytes": 1038
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/isPossibleNumber.js",
+          "sourceBytes": 1005
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/parsePreCandidate.js",
+          "sourceBytes": 979
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/getCountryAndCallingCodeFromOneOfThem.js",
+          "sourceBytes": 967
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/isValidPreCandidate.js",
+          "sourceBytes": 961
+        },
+        {
+          "source": "libphonenumber-js/es6/tools/semver-compare.js",
+          "sourceBytes": 927
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/findPhoneNumbers.js",
+          "sourceBytes": 904
+        },
+        {
+          "source": "libphonenumber-js/es6/formatIncompletePhoneNumber.js",
+          "sourceBytes": 898
+        },
+        {
+          "source": "libphonenumber-js/es6/findNumbers/util.js",
+          "sourceBytes": 834
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/isValidNumberForRegion_.js",
+          "sourceBytes": 684
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/isValidNumber.js",
+          "sourceBytes": 626
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/findNumbers.js",
+          "sourceBytes": 554
+        },
+        {
+          "source": "libphonenumber-js/min/exports/PhoneNumberMatcher.js",
+          "sourceBytes": 537
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/PhoneNumberSearch.js",
+          "sourceBytes": 525
+        },
+        {
+          "source": "libphonenumber-js/es6/parsePhoneNumberWithError.js",
+          "sourceBytes": 487
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/matchesEntirely.js",
+          "sourceBytes": 473
+        },
+        {
+          "source": "libphonenumber-js/min/exports/AsYouType.js",
+          "sourceBytes": 453
+        },
+        {
+          "source": "libphonenumber-js/es6/parsePhoneNumber.js",
+          "sourceBytes": 442
+        },
+        {
+          "source": "libphonenumber-js/min/exports/Metadata.js",
+          "sourceBytes": 429
+        },
+        {
+          "source": "libphonenumber-js/es6/legacy/parse.js",
+          "sourceBytes": 406
+        },
+        {
+          "source": "libphonenumber-js/min/exports/withMetadataArgument.js",
+          "sourceBytes": 365
+        },
+        {
+          "source": "libphonenumber-js/min/exports/formatIncompletePhoneNumber.js",
+          "sourceBytes": 279
+        },
+        {
+          "source": "libphonenumber-js/min/exports/parsePhoneNumberWithError.js",
+          "sourceBytes": 272
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/searchPhoneNumbers.js",
+          "sourceBytes": 272
+        },
+        {
+          "source": "libphonenumber-js/min/exports/validatePhoneNumberLength.js",
+          "sourceBytes": 271
+        },
+        {
+          "source": "libphonenumber-js/min/exports/searchPhoneNumbersInText.js",
+          "sourceBytes": 267
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/isValidNumberForRegion.js",
+          "sourceBytes": 264
+        },
+        {
+          "source": "libphonenumber-js/es6/getExampleNumber.js",
+          "sourceBytes": 259
+        },
+        {
+          "source": "libphonenumber-js/min/exports/findPhoneNumbersInText.js",
+          "sourceBytes": 259
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/isPossibleNumber.js",
+          "sourceBytes": 256
+        },
+        {
+          "source": "libphonenumber-js/min/exports/isPossiblePhoneNumber.js",
+          "sourceBytes": 255
+        },
+        {
+          "source": "libphonenumber-js/min/exports/getCountryCallingCode.js",
+          "sourceBytes": 255
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/isValidNumber.js",
+          "sourceBytes": 244
+        },
+        {
+          "source": "libphonenumber-js/min/exports/isValidPhoneNumber.js",
+          "sourceBytes": 243
+        },
+        {
+          "source": "libphonenumber-js/min/exports/isSupportedCountry.js",
+          "sourceBytes": 243
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/findPhoneNumbers.js",
+          "sourceBytes": 240
+        },
+        {
+          "source": "libphonenumber-js/min/exports/getExampleNumber.js",
+          "sourceBytes": 235
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/getNumberType.js",
+          "sourceBytes": 228
+        },
+        {
+          "source": "libphonenumber-js/min/exports/parsePhoneNumber.js",
+          "sourceBytes": 226
+        },
+        {
+          "source": "libphonenumber-js/min/exports/searchNumbers.js",
+          "sourceBytes": 223
+        },
+        {
+          "source": "libphonenumber-js/min/exports/getCountries.js",
+          "sourceBytes": 219
+        },
+        {
+          "source": "libphonenumber-js/min/exports/getExtPrefix.js",
+          "sourceBytes": 219
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/isObject.js",
+          "sourceBytes": 215
+        },
+        {
+          "source": "libphonenumber-js/min/exports/findNumbers.js",
+          "sourceBytes": 215
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/format.js",
+          "sourceBytes": 200
+        },
+        {
+          "source": "libphonenumber-js/index.es6.exports/parse.js",
+          "sourceBytes": 196
+        },
+        {
+          "source": "libphonenumber-js/es6/getCountries.js",
+          "sourceBytes": 177
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/isCountryCode.js",
+          "sourceBytes": 176
+        },
+        {
+          "source": "libphonenumber-js/es6/getCountryCallingCode.js",
+          "sourceBytes": 174
+        },
+        {
+          "source": "libphonenumber-js/es6/helpers/isCallingCode.js",
+          "sourceBytes": 171
+        }
+      ],
+      "runs": [
+        {
+          "slow": false,
+          "run": 0,
+          "homeUsableMs": 888,
+          "homeProductsMs": 954,
+          "shopMs": 1154,
+          "blogMs": 916,
+          "warmHomeMs": 108,
+          "startupJsWork": {
+            "ScriptDuration": 0.310729,
+            "TaskDuration": 0.608382
+          },
+          "jsWork": {
+            "ScriptDuration": 0.755634,
+            "TaskDuration": 1.445586,
+            "JSHeapUsedSize": 16824244
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-180638fb324fe12cc669b58fa36aa2d8.js",
+              "raw": 2657352,
+              "gzip": 588322,
+              "brotli": 508976
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": false,
+          "run": 1,
+          "homeUsableMs": 803,
+          "homeProductsMs": 882,
+          "shopMs": 424,
+          "blogMs": 860,
+          "warmHomeMs": 95,
+          "startupJsWork": {
+            "ScriptDuration": 0.310064,
+            "TaskDuration": 0.606703
+          },
+          "jsWork": {
+            "ScriptDuration": 0.69842,
+            "TaskDuration": 1.235457,
+            "JSHeapUsedSize": 22414476
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-180638fb324fe12cc669b58fa36aa2d8.js",
+              "raw": 2657352,
+              "gzip": 588322,
+              "brotli": 508976
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": false,
+          "run": 2,
+          "homeUsableMs": 1716,
+          "homeProductsMs": 1724,
+          "shopMs": 891,
+          "blogMs": 876,
+          "warmHomeMs": 62,
+          "startupJsWork": {
+            "ScriptDuration": 0.384736,
+            "TaskDuration": 1.00361
+          },
+          "jsWork": {
+            "ScriptDuration": 0.730269,
+            "TaskDuration": 1.605822,
+            "JSHeapUsedSize": 26553700
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-180638fb324fe12cc669b58fa36aa2d8.js",
+              "raw": 2657352,
+              "gzip": 588322,
+              "brotli": 508976
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": true,
+          "run": 0,
+          "homeUsableMs": 739,
+          "homeProductsMs": 2543,
+          "shopMs": 384,
+          "blogMs": 2369,
+          "warmHomeMs": 52,
+          "startupJsWork": {
+            "ScriptDuration": 0.272841,
+            "TaskDuration": 0.524605
+          },
+          "jsWork": {
+            "ScriptDuration": 0.598568,
+            "TaskDuration": 1.143335,
+            "JSHeapUsedSize": 18144136
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-180638fb324fe12cc669b58fa36aa2d8.js",
+              "raw": 2657352,
+              "gzip": 588322,
+              "brotli": 508976
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": true,
+          "run": 1,
+          "homeUsableMs": 714,
+          "homeProductsMs": 2517,
+          "shopMs": 863,
+          "blogMs": 2368,
+          "warmHomeMs": 63,
+          "startupJsWork": {
+            "ScriptDuration": 0.26856,
+            "TaskDuration": 0.504945
+          },
+          "jsWork": {
+            "ScriptDuration": 0.592221,
+            "TaskDuration": 1.117983,
+            "JSHeapUsedSize": 17554856
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-180638fb324fe12cc669b58fa36aa2d8.js",
+              "raw": 2657352,
+              "gzip": 588322,
+              "brotli": 508976
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": true,
+          "run": 2,
+          "homeUsableMs": 1145,
+          "homeProductsMs": 2947,
+          "shopMs": 863,
+          "blogMs": 2356,
+          "warmHomeMs": 65,
+          "startupJsWork": {
+            "ScriptDuration": 0.253463,
+            "TaskDuration": 0.501352
+          },
+          "jsWork": {
+            "ScriptDuration": 0.587071,
+            "TaskDuration": 1.146245,
+            "JSHeapUsedSize": 18960616
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-180638fb324fe12cc669b58fa36aa2d8.js",
+              "raw": 2657352,
+              "gzip": 588322,
+              "brotli": 508976
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        }
+      ],
+      "medians": [
+        {
+          "slow": false,
+          "homeUsableMs": 888,
+          "homeProductsMs": 954,
+          "startupScriptMs": 310.729,
+          "startupTaskMs": 608.382,
+          "journeyScriptMs": 730.2689999999999,
+          "journeyTaskMs": 1445.586
+        },
+        {
+          "slow": true,
+          "homeUsableMs": 739,
+          "homeProductsMs": 2543,
+          "startupScriptMs": 268.56,
+          "startupTaskMs": 504.945,
+          "journeyScriptMs": 592.221,
+          "journeyTaskMs": 1143.335
+        }
+      ]
+    },
+    "after": {
+      "initialBytes": {
+        "raw": 3701566,
+        "gzip": 876611,
+        "brotli": 759682
+      },
+      "phoneGraph": [
+        {
+          "source": "/lib/api-zod/src/phone-runtime.js",
+          "sourceBytes": 122944
+        }
+      ],
+      "runs": [
+        {
+          "slow": false,
+          "run": 0,
+          "homeUsableMs": 1328,
+          "homeProductsMs": 1337,
+          "shopMs": 393,
+          "blogMs": 842,
+          "warmHomeMs": 69,
+          "startupJsWork": {
+            "ScriptDuration": 0.408194,
+            "TaskDuration": 0.722186
+          },
+          "jsWork": {
+            "ScriptDuration": 0.640432,
+            "TaskDuration": 1.112629,
+            "JSHeapUsedSize": 26838956
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-7bcf74a184dfe21b46fe65a5904a2a27.js",
+              "raw": 2547429,
+              "gzip": 566430,
+              "brotli": 491151
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": false,
+          "run": 1,
+          "homeUsableMs": 1143,
+          "homeProductsMs": 1148,
+          "shopMs": 856,
+          "blogMs": 852,
+          "warmHomeMs": 68,
+          "startupJsWork": {
+            "ScriptDuration": 0.302916,
+            "TaskDuration": 0.547344
+          },
+          "jsWork": {
+            "ScriptDuration": 0.564379,
+            "TaskDuration": 0.988773,
+            "JSHeapUsedSize": 23315352
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-7bcf74a184dfe21b46fe65a5904a2a27.js",
+              "raw": 2547429,
+              "gzip": 566430,
+              "brotli": 491151
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": false,
+          "run": 2,
+          "homeUsableMs": 1132,
+          "homeProductsMs": 1137,
+          "shopMs": 852,
+          "blogMs": 852,
+          "warmHomeMs": 66,
+          "startupJsWork": {
+            "ScriptDuration": 0.28354,
+            "TaskDuration": 0.518867
+          },
+          "jsWork": {
+            "ScriptDuration": 0.513282,
+            "TaskDuration": 0.906008,
+            "JSHeapUsedSize": 27257560
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-7bcf74a184dfe21b46fe65a5904a2a27.js",
+              "raw": 2547429,
+              "gzip": 566430,
+              "brotli": 491151
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": true,
+          "run": 0,
+          "homeUsableMs": 1165,
+          "homeProductsMs": 2986,
+          "shopMs": 409,
+          "blogMs": 2366,
+          "warmHomeMs": 212,
+          "startupJsWork": {
+            "ScriptDuration": 0.255571,
+            "TaskDuration": 0.510215
+          },
+          "jsWork": {
+            "ScriptDuration": 0.648489,
+            "TaskDuration": 1.285081,
+            "JSHeapUsedSize": 18295652
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-7bcf74a184dfe21b46fe65a5904a2a27.js",
+              "raw": 2547429,
+              "gzip": 566430,
+              "brotli": 491151
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": true,
+          "run": 1,
+          "homeUsableMs": 1200,
+          "homeProductsMs": 2993,
+          "shopMs": 856,
+          "blogMs": 2364,
+          "warmHomeMs": 70,
+          "startupJsWork": {
+            "ScriptDuration": 0.254116,
+            "TaskDuration": 0.501733
+          },
+          "jsWork": {
+            "ScriptDuration": 0.605901,
+            "TaskDuration": 1.157678,
+            "JSHeapUsedSize": 18171508
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-7bcf74a184dfe21b46fe65a5904a2a27.js",
+              "raw": 2547429,
+              "gzip": 566430,
+              "brotli": 491151
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        },
+        {
+          "slow": true,
+          "run": 2,
+          "homeUsableMs": 1118,
+          "homeProductsMs": 2917,
+          "shopMs": 851,
+          "blogMs": 2367,
+          "warmHomeMs": 64,
+          "startupJsWork": {
+            "ScriptDuration": 0.23519,
+            "TaskDuration": 0.449433
+          },
+          "jsWork": {
+            "ScriptDuration": 0.572607,
+            "TaskDuration": 1.066385,
+            "JSHeapUsedSize": 19818164
+          },
+          "initialScripts": [
+            {
+              "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+              "raw": 3962,
+              "gzip": 1708,
+              "brotli": 1624
+            },
+            {
+              "name": "__common-7bcf74a184dfe21b46fe65a5904a2a27.js",
+              "raw": 2547429,
+              "gzip": 566430,
+              "brotli": 491151
+            },
+            {
+              "name": "entry-88ba27493aa2379497d2043feac70bf7.js",
+              "raw": 1092359,
+              "gzip": 287610,
+              "brotli": 247349
+            },
+            {
+              "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+              "raw": 8122,
+              "gzip": 3315,
+              "brotli": 3100
+            },
+            {
+              "name": "_layout-1ed40b02d1ae50ebea298eed62aa65b8.js",
+              "raw": 23415,
+              "gzip": 8546,
+              "brotli": 8044
+            },
+            {
+              "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+              "raw": 26279,
+              "gzip": 9002,
+              "brotli": 8414
+            }
+          ],
+          "errors": []
+        }
+      ],
+      "medians": [
+        {
+          "slow": false,
+          "homeUsableMs": 1143,
+          "homeProductsMs": 1148,
+          "startupScriptMs": 302.916,
+          "startupTaskMs": 547.344,
+          "journeyScriptMs": 564.379,
+          "journeyTaskMs": 988.773
+        },
+        {
+          "slow": true,
+          "homeUsableMs": 1165,
+          "homeProductsMs": 2986,
+          "startupScriptMs": 254.116,
+          "startupTaskMs": 501.733,
+          "journeyScriptMs": 605.9010000000001,
+          "journeyTaskMs": 1157.6779999999999
+        }
+      ]
+    }
+  }
+}
