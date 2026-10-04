@@ -34,7 +34,7 @@ interface LifespanAudit {
  * Visible to all logged-in team members; silently hidden on auth error.
  */
 function UcCustomerCountCard() {
-  const { data, isLoading } = useQuery<{ count: number; newThisWeek: number; newThisMonth: number } | null>({
+  const { data, isLoading, isError } = useQuery<{ count: number; newThisWeek: number; newThisMonth: number } | null>({
     queryKey: ["uc-customers-count"],
     staleTime: 60 * 1000,
     queryFn: async () => {
@@ -45,6 +45,8 @@ function UcCustomerCountCard() {
       return res.json();
     },
   });
+
+  if (isError || (!isLoading && !data)) return null;
 
   return (
     <Card className="shadow-sm hover:shadow-md transition-shadow border-blue-500/20">

@@ -143,6 +143,43 @@ function renderWithLiveFetch() {
 }
 
 describe("Dashboard – registered customers", () => {
+  it.each([
+    { failure: "403 forbidden", status: 403 },
+    { failure: "500 server error", status: 500 },
+    { failure: "network error", status: null },
+  ])("hides the customer card after a $failure response", async ({ status }) => {
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/uc/admin/customers/count")) {
+        if (status === null) throw new Error("Network error");
+        return new Response(null, { status });
+      }
+      if (url.includes("/api/uc/admin/products/lifespan-audit")) {
+        return new Response(null, { status: 403 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <Dashboard />
+      </QueryClientProvider>,
+    );
+
+    // Do not let an assertion during loading pass before the request settles.
+    await waitFor(() => {
+      const state = qc.getQueryState(["uc-customers-count"]);
+      expect(state?.status).toBe(status === null ? "error" : "success");
+      expect(state?.fetchStatus).toBe("idle");
+      expect(state?.data).toBe(status === null ? undefined : null);
+      expect(screen.queryByText("Registered Customers")).not.toBeInTheDocument();
+      expect(screen.queryByText("UC Companion app sign-ups")).not.toBeInTheDocument();
+    });
+  });
+
   it("shows admin customer totals after a successful count response", async () => {
     vi.mocked(global.fetch).mockImplementation(async (input) => {
       const url = String(input);
