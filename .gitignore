@@ -61,3 +61,4 @@ artifacts/api-server/data/
 !.env.example
 artifacts/uc-companion/static-build/
 artifacts/uc-companion/forest-dist/
+.offline-filter-release/
