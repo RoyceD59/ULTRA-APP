@@ -70,7 +70,7 @@ after(async () => {
   if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-function send() {
+function send(messages: AiChatParams["messages"] = [{ role: "user", content: "Explain Aquazeta maintenance" }], existingTurnId?: string) {
   return fetch(`${baseUrl}/uc/ai/water-chat`, {
     method: "POST",
     headers: {
@@ -78,8 +78,8 @@ function send() {
       authorization: `Bearer ${issueToken({ id: 987654, email: "knowledge-test@example.test" })}`,
     },
     body: JSON.stringify({
-      conversationId: `${prefix}-conversation`, turnId: `${prefix}-turn-${++sequence}`,
-      messages: [{ role: "user", content: "Explain Aquazeta maintenance" }],
+      conversationId: `${prefix}-conversation`, turnId: existingTurnId ?? `${prefix}-turn-${++sequence}`,
+      messages,
     }),
   });
 }
@@ -188,6 +188,89 @@ test("live adapter reuses complete paging, PHP-notice parsing and rejects HTTP o
       assert.deepEqual(await freshLoader()(), { state: "unavailable", reason: "lookup_failed" });
     }
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test("customer response and stored transcript reject AI claims; HTTP replay rechecks current commerce", async () => {
+  const messages: AiChatParams["messages"] = [{ role: "user", content: "What is the Aquazeta price and availability?" }];
+  _catalogueClient.load = async () => ({
+    state: "available", checkedAt: new Date().toISOString(), currency: "KES",
+    products: [{ id: 941, name: "Aquazeta", price: "5200", priceKind: "listed", availability: null }],
+  });
+  let calls = 0;
+  _aiClient.create = async () => {
+    calls++;
+    return { content: [{ type: "text", text: 'It costs KES 12,345 and is available to order. [Aquazeta](product:101).<!--SUG:["Buy for USD 9?"]-->' }] };
+  };
+  const response = await send(messages);
+  assert.equal(response.status, 200);
+  const first = await response.json() as { reply: string; suggestions: string[] };
+  assert.match(first.reply, /product:941/);
+  assert.match(first.reply, /KES 5,200/);
+  assert.match(first.reply, /stock availability cannot be verified/);
+  assert.doesNotMatch(first.reply + JSON.stringify(first.suggestions), /12,345|product:101|USD|available to order/);
+  const turnId = `${prefix}-turn-${sequence}`;
+  const stored = await pool.query("SELECT assistant_message FROM uc_alison_turns WHERE conversation_id=$1 AND turn_id=$2",
+    [`${prefix}-conversation`, turnId]);
+  assert.equal(stored.rows[0].assistant_message, first.reply);
+  // Replay same HTTP identity after a store outage: no old commerce or second paid call.
+  _catalogueClient.load = async () => ({ state: "unavailable", reason: "lookup_failed" });
+  const replay = await send(messages, turnId);
+  assert.equal(replay.status, 200);
+  const second = await replay.json() as { reply: string };
+  assert.match(second.reply, /cannot verify current prices/);
+  assert.doesNotMatch(second.reply, /product:|5,200/);
+  assert.equal(calls, 1);
+});
+
+test("a concurrent historical writer cannot bypass the response guard", async () => {
+  _catalogueClient.load = async () => ({
+    state: "available", checkedAt: new Date().toISOString(), currency: "KES",
+    products: [{ id: 941, name: "Aquazeta", price: "5200", priceKind: "listed", availability: "onbackorder" }],
+  });
+  _aiClient.create = async () => {
+    await pool.query("INSERT INTO uc_alison_conversations (id) VALUES ($1) ON CONFLICT DO NOTHING", [`${prefix}-conversation`]);
+    await pool.query(`INSERT INTO uc_alison_turns (conversation_id,turn_id,user_message,assistant_message)
+      VALUES ($1,$2,'What is the Aquazeta price?','KES 12,345, in stock. [Aquazeta](product:101)')`,
+    [`${prefix}-conversation`, `${prefix}-turn-${sequence}`]);
+    return { content: [{ type: "text", text: "A different model answer" }] };
+  };
+  const response = await send([{ role: "user", content: "What is the Aquazeta price and stock?" }]);
+  assert.equal(response.status, 200);
+  const delivered = await response.json() as { reply: string; suggestions: string[] };
+  assert.match(delivered.reply, /product:941/);
+  assert.match(delivered.reply, /KES 5,200/);
+  assert.match(delivered.reply, /on backorder/);
+  assert.doesNotMatch(delivered.reply, /12,345|product:101|in stock/);
+  assert.deepEqual(delivered.suggestions, []);
+});
+
+test("HTTP delivery, persistence and replays preserve installation, cleaning, returns and recommendations", async () => {
+  _catalogueClient.load = async () => ({
+    state: "available", checkedAt: new Date().toISOString(), currency: "KES",
+    products: [{ id: 941, name: "Aquazeta", price: "5200", priceKind: "listed", availability: "instock" }],
+  });
+  const examples = [
+    { question: "In what order should I install Aquazeta cartridges?", answer: "First turn off the water, then follow the Aquazeta guide's cartridge installation sequence." },
+    { question: "How do I clean Aquazeta?", answer: "Rinse [Aquazeta](product:941) as the guide recommends before fitting the clean housing." },
+    { question: "My order arrived with a leaking Aquazeta filter. How do I request a return?", answer: "I'm sorry your filter is leaking. Open Orders, select the affected order, then choose Request a Return so the team can review it." },
+    { question: "Which filter suits my mains water?", answer: "The approved guide describes [Aquazeta](product:941) as an option for this use. Follow its installation guidance." },
+  ];
+  for (const example of examples) {
+    let calls = 0;
+    _aiClient.create = async () => { calls++; return { content: [{ type: "text", text: example.answer }] }; };
+    const messages: AiChatParams["messages"] = [{ role: "user", content: example.question }];
+    const response = await send(messages);
+    assert.equal(response.status, 200, example.question);
+    assert.equal((await response.json() as { reply: string }).reply, example.answer);
+    const turnId = `${prefix}-turn-${sequence}`;
+    const stored = await pool.query("SELECT assistant_message FROM uc_alison_turns WHERE conversation_id=$1 AND turn_id=$2",
+      [`${prefix}-conversation`, turnId]);
+    assert.equal(stored.rows[0].assistant_message, example.answer);
+    const replay = await send(messages, turnId);
+    assert.equal(replay.status, 200);
+    assert.equal((await replay.json() as { reply: string }).reply, example.answer);
+    assert.equal(calls, 1);
+  }
 });
 
 test("reference failure returns a clear 503 without calling AI or storing an invented answer", async () => {

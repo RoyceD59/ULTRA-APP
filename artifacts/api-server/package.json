@@ -9,7 +9,9 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/db/seed.ts",
-    "test": "node --import tsx/esm src/tests/run.ts"
+    "test": "node --import tsx/esm src/tests/run.ts",
+    "eval:alison-commerce": "node --import tsx/esm src/evals/alison-commerce.ts",
+    "eval:alison-commerce:replay": "node --import tsx/esm src/evals/alison-commerce-replay.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.56",
