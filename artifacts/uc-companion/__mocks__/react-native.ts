@@ -5,6 +5,9 @@ export const PixelRatio = { get: () => 1 };
 export const Text = 'Text';
 export const TouchableOpacity = 'TouchableOpacity';
 export const View = 'View';
+export const Modal = 'Modal';
+export const Switch = 'Switch';
+export const ActivityIndicator = 'ActivityIndicator';
 export const Linking = { openURL: async (_url: string): Promise<void> => {} };
 let colorScheme: 'light' | 'dark' = 'light';
 export function __setColorScheme(next: 'light' | 'dark'): void {
