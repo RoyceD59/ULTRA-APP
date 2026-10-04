@@ -350,35 +350,39 @@ export default function CheckoutScreen() {
     // createOrder / clearInterval after an await.
     let settled = false;
 
+    function timeOut() {
+      if (settled || isCancelledAttempt(thisAttempt, attemptRef)) return;
+      settled = true;
+      clearInterval(intervalId);
+      if (pollRef.current === intervalId) pollRef.current = null;
+      setMpesaWaiting(false);
+      setProcessing(false);
+      // lastCheckoutRequestIdRef is intentionally NOT cleared here — the
+      // push may still complete moments after the UI timeout. Keeping the
+      // ref means the next "Try again" will query it before sending a new
+      // push, preventing a double charge.
+      Alert.alert(
+        'M-Pesa Timed Out',
+        'M-Pesa confirmation timed out. You can try again or place your order with Cash on Delivery.',
+        [
+          { text: 'Try again', onPress: () => setShowMpesaModal(true) },
+          {
+            // Clear the stored ref only when the server accepts the switch.
+            text: 'Pay with COD instead',
+            onPress: () => { void changePaymentMethod('cod'); },
+            style: 'cancel',
+          },
+        ],
+      );
+    }
+
     const intervalId = setInterval(async () => {
       // Discard if a newer attempt has started (cancel, retry, or timeout).
       if (isCancelledAttempt(thisAttempt, attemptRef)) { clearInterval(intervalId); return; }
       if (settled) return;
       attempts++;
       if (attempts > 20) {
-        settled = true;
-        clearInterval(intervalId);
-        if (pollRef.current === intervalId) pollRef.current = null;
-        setMpesaWaiting(false);
-        setProcessing(false);
-        // lastCheckoutRequestIdRef is intentionally NOT cleared here — the
-        // push may still complete moments after the UI timeout.  Keeping the
-        // ref means the next "Try again" will query it before sending a new
-        // push, preventing a double charge.
-        Alert.alert(
-          'M-Pesa Timed Out',
-          'M-Pesa confirmation timed out. You can try again or place your order with Cash on Delivery.',
-          [
-            { text: 'Try again', onPress: () => setShowMpesaModal(true) },
-            {
-              // Customer is switching away from M-Pesa — clear the stored ref
-              // so a later return to M-Pesa doesn't query a stale push.
-              text: 'Pay with COD instead',
-              onPress: () => { void changePaymentMethod('cod'); },
-              style: 'cancel',
-            },
-          ],
-        );
+        timeOut();
         return;
       }
       try {
@@ -427,6 +431,9 @@ export default function CheckoutScreen() {
         }
         // action.kind === 'continue_polling' → keep the interval running
       } catch { /* transient network error — keep polling */ }
+      // Dismiss after the twentieth status check, not an extra interval later.
+      // A slow, overlapping request still uses the pre-await timeout above.
+      if (attempts >= 20) timeOut();
     }, 3000);
     pollRef.current = intervalId;
   }
