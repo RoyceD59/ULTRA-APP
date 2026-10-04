@@ -30,3 +30,9 @@ description: Failure modes to check after several task agents merge into main at
 **Why:** These regressions survived integration onto main even though the independently frozen release package still passed. Package checks did not establish current-source correctness.
 
 **How to apply:** Verify current-source typechecks after synchronization and execute a preview-startup regression that fails on any scheduler, worker or settlement timer. Keep frozen-package and merged-source results distinct.
+
+**Rule — extracted-handler test scopes:** When a test executes handlers extracted from current source, synchronize its injected scope with newly merged dependencies before accepting an earlier passing result.
+
+**Why:** A concurrent checkout change added a ref read after a test run had passed. The missing injected ref then threw inside a production catch, appearing as an ordinary payment refusal rather than an obvious harness error.
+
+**How to apply:** After source synchronization, rerun extracted-handler tests and ensure success scenarios reach their final state and downstream action assertions; caught harness errors must not count as expected provider failures.
