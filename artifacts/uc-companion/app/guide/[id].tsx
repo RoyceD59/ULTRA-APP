@@ -14,6 +14,9 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchPublishedGuide } from '@/lib/guideContent';
 import { resolveMediaUrl } from '@/hooks/useApi';
 import { trackEvent } from '@/lib/analytics';
+import GuideLanguageToggle from '@/components/GuideLanguageToggle';
+import { useGuideLanguage } from '@/hooks/useGuideLanguage';
+import { localizeGuide } from '@/lib/guideLanguage';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -367,6 +370,7 @@ export default function GuideDetailScreen() {
   const { id }  = useLocalSearchParams<{ id: string }>();
   const router  = useRouter();
   const colors  = useColors();
+  const { language } = useGuideLanguage();
   const guidesQuery = useQuery({
     queryKey: ['companion', 'guide', id],
     queryFn: () => fetchPublishedGuide(String(id)),
@@ -374,7 +378,7 @@ export default function GuideDetailScreen() {
     staleTime: 30_000,
     refetchInterval: 30_000,
   });
-  const guide = guidesQuery.data;
+  const guide = guidesQuery.data ? localizeGuide(guidesQuery.data, language) : undefined;
   useEffect(() => {
     if (guide) trackEvent('guide_opened', { guideId: guide.id });
   }, [guide?.id]);
@@ -420,6 +424,7 @@ export default function GuideDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: Platform.OS === 'web' ? 40 : 80 }]}
         showsVerticalScrollIndicator={false}
       >
+        <GuideLanguageToggle />
         {/* Hero */}
         <View style={[styles.hero, { backgroundColor: colors.primaryLight }]}>
           <View style={styles.heroRow}>
