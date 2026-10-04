@@ -460,7 +460,7 @@ export function useApi() {
 
   const throwResponseError = useCallback(async (res: Response): Promise<never> => {
     const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-    await handleRejectedSessionResponse(res.status, token);
+    await handleRejectedSessionResponse(res.status, token, body);
     throw new ApiError(String(body['error'] ?? res.status), res.status, body);
   }, [token]);
 
@@ -539,7 +539,7 @@ export function useApi() {
       try { return await getHydrateCustomerTree({ headers: authHeaders() }); }
       catch (error) {
         const status = (error as { status?: number })?.status;
-        if (status) await handleRejectedSessionResponse(status, token);
+        if (status) await handleRejectedSessionResponse(status, token, (error as { data?: unknown })?.data);
         throw error;
       }
     },

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { registerCurrentPushToken, unregisterPushToken } from '@/hooks/useNotifications';
 import { authErrorMessage, companionLoginError } from '@/hooks/rateLimitAlert';
-import { setRejectedSessionHandler } from '@/hooks/deletedAccountResponse';
+import { handleRejectedSessionResponse, setRejectedSessionHandler } from '@/hooks/deletedAccountResponse';
+import { setErrorResponseHandler } from '@workspace/api-client-react/config';
 import {
   clearPersistedSession,
   loadPersistedSession,
@@ -129,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (sessionVersion.current === hydrationVersion) await clearPersistedSession();
             });
           } else {
+            tokenRef.current = session.token;
             setToken(session.token);
             setUser(hydratedUser);
             // Re-register push token on every cold start (token may have rotated)
@@ -159,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await persistSession(session);
     });
     if (sessionVersion.current !== operation) return false;
+    tokenRef.current = session.token;
     setToken(session.token);
     setUser(session.user as unknown as UCUser);
     setSessionNotice(null);
@@ -305,10 +308,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleRejectedSession = useCallback(async (rejectedToken?: string) => {
     // A slow response from an old request must not clear a newer login.
-    if (rejectedToken && tokenRef.current !== rejectedToken) {
+    if (!tokenRef.current || (rejectedToken && tokenRef.current !== rejectedToken)) {
       return;
     }
     const operation = ++sessionVersion.current;
+    // Invalidate synchronously: concurrent failures can arrive before React
+    // commits the cleared state. Only the first may enqueue storage cleanup.
+    tokenRef.current = null;
     setSessionNotice('Your session has expired. Please sign in again.');
     // Drop memory state first so mounted queries stop issuing authenticated
     // requests while durable credentials are being removed.
@@ -323,6 +329,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => setRejectedSessionHandler(handleRejectedSession),
     [handleRejectedSession],
   );
+
+  useEffect(() => setErrorResponseHandler(async ({ status, data, url, bearerToken }) => {
+    // Only Companion endpoints use this response contract. Keep ProjectHub
+    // and other consumers of the shared client unchanged.
+    const path = new URL(url, 'https://companion.invalid').pathname;
+    if (path.startsWith('/api/uc/')) {
+      await handleRejectedSessionResponse(status, bearerToken, data);
+    }
+  }), []);
 
   useEffect(() => {
     if (!user?.mustChangePassword || !user.temporaryPasswordExpiresAt) return;

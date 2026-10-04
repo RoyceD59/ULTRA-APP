@@ -374,7 +374,7 @@ export async function registerCurrentPushToken(
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        await handleRejectedSessionResponse(res.status, authToken);
+        await handleRejectedSessionResponse(res.status, authToken, body);
         return false;
       }
       await AsyncStorage.setItem(REGISTERED_PUSH_TOKEN_KEY, current);
@@ -408,7 +408,7 @@ export async function unregisterPushToken(authToken: string): Promise<void> {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        await handleRejectedSessionResponse(res.status, authToken);
+        await handleRejectedSessionResponse(res.status, authToken, body);
       }
     } catch { /* non-critical — silently ignore */ }
   });
@@ -512,7 +512,7 @@ export async function syncReminderToServer(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      await handleRejectedSessionResponse(res.status, token);
+      await handleRejectedSessionResponse(res.status, token, body);
     }
   } catch {
     /* non-critical — the next sync (register / clear / prefs visit) retries */

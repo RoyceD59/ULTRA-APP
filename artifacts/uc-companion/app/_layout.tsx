@@ -18,6 +18,7 @@ import { getApiBase } from '@/lib/apiBase';
 import { webAnalyticsLoader } from '@/lib/umamiWeb';
 import { initializeCompanionFieldVitals } from '@/lib/companionFieldVitals';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
+import { retrySessionRequest } from '@/hooks/deletedAccountResponse';
 import { cartBackDestination } from '@/lib/customerScreenState';
 import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
 import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
@@ -50,7 +51,7 @@ const queryClient = new QueryClient({
       ...recoveryDefaults.queries,
       staleTime: 2 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
-      retry: 1,
+      retry: retrySessionRequest,
       refetchOnWindowFocus: 'always',
       refetchOnReconnect: 'always',
       refetchInterval: query => sharedDataRefreshInterval(query.queryKey),

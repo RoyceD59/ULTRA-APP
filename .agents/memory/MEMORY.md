@@ -77,3 +77,4 @@
 - [Recovery order enrichment](recovery-order-enrichment-policy.md) — staff dispatch preparation is not account ownership, payment confirmation or a customer delivery notification.
 - [Shared library typecheck freshness](shared-library-typecheck-freshness.md) — refresh referenced declarations before treating missing consumer exports or DB fields as source defects.
 - [Account-scoped async effects](account-scoped-async-effects.md) — callback churn must not invalidate pending account work; cancellation must release any deduplication marker.
+- [Companion session rejection](companion-session-rejection.md) — exact forced-sign-out contracts only; preserve request-token provenance and synchronous duplicate protection.
