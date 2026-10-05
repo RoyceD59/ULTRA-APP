@@ -34,7 +34,8 @@ function text(tree: any): string {
 const roots: Array<{ dispose(): void }> = [];
 afterEach(() => { roots.splice(0).forEach(root => root.dispose()); });
 const brief = 'Hydrate the Future™ receives 3% of eligible paid purchases, split equally between tree growing in our community and clean-water access. Logged refills do not add funding.';
-const data = { totalUsers: 2, litresFiltered: 450, plasticsAvoided: 900, cleanWaterDays: 0 };
+const data = { totalUsers: 2, litresFiltered: 450, plasticsAvoided: 900, cleanWaterDays: 0,
+  snapshotId: 'a'.repeat(64), calculatedAt: '2026-10-05T00:00:00Z' };
 
 for (const [name, state] of Object.entries({
   loaded: { data, isPending: false, isError: false },
@@ -44,7 +45,8 @@ for (const [name, state] of Object.entries({
 })) {
   test(`programme policy and anonymous forest remain available: ${name}`, () => {
     let retries = 0;
-    impact.configure({ ...state, isFetching: false, refetch() { retries++; } });
+    impact.configure({ ...state, freshness: state.isError ? (state.data ? 'STALE' : 'UNAVAILABLE') : state.data ? 'CURRENT' : 'LOADING',
+      dataUpdatedAt: Date.now(), isFetching: false, refetch() { retries++; } });
     const root = __testRender(() => ({ props: { value: ImpactBubble() } }), {});
     roots.push(root);
     const all = nodes(root.value);
@@ -62,7 +64,7 @@ for (const [name, state] of Object.entries({
     assert.equal(programme.props.children[1].props.numberOfLines, undefined);
     assert.equal(programme.props.children[1].props.maxFontSizeMultiplier, undefined);
     if (state.isError) {
-      assert.match(text(root.value), state.data ? /Showing last received figures/ : /Global impact is unavailable/);
+      assert.match(text(root.value), state.data ? /Last-known figures/ : /Global impact is unavailable/);
       all.find(n => n.props?.testID === 'global-impact-retry').props.onPress();
       assert.equal(retries, 1);
     }

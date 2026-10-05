@@ -1,0 +1,4 @@
+{
+  "native": [],
+  "note": "No verified store distribution is approved. Add platform/runtime/version/release/updateUrl only after separate native distribution approval and destination verification. OTA remains disabled."
+}

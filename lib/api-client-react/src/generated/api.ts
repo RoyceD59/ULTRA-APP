@@ -105,6 +105,9 @@ import type {
   GetUcCheckoutDiagnostics200,
   GetUcCheckoutDiagnosticsParams,
   GetUcLocationRatingAggregateParams,
+  GlobalImpactAdjustmentInput,
+  GlobalImpactAdjustmentResult,
+  GlobalImpactSnapshot,
   HealthStatus,
   HydrateCustomerTree,
   HydrateForestTotals,
@@ -288,6 +291,154 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getReadGlobalImpactUrl = () => {
+
+
+
+
+  return `/api/uc/impact`
+}
+
+/**
+ * @summary Read account-independent global impact from one database snapshot
+ */
+export const readGlobalImpact = async ( options?: RequestInit): Promise<GlobalImpactSnapshot> => {
+
+  return customFetch<GlobalImpactSnapshot>(getReadGlobalImpactUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getReadGlobalImpactQueryKey = () => {
+    return [
+    `/api/uc/impact`
+    ] as const;
+    }
+
+
+export const getReadGlobalImpactQueryOptions = <TData = Awaited<ReturnType<typeof readGlobalImpact>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readGlobalImpact>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getReadGlobalImpactQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readGlobalImpact>>> = ({ signal }) => readGlobalImpact({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readGlobalImpact>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ReadGlobalImpactQueryResult = NonNullable<Awaited<ReturnType<typeof readGlobalImpact>>>
+export type ReadGlobalImpactQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read account-independent global impact from one database snapshot
+ */
+
+export function useReadGlobalImpact<TData = Awaited<ReturnType<typeof readGlobalImpact>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readGlobalImpact>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getReadGlobalImpactQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveGlobalImpactAdjustmentUrl = () => {
+
+
+
+
+  return `/api/uc/impact/override`
+}
+
+/**
+ * @summary Save shared adjustments with live impact edit authorization and optional revision precondition
+ */
+export const saveGlobalImpactAdjustment = async (globalImpactAdjustmentInput: GlobalImpactAdjustmentInput, options?: RequestInit): Promise<GlobalImpactAdjustmentResult> => {
+
+  return customFetch<GlobalImpactAdjustmentResult>(getSaveGlobalImpactAdjustmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(globalImpactAdjustmentInput)
+  }
+);}
+
+
+
+
+
+export const getSaveGlobalImpactAdjustmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveGlobalImpactAdjustment>>, TError,{data: BodyType<GlobalImpactAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveGlobalImpactAdjustment>>, TError,{data: BodyType<GlobalImpactAdjustmentInput>}, TContext> => {
+
+const mutationKey = ['saveGlobalImpactAdjustment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveGlobalImpactAdjustment>>, {data: BodyType<GlobalImpactAdjustmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveGlobalImpactAdjustment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveGlobalImpactAdjustmentMutationResult = NonNullable<Awaited<ReturnType<typeof saveGlobalImpactAdjustment>>>
+    export type SaveGlobalImpactAdjustmentMutationBody = BodyType<GlobalImpactAdjustmentInput>
+    export type SaveGlobalImpactAdjustmentMutationError = ErrorType<void>
+
+    /**
+ * @summary Save shared adjustments with live impact edit authorization and optional revision precondition
+ */
+export const useSaveGlobalImpactAdjustment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveGlobalImpactAdjustment>>, TError,{data: BodyType<GlobalImpactAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveGlobalImpactAdjustment>>,
+        TError,
+        {data: BodyType<GlobalImpactAdjustmentInput>},
+        TContext
+      > => {
+      return useMutation(getSaveGlobalImpactAdjustmentMutationOptions(options));
+    }
 
 export const getRegisterUcContactAccountUrl = () => {
 

@@ -10,6 +10,76 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Read account-independent global impact from one database snapshot
+ */
+export const readGlobalImpactResponseTotalUsersMin = 0;
+
+export const readGlobalImpactResponseLitresFilteredMin = 0;
+
+export const readGlobalImpactResponsePlasticsAvoidedMin = 0;
+
+export const readGlobalImpactResponseCleanWaterDaysMin = 0;
+
+export const readGlobalImpactResponseSnapshotIdRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+
+export const ReadGlobalImpactResponse = zod.object({
+  "totalUsers": zod.number().min(readGlobalImpactResponseTotalUsersMin),
+  "litresFiltered": zod.number().min(readGlobalImpactResponseLitresFilteredMin),
+  "plasticsAvoided": zod.number().min(readGlobalImpactResponsePlasticsAvoidedMin),
+  "cleanWaterDays": zod.number().min(readGlobalImpactResponseCleanWaterDaysMin),
+  "snapshotId": zod.string().regex(readGlobalImpactResponseSnapshotIdRegExp),
+  "calculatedAt": zod.string(),
+  "lastUpdated": zod.string(),
+  "adjustmentRevision": zod.number().min(1),
+  "maxAgeSeconds": zod.literal(60),
+  "lifespanAvailable": zod.boolean(),
+  "autoStats": zod.object({
+  "totalUsers": zod.number(),
+  "litresFiltered": zod.number(),
+  "cleanWaterDays": zod.number()
+}),
+  "offlineStats": zod.object({
+  "clientCount": zod.number(),
+  "litresFiltered": zod.number()
+}),
+  "override": zod.object({
+  "litresOffset": zod.number(),
+  "usersOffset": zod.number(),
+  "lastUpdatedBy": zod.string(),
+  "lastUpdatedAt": zod.string(),
+  "revision": zod.number().optional()
+})
+})
+
+
+/**
+ * @summary Save shared adjustments with live impact edit authorization and optional revision precondition
+ */
+export const saveGlobalImpactAdjustmentBodyExpectedRevisionMin = 0;
+
+
+
+export const SaveGlobalImpactAdjustmentBody = zod.object({
+  "litresOffset": zod.number().optional(),
+  "usersOffset": zod.number().optional(),
+  "expectedRevision": zod.number().min(saveGlobalImpactAdjustmentBodyExpectedRevisionMin).optional()
+})
+
+export const SaveGlobalImpactAdjustmentResponse = zod.object({
+  "ok": zod.boolean(),
+  "override": zod.object({
+  "litresOffset": zod.number(),
+  "usersOffset": zod.number(),
+  "lastUpdatedBy": zod.string(),
+  "lastUpdatedAt": zod.string(),
+  "revision": zod.number().optional()
+})
+})
+
+
+/**
  * @summary Create an account with required normalized phone and contact address
  */
 export const registerUcContactAccountBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');

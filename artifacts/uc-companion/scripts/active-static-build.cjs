@@ -7,6 +7,17 @@ function hasWebEntry(buildRoot) {
     || fs.existsSync(path.join(buildRoot, '_expo/static/js/web/bundle.js'));
 }
 
+function validateReleaseInfo(info, buildId) {
+  if (info.buildId !== buildId) throw new Error('Build metadata does not match release');
+  // Legacy metadata predates advisory supported-release checks.
+  if (info.supported && (info.supported.web !== buildId || info.supported.expoGo !== buildId)) {
+    throw new Error('Supported browser and Expo Go releases do not match selected build');
+  }
+  if (info.production && info.apiOrigin !== 'https://api.ucfilters.com') {
+    throw new Error('Selected production build has an unapproved API origin');
+  }
+}
+
 function stagePlatformManifest(projectRoot, buildId, platform, manifest) {
   if (!/^\d+-\d+$/.test(buildId) || !['ios', 'android'].includes(platform)
       || manifest.launchAsset?.key !== `bundle-${buildId}`) {
@@ -26,6 +37,7 @@ function readActiveBuild(staticRoot) {
   }
   const root = path.join(staticRoot, buildId);
   const info = JSON.parse(fs.readFileSync(path.join(root, 'build-info.json'), 'utf8'));
+  validateReleaseInfo(info, buildId);
   if (info.buildId !== buildId || !hasWebEntry(root)) {
     throw new Error('Active Companion build is incomplete');
   }
@@ -38,7 +50,7 @@ function activateStaticBuild(projectRoot, buildId) {
   if (!/^\d+-\d+$/.test(buildId)) throw new Error('Invalid Companion build ID');
   const buildRoot = path.join(staticRoot, buildId);
   const info = JSON.parse(fs.readFileSync(path.join(buildRoot, 'build-info.json'), 'utf8'));
-  if (info.buildId !== buildId) throw new Error('Build metadata does not match release');
+  validateReleaseInfo(info, buildId);
   if (!hasWebEntry(buildRoot)) throw new Error('Incomplete web build');
   for (const platform of ['ios', 'android']) {
     if (!fs.existsSync(path.join(buildRoot, '_expo/static/js', platform, 'bundle.js'))) {

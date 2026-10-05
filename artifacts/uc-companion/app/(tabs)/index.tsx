@@ -10,6 +10,7 @@ import { useApi, type UCPromotion } from '@/hooks/useApi';
 import ProductCard from '@/components/ProductCard';
 import TrustBadges from '@/components/TrustBadges';
 import ImpactBubble from '@/components/ImpactBubble';
+import ReleaseStatus from '@/components/ReleaseStatus';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
 import { useFilterStatus } from '@/hooks/useFilterStatus';
@@ -269,6 +270,7 @@ function HomeScreenContent() {
 
         {/* UC Impact */}
         <ImpactBubble />
+        <ReleaseStatus />
         <TouchableOpacity accessibilityRole="link" testID="home-about-us"
           onPress={() => router.push('/about' as never)} style={styles.statusAction}>
           <Text style={{ color: colors.primary, fontSize: 13, textDecorationLine: 'underline' }}>About Ultra Clear</Text>

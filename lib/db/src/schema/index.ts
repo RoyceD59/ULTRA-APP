@@ -1,4 +1,5 @@
 export * from "./runtime-observability";
+export * from "./uc-global-impact";
 export * from "./uc-daily-hydration";
 // Export your models here. Add one export per file
 // export * from "./posts";

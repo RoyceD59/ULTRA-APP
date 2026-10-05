@@ -67,6 +67,10 @@ interface OfflineClient {
 }
 
 interface ImpactData {
+  snapshotId: string;
+  calculatedAt: string;
+  adjustmentRevision: number;
+  maxAgeSeconds: number;
   totalUsers:      number;
   litresFiltered:  number;
   plasticsAvoided: number;
@@ -474,6 +478,7 @@ export default function ImpactPage() {
   if (!token) return <LoginGate onToken={handleToken} teamDenied={teamDenied} />;
   return (
     <ImpactDashboard
+      key={token}
       token={token}
       onSignOut={handleSignOut}
       isReadOnly={isReadOnly}
@@ -499,6 +504,12 @@ export function ImpactDashboard({
   const [clients, setClients] = useState<OfflineClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
+  const [receivedAt, setReceivedAt] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [online, setOnline] = useState(navigator.onLine);
+  const mounted = useRef(true);
+  const globalRequest = useRef(0);
+  const [formRevision, setFormRevision] = useState<number | undefined>();
   const [permissionMessage, setPermissionMessage] = useState('');
 
   // Registered app-user count — fetched with the team session token (if present).
@@ -552,11 +563,12 @@ export function ImpactDashboard({
   const load = useCallback(async () => {
     if (loadRef.current) return;
     loadRef.current = true;
+    const request = ++globalRequest.current;
     setLoading(true); setError('');
     try {
       const hdrs = { Authorization: `Bearer ${token}` };
       const [impactRes, clientsRes] = await Promise.all([
-        fetch(`${BASE}/api/uc/impact`),
+        fetch(`${BASE}/api/uc/impact`, { cache: 'no-store', signal: AbortSignal.timeout(15_000) }),
         fetch(`${BASE}/api/uc/offline-clients`, { headers: hdrs }),
       ]);
       if (impactRes.status === 401 || clientsRes.status === 401) { onSignOut(); return; }
@@ -564,21 +576,54 @@ export function ImpactDashboard({
       if (!clientsRes.ok) throw new Error(`Clients API: ${clientsRes.status}`);
       const d = await impactRes.json()  as ImpactData;
       const c = await clientsRes.json() as { clients: OfflineClient[] };
+      if (!mounted.current || request !== globalRequest.current) return;
+      if (!d.snapshotId || !Number.isFinite(Date.parse(d.calculatedAt))) throw new Error('Impact snapshot cannot be verified. Update the API before using these figures.');
       setData(d);
+      setReceivedAt(Date.now());
       setClients(c.clients);
       setLitresOffset(String(d.override.litresOffset));
       setUsersOffset(String(d.override.usersOffset));
+      setFormRevision(d.adjustmentRevision);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load. Is the API server running?');
+      if (mounted.current && request === globalRequest.current) setError(e instanceof Error ? e.message : 'Failed to load. Is the API server running?');
     } finally {
       setLoading(false);
       loadRef.current = false;
     }
   }, [token, onSignOut]);
 
-  const refresh = useCallback(async () => { loadRef.current = false; await load(); }, [load]);
+  const refresh = useCallback(async () => { await load(); }, [load]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    mounted.current = true;
+    const refreshGlobal = async () => {
+      if (loadRef.current || document.visibilityState === 'hidden' || !navigator.onLine) return;
+      const request = ++globalRequest.current;
+      try {
+        const response = await fetch(`${BASE}/api/uc/impact`, { cache: 'no-store', signal: AbortSignal.timeout(15_000) });
+        if (!response.ok) throw new Error('Global refresh failed');
+        const snapshot = await response.json() as ImpactData;
+        if (!snapshot.snapshotId || !Number.isFinite(Date.parse(snapshot.calculatedAt))) throw new Error('Impact snapshot cannot be verified');
+        if (mounted.current && request === globalRequest.current) { setData(snapshot); setReceivedAt(Date.now()); setError(''); }
+        // Never overwrite an open adjustment form during background refresh.
+      } catch (e) { if (mounted.current && request === globalRequest.current) setError(e instanceof Error ? e.message : 'Global refresh failed'); }
+    };
+    const reconnect = () => { setOnline(navigator.onLine); if (navigator.onLine) void refreshGlobal(); };
+    const focus = () => { void refreshGlobal(); };
+    const clock = setInterval(() => setNow(Date.now()), 5_000);
+    const poll = setInterval(refreshGlobal, 60_000);
+    window.addEventListener('online', reconnect);
+    window.addEventListener('offline', reconnect);
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', focus);
+    return () => {
+      mounted.current = false;
+      clearInterval(clock); clearInterval(poll);
+      window.removeEventListener('online', reconnect); window.removeEventListener('offline', reconnect);
+      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus);
+    };
+  }, []);
 
   async function handleLostEditAccess() {
     setDialogOpen(false);
@@ -599,10 +644,14 @@ export function ImpactDashboard({
     try {
       const litres = parseFloat(litresOffset) || 0;
       const users  = parseFloat(usersOffset)  || 0;
+      if (!data || !Number.isSafeInteger(formRevision) || !litresOffset.trim() || !usersOffset.trim()
+          || !Number.isFinite(Number(litresOffset)) || !Number.isFinite(Number(usersOffset))) {
+        throw new Error('Load a verified snapshot and enter both adjustments before saving. Missing historical data must be explicitly imported by the team.');
+      }
       const res = await fetch(`${BASE}/api/uc/impact/override`, {
         method:  'POST',
         headers: authHeaders(token),
-        body:    JSON.stringify({ litresOffset: litres, usersOffset: users, updatedBy: 'admin' }),
+        body:    JSON.stringify({ litresOffset: litres, usersOffset: users, expectedRevision: formRevision }),
       });
       const responseError = await res.clone().json().catch(() => ({})) as { code?: string };
       if (res.status === 403 && responseError.code === 'IMPACT_EDIT_ACCESS_REQUIRED') {
@@ -795,6 +844,10 @@ export function ImpactDashboard({
       </div>
 
       {/* Error banner */}
+      <p role="status" className="text-sm text-muted-foreground">
+        {!data ? (loading ? 'Loading global figures…' : 'Global figures unavailable — use Refresh to retry.')
+          : `${error || !online || now - receivedAt >= 60_000 ? 'STALE — last-known figures, not current' : 'Current global snapshot'} · Last successful refresh: ${new Date(receivedAt).toLocaleString()} · Snapshot ${data.snapshotId.slice(0, 12)} · Calculated ${new Date(data.calculatedAt).toLocaleString()}`}
+      </p>
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1089,7 +1142,7 @@ export function ImpactDashboard({
               <>
                 {legacyError && <p className="text-sm text-destructive">{legacyError}</p>}
                 {legacyMsg   && <p className="text-sm text-green-600">{legacyMsg}</p>}
-                <Button onClick={saveLegacyOffset} disabled={legacySaving} size="sm" className="gap-2">
+                <Button onClick={saveLegacyOffset} disabled={legacySaving || !data} size="sm" className="gap-2">
                   <Save className="w-4 h-4" />
                   {legacySaving ? 'Saving…' : 'Save bulk adjustment'}
                 </Button>

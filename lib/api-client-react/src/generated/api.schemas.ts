@@ -5,6 +5,66 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type GlobalImpactSnapshotMaxAgeSeconds = typeof GlobalImpactSnapshotMaxAgeSeconds[keyof typeof GlobalImpactSnapshotMaxAgeSeconds];
+
+
+export const GlobalImpactSnapshotMaxAgeSeconds = {
+  NUMBER_60: 60,
+} as const;
+
+export type GlobalImpactSnapshotAutoStats = {
+  totalUsers: number;
+  litresFiltered: number;
+  cleanWaterDays: number;
+};
+
+export type GlobalImpactSnapshotOfflineStats = {
+  clientCount: number;
+  litresFiltered: number;
+};
+
+export interface GlobalImpactAdjustment {
+  litresOffset: number;
+  usersOffset: number;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string;
+  revision?: number;
+}
+
+export interface GlobalImpactSnapshot {
+  /** @minimum 0 */
+  totalUsers: number;
+  /** @minimum 0 */
+  litresFiltered: number;
+  /** @minimum 0 */
+  plasticsAvoided: number;
+  /** @minimum 0 */
+  cleanWaterDays: number;
+  /** @pattern ^[a-f0-9]{64}$ */
+  snapshotId: string;
+  calculatedAt: string;
+  lastUpdated: string;
+  /** @minimum 1 */
+  adjustmentRevision: number;
+  maxAgeSeconds: GlobalImpactSnapshotMaxAgeSeconds;
+  lifespanAvailable: boolean;
+  autoStats: GlobalImpactSnapshotAutoStats;
+  offlineStats: GlobalImpactSnapshotOfflineStats;
+  override: GlobalImpactAdjustment;
+}
+
+export interface GlobalImpactAdjustmentInput {
+  litresOffset?: number;
+  usersOffset?: number;
+  /** @minimum 0 */
+  expectedRevision?: number;
+}
+
+export interface GlobalImpactAdjustmentResult {
+  ok: boolean;
+  override: GlobalImpactAdjustment;
+}
+
 export interface RewardsQrCandidate {
   /**
      * @nullable

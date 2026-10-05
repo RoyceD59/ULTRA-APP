@@ -43,6 +43,43 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/impact:
+    get:
+      operationId: readGlobalImpact
+      tags: [customer-lifecycle]
+      summary: Read account-independent global impact from one database snapshot
+      responses:
+        "200":
+          description: Calculated snapshot; identity excludes receipt time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalImpactSnapshot"
+        "503":
+          description: Authoritative adjustments or aggregate unavailable; never fabricated totals
+  /uc/impact/override:
+    post:
+      operationId: saveGlobalImpactAdjustment
+      tags: [customer-lifecycle]
+      summary: Save shared adjustments with live impact edit authorization and optional revision precondition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalImpactAdjustmentInput"
+      responses:
+        "200":
+          description: Adjustment committed and audited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalImpactAdjustmentResult"
+        "400": { description: Invalid adjustment }
+        "401": { description: Authentication required }
+        "403": { description: Live edit permission required }
+        "409": { description: Revision conflict or incomplete initialization }
+        "503": { description: Could not save adjustment }
   /uc/auth/register:
     post:
       operationId: registerUcContactAccount
@@ -4008,6 +4045,57 @@ components:
       bearerFormat: opaque
 
   schemas:
+    GlobalImpactSnapshot:
+      type: object
+      required: [totalUsers, litresFiltered, plasticsAvoided, cleanWaterDays, snapshotId, calculatedAt, adjustmentRevision, maxAgeSeconds, lifespanAvailable, autoStats, offlineStats, override, lastUpdated]
+      properties:
+        totalUsers: { type: number, minimum: 0 }
+        litresFiltered: { type: number, minimum: 0 }
+        plasticsAvoided: { type: number, minimum: 0 }
+        cleanWaterDays: { type: number, minimum: 0 }
+        snapshotId: { type: string, pattern: "^[a-f0-9]{64}$" }
+        calculatedAt: { type: string }
+        lastUpdated: { type: string }
+        adjustmentRevision: { type: integer, minimum: 1 }
+        maxAgeSeconds: { type: integer, enum: [60] }
+        lifespanAvailable: { type: boolean }
+        autoStats:
+          type: object
+          required: [totalUsers, litresFiltered, cleanWaterDays]
+          properties:
+            totalUsers: { type: number }
+            litresFiltered: { type: number }
+            cleanWaterDays: { type: number }
+        offlineStats:
+          type: object
+          required: [clientCount, litresFiltered]
+          properties:
+            clientCount: { type: number }
+            litresFiltered: { type: number }
+        override:
+          $ref: "#/components/schemas/GlobalImpactAdjustment"
+    GlobalImpactAdjustment:
+      type: object
+      required: [litresOffset, usersOffset, lastUpdatedBy, lastUpdatedAt]
+      properties:
+        litresOffset: { type: number }
+        usersOffset: { type: number }
+        lastUpdatedBy: { type: string }
+        lastUpdatedAt: { type: string }
+        revision: { type: integer }
+    GlobalImpactAdjustmentInput:
+      type: object
+      properties:
+        litresOffset: { type: number }
+        usersOffset: { type: number }
+        expectedRevision: { type: integer, minimum: 0 }
+    GlobalImpactAdjustmentResult:
+      type: object
+      required: [ok, override]
+      properties:
+        ok: { type: boolean }
+        override:
+          $ref: "#/components/schemas/GlobalImpactAdjustment"
     RewardsQrCandidate:
       type: object
       required: [qrToken]

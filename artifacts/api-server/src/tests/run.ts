@@ -264,6 +264,9 @@ try {
   await reviewMigrationDb.query(await readFile(
     new URL("../../../../lib/db/migrations/0065_runtime_observability.sql", import.meta.url), "utf8",
   ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0067_uc_global_impact.sql", import.meta.url), "utf8",
+  ));
 } finally { await reviewMigrationDb.end(); }
 
 console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);

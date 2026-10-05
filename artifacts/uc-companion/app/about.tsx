@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import ImpactBubble from '@/components/ImpactBubble';
+import ReleaseStatus from '@/components/ReleaseStatus';
 import ForestLink from '@/components/ForestLink';
 import AboutSocialLinks from '@/components/AboutSocialLinks';
 import publicPages from '@/data/public-pages.json';
@@ -31,6 +32,7 @@ export default function AboutScreen() {
       </View>
 
       <View style={styles.body}>
+        <ReleaseStatus />
         <View style={styles.block}>
           <Text {...headingProps(2)} style={[styles.h2, { color: colors.text }]}>What the app is for</Text>
           <Text style={[styles.p, { color: colors.mutedForeground }]}>

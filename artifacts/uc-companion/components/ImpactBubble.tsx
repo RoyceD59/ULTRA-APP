@@ -56,21 +56,19 @@ function fmt(n: number): string {
 interface StatBubbleProps {
   icon:    keyof typeof Ionicons.glyphMap;
   color:   string;
-  value:   number;
+  value:   number | null;
   label:   string;
   unit?:   string;
 }
 
 function StatBubble({ icon, color, value, label, unit }: StatBubbleProps) {
-  const animated = useCountUp(value);
-
   return (
     <View style={styles.statBubble}>
       <View style={[styles.statIcon, { backgroundColor: color + '22' }]}>
         <Ionicons name={icon} size={22} color={color} />
       </View>
       <Text style={styles.statValue}>
-        {fmt(animated)}
+        {value === null ? '—' : fmt(value)}
         {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
       </Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -102,7 +100,7 @@ function PulseDot() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ImpactBubble() {
-  const { data: stats, isError, isPending, isFetching, refetch } = useGlobalImpact();
+  const { data: stats, isPending, isFetching, refetch, freshness, dataUpdatedAt } = useGlobalImpact();
 
   return (
     <View testID="global-uc-impact" style={[styles.card, { backgroundColor: '#003F6E', borderColor: '#005d8f' }]}>
@@ -111,8 +109,7 @@ export default function ImpactBubble() {
         <Ionicons name="leaf" size={16} color="#4ade80" />
         <Text style={styles.headerText}>Ultra-Clear Impact</Text>
         <View style={styles.liveChip}>
-          {!!stats && !isError && <PulseDot />}
-          <Text style={styles.liveText}>{isError ? 'UNAVAILABLE' : stats ? 'LIVE' : 'LOADING'}</Text>
+          <Text style={styles.liveText}>{freshness}</Text>
         </View>
       </View>
 
@@ -124,13 +121,20 @@ export default function ImpactBubble() {
         <ActivityIndicator color="#B5E9FA" />
         <Text style={styles.subText}>Loading global impact…</Text>
       </View>}
-      {isError && <View style={{ gap: 4, alignItems: 'center' }}>
+      {(freshness === 'STALE' || freshness === 'UNAVAILABLE') && <View style={{ gap: 4, alignItems: 'center' }}>
         <Text accessibilityRole="alert" style={styles.subText}>
-          {stats ? 'Showing last received figures. The latest refresh failed.' : 'Global impact is unavailable right now.'}
+          {stats ? 'Last-known figures — not current. Refresh or reconnect to check the latest totals.' : 'Global impact is unavailable right now.'}
         </Text>
         <TouchableOpacity accessibilityRole="button" testID="global-impact-retry" disabled={isFetching}
           onPress={() => refetch()} style={{ minHeight: 44, justifyContent: 'center' }}>
           <Text style={{ color: '#B5E9FA', textDecorationLine: 'underline' }}>Try again</Text>
+        </TouchableOpacity>
+      </View>}
+      {!!stats && <View style={{ gap: 4 }}>
+        <Text style={styles.subText}>Last successful refresh: {new Date(dataUpdatedAt).toLocaleString()}</Text>
+        <Text selectable style={styles.footnote}>Snapshot {stats.snapshotId.slice(0, 12)} · calculated {new Date(stats.calculatedAt).toLocaleString()}</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={isFetching} onPress={() => refetch()}>
+          <Text style={[styles.subText, { textDecorationLine: 'underline', minHeight: 44 }]}>{isFetching ? 'Refreshing…' : 'Refresh global figures'}</Text>
         </TouchableOpacity>
       </View>}
 
@@ -161,8 +165,8 @@ export default function ImpactBubble() {
         <StatBubble
           icon="sunny-outline"
           color="#facc15"
-          value={stats.cleanWaterDays}
-          label="Days of clean water"
+          value={stats.lifespanAvailable ? stats.cleanWaterDays : null}
+          label={stats.lifespanAvailable ? "Days of clean water" : "Days unavailable"}
         />
       </View>}
 

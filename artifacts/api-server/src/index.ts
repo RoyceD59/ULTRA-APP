@@ -21,6 +21,7 @@ import { ensureCustomerAssignmentTables } from "./lib/customer-assignment-rollou
 import { ensureCheckoutBenefitsSchema } from "./lib/checkout-benefits-schema.js";
 import { ensureRuntimeSchema, flushRuntimeMetrics } from "./lib/runtime-observability.js";
 import { sampleOperationalHealth } from "./lib/runtime-health.js";
+import { ensureGlobalImpactSchema } from "./lib/global-impact-store.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -59,6 +60,7 @@ function shutdown(server: ReturnType<typeof app.listen>, signal: string) {
 // Uses IF NOT EXISTS so it is safe to run on every startup.
 async function applyStartupMigrations(): Promise<void> {
   await ensureRuntimeSchema();
+  await ensureGlobalImpactSchema();
   await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
   // Guide metadata is also created here for existing deployments that predate
   // migration 0045. Keep this DDL in lockstep with lib/db/migrations/0045.

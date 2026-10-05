@@ -804,6 +804,10 @@ export function useApi() {
     /** Fetch the live UC environmental impact stats. */
     getImpact: () =>
       get<{
+        snapshotId: string;
+        calculatedAt: string;
+        adjustmentRevision: number;
+        maxAgeSeconds: number;
         totalUsers:      number;
         litresFiltered:  number;
         plasticsAvoided: number;

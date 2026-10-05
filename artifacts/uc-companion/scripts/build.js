@@ -584,6 +584,9 @@ async function main() {
   const timestamp = `${Date.now()}-${process.pid}`;
   // Reuse release-consistency identity; do not create an update channel.
   process.env.EXPO_PUBLIC_COMPANION_BUILD_ID = timestamp;
+  process.env.EXPO_PUBLIC_BASE_PATH = basePath;
+  process.env.EXPO_PUBLIC_API_DOMAIN = apiDomain;
+  process.env.EXPO_PUBLIC_DOMAIN = domain;
 
   prepareDirectories(timestamp);
   clearMetroCache();

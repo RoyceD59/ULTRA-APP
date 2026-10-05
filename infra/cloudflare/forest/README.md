@@ -440,3 +440,12 @@ until the dedicated test-account access is restored, as described above.
    Pages production, and verify both hostnames, programme JSON, evidence links,
    anonymous card links and correct pending/verified labels. Preserve the 3% equal
    split and the rule that refills add no funding.
+
+### Companion release and global-impact consistency
+
+See [the consistency release evidence and approval checklist](companion-consistency-release.md).
+`prepare-companion-consistency.mjs` prepares a separate, checksummed source-only
+candidate without changing the approved archive or active release.
+`companion-consistency-package.test.mjs` verifies unchanged frozen files and
+browser/Expo Go selection against the prepared server. This is not publication,
+a compiled native binary, a configured OTA service or physical-device evidence.

@@ -6,6 +6,28 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const require = createRequire(import.meta.url);
 const { writeBuildInfo } = require('../build-info.js');
+const configure = require('../../app.config.js');
+
+test('standalone production config preserves disabled OTA and requires approved origin plus release identity', () => {
+  const keys = ['EAS_BUILD_PROFILE', 'EXPO_PUBLIC_API_DOMAIN', 'EXPO_PUBLIC_COMPANION_BUILD_ID', 'EAS_BUILD_ID'];
+  const before = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  try {
+    process.env.EAS_BUILD_PROFILE = 'production';
+    delete process.env.EXPO_PUBLIC_COMPANION_BUILD_ID;
+    delete process.env.EAS_BUILD_ID;
+    process.env.EXPO_PUBLIC_API_DOMAIN = 'localhost:8080';
+    assert.throws(() => configure({ config: {} }), /approved API/);
+    process.env.EXPO_PUBLIC_API_DOMAIN = 'api.ucfilters.com';
+    assert.throws(() => configure({ config: {} }), /identifiable release/);
+    process.env.EAS_BUILD_ID = 'approved-binary-fixture';
+    const config = configure({ config: { updates: { enabled: false }, runtimeVersion: '1.0.0' } });
+    assert.equal(config.extra.companionRelease, 'approved-binary-fixture');
+    assert.equal(config.updates.enabled, false);
+    assert.equal(config.runtimeVersion, '1.0.0');
+  } finally {
+    for (const key of keys) if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key];
+  }
+});
 
 test('release metadata records the build revision and fails if a tab is missing', () => {
   const root = mkdtempSync(join(tmpdir(), 'uc-release-'));
@@ -18,6 +40,11 @@ test('release metadata records the build revision and fails if a tab is missing'
     const info = writeBuildInfo(root, 'test-build', { SOURCE_REVISION: 'abc' });
     assert.equal(info.revision, 'abc');
     assert.equal(info.tabs.length, 6);
+    assert.equal(info.supported.web, 'test-build');
+    assert.equal(info.supported.expoGo, 'test-build');
+    assert.throws(() => writeBuildInfo(root, 'test-build', { NODE_ENV: 'production' }), /Missing production API/);
+    assert.throws(() => writeBuildInfo(root, 'test-build', { NODE_ENV: 'production', EXPO_PUBLIC_API_DOMAIN: 'http://localhost:8080' }), /Invalid production API/);
+    assert.throws(() => writeBuildInfo(root, 'test-build', { NODE_ENV: 'production', EXPO_PUBLIC_API_DOMAIN: 'preview.replit.dev' }), /Invalid production API/);
     assert.deepEqual(JSON.parse(readFileSync(join(root, 'static-build', 'test-build', 'build-info.json'), 'utf8')), info);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
