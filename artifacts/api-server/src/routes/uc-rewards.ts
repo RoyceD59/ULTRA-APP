@@ -684,10 +684,27 @@ router.post(["/uc/checkout/quote", "/uc/customer/referrals/discount/quote"], asy
 });
 router.post("/uc/checkout/cancel", async (req,res): Promise<void> => {
   const claims = verifyToken(req.headers.authorization);
+  if (req.headers.authorization && !claims) { res.status(401).json({error:"Authentication required"}); return; }
+  if (claims?.type === "team-session") { res.status(403).json({error:"Customer checkout required"}); return; }
   const userId = claims?.type !== "team-session" && claims ? String(claims.id) : "anonymous";
-  if (typeof req.body?.idempotencyKey !== "string") { res.status(400).json({error:"Checkout key required"}); return; }
+  if (typeof req.body?.idempotencyKey !== "string" || req.body.idempotencyKey.length < 8 || req.body.idempotencyKey.length > 200) { res.status(400).json({error:"Checkout key required"}); return; }
   try { await cancelCheckout(req.body.idempotencyKey,userId); res.json({cancelled:true}); }
   catch (error) { res.status(409).json({error:(error as Error).message}); }
+});
+router.get("/uc/checkout/recovery", async (req,res): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  if (claims?.type === "team-session") { res.status(403).json({error:"Customer checkout required"}); return; }
+  if (req.headers.authorization && !claims) { res.status(401).json({error:"Authentication required"}); return; }
+  const userId = claims ? String(claims.id) : "anonymous";
+  const key = req.query.idempotencyKey;
+  if (typeof key !== "string" || key.length < 8 || key.length > 200) { res.status(400).json({error:"Checkout key required"}); return; }
+  try {
+    const result = await pool.query("SELECT id,checkout_state,status FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2", [userId,key]);
+    const order = result.rows[0];
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ resolution: !order || order.checkout_state === "cancelled" ? "editable"
+      : order.checkout_state === "confirmed" ? "completed" : "unresolved", orderId: order?.id ?? null });
+  } catch { res.status(503).json({error:"Saved checkout status is unavailable. Keep your original checkout and try checking again."}); }
 });
 router.post("/uc/customer/promotions/:operation/quote", async (req,res): Promise<void> => {
   const userId=await authenticatedCustomer(req,res); if(!userId)return;

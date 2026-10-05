@@ -49,6 +49,7 @@ before(async () => {
     id: Number(USER_ID), email: USER_EMAIL,
     passwordHash: await bcryptjs.hash("PushFixture123!", 4),
     firstName: "Rotation", lastName: "Test",
+    phone: "+254712345678", address: "Test building, Nairobi",
   });
   const { default: app } = await import("../app.js");
   await new Promise<void>((resolve, reject) => {

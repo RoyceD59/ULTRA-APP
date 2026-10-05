@@ -11,7 +11,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
-import OfflinePurchasesSection from '@/components/OfflinePurchasesSection';
+import PurchaseActivationSection from '@/components/PurchaseActivationSection';
+import { useFilterStatus } from '@/hooks/useFilterStatus';
 import CareOverviewEntry from '@/components/CareOverviewEntry';
 import * as Haptics from 'expo-haptics';
 import RewardsQrDisplay from '@/components/RewardsQrDisplay';
@@ -150,6 +151,10 @@ function EditProfileModal({
       setError('Enter a valid phone number for the selected country');
       return;
     }
+    if (!form.address.trim()) {
+      setError('Enter your contact address');
+      return;
+    }
     if (form.address.trim().length > 500) {
       setError('Address must be 500 characters or fewer');
       return;
@@ -282,7 +287,7 @@ function EditProfileModal({
 
               {/* Delivery Address */}
               <View style={editStyles.fieldGroup}>
-                <Text style={[editStyles.label, { color: colors.mutedForeground }]}>Delivery Address</Text>
+                <Text style={[editStyles.label, { color: colors.mutedForeground }]}>Contact Address *</Text>
                 <View style={[editStyles.inputRow, editStyles.inputRowMultiline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Ionicons name="location-outline" size={15} color={colors.mutedForeground} style={{ marginTop: 2 }} />
                   <TextInput
@@ -581,6 +586,11 @@ function AccountScreenContent() {
   const [redeemVisible,      setRedeemVisible]         = useState(false);
   const [impactShareVisible, setImpactShareVisible]    = useState(false);
   const [accountFocused,     setAccountFocused]       = useState(false);
+  const cycleStatus = useFilterStatus();
+  useEffect(() => {
+    setFilterActivation(cycleStatus.activation);
+    setFilterActivationOwner(user?.id);
+  }, [cycleStatus.activation, user?.id]);
 
   // Delay authenticated account payloads until this tab is actually focused.
   // This keeps cold-start navigation from mounting four network observers.
@@ -1061,10 +1071,11 @@ function AccountScreenContent() {
               </Text>
             </View>)}
           </View>
-          <OfflinePurchasesSection key={`offline-purchases:${user.id}`} userId={user.id} focused={accountFocused}
+          <PurchaseActivationSection key={`activation-purchases:${user.id}`} activation={filterActivationOwner === user.id ? filterActivation : null}
             onRegistered={a => {
               setFilterActivation(a); setFilterActivationOwner(user.id); refreshNotifStatus();
               void queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) });
+              void queryClient.invalidateQueries({ queryKey: ['filter-cycle', user.id] });
             }} />
           <FilterTrackerSection
             key={`water-tests:${user.id}`}
@@ -1077,6 +1088,7 @@ function AccountScreenContent() {
               setFilterActivation(a);
               setFilterActivationOwner(user.id);
               refreshNotifStatus();
+              void queryClient.invalidateQueries({ queryKey: ['filter-cycle', user.id] });
             }}
             onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
           />

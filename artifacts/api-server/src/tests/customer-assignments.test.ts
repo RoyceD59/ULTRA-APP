@@ -162,12 +162,12 @@ describe("durable customer assignments", () => {
   });
   it("signup succeeds once; unverified contacts remain pending; both verification hooks link exactly once", async () => {
     const input = await fixture(), id = await createAssignment(input,teamId);
-    const registration = await api("/uc/auth/register", { email: input.email, phone: input.phone, firstName: "Assignment", password: "assignment-test-strong-password" });
+    const registration = await api("/uc/auth/register", { email: input.email, phone: input.phone, address: "Fixture contact, Nairobi", firstName: "Assignment", password: "assignment-test-strong-password" });
     assert.equal(registration.status,200);
     const userId = Number(registration.body.user.id); ids.users.push(userId);
     await reconcileAssignmentsForAccount(userId);
     assert.equal((await getAssignment(id)).reviewReason,"awaiting_verified_contacts");
-    const duplicate = await api("/uc/auth/register", { email: input.email, phone: input.phone, firstName: "Not Owner", password: "different-password" });
+    const duplicate = await api("/uc/auth/register", { email: input.email, phone: input.phone, address: "Another address is not ownership proof", firstName: "Not Owner", password: "different-password" });
     assert.equal(duplicate.status,409);
     for (const channel of ["email","whatsapp"]) {
       const token = randomUUID();

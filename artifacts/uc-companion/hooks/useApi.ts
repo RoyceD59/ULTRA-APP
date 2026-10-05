@@ -128,6 +128,9 @@ export interface UCOrderStatusEvent {
 }
 
 export interface UCOrder {
+  reconciliationRequired?: boolean;
+  checkoutState?: string | null;
+  synchronizationStatus?: string;
   discountAmount?: number;
   promoCode?: string;
   id: number;
@@ -587,15 +590,13 @@ export function useApi() {
       applyReferralDiscount?: boolean;
       idempotencyKey: string;
       fulfillment?: 'collection' | 'delivery';
-    }) => post<UCOrder & { reconciliationRequired?: boolean }>('/api/uc/orders', data).then(order => {
-      if (order.reconciliationRequired) throw new ApiError("Your checkout is saved and awaiting fulfillment reconciliation. Retry this confirmation; do not start another payment.",503,{retryable:true,orderId:order.id});
-      return order;
-    }),
+    }) => post<UCOrder & { reconciliationRequired?: boolean }>('/api/uc/orders', data),
     /** Validates a checkout code and returns its server-calculated quote. */
     quoteCheckout: (data: { code?: string; applyReferralDiscount?: boolean; fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
       quoteCompanionCheckout(data, { headers: authHeaders() }),
     quoteWaterTestPromotion: (code: string) => quotePhysicalTestPromotion({ code }, { headers: authHeaders() }),
     cancelCheckout: (idempotencyKey: string) => post<{cancelled: boolean}>('/api/uc/checkout/cancel',{idempotencyKey}),
+    getCheckoutRecovery: (idempotencyKey: string) => get<{resolution: 'editable' | 'completed' | 'unresolved'; orderId: number | null}>(`/api/uc/checkout/recovery?idempotencyKey=${encodeURIComponent(idempotencyKey)}`),
     quoteCheckoutPromotion: (data: { code: string; fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/promotions/checkout/quote', data),
     /** Quote the authenticated customer's available one-time referral reward. */
@@ -609,7 +610,7 @@ export function useApi() {
     registerOfflinePurchase: (saleId: number, unitId: string, installationDate: string) =>
       post<{ registration: RegisteredImpactFilter & { lifespanDays: number; offlineUnitId: string; maintenanceCount: number } }>(
         '/api/uc/filters/register-offline-purchase', { saleId, unitId, installationDate }),
-    registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string }) =>
+    registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string; unitId?: string; source?: 'app' | 'store' }) =>
       post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone, ...registration }),
     getLocations: () => get<MapLocation[]>('/api/uc/locations'),
     getLocationRatingAggregate: (id: string) =>
@@ -622,6 +623,7 @@ export function useApi() {
       post<{ report: any }>(`/api/uc/locations/${locationId}/ratings/${ratingId}/reports`, data),
     getTickets: () => get<MaintenanceTicket[]>('/api/uc/tickets'),
     createTicket: (data: {
+      contactDetails?: { phone: string; address: string };
       productModel: string;
       issueDescription: string;
       preferredContactTime: string;

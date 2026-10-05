@@ -64,6 +64,7 @@ import type {
   CommitCustomerOfflineFilterBody,
   CompanionCheckoutQuote,
   CompanionCheckoutQuoteInput,
+  CompleteUcContactProfileBody,
   ConfigureRuntimeAlertsBody,
   ConfirmCustomerAssignmentLinkBody,
   Contact,
@@ -89,6 +90,8 @@ import type {
   DisconnectWhatsApp200,
   ExportUcCustomersParams,
   FindAssignmentOrderLinesParams,
+  GetCompanionCheckoutRecovery200,
+  GetCompanionCheckoutRecoveryParams,
   GetCustomerLifecycleTimelineParams,
   GetDashboardActivityParams,
   GetEditorialBlogArticle200,
@@ -97,7 +100,10 @@ import type {
   GetPublishedUcGuide200,
   GetRuntimeMonitoring200,
   GetRuntimeMonitoringParams,
+  GetUcActivationPurchases200,
   GetUcAdminGuide200,
+  GetUcCheckoutDiagnostics200,
+  GetUcCheckoutDiagnosticsParams,
   GetUcLocationRatingAggregateParams,
   HealthStatus,
   HydrateCustomerTree,
@@ -188,6 +194,7 @@ import type {
   RefillCapabilities,
   RefillFeatures,
   RefillFeaturesUpdate,
+  RegisterUcContactAccountBody,
   RetryCustomerReviewAnalysis200,
   RetryUcOfflineClientDelivery200,
   RewardsQrCandidate,
@@ -281,6 +288,309 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getRegisterUcContactAccountUrl = () => {
+
+
+
+
+  return `/api/uc/auth/register`
+}
+
+/**
+ * @summary Create an account with required normalized phone and contact address
+ */
+export const registerUcContactAccount = async (registerUcContactAccountBody: RegisterUcContactAccountBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRegisterUcContactAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registerUcContactAccountBody)
+  }
+);}
+
+
+
+
+
+export const getRegisterUcContactAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerUcContactAccount>>, TError,{data: BodyType<RegisterUcContactAccountBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerUcContactAccount>>, TError,{data: BodyType<RegisterUcContactAccountBody>}, TContext> => {
+
+const mutationKey = ['registerUcContactAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerUcContactAccount>>, {data: BodyType<RegisterUcContactAccountBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerUcContactAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterUcContactAccountMutationResult = NonNullable<Awaited<ReturnType<typeof registerUcContactAccount>>>
+    export type RegisterUcContactAccountMutationBody = BodyType<RegisterUcContactAccountBody>
+    export type RegisterUcContactAccountMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an account with required normalized phone and contact address
+ */
+export const useRegisterUcContactAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerUcContactAccount>>, TError,{data: BodyType<RegisterUcContactAccountBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerUcContactAccount>>,
+        TError,
+        {data: BodyType<RegisterUcContactAccountBody>},
+        TContext
+      > => {
+      return useMutation(getRegisterUcContactAccountMutationOptions(options));
+    }
+
+export const getCompleteUcContactProfileUrl = () => {
+
+
+
+
+  return `/api/uc/customer/profile`
+}
+
+/**
+ * @summary Edit contact details without creating or relinking an account
+ */
+export const completeUcContactProfile = async (completeUcContactProfileBody: CompleteUcContactProfileBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getCompleteUcContactProfileUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(completeUcContactProfileBody)
+  }
+);}
+
+
+
+
+
+export const getCompleteUcContactProfileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeUcContactProfile>>, TError,{data: BodyType<CompleteUcContactProfileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeUcContactProfile>>, TError,{data: BodyType<CompleteUcContactProfileBody>}, TContext> => {
+
+const mutationKey = ['completeUcContactProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeUcContactProfile>>, {data: BodyType<CompleteUcContactProfileBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeUcContactProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteUcContactProfileMutationResult = NonNullable<Awaited<ReturnType<typeof completeUcContactProfile>>>
+    export type CompleteUcContactProfileMutationBody = BodyType<CompleteUcContactProfileBody>
+    export type CompleteUcContactProfileMutationError = ErrorType<void>
+
+    /**
+ * @summary Edit contact details without creating or relinking an account
+ */
+export const useCompleteUcContactProfile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeUcContactProfile>>, TError,{data: BodyType<CompleteUcContactProfileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeUcContactProfile>>,
+        TError,
+        {data: BodyType<CompleteUcContactProfileBody>},
+        TContext
+      > => {
+      return useMutation(getCompleteUcContactProfileMutationOptions(options));
+    }
+
+export const getGetUcCheckoutDiagnosticsUrl = (params: GetUcCheckoutDiagnosticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/orders/reconciliation-report?${stringifiedParams}` : `/api/uc/admin/orders/reconciliation-report`
+}
+
+/**
+ * @summary Read-only checkout evidence for at most 100 explicit local order IDs
+ */
+export const getUcCheckoutDiagnostics = async (params: GetUcCheckoutDiagnosticsParams, options?: RequestInit): Promise<GetUcCheckoutDiagnostics200> => {
+
+  return customFetch<GetUcCheckoutDiagnostics200>(getGetUcCheckoutDiagnosticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcCheckoutDiagnosticsQueryKey = (params?: GetUcCheckoutDiagnosticsParams,) => {
+    return [
+    `/api/uc/admin/orders/reconciliation-report`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetUcCheckoutDiagnosticsQueryOptions = <TData = Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>, TError = ErrorType<void>>(params: GetUcCheckoutDiagnosticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcCheckoutDiagnosticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>> = ({ signal }) => getUcCheckoutDiagnostics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcCheckoutDiagnosticsQueryResult = NonNullable<Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>>
+export type GetUcCheckoutDiagnosticsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read-only checkout evidence for at most 100 explicit local order IDs
+ */
+
+export function useGetUcCheckoutDiagnostics<TData = Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>, TError = ErrorType<void>>(
+ params: GetUcCheckoutDiagnosticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcCheckoutDiagnostics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcCheckoutDiagnosticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUcActivationPurchasesUrl = () => {
+
+
+
+
+  return `/api/uc/filters/activation-purchases`
+}
+
+/**
+ * @summary Owned purchase units with authoritative activation eligibility
+ */
+export const getUcActivationPurchases = async ( options?: RequestInit): Promise<GetUcActivationPurchases200> => {
+
+  return customFetch<GetUcActivationPurchases200>(getGetUcActivationPurchasesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUcActivationPurchasesQueryKey = () => {
+    return [
+    `/api/uc/filters/activation-purchases`
+    ] as const;
+    }
+
+
+export const getGetUcActivationPurchasesQueryOptions = <TData = Awaited<ReturnType<typeof getUcActivationPurchases>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcActivationPurchases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUcActivationPurchasesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcActivationPurchases>>> = ({ signal }) => getUcActivationPurchases({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUcActivationPurchases>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUcActivationPurchasesQueryResult = NonNullable<Awaited<ReturnType<typeof getUcActivationPurchases>>>
+export type GetUcActivationPurchasesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Owned purchase units with authoritative activation eligibility
+ */
+
+export function useGetUcActivationPurchases<TData = Awaited<ReturnType<typeof getUcActivationPurchases>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcActivationPurchases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUcActivationPurchasesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListCustomerOfflinePurchasesUrl = () => {
 
@@ -871,6 +1181,84 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCancelCompanionCheckoutMutationOptions(options));
     }
+
+export const getGetCompanionCheckoutRecoveryUrl = (params: GetCompanionCheckoutRecoveryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/checkout/recovery?${stringifiedParams}` : `/api/uc/checkout/recovery`
+}
+
+export const getCompanionCheckoutRecovery = async (params: GetCompanionCheckoutRecoveryParams, options?: RequestInit): Promise<GetCompanionCheckoutRecovery200> => {
+
+  return customFetch<GetCompanionCheckoutRecovery200>(getGetCompanionCheckoutRecoveryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanionCheckoutRecoveryQueryKey = (params?: GetCompanionCheckoutRecoveryParams,) => {
+    return [
+    `/api/uc/checkout/recovery`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCompanionCheckoutRecoveryQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>, TError = ErrorType<void>>(params: GetCompanionCheckoutRecoveryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanionCheckoutRecoveryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>> = ({ signal }) => getCompanionCheckoutRecovery(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanionCheckoutRecoveryQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>>
+export type GetCompanionCheckoutRecoveryQueryError = ErrorType<void>
+
+
+
+export function useGetCompanionCheckoutRecovery<TData = Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>, TError = ErrorType<void>>(
+ params: GetCompanionCheckoutRecoveryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCheckoutRecovery>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanionCheckoutRecoveryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getQuoteCompanionCheckoutUrl = () => {
 

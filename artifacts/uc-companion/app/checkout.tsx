@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { loadCheckoutRecovery, saveCheckoutRecovery, clearCheckoutRecovery, checkoutRecoveryScope } from '@/hooks/checkoutRecovery';
+import type { CheckoutRecovery } from '@/hooks/checkoutRecovery';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   Modal, Platform, ActivityIndicator, Alert,
@@ -7,6 +9,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPicker';
@@ -28,6 +31,8 @@ import { countryCodeFromValue } from '@workspace/api-zod/phone';
 import { trackEvent } from '@/lib/analytics';
 import { useApi, UCAddress, ApiError, type PaymentsConfig, type CheckoutPromotionQuote, type CheckoutPaymentInput } from '@/hooks/useApi';
 import { quoteMatchesCheckout } from '@/hooks/checkoutQuoteIdentity';
+import ContactCompletion from '@/components/ContactCompletion';
+import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
 
 const DELIVERY_FEE = 500;
 
@@ -100,7 +105,8 @@ function checkAddress(address: UCAddress, strict: boolean, delivery: boolean): A
     else if (!looksLikeRealName(address.lastName)) errors.lastName = 'Please enter your real last name.';
     if (delivery && !address.city.trim()) errors.city = 'City is required.';
   }
-  if (delivery && !address.address1.trim()) errors.address1 = 'Delivery address is required.';
+  if (!address.address1.trim()) errors.address1 = delivery ? 'Delivery address is required.' : 'Contact address is required, even for collection.';
+  else if (address.address1.trim().length > 500) errors.address1 = 'Address must be 500 characters or fewer.';
   if (!address.phone.trim()) errors.phone = 'Phone number is required.';
   else if (!isValidInstantPhone(address.phone, countryCodeFromValue(address.country) ?? 'KE')) errors.phone = 'Enter a valid phone number for the selected country.';
   return errors;
@@ -130,6 +136,7 @@ export default function CheckoutScreen() {
   const { items, totalPrice, clearCart, cartHydrated, cartLoadError, refreshCart } = useCart();
   const { user } = useAuth();
   const api = useApi();
+  const queryClient = useQueryClient();
   const checkoutStarted = useRef(false);
 
   useEffect(() => {
@@ -147,6 +154,7 @@ export default function CheckoutScreen() {
   const [paymentsConfig, setPaymentsConfig] = useState<PaymentsConfig | null>(null);
   useEffect(() => {
     let cancelled = false;
+    setPaymentsConfig(null);
     api.getPaymentsConfig()
       .then(cfg => {
         if (cancelled) return;
@@ -162,15 +170,21 @@ export default function CheckoutScreen() {
       .catch(() => { /* keep defaults — all methods visible */ });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]);
   const [address, setAddress] = useState<UCAddress>({
     ...DEFAULT_ADDRESS,
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
+    address1: user?.address ?? '',
+    phone: user?.phone ?? '',
   });
   // Field-level validation messages, shown under the offending input. An
   // entry is cleared as soon as the customer edits that field again.
   const [addressErrors, setAddressErrors] = useState<AddressErrors>({});
+  useEffect(() => {
+    if (paymentFrozen) return;
+    setAddress(prev => ({ ...prev, phone: prev.phone || user?.phone || '', address1: prev.address1 || user?.address || '' }));
+  }, [user?.phone, user?.address]);
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [showMpesaModal, setShowMpesaModal] = useState(false);
   // `processing` is plain React state — it is NOT persisted across process
@@ -180,6 +194,15 @@ export default function CheckoutScreen() {
   // button therefore cannot be stuck disabled after a force-quit.
   // See docs/checkout-retry-test-plan.md §§ 8-10 for the manual test checklist.
   const [processing, setProcessing] = useState(false);
+  const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
+  const [checkoutFeedback, setCheckoutFeedback] = useState('');
+  const [checkoutRecoveryReady, setCheckoutRecoveryReady] = useState(false);
+  const [checkingRecovery, setCheckingRecovery] = useState(false);
+  const recoveryCheckRef = useRef(false);
+  const recoveryRef = useRef<CheckoutRecovery | null>(null);
+  const recoveryScope = checkoutRecoveryScope(user?.id);
+  const checkoutAccountRef = useRef<string | undefined>(recoveryScope);
+  checkoutAccountRef.current = recoveryScope;
   const [mpesaWaiting, setMpesaWaiting] = useState(false);
   const [mpesaCheckingPrevious, setMpesaCheckingPrevious] = useState(false);
   const [mpesaCheckVisible, setMpesaCheckVisible] = useState(false);
@@ -209,11 +232,15 @@ export default function CheckoutScreen() {
     setMpesaCheckVisible(false);
   }
 
-  useEffect(() => () => {
-    mpesaCheckCleanupRef.current?.();
-    cancelMpesaPoll(attemptRef, pollRef);
-    paystackVerifyAttemptRef.current++;
-    paystackVerifyingRef.current = false;
+  useEffect(() => {
+    checkoutAccountRef.current = recoveryScope;
+    return () => {
+      checkoutAccountRef.current = undefined;
+      mpesaCheckCleanupRef.current?.();
+      cancelMpesaPoll(attemptRef, pollRef);
+      paystackVerifyAttemptRef.current++;
+      paystackVerifyingRef.current = false;
+    };
   }, []);
 
   // Alison greeting — variant chosen once per checkout visit (stable seed)
@@ -236,6 +263,48 @@ export default function CheckoutScreen() {
   const orderIdentityRef = useRef<CheckoutOrderIdentity | null>(null);
   const paymentInputRef = useRef<CheckoutPaymentInput | null>(null);
   const [paymentFrozen, setPaymentFrozen] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setCheckoutRecoveryReady(false);
+    setCheckingRecovery(false);
+    recoveryCheckRef.current = false;
+    setReviewOrderId(null); setCheckoutFeedback(''); setProcessing(false);
+    cancelMpesaPoll(attemptRef, pollRef);
+    paystackVerifyAttemptRef.current++;
+    setMpesaWaiting(false); setShowMpesaModal(false);
+    setMpesaPhone('');
+    setPaymentMethod('paystack');
+    setPromoInput(''); setPromoError(''); setPromoValidating(false); setShowPromoField(false);
+    setAppliedQuote(null); setUsingReferralDiscount(false);
+    setFulfillment(null); setBaseQuote(null); setQuoteError(''); setQuoteLoading(false);
+    pendingPaystackReferenceRef.current = null;
+    lastCheckoutRequestIdRef.current = null;
+    paymentMethodChangingRef.current = false; paystackVerifyingRef.current = false;
+    clearMpesaRetryCheck();
+    recoveryRef.current = null; paymentInputRef.current = null; orderIdentityRef.current = null;
+    setPaymentFrozen(false);
+    setAddress({ ...DEFAULT_ADDRESS, firstName: user?.firstName ?? '', lastName: user?.lastName ?? '',
+      phone: user?.phone ?? '', address1: user?.address ?? '' });
+    loadCheckoutRecovery(user?.id).then(({ saved, ready }) => {
+      if (cancelled) return;
+      if (saved) {
+        recoveryRef.current = saved;
+        paymentInputRef.current = saved.input; orderIdentityRef.current = saved.identity;
+        setAddress(saved.input.shippingAddress);
+        setFulfillment(saved.input.fulfillment!); setBaseQuote(saved.quote); setPaymentMethod(saved.method);
+        setAppliedQuote(saved.input.promoCode || saved.input.applyReferralDiscount ? saved.quote : null);
+        setUsingReferralDiscount(!!saved.input.applyReferralDiscount);
+        setPaymentFrozen(true); setReviewOrderId(saved.reviewOrderId ?? null);
+        setCheckoutFeedback(saved.reviewOrderId
+          ? `Order #${saved.reviewOrderId} is saved and needs review. Your cart is preserved. Do not pay again or create another order.`
+          : 'Your original checkout has been restored. Confirm only this same checkout; do not start another payment.');
+      }
+      setCheckoutRecoveryReady(ready);
+    }).catch(() => {
+      if (!cancelled) setCheckoutFeedback('Saved checkout could not be read safely. Contact the team before starting another payment.');
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
   function checkoutPaymentInput(): CheckoutPaymentInput {
     if (paymentInputRef.current) return paymentInputRef.current;
     const identity = retainCheckoutOrderIdentity(orderIdentityRef.current);
@@ -252,6 +321,42 @@ export default function CheckoutScreen() {
     return input;
   }
 
+  async function checkSavedCheckout() {
+    const original = recoveryRef.current;
+    const scope = recoveryScope;
+    if (!original || recoveryCheckRef.current || processing) return;
+    recoveryCheckRef.current = true;
+    setCheckingRecovery(true);
+    try {
+      const status = await api.getCheckoutRecovery(original.identity.idempotencyKey);
+      if (checkoutAccountRef.current !== scope) return;
+      if (status.resolution !== 'completed') {
+        // Cancellation independently verifies terminal/never-started evidence;
+        // absence creates a tombstone against delayed old requests.
+        await api.cancelCheckout(original.identity.idempotencyKey);
+        if (checkoutAccountRef.current !== scope) return;
+      }
+      await clearCheckoutRecovery(scope);
+      if (checkoutAccountRef.current !== scope) return;
+      recoveryRef.current = null; paymentInputRef.current = null; orderIdentityRef.current = null;
+      pendingPaystackReferenceRef.current = null; lastCheckoutRequestIdRef.current = null;
+      setReviewOrderId(null); setPaymentFrozen(false); setQuoteLoading(false); setBaseQuote(null);
+      setAppliedQuote(null); setUsingReferralDiscount(false); setPromoInput(''); setAddressErrors({});
+      setCheckoutFeedback(status.resolution === 'completed'
+        ? `Order #${status.orderId} is confirmed. Its original checkout is complete; you can start a new purchase.`
+        : 'The server safely retired your previous attempt. Edit your details and wait for a refreshed total before confirming.');
+      if (status.resolution === 'completed') {
+        clearCart();
+        await queryClient.invalidateQueries({ queryKey: ['customer', user?.id, 'orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['activation-purchases', user?.id] });
+      }
+    } catch (error) {
+      if (checkoutAccountRef.current === scope) setCheckoutFeedback((error as Error).message || 'Your saved checkout still needs review. Do not start another payment.');
+    } finally {
+      if (checkoutAccountRef.current === scope) { recoveryCheckRef.current = false; setCheckingRecovery(false); }
+    }
+  }
+
   const grossTotal = totalPrice + (fulfillment === 'delivery' ? DELIVERY_FEE : 0);
   const total = baseQuote?.total ?? grossTotal;
   const basketKey = JSON.stringify(items.map(i => ({ productId: i.id, quantity: i.quantity })));
@@ -259,7 +364,10 @@ export default function CheckoutScreen() {
   const quoteCurrent = paymentFrozen || quoteMatchesCheckout(baseQuote, {lineItems: items.map(i=>({productId:i.id,quantity:i.quantity})),
     fulfillment, code:activeCode, applyReferralDiscount:usingReferralDiscount});
   useEffect(() => {
-    if (paymentFrozen) return;
+    if (paymentFrozen) {
+      setQuoteLoading(false);
+      return;
+    }
     let cancelled = false;
     setBaseQuote(null);
     setQuoteError('');
@@ -271,9 +379,10 @@ export default function CheckoutScreen() {
       .catch(error => { if (!cancelled) setQuoteError(error.message); })
       .finally(() => { if (!cancelled) setQuoteLoading(false); });
     return () => { cancelled = true; };
-  }, [basketKey, fulfillment, activeCode, usingReferralDiscount, paymentFrozen]);
+  }, [user?.id, basketKey, fulfillment, activeCode, usingReferralDiscount, paymentFrozen]);
 
   async function changePaymentMethod(method: PaymentMethod) {
+    const changingAccountId = recoveryScope;
     if (method === paymentMethod || paymentMethodChangingRef.current ||
         (processing && !paystackVerifyingRef.current)) return;
     // Retire any in-flight verification before awaiting server cancellation.
@@ -285,6 +394,10 @@ export default function CheckoutScreen() {
     try {
       if (paymentFrozen && paymentInputRef.current) {
         await api.cancelCheckout(paymentInputRef.current.idempotencyKey);
+        if (checkoutAccountRef.current !== changingAccountId) return;
+        await clearCheckoutRecovery(changingAccountId);
+        if (checkoutAccountRef.current !== changingAccountId) return;
+        recoveryRef.current = null;
         paymentInputRef.current = null;
         orderIdentityRef.current = null;
         lastCheckoutRequestIdRef.current = null;
@@ -296,10 +409,14 @@ export default function CheckoutScreen() {
       pendingPaystackReferenceRef.current = null;
       setPaymentMethod(method);
     } catch (error) {
+      if (checkoutAccountRef.current !== changingAccountId) return;
+      setCheckoutFeedback(error instanceof Error ? error.message : 'Resume the original payment before changing method.');
       Alert.alert('Payment still pending', error instanceof Error ? error.message : 'Resume the original payment before changing method.');
     } finally {
-      paymentMethodChangingRef.current = false;
-      setProcessing(false);
+      if (checkoutAccountRef.current === changingAccountId) {
+        paymentMethodChangingRef.current = false;
+        setProcessing(false);
+      }
     }
   }
 
@@ -308,7 +425,7 @@ export default function CheckoutScreen() {
     setAddressErrors(errors);
     const first = Object.values(errors)[0];
     if (first) {
-      Alert.alert('Check your delivery details', first);
+      Alert.alert('Check your contact details', first);
       return false;
     }
     const normalizedPhone = normalizeInstantPhone(address.phone, countryCodeFromValue(address.country) ?? 'KE');
@@ -319,8 +436,24 @@ export default function CheckoutScreen() {
   }
 
   async function handleConfirm() {
+    if (!checkoutRecoveryReady || reviewOrderId !== null || processing || checkingRecovery) return;
+    if (user && !validateCustomerContact(user).ok) {
+      Alert.alert('Complete contact details', 'Save your phone number and contact address in the completion form before checkout.');
+      return;
+    }
     if (!fulfillment || !baseQuote || !quoteCurrent || quoteLoading || quoteError) { Alert.alert('Check checkout', quoteError || 'Choose collection or delivery and wait for your verified total.'); return; }
     if (!validateAddress()) return;
+    try {
+      const input = checkoutPaymentInput();
+      const recovery = { accountId: recoveryScope, identity: orderIdentityRef.current!,
+        input, quote: baseQuote!, method: paymentMethod };
+      await saveCheckoutRecovery(recovery);
+      if (checkoutAccountRef.current !== recoveryScope) return;
+      recoveryRef.current = recovery;
+    } catch {
+      setCheckoutFeedback('Your checkout safety details could not be saved. No new payment or order was started. Check device storage before trying again.');
+      return;
+    }
     if (total === 0) { await createOrder('free', ''); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (paymentMethod === 'mpesa') { setShowMpesaModal(true); return; }
@@ -567,13 +700,16 @@ export default function CheckoutScreen() {
 
   // Stripe Checkout — Stripe hosts the card form (PCI-safe, no card data on our server)
   async function handleStripeCheckout() {
+    const initiatingAccountId = recoveryScope;
     setProcessing(true);
     try {
       const orderId = `cart_${Date.now()}`;
       const session = await api.stripeSession(total, orderId, checkoutPaymentInput());
+      if (checkoutAccountRef.current !== initiatingAccountId) return;
       setProcessing(false);
       // Open hosted Stripe checkout — Stripe handles all card data
       await WebBrowser.openBrowserAsync(session.sessionUrl);
+      if (checkoutAccountRef.current !== initiatingAccountId) return;
       // Always verify session status after the browser closes, regardless of how the
       // user exited (success redirect, cancel, or manual dismiss). Server verifies
       // directly with Stripe; client cannot bypass this check.
@@ -581,6 +717,7 @@ export default function CheckoutScreen() {
       try {
         await createOrder('stripe', session.sessionId);
       } catch (e) {
+        if (checkoutAccountRef.current !== initiatingAccountId) return;
         setProcessing(false);
         // Only describe an unpaid checkout when the server confirms it.
         // Other verification errors must not imply that no payment was made.
@@ -602,6 +739,7 @@ export default function CheckoutScreen() {
         );
       }
     } catch (e) {
+      if (checkoutAccountRef.current !== initiatingAccountId) return;
       setProcessing(false);
       // Classify: 429 → wait message with only OK (no retry path that would
       // bypass the rate limit); transient blip → retry/COD; else declined.
@@ -746,6 +884,7 @@ export default function CheckoutScreen() {
   }
 
   async function handlePaystack() {
+    const initiatingAccountId = recoveryScope;
     if (pendingPaystackReferenceRef.current) {
       await handlePaystackVerify(pendingPaystackReferenceRef.current);
       return;
@@ -758,9 +897,11 @@ export default function CheckoutScreen() {
         total,
         checkoutPaymentInput(),
       );
+      if (checkoutAccountRef.current !== initiatingAccountId) return;
       pendingPaystackReferenceRef.current = r.reference;
       setProcessing(false);
     } catch (e) {
+      if (checkoutAccountRef.current !== initiatingAccountId) return;
       setProcessing(false);
       // Init failed — no payment session was created, so "Try again" safely
       // re-enters handlePaystack() to start a completely fresh attempt.
@@ -833,6 +974,7 @@ export default function CheckoutScreen() {
   }
 
   async function applyPromoCode() {
+    const quotingAccountId = recoveryScope;
     setPromoError('');
     if (paymentFrozen || !fulfillment) { setPromoError('Choose collection or delivery before applying a code.'); return; }
     if (!items.length) { setPromoError('Add a product to your basket before applying a code.'); return; }
@@ -844,21 +986,24 @@ export default function CheckoutScreen() {
         fulfillment: fulfillment ?? 'collection',
         lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
       });
+      if (checkoutAccountRef.current !== quotingAccountId) return;
       setAppliedQuote(quote);
       setBaseQuote(quote);
       setUsingReferralDiscount(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
+      if (checkoutAccountRef.current !== quotingAccountId) return;
       setAppliedQuote(null);
       setUsingReferralDiscount(false);
       setPromoError(error instanceof ApiError && error.status === 401 ? 'Sign in to use a promotion or referral code.' : error instanceof Error ? error.message : 'This code is not eligible for your checkout.');
       Alert.alert('Code not applied', error instanceof Error ? error.message : 'Could not validate this code. Please try again.');
     } finally {
-      setPromoValidating(false);
+      if (checkoutAccountRef.current === quotingAccountId) setPromoValidating(false);
     }
   }
 
   async function applyReferralDiscount() {
+    const quotingAccountId = recoveryScope;
     if (paymentFrozen || !fulfillment) return;
     if (!user) {
       Alert.alert('Sign in required', 'Sign in to use a referral reward.');
@@ -870,17 +1015,19 @@ export default function CheckoutScreen() {
         fulfillment: fulfillment ?? 'collection',
         lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
       });
+      if (checkoutAccountRef.current !== quotingAccountId) return;
       setAppliedQuote(quote);
       setBaseQuote(quote);
       setUsingReferralDiscount(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
+      if (checkoutAccountRef.current !== quotingAccountId) return;
       setAppliedQuote(null);
       setUsingReferralDiscount(false);
       setPromoError(error instanceof ApiError && error.status === 401 ? 'Sign in to use a promotion or referral code.' : error instanceof Error ? error.message : 'This code is not eligible for your checkout.');
       Alert.alert('Referral reward unavailable', error instanceof Error ? error.message : 'No referral discount is available for this order.');
     } finally {
-      setPromoValidating(false);
+      if (checkoutAccountRef.current === quotingAccountId) setPromoValidating(false);
     }
   }
 
@@ -908,6 +1055,7 @@ export default function CheckoutScreen() {
    * fails mid-creation and the customer retries.
    */
   async function createOrder(method: string, reference: string): Promise<boolean> {
+    const submittingUserId = recoveryScope;
     const normalizedPhone = normalizeInstantPhone(
       address.phone.trim(),
       countryCodeFromValue(address.country) ?? undefined,
@@ -932,24 +1080,63 @@ export default function CheckoutScreen() {
         paymentReference: stableReference,
         shippingAddress: paymentInputRef.current?.shippingAddress ?? normalizedShippingAddress,
       });
+      if (checkoutAccountRef.current !== submittingUserId) return false;
+      await queryClient.invalidateQueries({ queryKey: ['customer', user?.id, 'orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['activation-purchases', user?.id] });
+      await queryClient.invalidateQueries({ queryKey: ['offline-purchases', user?.id] });
+      if (checkoutAccountRef.current !== submittingUserId) return false;
+      if (order.reconciliationRequired) {
+        setProcessing(false); setMpesaWaiting(false);
+        setReviewOrderId(order.id);
+        setCheckoutFeedback(`Order #${order.id} is saved, but store synchronization needs review. Your cart and contact details are preserved. Do not pay again or create another order. Contact the team with this order number.`);
+        if (recoveryRef.current) {
+          recoveryRef.current = { ...recoveryRef.current, reviewOrderId: order.id };
+          await saveCheckoutRecovery(recoveryRef.current).catch(() => {
+            // The original identity was saved before submission, so even if
+            // receipt storage fails, reload still retries only that identity.
+          });
+        }
+        return false;
+      }
       if (method === 'paystack' || method === 'mpesa' || method === 'cod' || method === 'stripe') {
         trackEvent('order_submitted', {
           paymentMethod: method,
           itemCount: items.reduce((count, item) => count + item.quantity, 0),
         });
       }
+      try {
+        await clearCheckoutRecovery(submittingUserId!);
+      } catch {
+        setReviewOrderId(order.id);
+        setCheckoutFeedback(`Order #${order.id} was accepted, but local checkout recovery could not be cleared. Your cart is preserved. View your order and contact the team before trying again.`);
+        setProcessing(false); setMpesaWaiting(false);
+        return false;
+      }
+      if (checkoutAccountRef.current !== submittingUserId) return false;
+      recoveryRef.current = null;
+      paymentInputRef.current = null;
+      orderIdentityRef.current = null;
+      setPaymentFrozen(false);
+      setQuoteLoading(false);
+      setBaseQuote(null);
+      setQuoteError('');
+      setCheckoutFeedback('');
+      setAppliedQuote(null);
+      setUsingReferralDiscount(false);
+      setPromoInput('');
       clearCart();
       setMpesaWaiting(false);
       setProcessing(false);
       router.replace(`/order/${order.id}` as never);
       return true;
     } catch (e) {
+      if (checkoutAccountRef.current !== submittingUserId) return false;
       setProcessing(false);
       setMpesaWaiting(false);
       // Server-side delivery-details rejection (COD validation) — highlight
       // the offending fields and show the first message. This should be rare
       // because the same checks run client-side before submitting.
-      if (e instanceof ApiError && e.status === 400 && e.body['fields']) {
+      if (e instanceof ApiError && (e.status === 400 || e.status === 422) && e.body['fields']) {
         const fields = e.body['fields'] as AddressErrors;
         setAddressErrors(fields);
         const first = Object.values(fields)[0];
@@ -964,6 +1151,7 @@ export default function CheckoutScreen() {
         return false;
       }
       if (!(e instanceof ApiError) || e.retryable) {
+        setCheckoutFeedback('We could not confirm your order with the store. Your cart and contact details are preserved. Do not start another payment; retry the original confirmation or contact the team.');
         Alert.alert(
           'Checkout temporarily unavailable',
           'We could not confirm your order with the store. Your cart and delivery details are still here, and you have not been charged again.',
@@ -1045,7 +1233,9 @@ export default function CheckoutScreen() {
           onPress={() => setFulfillment(choice)} style={{ padding: 14, marginBottom: 8, borderWidth: 1, borderRadius: 8, borderColor: fulfillment === choice ? colors.primary : colors.border }}>
           <Text style={{ color: colors.text }}>{choice === 'collection' ? 'Free collection — KES 0' : 'Delivery — KES 500 (waived with a valid shipping code)'}</Text>
         </TouchableOpacity>)}
+        <ContactCompletion />
         <Text style={[styles.sectionTitle, { color: colors.text }]}>{fulfillment === 'delivery' ? 'Delivery address' : 'Contact details'}</Text>
+        {fulfillment === 'collection' ? <Text style={{ color: colors.mutedForeground }}>This is your contact address, not a delivery destination. You will collect your order.</Text> : null}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.field} pointerEvents={paymentFrozen ? 'none' : 'auto'}>
             <CountryPicker
@@ -1055,7 +1245,7 @@ export default function CheckoutScreen() {
               label="Phone country"
             />
           </View>
-          {ADDRESS_FIELDS.filter(f => fulfillment === 'delivery' || (f.key !== 'address1' && f.key !== 'city')).map(f => (
+          {ADDRESS_FIELDS.filter(f => fulfillment === 'delivery' || f.key !== 'city').map(f => (
             <View key={f.key} style={styles.field}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{f.label}</Text>
               <TextInput
@@ -1170,13 +1360,34 @@ export default function CheckoutScreen() {
 
       <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border,
         paddingBottom: Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
+        {!!checkoutFeedback && (
+          <View accessibilityLiveRegion="polite" style={{ gap: 8, marginBottom: 12 }}>
+            <Text style={{ color: colors.text }}>{checkoutFeedback}</Text>
+            {reviewOrderId !== null && !!user && (
+              <TouchableOpacity accessibilityRole="button" onPress={() => router.push(`/order/${reviewOrderId}` as never)}>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>View saved order #{reviewOrderId}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
         {!!quoteError && <Text style={{ color: colors.text }}>{quoteError} Remove the code or refresh your basket before payment.</Text>}
         {quoteLoading && <ActivityIndicator color={colors.primary} />}
-        <TouchableOpacity onPress={handleConfirm} disabled={processing || quoteLoading || !baseQuote || !quoteCurrent || !fulfillment || !!quoteError}
-          style={[styles.confirmBtn, { backgroundColor: processing ? colors.muted : colors.primary }]}>
+        {paymentFrozen && (
+          <TouchableOpacity accessibilityRole="button" disabled={checkingRecovery || processing} onPress={checkSavedCheckout}>
+            <Text style={{ color: colors.primary, fontWeight: '700', paddingVertical: 12 }}>
+              {checkingRecovery ? 'Checking saved checkout…' : 'Check saved checkout'}
+            </Text>
+            <Text style={{ color: colors.mutedForeground, marginBottom: 12 }}>
+              Confirm its status, or safely unlock editing only if no payment can still complete.
+            </Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={handleConfirm} disabled={!checkoutRecoveryReady || reviewOrderId !== null || processing || checkingRecovery || quoteLoading || !baseQuote || !quoteCurrent || !fulfillment || !!quoteError}
+          style={[styles.confirmBtn, { backgroundColor: processing || reviewOrderId !== null ? colors.muted : colors.primary }]}>
           {processing ? <ActivityIndicator color="#fff" size="small" /> : (
             <Text style={styles.confirmBtnText}>
-              {paymentMethod === 'mpesa' ? 'Send M-Pesa Request' :
+              {reviewOrderId !== null ? 'Order recorded — view status' :
+               paymentMethod === 'mpesa' ? 'Send M-Pesa Request' :
                paymentMethod === 'stripe' ? 'Pay with Stripe Checkout' :
                paymentMethod === 'paystack' ? 'Pay with Paystack' : 'Place Order (COD)'}
             </Text>

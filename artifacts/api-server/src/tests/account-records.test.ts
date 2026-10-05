@@ -62,6 +62,7 @@ describe("registration conflict recovery responses", () => {
         phone: `${phone.slice(0, -1)}${(Number(phone.at(-1)) + 1) % 10}`,
         password: "DifferentPassword1!",
         firstName: "Duplicate",
+        address: "Test building, Nairobi",
       });
 
       assert.equal(response.status, 409);
@@ -80,6 +81,7 @@ describe("registration conflict recovery responses", () => {
         phone,
         password: "DifferentPassword1!",
         firstName: "Duplicate",
+        address: "Test building, Nairobi",
       });
 
       assert.equal(response.status, 409);

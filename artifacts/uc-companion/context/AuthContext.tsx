@@ -53,6 +53,7 @@ interface AuthContextValue {
 }
 
 interface RegisterData {
+  address: string;
   email: string;
   phone: string;
   password: string;

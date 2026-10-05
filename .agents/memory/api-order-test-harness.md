@@ -5,6 +5,12 @@ description: How to write api-server tests that POST /uc/orders without hitting 
 
 # Order-flow tests must strip payment/WC credentials
 
+This applies to modern payment initialization tests too: preparing their cart now reads the authoritative catalogue even when the test only exercises provider callback tokens or failure handling.
+
+**Why:** Inherited Woo credentials can send a nominally isolated payment test to the live catalogue, or make a provider-only fetch stub fail catalogue validation before the behavior under test.
+
+**How to apply:** Remove inherited Woo credentials in the isolated test process, or explicitly inject a complete catalogue provider. Use server-priced cart fixtures rather than trusting arbitrary caller amounts.
+
 Any api-server test that POSTs to `/uc/orders` must delete these env vars in `before()` (they ARE present in the dev/test environment via secrets):
 
 ```ts

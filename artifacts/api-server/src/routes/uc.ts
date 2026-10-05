@@ -16,6 +16,12 @@ import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
 import { getCustomerStatistics } from "../lib/customer-statistics.js";
 import { validateCodShipping } from "../lib/order-validation.js";
+import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
+import { activationEligibility, validInstallationDate, purchaseUnitIds } from "../lib/activation-eligibility.js";
+import { activationPurchaseOptions } from "../lib/activation-purchases.js";
+import { orderEvidence } from "../lib/order-evidence.js";
+import { registerOrderUnit } from "../lib/register-order-unit.js";
+import { checkoutDiagnostics } from "../lib/checkout-diagnostics.js";
 import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
 import { remoteImageProxyPath } from "./product-images.js";
 import { CatalogueCache } from "../lib/catalogue-cache.js";
@@ -800,7 +806,7 @@ function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
     orderNumber: o["number"] ?? o["id"],
     status: o["status"],
     fulfillmentStatus: o["status"],
-    paymentStatus: o["date_paid"] || o["status"] === "completed" || o["status"] === "processing"
+    paymentStatus: o["date_paid"]
       ? "paid"
       : o["status"] === "cancelled" || o["status"] === "failed" || o["status"] === "refunded"
         ? o["status"]
@@ -2063,7 +2069,8 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
 });
 
 router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response): Promise<void> => {
-  const { email, phone, password, firstName, lastName, referralCode } = req.body as {
+  const { email, phone, password, firstName, lastName, referralCode, address } = req.body as {
+    address?: string;
     email?: string;
     phone?: string;
     password?: string;
@@ -2071,7 +2078,12 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     lastName?: string;
     referralCode?: string;
   };
-  if (!email || !phone || !password || !firstName) {
+  const contact = validateCustomerContact({ phone, address });
+  if (!contact.ok) {
+    res.status(400).json({ error: Object.values(contact.fields).join(" "), fields: contact.fields });
+    return;
+  }
+  if (typeof email !== "string" || !email.trim() || typeof password !== "string" || !password || typeof firstName !== "string" || !firstName.trim()) {
     res.status(400).json({ error: "First name, email, phone number and password are required" });
     return;
   }
@@ -2080,7 +2092,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     return;
   }
   const normalizedEmail = normalizeEmail(email);
-  const cleanPhone = normalizePhone(phone);
+  const cleanPhone = contact.phone;
   if (!cleanPhone) {
     res.status(400).json({ error: phoneValidationMessage() });
     return;
@@ -2117,9 +2129,9 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       } else {
           const passwordHash = await bcryptjs.hash(password, 10);
           const inserted = await registrationClient.query(
-            `INSERT INTO uc_users(email,password_hash,phone,email_verified,phone_verified,first_name,last_name)
-             VALUES($1,$2,$3,false,false,$4,$5) RETURNING *`,
-            [normalizedEmail, passwordHash, cleanPhone, firstName.trim(), lastName?.trim() ?? ""],
+            `INSERT INTO uc_users(email,password_hash,phone,email_verified,phone_verified,first_name,last_name,address)
+             VALUES($1,$2,$3,false,false,$4,$5,$6) RETURNING *`,
+            [normalizedEmail, passwordHash, cleanPhone, firstName.trim(), typeof lastName === "string" ? lastName.trim() : "", contact.address],
           );
           const row = inserted.rows[0];
           let referral: { status: string } | undefined;
@@ -3266,7 +3278,7 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
 
 router.patch("/uc/customer/profile", async (req: Request, res: Response): Promise<void> => {
   const claims = verifyToken(req.headers["authorization"]);
-  if (!claims) {
+  if (!claims || claims.type === "team-session") {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
@@ -3278,18 +3290,18 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
     address?:   string;
   };
 
-  if (firstName !== undefined && !firstName.trim()) {
+  if (firstName !== undefined && (typeof firstName !== "string" || !firstName.trim())) {
     res.status(400).json({ error: "First name cannot be empty" });
     return;
   }
-  if (phone !== undefined && phone !== "") {
+  if (phone !== undefined) {
     if (!normalizePhone(phone)) {
       res.status(400).json({ error: phoneValidationMessage() });
       return;
     }
   }
-  if (address !== undefined && address.length > 500) {
-    res.status(400).json({ error: "Address must be 500 characters or fewer" });
+  if (address !== undefined && (typeof address !== "string" || !address.trim() || address.trim().length > 500)) {
+    res.status(400).json({ error: "Enter a contact address of 500 characters or fewer", fields: { address: "Enter a contact address of 500 characters or fewer" } });
     return;
   }
 
@@ -4097,17 +4109,12 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
         // The local cash ledger wins over a stale Woo mirror once staff has
         // confirmed collection. This only overlays COD payment truth; all
         // other Woo order data remains authoritative.
-        const localOrders = await db.select({
-          wcOrderId: ucOrdersTable.wcOrderId,
-          status: ucOrdersTable.status,
-          codCollectionStatus: ucOrdersTable.codCollectionStatus,
-          customerStage: ucOrdersTable.customerStage,
-          customerStageUpdatedAt: ucOrdersTable.customerStageUpdatedAt,
-        }).from(ucOrdersTable).where(eq(ucOrdersTable.userId, userId));
+        const localOrders = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.userId, userId));
         const collectedByWcId = new Map(localOrders
           .filter(local => local.codCollectionStatus === "collected" && local.wcOrderId != null)
           .map(local => [local.wcOrderId!, local]));
-        const assignedLocalIds = assignedOrders.filter(o => o.wc_order_id === null).map(o => o.id);
+        const unsynchronized = await db.select().from(ucOrdersTable).where(and(eq(ucOrdersTable.userId, userId), isNull(ucOrdersTable.wcOrderId)));
+        const assignedLocalIds = unsynchronized.map(o => o.id);
         const localAssigned = assignedLocalIds.length ? await db.select().from(ucOrdersTable)
           .where(and(inArray(ucOrdersTable.id, assignedLocalIds), eq(ucOrdersTable.userId, userId))) : [];
         const assignedItems = assignedLocalIds.length ? await db.select().from(ucOrderItemsTable)
@@ -4125,6 +4132,8 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
             return projection
               ? {
                 ...normalized,
+                ...orderEvidence({ ...projection, status: String(normalized.status) }),
+                shippingAddress: projection.shippingAddress ?? normalized.shippingAddress,
                 ...(projection.customerStage ? {
                   customerStage: projection.customerStage,
                   customerStageUpdatedAt: projection.customerStageUpdatedAt,
@@ -4137,7 +4146,8 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
           id: o.id, status: o.status, dateCreated: o.dateCreated,
           total: o.total, currency: o.currency, paymentMethod: o.paymentMethod,
           paymentReference: o.paymentReference ?? "", codCollectionStatus: o.codCollectionStatus,
-          paymentStatus: o.codCollectionStatus === "collected" ? "paid" : "pending",
+          ...orderEvidence(o),
+          shippingAddress: o.shippingAddress ?? {},
           lineItems: assignedItems.filter(i => i.orderId === o.id).map(i => ({
             productId: i.productId, name: i.name, quantity: i.quantity, total: i.total,
           })),
@@ -4188,9 +4198,7 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
       customerStageUpdatedAt: o.customerStageUpdatedAt ?? null,
       statusEvents:     (eventsByOrder[String(o.id)] ?? []).slice(0, 20),
       fulfillmentStatus: o.status,
-      paymentStatus:   o.status === "completed" || o.status === "processing"
-        ? "paid"
-        : ["cancelled", "failed", "refunded"].includes(o.status) ? o.status : "pending",
+      ...orderEvidence(o),
       dateCreated:     o.dateCreated,
       total:           o.total,
       currency:        o.currency,
@@ -4347,9 +4355,6 @@ router.get("/uc/orders/:orderId", async (req: Request, res: Response): Promise<v
       ),
     ]);
     const fulfillmentStatus = order.customerStage ?? order.status;
-    const paymentStatus = ["completed", "processing"].includes(order.status)
-      ? "paid"
-      : ["cancelled", "failed", "refunded"].includes(order.status) ? order.status : "pending";
     res.json({
       id: order.id,
       orderNumber: order.wcOrderId ?? order.id,
@@ -4357,7 +4362,7 @@ router.get("/uc/orders/:orderId", async (req: Request, res: Response): Promise<v
       customerStage: order.customerStage,
       customerStageUpdatedAt: order.customerStageUpdatedAt,
       fulfillmentStatus,
-      paymentStatus,
+      ...orderEvidence(order),
       total: order.total,
       currency: order.currency,
       paymentMethod: order.paymentMethod,
@@ -4460,6 +4465,17 @@ async function saveCustomerStage(input: {
   } catch (err) { await client.query("ROLLBACK").catch(() => undefined); throw err; } finally { client.release(); }
 }
 
+router.get("/uc/admin/orders/reconciliation-report", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers.authorization))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const text = typeof req.query.ids === "string" ? req.query.ids : "";
+  const ids = [...new Set(text.split(",").map(Number))];
+  if (!ids.length || ids.length > 100 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+    res.status(400).json({ error: "Provide 1–100 local order IDs in ids, separated by commas." }); return;
+  }
+  res.set("Cache-Control", "no-store");
+  try { res.json(await checkoutDiagnostics(pool, ids)); }
+  catch (error) { logger.error({ error }, "Checkout diagnostics unavailable"); res.status(503).json({ error: "Diagnostics could not be read. No changes were made." }); }
+});
 router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void> => {
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) {
@@ -4508,6 +4524,7 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
       total:            o.total,
       currency:         o.currency,
       paymentMethod:    o.paymentMethod,
+      ...orderEvidence(o),
       paymentReference: o.paymentReference ?? "",
       promoCode:        o.promoCode ?? "",
       discountPercent:  o.discountPercent,
@@ -6020,9 +6037,22 @@ function phonesMatch(a: unknown, b: unknown): boolean {
 
 // Statuses whose purchase records may be used for registration. Cancelled,
 // refunded, failed and in-flight anchor ("pending-wc") orders are excluded.
-const REGISTRABLE_STATUSES = new Set([
-  "completed", "processing", "on-hold", "shipped", "delivered",
-]);
+router.get("/uc/filters/activation-purchases", lookupLimiter, async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const claims = verifyToken(req.headers.authorization);
+  const id = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    const account = (await pool.query("SELECT email FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [id])).rows[0];
+    if (!account) { res.status(401).json({ error: "Authentication required" }); return; }
+    const [lifespans, capacities] = await Promise.all([getProductLifespanMap(), getProductCapacityMap()]);
+    res.json(await activationPurchaseOptions(id, account.email, { lifespans, capacities },
+      { enabled: hasWCCredentials(), fetch: params => wcFetchArray("/orders", params, AbortSignal.timeout(15000)) }));
+  } catch (error) {
+    logger.error({ error, id }, "Activation purchases unavailable");
+    res.status(503).json({ error: "Purchase eligibility could not refresh. Retry when connected." });
+  }
+});
 
 const REGISTER_NOT_FOUND_MSG =
   "No purchase found matching that receipt number and phone number.";
@@ -6032,7 +6062,7 @@ router.post(
   lookupLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const claims = verifyToken(req.headers["authorization"]);
-    const accountId = claims ? Number(claims.id) : 0;
+    const accountId = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
     if (!Number.isInteger(accountId) || accountId <= 0 || accountId >= 1_000_000_000) {
       res.status(401).json({ error: "Authentication required" });
       return;
@@ -6046,13 +6076,19 @@ router.post(
       return;
     }
 
-    const { receipt, phone, productId: commitProductId, activatedAt: commitActivatedAt } = req.body as {
+    const { receipt, phone, productId: commitProductId, activatedAt: commitActivatedAt, unitId, source: requestedSource } = req.body as {
+      unitId?: unknown;
+      source?: unknown;
       receipt?: unknown;
       phone?: unknown;
       productId?: unknown;
       activatedAt?: unknown;
     };
     const receiptDigits = String(receipt ?? "").trim().replace(/^#/, "");
+    if (requestedSource !== undefined && requestedSource !== "app" && requestedSource !== "store" ||
+        unitId !== undefined && (typeof unitId !== "string" || unitId.length > 150)) {
+      res.status(400).json({ error: "Select a valid purchase unit from your account." }); return;
+    }
     const phoneDigits = String(phone ?? "").replace(/\D/g, "");
     if (!/^\d{1,10}$/.test(receiptDigits) || phoneDigits.length < 9) {
       logger.warn({ accountId, reason: "invalid_required_fields" }, "[register-purchase] rejected");
@@ -6064,17 +6100,20 @@ router.post(
     const orderId = Number(receiptDigits);
 
     type RegisterItem = {
+      lineId: number;
       productId: number; name: string; quantity: number; lifespanDays: number; capacityLitres: number;
     };
     const respond = async (
       source: "app" | "store",
       status: string,
       dateCreated: unknown,
-      rawItems: { productId: number; name: string; quantity: number }[],
+      rawItems: { lineId: number; productId: number; name: string; quantity: number }[],
+      evidence: Parameters<typeof activationEligibility>[0],
     ): Promise<void> => {
-      if (!REGISTRABLE_STATUSES.has(status)) {
+      const eligibility = activationEligibility(evidence, source);
+      if (!eligibility.eligible) {
         res.status(409).json({
-          error: "This purchase is not active (cancelled or refunded), so it can't be used for registration.",
+          error: eligibility.reason,
         });
         return;
       }
@@ -6101,8 +6140,10 @@ router.post(
       }));
       if (commitProductId !== undefined || commitActivatedAt !== undefined) {
         const productId = Number(commitProductId);
-        const item = items.find((candidate) => candidate.productId === productId);
-        const activatedAt = new Date(String(commitActivatedAt ?? dateCreated ?? ""));
+        const item = items.find((candidate) => candidate.productId === productId &&
+          (unitId === undefined || purchaseUnitIds(source, orderId, candidate.lineId, candidate.quantity).includes(String(unitId))));
+        const date = typeof commitActivatedAt === "string" ? commitActivatedAt.slice(0, 10) : "";
+        const activatedAt = new Date(date);
         if (!item || item.lifespanDays <= 0) {
           logger.warn({ accountId, orderId, reason: "ineligible_product" }, "[register-purchase] rejected");
           res.status(400).json({ error: "Select an eligible filter from this purchase." });
@@ -6112,29 +6153,20 @@ router.post(
           res.status(422).json({ error: "This filter does not have a rated litre capacity yet. Contact Ultra-Clear support." });
           return;
         }
-        if (Number.isNaN(activatedAt.getTime()) || activatedAt.getTime() > Date.now() + 60 * 60 * 1000) {
+        if (!validInstallationDate(date)) {
           logger.warn({ accountId, orderId, reason: "invalid_activation_date" }, "[register-purchase] rejected");
           res.status(400).json({ error: "Invalid activation date." });
           return;
         }
-        const inserted = await db.insert(ucRegisteredFiltersTable)
-          .values({
-            userId: accountId,
-            productId,
-            productName: item.name,
-            ratedCapacityLitres: item.capacityLitres,
-            activatedAt,
-            sourceOrderId: orderId,
-            source,
-          } as typeof ucRegisteredFiltersTable.$inferInsert)
-          .onConflictDoNothing()
-          .returning();
-        if (inserted.length === 0) {
-          logger.warn({ accountId, orderId, productId, source, reason: "duplicate_registration" }, "[register-purchase] rejected");
-          res.status(409).json({ error: "This filter from this receipt is already registered to your account." });
-          return;
+        try {
+          const selectedUnit = typeof unitId === "string" ? unitId : purchaseUnitIds(source, orderId, item.lineId, item.quantity)[0];
+          if (!selectedUnit) { res.status(422).json({ error: "Purchase quantity requires staff review." }); return; }
+          const registration = await registerOrderUnit({ accountId, source, orderId, productId, lineId: item.lineId,
+            unitId: selectedUnit, productName: item.name, capacityLitres: item.capacityLitres, activatedAt });
+          res.status(registration.repeated ? 200 : 201).json({ source, orderId, status, dateCreated, items, ...registration });
+        } catch (error) {
+          res.status(409).json({ error: error instanceof Error ? error.message : "Activation could not be completed." });
         }
-        res.status(201).json({ source, orderId, status, dateCreated, items, registration: inserted[0] });
         return;
       }
       res.json({ source, orderId, status, dateCreated, items });
@@ -6148,9 +6180,19 @@ router.post(
         .from(ucOrdersTable)
         .where(eq(ucOrdersTable.id, orderId))
         .limit(1);
-      if (row) {
+      if (row && requestedSource !== "store") {
         const addr = (row.shippingAddress ?? {}) as Record<string, string>;
         if (appPurchaseOwnedBy(accountId, row.userId, addr["phone"], phone, phonesMatch)) {
+          if (row.wcOrderId && hasWCCredentials()) {
+            const currentStoreOrder = await wcFetchOne(`/orders/${row.wcOrderId}`);
+            if (!currentStoreOrder) {
+              res.status(503).json({ error: "Store confirmation unavailable. Retry when connected before activation." }); return;
+            }
+            const currentEligibility = activationEligibility({ status: String(currentStoreOrder.status),
+              paymentMethod: row.paymentMethod, checkoutState: row.checkoutState, paymentConfirmedAt: row.paymentConfirmedAt,
+              codCollectionStatus: row.codCollectionStatus, customerStage: row.customerStage }, "app");
+            if (!currentEligibility.eligible) { res.status(409).json({ error: currentEligibility.reason }); return; }
+          }
           const items = await db
             .select()
             .from(ucOrderItemsTable)
@@ -6159,7 +6201,9 @@ router.post(
             "app",
             row.status,
             row.dateCreated,
-            items.map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity })),
+            items.map((i) => ({ lineId: i.id, productId: i.productId, name: i.name, quantity: i.quantity })),
+            { status: row.status, paymentMethod: row.paymentMethod, checkoutState: row.checkoutState,
+              paymentConfirmedAt: row.paymentConfirmedAt, codCollectionStatus: row.codCollectionStatus, customerStage: row.customerStage },
           );
           return;
         }
@@ -6171,7 +6215,12 @@ router.post(
     }
 
     // 2) Live store purchase record (store receipts / orders placed on the site)
-    if (hasWCCredentials()) {
+    if (hasWCCredentials() && requestedSource !== "app") {
+      const mirror = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
+        .where(and(eq(ucOrdersTable.wcOrderId, orderId), eq(ucOrdersTable.userId, String(accountId)))).limit(1);
+      if (mirror.length) {
+        res.status(409).json({ error: "Activate this checkout using the app purchase listed in your account, not its store mirror." }); return;
+      }
       const o = await wcFetchOne(`/orders/${orderId}`);
       if (o && Number(o["id"]) === orderId) {
         const billing = (o["billing"] ?? {}) as Record<string, unknown>;
@@ -6181,12 +6230,14 @@ router.post(
         if (storePurchaseOwnedBy(account.email, billing["email"], billing["phone"], shipping["phone"], phone, normalizeEmail, phonesMatch)) {
           const rawItems = Array.isArray(o["line_items"])
             ? (o["line_items"] as Record<string, unknown>[]).map((i) => ({
+                lineId: Number(i["id"]),
                 productId: Number(i["product_id"]),
                 name: String(i["name"] ?? ""),
                 quantity: Number(i["quantity"]) || 1,
               }))
             : [];
-          await respond("store", String(o["status"] ?? ""), o["date_created"], rawItems);
+          await respond("store", String(o["status"] ?? ""), o["date_created"], rawItems,
+            { status: String(o["status"] ?? ""), paymentMethod: String(o["payment_method"] ?? ""), datePaid: o["date_paid"] });
           return;
         }
       }
@@ -6206,6 +6257,9 @@ router.post(
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
 router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => {
+  if (req.headers.authorization && !verifyToken(req.headers.authorization)) {
+    res.status(401).json({error:"Authentication required"}); return;
+  }
   // Capture the caller's identity up-front so we can send a push notification
   // after the order is created without re-parsing the header each time.
   const orderUserId = userIdFromBearer(req.headers["authorization"]);
@@ -6222,11 +6276,14 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         res.status(402).json({ error: "Verified payment does not match this checkout total or currency" }); return;
       }
       const confirmed = await confirmCheckoutOrder(order.id, paymentReference);
-      if (confirmed.reconciliationRequired) { res.status(202).json({ id: order.id, reconciliationRequired: true }); return; }
+      if (confirmed.reconciliationRequired) {
+        res.status(202).json({ ...await checkoutOrderResponse({ ...confirmed.order, wc_order_id: null }), reconciliationRequired: true });
+        return;
+      }
       const response = await checkoutOrderResponse(confirmed.order);
       if (!confirmed.repeated) await notifyConfirmedCheckout(confirmed.order);
       res.json(response);
-    } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+    } catch (error) { res.status(422).json({ error: (error as Error).message, fields: (error as { fields?: Record<string, string> }).fields }); }
     return;
   }
 
@@ -6250,13 +6307,18 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   let userEmail: string | undefined;
   if (Number.isInteger(orderNumericId) && orderNumericId > 0) {
     const accountResult = await pool.query(
-      `SELECT id,email FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
+      `SELECT id,email,phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
       [orderNumericId],
     );
     userEmail = accountResult.rows[0]?.email as string | undefined;
     if (!userEmail) {
       res.status(401).json({ error: "Authenticated customer account required" });
       return;
+    }
+    const profileContact = validateCustomerContact(accountResult.rows[0]);
+    if (!profileContact.ok) {
+      res.status(422).json({ code: "CONTACT_COMPLETION_REQUIRED", error: "Complete your account phone and contact address before checkout.",
+        fields: profileContact.fields }); return;
     }
   }
   if (!lineItems || !paymentMethod) {
@@ -6269,6 +6331,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   // local numbers; without a valid country, local formats are rejected rather
   // than guessed as Kenyan.
   const submittedShipping = shippingAddress;
+  const orderContact = validateCustomerContact({ phone: submittedShipping?.phone, address: submittedShipping?.address1, country: submittedShipping?.country });
+  const contactErrors = { ...orderContact.fields, ...(paymentMethod === "cod" ? validateCodShipping(submittedShipping).fields : {}) };
+  if (contactErrors.address) contactErrors.address1 = contactErrors.address;
   const submittedPhone = typeof submittedShipping?.phone === "string"
     ? submittedShipping.phone
     : "";
@@ -6278,6 +6343,10 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const normalizedOrderPhone = submittedPhone
     ? normalizeInternationalPhone(submittedPhone, submittedCountry)
     : null;
+  if (!normalizedOrderPhone) contactErrors.phone = "Please enter a valid phone number for the selected country.";
+  if (Object.keys(contactErrors).length) {
+    res.status(400).json({ error: Object.values(contactErrors).join(" "), fields: contactErrors }); return;
+  }
   if (!normalizedOrderPhone) {
     if (paymentMethod === "cod") {
       const codCheck = validateCodShipping(submittedShipping);
@@ -8424,7 +8493,14 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
   }
   const ticketNumericId = Number(userId);
   if (await guardDeletedAccount(ticketNumericId, res)) return;
-  const { productModel, issueDescription, preferredContactTime, photos, videos } = req.body as {
+  const [ticketAccount] = await db.select().from(ucUsersTable).where(eq(ucUsersTable.id, ticketNumericId)).limit(1);
+  const ticketContact = validateCustomerContact(ticketAccount ?? {});
+  if (!ticketContact.ok) {
+    res.status(422).json({ error: "Complete your phone number and contact address in Account before requesting service.", fields: ticketContact.fields, code: "CONTACT_COMPLETION_REQUIRED" });
+    return;
+  }
+  const { productModel, issueDescription, preferredContactTime, photos, videos, contactDetails } = req.body as {
+    contactDetails?: { phone?: unknown; address?: unknown; country?: unknown };
     productModel?: string;
     issueDescription?: string;
     preferredContactTime?: string;
@@ -8434,6 +8510,10 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
   if (!productModel || !issueDescription) {
     res.status(400).json({ error: "Required fields missing" });
     return;
+  }
+  const serviceContact = validateCustomerContact(contactDetails ?? ticketAccount ?? {});
+  if (!serviceContact.ok) {
+    res.status(400).json({ error: Object.values(serviceContact.fields).join(" "), fields: serviceContact.fields }); return;
   }
   const photoList = sanitizeMediaUrls(photos, 6);
   const videoList = sanitizeMediaUrls(videos, 2);
@@ -8457,6 +8537,8 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
       `Product(s):    ${productModel}`,
       `Issue:         ${issueDescription}`,
       `Contact time:  ${preferredContactTime ?? "Any time"}`,
+      `Service phone: ${serviceContact.phone}`,
+      `Service address: ${serviceContact.address}`,
       `Customer:      ${customerStr}`,
       ...(photoList!.length ? [`Photos:        ${photoList!.join(", ")}`] : []),
       ...(videoList!.length ? [`Videos:        ${videoList!.join(", ")}`] : []),
@@ -8495,6 +8577,7 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
     appendToLocalStore("tickets.jsonl", {
       id: ticketId, userId, productModel, issueDescription,
       preferredContactTime: preferredContactTime ?? "Any time",
+      contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
       photos: photoList, videos: videoList, submittedAt: new Date().toISOString(),
     });
   }
@@ -8508,6 +8591,7 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
       preferredContactTime: preferredContactTime ?? "Any time",
       photos: photoList,
       videos: videoList,
+      contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
     }).returning();
     dispatchTktNotifications(ticket.id);
     res.status(201).json(ticket);
@@ -8515,6 +8599,7 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
     console.error("[tickets] DB insert failed, using fallback:", err);
     const fallback = {
       id, userId, productModel, issueDescription,
+      contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
       preferredContactTime: preferredContactTime ?? "Any time",
       photos: photoList,
       videos: videoList,
@@ -8536,6 +8621,11 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
   }
   const wtNumericId = Number(userId);
   if (await guardDeletedAccount(wtNumericId, res)) return;
+  const account = (await pool.query("SELECT phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [wtNumericId])).rows[0];
+  if (!account || !validateCustomerContact(account).ok) {
+    res.status(422).json({ code: "CONTACT_COMPLETION_REQUIRED", error: "Complete your account phone and contact address before requesting a physical test." });
+    return;
+  }
   const { name, address, phone, email: formEmail, waterSource, concerns, photos, videos } = req.body as {
     name?: string;
     address?: string;
@@ -8546,10 +8636,12 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
     photos?: string[];
     videos?: string[];
   };
-  if (!name || !address || !phone) {
-    res.status(400).json({ error: "Required fields missing" });
+  const testContact = validateCustomerContact({ phone, address });
+  if (!testContact.ok || typeof name !== "string" || !name.trim()) {
+    res.status(400).json({ error: Object.values(testContact.fields).join(" ") || "Enter your name.", fields: testContact.fields });
     return;
   }
+  req.body.phone = testContact.phone;
   const photoList = sanitizeMediaUrls(photos, 6);
   const videoList = sanitizeMediaUrls(videos, 2);
   if (photoList === null || videoList === null) {
@@ -8630,7 +8722,7 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
 
   try {
     const [wt] = await db.insert(ucWaterTestsTable).values({
-      id, userId, name, address, phone,
+      id, userId, name: name!.trim(), address: testContact.address, phone: testContact.phone!,
       waterSource: waterSource ?? "Municipal",
       concerns:    concerns ?? "",
       photos:      photoList,

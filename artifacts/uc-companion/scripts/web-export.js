@@ -32,8 +32,8 @@ function pairWebResources(directory, basePath, buildId) {
   console.log(`Exported ${chunks.length} web entry/route/shared chunks`);
 }
 
-async function exportWeb(projectRoot, buildId, basePath, env) {
-  const directory = path.join(projectRoot, 'static-build', buildId, 'web');
+async function exportWeb(projectRoot, buildId, basePath, env, outputRoot = projectRoot) {
+  const directory = path.join(outputRoot, 'static-build', buildId, 'web');
   await new Promise((resolve, reject) => {
     const child = spawn('pnpm', [
       'exec', 'expo', 'export', '--platform', 'web', '--output-dir', directory, '--clear',

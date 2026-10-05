@@ -6,6 +6,7 @@ import {
   normalizeInstantPhone as normalizeSharedPhone,
 } from "@workspace/api-zod/instant-water-identity";
 import { countryCodeFromValue } from "@workspace/api-zod/phone";
+import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, ObjectStorageService } from "./objectStorage.js";
 import {
   scoreInstantWaterCheck,
@@ -995,6 +996,14 @@ export async function requestPhysicalTest(input: {
     row = result.rows[0] as AssessmentRow;
     if (!row) throw new Error("NOT_FOUND");
   } else throw new Error("ACTION_UNAUTHORIZED");
+  if (input.userId && row.customer_user_id && String(row.customer_user_id) !== input.userId) throw new Error("ACTION_UNAUTHORIZED");
+  const contact = validateCustomerContact({ phone: row.normalized_phone, address: input.serviceAddress, country: row.country });
+  if (!contact.ok) throw new Error(!contact.phone ? "INVALID_PHONE" : "CONTACT_ADDRESS_REQUIRED");
+  if (input.userId) {
+    if (!Number.isSafeInteger(Number(input.userId)) || Number(input.userId) <= 0) throw new Error("CONTACT_COMPLETION_REQUIRED");
+    const account = (await pool.query("SELECT phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [Number(input.userId)])).rows[0];
+    if (!account || !validateCustomerContact(account).ok) throw new Error("CONTACT_COMPLETION_REQUIRED");
+  }
   const serviceState = physicalServiceState(row.country);
   const requestHash = hashSecret(stablePayload({
     assessmentId: input.assessmentId,

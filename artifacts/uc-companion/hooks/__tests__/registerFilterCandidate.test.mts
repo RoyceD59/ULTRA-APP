@@ -26,7 +26,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computeRegisterCandidate } from '../filterCandidateUtils.js';
+import { computeRegisterCandidate as computeCandidate } from '../filterCandidateUtils.js';
+// These original fixtures model accepted purchases. Unconfirmed evidence has
+// a separate regression below instead of silently assuming every order is paid.
+const computeRegisterCandidate = (options: Parameters<typeof computeCandidate>[0]) =>
+  computeCandidate({ ...options, orders: options.orders.map(order => ({ ...order, activationEligible: order.activationEligible ?? true })) });
 import type { FilterActivation } from '../useNotifications.js';
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -56,6 +60,11 @@ function makeActivation(override?: Partial<FilterActivation>): FilterActivation 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('computeRegisterCandidate — replace-mode sourceOrderId guard', () => {
+  it('never nudges an order without explicit server eligibility', () => {
+    const result = computeCandidate({ eligibleForRegister: true, eligibleForReplace: false, activation: null,
+      filterProducts: [PRODUCT], orders: [{ id: 901, dateCreated: NEWER_DATE, lineItems: [{ productId: PRODUCT.id }] }] });
+    assert.equal(result, null);
+  });
 
   // A. The same order that registered the current cycle must be skipped.
   it('A: sourceOrderId === order.id → null (nudge stays hidden)', () => {

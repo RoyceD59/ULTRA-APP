@@ -230,6 +230,15 @@ export default function OrderDetailScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.statusLabel, { color: statusCfg.color }]}>{statusCfg.label}</Text>
           <Text style={[styles.statusDesc, { color: colors.text }]}>{statusCfg.desc}</Text>
+          {!!order.synchronizationStatus && <Text style={{ color: colors.mutedForeground }}>
+            Store synchronization: {order.synchronizationStatus.replaceAll('_', ' ')}
+          </Text>}
+          {!!order.paymentStatus && <Text style={{ color: colors.mutedForeground }}>
+            Payment evidence: {order.paymentStatus.replaceAll('_', ' ')}
+          </Text>}
+          {order.synchronizationStatus === 'reconciliation_required' && <Text accessibilityRole="alert" style={{ color: colors.destructive }}>
+            Your checkout is recorded but needs staff review. Do not pay again or create another order.
+          </Text>}
         </View>
       </View>
 

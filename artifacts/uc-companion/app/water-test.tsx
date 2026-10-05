@@ -46,6 +46,8 @@ import { trackEvent } from '@/lib/analytics';
 import { CountryPicker } from '@/components/CountryPicker';
 import { Image } from 'expo-image';
 import RecommendationLink from '@/components/RecommendationLink';
+import ContactCompletion from '@/components/ContactCompletion';
+import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
 
 type ViewState = 'form' | 'result' | 'history' | 'booking';
 type SelectionSummary = { sources: InstantWaterSource[]; concerns: InstantWaterConcern[]; settings: InstantWaterSetting[] };
@@ -760,9 +762,11 @@ interface BookingViewProps {
 }
 
 function BookingView({ colors, api, assessment, actionToken, onBack, onComplete }: BookingViewProps) {
+  const { user } = useAuth();
   const [promoCode, setPromoCode] = useState('');
   const [promoChecked, setPromoChecked] = useState(false);
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState(user?.address ?? '');
+  useEffect(() => { setAddress(current => current || user?.address || ''); }, [user?.address]);
   const [time, setTime] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -773,6 +777,10 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
   const idempKeyRef = useRef(Crypto.randomUUID());
 
   const submit = async () => {
+    if (user && !validateCustomerContact(user).ok) {
+      setError('Save your contact phone and address before requesting a physical test.');
+      return;
+    }
     if (!address.trim() || !time.trim()) {
       setError("Please provide address and preferred time.");
       return;
@@ -832,6 +840,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
       </TouchableOpacity>
 
       <Text style={[styles.rTitle, { color: colors.text, marginBottom: 8 }]}>Book Physical Test</Text>
+      <ContactCompletion />
       <Text style={{ fontSize: 14, color: colors.mutedForeground, marginBottom: 24, lineHeight: 20 }}>
         A certified technician will visit your location to perform precise measurements.
       </Text>

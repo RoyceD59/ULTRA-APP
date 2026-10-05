@@ -18,6 +18,7 @@ const notificationsUrl = url(`
   export function getZeroLifespanNotice(id) { return read(id); }
   export function effectiveLifespanDays(a) { return a.lifespanDays; }
   export function scheduleAllFilterNotifications() {}
+  export async function getFilterActivation() { return null; }
   export function clearFilterActivation() {}
   export function getNotificationPermissionStatus() {}
   export function requestNotificationPermission() {}
@@ -108,7 +109,7 @@ describe('FilterTrackerSection account-scoped catalogue results', () => {
       if (!tree || typeof tree !== 'object') return [];
       return [tree, ...[tree.props?.children].flat(Infinity).flatMap(all)];
     }
-    const open = all(root.value).find(n => n.props?.onPress && all(n).some(c => c.props?.children === 'Register your filter'));
+    const open = all(root.value).find(n => n.props?.onPress && all(n).some(c => c.props?.children === 'Find a filter receipt'));
     assert.ok(open);
     open.props.onPress(); root.flush();
     assert.ok(all(root.value).some(n => n.props?.visible === true && n.props?.userId === 4));

@@ -14,6 +14,7 @@ export const ucRegisteredFiltersTable = pgTable("uc_registered_filters", {
   activatedAt: timestamp("activated_at", { withTimezone: true }).notNull(),
   sourceOrderId: integer("source_order_id"),
   source: text("source").notNull().default("legacy"),
+  sourceUnitId: text("source_unit_id"),
   offlineSaleId: integer("offline_sale_id"),
   offlineUnitId: text("offline_unit_id"),
   offlineLifespanDays: integer("offline_lifespan_days"),
@@ -30,7 +31,8 @@ export const ucRegisteredFiltersTable = pgTable("uc_registered_filters", {
 }, (t) => [
   uniqueIndex("uc_registered_filters_offline_unit_unique").on(t.offlineUnitId),
   uniqueIndex("uc_registered_filters_source_order_product_idx")
-    .on(t.source, t.sourceOrderId, t.productId),
+    .on(t.source, t.sourceOrderId, t.productId).where(sql`${t.sourceUnitId} IS NULL`),
+  uniqueIndex("uc_registered_filters_source_unit_unique").on(t.sourceUnitId),
   uniqueIndex("uc_registered_filters_verified_purchase_line_unique")
     .on(t.canonicalPurchaseLineId)
     .where(sql`${t.verificationStatus} = 'approved' AND ${t.canonicalPurchaseLineId} IS NOT NULL`),

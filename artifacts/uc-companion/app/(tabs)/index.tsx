@@ -10,10 +10,10 @@ import { useApi, type UCPromotion } from '@/hooks/useApi';
 import ProductCard from '@/components/ProductCard';
 import TrustBadges from '@/components/TrustBadges';
 import ImpactBubble from '@/components/ImpactBubble';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFilterActivation, filterLastChangedKey, effectiveLifespanDays } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
+import { useFilterStatus } from '@/hooks/useFilterStatus';
+import FilterLifeGauge from '@/components/FilterLifeGauge';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import { catalogueQueryKey } from '@/lib/catalogueQuery';
@@ -77,8 +77,7 @@ function HomeScreenContent() {
   const { user } = useAuth();
   const { totalItems, cartHydrated } = useCart();
   const api = useApi();
-  const [filterDays, setFilterDays] = useState<number | null>(null);
-  const [filterAdjusted, setFilterAdjusted] = useState(false);
+  const filterStatus = useFilterStatus();
   const topPad = 0;
 
   const { data: products, isLoading, isError, error: productError, refetch: retryProducts } = useQuery({
@@ -107,40 +106,7 @@ function HomeScreenContent() {
     retry: false,
   });
 
-  const refreshFilterStatus = useCallback(() => {
-    setFilterDays(null);
-    setFilterAdjusted(false);
-    if (!user) return;
-    // Primary: use the structured FilterActivation record (product-specific lifespan)
-    getFilterActivation(user.id).then(activation => {
-      if (activation) {
-        const elapsed   = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-        const effDays   = effectiveLifespanDays(activation);
-        const ratedDays = activation.lifespanDays;
-        setFilterDays(effDays - elapsed);
-        // Show "adjusted" note if a check-in has reduced the effective lifespan
-        setFilterAdjusted(activation.lastCheckIn != null && effDays < ratedDays);
-        return;
-      }
-      // Fallback: user-scoped last_changed timestamp, then legacy unscoped key
-      AsyncStorage.getItem(filterLastChangedKey(user.id)).then(v => {
-        if (v) {
-          const elapsed = Math.floor((Date.now() - parseInt(v)) / 86_400_000);
-          setFilterDays(180 - elapsed);
-          return;
-        }
-        // Legacy pre-migration key — only present on devices not yet migrated
-        AsyncStorage.getItem('uc_filter_last_changed').then(lv => {
-          if (lv) {
-            const elapsed = Math.floor((Date.now() - parseInt(lv)) / 86_400_000);
-            setFilterDays(180 - elapsed);
-          }
-        }).catch(() => {});
-      }).catch(() => {});
-    }).catch(() => {});
-  }, [user]);
-
-  useEffect(() => { refreshFilterStatus(); }, [refreshFilterStatus]);
+  const refreshFilterStatus = useCallback(() => { void filterStatus.refetch(); }, [filterStatus.refetch]);
 
   const cartBarInset = useCartBarInset();
   const featured = products?.slice(0, 6) ?? [];
@@ -170,31 +136,18 @@ function HomeScreenContent() {
 
        <View style={[styles.body, { padding: layout.gutter }]}>
         {/* Filter Health */}
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={filterDays !== null ? 'View filter status' : 'Register your filter'}
+        {filterStatus.life && <TouchableOpacity accessibilityRole="button" accessibilityLabel="View filter status"
           onPress={() => router.push('/(tabs)/account' as never)} activeOpacity={0.8}
-          style={[styles.filterCard, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warningLight : colors.primaryLight, borderColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
-          <View style={[styles.filterIcon, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
-            <Ionicons name="water" size={20} color="#fff" />
-          </View>
+          style={[styles.filterCard, { backgroundColor: colors.primaryLight, borderColor: colors.border }]}>
+          <FilterLifeGauge percent={filterStatus.life.percent}
+            color={filterStatus.life.status === 'green' ? '#22C55E' : filterStatus.life.status === 'amber' ? '#F59E0B' : filterStatus.life.status === 'red' ? '#EF4444' : colors.mutedForeground}
+            label={`${filterStatus.life.description} · ${filterStatus.life.basis}`} />
           <View style={{ flex: 1 }}>
-            {filterDays !== null ? (
-              <>
-                <Text style={[styles.filterTitle, { color: colors.text }]}>
-                  {filterDays > 0 ? `${filterDays} days until next filter change` : 'Filter replacement overdue!'}
-                </Text>
-                <Text style={[styles.filterSub, { color: colors.mutedForeground }]}>
-                  {filterAdjusted ? 'Adjusted for your water quality · Tap to order' : 'Tap to order replacement parts'}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={[styles.filterTitle, { color: colors.text }]}>Register your filter</Text>
-                <Text style={[styles.filterSub, { color: colors.mutedForeground }]}>Track replacement reminders</Text>
-              </>
-            )}
+            <Text style={[styles.filterTitle, { color: colors.text }]}>{filterStatus.life.description}</Text>
+            <Text style={[styles.filterSub, { color: colors.mutedForeground }]}>{filterStatus.life.basis}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        </TouchableOpacity>}
 
         {/* Nudge: bought a trackable filter but never registered it */}
         <RegisterFilterPrompt onRegistered={refreshFilterStatus} />

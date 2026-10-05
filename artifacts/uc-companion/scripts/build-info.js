@@ -3,7 +3,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { COMPANION_TABS } = require('../lib/companionLayout.ts');
 
-function writeBuildInfo(projectRoot, buildId, env = process.env) {
+function writeBuildInfo(projectRoot, buildId, env = process.env, outputRoot = projectRoot) {
   for (const tab of COMPANION_TABS) {
     if (!fs.existsSync(path.join(projectRoot, 'app', '(tabs)', `${tab.name}.tsx`))) {
       throw new Error(`Release is missing the ${tab.name} tab`);
@@ -15,7 +15,7 @@ function writeBuildInfo(projectRoot, buildId, env = process.env) {
     catch { /* Source archives have no Git metadata; explicitly report unknown. */ }
   }
   const info = { buildId, revision, builtAt: new Date().toISOString(), tabs: COMPANION_TABS.map(tab => tab.name) };
-  fs.writeFileSync(path.join(projectRoot, 'static-build', buildId, 'build-info.json'), JSON.stringify(info, null, 2));
+  fs.writeFileSync(path.join(outputRoot, 'static-build', buildId, 'build-info.json'), JSON.stringify(info, null, 2));
   return info;
 }
 module.exports = { writeBuildInfo };

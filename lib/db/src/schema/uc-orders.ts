@@ -4,6 +4,14 @@ const moneyNumber = customType<{ data: number; driverData: string }>({
 });
 import { sql } from "drizzle-orm";
 
+/** Non-financial tombstones prevent delayed requests from restarting a retired intent. */
+export const ucCheckoutRetirementsTable = pgTable("uc_checkout_retirements", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [uniqueIndex("uc_checkout_retirements_owner_key").on(table.userId, table.idempotencyKey)]);
+
 /**
  * Persists orders placed through the UC Companion app.
  * When WooCommerce credentials are present, WC is the system of record and

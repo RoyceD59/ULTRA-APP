@@ -1761,6 +1761,11 @@ async function applyStartupMigrations(): Promise<void> {
       WHERE checkout_idempotency_key != '';
   `);
   logger.info("Startup migration: durable local checkout idempotency ensured");
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_checkout_retirements (
+    id serial PRIMARY KEY, user_id text NOT NULL, idempotency_key text NOT NULL,
+    retired_at timestamptz NOT NULL DEFAULT now());
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_checkout_retirements_owner_key
+      ON uc_checkout_retirements(user_id,idempotency_key);`);
 
   // Opt-in channel flags for filter replacement reminders (email / SMS / WhatsApp).
   // All default false — customers explicitly enable each channel.

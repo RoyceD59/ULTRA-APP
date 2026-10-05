@@ -15,6 +15,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  RegisterUcContactAccountBody,
   UcPasswordChangeResult,
   UcPermanentPasswordInput
 } from '../models';
@@ -31,7 +32,77 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getCompleteUcTemporaryPasswordChangeUrl = () => {
+export const getRegisterUcContactAccountUrl = () => {
+
+
+
+
+  return `/api/uc/auth/register`
+}
+
+/**
+ * @summary Create an account with required normalized phone and contact address
+ */
+export const registerUcContactAccount = async (registerUcContactAccountBody: RegisterUcContactAccountBody, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRegisterUcContactAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registerUcContactAccountBody)
+  }
+);}
+
+
+
+
+
+export const getRegisterUcContactAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerUcContactAccount>>, TError,{data: BodyType<RegisterUcContactAccountBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerUcContactAccount>>, TError,{data: BodyType<RegisterUcContactAccountBody>}, TContext> => {
+
+const mutationKey = ['registerUcContactAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerUcContactAccount>>, {data: BodyType<RegisterUcContactAccountBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerUcContactAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterUcContactAccountMutationResult = NonNullable<Awaited<ReturnType<typeof registerUcContactAccount>>>
+    export type RegisterUcContactAccountMutationBody = BodyType<RegisterUcContactAccountBody>
+    export type RegisterUcContactAccountMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an account with required normalized phone and contact address
+ */
+export const useRegisterUcContactAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerUcContactAccount>>, TError,{data: BodyType<RegisterUcContactAccountBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerUcContactAccount>>,
+        TError,
+        {data: BodyType<RegisterUcContactAccountBody>},
+        TContext
+      > => {
+      return useMutation(getRegisterUcContactAccountMutationOptions(options));
+    }
+    export const getCompleteUcTemporaryPasswordChangeUrl = () => {
 
 
 

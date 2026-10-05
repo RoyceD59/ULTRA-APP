@@ -7,8 +7,9 @@ import { useColors } from '@/hooks/useColors';
 import { RegisterModal } from '@/components/FilterTrackerSection';
 import type { FilterActivation } from '@/hooks/useNotifications';
 
-export default function OfflinePurchasesSection({ userId, focused, onRegistered }: {
+export default function OfflinePurchasesSection({ userId, focused, onRegistered, existingActivation = null, compact = false }: {
   userId: number; focused: boolean; onRegistered: (a: FilterActivation) => void;
+  existingActivation?: FilterActivation | null; compact?: boolean;
 }) {
   const api = useApi(), colors = useColors();
   const [selection, setSelection] = useState<{ saleId: number; saleDate: string; item: OfflinePurchaseItem; unitId: string; registeredInstallationDate?: string } | null>(null);
@@ -20,7 +21,7 @@ export default function OfflinePurchasesSection({ userId, focused, onRegistered 
   useFocusEffect(useCallback(() => { void purchases.refetch(); }, [userId]));
   return <View style={{ gap: 12 }}>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-      <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>Offline purchases</Text>
+      <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{compact ? 'Linked filters' : 'Offline purchases'}</Text>
       <TouchableOpacity testID="offline-purchases-refresh" onPress={() => purchases.refetch()}>
         <Text style={{ color: colors.primary }}>Refresh</Text>
       </TouchableOpacity>
@@ -34,16 +35,16 @@ export default function OfflinePurchasesSection({ userId, focused, onRegistered 
     </View> : null}
     {!purchases.isLoading && !purchases.isError && !purchases.data?.purchases.length
       ? <Text style={{ color: colors.mutedForeground }}>No linked offline sales on this account.</Text> : null}
-    {(purchases.data?.purchases ?? []).map(sale => <View key={`offline-sale:${sale.saleId}`}
+    {(purchases.data?.purchases ?? []).filter(sale => !compact || sale.items.some(i => !i.unavailableReason && i.availableUnitIds.length)).map(sale => <View key={`offline-sale:${sale.saleId}`}
       style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 14, gap: 10 }}>
       <Text style={{ color: colors.mutedForeground }}>Offline Sale · {sale.saleDate}</Text>
       {sale.items.map(item => <View key={`offline-line:${item.lineId}`} style={{ gap: 6 }}>
         <Text style={{ color: colors.text, fontWeight: '600' }}>{item.name} · ×{item.quantity}</Text>
         {item.unavailableReason ? <Text style={{ color: colors.mutedForeground }}>{item.unavailableReason}</Text>
-          : item.availableUnitIds.length ? <TouchableOpacity testID={`offline-register-${item.lineId}`}
-            onPress={() => setSelection({ saleId: sale.saleId, saleDate: sale.saleDate, item, unitId: item.availableUnitIds[0] })}>
-            <Text style={{ color: colors.primary }}>Register filter · {item.availableUnitIds.length} available</Text>
-          </TouchableOpacity> : <Text style={{ color: colors.mutedForeground }}>All units registered. Filter history is preserved.</Text>}
+          : item.availableUnitIds.length ? item.availableUnitIds.map(unitId => <TouchableOpacity key={unitId} testID={`offline-register-${item.lineId}-${unitId}`}
+            onPress={() => setSelection({ saleId: sale.saleId, saleDate: sale.saleDate, item, unitId })}>
+            <Text style={{ color: colors.primary }}>Activate your filter · unit {item.availableUnitIds.indexOf(unitId) + 1}</Text>
+          </TouchableOpacity>) : <Text style={{ color: colors.mutedForeground }}>All units registered. Filter history is preserved.</Text>}
         {(item.registeredUnits ?? []).filter(unit => unit.active).map(unit => <TouchableOpacity key={`restore:${unit.unitId}`}
           testID={`offline-restore-${unit.unitId}`}
           onPress={() => setSelection({ saleId: sale.saleId, saleDate: sale.saleDate, item, unitId: unit.unitId, registeredInstallationDate: unit.installationDate })}>
@@ -52,7 +53,7 @@ export default function OfflinePurchasesSection({ userId, focused, onRegistered 
       </View>)}
     </View>)}
     <RegisterModal key={`offline-modal:${userId}`} visible={!!selection} offlineSelection={selection}
-      existingActivation={null} filterProducts={[]} productsLoading={false} userId={userId}
+      existingActivation={existingActivation} filterProducts={[]} productsLoading={false} userId={userId}
       onClose={() => setSelection(null)} onSave={activation => {
         onRegistered(activation); setSelection(null); void purchases.refetch();
       }} />

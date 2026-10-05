@@ -29,6 +29,7 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { paymentCheckoutFixture } from "./helpers/payment-checkout.js";
 import http from "node:http";
 import { createHmac } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -663,7 +664,7 @@ describe("Paystack initialize — transient outage signalling", () => {
         const res = await realFetch(`${base}/payments/paystack/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "buyer@example.com", amount: 1000 }),
+          body: JSON.stringify({ email: "buyer@example.com", amount: 1000, checkout: paymentCheckoutFixture() }),
         });
 
         const body = (await res.json()) as Record<string, unknown>;

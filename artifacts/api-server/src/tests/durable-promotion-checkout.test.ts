@@ -25,7 +25,7 @@ describe("durable promoted local checkout idempotency", () => {
     process.env.SESSION_SECRET ??= "durable-checkout-test";
     const hash = await bcrypt.hash("Test1234!", 4), stamp = Date.now();
     for (const suffix of ["a", "b"]) {
-      const [u] = await db.insert(ucUsersTable).values({ email: `durable-${suffix}-${stamp}@test.invalid`, passwordHash: hash, firstName: "Amina", lastName: "Test" }).returning();
+      const [u] = await db.insert(ucUsersTable).values({ email: `durable-${suffix}-${stamp}@test.invalid`, passwordHash: hash, firstName: "Amina", lastName: "Test", phone: "+254712345678", address: "Test building, Nairobi" }).returning();
       const value = { id: u!.id, token: issueToken({ id: u!.id, email: u!.email, firstName: "Amina", lastName: "Test" }) }; if (suffix === "a") a = value; else b = value;
     }
     const promo = await pool.query(`INSERT INTO uc_promotions(code,type,effect_mode,effect_value,starts_at,active,created_by,updated_by) VALUES ('DURABLE_TEST','checkout_discount','fixed',100,now(),true,'test','test') RETURNING id`);

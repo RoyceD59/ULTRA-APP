@@ -10,6 +10,84 @@ import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant
 
 
 /**
+ * @summary Create an account with required normalized phone and contact address
+ */
+export const registerUcContactAccountBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+export const registerUcContactAccountBodyPasswordMin = 6;
+
+
+
+export const registerUcContactAccountBodyAddressMax = 500;
+
+
+
+export const RegisterUcContactAccountBody = zod.object({
+  "email": zod.string().regex(registerUcContactAccountBodyEmailRegExp),
+  "password": zod.string().min(registerUcContactAccountBodyPasswordMin),
+  "firstName": zod.string().min(1),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().min(1),
+  "address": zod.string().min(1).max(registerUcContactAccountBodyAddressMax),
+  "referralCode": zod.string().optional()
+})
+
+export const RegisterUcContactAccountResponse = zod.unknown()
+
+
+/**
+ * @summary Edit contact details without creating or relinking an account
+ */
+
+
+export const completeUcContactProfileBodyAddressMax = 500;
+
+
+
+export const CompleteUcContactProfileBody = zod.object({
+  "firstName": zod.string().min(1).optional(),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().min(1).optional(),
+  "address": zod.string().min(1).max(completeUcContactProfileBodyAddressMax).optional()
+})
+
+export const CompleteUcContactProfileResponse = zod.unknown()
+
+
+/**
+ * @summary Read-only checkout evidence for at most 100 explicit local order IDs
+ */
+export const GetUcCheckoutDiagnosticsQueryParams = zod.object({
+  "ids": zod.coerce.string()
+})
+
+export const GetUcCheckoutDiagnosticsResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Owned purchase units with authoritative activation eligibility
+ */
+export const GetUcActivationPurchasesResponse = zod.object({
+  "purchases": zod.array(zod.object({
+  "source": zod.enum(['app', 'store']),
+  "orderId": zod.number(),
+  "dateCreated": zod.string(),
+  "phone": zod.string(),
+  "status": zod.string(),
+  "items": zod.array(zod.object({
+  "lineId": zod.number(),
+  "productId": zod.number(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "availableUnitIds": zod.array(zod.string()),
+  "unavailableReason": zod.string().nullable()
+}))
+}))
+})
+
+
+/**
  * @summary Read only this account's durably linked offline sales
  */
 export const ListCustomerOfflinePurchasesResponse = zod.object({
@@ -198,6 +276,21 @@ export const CancelCompanionCheckoutBody = zod.object({
 
 export const CancelCompanionCheckoutResponse = zod.object({
   "cancelled": zod.boolean()
+})
+
+
+export const getCompanionCheckoutRecoveryQueryIdempotencyKeyMin = 8;
+export const getCompanionCheckoutRecoveryQueryIdempotencyKeyMax = 200;
+
+
+
+export const GetCompanionCheckoutRecoveryQueryParams = zod.object({
+  "idempotencyKey": zod.coerce.string().min(getCompanionCheckoutRecoveryQueryIdempotencyKeyMin).max(getCompanionCheckoutRecoveryQueryIdempotencyKeyMax)
+})
+
+export const GetCompanionCheckoutRecoveryResponse = zod.object({
+  "resolution": zod.enum(['editable', 'completed', 'unresolved']),
+  "orderId": zod.number().nullable()
 })
 
 
@@ -2003,6 +2096,11 @@ export const GetUcCustomerResponse = zod.object({
 })
 }),
   "orders": zod.array(zod.object({
+  "checkoutState": zod.string().nullish(),
+  "synchronizationStatus": zod.string().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentConfirmedAt": zod.string().nullish(),
+  "reconciliationRequired": zod.boolean().optional(),
   "id": zod.number(),
   "status": zod.string(),
   "total": zod.string(),

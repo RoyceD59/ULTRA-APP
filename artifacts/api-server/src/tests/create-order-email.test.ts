@@ -78,7 +78,7 @@ async function createTestUser(
   const hash  = await bcryptjs.hash("Test1234!", 4);
   const [row]  = await db
     .insert(ucUsersTable)
-    .values({ email, passwordHash: hash, firstName: "Test", lastName: "Buyer", phone: "+254711000001" })
+    .values({ email, passwordHash: hash, firstName: "Test", lastName: "Buyer", phone: "+254711000001", address: "Test building, Nairobi" })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;
   createdUserIds.push(id);

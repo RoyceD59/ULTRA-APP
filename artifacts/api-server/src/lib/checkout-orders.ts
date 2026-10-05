@@ -3,6 +3,8 @@ import { pool } from "@workspace/db";
 import { checkoutQuote, claimReferralBenefit, type Fulfillment } from "./checkout-pricing.js";
 import { consumePromotionOnClient } from "./reward-promotions.js";
 import { validateCodShipping, validatePhone } from "./order-validation.js";
+import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
+import { orderEvidence } from "./order-evidence.js";
 import { hasWCCredentials, wcFetchArray, wcCreateCheckoutOrder } from "../routes/uc.js";
 
 export interface CheckoutInput {
@@ -27,17 +29,23 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
   if (!input || typeof input.idempotencyKey !== "string" || input.idempotencyKey.trim().length < 8 ||
       input.idempotencyKey.length > 200) throw new Error("A checkout retry key is required");
   const address = input.shippingAddress;
+  const contact = validateCustomerContact({ phone: address?.phone, address: address?.address1, country: address?.country });
+  if (!contact.ok) throw Object.assign(new Error(Object.values(contact.fields).join(" ")), {
+    fields: { ...contact.fields, ...(contact.fields.address ? { address1: contact.fields.address } : {}) },
+  });
   if (!address || typeof address.firstName !== "string" || !address.firstName.trim() ||
       typeof address.phone !== "string" || !validatePhone(address.phone, address.country).valid) throw new Error("A name and valid contact phone are required");
   if (input.fulfillment === "delivery" && (!address.address1?.trim() || !address.city?.trim())) throw new Error("Delivery address and city are required");
   if (method === "cod" && !validateCodShipping(address).ok) throw new Error("Please check your contact details");
   if (!["cod", "free", "paystack", "mpesa", "stripe"].includes(method)) throw new Error("Unsupported payment method");
-  input = { ...input, shippingAddress: { ...address, phone: validatePhone(address.phone, address.country).normalized! } };
+  input = { ...input, shippingAddress: { ...address, address1: contact.address, phone: contact.phone! } };
   const hash = fingerprint(input, method);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [userId, input.idempotencyKey]);
+    const retired = await client.query("SELECT id FROM uc_checkout_retirements WHERE user_id=$1 AND idempotency_key=$2", [userId, input.idempotencyKey]);
+    if (retired.rows[0]) throw new Error("This checkout was safely retired; refresh your checkout before submitting.");
     await client.query("SELECT pg_advisory_xact_lock(862,hashtext($1))", [userId]);
     const prior = await client.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2", [userId, input.idempotencyKey]);
     if (prior.rows[0]) {
@@ -48,8 +56,9 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
     }
     const customerId = Number(userId);
     const account = Number.isInteger(customerId) && customerId > 0
-      ? await client.query("SELECT email FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [customerId]) : null;
+      ? await client.query("SELECT email,phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [customerId]) : null;
     if (account && !account.rows[0]) throw new Error("Customer account is unavailable");
+    if (account && !validateCustomerContact(account.rows[0]).ok) throw new Error("Complete your account phone and contact address before checkout.");
     const pricing = await checkoutQuote({ ...input, code: input.promoCode }, Number.isInteger(customerId) && customerId > 0 ? customerId : undefined);
     if (input.quotedTotal !== undefined && (!Number.isFinite(input.quotedTotal) || Math.abs(input.quotedTotal - pricing.total) > 0.001)) {
       throw new Error("Prices changed; refresh your checkout total before paying");
@@ -63,7 +72,7 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
     if (method === "free" && pricing.total !== 0) throw new Error("This order requires payment");
     if (method !== "cod" && method !== "free" && pricing.total === 0) throw new Error("No payment is needed; confirm the free order");
     if (method === "mpesa" && !Number.isInteger(pricing.total)) throw new Error("M-Pesa requires a whole-shilling total. Choose Paystack for this checkout.");
-    const normalizedAddress = { ...address, phone: validatePhone(address.phone, address.country).normalized!,
+    const normalizedAddress = { ...input.shippingAddress,
       fulfillment: input.fulfillment, subtotal: String(pricing.subtotal), shippingAmount: String(pricing.delivery),
       discountAmount: String(pricing.discountAmount) };
     const inserted = await client.query(`INSERT INTO uc_orders
@@ -98,6 +107,9 @@ export async function bindCheckoutPayment(orderId: number, reference: string, pr
 export async function checkoutOrderResponse(order: any) {
   const items = await pool.query("SELECT * FROM uc_order_items WHERE order_id=$1 ORDER BY id", [order.id]);
   return { id: order.wc_order_id ?? order.id, status: order.status, total: order.total, currency: order.currency,
+    ...orderEvidence({ status: order.status, paymentMethod: order.payment_method, checkoutState: order.checkout_state,
+      paymentConfirmedAt: order.payment_confirmed_at, wcOrderId: order.wc_order_id, codCollectionStatus: order.cod_collection_status,
+      shippingAddress: order.shipping_address }),
     dateCreated: order.date_created, paymentMethod: order.payment_method, shippingAddress: order.shipping_address,
     fulfillment: order.shipping_address?.fulfillment, shippingAmount: Number(order.shipping_address?.shippingAmount ?? 0),
     discountAmount: Number(order.discount_amount), promoCode: order.promo_code, mpesaReceipt: order.mpesa_receipt ?? "",
@@ -119,9 +131,24 @@ export async function confirmCheckoutOrder(orderId: number, reference: string) {
     if (hasWCCredentials() && !order.wc_order_id) {
       if (["remote_attempted", "remote_unknown"].includes(order.checkout_state)) {
         const candidates = await wcFetchArray("/orders", { per_page: "100", status: "any", orderby: "date", order: "desc" });
-        const matched = candidates?.find(o => Array.isArray(o.meta_data) && (o.meta_data as any[]).some(m => m.key === "uc_checkout_claim_id" && m.value === order.checkout_claim_id));
+        const matches = candidates?.filter(o => Array.isArray(o.meta_data) && (o.meta_data as any[]).some(m => m.key === "uc_checkout_claim_id" && m.value === order.checkout_claim_id));
+        const matched = matches?.length === 1 ? matches[0] : undefined;
         if (!matched) { await client.query("COMMIT"); return { order, repeated: true, reconciliationRequired: true }; }
-        if (Math.abs(Number(matched.total) - Number(order.total)) > 0.01) throw new Error("WooCommerce total differs from the verified checkout; staff reconciliation required");
+        const meta = new Map((matched.meta_data as any[]).map(m => [m.key, String(m.value)]));
+        const remoteLines = Array.isArray(matched.line_items) ? matched.line_items as any[] : [];
+        const expectedLines = order.checkout_snapshot.pricing.lines as any[];
+        const quantities = (lines: any[], remote: boolean) => lines.reduce((map, line) => {
+          const id = Number(remote ? line.product_id : line.productId);
+          map.set(id, (map.get(id) ?? 0) + Number(line.quantity)); return map;
+        }, new Map<number, number>());
+        const expected = quantities(expectedLines, false), actual = quantities(remoteLines, true);
+        if (!Number.isFinite(Number(matched.total)) || Math.abs(Number(matched.total) - Number(order.total)) > 0.01 ||
+            String(matched.currency).toUpperCase() !== order.currency || matched.payment_method !== order.payment_method ||
+            meta.get("uc_account_id") !== order.user_id || meta.get("payment_reference") !== reference ||
+            ["failed", "cancelled", "refunded"].includes(String(matched.status)) ||
+            expected.size !== actual.size || [...expected].some(([id, quantity]) => actual.get(id) !== quantity)) {
+          await client.query("COMMIT"); return { order, repeated: true, reconciliationRequired: true };
+        }
         order.wc_order_id = Number(matched.id);
       } else {
         await client.query("UPDATE uc_orders SET checkout_state='remote_attempted',remote_attempted_at=now() WHERE id=$1", [orderId]);

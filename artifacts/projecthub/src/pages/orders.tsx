@@ -36,6 +36,11 @@ const TOKEN_KEY = "uc_orders_admin_token";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AdminOrder {
+  checkoutState?: string | null;
+  paymentStatus?: string;
+  synchronizationStatus?: string;
+  paymentConfirmedAt?: string | null;
+  wcOrderId?: number | null;
   shippingAddress?: Record<string, string>;
   recoveryEnrichedAt?: string | null;
   discountAmount?: number;
@@ -534,6 +539,10 @@ function OrderCard({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-semibold">Order #{order.id}</span>
+            {!!order.checkoutState && <Badge variant="outline">Checkout: {order.checkoutState.replaceAll("_", " ")}</Badge>}
+            {!!order.paymentStatus && <Badge variant="outline">Payment: {order.paymentStatus.replaceAll("_", " ")}</Badge>}
+            {order.synchronizationStatus === "reconciliation_required" && <Badge variant="destructive">Synchronization needs review — do not resubmit payment</Badge>}
+            {order.synchronizationStatus === "local_only" && <Badge variant="outline">Accepted locally</Badge>}
             {!!order.shippingAddress?.fulfillment && <Badge variant="outline">{order.shippingAddress.fulfillment === "collection" ? "Free collection" : "Delivery"}</Badge>}
             {/* Webhook recovery badge — persisted flag, never derived from heuristics */}
             {isRecovery && (
@@ -790,9 +799,32 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
   let baseOrders = recoveryOnly ? recoveryOrders : (orders ?? []);
   if (gapsOnly) baseOrders = baseOrders.filter(o => gapsByOrderId.has(o.id));
   const visibleOrders = statusFilter ? baseOrders.filter(o => o.status === statusFilter) : baseOrders;
+  const [diagnosticError, setDiagnosticError] = useState("");
+  async function downloadDiagnostics() {
+    setDiagnosticError("");
+    const ids = visibleOrders.slice(0, 100).map(o => o.id);
+    if (!ids.length) { setDiagnosticError("Clear your filters or select a date range with orders first."); return; }
+    try {
+      const response = await fetch(`${BASE}/api/uc/admin/orders/reconciliation-report?ids=${ids.join(",")}`,
+        { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error("The report could not be read. No orders were changed.");
+      const body = await response.json();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a"); link.href = url; link.download = "checkout-diagnostics.json"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setDiagnosticError(error instanceof Error ? error.message : "Report unavailable."); }
+  }
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" onClick={downloadDiagnostics}>Download read-only checkout diagnostics</Button>
+        <span className="text-sm text-muted-foreground">First 100 visible orders only. No payment, ownership or synchronization changes.</span>
+        {!!diagnosticError && <p role="alert" className="text-destructive">{diagnosticError}</p>}
+        {visibleOrders.length < (orders?.length ?? 0) && <span className="text-sm text-muted-foreground">
+          {(orders?.length ?? 0) - visibleOrders.length} orders hidden by the current status/recovery filters.
+        </span>}
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

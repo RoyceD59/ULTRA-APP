@@ -53,7 +53,7 @@ describe("canonical dual-write HTTP integration", { concurrency: false }, () => 
   async function createTestUser(suffix: string) {
     const email = `dual-cod-${suffix}-${Date.now()}@test.invalid`;
     const user = await pool.query(
-      "INSERT INTO uc_users (email,password_hash,first_name,last_name) VALUES ($1,$2,'Amina','Buyer') RETURNING id",
+      "INSERT INTO uc_users (email,password_hash,first_name,last_name,phone,address) VALUES ($1,$2,'Amina','Buyer','+254712345678','12 Riverside Dr, Nairobi') RETURNING id",
       [email, await bcryptjs.hash("Test1234!", 4)],
     );
     const login = await realFetch(`${base}/uc/auth/login`, {

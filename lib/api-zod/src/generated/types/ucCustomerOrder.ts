@@ -8,6 +8,11 @@
 import type { UcCustomerOrderItem } from './ucCustomerOrderItem';
 
 export interface UcCustomerOrder {
+  checkoutState?: string | null;
+  synchronizationStatus?: string;
+  paymentStatus?: string;
+  paymentConfirmedAt?: string | null;
+  reconciliationRequired?: boolean;
   id: number;
   status: string;
   total: string;

@@ -92,6 +92,12 @@ function fail(res: Response, error: unknown): void {
     res.status(422).json({ error: (error as Error).message }); return;
   }
   const code = error instanceof Error ? error.message : "";
+  if (code === "CONTACT_COMPLETION_REQUIRED" || code === "CONTACT_ADDRESS_REQUIRED") {
+    res.status(422).json({ code, error: code === "CONTACT_COMPLETION_REQUIRED"
+      ? "Save a valid phone and contact address in your account before booking."
+      : "Enter the service address before booking.", fields: { address: "A nonblank address of 500 characters or fewer is required." } });
+    return;
+  }
   const safeCodes = new Set([
     "RATE_LIMITED", "IDEMPOTENCY_CONFLICT", "CONFLICT", "OWNERSHIP_CONFLICT", "NOT_FOUND",
     "ACTION_UNAUTHORIZED", "OTP_LOCKED", "INVALID_CODE", "SMS_CONSENT_REQUIRED",

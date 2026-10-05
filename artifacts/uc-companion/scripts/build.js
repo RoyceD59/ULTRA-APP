@@ -21,6 +21,8 @@ let metroPort = null;
 
 const projectRoot = path.resolve(__dirname, '..');
 
+const buildRoot = process.env.UC_PREPARED_OUTPUT_DIR
+  ? path.resolve(process.env.UC_PREPARED_OUTPUT_DIR) : projectRoot;
 function findWorkspaceRoot(startDir) {
   let dir = startDir;
   while (dir !== path.dirname(dir)) {
@@ -101,8 +103,8 @@ function getApiDomain() {
 
 function prepareDirectories(timestamp) {
   console.log('Preparing build directories...');
-  preserveLegacyManifests(path.join(projectRoot, 'static-build'));
-  prepareStaticBuild(projectRoot, timestamp);
+  preserveLegacyManifests(path.join(buildRoot, 'static-build'));
+  prepareStaticBuild(buildRoot, timestamp);
 
   console.log('Build:', timestamp);
 }
@@ -274,6 +276,7 @@ async function downloadBundle(platform, timestamp) {
   url.searchParams.set('minify', 'true');
 
   const output = path.join(
+    buildRoot,
     'static-build',
     timestamp,
     '_expo',
@@ -341,7 +344,7 @@ async function downloadBundlesAndManifests(timestamp) {
 }
 
 function extractAssets(timestamp) {
-  const staticBuild = path.join(projectRoot, 'static-build');
+  const staticBuild = path.join(buildRoot, 'static-build');
   const bundles = {
     ios: fs.readFileSync(
       path.join(
@@ -430,7 +433,7 @@ async function downloadAssets(assets, timestamp) {
     const decodedPath = decodeURIComponent(unstablePath);
 
     const outputDir = path.join(
-      projectRoot,
+      buildRoot,
       'static-build',
       timestamp,
       '_expo',
@@ -479,7 +482,7 @@ async function downloadAssets(assets, timestamp) {
 function updateBundleUrls(timestamp, baseUrl) {
   const updateForPlatform = (platform) => {
     const bundlePath = path.join(
-      projectRoot,
+      buildRoot,
       'static-build',
       timestamp,
       '_expo',
@@ -562,7 +565,7 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
 
     // Never overwrite legacy live manifests: a failed first upgrade must leave
     // the no-pointer server on its old native AND browser release.
-    stagePlatformManifest(projectRoot, timestamp, platform, manifest);
+    stagePlatformManifest(buildRoot, timestamp, platform, manifest);
   };
 
   updateForPlatform('ios', manifests.ios);
@@ -622,8 +625,8 @@ async function main() {
 
   console.log('Updating manifests and creating landing page...');
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
-  writeBuildInfo(projectRoot, timestamp);
-  publishWebIcon(projectRoot);
+  writeBuildInfo(projectRoot, timestamp, process.env, buildRoot);
+  publishWebIcon(projectRoot, buildRoot);
   await exportWeb(projectRoot, timestamp, basePath, {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: domain,
@@ -631,9 +634,9 @@ async function main() {
     EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || '',
     EXPO_PUBLIC_CLERK_PROXY_URL: process.env.CLERK_PROXY_URL
       ? `${baseUrl}${process.env.CLERK_PROXY_URL}` : '',
-  });
-  precompressAssets(path.join(projectRoot, 'static-build', timestamp));
-  activateStaticBuild(projectRoot, timestamp);
+  }, buildRoot);
+  precompressAssets(path.join(buildRoot, 'static-build', timestamp));
+  activateStaticBuild(buildRoot, timestamp);
 
   console.log('Build complete! Deploy to:', baseUrl);
 
@@ -650,4 +653,3 @@ main().catch((error) => {
   }
   process.exit(1);
 });
-

@@ -2577,6 +2577,11 @@ export interface UcCustomerOrderItem {
 }
 
 export interface UcCustomerOrder {
+  checkoutState?: string | null;
+  synchronizationStatus?: string;
+  paymentStatus?: string;
+  paymentConfirmedAt?: string | null;
+  reconciliationRequired?: boolean;
   id: number;
   status: string;
   total: string;
@@ -3938,6 +3943,75 @@ export interface AuditEventPage {
   total: number;
 }
 
+export type RegisterUcContactAccountBody = {
+  /** @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$ */
+  email: string;
+  /** @minLength 6 */
+  password: string;
+  /** @minLength 1 */
+  firstName: string;
+  lastName?: string;
+  /** @minLength 1 */
+  phone: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  address: string;
+  referralCode?: string;
+};
+
+export type CompleteUcContactProfileBody = {
+  /** @minLength 1 */
+  firstName?: string;
+  lastName?: string;
+  /** @minLength 1 */
+  phone?: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  address?: string;
+};
+
+export type GetUcCheckoutDiagnosticsParams = {
+ids: string;
+};
+
+export type GetUcCheckoutDiagnostics200 = { [key: string]: unknown };
+
+export type GetUcActivationPurchases200PurchasesItemSource = typeof GetUcActivationPurchases200PurchasesItemSource[keyof typeof GetUcActivationPurchases200PurchasesItemSource];
+
+
+export const GetUcActivationPurchases200PurchasesItemSource = {
+  app: 'app',
+  store: 'store',
+} as const;
+
+export type GetUcActivationPurchases200PurchasesItemItemsItem = {
+  lineId: number;
+  productId: number;
+  name: string;
+  quantity: number;
+  lifespanDays: number;
+  capacityLitres: number;
+  availableUnitIds: string[];
+  unavailableReason: string | null;
+};
+
+export type GetUcActivationPurchases200PurchasesItem = {
+  source: GetUcActivationPurchases200PurchasesItemSource;
+  orderId: number;
+  dateCreated: string;
+  phone: string;
+  status: string;
+  items: GetUcActivationPurchases200PurchasesItemItemsItem[];
+};
+
+export type GetUcActivationPurchases200 = {
+  purchases: GetUcActivationPurchases200PurchasesItem[];
+};
+
 export type CommitCustomerOfflineFilterBody = {
   /** @minimum 1 */
   saleId: number;
@@ -3987,6 +4061,28 @@ export type CancelCompanionCheckoutBody = {
 
 export type CancelCompanionCheckout200 = {
   cancelled: boolean;
+};
+
+export type GetCompanionCheckoutRecoveryParams = {
+/**
+ * @minLength 8
+ * @maxLength 200
+ */
+idempotencyKey: string;
+};
+
+export type GetCompanionCheckoutRecovery200Resolution = typeof GetCompanionCheckoutRecovery200Resolution[keyof typeof GetCompanionCheckoutRecovery200Resolution];
+
+
+export const GetCompanionCheckoutRecovery200Resolution = {
+  editable: 'editable',
+  completed: 'completed',
+  unresolved: 'unresolved',
+} as const;
+
+export type GetCompanionCheckoutRecovery200 = {
+  resolution: GetCompanionCheckoutRecovery200Resolution;
+  orderId: number | null;
 };
 
 export type QuotePhysicalTestPromotion200Promotion = {

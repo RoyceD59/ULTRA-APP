@@ -74,6 +74,8 @@ async function createTestUser(
       passwordHash: hash,
       firstName: "Test",
       lastName: "Buyer",
+      phone: "+254712345678",
+      address: "Fixture contact, Nairobi",
     })
     .returning();
   if (!row) throw new Error("failed to insert test user");
@@ -408,6 +410,7 @@ describe("COD order input validation", () => {
           firstName: "Amina",
           country: "GH",
           phone: "0241234567",
+          address1: "Test collection contact, Accra",
         },
       },
       jwt,

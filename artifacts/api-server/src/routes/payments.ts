@@ -15,6 +15,7 @@ import { reconcileCanonicalPurchaseDualWrite } from "../lib/canonical-purchase-d
 import { prepareCheckoutOrder, bindCheckoutPayment, confirmCheckoutOrder } from "../lib/checkout-orders.js";
 import { getTeamAlertEmail, notifyConfirmedCheckout, verifyPaymentOnServer } from "./uc.js";
 import { verifyToken } from "../lib/jwt.js";
+import { validatePhone } from "../lib/order-validation.js";
 
 async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
   // Provider recovery rows carry an email/phone placeholder until /uc/orders
@@ -101,14 +102,22 @@ export async function recoverSnapshotCheckout(reference: string, amount: number,
   if (!confirmed.repeated && !confirmed.reconciliationRequired) await notify(confirmed.order);
   return order.id;
 }
-// Modern checkout supplies the full cart/fulfillment identity. Old payment
-// clients retain their existing contract, but never influence these snapshots.
-router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/session"], async (req, res, next) => {
-  if (!req.body?.checkout) { next(); return; }
+// Rate-limit both modern initialization and rejected old clients exactly once,
+// before any contact/catalogue/database work. Existing references remain verifiable.
+router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/session"], paymentLimiter, async (req, res, next) => {
+  if (!req.body?.checkout) {
+    res.status(422).json({ error: "Start payment from the updated checkout with your cart, phone and contact address. Existing payment references can still be checked.", fields: { checkout: "A complete checkout is required before starting a payment." }, retryable: false });
+    return;
+  }
   const claims = verifyToken(req.headers.authorization);
+  if (req.headers.authorization && !claims) { res.status(401).json({error:"Authentication required"}); return; }
   if (claims?.type === "team-session") { res.status(403).json({ error: "Customer checkout required" }); return; }
   const userId = claims ? String(claims.id) : "anonymous";
   const method = req.path.includes("paystack") ? "paystack" : req.path.includes("mpesa") ? "mpesa" : "stripe";
+  if (method === "mpesa" && (typeof req.body.phone !== "string" || !validatePhone(req.body.phone, "KE").valid)) {
+    res.status(400).json({error:"Enter a valid M-Pesa phone number.",fields:{phone:"Enter a valid M-Pesa phone number."}});
+    return;
+  }
   try {
     let order = await prepareCheckoutOrder(req.body.checkout, userId, method);
     if (method === "mpesa" && order.checkout_snapshot?.provider && order.payment_reference &&
@@ -161,7 +170,7 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
       return res;
     }) as typeof res.json;
     next();
-  } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+  } catch (error) { res.status(422).json({ error: (error as Error).message, fields: (error as { fields?: Record<string, string> }).fields }); }
 });
 
 // ─── M-Pesa webhook secret — DB-backed with env-var fallback ──────────────────
@@ -324,7 +333,7 @@ async function getMpesaToken(): Promise<string | null> {
   }
 }
 
-router.post("/payments/mpesa", paymentLimiter, async (req: Request, res: Response): Promise<void> => {
+router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void> => {
   const { phone, amount, orderId } = req.body as {
     phone: string;
     amount: number;
@@ -557,7 +566,6 @@ router.get(
 // Frontend opens the sessionUrl in expo-web-browser; Stripe handles all card data.
 router.post(
   "/payments/stripe/session",
-  paymentLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const { amount, currency = "kes", orderId, returnUrl } = req.body as {
       amount: number;
@@ -632,7 +640,6 @@ router.get(
 // ─── Paystack ─────────────────────────────────────────────────────────────────
 router.post(
   "/payments/paystack/init",
-  paymentLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const { email, amount, callbackUrl } = req.body as {
       email: string;

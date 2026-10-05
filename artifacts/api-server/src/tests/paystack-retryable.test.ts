@@ -24,6 +24,8 @@
 import { describe, it, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { randomUUID } from "node:crypto";
+import { pool } from "@workspace/db";
 
 // ── Real fetch reference — saved before any mock can replace it ───────────────
 // Typed explicitly so TypeScript does not widen the cast.
@@ -58,6 +60,7 @@ before(async () => {
   // (rather than the mock-response short-circuit).
   process.env["PAYSTACK_SECRET_KEY"] ??= "sk_test_fake_key_for_testing";
   process.env["SESSION_SECRET"] ??= "test-secret-paystack-retryable";
+  for (const key of ["WC_BASE_URL", "WC_CONSUMER_KEY", "WC_CONSUMER_SECRET"]) delete process.env[key];
 
   const { default: app } = await import("../app.js");
   await new Promise<void>((resolve, reject) => {
@@ -68,10 +71,12 @@ before(async () => {
 });
 
 after(
-  () =>
-    new Promise<void>((resolve, reject) =>
+  async () => {
+    await pool.query("DELETE FROM uc_orders WHERE checkout_idempotency_key LIKE 'retryable-init-%'");
+    return new Promise<void>((resolve, reject) =>
       server.close((e) => (e ? reject(e) : resolve())),
-    ),
+    );
+  },
 );
 
 // ── Helper: make Paystack init request ───────────────────────────────────────
@@ -80,7 +85,12 @@ async function postPaystackInit(srv: http.Server) {
     server: srv,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "test@example.com", amount: 1000 }),
+    body: JSON.stringify({ email: "test@example.com", amount: 1000, checkout: {
+      idempotencyKey: `retryable-init-${randomUUID()}`, fulfillment: "collection",
+      lineItems: [{ productId: 1, quantity: 1 }],
+      shippingAddress: { firstName: "Avery", lastName: "Fixture", address1: "Test building, Nairobi",
+        phone: "+254712345678", country: "KE" },
+    } }),
   });
 }
 

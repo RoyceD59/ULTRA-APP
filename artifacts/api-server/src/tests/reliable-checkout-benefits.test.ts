@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { createHmac, randomUUID } from "node:crypto";
@@ -29,13 +29,14 @@ describe("authoritative checkout and managed waived-service benefits", () => {
   let mpesaCalls = 0;
   const mpesaStatuses = new Map<string,string>();
   const mpesaRefs: string[] = [];
-  const address = { firstName: "Amina", lastName: "Otieno", country: "KE", phone: "+254712345678", address1: "", city: "" };
+  const address = { firstName: "Amina", lastName: "Otieno", country: "KE", phone: "+254712345678", address1: "Collection contact, Nairobi", city: "" };
   const cart = [{ productId: 10001, quantity: 1 }, { productId: 10002, quantity: 2 }];
   const fixture = (key = randomUUID(), extra: Record<string, unknown> = {}) => ({
     lineItems: cart, fulfillment: "collection" as const, shippingAddress: address, idempotencyKey: key, ...extra,
   });
   async function api(path: string, body: unknown, signed = true, headers = {}) {
     const result = await realFetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json",
+      "X-Forwarded-For": `198.51.100.${paymentWindow}`,
       ...(signed ? { Authorization: `Bearer ${token}` } : {}), ...headers }, body: JSON.stringify(body) });
     return { status: result.status, body: await result.json() as any };
   }
@@ -45,14 +46,17 @@ describe("authoritative checkout and managed waived-service benefits", () => {
       VALUES($1,$2,'fixed',$3,now()-interval '1 minute',true,$4,1,'test','test')`, [code, kind, value, cap ?? null]);
     return code;
   }
+  let paymentWindow = 0;
+  beforeEach(() => { paymentWindow++; });
   before(async () => {
+    app.set("trust proxy", "loopback"); // Test-only, so each scenario has its own payment allowance.
     for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY","MPESA_SHORTCODE","PAYSTACK_SECRET_KEY","STRIPE_SECRET_KEY"]) delete process.env[key];
     process.env.SESSION_SECRET ??= "isolated-benefits-test";
     process.env.WC_BASE_URL = "https://benefits-shop.test";
     process.env.WC_CONSUMER_KEY = "fixture";
     process.env.WC_CONSUMER_SECRET = "fixture";
-    const users = await pool.query(`INSERT INTO uc_users(email,password_hash,first_name,last_name,phone,is_admin)
-      VALUES($1,'unused','Amina','Otieno','+254712345678',true),($2,'unused','Mary','Otieno','+254712345679',false) RETURNING id,email`,
+    const users = await pool.query(`INSERT INTO uc_users(email,password_hash,first_name,last_name,phone,is_admin,address)
+      VALUES($1,'unused','Amina','Otieno','+254712345678',true,'Fixture address'),($2,'unused','Mary','Otieno','+254712345679',false,'Fixture address') RETURNING id,email`,
       [`${prefix}@test.invalid`,`${prefix}-other@test.invalid`]);
     uid = users.rows[0].id; otherId = users.rows[1].id;
     token = issueToken({ id: uid, email: users.rows[0].email, firstName: "Amina", lastName: "Otieno" });

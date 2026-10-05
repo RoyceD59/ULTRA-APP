@@ -12,6 +12,7 @@
     ".": "./src/index.ts",
     "./instant-water-identity": "./src/instant-water-identity.ts",
     "./phone": "./src/phone.ts",
+    "./customer-contact": "./src/customer-contact.ts",
     "./blog-inline-links": "./src/blog-inline-links.ts",
     "./blog-inline-links-core": "./src/blog-inline-links-core.cjs",
     "./refill-readiness": "./src/refill-readiness.ts",

@@ -45,7 +45,7 @@
 - [Canonical lifecycle program](canonical-lifecycle-program.md) — unify identity, purchases, registrations, maintenance, and impact; unmatched legacy purchases require staff review.
 - [Parallel dispatcher tests](parallel-dispatcher-tests.md) — inject providers, shared configuration, and recipient scope; a shared test DB alone does not isolate broad dispatch scans.
 - [Cross-path alert timestamps](cross-path-alert-timestamps.md) — when manual and scheduled sends share dedupe state, timestamp upserts must be monotonic and occur only after successful delivery.
-- [OpenAPI URI codegen compatibility](openapi-uri-codegen.md) — generated standalone zod.url() can break runtime imports with the installed Zod; verify URI schemas after codegen.
+- [OpenAPI format codegen compatibility](openapi-uri-codegen.md) — URI/email constructors can break runtime imports with installed Zod; verify formatted schemas after codegen.
 - [OpenAPI integer validation](openapi-integer-validation.md) — generated numeric query coercion can accept fractions; enforce integer bounds before passing pagination to SQL.
 - [pnpm Nix version switching](pnpm-nix-version-switching.md) — disable automatic version switching here to avoid recursive self-installs; retain the external CI pin.
 - [pnpm workspace-state checks](pnpm-workspace-state-race.md) — a JSON parsing failure before the compiler runs can be transient under parallel validation; retry the exact command in isolation.
@@ -56,6 +56,7 @@
 - [Review sentiment policy](review-sentiment-policy.md) — stars and text remain separate; Mixed is not disagreement; staff-only AI must not drive customer decisions.
 - [Hydrate programme policy](hydrate-programme-policy.md) — 3% split equally; refills add no funding; unavailable evidence stays pending; static forest hosting only.
 - [Customer assignment policy](customer-assignment-policy.md) — pre-signup reservations are not accounts or sales; name is not proof; ownership linking never implies COD collection.
+- [Customer contact policy](customer-contact-policy.md) — require phone/address for account creation and relevant submissions; preserve legacy reads and distinguish collection from delivery.
 - [Approved filter specifications](approved-filter-specifications.md) — Hydra Flux: 150 litres or 2–3 months depending on water quality; approved reminder default is 90 days.
 - [Expired retry key policy](expired-retry-key-policy.md) — assessment keys are reusable after 30 days; customer history and longer-lived delivery identities remain separate.
 - [Hydration reminder policy](hydration-reminder-policy.md) — every 2/3/4 hours, 5 am–8 pm local; relocating the daily summary does not authorize regrouping hydration settings.
@@ -72,6 +73,7 @@
 - [Catalogue performance boundaries](catalogue-performance-policy.md) — browsing snapshots never replace transaction-time Woo authority; local gains are not deployed or phone evidence.
 - [Promotions and fulfillment policy](promotions-fulfillment-policy.md) — managed code benefits only; reserve before payment and keep pending outcomes bound to their checkout.
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
+- [Shared TypeScript bundler resolution](shared-typescript-bundler-resolution.md) — Metro may reject .js-to-.ts imports that TypeScript and server tests accept.
 - [Browser fixture recovery](browser-fixture-recovery.md) — browser worker resets can erase test credentials without removing shared-development DB fixtures.
 - [Expo guide printing](expo-guide-printing.md) — web printing ignores supplied HTML; article exports must print an isolated complete document, not the collapsed screen.
 - [Swahili guide audience](swahili-guide-audience.md) — Nairobi customers need offline Swahili installation help; guide localization is not a whole-app migration.
@@ -83,5 +85,7 @@
 - [Companion session rejection](companion-session-rejection.md) — exact forced-sign-out contracts only; preserve request-token provenance and synchronous duplicate protection.
 - [Customer signup reporting](customer-signup-reporting.md) — user chose Africa/Nairobi; Monday and first-of-month midnight resets must not follow database timezone settings.
 - [Field-review reminder policy](field-review-reminder-policy.md) — warn once per review cycle; becoming overdue alone does not authorize a second reminder.
+- [Expo web feedback](expo-web-alert-feedback.md) — native alerts alone did not convey a critical saved-but-unresolved checkout result in the browser.
+- [Checkout intent durability](checkout-intent-durability.md) — retain original retries across reload; clear confirmed intents and isolate private drafts and late responses by account.
 - [Page loader presentation](page-loader-presentation.md) — user chose a single blue droplet with visible loading text; future artwork restyles must retain the text.
 - [Runtime observability policy](runtime-observability-policy.md) — public diagnostics are untrusted operational evidence; ambiguous alert delivery must not be silently replayed.

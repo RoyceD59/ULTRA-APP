@@ -74,6 +74,7 @@ async function createTestUser(): Promise<{ id: number; jwt: string }> {
       firstName: "Test",
       lastName: "Offline",
       phone: "+254711000099",
+      address: "Test building, Nairobi",
     })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;

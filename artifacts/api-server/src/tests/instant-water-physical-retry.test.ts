@@ -11,6 +11,7 @@ import { setPhysicalTestNotificationSenderForTests } from "../lib/physical-test-
 describe("physical water-test retry keys", () => {
   const ids: string[] = [];
   const notifications: string[] = [];
+  const owners: number[] = [];
   before(() => {
     // Do not contact real customer/team delivery providers from this suite.
     setPhysicalTestNotificationSenderForTests(async input => { notifications.push(input.ticketId); });
@@ -19,12 +20,17 @@ describe("physical water-test retry keys", () => {
     setPhysicalTestNotificationSenderForTests();
     await pool.query("DELETE FROM instant_water_idempotency WHERE assessment_id = ANY($1::text[])", [ids]);
     await pool.query("DELETE FROM instant_water_assessments WHERE id = ANY($1::text[])", [ids]);
+    await pool.query("DELETE FROM uc_users WHERE id = ANY($1::int[])", [owners]);
   });
 
   async function fixture(country = "Kenya", guest = false) {
     const assessmentId = randomUUID();
     const ticketId = randomUUID();
-    const userId = `physical-retry-${randomUUID()}`;
+    const owner = await pool.query(`INSERT INTO uc_users(email,password_hash,first_name,last_name,phone,address)
+      VALUES($1,'fixture-only','Retry','Customer','+254712345678','Test building, Nairobi') RETURNING id`,
+      [`physical-retry-${randomUUID()}@test.invalid`]);
+    owners.push(owner.rows[0].id);
+    const userId = String(owner.rows[0].id);
     ids.push(assessmentId);
     await pool.query(
       `INSERT INTO instant_water_assessments

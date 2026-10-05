@@ -64,6 +64,7 @@ async function createUser(suffix: string, phone: string): Promise<{ id: number; 
       firstName: "Route",
       lastName: "Test",
       phone,
+      address: "Test building, Nairobi",
     })
     .returning({ id: ucUsersTable.id });
   assert.ok(user);

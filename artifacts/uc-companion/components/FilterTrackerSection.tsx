@@ -33,6 +33,7 @@ import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
 import {
   FilterActivation,
+  getFilterActivation,
   scheduleAllFilterNotifications,
   clearFilterActivation,
   getNotificationPermissionStatus,
@@ -222,7 +223,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                   </Text>
                 </View>
                 <TouchableOpacity onPress={openRegisterModal} style={[styles.replaceBtn, { borderColor: colors.primary }]}>
-                  <Text style={[styles.replaceBtnTxt, { color: colors.primary }]}>Replace</Text>
+                  <Text style={[styles.replaceBtnTxt, { color: colors.primary }]}>Another receipt</Text>
                 </TouchableOpacity>
               </View>
 
@@ -367,9 +368,9 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                 <Ionicons name="water-outline" size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.productName, { color: colors.text }]}>Register your filter</Text>
+                <Text style={[styles.productName, { color: colors.text }]}>Find a filter receipt</Text>
                 <Text style={[styles.subText, { color: colors.mutedForeground }]}>
-                  Get personalised maintenance reminders and discount offers
+                  Purchased units are listed above. Use a receipt only for a purchase not listed there.
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
@@ -380,6 +381,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
 
       {/* ── Registration / Replace Modal ─────────────────────────────────── */}
       <RegisterModal
+        key={`receipt-modal:${user?.id ?? 0}`}
         visible={showRegisterModal}
         existingActivation={activation}
         filterProducts={filterProducts}
@@ -431,6 +433,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
 
 // ── Registration modal ────────────────────────────────────────────────────────
 interface ModalProps {
+  purchaseSelection?: { source: 'app' | 'store'; orderId: number; phone: string; unitId: string; productId: number; name: string; lifespanDays: number } | null;
   offlineSelection?: { saleId: number; saleDate: string; item: OfflinePurchaseItem; unitId: string; registeredInstallationDate?: string } | null;
   visible: boolean;
   existingActivation: FilterActivation | null;
@@ -450,6 +453,7 @@ export function RegisterModal({
   visible, existingActivation, filterProducts, productsLoading, userId, onClose, onSave,
   initialProductId = null, initialDayOffset = 0,
   offlineSelection = null,
+  purchaseSelection = null,
 }: ModalProps) {
   const colors = useColors();
   const api = useApi();
@@ -458,7 +462,7 @@ export function RegisterModal({
   const [installationDate, setInstallationDate] = useState('');
   const current = useRef(true);
   useEffect(() => { current.current = true; return () => { current.current = false; lookupSeq.current++; }; }, []);
-  useEffect(() => { setInstallationDate(offlineSelection?.registeredInstallationDate ?? ''); setLookupError(''); }, [offlineSelection?.unitId, offlineSelection?.registeredInstallationDate, visible]);
+  useEffect(() => { setInstallationDate(offlineSelection?.registeredInstallationDate ?? ''); setLookupError(''); }, [offlineSelection?.unitId, purchaseSelection?.unitId, offlineSelection?.registeredInstallationDate, visible]);
 
   // ── Receipt-based registration state ──────────────────────────────────────
   // There is deliberately no catalogue mode: all registration side effects
@@ -537,25 +541,30 @@ export function RegisterModal({
       if (status !== 'granted') {
         await requestNotificationPermission();
       }
-      const activatedAt = purchase.dateCreated || new Date().toISOString();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(installationDate)) throw new Error('Confirm the installation date as YYYY-MM-DD.');
+      const activatedAt = `${installationDate}T00:00:00.000Z`;
       await commitPurchaseBackedRegistration(
         () => api.registerFilterPurchase(receipt.trim(), phone.trim(), {
           productId: item.productId,
           activatedAt,
         }),
-        committed => scheduleAllFilterNotifications({
-          activatedAt,
+        committed => {
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          return existingActivation ? Promise.resolve(existingActivation) : scheduleAllFilterNotifications({
+          activatedAt: committed.registration?.activatedAt ?? activatedAt,
           productId:     item.productId,
           productName:   item.name,
           lifespanDays:  item.lifespanDays,
           sourceOrderId: purchase.orderId,
           registeredFilterId: committed.registration?.id,
-        }, userId),
-        onSave,
+          }, userId);
+        },
+        a => { if (current.current) onSave(a); },
       );
       // Refresh only after durable registration so the capacity-backed impact
       // card reflects the newly registered filter.
       await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
+      await queryClient.invalidateQueries({ queryKey: ['activation-purchases', userId] });
       reset();
     } catch (e) {
       // Keep the verified purchase selection visible so the customer can retry
@@ -578,6 +587,39 @@ export function RegisterModal({
     setLookupLoading(false);
     if (purchase) setPurchase(null);
   }
+  async function handleSelectedPurchaseSave() {
+    if (!purchaseSelection || savingRef.current) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(installationDate)) {
+      setLookupError('Confirm the installation date as YYYY-MM-DD. Owning the filter does not start its lifespan.');
+      return;
+    }
+    savingRef.current = true; setSaving(true); setLookupError('');
+    try {
+      await commitPurchaseBackedRegistration(
+        () => api.registerFilterPurchase(String(purchaseSelection.orderId), purchaseSelection.phone, {
+          productId: purchaseSelection.productId, unitId: purchaseSelection.unitId, source: purchaseSelection.source,
+          activatedAt: `${installationDate}T00:00:00.000Z`,
+        }),
+        async committed => {
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          // Adding another unit must not overwrite this device's active cycle.
+          const retained = existingActivation ?? await getFilterActivation(userId);
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          if (retained) return retained;
+          const r = committed.registration;
+          if (!r) throw new Error('Activation confirmation missing.');
+          return scheduleAllFilterNotifications({
+            activatedAt: r.activatedAt, productId: purchaseSelection.productId, productName: purchaseSelection.name,
+            lifespanDays: purchaseSelection.lifespanDays, registeredFilterId: r.id, sourceOrderId: purchaseSelection.orderId,
+          }, userId);
+        },
+        activation => { if (current.current) onSave(activation); },
+      );
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
+      await queryClient.invalidateQueries({ queryKey: ['activation-purchases', userId] });
+    } catch (error) { if (current.current) setLookupError(error instanceof Error ? error.message : 'Could not activate filter.'); }
+    finally { savingRef.current = false; if (current.current) setSaving(false); }
+  }
 
   async function handleOfflineSave() {
     if (!offlineSelection || savingRef.current) return;
@@ -591,6 +633,7 @@ export function RegisterModal({
         () => api.registerOfflinePurchase(offlineSelection.saleId, offlineSelection.unitId, installationDate),
         async committed => {
           if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+           if (existingActivation && existingActivation.registeredFilterId !== committed.registration.id) return existingActivation;
           const r = committed.registration;
           const status = await getNotificationPermissionStatus();
           if (status !== 'granted') await requestNotificationPermission();
@@ -627,14 +670,28 @@ export function RegisterModal({
               </TouchableOpacity>
             )}
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              {offlineSelection ? 'Register Offline Filter' : purchase ? 'Select Your Filter' : 'Register with Receipt'}
+              {offlineSelection || purchaseSelection ? 'Activate your filter' : purchase ? 'Select Your Filter' : 'Register with Receipt'}
             </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          {offlineSelection ? (
+          {purchaseSelection ? (
+            <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.productName, { color: colors.text }]}>{purchaseSelection.name}</Text>
+              <Text style={{ color: colors.mutedForeground }}>Order #{purchaseSelection.orderId} · unit {purchaseSelection.unitId.split(':').at(-1)}</Text>
+              <Text style={{ color: colors.text }}>When did you install this filter? Purchase date is not installation date.</Text>
+              <TextInput accessibilityLabel="Installation date YYYY-MM-DD" value={installationDate} onChangeText={setInstallationDate}
+                placeholder="YYYY-MM-DD" editable={!saving} style={[styles.input, { color: colors.text }]} />
+              {existingActivation ? <Text style={{ color: colors.mutedForeground }}>This adds a separate filter cycle. Your current filter reminders and history stay unchanged.</Text> : null}
+              {!!lookupError && <Text accessibilityLiveRegion="polite" style={{ color: colors.destructive }}>{lookupError}</Text>}
+              <TouchableOpacity accessibilityRole="button" onPress={handleSelectedPurchaseSave} disabled={saving}
+                style={[styles.productRow, { backgroundColor: colors.primary }]}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Confirm installation and activate</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          ) : offlineSelection ? (
             <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
               <Text style={[styles.productName, { color: colors.text }]}>{offlineSelection.item.name}</Text>
               <Text style={[styles.receiptMeta, { color: colors.mutedForeground }]}>
@@ -724,6 +781,9 @@ export function RegisterModal({
                 <Text style={[styles.stepHint, { color: colors.mutedForeground, marginTop: 4, marginBottom: 8 }]}>
                   Tap the filter you installed:
                 </Text>
+                <TextInput accessibilityLabel="Installation date YYYY-MM-DD" value={installationDate} onChangeText={setInstallationDate}
+                  placeholder="Installation date: YYYY-MM-DD" style={[styles.input, { color: colors.text }]} />
+                {existingActivation ? <Text style={{ color: colors.mutedForeground }}>A new unit is a separate cycle. Current reminders and history stay unchanged.</Text> : null}
                 <View style={{ gap: 10 }}>
                   {purchase.items.filter(i => i.lifespanDays > 0).map((item, idx) => (
                     <TouchableOpacity

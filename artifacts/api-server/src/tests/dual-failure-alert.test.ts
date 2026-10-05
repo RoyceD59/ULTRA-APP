@@ -143,6 +143,7 @@ describe("Dual-failure registration alert", () => {
       const { status, body } = await post("/api/uc/auth/register", {
         email:     customerEmail,
         phone:     customerPhone,
+        address:   "Test building, Nairobi",
         password:  "test-pass-dual-alert",
         firstName: "Alert",
         lastName:  "Test",
@@ -194,6 +195,7 @@ describe("Dual-failure registration alert", () => {
       const { status, body } = await post("/api/uc/auth/register", {
         email:     customerEmail,
         phone:     customerPhone,
+        address:   "Test building, Nairobi",
         password:  "test-pass-slack-fallback",
         firstName: "Slack",
         lastName:  "Fallback",
@@ -241,6 +243,7 @@ describe("Dual-failure registration alert", () => {
       const { status, body } = await post("/api/uc/auth/register", {
         email:     customerEmail,
         phone:     customerPhone,
+        address:   "Test building, Nairobi",
         password:  "test-pass-all-fail",
         firstName: "Total",
         lastName:  "Failure",

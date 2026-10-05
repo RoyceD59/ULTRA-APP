@@ -74,8 +74,20 @@ export async function releaseUnsuccessfulCheckout(
 
 /** Release only a never-initiated or independently verified failed payment. */
 export async function cancelCheckout(key: string, userId: string) {
-  const result = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2", [userId, key]);
-  const order = result.rows[0];
+  // Establish absence under the same lock as preparation, and leave a durable
+  // barrier against an old request arriving after the customer starts editing.
+  const client = await pool.connect();
+  let order: any;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [userId, key]);
+    const result = await client.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2", [userId, key]);
+    order = result.rows[0];
+    if (!order) await client.query(`INSERT INTO uc_checkout_retirements(user_id,idempotency_key)
+      VALUES($1,$2) ON CONFLICT(user_id,idempotency_key) DO NOTHING`, [userId, key]);
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
   if (!order) return;
   if (!order.checkout_snapshot) throw new Error("Checkout cannot be cancelled here");
   if (await releaseUnsuccessfulCheckout(order, "customer") === "retained") {

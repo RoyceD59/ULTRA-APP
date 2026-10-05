@@ -34,10 +34,8 @@ Broad retention-job tests must isolate the table they prune, not just their fixt
 
 **How to apply:** Use a transaction-local temporary table that shadows the target table and route the production queries to that connection. Keep the real SQL predicates, inject deterministic time/settings, and roll back afterward.
 
-Standalone restart probes must use a machine-readable output channel.
+Subprocess results consumed by tests must use a machine-readable output channel.
 
-**Why:** Forced-color console inspection wraps numeric values in ANSI escapes,
-so parsing a subprocess's database count fails despite persistence working.
+**Why:** Console inspection can include ANSI formatting; parsing it can fail even when the underlying operation succeeds.
 
-**How to apply:** Write plain strings directly to stdout, retain the isolated
-test database, and test the output format with forced console colors enabled.
+**How to apply:** Emit plain strings or JSON directly to stdout instead of parsing human-oriented console inspection.

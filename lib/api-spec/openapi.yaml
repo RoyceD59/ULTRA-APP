@@ -43,6 +43,109 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/auth/register:
+    post:
+      operationId: registerUcContactAccount
+      tags: [uc-customer]
+      summary: Create an account with required normalized phone and contact address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, firstName, phone, address]
+              properties:
+                email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$' }
+                password: { type: string, minLength: 6 }
+                firstName: { type: string, minLength: 1 }
+                lastName: { type: string }
+                phone: { type: string, minLength: 1 }
+                address: { type: string, minLength: 1, maxLength: 500 }
+                referralCode: { type: string }
+      responses:
+        "200": { description: Account created }
+        "400": { description: Missing or invalid fields }
+        "409": { description: Existing or conflicting identity — sign in or contact support }
+  /uc/customer/profile:
+    patch:
+      operationId: completeUcContactProfile
+      tags: [uc-customer]
+      security: [{ bearerAuth: [] }]
+      summary: Edit contact details without creating or relinking an account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string, minLength: 1 }
+                lastName: { type: string }
+                phone: { type: string, minLength: 1 }
+                address: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200": { description: Saved existing account }
+        "400": { description: Actionable contact field errors }
+        "409": { description: Phone identity conflict }
+  /uc/admin/orders/reconciliation-report:
+    get:
+      operationId: getUcCheckoutDiagnostics
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      summary: Read-only checkout evidence for at most 100 explicit local order IDs
+      parameters:
+        - { name: ids, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: No provider calls, mutations, financial or ownership inference
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400": { description: Invalid scope }
+        "403": { description: Active administrator required }
+  /uc/filters/activation-purchases:
+    get:
+      operationId: getUcActivationPurchases
+      tags: [uc-customer]
+      security: [{ bearerAuth: [] }]
+      summary: Owned purchase units with authoritative activation eligibility
+      responses:
+        "200":
+          description: Purchases remain visible even when activation is unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchases]
+                properties:
+                  purchases:
+                    type: array
+                    items:
+                      type: object
+                      required: [source, orderId, dateCreated, phone, status, items]
+                      properties:
+                        source: { type: string, enum: [app, store] }
+                        orderId: { type: integer }
+                        dateCreated: { type: string }
+                        phone: { type: string }
+                        status: { type: string }
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            required: [lineId, productId, name, quantity, lifespanDays, capacityLitres, availableUnitIds, unavailableReason]
+                            properties:
+                              lineId: { type: integer }
+                              productId: { type: integer }
+                              name: { type: string }
+                              quantity: { type: integer }
+                              lifespanDays: { type: integer }
+                              capacityLitres: { type: integer }
+                              availableUnitIds: { type: array, items: { type: string } }
+                              unavailableReason: { type: string, nullable: true }
+        "401": { description: Authentication required }
+        "503": { description: Eligibility could not be refreshed }
   /uc/purchases/offline:
     get:
       operationId: listCustomerOfflinePurchases
@@ -244,6 +347,28 @@ paths:
                   cancelled: { type: boolean }
         "409":
           description: Payment may still complete; resume the original payment
+  /uc/checkout/recovery:
+    get:
+      operationId: getCompanionCheckoutRecovery
+      parameters:
+        - in: query
+          name: idempotencyKey
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        "200":
+          description: Read-only owned checkout state; editing still requires authorized cancellation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resolution, orderId]
+                properties:
+                  resolution: { type: string, enum: [editable, completed, unresolved] }
+                  orderId: { type: integer, nullable: true }
+        "401": { description: Invalid customer session }
+        "403": { description: Team session is not a customer checkout }
+        "503": { description: Keep the original intent while state is unavailable }
   /uc/checkout/quote:
     post:
       operationId: quoteCompanionCheckout
@@ -5940,6 +6065,11 @@ components:
       type: object
       required: [id, status, total, currency, paymentMethod, dateCreated, lineItems]
       properties:
+        checkoutState: { type: string, nullable: true }
+        synchronizationStatus: { type: string }
+        paymentStatus: { type: string }
+        paymentConfirmedAt: { type: string, nullable: true }
+        reconciliationRequired: { type: boolean }
         id:
           type: integer
         status:
