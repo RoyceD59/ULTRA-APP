@@ -63,3 +63,4 @@ artifacts/uc-companion/static-build/
 artifacts/uc-companion/forest-dist/
 .offline-filter-release/
 .checkout-activation-release/
+.companion-consistency-release/
