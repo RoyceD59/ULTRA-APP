@@ -20,3 +20,9 @@ Compile the frozen candidate itself, including its dependent contracts; a workin
 **Why:** A frozen package can retain older dependent contracts even when the working tree compiles and the changed files fit the intended allowlist.
 
 **How to apply:** Prepare an additive candidate without selecting it, typecheck its consumer apps, and verify its actually selected manifest/launch bytes separately from signed-in working-preview behavior.
+
+A healthy preview endpoint does not establish that the current source is running.
+
+**Why:** An older API process continued answering HTTP 200 while its managed workflow failed with a port conflict. New clients rejected its older response contract despite successful current-source compilation and isolated API tests.
+
+**How to apply:** Verify process ownership/start time and the actual response contract separately from workflow status and health checks. In a read-only verification request, report the mismatch rather than silently replacing the process.

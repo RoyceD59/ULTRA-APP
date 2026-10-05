@@ -51,3 +51,17 @@ mtime_ms = 1791113767404
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/f310e14b-641a-476c-adc9-1dc283dc0be4/f89d12af-df4e-4af7-bbd0-791fab3a7a0a"
 storage_version_token = "1791113767739002"
 content_type = "text/html;profile=replit-chart"
+
+[[outputs]]
+id = "4tVELpBAlieA9C3KOOwCc"
+uri = "file://.local/reports/five-day-verification/verification.html"
+type = "html"
+title = "Five-day independent verification report"
+description = "FAIL verdict with captured build/test/HTTP evidence, production-versus-frozen-source comparison, corrected browser findings and explicit verification gaps."
+logical_id = "9e52dcd3-4b1b-4ca5-9ce3-fa8bac284e3a"
+content_hash = "sha256:ff9b2f5f64abfc44b542755ee19264a53b81c55898a62be1f8a6e6cdec24a1ce"
+size = 188913
+mtime_ms = 1791184461324
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/9e52dcd3-4b1b-4ca5-9ce3-fa8bac284e3a/20d51d9d-2039-424b-98b0-fe56bccb83b4"
+storage_version_token = "1791184461978047"
+content_type = "text/html"
