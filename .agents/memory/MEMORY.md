@@ -89,3 +89,4 @@
 - [Checkout intent durability](checkout-intent-durability.md) — retain original retries across reload; clear confirmed intents and isolate private drafts and late responses by account.
 - [Page loader presentation](page-loader-presentation.md) — user chose a single blue droplet with visible loading text; future artwork restyles must retain the text.
 - [Runtime observability policy](runtime-observability-policy.md) — public diagnostics are untrusted operational evidence; ambiguous alert delivery must not be silently replayed.
+- [Node component mock interop](node-component-mock-interop.md) — use explicit plain-ESM fixtures when synchronous TSX loading misreads data URLs or star reexports.

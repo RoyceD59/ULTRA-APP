@@ -169,7 +169,13 @@ export default function ImpactBubble() {
       <Text style={styles.footnote}>
         Shared global totals managed through ProjectHub. One litre of filtered water replaces two 500 ml bottles.
       </Text>
-      <ForestLink light />
+      <View testID="global-impact-programme" style={styles.programme}>
+        <Text style={styles.programmeHeading}>Programme policy</Text>
+        <Text testID="global-impact-programme-brief" style={styles.programmeText}>
+          Hydrate the Future™ receives 3% of eligible paid purchases, split equally between tree growing in our community and clean-water access. Logged refills do not add funding.
+        </Text>
+        <ForestLink light label="Explore the global forest" />
+      </View>
     </View>
   );
 }
@@ -201,4 +207,7 @@ const styles = StyleSheet.create({
   statLabel:  { fontSize: 10, color: 'rgba(255,255,255,0.6)', textAlign: 'center', fontWeight: '500' as const },
 
   footnote: { fontSize: 10, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 14 },
+  programme: { gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.16)', paddingTop: 12 },
+  programmeHeading: { fontSize: 12, fontWeight: '700', color: '#B5E9FA' },
+  programmeText: { fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.9)' },
 });

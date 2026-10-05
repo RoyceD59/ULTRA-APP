@@ -36,5 +36,5 @@ export default function ForestLink({
 
 const styles = StyleSheet.create({
   link: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  label: { fontSize: 13, textDecorationLine: 'underline' },
+  label: { fontSize: 13, textDecorationLine: 'underline', flexShrink: 1, textAlign: 'center' },
 });
