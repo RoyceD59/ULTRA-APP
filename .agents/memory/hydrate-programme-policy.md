@@ -32,6 +32,13 @@ The owner approved connecting `forest.ucfilters.com` before certification, with 
 **Why:** The owner changed the earlier certification gate and explicitly selected “Connect forest.ucfilters.com now”, approving custom-domain attachment and the required forest DNS record.
 
 **How to apply:** Keep missing evidence null/pending; this domain approval does not authorize fabricated temporary figures, certification claims, or unrelated routing changes. Obtain documented evidence and public-disclosure approval before publishing verified outcomes.
+
+Keep forest programme wording locked to the future until the programme launches and the owner approves the announcement.
+
+**Why:** The owner said the team is working on evidence and instructed: “this will be announced after program launched keep the wording locked to future.”
+
+**How to apply:** Leave unannounced programme facts pending. Receipt of evidence is not permission to announce it; obtain post-launch public-disclosure and publication approval before changing public claims.
+
 ProjectHub is the source of truth for global UC Impact, displayed uniformly across registered accounts.
 
 **Why:** The user asked, “Synche all registered account to display global UC Impact page to uniformly from project hub.”

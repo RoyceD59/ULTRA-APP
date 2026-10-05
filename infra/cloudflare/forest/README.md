@@ -423,6 +423,15 @@ until the dedicated test-account access is restored, as described above.
 
 ### Publishing certified evidence later
 
+**Owner announcement gate:** The team is still working on the evidence. The owner
+instructed: “this will be announced after program launched keep the wording locked
+to future.” Keep programme wording future-facing and unannounced facts
+null/pending. Receiving a document alone does not authorize announcing it. Resume
+evidence publication only after launch and the owner's explicit approval of the
+public announcement, facts, redactions and exact production update. No evidence
+publication is authorized now; the static forest and existing funding rules remain
+unchanged.
+
 1. Obtain documented programme dates, partner details, donation records, certification
    and independently supported field evidence. Confirm each field/document that may
    be publicly disclosed and redact private information before packaging.
@@ -440,7 +449,6 @@ until the dedicated test-account access is restored, as described above.
    Pages production, and verify both hostnames, programme JSON, evidence links,
    anonymous card links and correct pending/verified labels. Preserve the 3% equal
    split and the rule that refills add no funding.
-
 ### Companion release and global-impact consistency
 
 See [the consistency release evidence and approval checklist](companion-consistency-release.md).
