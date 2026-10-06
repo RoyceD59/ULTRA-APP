@@ -21,3 +21,15 @@ installed correctly. Regression tests caught the ineffective installation.
 
 **How to apply:** Prefer the package manager's patch generator over manually
 counted diff hunks, and keep an attack fixture for each locally patched advisory.
+
+A frozen install can preserve an already-cached, inactive backport even in a
+hash-qualified directory; a correct lockfile alone does not prove runtime safety.
+
+**Why:** Actual-consumer regression fixtures failed in main despite matching
+patch-hash directory names; a forced frozen reinstall restored the existing
+backports without changing their source or declared package versions.
+
+**How to apply:** If those regressions fail, inspect installed guards first and
+refresh the frozen installation rather than weakening fixtures or silently
+editing node_modules. Execute real-consumer checks again during release build
+preparation so cache reuse cannot bypass security verification.

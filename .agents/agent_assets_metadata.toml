@@ -79,3 +79,17 @@ mtime_ms = 1791287063604
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/4eb191cc-c5ee-47c9-a969-ece5d8ee652c/63240dda-9aaf-400e-8fd3-56734082d5c7"
 storage_version_token = "1791287064623635"
 content_type = "text/html"
+
+[[outputs]]
+id = "wqw5DMbAAOst6skC9ijGX"
+uri = "file://.local/reports/consistency-rollout/security-only-revision.html"
+type = "html"
+title = "Security-only consistency revision: verification"
+description = "Exact source boundary, three fixed dependency versions, 32 passing candidate checks and isolated API build. Not published; tracked Security Center review remains pending."
+logical_id = "0eeda23e-c97a-4618-b758-77bb7b7747b4"
+content_hash = "sha256:b0e801097238921e29578e40a3a10f29829cbe0a21c46454af22c0e87af7c066"
+size = 15091
+mtime_ms = 1791288847526
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/0eeda23e-c97a-4618-b758-77bb7b7747b4/15553ee9-4b2e-419f-acbf-594c6f6bcf33"
+storage_version_token = "1791288847942318"
+content_type = "text/html"

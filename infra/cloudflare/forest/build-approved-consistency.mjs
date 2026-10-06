@@ -104,6 +104,10 @@ if (mode === 'serve-companion') {
     const { rmdir } = await import('node:fs/promises');
     await rmdir(lock);
   }
+  // A patch hash or cached installation is not proof the backport is active.
+  // Exercise the actual frozen consumers before any deployment output is copied.
+  await run('node', ['--test', 'scripts/tests/dependency-security.test.mjs']);
+  await run('node', ['--test', resolve(here, 'consistency-security-runtime.test.mjs')]);
   await run('pnpm', ['--filter', packages[mode], 'run', 'typecheck']);
   const env = { ...inheritedEnv };
   if (mode === 'hub') { env.PORT ||= '20100'; env.BASE_PATH = '/'; }

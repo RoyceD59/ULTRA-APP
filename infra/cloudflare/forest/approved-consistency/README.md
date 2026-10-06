@@ -1,5 +1,14 @@
 # Approved consistency source — inactive handoff
 
+## Security-only preparation addendum (2026-10-06)
+
+The original approved archive below remains intact. With owner approval, the
+handoff builder now selects the separately retained security-only revision in
+`../security-consistency/`. Its only source delta is the narrowly verified
+lockfile update for proxy-addr, source-map-js and compression. See that README
+for the new checksum, audit exceptions and unchanged API-first boundaries.
+Neither candidate is claimed published.
+
 `release-sources.tar.gz` is the **exact approved source candidate**, not a built
 binary and not the active production archive. `candidate.json` is its original
 scope/checksum record. It must not be regenerated from later workspace changes.

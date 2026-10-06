@@ -85,6 +85,46 @@ initialization, then client delivery and exact live snapshot comparisons.
 
 ## Entry template
 
+### 2026-10-06 — Owner-approved security-only consistency revision
+
+- **Scope:** Prepare a dependency-only revision before publication; preserve
+  consistency functionality and the original approved source.
+- **Changes:** Saved a separate security archive and checksum, selected it in the
+  handoff, and verified the exact lockfile delta independently. Only proxy-addr
+  2.0.8, source-map-js 1.2.2 and compression 1.8.2 change, plus compression's
+  required reference to already-locked destroy 1.2.0. Updated the main lockfile
+  for the same three fixed releases without changing workspace manifests,
+  application code, hosting, schema, SDK pins, authentication or OTA activation.
+  Preserved both original archives. Added full archive-scope and real-consumer
+  security regressions; deployment preparation executes consumer checks before
+  compiling/copying, not during static-server startup.
+- **Dependency hygiene:** Verified real package names, registry releases and
+  acceptable licenses. Discarded broad resolver output that pruned the absent
+  sandbox importer and changed unrelated peer resolutions. Installed the exact
+  minimal lockfile using frozen installation. Main's cached installation had
+  inactive backports despite patch-hash directory names; forced frozen reinstall
+  restored their implementation and all seven main backport checks passed.
+- **Verification:** Exact candidate API compiled; shared libraries, API, Hub and
+  Companion typechecked. Packaging/scope checks, four fixed-dependency runtime
+  checks and seven archived backport checks passed; detailed final counts and
+  output are saved in the security preparation evidence/report.
+- **Audit:** Candidate and main npm audits now have zero critical findings and
+  only the two version-only highs covered by tested braces/node-forge patches.
+  Security Center's dependency feed adds the tested cache-policy backport and
+  two moderate findings outside the requested update. No scanner-wide clean
+  result is claimed. The tracked Security Center scan remains waiting for input.
+- **Runtime:** Restarted existing API, Hub and Expo workflows after installation.
+  API/Hub serve; Metro runs. Expo's optional debugger reports a missing libglib
+  shared library; this is not a completed native-device verification. An external
+  Woo catalogue request also returned a transient 502 before later succeeding;
+  it is not attributed to this dependency delta or represented as fixed.
+- **Ignore rules:** Unchanged in this revision. Disposable preparation stays
+  under `.consistency-build/`; security archive and metadata remain tracked.
+- **Publication:** Not published; no production database writes or baseline
+  initialization. API build selection targets the security candidate; client
+  commands remain predecessor. Full publication/scan/account/device gates remain
+  distinct from successful preparation.
+
 ### 2026-10-06 — Main-workspace API-first consistency rollout preparation
 
 - **Scope/approval:** Continue the approved consistency rollout in main. Publish

@@ -1,0 +1,221 @@
+{
+  "date": "2026-10-06",
+  "scope": "Owner-approved security-only consistency revision",
+  "preparationVerdict": "PASS",
+  "publicationVerdict": "NOT PUBLISHED; full Security Center scan awaiting input",
+  "sha256": {
+    "securityCandidate": "b3a298f2e19090a5da3b98a0c0b320cde8afe733f80430af48bfc9a24183921c",
+    "originalApproved": "db2ef861871dcff39cde08350d9374e9b8d1220409e2f506141cf9c4666cad59",
+    "predecessor": "bdc71175d7f653c99d9d431770200915acd2e8333220c59b8b66a3d48e03d3b2"
+  },
+  "changedArchivePaths": [
+    "pnpm-lock.yaml"
+  ],
+  "applicationSourceBytes": "unchanged from original approved candidate",
+  "unrelatedImportersAndResolutions": "unchanged",
+  "upgrades": [
+    {
+      "package": "proxy-addr",
+      "from": "2.0.7",
+      "to": "2.0.8",
+      "registryVerified": true,
+      "license": "MIT"
+    },
+    {
+      "package": "source-map-js",
+      "from": "1.2.1",
+      "to": "1.2.2",
+      "registryVerified": true,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "package": "compression",
+      "from": "1.8.1",
+      "to": "1.8.2",
+      "registryVerified": true,
+      "license": "MIT",
+      "additionalReference": "already locked destroy 1.2.0"
+    }
+  ],
+  "checks": {
+    "packagingScopeAndGateTests": {
+      "pass": 21,
+      "fail": 0
+    },
+    "actualCandidateBackportTests": {
+      "pass": 7,
+      "fail": 0
+    },
+    "fixedConsumerRuntimeTests": {
+      "pass": 4,
+      "fail": 0
+    },
+    "mainBackportTests": {
+      "pass": 7,
+      "fail": 0
+    },
+    "totalUniqueCandidateChecks": 32,
+    "finalBuildExitCode": 0,
+    "typechecks": [
+      "shared libraries",
+      "API",
+      "Hub",
+      "Companion"
+    ],
+    "apiCompiled": true,
+    "developmentHealth": {
+      "path": "/api/healthz",
+      "body": {
+        "status": "ok"
+      },
+      "isProductionProof": false
+    }
+  },
+  "npmAudit": {
+    "exitCode": 1,
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 2,
+        "critical": 0
+      },
+      "dependencies": 856,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 856
+    },
+    "unmitigatedHighCritical": 0,
+    "remainingVersionOnlyHighs": [
+      {
+        "package": "node-forge",
+        "advisory": "GHSA-86w9-cpqp-85rv",
+        "severity": "high",
+        "mitigation": "retained backport, real-consumer regression passed"
+      },
+      {
+        "package": "braces",
+        "advisory": "GHSA-vfj7-8cjw-p6xm",
+        "severity": "high",
+        "mitigation": "retained backport, real-consumer regression passed"
+      }
+    ]
+  },
+  "securityCenterDependencyFeed": {
+    "metadata": {
+      "vulnerabilities": {
+        "critical": 0,
+        "high": 3,
+        "info": 0,
+        "low": 0,
+        "moderate": 2
+      }
+    },
+    "findings": [
+      {
+        "id": "GHSA-vfj7-8cjw-p6xm@braces-3.0.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "braces",
+          "purl": "pkg:npm/braces",
+          "version": "3.0.3"
+        },
+        "severity": {
+          "level": "high",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+        }
+      },
+      {
+        "id": "GHSA-jggr-w7fw-pc2j@fast-copy-4.0.4",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-copy",
+          "purl": "pkg:npm/fast-copy",
+          "version": "4.0.4"
+        },
+        "severity": {
+          "level": "moderate",
+          "type": "CVSS_V4",
+          "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N"
+        },
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.1.0"
+        }
+      },
+      {
+        "id": "GHSA-ch52-4w7c-c8xp@http-cache-semantics-4.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "http-cache-semantics",
+          "purl": "pkg:npm/http-cache-semantics",
+          "version": "4.2.0"
+        },
+        "severity": {
+          "level": "high",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": "GHSA-86w9-cpqp-85rv@node-forge-1.4.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "node-forge",
+          "purl": "pkg:npm/node-forge",
+          "version": "1.4.0"
+        },
+        "severity": {
+          "level": "high",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+        }
+      },
+      {
+        "id": "GHSA-rj75-hqrm-r3gf@postcss-selector-parser-6.0.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "postcss-selector-parser",
+          "purl": "pkg:npm/postcss-selector-parser",
+          "version": "6.0.10"
+        },
+        "severity": {
+          "level": "moderate",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+        },
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": true,
+          "version": "7.1.6"
+        }
+      }
+    ],
+    "limits": "Three high version findings are retained tested backports; two moderate findings outside the three-package revision remain unreviewed. Not a scanner-wide clean verdict."
+  },
+  "trackedScan": {
+    "error": "The security scan did not finish: the scan task is paused waiting for user input in the workspace and will not finish on its own. Task: https://replit.com/@jerryaroyce/ULTRA-APP/task/10ceaf1f-a0a4-41d9-8a54-6cabcc1ac7e9",
+    "ok": false,
+    "status": "waitingOnInput",
+    "taskId": "10ceaf1f-a0a4-41d9-8a54-6cabcc1ac7e9",
+    "taskUrl": "https://replit.com/@jerryaroyce/ULTRA-APP/task/10ceaf1f-a0a4-41d9-8a54-6cabcc1ac7e9"
+  },
+  "productionDatabaseWrites": 0,
+  "published": false,
+  "selection": {
+    "api": "security candidate via validated existing API-first build command",
+    "hub": "unchanged predecessor",
+    "companion": "unchanged predecessor"
+  },
+  "limitations": [
+    "Tracked full security scan paused waiting for input",
+    "No signed-in/customer or physical-device flow retest performed in this dependency-only preparation",
+    "Client publication still gated on actual compatible live API and fresh shared snapshots",
+    "Existing public predecessor asset 404s/platform-scale parity remain uncertified",
+    "Expo optional debugger missing libglib; Metro serving does not prove physical-device readiness",
+    "Development catalogue briefly returned 502 before subsequent success; not diagnosed or attributed to the security delta"
+  ]
+}

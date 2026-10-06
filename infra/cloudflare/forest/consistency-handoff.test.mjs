@@ -19,7 +19,8 @@ test('saved candidate is the exact approved source, with untouched predecessor a
   const info = await verifyHandoff();
   assert.equal(info.candidateSha256, APPROVED_CANDIDATE);
   assert.equal(info.baselineSha256, PREDECESSOR);
-  assert.equal(info.unchangedFrozenFiles, 1227);
+  assert.equal(info.unchangedFrozenFiles, 1227); // The lockfile was already an approved changed path.
+  assert.deepEqual(info.securityChangedPaths, ['pnpm-lock.yaml']);
   const frozenManifest = JSON.parse(await readFile(resolve(here, 'release-manifest.json')));
   assert.equal(frozenManifest.sourceArchiveSha256, PREDECESSOR);
   const builder = await readFile(resolve(here, 'release-build.mjs'), 'utf8');
@@ -118,12 +119,14 @@ test('production serving works with all external fetches unavailable, while clie
   let server;
   try {
     await mkdir(resolve(tools, 'approved-consistency'), { recursive: true });
+    await mkdir(resolve(tools, 'security-consistency'), { recursive: true });
     await mkdir(serverDir, { recursive: true });
-    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
+    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
       await cp(resolve(here, name), resolve(tools, name));
     }
     for (const name of ['candidate.json', 'release-sources.tar.gz']) {
       await cp(resolve(here, 'approved-consistency', name), resolve(tools, 'approved-consistency', name));
+      await cp(resolve(here, 'security-consistency', name), resolve(tools, 'security-consistency', name));
     }
     await writeFile(resolve(frozenStage, '.prepared'), APPROVED_CANDIDATE);
     await writeFile(resolve(frozenStage, 'companion-build.json'), JSON.stringify({
