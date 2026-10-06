@@ -191,3 +191,158 @@ After publication/distribution approval:
 - Test partial preparation failures and whole-build rollback without deleting
   retained assets. Record actual live build IDs, snapshot IDs, timestamps,
   physical-device versions and any remaining access limits.
+
+## Approved candidate compilation and blocked publication — 5 October 2026
+
+The owner separately approved candidate SHA-256
+`db2ef861871dcff39cde08350d9374e9b8d1220409e2f506141cf9c4666cad59`
+for gated compilation and production publication. That approval does not
+establish historical adjustment values or authorize the paused customer-login
+investigation.
+
+The candidate was compiled only inside `.companion-consistency-release/source`,
+using its frozen lockfile. No candidate output was copied into the active
+deployment staging directory or working application outputs. The production
+release manifest and predecessor archive remain unchanged.
+
+- Both package-boundary tests passed.
+- Candidate shared-library, API, ProjectHub and Companion type checks passed.
+- Candidate API and ProjectHub production builds passed. ProjectHub reported
+  non-fatal sourcemap and bundle-size warnings.
+- Candidate browser/iOS/Android compilation passed; all 54 assets were copied.
+  Metro's optional DevTools reported a missing system library, but Metro
+  generated all three bundles and completed successfully.
+- Local candidate selection is `1791190818435-5334`, built at
+  `2026-10-05T09:01:26.124Z`. This is **not a published build**.
+- Its metadata identifies the source checksum, approved API origin
+  `https://api.ucfilters.com`, and matching browser/Expo Go support IDs.
+  Both native manifests identify the same build, both launch URLs select its
+  platform bundle, and updates remain disabled. All three generated bundles
+  contain that build ID, the production API hostname and snapshot metadata.
+- Compiled bundle SHA-256 values:
+  - browser: `e5a371a63ab1f0a484d079d93abc8b8b6d5d00837c7a89e5a5ce499ca9e2e13a`
+  - iOS: `083da2c56172621f8a23a4e05604c8a0b4f41ce5adab0d2a81f1f655d8a48f49`
+  - Android: `86deeff55a410a0cb1eaaf712c71f42c2098f65b7f1068fcd4eef6291fdb01f1`
+  - API entry: `fd6b1bd79de4a5509e432dabb645bc965c8776624928da277050e1e3dde51284`
+  - ProjectHub entry: `d818450c72365a5425fcaff8ba54bc18d1d39c9eff86220a3eea773d5687370d`
+
+Read-only production checks found both shared-impact tables already present,
+but no global adjustment row and no audit entries. The production API and
+custom API host still return the old response: 5 users, 1,150 litres and 2,300
+bottles, without snapshot metadata. Its reported zero adjustments remain
+unverified fallback values, not migration input.
+
+Both public delivery hosts still serve browser and iOS/Android Expo Go build
+`1791182522315-296`, revision
+`a787b1a16fad710f8725a9e1fb7722a89661c54e`. Browser HTML references that build;
+native launch keys/URLs agree. Native bundles contain the approved API hostname,
+but manifests have no `companionRelease` and retain disabled updates.
+These are credential-free delivery checks, not physical-device observations.
+
+**Publication is blocked.** A verified read-only capture of the actual
+`artifacts/api-server/data/impact-override.json` resolved from each serving
+instance's working directory is required, including capture provenance and
+checksums. A workspace file is not evidence of the deployed file. If production
+files are missing, malformed or disagree, the team must choose verified
+historical input before any initialization or publication. No production write,
+import, adjustment, publication, rollback selection, customer sign-in or
+authentication/hosting change was performed. Approved-account snapshot
+comparisons and post-publication checks remain outstanding.
+
+### Project-file search
+
+The owner reported having no production captures and requested a project-file
+search. One local legacy file was found at
+`artifacts/api-server/data/impact-override.json`. It is valid JSON with
+`litresOffset: 0`, `usersOffset: 0` and an unknown historical update time.
+Its SHA-256 is
+`90d07bcb36e9ba92333937abe2e1887bb6e754dc79bb53a4bed50228d3aec3ad`.
+The bytes exactly match the file originally committed on 31 July 2026.
+No alternative adjustment backup was found. The frozen predecessor and
+candidate archives contain no legacy adjustment file; the local file is now
+ignored by Git.
+
+This establishes a real project historical file, **not** the current adjustment
+state of any serving production instance. It must not silently authorize zero
+initialization. The team must explicitly choose this historical input or
+provide different verified input before the blocked production work continues.
+
+The owner subsequently selected this exact project file's zero adjustments as
+the production initialization input, while reporting no independent historical
+evidence and asking for an explanation and a publication-log check. The impact
+was explained before any write: zero applies only to historical offsets, not
+orders, offline-client records or personal data; any unrecorded production-only
+adjustment could be omitted. Existing shared adjustments must still win over
+the import.
+
+Available deployment logs were read without logging their raw contents. They
+contained no legacy-file or historical-import evidence. A targeted log search
+also found no matching adjustment evidence. Git history confirms the original
+project file's bytes, but neither Git history nor those deployment logs verifies
+the current serving-instance files. Zero initialization is therefore an
+explicit owner choice of historical input, not a recovered production fact.
+No production write or publication has yet been performed.
+
+## Main-workspace handoff scope
+
+The owner approved finishing preparation in this isolated task and performing
+publication/live verification separately after applying it to main. The
+configured staff account and two specifically named customer accounts were
+authorized only for consistency checks. Customer identifiers are intentionally
+not stored here; the second customer's unambiguous identifier and secure access
+remain prerequisites. The paused production login investigation remains excluded.
+
+The exact source candidate and its original scope metadata are saved under
+`approved-consistency/`; the predecessor archive and existing production build
+commands remain unchanged. `build-approved-consistency.mjs` provides isolated
+compilation from these saved bytes, typechecks archive consumers, and gates
+client deployment preparation on fresh agreeing public snapshots. Local-only
+outputs cannot be copied into deployment outputs or used as published clients.
+Production client preparation also requires complete verified rollback assets.
+
+The operational checklist is in `approved-consistency/README.md`. Main-workspace
+publication, production initialization, served-build confirmation, approved
+account comparisons and live rollback/device checks are **not completed by
+this preparation**. Development and ignore-rule history is tracked in
+`docs/development-change-log.md` and `docs/gitignore-record.md`, without secrets,
+raw production logs or customer identifiers.
+
+### Handoff verification results
+
+- All 17 source-package, predecessor and handoff-gate tests passed. The eight
+  handoff tests were rerun after adding referenced-asset retention checks and
+  passed.
+- The saved-source builder completed fresh shared-library and all three
+  application type checks, plus API, ProjectHub and browser/iOS/Android builds.
+  No output-copy flag was used, and no API process or database import was run.
+- The live API gate correctly refused the current old response lacking a
+  compatible snapshot. That result does not write to production.
+- The handoff's local-only server was started and stopped for HTTP verification.
+  Browser HTML, uncached version metadata and both native manifests agreed on
+  local compiled build `1791259615348-6264`. Its build metadata records
+  `2026-10-06T04:08:12.043Z`; this is the compiler's recorded timestamp, not a
+  publication time. All three served bundles contain that identity and the
+  approved API hostname; native manifests retain disabled updates.
+- Local HTTP-served bundle SHA-256:
+  - browser: `9b41f1c0cd18d666e7c452f0aee0bcdf6ac6df8b102711f1a1da9cb8ae791381`
+  - iOS: `d5df7e428ac82c7a5e6d747cf8216a87e4caa49fd5ea9ae9ea4f01bd09b0a0ff`
+  - Android: `4cbc001827ef3ec9a226a44ac97a592bf5386df94a0114a42e26575c82e3bd6a`
+- The existing signed-out ProjectHub preview rendered its login screen without
+  a browser error. This is not protected-page verification.
+- Ignore checks confirm disposable compilation is ignored, while the change
+  log, ignore-rule record and approved source archive are not ignored.
+
+**Preparation handoff: passed. Production rollout: not performed.**
+No claim is made about live new snapshots, approved-account comparisons,
+physical phones, production restart/multi-instance audit checks or live rollback.
+
+The completion check identified an availability flaw in the first handoff:
+external baseline/snapshot gates also ran on `serve-companion`. That was
+corrected before completion. The production serve path now checks only local
+archive/build provenance and delegates static delivery; live API gates remain
+on deployment preparation. A subprocess regression verifies serving with every
+external fetch rejected, and verifies Hub/Companion build preparation still
+rejects an API outage. No production restart or publication is claimed.
+All nine handoff tests passed after this correction; syntax and whitespace
+checks passed. The archived source and previously measured bundle bytes did
+not change.

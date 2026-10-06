@@ -91,3 +91,4 @@
 - [Runtime observability policy](runtime-observability-policy.md) — public diagnostics are untrusted operational evidence; ambiguous alert delivery must not be silently replayed.
 - [Node component mock interop](node-component-mock-interop.md) — use explicit plain-ESM fixtures when synchronous TSX loading misreads data URLs or star reexports.
 - [Impact consistency scope](impact-consistency-scope.md) — common releases/global totals only; preserve personal data and never treat missing historical evidence as zero.
+- [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
