@@ -65,3 +65,17 @@ mtime_ms = 1791184461324
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/9e52dcd3-4b1b-4ca5-9ce3-fa8bac284e3a/20d51d9d-2039-424b-98b0-fe56bccb83b4"
 storage_version_token = "1791184461978047"
 content_type = "text/html"
+
+[[outputs]]
+id = "Apiy0XthXGUfkXv3wEqIF"
+uri = "file://.local/reports/consistency-rollout/api-first-gate.html"
+type = "html"
+title = "Main consistency rollout: API-first gate"
+description = "Prepared changes confirmed, empty production schema diff, isolated build/test evidence and the dependency findings currently pausing publication."
+logical_id = "4eb191cc-c5ee-47c9-a969-ece5d8ee652c"
+content_hash = "sha256:ee3c72d6441868b4685972c98980821e80710fbc6a3151bd5f998c4d780968c0"
+size = 13294
+mtime_ms = 1791287063604
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/4eb191cc-c5ee-47c9-a969-ece5d8ee652c/63240dda-9aaf-400e-8fd3-56734082d5c7"
+storage_version_token = "1791287064623635"
+content_type = "text/html"

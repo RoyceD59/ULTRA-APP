@@ -67,3 +67,8 @@ artifacts/uc-companion/forest-dist/
 # Disposable checksum-scoped compilation only. Approved source archives and
 # docs/development-change-log.md are intentionally tracked (see docs/gitignore-record.md).
 .consistency-build/
+
+# Exact public rollback dependencies, hash-verified against served bundles.
+# These are release inputs, not installed workspace dependency trees.
+!infra/cloudflare/forest/rollback-static/**/node_modules/
+!infra/cloudflare/forest/rollback-static/**/node_modules/**

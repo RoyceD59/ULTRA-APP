@@ -26,3 +26,9 @@ A healthy preview endpoint does not establish that the current source is running
 **Why:** An older API process continued answering HTTP 200 while its managed workflow failed with a port conflict. New clients rejected its older response contract despite successful current-source compilation and isolated API tests.
 
 **How to apply:** Verify process ownership/start time and the actual response contract separately from workflow status and health checks. In a read-only verification request, report the mismatch rather than silently replacing the process.
+
+Verify referenced public font/image URLs separately from manifests, bundle delivery and compilation.
+
+**Why:** Valid served metadata and all three downloadable bundles coexisted with HTTP 404 font dependencies and missing icons. An older local asset directory was not evidence of the current public deployment.
+
+**How to apply:** Record actual dependency availability. Recovery bytes need hash evidence from the served bundle; matching a declared platform/scale hash does not certify visual parity or repair the public route.

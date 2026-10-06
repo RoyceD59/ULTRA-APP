@@ -19,6 +19,14 @@ unchanged. The complete authoritative list is `.gitignore`.
 
 ## Rules for future changes
 
+### Approved consistency rollback inputs
+
+Scoped exceptions retain `infra/cloudflare/forest/rollback-static/**/node_modules/`
+and its contents. These files are public static dependencies verified against
+the asset hashes in the served predecessor bundles, not an installed dependency
+tree or runtime data. The exceptions make rollback inputs available to publishing.
+The general `node_modules` exclusion remains in force elsewhere.
+
 - Record every development change in the tracked development log, grouping
   related edits with scope, verification and publication status.
 - For every new ignore pattern, record its reason and where safe evidence lives.

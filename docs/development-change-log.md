@@ -85,6 +85,54 @@ initialization, then client delivery and exact live snapshot comparisons.
 
 ## Entry template
 
+### 2026-10-06 — Main-workspace API-first consistency rollout preparation
+
+- **Scope/approval:** Continue the approved consistency rollout in main. Publish
+  the API-compatible response before advancing either client. Preserve hosting,
+  authentication, OTA, source freeze and historical impact evidence.
+- **Changes:** Confirmed the saved approved source candidate and predecessor
+  checksums. Changed only API production build selection through artifact
+  validation to `build-approved-consistency.mjs api --copy-output`. Its production
+  run command is unchanged; Hub and Companion retain predecessor build commands.
+  No production database write, initialization or publication was performed.
+- **Verification:** `explainSchemaDiff()` returned success with no diff, no SQL
+  statements and no destructive/backward-incompatible changes. Read-only
+  production queries confirmed both impact tables exist, with no adjustment row
+  and zero audit entries. Handoff/package tests: 18 passed, zero failed, exit 0.
+  Isolated approved API source and libraries typechecked and API compiled, exit 0.
+  The live-API compatibility gate still rejects the old served contract.
+- **Rollback:** Captured served build `1791182522315-296`, public version metadata,
+  all three bundles and both native manifests. Saved 60 unique files with
+  checksum/provenance evidence in `infra/cloudflare/forest/rollback-static/`.
+  Several public dependency URLs return 404. Recovered dependency bytes from
+  retained local output only when their MD5 matches a platform/scale file hash
+  declared in the actually served native bundles. No older build metadata or
+  bundles were substituted. The handoff retention helper validated and copied
+  the inputs to a disposable verification directory, retaining 61 files including
+  the capture evidence. This is not certification of multi-scale/platform visual
+  parity and does not repair the existing public asset URLs.
+- **Ignore changes:** Added narrowly scoped exceptions for public rollback
+  dependencies nested in `node_modules`, ensuring these release inputs can reach
+  the publishing builder. Workspace dependencies and generated stages stay ignored.
+- **Security gate:** The exact candidate's production dependency audit exited 1:
+  four high findings and one critical finding. Existing braces/node-forge patches
+  were verified by seven passing dependency-security regression tests (exit 0);
+  a version-only audit still reports those two patched packages. The remaining
+  findings are proxy-addr 2.0.7 (critical), source-map-js 1.2.1 (high) and compression
+  1.8.1 (high). The latter two paths are Expo tooling; the proxy-addr advisory
+  depends on an unsafe IPv6 trust-subnet configuration, not observed in the API
+  source. This is not proof of a production exploit, but the clean shipping
+  dependency gate is unmet. No dependency or approved archive was silently changed.
+- **Status:** Main API build selection prepared and compiled; publication paused
+  at the dependency-security gate. No initialization or client activation.
+- **Remaining:** Owner Publish action for API-first stage; verify compatible live
+  API before approved staff initialization with `expectedRevision: 0` if still
+  empty. Preserve any intervening staff revision. Compare both API hosts, recapture
+  the actually served predecessor after first publication, then configure/publish
+  paired clients. Account/device checks and existing public asset failures remain
+  distinct from successful compilation or schema inspection. Obtain approval for
+  a narrowly scoped security revision/new candidate checksum before proceeding.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
