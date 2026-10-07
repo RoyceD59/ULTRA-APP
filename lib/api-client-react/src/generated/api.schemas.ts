@@ -949,9 +949,11 @@ export interface AlisonTurnInput {
 
 export interface AlisonTurnResponse {
   reply: string;
+  feedbackToken: string;
   suggestions: string[];
 }
 
+export type AlisonFeedbackInputRating = typeof AlisonFeedbackInputRating[keyof typeof AlisonFeedbackInputRating];
 export type AlisonTranscriptMessageRole = typeof AlisonTranscriptMessageRole[keyof typeof AlisonTranscriptMessageRole];
 
 
@@ -1963,7 +1965,10 @@ export interface AnthropicError {
 }
 
 export interface AiQueryInput {
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
   question: string;
   /** Identifier of the calling agent (e.g. "orchestrator", "analytics-agent") */
   source?: string;
@@ -4671,6 +4676,9 @@ export type IssueAgentClientTokenBody = {
   scope?: string;
 };
 
+export type SubmitUcAlisonFeedback200 = {
+  ok: boolean;
+};
 export type SuspendAgentOauthClientBodyStatus = typeof SuspendAgentOauthClientBodyStatus[keyof typeof SuspendAgentOauthClientBodyStatus];
 
 
@@ -4838,3 +4846,16 @@ page?: number;
  */
 limit?: number;
 };
+
+export interface AlisonFeedbackInput {
+  rating: AlisonFeedbackInputRating;
+  question: string;
+  answer: string;
+  /** @maxLength 2048 */
+  feedbackToken: string;
+}
+
+export const AlisonFeedbackInputRating = {
+  up: 'up',
+  down: 'down',
+} as const;

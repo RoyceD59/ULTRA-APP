@@ -10,6 +10,7 @@ import express from "express";
 import { eq } from "drizzle-orm";
 import { db, ucAlisonConversationsTable } from "@workspace/db";
 import { issueToken } from "../lib/jwt.js";
+import { verifyFeedbackReceipt } from "../lib/ai-feedback-receipt.js";
 import waterChatRouter, {
   _aiClient, _knowledgeClient, SYSTEM_PROMPT, type AiChatParams,
 } from "../routes/uc-water-chat.js";
@@ -78,7 +79,11 @@ describe("water-chat — successful Anthropic responses", () => {
     const body = await response.json();
     assert.equal(response.status, 200, JSON.stringify(body));
     assert.equal(calls.length, 1, "The request must reach Anthropic, not a saved-turn shortcut");
-    return { body, params: calls[0] };
+    const { feedbackToken, ...replyBody } = body;
+    const question = [...messages].reverse().find((message) => message.role === "user")!.content;
+    assert.ok(verifyFeedbackReceipt(feedbackToken, 221000001, question, body.reply),
+      "Every successful answer must carry a valid customer-bound feedback receipt");
+    return { body: replyBody, params: calls[0] };
   }
 
   it("returns the parsed reply and suggestions and preserves conversation history", async () => {

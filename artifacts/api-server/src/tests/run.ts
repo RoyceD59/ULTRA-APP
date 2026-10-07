@@ -296,6 +296,7 @@ const SHARED_STATE_FILES = [
   // Keep real PDF worker rejection checks inside their production time budget.
   // Serialize the CPU-heavy fixture instead of increasing the parser timeout.
   "library-knowledge",
+  "library-knowledge-routes",
   "low-stock-alert",
   // Both suites drain the same global order outbox; isolate them from the
   // parallel phase so one worker cannot claim another suite's work.

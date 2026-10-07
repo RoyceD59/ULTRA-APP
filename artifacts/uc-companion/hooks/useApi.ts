@@ -813,7 +813,7 @@ export function useApi() {
       },
       isRetry?: boolean,
       signal?: AbortSignal,
-    ) => post<{ reply: string; suggestions: string[] }>('/api/uc/ai/water-chat', {
+    ) => post<{ reply: string; suggestions: string[]; feedbackToken: string }>('/api/uc/ai/water-chat', {
       messages, conversationId, turnId, filterContext, isRetry,
     }, signal),
 
@@ -873,7 +873,8 @@ export function useApi() {
       rating:   'up' | 'down',
       question: string,
       answer:   string,
-    ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer }),
+      feedbackToken: string,
+    ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer, feedbackToken }),
 
     // ── Admin: product detail edit ────────────────────────────────────────────
     /** Admin-only: update product fields in WooCommerce. All fields optional. */

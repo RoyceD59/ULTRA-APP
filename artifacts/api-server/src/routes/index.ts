@@ -61,8 +61,9 @@ router.use("/projects",     requireTeamAuth);
 router.use("/tasks",        requireTeamAuth);
 router.use("/dashboard",    requireTeamAuth);
 router.use("/notifications", requireTeamAuth);
-// /ai/report, /ai/push, and /ai/pushes are team-only; /ai/query is a public
-// UC webhook and /ai/echo is the HMAC-signed orchestrator status callback.
+// Project-data AI endpoints are team-only; /ai/echo remains the HMAC-signed
+// orchestrator status callback.
+router.use("/ai/query",      requireTeamAuth);
 router.use("/ai/report",     requireTeamAuth);
 router.use("/ai/push",       requireTeamAuth);
 router.use("/ai/pushes",     requireTeamAuth);

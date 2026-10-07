@@ -825,6 +825,11 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS improvement_note_at timestamptz;
   `);
   logger.info("Startup migration: uc_ai_feedback improvement note columns ensured");
+  await pool.query(`
+    ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS user_id integer;
+    ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS feedback_key text;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_ai_feedback_key_idx ON uc_ai_feedback(feedback_key);
+  `);
 
   // Once-per-product alert dedupe for the daily lifespan-audit scheduler job
   // (products missing filter_lifespan_days — see lib/scheduler.ts).

@@ -1,6 +1,98 @@
 # Development change log
 
 
+## 2026-10-07 — AI endpoint access and feedback integrity
+
+**Scope:** Security hardening only. No production publication performed.
+
+- Private project-context queries now require a signed ProjectHub team session
+  and a live active team account before context loading or provider work.
+  Requests are limited to ten per account per minute; questions are capped at
+  4,000 characters.
+- Alison feedback requires a live customer account and an owner-bound signed
+  receipt for the exact delivered question/answer. One rating per customer/turn
+  is enforced by a unique database key, including concurrent submissions.
+  Repeated or rejected feedback does not invalidate topic summaries.
+- Feedback is limited to twenty submissions per customer per minute. Like
+  existing application limiters, new limits are process-local and reset on
+  restart; they are not a distributed quota.
+- Companion carries receipts in both ordinary and regenerated answers and
+  saves them with account-scoped recent history. Older answers without receipts
+  remain readable but cannot submit ratings. Existing feedback rows are retained.
+  Anonymous server transcripts remain anonymous; identity is attached only to
+  authenticated feedback.
+- Updated the OpenAPI contract, regenerated clients/validators, and included
+  matching shared SQL and idempotent API-startup migrations.
+- Focused API security regressions pass: unauthorized/inactive principals,
+  provider-call limits, modified/wrong-owner/expired receipts, turn question
+  conflicts, duplicate/concurrent writes, and feedback throttling. API,
+  Companion, and shared-library typechecks pass.
+- Related API chat/auth/persistence/export regressions pass (32 checks, including
+  updated successful-response receipt assertions), as do ten local chat-history
+  checks. The running development API returns 401 for anonymous requests to both
+  hardened endpoints and its health endpoint reports healthy. No signed-in
+  browser or physical-phone check was performed for this backend-focused patch.
+
+**Rollout:** Deploy API and updated Companion together. Old clients without
+answer receipts intentionally fail closed on feedback. Orchestrator callers of
+the formerly public project query must authenticate with an active team session;
+no public or shared-secret bypass was added. No ignore-rule changes were needed.
+
+**Completion validation:** All configured TypeScript and startup-font checks
+passed, and completion code review approved the changes. The full API run
+identified two additional knowledge-route fixtures needing the new receipt
+contract and consistent retry questions; both were corrected, and all nine
+tests in that file pass in isolation. Expo Doctor initially failed on six
+pre-existing Expo patch-version mismatches. The owner approved the six SDK 57
+patch updates, but the first installation was blocked by the 24-hour minimum-release-age
+rule for the official transitive `babel-preset-expo@57.0.14`. The owner chose to
+retain that protection and retry no earlier than 2026-10-07 15:10 Africa/Nairobi.
+No exception or registry bypass was added. The unapplied manifest changes were
+restored to match the unchanged lockfile while waiting. The owner requested a
+retry after the window; installation then succeeded without any safety-rule
+exception. Verified all six releases against the official Expo repository:
+`expo` 57.0.27, `expo-auth-session` 57.0.14, `expo-constants` 57.0.21,
+`expo-linking` 57.0.12, `expo-router` 57.0.25 and `expo-notifications` 57.0.22.
+The SDK-aligned manifest ranges and lockfile were updated together.
+
+**Recovery and safety:** Saved the pre-update security-patch source revision in
+the local Git branch `backup/ai-endpoints-before-expo-update`, plus a dependency
+baseline archive under the already-ignored `.local/state/ai-endpoint-recovery/`.
+These are source/dependency recovery points, not database backups. The deferred
+package update required no data deletion or database migration. Restarted the
+managed Expo workflow once after installation; the public mobile-width browser
+preview renders without a fatal application error. The optional desktop React
+Native debugger cannot launch because the workspace lacks a system library;
+Metro and the application still serve normally. No physical-phone test was
+performed. The completion gate reruns the configured compatibility, typecheck,
+startup-font and API checks. The post-install dependency audit matches the
+baseline exactly, with no new advisories.
+
+**Accepted scope limitation:** The baseline dependency audit reports one
+critical (`shell-quote`) and four high (`node-forge`, `http-cache-semantics`,
+`braces`, `sharp`) advisories, plus two moderate findings. The owner explicitly
+approved leaving those existing findings outside this task; they are not fixed
+or waived for production publication. This approval does not cover newly
+introduced findings. No production publication or data backup was performed.
+Completion remains subject to all configured validation checks passing; this
+entry is development evidence, not a production-release approval.
+
+**Preview isolation:** Completion validation after syncing with main caught
+background-worker startup in the listener-only preview branch. Restored the
+preview branch to HTTP listening and shutdown signal handlers only; normal
+startup retains scheduler, review-analysis and referral-settlement workers.
+All four existing preview-safety regressions and seven release-package checks
+pass after the correction, without starting background work against shared data.
+The restarted development API reports healthy and rejects anonymous requests
+to both hardened AI endpoints with 401.
+
+**Validation resource isolation:** A subsequent full API run hit the unchanged
+PDF parser deadline in the library route integration test. The serial-test
+group covered the direct PDF tests but omitted the route fixture's exact file
+name. Added that fixture to the existing serial phase; no production timeout,
+document limit or assertion was relaxed. All twelve direct and route-level
+knowledge tests pass together under the isolated database harness.
+
 ## 2026-10-08 — Frozen sign-in/upload security integration
 
 - Compared the retained dependency-security archive against exact merged

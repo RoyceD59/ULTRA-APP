@@ -19,3 +19,14 @@ manifest and lockfile already contained every required SDK patch.
 lockfile installation first instead of introducing additional dependency changes.
 Stale installations can remain after newer pins arrive from a merge. Rerun
 Expo Doctor after installation without suppressing its checks.
+
+Preserve the dependency release-age safety window when newly recommended Expo
+patches require a build dependency that is not yet eligible. Do not add an
+age-rule exception merely to make Expo Doctor pass.
+
+**Why:** The owner chose to wait for the safety window rather than exempt a
+newly released official Expo build dependency.
+
+**How to apply:** Keep the manifest and lockfile consistent while an update is
+deferred. Report the earliest retry time and incomplete validation explicitly;
+do not substitute compatibility-check success for dependency safety.

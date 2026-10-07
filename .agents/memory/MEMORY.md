@@ -54,6 +54,7 @@
 - [Refill preview activation](refill-preview-activation.md) — persisted admin switches activate delivered previews only; unfinished financial and dispensing functions remain unavailable.
 - [Article body links](article-body-links.md) — rendered articles must use descriptive clickable linkpoints, not bare URLs or literal Markdown links.
 - [Alison answer policy](alison-answer-policy.md) — short replies backed by curated agent Markdown and local customer-facing documents.
+- [AI feedback integrity](ai-feedback-integrity.md) — signed answer receipts protect ratings without attaching customer identity to anonymous transcripts.
 - [Alison welcome policy](alison-welcome-policy.md) — user chose a floating brief-welcome bubble to replace the timed Products banner, not to appear alongside it.
 - [Review sentiment policy](review-sentiment-policy.md) — stars and text remain separate; Mixed is not disagreement; staff-only AI must not drive customer decisions.
 - [Hydrate programme policy](hydrate-programme-policy.md) — 3% split equally; refills add no funding; unavailable evidence stays pending; static forest hosting only.

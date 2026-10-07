@@ -7,7 +7,10 @@
  */
 
 export interface AiQueryInput {
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
   question: string;
   /** Identifier of the calling agent (e.g. "orchestrator", "analytics-agent") */
   source?: string;

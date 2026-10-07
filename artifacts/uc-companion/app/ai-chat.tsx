@@ -329,13 +329,14 @@ function AccountChatScreen({ userId }: { userId: number | null }) {
         history, conversationId, turnId, filterContext, isRetry, controller.signal,
       );
       trackEvent('alison_message_sent');
-      const { reply, suggestions } = await replyRequest;
+      const { reply, suggestions, feedbackToken } = await replyRequest;
       if (!mounted.current) return;
       pendingTurnId.current = undefined;
       trackEvent('alison_reply_received');
       setMessages(prev => [...prev, {
         id: `a-${Crypto.randomUUID()}`, role: 'assistant', content: reply,
         suggestions: suggestions?.length ? suggestions : undefined,
+        feedbackToken,
       }]);
       setFailedTurn(null);
     } catch (error) {
@@ -422,7 +423,7 @@ function AccountChatScreen({ userId }: { userId: number | null }) {
       } finally {
         clearTimeout(timeout);
       }
-      const { reply, suggestions } = result;
+      const { reply, suggestions, feedbackToken } = result;
       if (!mounted.current) return;
       trackEvent('alison_reply_received');
       setMessages(prev => [...prev, {
@@ -431,6 +432,7 @@ function AccountChatScreen({ userId }: { userId: number | null }) {
         content:     reply,
         suggestions: suggestions?.length ? suggestions : undefined,
         retryOf:     ratedMsgId,
+        feedbackToken,
       }]);
     } catch (error) {
       if (!mounted.current) return;
@@ -448,7 +450,7 @@ function AccountChatScreen({ userId }: { userId: number | null }) {
   // ── Rating ────────────────────────────────────────────────────────────────
 
   async function handleRate(msg: Message, rating: Rating) {
-    if (msg.rating) return; // already rated
+    if (msg.rating || !msg.feedbackToken) return; // already rated or legacy answer
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
@@ -460,7 +462,7 @@ function AccountChatScreen({ userId }: { userId: number | null }) {
     const questionMsg = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user');
 
     // Log to knowledge base (fire-and-forget)
-    api.chatFeedback(rating, questionMsg?.content ?? '', msg.content).catch(() => {});
+    api.chatFeedback(rating, questionMsg?.content ?? '', msg.content, msg.feedbackToken).catch(() => {});
 
     // Thumbs-down → auto-retry with a different approach
     if (rating === 'down') {
@@ -472,7 +474,7 @@ function AccountChatScreen({ userId }: { userId: number | null }) {
 
   function renderMessage({ item }: { item: Message }) {
     const isUser        = item.role === 'user';
-    const showRating    = !isUser && !item.noRating;
+    const showRating    = !isUser && !item.noRating && !!item.feedbackToken;
     const isRetryingThis = retryingId === item.id;
 
     return (

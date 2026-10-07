@@ -4,6 +4,7 @@ import http from "node:http";
 import express from "express";
 import { pool } from "@workspace/db";
 import { issueToken } from "../lib/jwt.js";
+import { verifyFeedbackReceipt } from "../lib/ai-feedback-receipt.js";
 import router, { _aiClient, _knowledgeClient, _catalogueClient, SYSTEM_PROMPT, type AiChatParams } from "../routes/uc-water-chat.js";
 import { AlisonKnowledgeError } from "../lib/alison-knowledge.js";
 import { createAlisonCatalogueLoader } from "../lib/alison-catalogue.js";
@@ -102,7 +103,9 @@ test("Alison receives approved guide and agent Markdown snapshots, not drafts or
   };
   const response = await send();
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
+  const { feedbackToken, ...answer } = await response.json();
+  assert.ok(verifyFeedbackReceipt(feedbackToken, 987654, "Explain Aquazeta maintenance", answer.reply));
+  assert.deepEqual(answer, {
     reply: "The Aquazeta guide recommends regular maintenance.", suggestions: ["How often?", "Which cartridge?"],
   });
   assert.ok(captured);
@@ -230,7 +233,7 @@ test("a concurrent historical writer cannot bypass the response guard", async ()
   _aiClient.create = async () => {
     await pool.query("INSERT INTO uc_alison_conversations (id) VALUES ($1) ON CONFLICT DO NOTHING", [`${prefix}-conversation`]);
     await pool.query(`INSERT INTO uc_alison_turns (conversation_id,turn_id,user_message,assistant_message)
-      VALUES ($1,$2,'What is the Aquazeta price?','KES 12,345, in stock. [Aquazeta](product:101)')`,
+      VALUES ($1,$2,'What is the Aquazeta price and stock?','KES 12,345, in stock. [Aquazeta](product:101)')`,
     [`${prefix}-conversation`, `${prefix}-turn-${sequence}`]);
     return { content: [{ type: "text", text: "A different model answer" }] };
   };

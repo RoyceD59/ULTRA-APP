@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './alisonFeedbackInput';
+export * from './alisonFeedbackInputRating';
 export * from './alisonTurnInput';
 export * from './alisonTurnInputMessagesItem';
 export * from './alisonTurnInputMessagesItemRole';
@@ -140,6 +142,7 @@ export * from './rewardsQrCandidate';
 export * from './rewardsQrInspection';
 export * from './rewardsQrInspectionStatus';
 export * from './rewardsQrRecovery';
+export * from './submitUcAlisonFeedback200';
 export * from './ucCodeValidation';
 export * from './ucCodeValidationType';
 export * from './ucDailyHydration';

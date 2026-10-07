@@ -5,6 +5,7 @@ const messageSchema = z.object({
   id: z.string(), role: z.enum(['user', 'assistant']), content: z.string(),
   suggestions: z.array(z.string()).optional(), rating: z.enum(['up', 'down']).optional(),
   noRating: z.boolean().optional(), retryOf: z.string().optional(),
+  feedbackToken: z.string().optional(),
 });
 const contextSchema = z.object({
   productName: z.string().optional(), daysRemaining: z.number().finite().optional(),

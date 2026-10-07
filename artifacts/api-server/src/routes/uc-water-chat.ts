@@ -23,9 +23,19 @@ import { hasWCCredentials, wcFetchArray, fetchAllPublishedProducts } from "./uc.
 import { logger } from "../lib/logger.js";
 import { SYSTEM_PROMPT, ALISON_MODEL, ALISON_MAX_TOKENS } from "../lib/alison-prompt.js";
 import { guardAlisonCommerceReply, needsCommerceGuard } from "../lib/alison-commerce-guard.js";
+import { issueFeedbackReceipt, verifyFeedbackReceipt } from "../lib/ai-feedback-receipt.js";
+import { rateLimit } from "express-rate-limit";
 export { SYSTEM_PROMPT } from "../lib/alison-prompt.js";
 
 const router: IRouter = Router();
+const feedbackLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(authenticatedUserId(req.headers.authorization)),
+  message: { error: "Too many feedback submissions. Please try again in a minute." },
+});
 
 // ─── Admin auth helper (DB-anchored, matches uc.ts exactly) ──────────────────
 
@@ -266,13 +276,19 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
     res.status(400).json({ error: "A user message is required" });
     return;
   }
-  const [existingTurn] = await db.select({ reply: ucAlisonTurnsTable.assistantMessage })
+  const [existingTurn] = await db.select({
+    reply: ucAlisonTurnsTable.assistantMessage, question: ucAlisonTurnsTable.userMessage,
+  })
     .from(ucAlisonTurnsTable)
     .where(and(
       eq(ucAlisonTurnsTable.conversationId, conversationId),
       eq(ucAlisonTurnsTable.turnId, turnId),
     )).limit(1);
   if (existingTurn) {
+    if (existingTurn.question !== submittedUserMessage) {
+      res.status(409).json({ error: "This turn was already used for a different question." });
+      return;
+    }
     // Retry identity deduplicates model work, not current commerce authority.
     // Old persisted prices/links must not bypass the guard on an HTTP replay.
     try {
@@ -280,7 +296,10 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
         messages, rawReply: existingTurn.reply,
         knowledgeContext: needsCommerceGuard(messages, existingTurn.reply) ? await _knowledgeClient.load(messages) : "",
       });
-      res.json({ reply: parseSuggestions(guarded.rawReply).reply, suggestions: [] });
+      const reply = parseSuggestions(guarded.rawReply).reply;
+      res.json({ reply, suggestions: [], feedbackToken: issueFeedbackReceipt(
+        userId, conversationId, turnId, submittedUserMessage, reply,
+      ) });
     } catch {
       res.status(503).json({ error: "Alison's reference documents are temporarily unavailable. Please try again shortly or contact support at 0717774049." });
     }
@@ -355,13 +374,16 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
           .where(eq(ucAlisonConversationsTable.id, conversationId));
         return inserted[0].reply;
       }
-      const [winner] = await tx.select({ reply: ucAlisonTurnsTable.assistantMessage })
+      const [winner] = await tx.select({
+        reply: ucAlisonTurnsTable.assistantMessage, question: ucAlisonTurnsTable.userMessage,
+      })
         .from(ucAlisonTurnsTable)
         .where(and(
           eq(ucAlisonTurnsTable.conversationId, conversationId),
           eq(ucAlisonTurnsTable.turnId, turnId),
         )).limit(1);
       if (!winner) throw new Error("Alison turn idempotency conflict could not be resolved");
+      if (winner.question !== submittedUserMessage) throw new Error("Alison turn question conflict");
       return winner.reply;
     });
     // A concurrent writer may have won with older commerce wording. Guard that
@@ -369,7 +391,9 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
     const delivered = parseSuggestions(guardAlisonCommerceReply({
       messages, knowledgeContext, rawReply: persistedReply,
     }).rawReply).reply;
-    res.json({ reply: delivered, suggestions: persistedReply === reply ? suggestions : [] });
+    res.json({ reply: delivered, suggestions: persistedReply === reply ? suggestions : [],
+      feedbackToken: issueFeedbackReceipt(userId, conversationId, turnId, submittedUserMessage, delivered),
+    });
   } catch (err) {
     if (err instanceof AlisonKnowledgeError) {
       logger.warn("Alison approved reference lookup failed");
@@ -389,11 +413,27 @@ router.post("/uc/ai/water-chat", async (req: Request, res: Response): Promise<vo
 // Stores customer thumbs up/down ratings in the database.
 // Forms the knowledge base that the UCFilters team reviews to identify gaps
 // in Alison's answers.
-router.post("/uc/ai/chat-feedback", async (req: Request, res: Response): Promise<void> => {
-  const { rating, question, answer } = req.body as {
+router.post("/uc/ai/chat-feedback", async (req, res, next): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  const userId = authenticatedUserId(req.headers.authorization);
+  if (userId === null || !Number.isSafeInteger(userId) || claims?.type === "team-session") {
+    res.status(401).json({ error: "Customer authentication required." });
+    return;
+  }
+  const [user] = await db.select({ deletedAt: ucUsersTable.deletedAt }).from(ucUsersTable)
+    .where(eq(ucUsersTable.id, userId)).limit(1);
+  if (!user || user.deletedAt) {
+    res.status(401).json({ error: "Customer authentication required." });
+    return;
+  }
+  next();
+}, feedbackLimiter, async (req: Request, res: Response): Promise<void> => {
+  const userId = authenticatedUserId(req.headers.authorization)!;
+  const { rating, question, answer, feedbackToken } = (req.body ?? {}) as {
     rating:   unknown;
     question: unknown;
     answer:   unknown;
+    feedbackToken: unknown;
   };
 
   if (rating !== "up" && rating !== "down") {
@@ -404,13 +444,25 @@ router.post("/uc/ai/chat-feedback", async (req: Request, res: Response): Promise
     res.status(400).json({ error: "question and answer must be strings" });
     return;
   }
+  const feedbackKey = verifyFeedbackReceipt(feedbackToken, userId, question, answer);
+  if (!feedbackKey) {
+    res.status(400).json({ error: "A valid receipt for this answer is required." });
+    return;
+  }
 
   try {
-    await db.insert(ucAiFeedbackTable).values({
+    const inserted = await db.insert(ucAiFeedbackTable).values({
       rating:   rating as "up" | "down",
       question: question.slice(0, 500),
       answer:   answer.slice(0, 1000),
-    });
+      userId,
+      feedbackKey,
+    }).onConflictDoNothing({ target: ucAiFeedbackTable.feedbackKey })
+      .returning({ id: ucAiFeedbackTable.id });
+    if (!inserted.length) {
+      res.json({ ok: true });
+      return;
+    }
   } catch (err) {
     console.error("[Alison feedback] DB insert failed:", err);
     res.status(500).json({ error: "Failed to save feedback" });

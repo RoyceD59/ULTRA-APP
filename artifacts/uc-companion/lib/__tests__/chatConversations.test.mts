@@ -30,6 +30,14 @@ describe('recent Alison conversations', () => {
     await saveConversation(42, saved);
     assert.deepEqual(await loadConversations(42), [saved]);
   });
+  it('retains answer receipts through reopening without requiring them on legacy answers', async () => {
+    const saved = conversation();
+    saved.messages[2].feedbackToken = 'signed-answer-receipt';
+    await saveConversation(42, saved);
+    assert.equal((await loadConversations(42))[0].messages[2].feedbackToken, 'signed-answer-receipt');
+    await saveConversation(43, conversation());
+    assert.equal((await loadConversations(43))[0].messages[2].feedbackToken, undefined);
+  });
 
   it('keeps accounts isolated and never uses a guest or shared key', async () => {
     await saveConversation(42, conversation());

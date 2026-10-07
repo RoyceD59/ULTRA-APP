@@ -2568,7 +2568,8 @@ paths:
     post:
       operationId: aiQuery
       tags: [ai-monitor]
-      summary: Inbound webhook — Ultra Clear AI asks a question about projects
+      summary: Active ProjectHub team member asks a question about projects
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -2582,6 +2583,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AiQueryAnswer"
+        "401": { description: Team authentication required }
+        "403": { description: Active team account required }
+        "429": { description: Team account AI query limit exceeded }
 
   /ai/report:
     get:
@@ -3274,9 +3278,35 @@ paths:
               schema: { $ref: "#/components/schemas/AlisonTurnResponse" }
         "400": { description: Invalid messages or anonymous identifiers }
         "401": { description: Customer authentication required }
+        "409": { description: Turn already used for a different question }
         "429": { description: Customer rate limit exceeded }
         "502": { description: Alison generation or transcript persistence unavailable }
         "503": { description: Approved Alison reference documents temporarily unavailable }
+  /uc/ai/chat-feedback:
+    post:
+      operationId: submitUcAlisonFeedback
+      tags: [anthropic]
+      summary: Rate a server-issued Alison answer once
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlisonFeedbackInput"
+      responses:
+        "200":
+          description: Saved feedback or already-rated answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "400": { description: "Invalid rating, texts, or answer receipt" }
+        "401": { description: Customer authentication required }
+        "429": { description: Customer feedback limit exceeded }
   /oauth/clients:
     get:
       operationId: listAgentOauthClients
@@ -4772,12 +4802,21 @@ components:
         isRetry: { type: boolean, default: false }
     AlisonTurnResponse:
       type: object
-      required: [reply, suggestions]
+      required: [reply, suggestions, feedbackToken]
       properties:
         reply: { type: string }
+        feedbackToken: { type: string }
         suggestions:
           type: array
           items: { type: string }
+    AlisonFeedbackInput:
+      type: object
+      required: [rating, question, answer, feedbackToken]
+      properties:
+        rating: { type: string, enum: [up, down] }
+        question: { type: string }
+        answer: { type: string }
+        feedbackToken: { type: string, maxLength: 2048 }
     AlisonTranscriptMessage:
       type: object
       required: [role, content, createdAt]
@@ -5599,7 +5638,7 @@ components:
       type: object
       required: [question]
       properties:
-        question: { type: string, minLength: 1 }
+        question: { type: string, minLength: 1, maxLength: 4000 }
         source:
           type: string
           description: Identifier of the calling agent (e.g. "orchestrator", "analytics-agent")
