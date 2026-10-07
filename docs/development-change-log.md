@@ -393,6 +393,36 @@ initialization, then client delivery and exact live snapshot comparisons.
   distinct from successful compilation or schema inspection. Obtain approval for
   a narrowly scoped security revision/new candidate checksum before proceeding.
 
+### 2026-10-07 — Saved-order scoped guest payments
+
+- **Scope/approval:** Development implementation of saved-order “Ask someone to
+  pay”; no production activation, DNS changes or real financial transaction.
+- **Changes:** Authenticated, retry-safe 72-hour hashed capabilities, additive
+  fresh/startup DB migration; variant-safe existing checkout sharing/recovery;
+  saved-total WhatsApp/copy messaging and deliberate bearer warning; isolated
+  noindex/no-store/referrer-protected signed-out pay document/proxy; shared
+  order-attempt guard, live pricing/stock/benefit checks, provider timeout
+  reconciliation and signed callback binding; original-order confirmation,
+  idempotent receipt dispatch, redacted diagnostics and privacy-filtered events.
+- **Verification:** Focused lifecycle, existing checkout-benefit, document/proxy
+  tests and API/Companion type checks. Evidence and remaining controlled external
+  checks: [Guest-payment readiness](saved-order-guest-payment-readiness.md).
+- **Completion correction:** Validated order capabilities scope separate guest
+  polling/initialization limits; invalid-link abuse has an independent budget.
+  A real proxy-to-API test confirms concurrent payers and polling beyond the
+  former shared five-request allowance without trusting forwarded IPs.
+- **Ignore changes:** None. Source, migrations, tests and readiness record remain
+  tracked; no bearer/contact/provider secret material or generated staging added.
+- **Status:** Source implemented and locally compiled/tested; not published.
+- **Browser evidence:** Signed-in actual API pending save and reload/link
+  idempotency using a read-only approved catalogue fixture; actual signed-out
+  allowlisted summary/private document and readable phone/tablet/desktop layouts;
+  browser-mocked pending/verified/interrupted payment states. Fixtures and
+  temporary overrides removed; no provider or Woo order created.
+- **Remaining:** Satisfy the explicitly separate live-catalogue mapping and
+  sandbox/physical-device/notification/collector/ingress release gates
+  before any later approved activation.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

@@ -36,7 +36,7 @@ function rawBodyMiddleware(req: Request, _res: Response, next: NextFunction): vo
 }
 
 app.use(
-  "/api/payments/paystack/webhook",
+  ["/api/payments/paystack/webhook", "/api/payments/stripe/webhook"],
   express.raw({ type: "*/*", limit: "1mb" }),
   rawBodyMiddleware,
 );
@@ -105,6 +105,12 @@ app.use((req, res, next) => {
 app.use("/api/diagnostics", runtimeDiagnosticsRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Parser failures must never echo or log a capability/contact-containing
+// request excerpt through Express's default error page/stack.
+app.use("/api/guest-pay", (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  res.set({ "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" });
+  res.status(400).json({ error: "Invalid private payment request", retryable: false });
+});
 
 // ─── UC deleted-account guard ────────────────────────────────────────────────
 // Any /api/uc/* request carrying a valid customer JWT whose uc_users row has

@@ -467,6 +467,15 @@ export interface CheckoutPaymentInput {
   shippingAddress: UCAddress;
   idempotencyKey: string;
 }
+export interface SavedPayLink {
+  url: string;
+  expiresAt: string;
+  orderId: number;
+  summary: {
+    state: string; total: number; currency: string;
+    items: { name: string; size?: string; variant: string; sku: string; quantity: number; total: number }[];
+  };
+}
 /** Server-side notification preferences, including the opt-in flags for
  *  filter-reminder delivery via external channels (email / SMS / WhatsApp). */
 export interface ServerNotifPrefs {
@@ -600,6 +609,9 @@ export function useApi() {
       quoteCompanionCheckout(data, { headers: authHeaders() }),
     quoteWaterTestPromotion: (code: string) => quotePhysicalTestPromotion({ code }, { headers: authHeaders() }),
     cancelCheckout: (idempotencyKey: string) => post<{cancelled: boolean}>('/api/uc/checkout/cancel',{idempotencyKey}),
+    savePayLink: (checkout: CheckoutPaymentInput, method: 'paystack' | 'mpesa' | 'stripe') =>
+      post<SavedPayLink>('/api/uc/orders/pay-link', { checkout, method }),
+    revokePayLink: (idempotencyKey: string) => post<{revoked: boolean}>('/api/uc/orders/pay-link/revoke', { idempotencyKey }),
     getCheckoutRecovery: (idempotencyKey: string) => get<{resolution: 'editable' | 'completed' | 'unresolved'; orderId: number | null}>(`/api/uc/checkout/recovery?idempotencyKey=${encodeURIComponent(idempotencyKey)}`),
     quoteCheckoutPromotion: (data: { code: string; fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/promotions/checkout/quote', data),

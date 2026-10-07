@@ -519,11 +519,13 @@ export async function serverPricedLines(lineItems: { productId: number; quantity
         (selected["manage_stock"] === true && typeof selected["stock_quantity"] === "number" &&
           selected["stock_quantity"] < quantity && selected["backorders_allowed"] !== true) ||
         (hasWCCredentials() && !["instock", "onbackorder"].includes(String(selected["stock_status"])))) return null;
-    return { productId, name: `${String(product["name"])}${variantLabel ? ` — ${variantLabel} (${item.childSku})` : ''}`, quantity, subtotal: price * quantity,
+    return { productId, name: `${String(product["name"])}${variantLabel ? ` — ${variantLabel} (${item.childSku})` : ''}`,
+      sku: String(selected["sku"] || product["sku"] || ""), size: String(record?.specs?.Capacity || ""),
+      quantity, subtotal: price * quantity,
       ...(item.variationId ? { variationId: item.variationId, childSku: item.childSku, variantLabel } : {}) };
   }));
   return lines.some((line) => !line) ? null : lines as {
-    productId: number; name: string; quantity: number; subtotal: number;
+    productId: number; name: string; sku: string; size: string; quantity: number; subtotal: number;
     variationId?: number; childSku?: string; variantLabel?: string;
   }[];
 }
@@ -4058,10 +4060,10 @@ export async function verifyPaymentOnServer(
 
   // ── Stripe ──
   if (method === "stripe") {
-    const stripeKey = process.env["STRIPE_SECRET_KEY"];
     try {
-      const StripeSDK = await import("stripe");
-      const stripe = new StripeSDK.default(stripeKey!, { timeout: 10_000, maxNetworkRetries: 0 });
+      // Initialization and reconciliation use one configured SDK and test seam.
+      const stripe = await (await import("./payments.js")).getStripe();
+      if (!stripe) return { ok: false, reason: "Stripe verification unavailable" };
       const session = await stripe.checkout.sessions.retrieve(reference);
       const ok = session.payment_status === "paid";
       return ok ? { ok: true, amount: Number(session.amount_total) / 100, currency: session.currency?.toUpperCase() } : { ok: false, failureFinal: session.status === "expired", reason: `Stripe session status: ${session.payment_status}` };
@@ -5979,6 +5981,7 @@ export function sendOrderConfirmationEmail(
     dateCreated?:     string | Date;
     /** Payment trace for the receipt (M-Pesa code or gateway reference). */
     paymentReference?: string;
+    privateGuest?: boolean;
   },
 ): void {
   getUserContact(ownerUserId).then(contact => {
@@ -5987,7 +5990,7 @@ export function sendOrderConfirmationEmail(
         orderId:   order.orderId,
         total:     order.total,
         firstName: contact.firstName,
-      }), { template: "order_confirmation", orderId: order.orderId });
+      }), { template: "order_confirmation", orderId: order.orderId, redactLogs: order.privateGuest });
     }
     if (contact?.email) {
       const receipt = buildOrderReceiptEmail({
@@ -6011,9 +6014,13 @@ export function sendOrderConfirmationEmail(
         subject: receipt.subject,
         text:    receipt.text,
         html:    receipt.html,
-        meta:    { template: "order_receipt", orderId: order.orderId },
+        meta:    { template: "order_receipt", orderId: order.orderId, redactLogs: order.privateGuest },
       }).then(ok => {
         if (!ok) {
+          if (order.privateGuest) {
+            logger.warn({ code: "GUEST_ORDER_RECEIPT_NOT_DELIVERED", orderId: order.orderId }, "Guest-paid buyer receipt requires staff review; payment remains verified");
+            return; // Logged by the existing notification monitor; no hidden resend.
+          }
           logger.warn(`[resend] order confirmation not delivered to ${contact.email}; trying legacy email provider`);
           sendSlackTeamMessage(
             `⚠️ *Order confirmation email failed*\nResend could not deliver the receipt for order *#${order.orderId}* to ${contact.email}.\nThe legacy email provider is being attempted.`,
@@ -6024,11 +6031,19 @@ export function sendOrderConfirmationEmail(
       });
     }
   }).catch((err: unknown) => {
-    logger.error({ err, orderId: order.orderId }, "Order receipt preparation failed");
+    logger.error(order.privateGuest ? { code: "GUEST_ORDER_RECEIPT_PREPARATION_FAILED", orderId: order.orderId } :
+      { err, orderId: order.orderId }, "Order receipt preparation failed");
   });
 }
 
 export async function notifyConfirmedCheckout(order: any) {
+  const guest = await pool.query("SELECT id FROM uc_guest_pay_links WHERE order_id=$1 LIMIT 1", [order.id]);
+  if (guest.rows[0]) {
+    const dispatch = await pool.query(`UPDATE uc_orders SET checkout_snapshot=checkout_snapshot ||
+      '{"confirmationDispatch":"queuing"}'::jsonb WHERE id=$1
+      AND checkout_snapshot->>'confirmationDispatch' IS NULL RETURNING id`, [order.id]);
+    if (!dispatch.rows[0]) return;
+  }
   await reconcileCanonicalPurchaseDualWrite(order.id, `checkout:${order.id}`);
   if (order.payment_method !== "cod" && order.payment_method !== "free") {
     await enqueueReferralSettlement(order.id);
@@ -6042,7 +6057,10 @@ export async function notifyConfirmedCheckout(order: any) {
     total: response.total, currency: response.currency, paymentMethod: order.payment_method,
     shippingAddress: response.shippingAddress, discountAmount: response.discountAmount, promoCode: response.promoCode,
     dateCreated: response.dateCreated, paymentStatus: response.paymentStatus,
-    paymentReference: order.payment_method === "cod" ? "" : order.mpesa_receipt || order.payment_reference });
+    paymentReference: order.payment_method === "cod" ? "" : order.mpesa_receipt || order.payment_reference,
+    privateGuest: !!guest.rows[0] });
+  if (guest.rows[0]) await pool.query(`UPDATE uc_orders SET checkout_snapshot=checkout_snapshot ||
+    '{"confirmationDispatch":"queued"}'::jsonb WHERE id=$1`, [order.id]);
 }
 
 // ─── Filter registration from purchase record ────────────────────────────────

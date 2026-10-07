@@ -77,6 +77,7 @@
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
 - [Shared TypeScript bundler resolution](shared-typescript-bundler-resolution.md) — Metro may reject .js-to-.ts imports that TypeScript and server tests accept.
 - [Browser fixture recovery](browser-fixture-recovery.md) — browser worker resets can erase test credentials without removing shared-development DB fixtures.
+- [Persistent browser fixtures](browser-fixture-server-lifetime.md) — foreground fixture servers can die before browser actions; use a tracked background process.
 - [Expo guide printing](expo-guide-printing.md) — web printing ignores supplied HTML; article exports must print an isolated complete document, not the collapsed screen.
 - [Swahili guide audience](swahili-guide-audience.md) — Nairobi customers need offline Swahili installation help; guide localization is not a whole-app migration.
 - [Schedule-update deduplication](schedule-update-deduplication.md) — dedupe against the applied activation, not a history of lifespan values; returning to an old value is a new correction.
@@ -96,4 +97,4 @@
 - [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
 - [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
-- [Product-page sharing and comparison](product-page-future-flows.md) — interim child-SKU product links are not saved-order payment links; Hydra Flux comparison defaults to Truva Go.
+- [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.

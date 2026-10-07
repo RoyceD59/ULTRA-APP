@@ -100,5 +100,20 @@ export const ucOrderItemsTable = pgTable("uc_order_items", {
   total:     text("total").notNull(),
 });
 
+export const ucGuestPayLinksTable = pgTable("uc_guest_pay_links", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => ucOrdersTable.id, { onDelete: "cascade" }),
+  generation: text("generation").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now()+interval '72 hours'`),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  paidEventAt: timestamp("paid_event_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex("uc_guest_pay_links_token_hash_unique").on(t.tokenHash),
+  uniqueIndex("uc_guest_pay_active_order").on(t.orderId).where(sql`revoked_at IS NULL`),
+]);
+
 export type UcOrder     = typeof ucOrdersTable.$inferSelect;
 export type UcOrderItem = typeof ucOrderItemsTable.$inferSelect;

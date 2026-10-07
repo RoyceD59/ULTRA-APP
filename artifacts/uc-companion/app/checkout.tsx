@@ -8,7 +8,7 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/context/CartContext';
 import { checkoutLine, cartLineKey } from '@/context/cartStorage';
@@ -36,6 +36,8 @@ import { quoteMatchesCheckout, checkoutLineSubtotal } from '@/hooks/checkoutQuot
 import ContactCompletion from '@/components/ContactCompletion';
 import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
 import { useCheckoutReceipt } from '@/context/CheckoutReceiptContext';
+import SavedOrderSharing from '@/components/SavedOrderSharing';
+import type { SavedPayLink } from '@/hooks/useApi';
 
 const DELIVERY_FEE = 500;
 
@@ -136,6 +138,10 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const router = useRouter();
+  const { askToPay } = useLocalSearchParams<{ askToPay?: string }>();
+  const [sharingMode, setSharingMode] = useState(askToPay === '1');
+  const [savedPayLink, setSavedPayLink] = useState<SavedPayLink | null>(null);
+  const shareBusy = useRef(false);
   const { items, totalPrice, clearCart, cartHydrated, cartLoadError, refreshCart } = useCart();
   const { retainOrder } = useCheckoutReceipt();
   const { user } = useAuth();
@@ -274,6 +280,7 @@ export default function CheckoutScreen() {
     setCheckingRecovery(false);
     recoveryCheckRef.current = false;
     setReviewOrderId(null); setCheckoutFeedback(''); setProcessing(false);
+    setSavedPayLink(null); shareBusy.current = false; setSharingMode(askToPay === '1');
     cancelMpesaPoll(attemptRef, pollRef);
     paystackVerifyAttemptRef.current++;
     setMpesaWaiting(false); setShowMpesaModal(false);
@@ -293,6 +300,7 @@ export default function CheckoutScreen() {
     loadCheckoutRecovery(user?.id).then(({ saved, ready }) => {
       if (cancelled) return;
       if (saved) {
+        setSharingMode(saved.paymentSharing === true);
         recoveryRef.current = saved;
         paymentInputRef.current = saved.input; orderIdentityRef.current = saved.identity;
         setAddress(saved.input.shippingAddress);
@@ -344,6 +352,7 @@ export default function CheckoutScreen() {
       await clearCheckoutRecovery(scope);
       if (checkoutAccountRef.current !== scope) return;
       recoveryRef.current = null; paymentInputRef.current = null; orderIdentityRef.current = null;
+      setSavedPayLink(null);
       pendingPaystackReferenceRef.current = null; lastCheckoutRequestIdRef.current = null;
       setReviewOrderId(null); setPaymentFrozen(false); setQuoteLoading(false); setBaseQuote(null);
       setAppliedQuote(null); setUsingReferralDiscount(false); setPromoInput(''); setAddressErrors({});
@@ -407,6 +416,7 @@ export default function CheckoutScreen() {
         orderIdentityRef.current = null;
         lastCheckoutRequestIdRef.current = null;
         setPaymentFrozen(false);
+        setSavedPayLink(null);
       }
       cancelMpesaPoll(attemptRef, pollRef);
       clearMpesaRetryCheck();
@@ -442,6 +452,13 @@ export default function CheckoutScreen() {
 
   async function handleConfirm() {
     if (!checkoutRecoveryReady || reviewOrderId !== null || processing || checkingRecovery) return;
+    if (sharingMode && !user) {
+      setCheckoutFeedback('Sign in to save this order under your account and create a payment link.');
+      router.push('/auth/login'); return;
+    }
+    if (sharingMode && (paymentMethod === 'cod' || total === 0)) {
+      setCheckoutFeedback('Choose an available online provider for guest payment. Cash on delivery and free orders do not need a payment link.'); return;
+    }
     if (user && !validateCustomerContact(user).ok) {
       Alert.alert('Complete contact details', 'Save your phone number and contact address in the completion form before checkout.');
       return;
@@ -451,12 +468,28 @@ export default function CheckoutScreen() {
     try {
       const input = checkoutPaymentInput();
       const recovery = { accountId: recoveryScope, identity: orderIdentityRef.current!,
-        input, quote: baseQuote!, method: paymentMethod };
+        input, quote: baseQuote!, method: paymentMethod, paymentSharing: sharingMode };
       await saveCheckoutRecovery(recovery);
       if (checkoutAccountRef.current !== recoveryScope) return;
       recoveryRef.current = recovery;
     } catch {
       setCheckoutFeedback('Your checkout safety details could not be saved. No new payment or order was started. Check device storage before trying again.');
+      return;
+    }
+    if (sharingMode) {
+      if (shareBusy.current || !user) return;
+      shareBusy.current = true; setProcessing(true);
+      const scope = recoveryScope;
+      try {
+        const link = await api.savePayLink(checkoutPaymentInput(), paymentMethod as 'paystack' | 'mpesa' | 'stripe');
+        if (checkoutAccountRef.current !== scope) return;
+        setSavedPayLink(link);
+        setCheckoutFeedback('Order saved and awaiting payment. No payment or fulfillment has been confirmed.');
+      } catch (error) {
+        if (checkoutAccountRef.current === scope) setCheckoutFeedback(error instanceof Error ? error.message : 'Check your saved order before retrying.');
+      } finally {
+        if (checkoutAccountRef.current === scope) { shareBusy.current = false; setProcessing(false); }
+      }
       return;
     }
     if (total === 0) { await createOrder('free', ''); return; }
@@ -1280,7 +1313,8 @@ export default function CheckoutScreen() {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Method</Text>
         <PaymentMethodPicker
           selected={paymentMethod}
-          enabled={paymentsConfig?.methods}
+          enabled={sharingMode ? { paystack: paymentsConfig?.methods.paystack === true, mpesa: paymentsConfig?.methods.mpesa === true,
+            stripe: paymentsConfig?.methods.stripe === true, cod: false } : paymentsConfig?.methods}
           onChange={(method) => { void changePaymentMethod(method); }}
         />
 
@@ -1368,6 +1402,8 @@ export default function CheckoutScreen() {
 
       <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border,
         paddingBottom: Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
+        {sharingMode && <Text style={{ color: colors.text }}>Ask someone to pay: complete your normal contact and delivery details, then save your order. The payer cannot edit it.</Text>}
+        {savedPayLink && <SavedOrderSharing link={savedPayLink} onRevoke={() => { void checkSavedCheckout(); }} />}
         {!!checkoutFeedback && (
           <View accessibilityLiveRegion="polite" style={{ gap: 8, marginBottom: 12 }}>
             <Text style={{ color: colors.text }}>{checkoutFeedback}</Text>
@@ -1390,11 +1426,12 @@ export default function CheckoutScreen() {
             </Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={handleConfirm} disabled={!checkoutRecoveryReady || reviewOrderId !== null || processing || checkingRecovery || quoteLoading || !baseQuote || !quoteCurrent || !fulfillment || !!quoteError}
+        <TouchableOpacity onPress={handleConfirm} disabled={!!savedPayLink || !checkoutRecoveryReady || reviewOrderId !== null || processing || checkingRecovery || quoteLoading || !baseQuote || !quoteCurrent || !fulfillment || !!quoteError}
           style={[styles.confirmBtn, { backgroundColor: processing || reviewOrderId !== null ? colors.muted : colors.primary }]}>
           {processing ? <ActivityIndicator color="#fff" size="small" /> : (
             <Text style={styles.confirmBtnText}>
               {reviewOrderId !== null ? 'Order recorded — view status' :
+               sharingMode ? (savedPayLink ? 'Order saved — awaiting payment' : 'Save order and create payment link') :
                paymentMethod === 'mpesa' ? 'Send M-Pesa Request' :
                paymentMethod === 'stripe' ? 'Pay with Stripe Checkout' :
                paymentMethod === 'paystack' ? 'Pay with Paystack' : 'Place Order (COD)'}

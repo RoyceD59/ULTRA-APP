@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { db, pool } from "@workspace/db";
 import { ucOrdersTable, mpesaStkInitiationsTable, teamSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -9,7 +9,7 @@ import { sendViaResend } from "../lib/resend.js";
 import { sendRecoveryAlertEmail } from "../lib/recovery-alert-email.js";
 import { sendSms } from "../lib/sms.js";
 import { buildOrderReceiptEmail } from "../lib/email.js";
-import { paymentLimiter } from "../lib/rate-limiters.js";
+import { paymentLimiter, guestStatusLimiter, guestInitializationLimiter, invalidGuestLimiter } from "../lib/rate-limiters.js";
 import { enqueueReferralSettlement } from "./referrals.js";
 import { reconcileCanonicalPurchaseDualWrite } from "../lib/canonical-purchase-dual-write.js";
 import { prepareCheckoutOrder, bindCheckoutPayment, confirmCheckoutOrder } from "../lib/checkout-orders.js";
@@ -17,6 +17,9 @@ import { getTeamAlertEmail, notifyConfirmedCheckout, verifyPaymentOnServer } fro
 import { verifyToken } from "../lib/jwt.js";
 import { validatePhone } from "../lib/order-validation.js";
 import { paymentMocksAllowed, paymentProviderConfigured, mpesaConfigured } from "../lib/payment-configuration.js";
+import { guestPayOrigin, guestPaySummary, guestProviderAvailable, issuePayLink, payLinkState, resolvePayLink, revalidatePayOrder } from "../lib/guest-pay.js";
+import { cancelCheckout } from "../lib/checkout-cancellation.js";
+import { logger } from "../lib/logger.js";
 
 async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
   // Provider recovery rows carry an email/phone placeholder until /uc/orders
@@ -83,12 +86,120 @@ export function alertTeamRecoveryOrder(params: {
 export const NON_RETRIABLE_CODES = new Set(["1", "1032", "2001"]);
 
 const router = Router();
+router.use("/guest-pay", (_req, res, next) => {
+  res.set({ "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow",
+    "Referrer-Policy": "no-referrer" });
+  next();
+});
+router.post("/uc/orders/pay-link", paymentLimiter, async (req, res) => {
+  res.set({ "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" });
+  const claims = verifyToken(req.headers.authorization);
+  if (!claims || claims.type === "team-session" || !Number.isSafeInteger(Number(claims.id)) || Number(claims.id) <= 0) {
+    res.status(401).json({ error: "Customer sign-in required" }); return;
+  }
+  try {
+    const activeBuyer = await pool.query("SELECT id FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [Number(claims.id)]);
+    if (!activeBuyer.rows[0]) { res.status(401).json({ error: "Customer account unavailable" }); return; }
+    guestPayOrigin(); // Fail before reserving an order if sharing is not configured.
+    if (!process.env.SESSION_SECRET) throw new Error("Sharing is not configured");
+    if (!["paystack", "mpesa", "stripe"].includes(req.body.method) ||
+        !guestProviderAvailable(req.body.method)) throw new Error("Choose an available online payment method");
+    const order = await prepareCheckoutOrder(req.body.checkout, String(claims.id), req.body.method);
+    const link = await issuePayLink(order);
+    res.set("Cache-Control", "private, no-store").json(link);
+  } catch {
+    // No input/contact/provider error is echoed into the sharing surface.
+    res.status(422).json({ error: "The order or sharing configuration needs review. Refresh checkout or check the saved order before retrying.", retryable: false });
+  }
+});
+router.post("/uc/orders/pay-link/revoke", paymentLimiter, async (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  const claims = verifyToken(req.headers.authorization);
+  if (!claims || claims.type === "team-session") { res.status(401).json({ error: "Customer sign-in required" }); return; }
+  try {
+    // Same retirement and order-row barrier as buyer payment/cancellation.
+    await cancelCheckout(String(req.body.idempotencyKey || ""), String(claims.id));
+    const result = await pool.query(`UPDATE uc_guest_pay_links l SET revoked_at=COALESCE(revoked_at,now())
+      FROM uc_orders o WHERE l.order_id=o.id AND o.user_id=$1 AND o.checkout_idempotency_key=$2 AND o.status='cancelled' RETURNING l.id`,
+      [String(claims.id), req.body.idempotencyKey]);
+    res.json({ revoked: result.rowCount !== 0 });
+  } catch { res.status(409).json({ error: "Payment may still complete. Check the original order before replacing its link." }); }
+});
+router.use("/guest-pay", async (req, res, next) => {
+  if (req.method !== "POST" || !["/summary", "/reconcile", "/initialize"].includes(req.path)) { next(); return; }
+  try {
+    const found = await resolvePayLink(req.body?.token);
+    if (!found) {
+      invalidGuestLimiter(req, res, () => { res.status(req.path === "/initialize" ? 409 : 200).json({ state: "invalid" }); });
+      return;
+    }
+    res.locals.guestPay = found;
+    (req.path === "/initialize" ? guestInitializationLimiter : guestStatusLimiter)(req, res, next);
+  } catch { res.status(503).json({ error: "Payment link unavailable", retryable: false }); }
+});
+router.post(["/guest-pay/summary", "/guest-pay/reconcile"], async (req, res) => {
+  try {
+    let found = res.locals.guestPay as Awaited<ReturnType<typeof resolvePayLink>>;
+    if (!found) { res.json({ state: "invalid" }); return; }
+    let state = payLinkState(found.order, found.link);
+    if (req.path.endsWith("/reconcile") && state === "pending" && !found.order.payment_reference &&
+        found.order.payment_method === "stripe" && !found.link.revoked_at) {
+      const stripe = await getStripe();
+      if (stripe) {
+        const savedOrder = found.order;
+        const sessions = [];
+        let startingAfter: string | undefined;
+        for (let page = 0; page < 5; page++) {
+          const result = await stripe.checkout.sessions.list({ limit: 100,
+            created: { gte: Math.floor(new Date(found.order.checkout_snapshot.paymentStartedAt).getTime() / 1000) - 60 },
+            ...(startingAfter ? { starting_after: startingAfter } : {}) });
+          sessions.push(...result.data.filter(s => s.metadata?.uc_saved_order === String(savedOrder.id) &&
+            s.metadata?.uc_attempt === savedOrder.checkout_snapshot.paymentAttemptId));
+          if (!result.has_more) break;
+          startingAfter = result.data.at(-1)?.id;
+        }
+        if (sessions.length === 1 && sessions[0]!.amount_total === Math.round(Number(found.order.total) * 100) &&
+            sessions[0]!.currency?.toUpperCase() === found.order.currency) {
+          const session = sessions[0]!;
+          await bindCheckoutPayment(found.order.id, session.id, { sessionId: session.id, sessionUrl: session.url, amount: Number(found.order.total) });
+          found.order = (await pool.query("SELECT * FROM uc_orders WHERE id=$1", [found.order.id])).rows[0];
+        }
+      }
+    }
+    if (req.path.endsWith("/reconcile") && state === "pending" && found.order.payment_reference && !found.link.revoked_at) {
+      const evidence = await verifyPaymentOnServer(found.order.payment_method, found.order.payment_reference);
+      if (evidence.ok) {
+        const amount = evidence.amount ?? (paymentMocksAllowed() && !paymentProviderConfigured(found.order.payment_method) ? Number(found.order.total) : NaN);
+        const currency = evidence.currency ?? (paymentMocksAllowed() && !paymentProviderConfigured(found.order.payment_method) ? "KES" : "");
+        await recoverSnapshotCheckout(found.order.payment_reference, amount, currency);
+        found = (await resolvePayLink(req.body.token))!;
+        state = payLinkState(found.order, found.link);
+      } else if (evidence.failureFinal) {
+        // A shared hosted session must be permanently voided/reconciled before
+        // replacement; ordinary failed-status evidence alone cannot release it.
+        state = "review_required";
+      }
+    }
+    if (state === "ready" && !await revalidatePayOrder(found.order)) state = "refresh_required";
+    const opened = await pool.query("UPDATE uc_guest_pay_links SET opened_at=now() WHERE id=$1 AND opened_at IS NULL RETURNING id", [found.link.id]);
+    const paid = state === "paid" ? await pool.query("UPDATE uc_guest_pay_links SET paid_event_at=now() WHERE id=$1 AND paid_event_at IS NULL RETURNING id", [found.link.id]) : null;
+    const analyticsEvents = [
+      ...(opened.rows[0] ? ["pay_link_opened", "begin_checkout"] : []),
+      ...(paid?.rows[0] ? ["pay_link_paid", "purchase"] : []),
+    ];
+    res.json({ ...await guestPaySummary(found.order, found.link, state), analyticsEvents });
+  } catch {
+    logger.warn({ code: "GUEST_PAY_RECONCILIATION_UNAVAILABLE" }, "Guest payment status unavailable");
+    res.status(503).json({ error: "Payment status could not be checked. Do not start another payment.", retryable: false });
+  }
+});
 export async function recoverSnapshotCheckout(reference: string, amount: number, currency: string, receipt?: string,
   notify: typeof notifyConfirmedCheckout = notifyConfirmedCheckout): Promise<number | null> {
   const result = await pool.query("SELECT * FROM uc_orders WHERE payment_reference=$1 AND checkout_snapshot IS NOT NULL", [reference]);
   const order = result.rows[0];
   if (!order) return null;
-  if (!Number.isFinite(amount) || Math.abs(Number(order.total) - amount) > 0.01 || currency.toUpperCase() !== "KES") throw new Error("Payment does not match reserved checkout");
+  if (!Number.isFinite(amount) || Math.round(Number(order.total) * 100) !== Math.round(amount * 100) ||
+      currency.toUpperCase() !== order.currency) throw new Error("Payment does not match reserved checkout");
   // Fill the verified receipt before confirmation reads the order and queues
   // notifications. Empty strings are the schema default, not SQL NULL.
   // Latch verified payment before fulfillment, so cleanup cannot release a
@@ -100,12 +211,43 @@ export async function recoverSnapshotCheckout(reference: string, amount: number,
     [order.id, reference, receipt ?? null]);
   if (!latched.rows[0]) throw new Error("This checkout was cancelled or its attempt changed; payment requires staff reconciliation");
   const confirmed = await confirmCheckoutOrder(order.id, reference);
-  if (!confirmed.repeated && !confirmed.reconciliationRequired) await notify(confirmed.order);
+  if (!confirmed.repeated && !confirmed.reconciliationRequired) {
+    try { await notify(confirmed.order); }
+    catch {
+      await pool.query(`UPDATE uc_orders SET checkout_snapshot=checkout_snapshot ||
+        '{"confirmationDispatch":"queue_failed"}'::jsonb WHERE id=$1`, [order.id]);
+      logger.error({ code: "CHECKOUT_CONFIRMATION_QUEUE_FAILED", orderId: order.id },
+        "Verified payment retained; confirmation delivery requires staff review");
+    }
+  }
   return order.id;
 }
 // Rate-limit both modern initialization and rejected old clients exactly once,
 // before any contact/catalogue/database work. Existing references remain verifiable.
-router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/session"], paymentLimiter, async (req, res, next) => {
+router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/session", "/guest-pay/initialize"],
+  (req, res, next) => req.path === "/guest-pay/initialize" ? next() : paymentLimiter(req, res, next), async (req, res, next) => {
+  const guest = req.path === "/guest-pay/initialize";
+  let capability: Awaited<ReturnType<typeof resolvePayLink>> = null;
+  if (guest) {
+    try {
+      capability = res.locals.guestPay as Awaited<ReturnType<typeof resolvePayLink>>;
+      const state = capability ? payLinkState(capability.order, capability.link) : "invalid";
+      if (state !== "ready") { res.status(409).json({ state }); return; }
+      if (req.body.method !== capability!.order.payment_method) { res.status(422).json({ error: "Use the saved order's payment method" }); return; }
+      const { email, phone } = req.body;
+      if (capability!.order.payment_method === "paystack" && (typeof email !== "string" || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+        res.status(422).json({ error: "A valid payer email is required by Paystack" }); return;
+      }
+      // Discard arbitrary payer checkout/address/amount/benefit/callback inputs.
+      req.body = { method: capability!.order.payment_method,
+        email: capability!.order.payment_method === "paystack" ? email : undefined,
+        phone: capability!.order.payment_method === "mpesa" ? phone : undefined,
+        callbackUrl: `${guestPayOrigin()}/pay`, returnUrl: `${guestPayOrigin()}/pay`,
+        checkout: capability!.order.checkout_snapshot.input };
+      res.locals.guestPay = true;
+      res.locals.guestMethod = capability!.order.payment_method;
+    } catch { res.status(503).json({ error: "Payment link unavailable", retryable: false }); return; }
+  }
   if (!req.body?.checkout) {
     res.status(422).json({ error: "Start payment from the updated checkout with your cart, phone and contact address. Existing payment references can still be checked.", fields: { checkout: "A complete checkout is required before starting a payment." }, retryable: false });
     return;
@@ -113,19 +255,25 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
   const claims = verifyToken(req.headers.authorization);
   if (req.headers.authorization && !claims) { res.status(401).json({error:"Authentication required"}); return; }
   if (claims?.type === "team-session") { res.status(403).json({ error: "Customer checkout required" }); return; }
-  const userId = claims ? String(claims.id) : "anonymous";
-  const method = req.path.includes("paystack") ? "paystack" : req.path.includes("mpesa") ? "mpesa" : "stripe";
+  const userId = capability ? capability.order.user_id : claims ? String(claims.id) : "anonymous";
+  const method = capability ? capability.order.payment_method : req.path.includes("paystack") ? "paystack" : req.path.includes("mpesa") ? "mpesa" : "stripe";
   if (method === "mpesa" && (typeof req.body.phone !== "string" || !validatePhone(req.body.phone, "KE").valid)) {
     res.status(400).json({error:"Enter a valid M-Pesa phone number.",fields:{phone:"Enter a valid M-Pesa phone number."}});
     return;
   }
-  if (!paymentProviderConfigured(method) && !paymentMocksAllowed()) {
+  if ((!paymentProviderConfigured(method) && !paymentMocksAllowed()) || (method === "stripe" && !stripeEnabled())) {
     res.status(503).json({ error: `${method} payments are currently unavailable`, retryable: true });
     return;
   }
   try {
-    let order = await prepareCheckoutOrder(req.body.checkout, userId, method);
-    if (method === "mpesa" && order.checkout_snapshot?.provider && order.payment_reference &&
+    let order = capability?.order ?? await prepareCheckoutOrder(req.body.checkout, userId, method);
+    const linked = capability || (await pool.query("SELECT id FROM uc_guest_pay_links WHERE order_id=$1 LIMIT 1", [order.id])).rows[0];
+    res.locals.linkedCheckout = !!linked;
+    if (linked && (order.status !== "pending" || order.payment_confirmed_at)) { res.status(409).json({ state: "paid" }); return; }
+    if (linked && order.checkout_state === "payment_pending" && !await revalidatePayOrder(order)) {
+      res.status(409).json({ state: "refresh_required", error: "The buyer must refresh and accept the revised checkout before payment." }); return;
+    }
+    if (!linked && method === "mpesa" && order.checkout_snapshot?.provider && order.payment_reference &&
         order.status === "pending" && order.checkout_state === "payment_initiating") {
       const verified = await verifyPaymentOnServer("mpesa", order.payment_reference);
       if (verified.failureFinal) {
@@ -147,9 +295,13 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
     if (order.checkout_snapshot?.provider) { res.json(order.checkout_snapshot.provider); return; }
     const acquired = await pool.query(`UPDATE uc_orders SET checkout_state='payment_initiating',
       checkout_snapshot=checkout_snapshot || jsonb_build_object('paymentStartedAt',now(),'paymentNotStarted',false)
-      WHERE id=$1 AND status='pending' AND checkout_state='payment_pending' RETURNING id`, [order.id]);
+      WHERE id=$1 AND status='pending' AND checkout_state='payment_pending' AND payment_confirmed_at IS NULL
+      AND ($2::integer IS NULL OR EXISTS (SELECT 1 FROM uc_guest_pay_links WHERE id=$2 AND order_id=$1 AND revoked_at IS NULL AND expires_at>now()))
+      RETURNING id`, [order.id, capability?.link.id ?? null]);
     if (!acquired.rows[0]) { res.status(409).json({ error: "The original payment is being initialized or needs reconciliation. Do not start another charge." }); return; }
     req.body.amount = Number(order.total);
+    res.locals.checkoutOrderId = order.id;
+    res.locals.checkoutAttemptId = order.checkout_snapshot.paymentAttemptId;
     req.body.orderId = String(order.id);
     if (method === "paystack" && !order.payment_reference) {
       // Paystack accepts a caller-supplied reference. Persist it before the
@@ -169,13 +321,18 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
       } else {
         // Do not retry an ambiguous STK initiation; initialize-only card
         // sessions can safely be requested again if no reference was returned.
-        if (method !== "mpesa") void pool.query("UPDATE uc_orders SET checkout_state='payment_pending' WHERE id=$1", [order.id]);
-        send(body);
+        if (method !== "mpesa" && !linked) void pool.query("UPDATE uc_orders SET checkout_state='payment_pending' WHERE id=$1", [order.id]);
+        send(guest ? { error: "Payment initialization needs reconciliation. Do not start another charge.", state: "pending", retryable: false } : body);
       }
       return res;
     }) as typeof res.json;
     next();
-  } catch (error) { res.status(422).json({ error: (error as Error).message, fields: (error as { fields?: Record<string, string> }).fields }); }
+  } catch (error) {
+    if (req.path === "/guest-pay/initialize") {
+      logger.warn({ code: "GUEST_PAY_INITIALIZE_UNAVAILABLE" }, "Guest initialization needs review");
+      res.status(503).json({ error: "Payment status requires reconciliation. Do not pay again.", retryable: false });
+    } else res.status(422).json({ error: (error as Error).message, fields: (error as { fields?: Record<string, string> }).fields });
+  }
 });
 
 // ─── M-Pesa webhook secret — DB-backed with env-var fallback ──────────────────
@@ -284,15 +441,59 @@ export function stripeEnabled(): boolean {
 
 // Lazy Stripe — only when STRIPE_SECRET_KEY is present
 let _stripe: Stripe | null = null;
-async function getStripe(): Promise<Stripe | null> {
+export function setStripeForGuestPayTests(stripe: Stripe | null): void {
+  if (process.env.NODE_ENV !== "test") throw new Error("Test adapter unavailable");
+  _stripe = stripe;
+}
+export async function getStripe(): Promise<Stripe | null> {
   const key = process.env["STRIPE_SECRET_KEY"];
   if (!key) return null;
   if (!_stripe) {
     const StripeSDK = await import("stripe");
-    _stripe = new StripeSDK.default(key);
+    _stripe = new StripeSDK.default(key, { timeout: 15000, maxNetworkRetries: 0 });
   }
   return _stripe;
 }
+// Scoped Stripe confirmation for saved guest-pay orders. Ordinary checkout
+// remains on its existing verification path. Missing signing configuration
+// cannot turn an unsigned event into evidence.
+router.post("/payments/stripe/webhook", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const stripe = await getStripe();
+  if (!secret || !stripe) { res.status(503).json({ error: "Signed confirmation is unavailable" }); return; }
+  let event;
+  try {
+    const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+    if (!raw) throw new Error("Missing raw message");
+    event = stripe.webhooks.constructEvent(raw, String(req.headers["stripe-signature"] || ""), secret);
+  } catch { res.status(401).json({ error: "Invalid signature" }); return; }
+  if (!["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
+    res.json({ received: true }); return;
+  }
+  try {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (session.payment_status !== "paid") { res.json({ received: true }); return; }
+    const orderId = Number(session.metadata?.uc_saved_order);
+    if (!Number.isSafeInteger(orderId) || orderId <= 0) { res.json({ received: true }); return; }
+    const result = await pool.query(`SELECT o.* FROM uc_orders o
+      WHERE o.id=$1 AND o.payment_method='stripe' AND EXISTS
+      (SELECT 1 FROM uc_guest_pay_links WHERE order_id=o.id)`, [orderId]);
+    const order = result.rows[0];
+    if (!order || order.checkout_snapshot?.paymentAttemptId !== session.metadata?.uc_attempt ||
+        (order.payment_reference && order.payment_reference !== session.id) ||
+        session.amount_total !== Math.round(Number(order.total) * 100) ||
+        typeof session.currency !== "string" || session.currency.toUpperCase() !== order.currency) {
+      res.status(409).json({ error: "Payment binding does not match" }); return;
+    }
+    await bindCheckoutPayment(order.id, session.id, { sessionId: session.id, sessionUrl: session.url, amount: Number(order.total) });
+    await recoverSnapshotCheckout(session.id, session.amount_total / 100, session.currency);
+    res.json({ received: true });
+  } catch {
+    logger.warn({ code: "STRIPE_SAVED_CONFIRMATION_RECONCILIATION_REQUIRED" }, "Signed payment confirmation requires reconciliation");
+    res.status(503).json({ error: "Confirmation requires reconciliation" });
+  }
+});
 
 // ─── M-Pesa credential validation ─────────────────────────────────────────────
 // Daraja shortcodes are numeric (Paybill/Till numbers, e.g. sandbox 174379).
@@ -329,7 +530,7 @@ async function getMpesaToken(): Promise<string | null> {
     const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
     const res = await fetch(
       `https://${env}.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials`,
-      { headers: { Authorization: `Basic ${creds}` } }
+      { headers: { Authorization: `Basic ${creds}` }, signal: AbortSignal.timeout(10000) }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { access_token?: string };
@@ -339,7 +540,8 @@ async function getMpesaToken(): Promise<string | null> {
   }
 }
 
-router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void> => {
+router.post(["/payments/mpesa", "/guest-pay/initialize"], async (req: Request, res: Response, next): Promise<void> => {
+  if (res.locals.guestPay && res.locals.guestMethod !== "mpesa") { next(); return; }
   const { phone, amount, orderId } = req.body as {
     phone: string;
     amount: number;
@@ -413,6 +615,15 @@ router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void
     // initiation record, so a token captured in access logs cannot be reused
     // across pushes or after the 15-minute window.
     const callbackToken = randomUUID();
+    // Retain a scoped callback binding BEFORE the non-idempotent STK request.
+    // A timeout can lose the returned reference; a verified callback must still
+    // attach to this exact original order, not create a detached recovery order.
+    if (res.locals.linkedCheckout) {
+      await pool.query(`UPDATE uc_orders SET checkout_snapshot=checkout_snapshot ||
+        jsonb_build_object('guestMpesaTokenHash',$2::text,'guestMpesaExpiresAt',$3::text,'guestMpesaPhone',$4::text)
+        WHERE id=$1 AND checkout_state='payment_initiating' AND NULLIF(payment_reference,'') IS NULL`,
+        [res.locals.checkoutOrderId, createHash("sha256").update(callbackToken).digest("hex"), expiresAt.toISOString(), normalizedPhone]);
+    }
 
     const apiBase =
       process.env["API_BASE_URL"] ??
@@ -441,13 +652,14 @@ router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void
           AccountReference: `Order-${orderId}`,
           TransactionDesc: "UC Filter Purchase",
         }),
+        signal: AbortSignal.timeout(15000),
       }
     );
     const stkData = (await stkRes.json()) as Record<string, string>;
     const checkoutRequestId = stkData["CheckoutRequestID"];
 
     if (!checkoutRequestId) {
-      console.error("[M-Pesa] STK push failed — Safaricom response:", JSON.stringify(stkData), "HTTP status:", stkRes.status);
+      logger.warn({ code: "MPESA_INIT_NO_REFERENCE", status: stkRes.status, orderId: res.locals.checkoutOrderId }, "M-Pesa initialization needs review");
       res.status(500).json({ error: "M-Pesa request failed — no checkout reference", retryable: true });
       return;
     }
@@ -466,16 +678,21 @@ router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void
         expiresAt,
       }).onConflictDoNothing();
     } catch (err) {
-      console.error(
-        `[M-Pesa] CRITICAL: STK push sent (ref=${checkoutRequestId}) but initiation record failed to persist:`,
-        err,
-      );
+      if (res.locals.linkedCheckout) logger.warn({ code: "GUEST_MPESA_LEDGER_WRITE_FAILED",
+        orderId: res.locals.checkoutOrderId }, "Original callback binding retained; reconcile this attempt only");
+      else console.error(
+        `[M-Pesa] CRITICAL: STK push sent (ref=${checkoutRequestId}) but initiation record failed to persist:`, err);
       // Alert team — the push was sent but can't be recovered by the callback.
       sendViaResend({
         from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
         to:      "info@ucfilters.com",
         subject: `⚠️ M-Pesa push ${checkoutRequestId} sent but NOT tracked — manual check needed`,
-        text: [
+        text: res.locals.linkedCheckout ? [
+          `Saved order: ${res.locals.checkoutOrderId}`,
+          `Checkout Ref: ${checkoutRequestId}`, `Expected amount: KES ${expectedAmount}`,
+          "The original attempt's callback binding is retained. Reconcile and verify this original order.",
+          "Do not initialize another payment or create a replacement order.",
+        ].join("\n") : [
           "An M-Pesa STK push was accepted by Safaricom but the correlation record",
           "could not be saved to the database (database error).",
           "If the customer pays, the callback will reject it as unrecognised.",
@@ -486,7 +703,7 @@ router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void
           "",
           "Action: check M-Pesa Business Console and fulfil manually if payment received.",
         ].join("\n"),
-        meta: { template: "mpesa_tracking_alert" },
+        meta: { template: "mpesa_tracking_alert", redactLogs: !!res.locals.linkedCheckout },
       }).catch(() => {});
       res.status(500).json({ error: "Checkout error — please try again", retryable: true });
       return;
@@ -583,8 +800,9 @@ router.get(
 // ─── Stripe — Checkout Session (PCI-safe: Stripe hosts the card form) ─────────
 // Frontend opens the sessionUrl in expo-web-browser; Stripe handles all card data.
 router.post(
-  "/payments/stripe/session",
-  async (req: Request, res: Response): Promise<void> => {
+  ["/payments/stripe/session", "/guest-pay/initialize"],
+  async (req: Request, res: Response, next): Promise<void> => {
+    if (res.locals.guestPay && res.locals.guestMethod !== "stripe") { next(); return; }
     const { amount, currency = "kes", orderId, returnUrl } = req.body as {
       amount: number;
       currency: string;
@@ -632,9 +850,11 @@ router.post(
             quantity: 1,
           },
         ],
-        success_url: `${appBase}/stripe/success?session_id={CHECKOUT_SESSION_ID}&order=${orderId}`,
-        cancel_url: `${appBase}/stripe/cancel?order=${orderId}`,
-      });
+        success_url: res.locals.guestPay ? `${appBase}?payment=return` : `${appBase}/stripe/success?session_id={CHECKOUT_SESSION_ID}&order=${orderId}`,
+        cancel_url: res.locals.guestPay ? `${appBase}?payment=return` : `${appBase}/stripe/cancel?order=${orderId}`,
+        ...(res.locals.linkedCheckout ? { metadata: { uc_saved_order: String(res.locals.checkoutOrderId),
+          uc_attempt: String(res.locals.checkoutAttemptId) } } : {}),
+      }, res.locals.linkedCheckout ? { idempotencyKey: `guest-order-${orderId}` } : undefined);
       res.json({ sessionId: session.id, sessionUrl: session.url, amount });
     } catch (e: unknown) {
       res.status(500).json({ error: (e as Error).message, retryable: true });
@@ -665,8 +885,9 @@ router.get(
 
 // ─── Paystack ─────────────────────────────────────────────────────────────────
 router.post(
-  "/payments/paystack/init",
-  async (req: Request, res: Response): Promise<void> => {
+  ["/payments/paystack/init", "/guest-pay/initialize"],
+  async (req: Request, res: Response, next): Promise<void> => {
+    if (res.locals.guestPay && res.locals.guestMethod !== "paystack") { next(); return; }
     const { email, amount, callbackUrl } = req.body as {
       email: string;
       amount: number;
@@ -712,6 +933,7 @@ router.post(
           ...(res.locals.checkoutReference ? { reference: res.locals.checkoutReference } : {}),
           callback_url: resolvedCallback,
         }),
+        signal: AbortSignal.timeout(15_000),
       });
       // Treat upstream 5xx / 429 as a transient outage — Paystack blips commonly
       // manifest as a non-2xx HTTP response rather than a thrown exception.
@@ -1076,6 +1298,24 @@ router.post("/payments/mpesa/callback", async (req: Request, res: Response): Pro
       (process.env["NODE_ENV"] === "production" && !webhookSecret);
 
     if (peekId) {
+      const callbackBearer = String(req.query["token"] || "");
+      if (/^[a-f0-9-]{36}$/i.test(callbackBearer)) {
+        const interrupted = await pool.query(`SELECT * FROM uc_orders WHERE payment_method='mpesa'
+          AND checkout_snapshot->>'guestMpesaTokenHash'=$1 AND (NULLIF(payment_reference,'') IS NULL OR payment_reference=$2)
+          AND (checkout_snapshot->>'guestMpesaExpiresAt')::timestamptz > now() AND status='pending'`,
+          [createHash("sha256").update(callbackBearer).digest("hex"), peekId]);
+        if (interrupted.rows.length === 1) {
+          const saved = interrupted.rows[0];
+          const linked = await pool.query(`UPDATE uc_orders SET payment_reference=$2,
+            checkout_snapshot=checkout_snapshot || '{"paymentNotStarted":false}'::jsonb
+            WHERE id=$1 AND (NULLIF(payment_reference,'') IS NULL OR payment_reference=$2) RETURNING id`, [saved.id, peekId]);
+          if (linked.rows[0]) await db.insert(mpesaStkInitiationsTable).values({
+            checkoutRequestId: peekId, expectedAmount: Math.round(Number(saved.total)),
+            phone: saved.checkout_snapshot.guestMpesaPhone, callbackToken: callbackBearer,
+            expiresAt: new Date(saved.checkout_snapshot.guestMpesaExpiresAt),
+          }).onConflictDoNothing();
+        }
+      }
       // We have a CheckoutRequestID — verify against the per-push token stored
       // in the initiation record (primary path for all new-style pushes).
       const [initRow] = await db

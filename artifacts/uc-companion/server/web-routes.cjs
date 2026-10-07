@@ -5,7 +5,7 @@ const WEB_APP_ROUTES = new Set([
   'referral', 'rewards', 'water-test', 'about', 'hydration',
 ]);
 const WEB_APP_ROUTE_PREFIXES = new Set([
-  'admin', 'auth', 'blog', 'guide', 'order', 'product', 'topic', 'review', 'ticket',
+  'admin', 'auth', 'blog', 'guide', 'order', 'product', 'topic', 'review', 'ticket', 'pay',
 ]);
 
 function isWebAppRoute(pathname) {

@@ -1765,6 +1765,7 @@ async function applyStartupMigrations(): Promise<void> {
       WHERE checkout_idempotency_key != '';
   `);
   logger.info("Startup migration: durable local checkout idempotency ensured");
+  await pool.query((await import("./lib/guest-pay.js")).GUEST_PAY_DDL);
   await pool.query(`CREATE TABLE IF NOT EXISTS uc_checkout_retirements (
     id serial PRIMARY KEY, user_id text NOT NULL, idempotency_key text NOT NULL,
     retired_at timestamptz NOT NULL DEFAULT now());

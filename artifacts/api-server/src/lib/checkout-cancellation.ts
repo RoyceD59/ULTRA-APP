@@ -30,6 +30,12 @@ export async function releaseUnsuccessfulCheckout(
   const uninitiated = neverInitiated(order);
   let evidence: Awaited<ReturnType<PaymentVerifier>> | undefined;
   if (!uninitiated) {
+    // A guest may still possess a previously returned hosted URL. "Failed" or
+    // "abandoned" status alone does not prove that URL is permanently void.
+    // Keep this attempt/reservation reconciliation-only, including cleanup
+    // jobs; never mint a replacement charge merely because a session failed.
+    const linked = await pool.query("SELECT id FROM uc_guest_pay_links WHERE order_id=$1 LIMIT 1", [order.id]);
+    if (linked.rows[0]) return "retained";
     if (!order.payment_reference || !["paystack", "mpesa", "stripe"].includes(order.payment_method)) return "retained";
     evidence = await verify(order.payment_method, order.payment_reference);
     if (evidence.ok || evidence.failureFinal !== true) return "retained";

@@ -60,7 +60,7 @@ function logSmsAttempt(params: {
       errorMessage: params.errorMessage,
     })
     .catch((err: unknown) => {
-      console.error("[sms] notification log write failed:", err);
+      console.error("[sms] notification log write failed");
     });
 }
 
@@ -79,10 +79,12 @@ export async function sendSms(
     orderId?:  number | string;
     ticketId?: string;
     testId?:   string;
+    redactLogs?: boolean;
   },
 ): Promise<void> {
   if (!hasATCredentials()) {
-    console.log("[sms] AT credentials absent — skipping SMS to", to);
+    if (meta?.redactLogs) console.log("[sms] private order SMS unavailable", { orderId: meta.orderId });
+    else console.log("[sms] AT credentials absent — skipping SMS to", to);
     logSmsAttempt({
       recipient:    normalisePhone(to) || to,
       template:     meta?.template ?? "",
@@ -98,7 +100,8 @@ export async function sendSms(
 
   const phone = normalisePhone(to);
   if (!phone) {
-    console.warn("[sms] Cannot normalise phone number:", to);
+    if (meta?.redactLogs) console.warn("[sms] private order SMS phone invalid", { orderId: meta.orderId });
+    else console.warn("[sms] Cannot normalise phone number:", to);
     return;
   }
 
@@ -132,17 +135,20 @@ export async function sendSms(
     .then(async (res) => {
       if (!res.ok) {
         const body = await res.text().catch(() => "(unreadable)");
-        console.error(`[sms] AT returned ${res.status}:`, body);
-        logSmsAttempt({ ...logMeta, status: "failed", errorMessage: `AT ${res.status}: ${body}` });
+        const diagnostic = meta?.redactLogs ? `AT ${res.status}` : `AT ${res.status}: ${body}`;
+        console.error("[sms] delivery rejected", diagnostic);
+        logSmsAttempt({ ...logMeta, status: "failed", errorMessage: diagnostic });
       } else {
         const data = await res.json().catch(() => null);
-        console.log("[sms] sent to", phone, "—", JSON.stringify(data));
+        if (meta?.redactLogs) console.log("[sms] private order SMS accepted", { orderId: meta.orderId });
+        else console.log("[sms] sent to", phone, "—", JSON.stringify(data));
         logSmsAttempt({ ...logMeta, status: "sent" });
       }
     })
     .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[sms] network error:", err);
+      const msg = meta?.redactLogs ? "SMS transport unavailable" : err instanceof Error ? err.message : String(err);
+      if (meta?.redactLogs) console.error("[sms] network error:", msg);
+      else console.error("[sms] network error:", err);
       logSmsAttempt({ ...logMeta, status: "failed", errorMessage: `Network error: ${msg}` });
     });
 }

@@ -115,7 +115,7 @@ export async function ingestDiagnostic(d: Diagnostic, address: string): Promise<
 // Fixed route families, never raw paths. Detail IDs/slugs are deliberately discarded.
 export function boundedApiRoute(path: string): string {
   const clean = path.split(/[?#]/, 1)[0] || "";
-  const roots = ["healthz", "readyz", "auth", "admin", "members", "projects", "tasks", "dashboard", "contacts", "notifications", "system", "library", "blog", "guides", "payments", "referrals", "storage", "ai", "webhook"];
+  const roots = ["healthz", "readyz", "auth", "admin", "members", "projects", "tasks", "dashboard", "contacts", "notifications", "system", "library", "blog", "guides", "payments", "guest-pay", "referrals", "storage", "ai", "webhook"];
   const ucRoots = ["products", "orders", "customer", "impact", "rewards", "referrals", "promotions", "locations", "reminders", "hydration", "reviews", "tickets", "guides", "blog", "auth", "water-chat", "webhooks"];
   const parts = clean.replace(/^\/api\/?/, "").split("/");
   if (parts[0] === "uc") return ucRoots.includes(parts[1] || "") ? `/api/uc/${parts[1]}/*` : "/api/uc/other";

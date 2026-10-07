@@ -9,6 +9,7 @@ export interface CheckoutRecovery {
   quote: CheckoutPromotionQuote;
   method: 'cod' | 'mpesa' | 'paystack' | 'stripe';
   reviewOrderId?: number;
+  paymentSharing?: boolean;
 }
 
 const key = (accountId: string | number) => `uc-checkout-recovery-v1:${accountId}`;

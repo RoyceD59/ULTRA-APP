@@ -1,6 +1,6 @@
 ---
 name: Product-page sharing and comparison
-description: Interim product sharing versus saved-order payment, and approved record comparison.
+description: Product sharing versus saved-order guest payment, and approved record comparison.
 ---
 
 The guest pay-link requirement remains a saved buyer order payable by a guest,
@@ -10,10 +10,21 @@ sharing link is not a substitute.
 **Why:** The owner explicitly retained the original requirement while excluding
 its implementation from the initial record-backed page work.
 
-**How to apply:** The owner explicitly authorized interim product-link sharing
-with a selected child SKU. Label it as a product link, never as paying a saved
-buyer order. The separately planned guest payment lifecycle remains required;
-interim sharing does not authorize implementing or claiming that lifecycle.
+**How to apply:** Keep attributed product-link sharing distinct from “Ask someone
+to pay”. The owner subsequently authorized the saved-order guest payment flow:
+share its server-priced total and exact selected identity only after normal
+buyer checkout details have been collected. It does not transfer account/order
+ownership, authorize payer edits, or make order creation proof of payment.
+
+Guest-payment publication, provider sandbox checks and signed-out physical-phone
+evidence remain separate from mocked tests and responsive browser checks.
+
+**Why:** The owner explicitly excluded production activation and real financial
+transactions and required external evidence to be distinguished from mocks.
+
+**How to apply:** Record the evidence category accurately; do not activate
+collection, publish, change DNS or claim real provider/device verification
+because the source implementation or local tests pass.
 
 Bottle comparison must default Hydra Flux to Truva Go, allow selection of
 eligible bottles, and use record-only comparison rows.

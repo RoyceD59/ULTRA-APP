@@ -24,6 +24,9 @@ const STATIC_ROOT =
   path.resolve(process.env.STATIC_ROOT || path.resolve(__dirname, '..', 'static-build'));
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
+const guestPayDelivery = require('./guest-pay-delivery.cjs').createGuestPayDelivery({
+  basePath, apiOrigin: process.env.UC_GUEST_PAY_API_ORIGIN || process.env.PUBLIC_WEB_API_ORIGIN,
+});
 // Explicit opt-in: do not change published canonicals or renderer on merge.
 const publicRenderingEnabled = process.env.PUBLIC_WEB_RENDERING_ENABLED === 'true';
 const publicRenderer = publicRenderingEnabled ? createPublicRenderer({
@@ -360,6 +363,8 @@ const server = http.createServer(async (req, res) => {
     pathname = pathname.slice(basePath.length) || '/';
   }
 
+  // Private documents must never enter the Expo/account/metadata shell.
+  if (await guestPayDelivery(req, res, pathname)) return;
   const browserRedirect = browserEntryRedirect(req, pathname, url.search);
   if (browserRedirect) {
     res.writeHead(302, { location: browserRedirect, 'cache-control': 'no-store' });

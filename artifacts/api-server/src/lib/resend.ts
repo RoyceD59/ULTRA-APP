@@ -35,6 +35,8 @@ export interface ResendEmail {
     testId?:   string;
     /** Keep only provider metadata in the audit log (for recovery links). */
     auditMode?: "metadata-only";
+    /** Fixed diagnostics for private guest-payment delivery. */
+    redactLogs?: boolean;
   };
   /**
    * Override what is written to the notification log. Use this for sensitive
@@ -70,7 +72,7 @@ async function logResendAttempt(params: {
       resendMessageId: params.resendMessageId,
     });
   } catch (err) {
-    console.error("[resend] notification log write failed:", err);
+    console.error("[resend] notification log write failed");
   }
 }
 
@@ -210,7 +212,7 @@ export async function sendViaResend(email: ResendEmail): Promise<boolean> {
     await logResendAttempt({ ...logBase, status: "failed", errorMessage: errMsg });
     return false;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = email.meta?.redactLogs ? "Delivery transport unavailable" : err instanceof Error ? err.message : String(err);
     console.error(`[resend] send failed for "${email.subject}":`, msg);
     await logResendAttempt({ ...logBase, status: "failed", errorMessage: `Network error: ${msg}` });
     return false;

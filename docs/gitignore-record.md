@@ -1,5 +1,12 @@
 # Git ignore record
 
+## Saved-order guest-payment source — 2026-10-07
+
+No ignore patterns were changed. Capability lifecycle, migration, checkout
+sharing, private document/proxy, isolated tests/read-only catalogue fixture and
+release-readiness evidence are tracked. Raw bearer links, contact data, test
+session credentials and provider credentials must never be committed.
+
 ## Editable product pages — 2026-10-07
 
 No ignore rule changed. Editorial schema/migration, shared content and tests,

@@ -110,13 +110,13 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
     } catch { /* fall through to server truth */ } finally { setWish(null); }
   }, [token, user, pid, saved, api, qc, record, variant, router]);
 
-  const buyNow = () => {
+  const buyNow = (askToPay = false) => {
     if (state.kind !== 'buy' || pid === null) return;
     const item = { id: pid, name: record.name, price: state.price, quantity: 1,
       image: resolveMediaUrl(photos[0]?.src ?? ''), sku: variant?.childSku ?? record.parentSku,
       variationId: variant?.variationId ?? undefined, childSku: variant?.childSku, variantLabel: variant?.label };
     addItem(item as CartItem);
-    router.push('/checkout');
+    router.push(askToPay ? '/checkout?askToPay=1' : '/checkout');
   };
 
   const waUrl = productShareUrl(record.slug, variant?.childSku, 'whatsapp');
@@ -184,7 +184,9 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         </View>) : null}
       {state.kind === 'blocked' ? <View style={s.warn}><Text style={s.warnT}>{state.reason}</Text></View> : null}
       {state.kind === 'buy' ? (
-        <TouchableOpacity onPress={buyNow} style={s.primary} accessibilityRole="button"><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
+        <><TouchableOpacity onPress={() => buyNow()} style={s.primary} accessibilityRole="button"><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => buyNow(true)} style={s.chip} accessibilityRole="button"><Text style={s.chipT}>Ask someone to pay</Text></TouchableOpacity>
+        </>
       ) : state.kind === 'out_of_stock' ? (
         <TouchableOpacity onPress={toggleWish} style={s.ghost} accessibilityRole="button">
           <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={P.tealDark} />
@@ -292,7 +294,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
           <Text {...headingProps(2)} style={s.accTitle}>{record.summary?.heading || 'Review your selection'}</Text>
           <Text style={s.body}>{record.name}{variant ? ` - ${variant.label}` : ''}</Text>
           <Text style={s.price}>{price !== null ? kes(price) : 'Price on enquiry'}</Text>
-          {state.kind === 'buy' ? <TouchableOpacity onPress={buyNow} style={s.primary}><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
+          {state.kind === 'buy' ? <TouchableOpacity onPress={() => buyNow()} style={s.primary}><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
             : state.kind === 'blocked' ? <Text style={s.warnT}>{state.reason}</Text> : null}
         </View>
 
