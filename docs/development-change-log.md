@@ -1,5 +1,36 @@
 # Development change log
 
+## 2026-10-07 — Editable shared product pages (development only)
+
+- Added validated persistent v2.4 editorial records, conflict-aware ProjectHub
+  editing and non-destructive six-slot media mapping, separate from WooCommerce
+  stock/identity authority.
+- Connected public HTML/SEO/schema and web/native Choose / Understand / Decide
+  pages; added record comparison and clearly labelled selected-SKU product links.
+- Preserved verified variation identity in persistent cart, quotes, saved order
+  lines and existing fulfillment; unavailable mappings/stock
+  block purchasing rather than guessing.
+- Added explicit opt-in privacy-filtered Google product event adapter without
+  replacing Umami, installing collectors or changing native collection.
+- Verification and rollout limitations: `editable-product-pages-verification.md`.
+  No publication, activation, tariff/provider changes or real payment occurred.
+
+- Later owner clarification: uploaded Excel supersedes WooCommerce pricing.
+  Verified CATALOGUE RETAIL prices/children for all 19 priced full records;
+  imported prices once into persistent records (Hydra Flux KES 4,399), retaining
+  non-price edits and subsequent staff price changes. Enquiry records stay null.
+  Checkout and Woo order line subtotals use approved Companion prices; Woo
+  reference mismatches remain visible but do not block verified in-stock SKUs.
+  No WooCommerce catalogue prices or provider settings were changed.
+  Added an additive import-revision column and workbook verification script.
+  Legacy variant order branches now reject before anchors/provider calls.
+  Verification: 9/9 isolated editorial API tests, 62 Companion checks and
+  refreshed shared/API/Companion/ProjectHub typechecks. No ignore-rule changes.
+  Final checkout fixes enforce live parent publication during pricing and use
+  exact child identity/quantity for summary subtotals. Published Woo fixtures now
+  explicitly include their status. Fixed the library test's time-sensitive JWT
+  string comparison; library authorization behavior itself is unchanged.
+
 
 ## 2026-10-07 — Unified My Filters (development only)
 

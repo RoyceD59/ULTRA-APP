@@ -9,7 +9,7 @@ import { hasWCCredentials, wcFetchArray, wcCreateCheckoutOrder } from "../routes
 import { orderReceiptSerial } from "@workspace/api-zod/order-receipt";
 
 export interface CheckoutInput {
-  lineItems: { productId: number; quantity: number }[];
+  lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[];
   fulfillment: Fulfillment;
   promoCode?: string;
   applyReferralDiscount?: boolean;
@@ -27,6 +27,11 @@ function fingerprint(input: CheckoutInput, method: string) {
 /** A pending order and its benefit are created together BEFORE requesting money.
  * It is the immutable payment/recovery identity, not a new order on each retry. */
 export async function prepareCheckoutOrder(input: CheckoutInput, userId: string, method: string) {
+  if (Array.isArray(input?.lineItems) &&
+      input.lineItems.some(line => line?.variationId !== undefined || line?.childSku !== undefined) &&
+      input.fulfillment !== "collection" && input.fulfillment !== "delivery") {
+    throw new Error("Refresh your cart and choose delivery or collection in the updated variant checkout.");
+  }
   if (!input || typeof input.idempotencyKey !== "string" || input.idempotencyKey.trim().length < 8 ||
       input.idempotencyKey.length > 200) throw new Error("A checkout retry key is required");
   const address = input.shippingAddress;
@@ -85,8 +90,8 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
        JSON.stringify({ hash, input, pricing, provider: null, accountEmail: account?.rows[0]?.email,
          paymentAttemptId: randomUUID(), paymentAttempts: [], paymentNotStarted: true }), method === "cod" ? "awaiting_collection" : null]);
     const order = inserted.rows[0];
-    for (const line of pricing.lines) await client.query(`INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,$2,$3,$4,$5)`,
-      [order.id, line.productId, line.name, line.quantity, String(line.subtotal)]);
+    for (const line of pricing.lines) await client.query(`INSERT INTO uc_order_items(order_id,product_id,name,quantity,total,variation_id,child_sku,variant_label) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [order.id, line.productId, line.name, line.quantity, String(line.subtotal), line.variationId ?? null, line.childSku ?? null, line.variantLabel ?? null]);
     if (pricing.promotion) await consumePromotionOnClient(client, { quote: pricing.promotion, userId: customerId,
       operation: "checkout", actor: `customer:${customerId}`, idempotencyKey: `checkout:${input.idempotencyKey}`, operationRef: String(order.id) });
     await claimReferralBenefit(client, pricing.referralBenefitId, customerId, order.id);
@@ -117,7 +122,8 @@ export async function checkoutOrderResponse(order: any) {
     paymentReference: order.payment_method === "cod" ? "" : order.mpesa_receipt || order.payment_reference || "",
     fulfillment: order.shipping_address?.fulfillment, shippingAmount: Number(order.shipping_address?.shippingAmount ?? 0),
     discountAmount: Number(order.discount_amount), promoCode: order.promo_code, mpesaReceipt: order.mpesa_receipt ?? "",
-    lineItems: items.rows.map(i => ({ productId: i.product_id, name: i.name, quantity: i.quantity, total: i.total })) };
+    lineItems: items.rows.map(i => ({ productId: i.product_id, variationId: i.variation_id, childSku: i.child_sku, variantLabel: i.variant_label,
+      name: i.name, quantity: i.quantity, total: i.total })) };
 }
 
 /** Confirmation serializes by order; unknown remote attempts are reconciliation-only. */
@@ -142,9 +148,9 @@ export async function confirmCheckoutOrder(orderId: number, reference: string) {
         const remoteLines = Array.isArray(matched.line_items) ? matched.line_items as any[] : [];
         const expectedLines = order.checkout_snapshot.pricing.lines as any[];
         const quantities = (lines: any[], remote: boolean) => lines.reduce((map, line) => {
-          const id = Number(remote ? line.product_id : line.productId);
+          const id = `${remote ? line.product_id : line.productId}:${(remote ? line.variation_id : line.variationId) || 0}`;
           map.set(id, (map.get(id) ?? 0) + Number(line.quantity)); return map;
-        }, new Map<number, number>());
+        }, new Map<string, number>());
         const expected = quantities(expectedLines, false), actual = quantities(remoteLines, true);
         if (!Number.isFinite(Number(matched.total)) || Math.abs(Number(matched.total) - Number(order.total)) > 0.01 ||
             String(matched.currency).toUpperCase() !== order.currency || matched.payment_method !== order.payment_method ||
@@ -167,7 +173,7 @@ export async function confirmCheckoutOrder(orderId: number, reference: string) {
            billing: { email: order.checkout_snapshot.accountEmail, first_name: order.shipping_address.firstName, last_name: order.shipping_address.lastName,
             phone: order.shipping_address.phone, country: order.shipping_address.country,
             address_1: order.shipping_address.address1, city: order.shipping_address.city },
-          line_items: pricing.lines.map((line: any) => ({ product_id: line.productId, quantity: line.quantity, subtotal: String(line.subtotal), total: String(line.subtotal) })),
+          line_items: pricing.lines.map((line: any) => ({ product_id: line.productId, variation_id: line.variationId || 0, quantity: line.quantity, subtotal: String(line.subtotal), total: String(line.subtotal) })),
           shipping_lines: [{ method_id: pricing.fulfillment === "collection" ? "local_pickup" : "flat_rate",
             method_title: pricing.fulfillment === "collection" ? "Free collection" : "Delivery", total: String(pricing.delivery) }],
           fee_lines: pricing.discountAmount ? [{ name: `Companion ${order.promo_code || "referral reward"}`, total: String(-pricing.discountAmount), taxable: false }] : [],

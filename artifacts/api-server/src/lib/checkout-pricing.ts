@@ -5,7 +5,7 @@ import { validateCodeForDiscount } from "../routes/referrals.js";
 
 export type Fulfillment = "collection" | "delivery";
 export async function checkoutQuote(input: {
-  lineItems: { productId: number; quantity: number }[];
+  lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[];
   fulfillment: Fulfillment; code?: string; applyReferralDiscount?: boolean;
 }, userId?: number) {
   if (input.fulfillment !== "collection" && input.fulfillment !== "delivery") throw new Error("Choose free collection or paid delivery");

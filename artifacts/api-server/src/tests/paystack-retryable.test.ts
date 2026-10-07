@@ -328,8 +328,8 @@ describe("Paystack retryable error signalling", () => {
     const fetchMock = mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/wp-json/wc/v3/products")) return new Response(JSON.stringify([
-        {id:1,name:"Filter fixture",price:"1000",stock_status:"instock"},
-        {id:22,name:"Bottle Filter Cartridge",price:"1099",stock_status:"instock"},
+        {id:1,name:"Filter fixture",price:"1000",stock_status:"instock",status:"publish"},
+        {id:22,name:"Bottle Filter Cartridge",price:"1099",stock_status:"instock",status:"publish"},
       ]));
       if (url.includes("api.paystack.co/transaction/verify/")) {
         return new Response(JSON.stringify({

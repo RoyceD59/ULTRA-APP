@@ -44,6 +44,7 @@ import AdminReferralsPage from '@/pages/admin/referrals';
 import AdminPromotionsPage from '@/pages/admin/promotions';
 import AdminProductsPage from '@/pages/admin/products/index';
 import AdminProductEditorPage from '@/pages/admin/products/editor';
+import AdminRecordOnlyEditorPage from '@/pages/admin/products/record-editor';
 import AdminLocationsPage from '@/pages/admin/locations';
 import AgentOperationsPage from '@/pages/admin/agent-operations';
 import AdminGuidesPage from '@/pages/admin/guides';
@@ -138,6 +139,7 @@ function Router() {
               <Route path="/admin/referrals"><AdminGuard><AdminReferralsPage /></AdminGuard></Route>
               <Route path="/admin/promotions"><AdminGuard><AdminPromotionsPage /></AdminGuard></Route>
               <Route path="/admin/products"><AdminGuard><AdminProductsPage /></AdminGuard></Route>
+              <Route path="/admin/products/record/:slug"><AdminGuard><AdminRecordOnlyEditorPage /></AdminGuard></Route>
               <Route path="/admin/products/:id"><AdminGuard><AdminProductEditorPage /></AdminGuard></Route>
               <Route path="/admin/locations"><AdminGuard><AdminLocationsPage /></AdminGuard></Route>
               <Route path="/admin/agent-operations"><AdminGuard><AgentOperationsPage /></AdminGuard></Route>

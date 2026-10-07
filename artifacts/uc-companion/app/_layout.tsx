@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { installConfiguredGoogleProductAnalytics } from '@/lib/productAnalytics';
 import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -161,6 +162,9 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   useEffect(() => installCompanionDiagnostics(), []);
+  useEffect(() => {
+    if (installConfiguredGoogleProductAnalytics() === 'invalid') console.warn('Product analytics configuration is invalid; Google events remain disabled.');
+  }, []);
   useEffect(() => {
     if (Platform.OS === 'web') webAnalyticsLoader.initialize();
     if (Platform.OS === 'web') initializeCompanionFieldVitals();

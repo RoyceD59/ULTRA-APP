@@ -14,6 +14,7 @@ import {
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
+import { effectiveEditorial } from "../lib/product-editorial.js";
 import { getCustomerStatistics } from "../lib/customer-statistics.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { paymentMocksAllowed, paymentProviderConfigured } from "../lib/payment-configuration.js";
@@ -474,25 +475,57 @@ export const MOCK_PRODUCTS: Record<string, unknown>[] = [
 /** Single authoritative fallback-catalog pricing implementation for checkout
  * quotes and order creation. Unknown products are rejected rather than priced
  * at zero. */
-export async function serverPricedLines(lineItems: { productId: number; quantity: number }[], allowEmpty = false) {
+export async function serverPricedLines(lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[], allowEmpty = false) {
   if (!Array.isArray(lineItems) || (!lineItems.length && !allowEmpty)) return null;
   if (lineItems.length > 100 || lineItems.some(item => !item || typeof item !== "object" ||
       !Number.isInteger(item.productId) || item.productId <= 0 ||
-      !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 1000)) return null;
+      !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 1000 ||
+      (item.variationId !== undefined && (!Number.isSafeInteger(item.variationId) || item.variationId <= 0)) ||
+      (item.childSku !== undefined && (typeof item.childSku !== "string" || !item.childSku.trim())) ||
+      (!!item.variationId !== !!item.childSku))) return null;
   const catalogue = hasWCCredentials()
     ? await wcFetchArray("/products", { include: [...new Set(lineItems.map(i => i.productId))].join(","), per_page: "100" })
     : MOCK_PRODUCTS;
   // A live product must never be priced using an unrelated demo ID.
   if (!catalogue) return null;
-  const lines = lineItems.map((item) => {
+  const { collection } = await effectiveEditorial();
+  const lines = await Promise.all(lineItems.map(async (item) => {
     const productId = Number(item.productId), quantity = Number(item.quantity);
     const product = catalogue.find((candidate) => candidate["id"] === productId);
     if (!product || !Number.isInteger(quantity) || quantity <= 0) return null;
-    const price = Number(product["price"]);
-    if (!Number.isFinite(price) || price <= 0 || product["enquiryOnly"] || product["stock_status"] === "outofstock") return null;
-    return { productId, name: String(product["name"]), quantity, subtotal: price * quantity };
-  });
-  return lines.some((line) => !line) ? null : lines as { productId: number; name: string; quantity: number; subtotal: number }[];
+    if (hasWCCredentials() && product["status"] !== "publish") return null;
+    const record = collection.products.find((p: any) => p.parentSku === product["sku"]);
+    if (record && !record.purchasable) return null;
+    let selected = product;
+    let variantLabel: string | undefined;
+    if (item.variationId) {
+      if (!hasWCCredentials() || !record) return null;
+      const variant = record.variants.find((v: any) => v.childSku === item.childSku);
+      if (!variant) return null;
+      const live = await wcFetchOne(`/products/${productId}/variations/${item.variationId}`);
+      if (!live || Number(live.id) !== item.variationId || live.sku !== item.childSku ||
+          (live.parent_id !== undefined && Number(live.parent_id) !== productId) || live.status !== "publish") return null;
+      // Verify SKU uniqueness among the parent's complete set, not ID alone.
+      const children = await wcFetchAllPages(`/products/${productId}/variations`, { per_page: "100" });
+      if (!children || children.filter(c => c.sku === item.childSku).length !== 1) return null;
+      selected = live;
+      variantLabel = variant.label;
+    } else if (record?.variants.length || product["type"] === "variable") return null;
+    // Owner-approved editorial prices (initially Excel CATALOGUE RETAIL)
+    // supersede Woo prices. Woo still verifies identity, publication and stock.
+    const price = record ? record.price : Number(selected["price"]);
+    if (typeof price !== "number" || !Number.isFinite(price) || price <= 0 || product["enquiryOnly"] ||
+        selected["purchasable"] === false ||
+        (selected["manage_stock"] === true && typeof selected["stock_quantity"] === "number" &&
+          selected["stock_quantity"] < quantity && selected["backorders_allowed"] !== true) ||
+        (hasWCCredentials() && !["instock", "onbackorder"].includes(String(selected["stock_status"])))) return null;
+    return { productId, name: `${String(product["name"])}${variantLabel ? ` — ${variantLabel} (${item.childSku})` : ''}`, quantity, subtotal: price * quantity,
+      ...(item.variationId ? { variationId: item.variationId, childSku: item.childSku, variantLabel } : {}) };
+  }));
+  return lines.some((line) => !line) ? null : lines as {
+    productId: number; name: string; quantity: number; subtotal: number;
+    variationId?: number; childSku?: string; variantLabel?: string;
+  }[];
 }
 
 /** Attach a verified provider recovery payment to its authenticated account
@@ -723,7 +756,7 @@ export async function wcFetchAllPages(
   return null;
 }
 
-async function wcFetchOne(
+export async function wcFetchOne(
   path: string,
   extra: Record<string, string> = {}
 ): Promise<Record<string, unknown> | null> {
@@ -6289,6 +6322,14 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const orderUserId = userIdFromBearer(req.headers["authorization"]);
   const orderNumericId = Number(orderUserId);
   if (await guardDeletedAccount(orderNumericId, res)) return;
+  // Legacy order branches have parent-only promotion/recovery anchors. Never
+  // turn a child-priced request into parent fulfillment on those branches.
+  if (req.body?.fulfillment === undefined && Array.isArray(req.body?.lineItems) &&
+      req.body.lineItems.some((line: any) => line?.variationId !== undefined || line?.childSku !== undefined)) {
+    res.status(422).json({ error: "Refresh your cart and use the updated checkout to order this variant.",
+      code: "VARIANT_CHECKOUT_REFRESH_REQUIRED", retryable: false });
+    return;
+  }
   if (req.body?.fulfillment !== undefined) {
     try {
       const { paymentMethod, paymentReference = "", ...input } = req.body;
@@ -7148,7 +7189,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           paymentMethod === "paystack" ? "Paystack" : "Cash on Delivery",
         set_paid: isPaid,
         shipping: shippingAddress,
-        line_items: productLines.map((i) => ({ product_id: i.productId, quantity: i.quantity, subtotal: String(i.subtotal), total: String(i.subtotal) })),
+        line_items: productLines.map((i) => ({ product_id: i.productId, variation_id: i.variationId || 0, quantity: i.quantity, subtotal: String(i.subtotal), total: String(i.subtotal) })),
         shipping_lines: [{ method_id: fulfillment === "collection" ? "local_pickup" : "flat_rate", method_title: fulfillment === "collection" ? "Free collection" : "Delivery", total: String(delivery) }],
         fee_lines: discountAmount ? [{ name: `Companion ${promoCode || "referral reward"}`, total: String(-discountAmount), taxable: false }] : [],
         meta_data: [
@@ -7329,8 +7370,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           return;
         }
         for (const line of productLines) await client.query(
-          `INSERT INTO uc_order_items (order_id,product_id,name,quantity,total) VALUES ($1,$2,$3,$4,$5)`,
-          [dbOrder.id, line.productId, line.name, line.quantity, String(line.subtotal)],
+          `INSERT INTO uc_order_items (order_id,product_id,name,quantity,total,variation_id,child_sku,variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [dbOrder.id, line.productId, line.name, line.quantity, String(line.subtotal), line.variationId ?? null, line.childSku ?? null, line.variantLabel ?? null],
         );
         await client.query(
           "UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2",
@@ -7382,12 +7423,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     // transaction as the order and promotion use. Do not duplicate them here.
     if (dbOrder && productLines.length > 0 && !idempotencyKey?.trim()) {
       await db.insert(ucOrderItemsTable).values(
-        productLines.map(({ productId, name, quantity, subtotal: t }) => ({
+        productLines.map(({ productId, name, quantity, subtotal: t, variationId, childSku, variantLabel }) => ({
           orderId:   dbOrder.id,
           productId,
           name,
           quantity,
           total:     String(t),
+          variationId, childSku, variantLabel,
         }))
       );
     }

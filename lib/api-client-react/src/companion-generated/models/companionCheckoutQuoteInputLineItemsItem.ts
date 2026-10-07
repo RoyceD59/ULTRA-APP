@@ -14,4 +14,8 @@ export type CompanionCheckoutQuoteInputLineItemsItem = {
      * @maximum 1000
      */
   quantity: number;
+  /** @minimum 1 */
+  variationId?: number;
+  /** @minLength 1 */
+  childSku?: string;
 };

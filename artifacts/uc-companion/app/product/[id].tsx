@@ -26,6 +26,8 @@ import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
 import { headingProps } from '@/lib/accessibility';
 import PublicRecordDocument, { hasPublicRecordDelivery, type PublicRecord } from '@/components/PublicRecordDocument';
+import ProductRecordPage from '@/components/product/ProductRecordPage';
+import { fetchRecord } from '@/lib/productRecord';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -41,12 +43,35 @@ type Slide =
   | { kind: 'video'; src: string };
 
 export default function ProductDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  if (hasPublicRecordDelivery()) {
-    return <PublicRecordDocument route={`/product/${id}`} controls={record =>
-      record.commerceId && record.availability ? <ProductCommerceScreen key={record.commerceId} publicRecord={record} /> : null} />;
+  const { id, sku } = useLocalSearchParams<{ id: string; sku?: string }>();
+  const router = useRouter();
+  const key = String(id ?? '');
+  const record = useQuery({
+    queryKey: ['product-record', key],
+    queryFn: ({ signal }) => fetchRecord(key, signal),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    enabled: !!key,
+    retry: (n, e) => ![404, 410].includes((e as { status?: number })?.status ?? 0) && n < 2,
+  });
+  if (record.data) {
+    // Shared presentation replaces the server HTML once, without duplication.
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.getElementById('uc-public-content')?.remove();
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: '#FBFDFE' }} contentContainerStyle={{ paddingBottom: 60 }}>
+        <ProductRecordPage key={record.data.slug} record={record.data} initialSku={sku ? String(sku) : undefined} topicsRow />
+      </ScrollView>
+    );
   }
-  return <ProductCommerceScreen />;
+  if (hasPublicRecordDelivery() && !record.isError) return <PublicRecordDocument route={`/product/${id}`} />;
+  if (record.isLoading) return <View style={{ flex: 1 }}><PageDataLoader label="Loading product…" /></View>;
+  const status = (record.error as { status?: number } | null)?.status;
+  if (record.isError && (record.error as { legacy?: boolean }).legacy === true) return <ProductCommerceScreen />;
+  if (record.isError && status !== 404 && status !== 410) {
+    return <View style={{ flex: 1 }}><PageDataError title="Product unavailable" error={record.error} onRetry={() => record.refetch()} actionLabel="Retry" /></View>;
+  }
+  return <View style={{ flex: 1 }}><PageDataError title="Product not found" error={record.error}
+    onRetry={() => router.replace('/(tabs)/products')} actionLabel="Browse products" /></View>;
 }
 
 function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }) {

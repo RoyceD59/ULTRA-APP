@@ -71,8 +71,8 @@ async function context() {
 
 test("only active database-backed admins can preview, approve or revoke (JWT role is not trusted)", async () => {
   await request(app).get(endpoint).expect(401);
-  for (const denied of [token(memberId), token(`${prefix}-nonexistent`), token(adminId, "admin", "customer")]) {
-    const status = denied === token(adminId, "admin", "customer") ? 401 : 403;
+  for (const [denied, status] of [[token(memberId), 403], [token(`${prefix}-nonexistent`), 403],
+    [token(adminId, "admin", "customer"), 401]] as const) {
     await request(app).get(endpoint).set("Authorization", denied).expect(status);
     await request(app).post(endpoint).set("Authorization", denied).send({ action: "revoke", revision: 0 }).expect(status);
   }

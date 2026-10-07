@@ -13,6 +13,9 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
+  const recordsDir = path.resolve(artifactDir, "../uc-companion/server");
+  await cp(path.join(recordsDir, "records"), path.join(distDir, "product-records/records"), { recursive: true });
+  await cp(path.join(recordsDir, "product-records.cjs"), path.join(distDir, "product-records/product-records.cjs"));
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],

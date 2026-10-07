@@ -72,7 +72,7 @@
 - [Filter gauge policy](filter-gauge-policy.md) — display-only status; recorded refills are not sensor measurements; require exact customer/purchase/cycle linkage.
 - [Frozen release verification](frozen-release-verification.md) — a successful publish can still serve an older approved package; verify the actual live feature before operational recovery.
 - [Phone validation optimization](phone-validation-optimization.md) — reduce unused code, not country metadata; preserve canonical identity versus legacy form defaults.
-- [Catalogue performance boundaries](catalogue-performance-policy.md) — browsing snapshots never replace transaction-time Woo authority; local gains are not deployed or phone evidence.
+- [Catalogue performance boundaries](catalogue-performance-policy.md) — caches are not checkout authority; Companion prices start from Excel, while Woo verifies identity and stock.
 - [Promotions and fulfillment policy](promotions-fulfillment-policy.md) — managed code benefits only; reserve before payment and keep pending outcomes bound to their checkout.
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
 - [Shared TypeScript bundler resolution](shared-typescript-bundler-resolution.md) — Metro may reject .js-to-.ts imports that TypeScript and server tests accept.
@@ -96,4 +96,4 @@
 - [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
 - [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
-- [Product-page deferred flows](product-page-future-flows.md) — guest sharing still requires a safeguarded saved order; later bottle comparison defaults Hydra Flux to Truva Go.
+- [Product-page sharing and comparison](product-page-future-flows.md) — interim child-SKU product links are not saved-order payment links; Hydra Flux comparison defaults to Truva Go.

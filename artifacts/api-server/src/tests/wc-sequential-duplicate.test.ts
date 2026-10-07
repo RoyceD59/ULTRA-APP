@@ -167,7 +167,7 @@ describe("WooCommerce path — sequential duplicate Paystack delivery", () => {
     const savedFetch = globalThis.fetch;
     globalThis.fetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
       const u = String(url);
-      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
+      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
 
       // Resend email dispatch — count and absorb.
       if (u.includes("resend.com") && u.includes("/emails")) {

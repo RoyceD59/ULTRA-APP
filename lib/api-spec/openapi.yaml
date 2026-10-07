@@ -43,6 +43,78 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/product-records:
+    get:
+      operationId: listProductEditorialRecords
+      tags: [uc]
+      responses:
+        "200":
+          description: Allowlisted publishable v2.4 editorial collection; never private author notes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialCollection" }
+  /uc/product-records/{key}:
+    get:
+      operationId: getProductEditorialRecord
+      tags: [uc]
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Effective public record and verified live operation, with unavailable diagnostics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialPublic" }
+        "404": { description: Not publishable or no full record }
+        "503": { description: Identity or editorial store unavailable }
+  /uc/admin/product-records:
+    get:
+      operationId: listAdminProductEditorialRecords
+      tags: [admin]
+      responses:
+        "200":
+          description: All full authored record identities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProductEditorialIdentity" }
+        "403": { description: Live verified admin required }
+  /uc/admin/product-records/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getAdminProductEditorialRecord
+      tags: [admin]
+      responses:
+        "200":
+          description: Full private v2.4 record and optimistic revision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+        "403": { description: Live verified admin required }
+        "404": { description: Full record not found }
+    put:
+      operationId: saveProductEditorialRecord
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+      responses:
+        "200":
+          description: Saved record and incremented revision; prices and stock are not synchronized to WooCommerce
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+        "400": { description: "v2.4 contract, safety or media validation rejected" }
+        "403": { description: Live verified admin required }
+        "409": { description: Revision conflict; reload before saving }
   /uc/impact:
     get:
       operationId: readGlobalImpact
@@ -4058,6 +4130,64 @@ components:
       bearerFormat: opaque
 
   schemas:
+    ProductEditorialIdentity:
+      type: object
+      required: [code, slug, name, parent_sku, publishable]
+      properties:
+        code: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        parent_sku: { type: string }
+        publishable: { type: boolean }
+    ProductEditorialRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, record]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        record:
+          type: object
+          description: Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints
+          additionalProperties: true
+    ProductEditorialPublic:
+      type: object
+      required: [code, slug, name, parentSku, purchasable, price, variants]
+      properties:
+        code: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        priceAuthority: { type: string, enum: [companion] }
+        parentSku: { type: string }
+        purchasable: { type: boolean }
+        price: { type: [number, "null"] }
+        commerceId: { type: [integer, "null"] }
+        availability: { type: [string, "null"] }
+        livePrice: { type: [number, "null"] }
+        diagnostics: { type: array, items: { type: string } }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/ProductEditorialVariant" }
+      additionalProperties: true
+    ProductEditorialVariant:
+      type: object
+      required: [childSku, label]
+      properties:
+        childSku: { type: string }
+        label: { type: string }
+        variationId: { type: [integer, "null"] }
+        price: { type: [number, "null"] }
+        stockStatus: { type: [string, "null"] }
+        diagnostic: { type: string }
+    ProductEditorialCollection:
+      type: object
+      required: [products, topics]
+      properties:
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/ProductEditorialPublic" }
+        topics:
+          type: array
+          items: { type: object, additionalProperties: true }
     GlobalImpactSnapshot:
       type: object
       required: [totalUsers, litresFiltered, plasticsAvoided, cleanWaterDays, snapshotId, calculatedAt, adjustmentRevision, maxAgeSeconds, lifespanAvailable, autoStats, offlineStats, override, lastUpdated]
@@ -4197,6 +4327,8 @@ components:
             properties:
               productId: { type: integer, minimum: 1 }
               quantity: { type: integer, minimum: 1, maximum: 1000 }
+              variationId: { type: integer, minimum: 1 }
+              childSku: { type: string, minLength: 1 }
     CompanionCheckoutQuote:
       type: object
       required: [promotion, fulfillment, subtotal, delivery, discountAmount, total]
@@ -4208,6 +4340,9 @@ components:
             required: [productId, name, quantity, subtotal]
             properties:
               productId: { type: integer }
+              variationId: { type: integer, minimum: 1 }
+              childSku: { type: string }
+              variantLabel: { type: string }
               name: { type: string }
               quantity: { type: integer }
               subtotal: { type: number }
@@ -6183,6 +6318,10 @@ components:
       type: object
       required: [name, quantity, total]
       properties:
+        productId: { type: integer }
+        variationId: { type: [integer, "null"] }
+        childSku: { type: [string, "null"] }
+        variantLabel: { type: [string, "null"] }
         name:
           type: string
         quantity:

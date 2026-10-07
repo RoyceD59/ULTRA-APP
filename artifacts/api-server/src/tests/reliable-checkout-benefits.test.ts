@@ -78,8 +78,8 @@ describe("authoritative checkout and managed waived-service benefits", () => {
       if (target.includes("benefits-shop.test") && target.includes("/products")) {
         if (catalogueDown) return new Response("Offline", { status: 503 });
         return new Response(JSON.stringify([
-          { id: 10001, name: "Live filter", price: "1400", stock_status: "instock" },
-          { id: 10002, name: "Live bottle", price: "300", stock_status: "instock" },
+          { id: 10001, name: "Live filter", price: "1400", stock_status: "instock", status: "publish" },
+          { id: 10002, name: "Live bottle", price: "300", stock_status: "instock", status: "publish" },
         ]));
       }
       if (target.includes("benefits-shop.test") && target.includes("/orders")) {

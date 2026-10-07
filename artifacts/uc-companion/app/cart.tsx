@@ -7,6 +7,7 @@ import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
+import { cartLineKey } from '@/context/cartStorage';
 import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -159,7 +160,7 @@ export default function CartScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <FlatList
         data={items}
-        keyExtractor={i => String(i.id)}
+        keyExtractor={cartLineKey}
         contentContainerStyle={[styles.list, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -259,19 +260,20 @@ export default function CartScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
+              {!!item.variantLabel && <Text style={{ color: colors.mutedForeground }}>{item.variantLabel} · {item.childSku}</Text>}
               <Text style={[styles.itemPrice, { color: colors.primary }]}>KES {item.price.toLocaleString('en-KE')}</Text>
             </View>
             <View style={styles.qtyRow}>
-              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(item.id, item.quantity - 1); }}
+              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(cartLineKey(item), item.quantity - 1); }}
                 style={[styles.qtyBtn, { borderColor: colors.border }]}>
                 <Ionicons name="remove" size={16} color={colors.text} />
               </TouchableOpacity>
               <Text style={[styles.qty, { color: colors.text }]}>{item.quantity}</Text>
-              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(item.id, item.quantity + 1); }}
+              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(cartLineKey(item), item.quantity + 1); }}
                 style={[styles.qtyBtn, { borderColor: colors.border }]}>
                 <Ionicons name="add" size={16} color={colors.text} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); removeItem(item.id); }}
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); removeItem(cartLineKey(item)); }}
                 style={styles.removeBtn}>
                 <Ionicons name="trash-outline" size={18} color={colors.destructive} />
               </TouchableOpacity>

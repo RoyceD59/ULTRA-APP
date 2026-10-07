@@ -11,6 +11,8 @@ import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/context/CartContext';
+import { checkoutLine, cartLineKey } from '@/context/cartStorage';
+import { trackProductEvent, trackVerifiedPurchase } from '@/lib/productAnalytics';
 import { useAuth } from '@/context/AuthContext';
 import PaymentMethodPicker, { PaymentMethod } from '@/components/PaymentMethodPicker';
 import * as WebBrowser from 'expo-web-browser';
@@ -30,7 +32,7 @@ import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/i
 import { countryCodeFromValue } from '@workspace/api-zod/phone';
 import { trackEvent } from '@/lib/analytics';
 import { useApi, UCAddress, ApiError, type PaymentsConfig, type CheckoutPromotionQuote, type CheckoutPaymentInput } from '@/hooks/useApi';
-import { quoteMatchesCheckout } from '@/hooks/checkoutQuoteIdentity';
+import { quoteMatchesCheckout, checkoutLineSubtotal } from '@/hooks/checkoutQuoteIdentity';
 import ContactCompletion from '@/components/ContactCompletion';
 import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
 import { useCheckoutReceipt } from '@/context/CheckoutReceiptContext';
@@ -147,6 +149,7 @@ export default function CheckoutScreen() {
     trackEvent('checkout_started', {
       itemCount: items.reduce((count, item) => count + item.quantity, 0),
     });
+    trackProductEvent('begin_checkout', { itemCount: items.reduce((count, item) => count + item.quantity, 0) });
   }, [cartHydrated, items]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paystack');
@@ -312,7 +315,7 @@ export default function CheckoutScreen() {
     const identity = retainCheckoutOrderIdentity(orderIdentityRef.current);
     orderIdentityRef.current = identity;
     const input: CheckoutPaymentInput = {
-      lineItems: items.map(i => ({ productId: i.id, quantity: i.quantity })),
+      lineItems: items.map(checkoutLine),
       fulfillment: fulfillment ?? 'collection', shippingAddress: address,
       quotedTotal: baseQuote?.total,
       promoCode: usingReferralDiscount ? undefined : appliedQuote?.promotion.code,
@@ -361,9 +364,9 @@ export default function CheckoutScreen() {
 
   const grossTotal = totalPrice + (fulfillment === 'delivery' ? DELIVERY_FEE : 0);
   const total = baseQuote?.total ?? grossTotal;
-  const basketKey = JSON.stringify(items.map(i => ({ productId: i.id, quantity: i.quantity })));
+  const basketKey = JSON.stringify(items.map(checkoutLine));
   const activeCode = usingReferralDiscount ? undefined : appliedQuote?.promotion.code;
-  const quoteCurrent = paymentFrozen || quoteMatchesCheckout(baseQuote, {lineItems: items.map(i=>({productId:i.id,quantity:i.quantity})),
+  const quoteCurrent = paymentFrozen || quoteMatchesCheckout(baseQuote, {lineItems: items.map(checkoutLine),
     fulfillment, code:activeCode, applyReferralDiscount:usingReferralDiscount});
   useEffect(() => {
     if (paymentFrozen) {
@@ -986,7 +989,7 @@ export default function CheckoutScreen() {
       const quote = await api.quoteCheckoutPromotion({
         code: promoInput.trim(),
         fulfillment: fulfillment ?? 'collection',
-        lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
+        lineItems: items.map(checkoutLine),
       });
       if (checkoutAccountRef.current !== quotingAccountId) return;
       setAppliedQuote(quote);
@@ -1015,7 +1018,7 @@ export default function CheckoutScreen() {
     try {
       const quote = await api.quoteReferralDiscount({
         fulfillment: fulfillment ?? 'collection',
-        lineItems: items.map(item => ({ productId: item.id, quantity: item.quantity })),
+        lineItems: items.map(checkoutLine),
       });
       if (checkoutAccountRef.current !== quotingAccountId) return;
       setAppliedQuote(quote);
@@ -1106,6 +1109,7 @@ export default function CheckoutScreen() {
           itemCount: items.reduce((count, item) => count + item.quantity, 0),
         });
       }
+      trackVerifiedPurchase(order.paymentStatus === 'paid', { transactionId: `UC-${order.id}`, value: Number(order.total), itemCount: items.reduce((count, item) => count + item.quantity, 0) });
       try {
         await clearCheckoutRecovery(submittingUserId!);
       } catch {
@@ -1335,10 +1339,11 @@ export default function CheckoutScreen() {
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Summary</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {(paymentFrozen && baseQuote?.lines ? baseQuote.lines.map(line => ({id: line.productId, name: line.name, quantity: line.quantity, price: line.subtotal / line.quantity})) : items).map(i => (
-            <View key={i.id} style={styles.sumRow}>
-              <Text style={[styles.sumItemName, { color: colors.text }]} numberOfLines={1}>{i.name} ×{i.quantity}</Text>
-              <Text style={[styles.sumItemPrice, { color: colors.text }]}>KES {(baseQuote?.lines?.find(line => line.productId === i.id)?.subtotal ?? i.price * i.quantity).toLocaleString()}</Text>
+          {(quoteCurrent && baseQuote?.lines ? baseQuote.lines.map(line => ({id: line.productId, name: line.name, quantity: line.quantity, price: line.subtotal / line.quantity,
+            variationId: line.variationId, childSku: line.childSku, variantLabel: line.variantLabel})) : items).map(i => (
+            <View key={cartLineKey(i)} style={styles.sumRow}>
+              <Text style={[styles.sumItemName, { color: colors.text }]}>{i.name}{i.childSku ? ` · ${i.variantLabel || i.childSku}${i.variantLabel ? ` (${i.childSku})` : ''}` : ''} ×{i.quantity}</Text>
+              <Text style={[styles.sumItemPrice, { color: colors.text }]}>KES {checkoutLineSubtotal(i, baseQuote, quoteCurrent).toLocaleString()}</Text>
             </View>
           ))}
           <View style={[styles.divider, { backgroundColor: colors.border }]} />

@@ -5,6 +5,72 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ProductEditorialIdentity {
+  code: string;
+  slug: string;
+  name: string;
+  parent_sku: string;
+  publishable: boolean;
+}
+
+/**
+ * Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints
+ */
+export type ProductEditorialRevisionRecord = { [key: string]: unknown };
+
+export interface ProductEditorialRevision {
+  /** @minimum 1 */
+  revision: number;
+  /** Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints */
+  record: ProductEditorialRevisionRecord;
+}
+
+export type ProductEditorialPublicPriceAuthority = typeof ProductEditorialPublicPriceAuthority[keyof typeof ProductEditorialPublicPriceAuthority];
+
+
+export const ProductEditorialPublicPriceAuthority = {
+  companion: 'companion',
+} as const;
+
+export interface ProductEditorialVariant {
+  childSku: string;
+  label: string;
+  /** @nullable */
+  variationId?: number | null;
+  /** @nullable */
+  price?: number | null;
+  /** @nullable */
+  stockStatus?: string | null;
+  diagnostic?: string;
+}
+
+export interface ProductEditorialPublic {
+  code: string;
+  slug: string;
+  name: string;
+  priceAuthority?: ProductEditorialPublicPriceAuthority;
+  parentSku: string;
+  purchasable: boolean;
+  /** @nullable */
+  price: number | null;
+  /** @nullable */
+  commerceId?: number | null;
+  /** @nullable */
+  availability?: string | null;
+  /** @nullable */
+  livePrice?: number | null;
+  diagnostics?: string[];
+  variants: ProductEditorialVariant[];
+  [key: string]: unknown;
+ }
+
+export type ProductEditorialCollectionTopicsItem = { [key: string]: unknown };
+
+export interface ProductEditorialCollection {
+  products: ProductEditorialPublic[];
+  topics: ProductEditorialCollectionTopicsItem[];
+}
+
 export type GlobalImpactSnapshotMaxAgeSeconds = typeof GlobalImpactSnapshotMaxAgeSeconds[keyof typeof GlobalImpactSnapshotMaxAgeSeconds];
 
 
@@ -200,6 +266,10 @@ export type CompanionCheckoutQuoteInputLineItemsItem = {
      * @maximum 1000
      */
   quantity: number;
+  /** @minimum 1 */
+  variationId?: number;
+  /** @minLength 1 */
+  childSku?: string;
 };
 
 export interface CompanionCheckoutQuoteInput {
@@ -216,6 +286,10 @@ export interface CompanionCheckoutQuoteInput {
 
 export type CompanionCheckoutQuoteLinesItem = {
   productId: number;
+  /** @minimum 1 */
+  variationId?: number;
+  childSku?: string;
+  variantLabel?: string;
   name: string;
   quantity: number;
   subtotal: number;
@@ -2653,6 +2727,13 @@ export interface UcCustomerList {
 }
 
 export interface UcCustomerOrderItem {
+  productId?: number;
+  /** @nullable */
+  variationId?: number | null;
+  /** @nullable */
+  childSku?: string | null;
+  /** @nullable */
+  variantLabel?: string | null;
   name: string;
   quantity: number;
   total: string;
@@ -4025,6 +4106,10 @@ export interface AuditEventPage {
   total: number;
 }
 
+export type ListAdminProductEditorialRecords200 = {
+  records: ProductEditorialIdentity[];
+};
+
 export type RegisterUcContactAccountBody = {
   /** @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$ */
   email: string;
@@ -4068,6 +4153,7 @@ export type GetUcCheckoutDiagnostics200 = { [key: string]: unknown };
 export type GetUcActivationPurchases200SourceErrors = {
   store?: string;
 };
+
 export type GetUcActivationPurchases200PurchasesItemSource = typeof GetUcActivationPurchases200PurchasesItemSource[keyof typeof GetUcActivationPurchases200PurchasesItemSource];
 
 

@@ -88,7 +88,7 @@ function recordProductModel(record, operation, route, site = SITE) {
   if (record.purchasable && record.price !== null) {
     schema.offers = { '@type': 'Offer', url: canonical(route, site),
       price: String(record.price), priceCurrency: 'KES' };
-    if (operation.availability) schema.offers.availability = `https://schema.org/${operation.availability}`;
+    if (operation.availability && !operation.diagnostics?.includes('record-commerce-price-disagreement')) schema.offers.availability = `https://schema.org/${operation.availability}`;
   }
   const faq = record.faq.length ? { '@type': 'FAQPage', '@id': `${canonical(route, site)}#faq`,
     mainEntity: record.faq.map(f => ({ '@type': 'Question', name: f.q,

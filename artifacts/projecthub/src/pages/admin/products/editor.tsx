@@ -17,6 +17,7 @@ import { isTeamAdmin } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ProductRecordEditor } from "@/components/product-record-editor";
 
 export default function AdminProductEditorPage() {
   const params = useParams<{ id: string }>();
@@ -137,7 +138,7 @@ export default function AdminProductEditorPage() {
           className="gap-2"
         >
           {updateProduct.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Save Changes
+          Save WooCommerce fields
         </Button>
       </div>
 
@@ -178,6 +179,8 @@ export default function AdminProductEditorPage() {
               </div>
             </CardContent>
           </Card>
+
+          <ProductRecordEditor sku={product.sku} product={product} media={media || []} />
 
           <Card>
             <CardHeader>

@@ -1,3 +1,4 @@
+export * from "./uc-product-editorial";
 export * from "./runtime-observability";
 export * from "./uc-global-impact";
 export * from "./uc-daily-hydration";

@@ -8,6 +8,10 @@
 
 export type CompanionCheckoutQuoteLinesItem = {
   productId: number;
+  /** @minimum 1 */
+  variationId?: number;
+  childSku?: string;
+  variantLabel?: string;
   name: string;
   quantity: number;
   subtotal: number;

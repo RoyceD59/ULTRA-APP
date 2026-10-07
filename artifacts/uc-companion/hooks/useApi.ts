@@ -146,7 +146,7 @@ export interface UCOrder {
   dateCreated: string;
   total: string;
   currency: string;
-  lineItems: { productId?: number; name: string; quantity: number; total: string }[];
+  lineItems: { productId?: number; name: string; quantity: number; total: string; variationId?: number | null; childSku?: string | null; variantLabel?: string | null }[];
   paymentMethod: string;
   shippingAddress: UCAddress;
   delivery?: { method: string; trackingNumber: string | null };
@@ -444,7 +444,7 @@ export interface CodeValidationResult {
 export interface CheckoutPromotionQuote {
   code?: string;
   referralBenefitId?: number | null;
-  lines?: { productId: number; name: string; quantity: number; subtotal: number }[];
+  lines?: { productId: number; name: string; quantity: number; subtotal: number; variationId?: number; childSku?: string; variantLabel?: string }[];
   promotion: {
     code: string;
     type?: string;
@@ -460,7 +460,7 @@ export interface CheckoutPromotionQuote {
 
 export interface CheckoutPaymentInput {
   quotedTotal?: number;
-  lineItems: { productId: number; quantity: number }[];
+  lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[];
   fulfillment: 'collection' | 'delivery';
   promoCode?: string;
   applyReferralDiscount?: boolean;
@@ -585,7 +585,7 @@ export function useApi() {
     requestReturn: (orderId: number, data: { reason: string; details?: string }) =>
       post<{ ok: boolean; requestId: number; message: string }>(`/api/uc/orders/${orderId}/return-request`, data),
     createOrder: (data: {
-      lineItems: { productId: number; quantity: number }[];
+      lineItems: CheckoutPaymentInput['lineItems'];
       paymentMethod: string;
       paymentReference: string;
       shippingAddress: UCAddress;
@@ -596,15 +596,15 @@ export function useApi() {
       fulfillment?: 'collection' | 'delivery';
     }) => post<UCOrder & { reconciliationRequired?: boolean }>('/api/uc/orders', data),
     /** Validates a checkout code and returns its server-calculated quote. */
-    quoteCheckout: (data: { code?: string; applyReferralDiscount?: boolean; fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
+    quoteCheckout: (data: { code?: string; applyReferralDiscount?: boolean; fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
       quoteCompanionCheckout(data, { headers: authHeaders() }),
     quoteWaterTestPromotion: (code: string) => quotePhysicalTestPromotion({ code }, { headers: authHeaders() }),
     cancelCheckout: (idempotencyKey: string) => post<{cancelled: boolean}>('/api/uc/checkout/cancel',{idempotencyKey}),
     getCheckoutRecovery: (idempotencyKey: string) => get<{resolution: 'editable' | 'completed' | 'unresolved'; orderId: number | null}>(`/api/uc/checkout/recovery?idempotencyKey=${encodeURIComponent(idempotencyKey)}`),
-    quoteCheckoutPromotion: (data: { code: string; fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
+    quoteCheckoutPromotion: (data: { code: string; fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/promotions/checkout/quote', data),
     /** Quote the authenticated customer's available one-time referral reward. */
-    quoteReferralDiscount: (data: { fulfillment: 'collection' | 'delivery'; lineItems: { productId: number; quantity: number }[] }) =>
+    quoteReferralDiscount: (data: { fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/referrals/discount/quote', data),
     /**
      * Look up a purchase by receipt/order number + the checkout phone number

@@ -211,7 +211,7 @@ export async function apiFetch<T = unknown>(
   if (!res.ok) {
     if (res.status === 401) handleUnauthorizedResponse();
     const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `Request failed (${res.status})`);
+    throw Object.assign(new Error(data.error ?? `Request failed (${res.status})`), { status: res.status });
   }
   return res.json() as Promise<T>;
 }

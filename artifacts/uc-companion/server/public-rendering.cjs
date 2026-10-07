@@ -63,6 +63,12 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
   }
 
   async function render(route) {
+    let effectiveRecords = records;
+    if (data.editorialRecords) {
+      try { effectiveRecords = await data.editorialRecords(); }
+      catch { return errorPage(503); }
+    }
+    const activeRecords = effectiveRecords;
     try {
       route = new URL(route, origin).pathname.replace(/\/$/, '') || '/';
       let page = pages[route];
@@ -74,7 +80,7 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
       let canonicalRoute = route;
       const crumbs = [{ name: 'Home', path: '/' }];
       if (route === '/' || route === '/products') {
-        const products = records.products;
+        const products = activeRecords.products;
         const entries = [];
         body += `<h2>Products</h2><ul>${products.map(product => {
           entries.push({ name: product.seo.h1, path: `/product/${product.slug}` });
@@ -102,19 +108,23 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
           `<section><h2>${escapeHtml(location.name)}</h2>${paragraph(location.address)}${paragraph(location.hours)}${paragraph(location.accessNotes)}</section>`).join('');
       } else if (/^\/product\/[^/]+$/.test(route)) {
         const key = route.split('/')[2];
-        let product = records.products.find(p => p.slug === key);
+        let product = activeRecords.products.find(p => p.slug === key);
         let inventory = null;
         if (/^[1-9]\d*$/.test(key)) {
           inventory = await data.products();
-          const matches = records.identities.filter(i => resolveIdentity(i, inventory).id === Number(key));
+          const matches = activeRecords.identities.filter(i => resolveIdentity(i, inventory).id === Number(key));
           if (matches.length !== 1) return errorPage(404);
-          product = records.products.find(p => p.code === matches[0].code);
+          product = activeRecords.products.find(p => p.code === matches[0].code);
         }
         if (!product) return errorPage(404);
         canonicalRoute = `/product/${product.slug}`;
         documentKind = 'product';
-        const operation = await recordOperation(product, records.identities.find(i => i.code === product.code), data, inventory);
+        const operation = data.editorialProduct ? await data.editorialProduct(product.slug)
+          : await recordOperation(product, activeRecords.identities.find(i => i.code === product.code), data, inventory);
         publicRecord = { ...product, ...operation };
+        // The fetched effective record and its operation form one response:
+        // metadata, body, schema and hydrated payload cannot mix revisions.
+        product = publicRecord;
         const model = recordProductModel(product, operation, canonicalRoute, origin.href);
         page = { title: product.seo.h1, description: product.seo.description };
         const slots = ['Product', 'In use', 'Parts', 'Included', 'Colours', 'Size'];
@@ -133,12 +143,32 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
           + `<section><h2>Related topics</h2><ul>${product.topics.map(t => `<li>${link(`/topic/${t.slug}`, t.name)}</li>`).join('')}</ul></section>`
           + link(operation.commerceId ? `/enquiry?productId=${operation.commerceId}` : '/enquiry', 'Enquire about this product')
           + ' · ' + link('/cart', 'Cart');
+        const list = values => Array.isArray(values) && values.length ? `<ul>${values.map(v => `<li>${escapeHtml(v)}</li>`).join('')}</ul>` : '';
+        const accordion = (heading, content) => content ? `<details><summary>${escapeHtml(heading)}</summary>${content}</details>` : '';
+        const pkg = product.package || {}, service = product.service || {}, suitability = product.suitability || {};
+        body = `<section class="uc-choose" aria-label="Choose">${body}</section>`
+          + `<section class="uc-understand" aria-label="Understand"><h2>${escapeHtml(product.benefits?.heading || 'Made for your routine')}</h2>`
+          + (product.benefits?.items || []).map(b => `<article class="uc-product-card"><h3>${escapeHtml(b.feature)}</h3>${paragraph(b.consequence)}</article>`).join('')
+          + accordion('Specifications', `<dl>${Object.entries(product.specs || {}).map(([k,v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`)
+          + accordion(suitability.heading || 'Will it suit your water?', paragraph(suitability.intended_use) + list(suitability.water) + list(suitability.setup) + list(suitability.exclusions) + link('/water-test', 'Check my setup'))
+          + list(product.evidenceLimits)
+          + accordion(pkg.heading || 'What is included', list(pkg.included) + list(pkg.sold_separately) + paragraph(pkg.dimensions) + list(pkg.setup_steps) + link('/support', 'View setup guides'))
+          + '</section><section class="uc-decide" aria-label="Decide"><h2>Know before you buy</h2>'
+          + accordion('Replacement and care', paragraph(product.specs?.Care) + paragraph(product.ownership?.replacement?.name)
+            + (product.ownership?.replacement?.price_kes != null ? paragraph(`Replacement: KES ${product.ownership.replacement.price_kes.toLocaleString('en-KE')}`) : '')
+            + paragraph(product.ownership?.replacement?.guidance))
+          + accordion('Delivery, service and returns', paragraph('Choose our delivery or self-paid delivery at checkout.')
+            + paragraph(service.support) + paragraph(service.warranty?.text) + paragraph(service.returns) + list(service.exclusions))
+          + `<article class="uc-product-card"><h2>${escapeHtml(product.summary?.heading || 'Review your selection')}</h2>`
+          + paragraph(product.name) + paragraph(product.seo.subline)
+          + paragraph(product.price !== null ? `KES ${product.price.toLocaleString('en-KE')}` : 'Pricing on request')
+          + link('/cart', 'Open cart') + '</article></section>';
         meta = { ...metadata(canonicalRoute, page.title, page.description, 'product', safeUrl(operation.images[0]?.src)),
           title: product.seo.title, description: product.seo.description };
         schemas = [model.schema, ...(model.faq ? [model.faq] : [])];
         crumbs.push({ name: 'Products', path: '/products' });
       } else if (/^\/topic\/[^/]+$/.test(route)) {
-        const topic = records.topics.find(t => t.slug === route.split('/')[2]);
+        const topic = activeRecords.topics.find(t => t.slug === route.split('/')[2]);
         if (!topic) return errorPage(404);
         documentKind = 'topic';
         page = { title: topic.name, description: '' };
@@ -211,9 +241,10 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
   }
 
   async function sitemap() {
+    const activeRecords = data.editorialRecords ? await data.editorialRecords() : records;
     const [articles, guides] = await Promise.all([data.articles(), data.guides()]);
     const routes = Object.keys(pages);
-    for (const product of records.products) {
+    for (const product of activeRecords.products) {
       routes.push(`/product/${product.slug}`);
     }
     for (const article of articles) {

@@ -69,8 +69,8 @@ describe("WC configured durable promoted checkout state machine", () => {
     globalThis.fetch = async (url: any, init?: RequestInit) => {
       const value = String(url);
       if (value.includes("/wp-json/wc/v3/products")) return new Response(JSON.stringify([
-        { id: 22, name: "Live filter 22", price: "1099", stock_status: "instock" },
-        { id: 23, name: "Live filter 23", price: "1999", stock_status: "instock" },
+        { id: 22, name: "Live filter 22", price: "1099", stock_status: "instock", status: "publish" },
+        { id: 23, name: "Live filter 23", price: "1999", stock_status: "instock", status: "publish" },
       ]));
       if (value.includes("/wp-json/wc/v3/orders")) {
         if ((init?.method ?? "GET").toUpperCase() === "POST") {

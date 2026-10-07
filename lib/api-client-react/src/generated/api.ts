@@ -142,6 +142,7 @@ import type {
   LibraryKnowledgeDecision,
   LibraryKnowledgeMetadata,
   LibraryKnowledgePreview,
+  ListAdminProductEditorialRecords200,
   ListAgentAlisonChatsParams,
   ListCompanionBlogEditorialRuns200,
   ListCustomerAccountAssignmentsParams,
@@ -181,6 +182,9 @@ import type {
   OkResponse,
   PhysicalTestPromotionInput,
   PreviewCustomerAssignment200,
+  ProductEditorialCollection,
+  ProductEditorialPublic,
+  ProductEditorialRevision,
   Project,
   ProjectHubInstantWaterDetail,
   ProjectHubInstantWaterList,
@@ -293,6 +297,356 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListProductEditorialRecordsUrl = () => {
+
+
+
+
+  return `/api/uc/product-records`
+}
+
+export const listProductEditorialRecords = async ( options?: RequestInit): Promise<ProductEditorialCollection> => {
+
+  return customFetch<ProductEditorialCollection>(getListProductEditorialRecordsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProductEditorialRecordsQueryKey = () => {
+    return [
+    `/api/uc/product-records`
+    ] as const;
+    }
+
+
+export const getListProductEditorialRecordsQueryOptions = <TData = Awaited<ReturnType<typeof listProductEditorialRecords>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProductEditorialRecords>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProductEditorialRecordsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProductEditorialRecords>>> = ({ signal }) => listProductEditorialRecords({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProductEditorialRecords>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProductEditorialRecordsQueryResult = NonNullable<Awaited<ReturnType<typeof listProductEditorialRecords>>>
+export type ListProductEditorialRecordsQueryError = ErrorType<unknown>
+
+
+
+export function useListProductEditorialRecords<TData = Awaited<ReturnType<typeof listProductEditorialRecords>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProductEditorialRecords>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProductEditorialRecordsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProductEditorialRecordUrl = (key: string,) => {
+
+
+
+
+  return `/api/uc/product-records/${key}`
+}
+
+export const getProductEditorialRecord = async (key: string, options?: RequestInit): Promise<ProductEditorialPublic> => {
+
+  return customFetch<ProductEditorialPublic>(getGetProductEditorialRecordUrl(key),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductEditorialRecordQueryKey = (key: string,) => {
+    return [
+    `/api/uc/product-records/${key}`
+    ] as const;
+    }
+
+
+export const getGetProductEditorialRecordQueryOptions = <TData = Awaited<ReturnType<typeof getProductEditorialRecord>>, TError = ErrorType<void>>(key: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductEditorialRecord>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductEditorialRecordQueryKey(key);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductEditorialRecord>>> = ({ signal }) => getProductEditorialRecord(key, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: key !== null && key !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductEditorialRecord>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductEditorialRecordQueryResult = NonNullable<Awaited<ReturnType<typeof getProductEditorialRecord>>>
+export type GetProductEditorialRecordQueryError = ErrorType<void>
+
+
+
+export function useGetProductEditorialRecord<TData = Awaited<ReturnType<typeof getProductEditorialRecord>>, TError = ErrorType<void>>(
+ key: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductEditorialRecord>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductEditorialRecordQueryOptions(key,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAdminProductEditorialRecordsUrl = () => {
+
+
+
+
+  return `/api/uc/admin/product-records`
+}
+
+export const listAdminProductEditorialRecords = async ( options?: RequestInit): Promise<ListAdminProductEditorialRecords200> => {
+
+  return customFetch<ListAdminProductEditorialRecords200>(getListAdminProductEditorialRecordsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminProductEditorialRecordsQueryKey = () => {
+    return [
+    `/api/uc/admin/product-records`
+    ] as const;
+    }
+
+
+export const getListAdminProductEditorialRecordsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminProductEditorialRecords>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminProductEditorialRecords>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminProductEditorialRecordsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminProductEditorialRecords>>> = ({ signal }) => listAdminProductEditorialRecords({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminProductEditorialRecords>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminProductEditorialRecordsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminProductEditorialRecords>>>
+export type ListAdminProductEditorialRecordsQueryError = ErrorType<void>
+
+
+
+export function useListAdminProductEditorialRecords<TData = Awaited<ReturnType<typeof listAdminProductEditorialRecords>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminProductEditorialRecords>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminProductEditorialRecordsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminProductEditorialRecordUrl = (key: string,) => {
+
+
+
+
+  return `/api/uc/admin/product-records/${key}`
+}
+
+export const getAdminProductEditorialRecord = async (key: string, options?: RequestInit): Promise<ProductEditorialRevision> => {
+
+  return customFetch<ProductEditorialRevision>(getGetAdminProductEditorialRecordUrl(key),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminProductEditorialRecordQueryKey = (key: string,) => {
+    return [
+    `/api/uc/admin/product-records/${key}`
+    ] as const;
+    }
+
+
+export const getGetAdminProductEditorialRecordQueryOptions = <TData = Awaited<ReturnType<typeof getAdminProductEditorialRecord>>, TError = ErrorType<void>>(key: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminProductEditorialRecord>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminProductEditorialRecordQueryKey(key);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminProductEditorialRecord>>> = ({ signal }) => getAdminProductEditorialRecord(key, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: key !== null && key !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminProductEditorialRecord>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminProductEditorialRecordQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminProductEditorialRecord>>>
+export type GetAdminProductEditorialRecordQueryError = ErrorType<void>
+
+
+
+export function useGetAdminProductEditorialRecord<TData = Awaited<ReturnType<typeof getAdminProductEditorialRecord>>, TError = ErrorType<void>>(
+ key: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminProductEditorialRecord>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminProductEditorialRecordQueryOptions(key,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveProductEditorialRecordUrl = (key: string,) => {
+
+
+
+
+  return `/api/uc/admin/product-records/${key}`
+}
+
+export const saveProductEditorialRecord = async (key: string,
+    productEditorialRevision: ProductEditorialRevision, options?: RequestInit): Promise<ProductEditorialRevision> => {
+
+  return customFetch<ProductEditorialRevision>(getSaveProductEditorialRecordUrl(key),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(productEditorialRevision)
+  }
+);}
+
+
+
+
+
+export const getSaveProductEditorialRecordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveProductEditorialRecord>>, TError,{key: string;data: BodyType<ProductEditorialRevision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveProductEditorialRecord>>, TError,{key: string;data: BodyType<ProductEditorialRevision>}, TContext> => {
+
+const mutationKey = ['saveProductEditorialRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveProductEditorialRecord>>, {key: string;data: BodyType<ProductEditorialRevision>}> = (props) => {
+          const {key,data} = props ?? {};
+
+          return  saveProductEditorialRecord(key,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveProductEditorialRecordMutationResult = NonNullable<Awaited<ReturnType<typeof saveProductEditorialRecord>>>
+    export type SaveProductEditorialRecordMutationBody = BodyType<ProductEditorialRevision>
+    export type SaveProductEditorialRecordMutationError = ErrorType<void>
+
+    export const useSaveProductEditorialRecord = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveProductEditorialRecord>>, TError,{key: string;data: BodyType<ProductEditorialRevision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveProductEditorialRecord>>,
+        TError,
+        {key: string;data: BodyType<ProductEditorialRevision>},
+        TContext
+      > => {
+      return useMutation(getSaveProductEditorialRecordMutationOptions(options));
+    }
 
 export const getReadGlobalImpactUrl = () => {
 

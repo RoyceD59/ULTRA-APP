@@ -9,6 +9,104 @@ import * as zod from 'zod';
 import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant-water-identity.js';
 
 
+export const ListProductEditorialRecordsResponse = zod.object({
+  "products": zod.array(zod.object({
+  "code": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "priceAuthority": zod.enum(['companion']).optional(),
+  "parentSku": zod.string(),
+  "purchasable": zod.boolean(),
+  "price": zod.number().nullable(),
+  "commerceId": zod.number().nullish(),
+  "availability": zod.string().nullish(),
+  "livePrice": zod.number().nullish(),
+  "diagnostics": zod.array(zod.string()).optional(),
+  "variants": zod.array(zod.object({
+  "childSku": zod.string(),
+  "label": zod.string(),
+  "variationId": zod.number().nullish(),
+  "price": zod.number().nullish(),
+  "stockStatus": zod.string().nullish(),
+  "diagnostic": zod.string().optional()
+}))
+})),
+  "topics": zod.array(zod.record(zod.string(), zod.unknown()))
+})
+
+
+export const GetProductEditorialRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const GetProductEditorialRecordResponse = zod.object({
+  "code": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "priceAuthority": zod.enum(['companion']).optional(),
+  "parentSku": zod.string(),
+  "purchasable": zod.boolean(),
+  "price": zod.number().nullable(),
+  "commerceId": zod.number().nullish(),
+  "availability": zod.string().nullish(),
+  "livePrice": zod.number().nullish(),
+  "diagnostics": zod.array(zod.string()).optional(),
+  "variants": zod.array(zod.object({
+  "childSku": zod.string(),
+  "label": zod.string(),
+  "variationId": zod.number().nullish(),
+  "price": zod.number().nullish(),
+  "stockStatus": zod.string().nullish(),
+  "diagnostic": zod.string().optional()
+}))
+})
+
+
+export const ListAdminProductEditorialRecordsResponse = zod.object({
+  "records": zod.array(zod.object({
+  "code": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "parent_sku": zod.string(),
+  "publishable": zod.boolean()
+}))
+})
+
+
+export const GetAdminProductEditorialRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+
+
+
+export const GetAdminProductEditorialRecordResponse = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
+export const SaveProductEditorialRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+
+
+
+export const SaveProductEditorialRecordBody = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
+
+
+export const SaveProductEditorialRecordResponse = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
 /**
  * @summary Read account-independent global impact from one database snapshot
  */
@@ -21,6 +119,7 @@ export const readGlobalImpactResponsePlasticsAvoidedMin = 0;
 export const readGlobalImpactResponseCleanWaterDaysMin = 0;
 
 export const readGlobalImpactResponseSnapshotIdRegExp = new RegExp('^[a-f0-9]{64}$');
+
 
 
 export const ReadGlobalImpactResponse = zod.object({
@@ -59,6 +158,7 @@ export const ReadGlobalImpactResponse = zod.object({
 export const saveGlobalImpactAdjustmentBodyExpectedRevisionMin = 0;
 
 
+
 export const SaveGlobalImpactAdjustmentBody = zod.object({
   "litresOffset": zod.number().optional(),
   "usersOffset": zod.number().optional(),
@@ -84,7 +184,9 @@ export const registerUcContactAccountBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@
 export const registerUcContactAccountBodyPasswordMin = 6;
 
 
+
 export const registerUcContactAccountBodyAddressMax = 500;
+
 
 
 export const RegisterUcContactAccountBody = zod.object({
@@ -106,6 +208,7 @@ export const RegisterUcContactAccountResponse = zod.unknown()
 
 
 export const completeUcContactProfileBodyAddressMax = 500;
+
 
 
 export const CompleteUcContactProfileBody = zod.object({
@@ -291,6 +394,7 @@ export const previewLibraryKnowledgeResponseTextMax = 16000;
 export const previewLibraryKnowledgeResponseRevisionMin = 0;
 
 
+
 export const PreviewLibraryKnowledgeResponse = zod.object({
   "text": zod.string().max(previewLibraryKnowledgeResponseTextMax),
   "hash": zod.string(),
@@ -311,6 +415,7 @@ export const DecideLibraryKnowledgeParams = zod.object({
 export const decideLibraryKnowledgeBodyRevisionMin = 0;
 
 export const decideLibraryKnowledgeBodyTitleMax = 160;
+
 
 
 export const DecideLibraryKnowledgeBody = zod.object({
@@ -335,6 +440,7 @@ export const cancelCompanionCheckoutBodyIdempotencyKeyMin = 8;
 export const cancelCompanionCheckoutBodyIdempotencyKeyMax = 200;
 
 
+
 export const CancelCompanionCheckoutBody = zod.object({
   "idempotencyKey": zod.string().min(cancelCompanionCheckoutBodyIdempotencyKeyMin).max(cancelCompanionCheckoutBodyIdempotencyKeyMax)
 })
@@ -346,6 +452,7 @@ export const CancelCompanionCheckoutResponse = zod.object({
 
 export const getCompanionCheckoutRecoveryQueryIdempotencyKeyMin = 8;
 export const getCompanionCheckoutRecoveryQueryIdempotencyKeyMax = 200;
+
 
 
 export const GetCompanionCheckoutRecoveryQueryParams = zod.object({
@@ -363,7 +470,10 @@ export const quoteCompanionCheckoutBodyCodeMax = 64;
 
 export const quoteCompanionCheckoutBodyLineItemsItemQuantityMax = 1000;
 
+
+
 export const quoteCompanionCheckoutBodyLineItemsMax = 100;
+
 
 
 export const QuoteCompanionCheckoutBody = zod.object({
@@ -372,13 +482,21 @@ export const QuoteCompanionCheckoutBody = zod.object({
   "applyReferralDiscount": zod.boolean().optional(),
   "lineItems": zod.array(zod.object({
   "productId": zod.number().min(1),
-  "quantity": zod.number().min(1).max(quoteCompanionCheckoutBodyLineItemsItemQuantityMax)
+  "quantity": zod.number().min(1).max(quoteCompanionCheckoutBodyLineItemsItemQuantityMax),
+  "variationId": zod.number().min(1).optional(),
+  "childSku": zod.string().min(1).optional()
 })).min(1).max(quoteCompanionCheckoutBodyLineItemsMax)
 })
+
+
+
 
 export const QuoteCompanionCheckoutResponse = zod.object({
   "lines": zod.array(zod.object({
   "productId": zod.number(),
+  "variationId": zod.number().min(1).optional(),
+  "childSku": zod.string().optional(),
+  "variantLabel": zod.string().optional(),
   "name": zod.string(),
   "quantity": zod.number(),
   "subtotal": zod.number()
@@ -401,6 +519,7 @@ export const quotePhysicalTestPromotionBodyCodeMin = 3;
 export const quotePhysicalTestPromotionBodyCodeMax = 64;
 
 
+
 export const QuotePhysicalTestPromotionBody = zod.object({
   "code": zod.string().min(quotePhysicalTestPromotionBodyCodeMin).max(quotePhysicalTestPromotionBodyCodeMax)
 })
@@ -417,6 +536,7 @@ export const listCustomerAssignmentsQueryPageMax = 1000000;
 export const listCustomerAssignmentsQueryLimitMax = 100;
 
 export const listCustomerAssignmentsQueryQMax = 200;
+
 
 
 export const ListCustomerAssignmentsQueryParams = zod.object({
@@ -483,6 +603,7 @@ export const CreateCustomerAssignmentResponse = zod.object({
  */
 
 
+
 export const ListCustomerAccountAssignmentsParams = zod.object({
   "accountId": zod.coerce.number().min(1)
 })
@@ -490,6 +611,7 @@ export const ListCustomerAccountAssignmentsParams = zod.object({
 export const listCustomerAccountAssignmentsQueryPageMax = 1000000;
 
 export const listCustomerAccountAssignmentsQueryLimitMax = 100;
+
 
 
 export const ListCustomerAccountAssignmentsQueryParams = zod.object({
@@ -534,6 +656,7 @@ export const ListCustomerAccountAssignmentsResponse = zod.object({
  */
 
 
+
 export const ListCustomerAssignmentAuditParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
@@ -541,6 +664,7 @@ export const ListCustomerAssignmentAuditParams = zod.object({
 export const listCustomerAssignmentAuditQueryPageMax = 1000000;
 
 export const listCustomerAssignmentAuditQueryLimitMax = 100;
+
 
 
 export const ListCustomerAssignmentAuditQueryParams = zod.object({
@@ -722,6 +846,7 @@ export const SaveUcDailyHydrationParams = zod.object({
 export const saveUcDailyHydrationBodyLitresMin = 0;
 
 
+
 export const SaveUcDailyHydrationBody = zod.object({
   "litres": zod.number().min(saveUcDailyHydrationBodyLitresMin)
 })
@@ -755,6 +880,7 @@ export const getHydrateCustomerTreeResponseTreeFundedPctMin = 0;
 export const getHydrateCustomerTreeResponseTreeFundedPctMax = 100;
 
 export const getHydrateCustomerTreeResponseTreeYourShareKesMin = 0;
+
 
 
 export const GetHydrateCustomerTreeResponse = zod.object({
@@ -808,6 +934,7 @@ export const getHydrateForestTotalsResponseTreesEstablishedMin = 0;
 export const getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin = 0;
 
 
+
 export const GetHydrateForestTotalsResponse = zod.object({
   "generatedAt": zod.string(),
   "eligibleRevenueKes": zod.number().min(getHydrateForestTotalsResponseEligibleRevenueKesMin),
@@ -847,6 +974,7 @@ export const listCustomerReviewsQueryRatingMax = 5;
 export const listCustomerReviewsQuerySearchMax = 200;
 
 
+
 export const ListCustomerReviewsQueryParams = zod.object({
   "page": zod.coerce.number().min(1).max(listCustomerReviewsQueryPageMax).default(listCustomerReviewsQueryPageDefault),
   "limit": zod.coerce.number().min(1).max(listCustomerReviewsQueryLimitMax).default(listCustomerReviewsQueryLimitDefault),
@@ -866,6 +994,7 @@ export const listCustomerReviewsResponseReviewsItemAnalysisExplanationMax = 460;
 export const listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax = 40;
 
 export const listCustomerReviewsResponseReviewsItemAnalysisThemesMax = 3;
+
 
 
 export const ListCustomerReviewsResponse = zod.object({
@@ -931,6 +1060,7 @@ export const ListCustomerReviewsResponse = zod.object({
 export const retryCustomerReviewAnalysisPathIdMax = 2147483647;
 
 
+
 export const RetryCustomerReviewAnalysisParams = zod.object({
   "id": zod.coerce.number().min(1).max(retryCustomerReviewAnalysisPathIdMax)
 })
@@ -979,6 +1109,7 @@ export const createPublicInstantWaterAssessmentBodyAnswersSourcesMax = 3;
 export const createPublicInstantWaterAssessmentBodyAnswersConcernsMax = 3;
 
 export const createPublicInstantWaterAssessmentBodyAnswersSettingsMax = 3;
+
 
 
 export const CreatePublicInstantWaterAssessmentBody = zod.object({
@@ -1128,6 +1259,7 @@ export const getPublicInstantWaterAssessmentResultPathTokenMin = 32;
 export const getPublicInstantWaterAssessmentResultPathTokenMax = 256;
 
 
+
 export const GetPublicInstantWaterAssessmentResultParams = zod.object({
   "token": zod.coerce.string().min(getPublicInstantWaterAssessmentResultPathTokenMin).max(getPublicInstantWaterAssessmentResultPathTokenMax)
 })
@@ -1168,6 +1300,7 @@ export const requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMin = 8;
 export const requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMax = 200;
 
 
+
 export const RequestInstantWaterAssessmentVerificationBody = zod.object({
   "idempotencyKey": zod.string().min(requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMin).max(requestInstantWaterAssessmentVerificationBodyIdempotencyKeyMax),
   "channel": zod.enum(['whatsapp', 'sms']),
@@ -1175,6 +1308,7 @@ export const RequestInstantWaterAssessmentVerificationBody = zod.object({
 })
 
 export const requestInstantWaterAssessmentVerificationResponseRetryAfterSecondsMin = 0;
+
 
 
 export const RequestInstantWaterAssessmentVerificationResponse = zod.object({
@@ -1214,6 +1348,7 @@ export const consumeInstantWaterAssessmentHandoffBodyHandoffTokenMin = 32;
 export const consumeInstantWaterAssessmentHandoffBodyHandoffTokenMax = 200;
 
 
+
 export const ConsumeInstantWaterAssessmentHandoffBody = zod.object({
   "handoffToken": zod.string().min(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMin).max(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMax)
 })
@@ -1228,6 +1363,7 @@ export const consumeInstantWaterAssessmentHandoffResponseAnswersSourcesMax = 3;
 export const consumeInstantWaterAssessmentHandoffResponseAnswersConcernsMax = 3;
 
 export const consumeInstantWaterAssessmentHandoffResponseAnswersSettingsMax = 3;
+
 
 
 export const ConsumeInstantWaterAssessmentHandoffResponse = zod.object({
@@ -1283,6 +1419,7 @@ export const attachInstantWaterAssessmentResponseAnswersConcernsMax = 3;
 export const attachInstantWaterAssessmentResponseAnswersSettingsMax = 3;
 
 
+
 export const AttachInstantWaterAssessmentResponse = zod.object({
   "answers": zod.object({
   "country": zod.string().min(attachInstantWaterAssessmentResponseAnswersCountryMin).max(attachInstantWaterAssessmentResponseAnswersCountryMax),
@@ -1335,6 +1472,7 @@ export const requestInstantWaterPhysicalTestBodyMediaReferencesItemReferenceMax 
 export const requestInstantWaterPhysicalTestBodyMediaReferencesMax = 7;
 
 
+
 export const RequestInstantWaterPhysicalTestBody = zod.object({
   "promoCode": zod.string().min(requestInstantWaterPhysicalTestBodyPromoCodeMin).max(requestInstantWaterPhysicalTestBodyPromoCodeMax).optional(),
   "idempotencyKey": zod.string().min(requestInstantWaterPhysicalTestBodyIdempotencyKeyMin).max(requestInstantWaterPhysicalTestBodyIdempotencyKeyMax),
@@ -1371,6 +1509,7 @@ export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnsw
 export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersConcernsMax = 3;
 
 export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSettingsMax = 3;
+
 
 
 export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
@@ -1419,6 +1558,7 @@ export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAn
 export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSettingsMax = 3;
 
 
+
 export const GetAuthenticatedLatestInstantWaterAssessmentResponse = zod.object({
   "assessment": zod.union([zod.object({
   "answers": zod.object({
@@ -1457,6 +1597,8 @@ export const listProjectHubInstantWaterAssessmentsQueryPageDefault = 1;
 
 export const listProjectHubInstantWaterAssessmentsQueryLimitDefault = 50;
 export const listProjectHubInstantWaterAssessmentsQueryLimitMax = 100;
+
+
 
 
 export const ListProjectHubInstantWaterAssessmentsQueryParams = zod.object({
@@ -1510,6 +1652,7 @@ export const getProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax = 3
 export const getProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax = 3;
 
 export const getProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax = 3;
+
 
 
 export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
@@ -1569,6 +1712,7 @@ export const UpdateProjectHubInstantWaterAssessmentParams = zod.object({
 export const updateProjectHubInstantWaterAssessmentBodyInternalNoteMax = 2000;
 
 
+
 export const UpdateProjectHubInstantWaterAssessmentBody = zod.object({
   "serviceState": zod.enum(['instant_result_ready', 'follow_up_requested', 'physical_test_requested', 'scheduled', 'completed', 'closed']),
   "expectedUpdatedAt": zod.coerce.date(),
@@ -1585,6 +1729,7 @@ export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax 
 export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax = 3;
 
 export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax = 3;
+
 
 
 export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
@@ -1639,6 +1784,7 @@ export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
  */
 
 
+
 export const UpdateUcOrderFulfillmentParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
@@ -1678,6 +1824,7 @@ export const UpdateUcOrderFulfillmentResponse = zod.object({
  */
 
 
+
 export const UpdateUcAdminOrderParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
@@ -1692,6 +1839,7 @@ export const updateUcAdminOrderBodyLineItemsItemQuantityMax = 1000;
 
 export const updateUcAdminOrderBodyLineItemsItemTotalRegExp = new RegExp('^\\d{1,10}(\\.\\d{1,2})?$');
 export const updateUcAdminOrderBodyLineItemsMax = 100;
+
 
 
 export const UpdateUcAdminOrderBody = zod.object({
@@ -1802,6 +1950,7 @@ export const ListUcProductsResponse = zod.array(ListUcProductsResponseItem)
  */
 
 
+
 export const GetUcProductParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
@@ -1859,6 +2008,7 @@ export const GetUcProductResponse = zod.union([zod.object({
  */
 
 
+
 export const UpdateUcProductParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
@@ -1873,6 +2023,7 @@ export const updateUcProductBodySalePriceMinOne = 0;
 export const updateUcProductBodySalePriceMinTwo = 0;
 
 export const updateUcProductBodyStockQuantityMin = 0;
+
 
 
 export const UpdateUcProductBody = zod.object({
@@ -1898,11 +2049,13 @@ export const UpdateUcProductResponse = zod.object({
  */
 
 
+
 export const ListUcProductMediaParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
 
 export const listUcProductMediaResponseUrlMax = 2048;
+
 
 
 export const ListUcProductMediaResponseItem = zod.object({
@@ -1922,11 +2075,13 @@ export const ListUcProductMediaResponse = zod.array(ListUcProductMediaResponseIt
  */
 
 
+
 export const AttachUcProductMediaParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
 
 export const attachUcProductMediaBodyUrlMax = 2048;
+
 
 
 export const AttachUcProductMediaBody = zod.object({
@@ -1937,6 +2092,7 @@ export const AttachUcProductMediaBody = zod.object({
 })
 
 export const attachUcProductMediaResponseUrlMax = 2048;
+
 
 
 export const AttachUcProductMediaResponse = zod.object({
@@ -1955,6 +2111,7 @@ export const AttachUcProductMediaResponse = zod.object({
  */
 
 
+
 export const DeleteUcProductMediaParams = zod.object({
   "mediaId": zod.coerce.number().min(1)
 })
@@ -1970,6 +2127,8 @@ export const DeleteUcProductMediaResponse = zod.object({
  */
 
 export const requestUcUploadUrlBodySizeExclusiveMin = 0;
+
+
 
 
 export const RequestUcUploadUrlBody = zod.object({
@@ -2011,6 +2170,7 @@ export const UpdateUcInventoryItemParams = zod.object({
 })
 
 export const updateUcInventoryItemBodyStockQuantityMin = 0;
+
 
 
 export const UpdateUcInventoryItemBody = zod.object({
@@ -2064,6 +2224,7 @@ export const UpdateAdminIntegrationsResponse = zod.object({
 export const listUcCustomersQueryPageDefault = 1;
 export const listUcCustomersQueryLimitDefault = 50;
 export const listUcCustomersQueryLimitMax = 100;
+
 
 
 export const ListUcCustomersQueryParams = zod.object({
@@ -2148,6 +2309,10 @@ export const GetUcCustomerResponse = zod.object({
   "paymentMethod": zod.string(),
   "dateCreated": zod.coerce.date(),
   "lineItems": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "variationId": zod.number().nullish(),
+  "childSku": zod.string().nullish(),
+  "variantLabel": zod.string().nullish(),
   "name": zod.string(),
   "quantity": zod.number(),
   "total": zod.string()
@@ -2346,6 +2511,7 @@ export const getUcLocationRatingAggregateQueryLimitDefault = 20;
 export const getUcLocationRatingAggregateQueryLimitMax = 50;
 
 
+
 export const GetUcLocationRatingAggregateQueryParams = zod.object({
   "page": zod.coerce.number().min(1).default(getUcLocationRatingAggregateQueryPageDefault),
   "limit": zod.coerce.number().min(1).max(getUcLocationRatingAggregateQueryLimitMax).default(getUcLocationRatingAggregateQueryLimitDefault)
@@ -2362,6 +2528,7 @@ export const getUcLocationRatingAggregateResponseRatingsItemServiceReliabilityMa
 export const getUcLocationRatingAggregateResponseRatingsItemSafetyConfidenceMax = 5;
 
 export const getUcLocationRatingAggregateResponseRatingsItemCommentMax = 1000;
+
 
 
 export const GetUcLocationRatingAggregateResponse = zod.object({
@@ -2401,6 +2568,7 @@ export const upsertUcLocationRatingBodySafetyConfidenceMax = 5;
 export const upsertUcLocationRatingBodyCommentMax = 1000;
 
 
+
 export const UpsertUcLocationRatingBody = zod.object({
   "waterQuality": zod.number().min(1).max(upsertUcLocationRatingBodyWaterQualityMax),
   "cleanliness": zod.number().min(1).max(upsertUcLocationRatingBodyCleanlinessMax),
@@ -2419,6 +2587,7 @@ export const UpsertUcLocationRatingResponse = zod.unknown()
 export const UpdateUcAdminLocationParams = zod.object({
   "id": zod.coerce.string()
 })
+
 
 
 export const updateUcAdminLocationBodyLatitudeMin = -90;
@@ -2557,6 +2726,7 @@ export const getLocationAssessmentResponseAssessmentServiceReliabilityMax = 5;
 export const getLocationAssessmentResponseAssessmentSafetyConfidenceMax = 5;
 
 
+
 export const GetLocationAssessmentResponse = zod.object({
   "assessment": zod.object({
   "id": zod.string(),
@@ -2597,6 +2767,7 @@ export const updateLocationAssessmentBodySafetyConfidenceMax = 5;
 export const updateLocationAssessmentBodyNotesMax = 2000;
 
 
+
 export const UpdateLocationAssessmentBody = zod.object({
   "waterQuality": zod.number().min(1).max(updateLocationAssessmentBodyWaterQualityMax),
   "cleanliness": zod.number().min(1).max(updateLocationAssessmentBodyCleanlinessMax),
@@ -2616,6 +2787,7 @@ export const updateLocationAssessmentResponseAssessmentEquipmentConditionMax = 5
 export const updateLocationAssessmentResponseAssessmentServiceReliabilityMax = 5;
 
 export const updateLocationAssessmentResponseAssessmentSafetyConfidenceMax = 5;
+
 
 
 export const UpdateLocationAssessmentResponse = zod.object({
@@ -2665,6 +2837,10 @@ export const ListUnsyncedRegistrationsResponse = zod.object({
  */
 
 
+
+
+
+
 export const RecoverUnsyncedRegistrationBody = zod.object({
   "originalEmail": zod.string().min(1),
   "originalPhone": zod.string().optional(),
@@ -2694,6 +2870,7 @@ export const ClearResolvedRegistrationsBody = zod.object({
 export const clearResolvedRegistrationsResponseClearedMin = 0;
 
 
+
 export const ClearResolvedRegistrationsResponse = zod.object({
   "cleared": zod.number().min(clearResolvedRegistrationsResponseClearedMin)
 })
@@ -2703,6 +2880,7 @@ export const ClearResolvedRegistrationsResponse = zod.object({
  * @summary Replace a temporary Companion password with a permanent password
  */
 export const completeUcTemporaryPasswordChangeBodyNewPasswordMin = 8;
+
 
 
 export const CompleteUcTemporaryPasswordChangeBody = zod.object({
@@ -2727,6 +2905,7 @@ export const CompleteUcTemporaryPasswordChangeResponse = zod.object({
 export const completeUcTemporaryPasswordChangeAliasBodyNewPasswordMin = 8;
 
 
+
 export const CompleteUcTemporaryPasswordChangeAliasBody = zod.object({
   "newPassword": zod.string().min(completeUcTemporaryPasswordChangeAliasBodyNewPasswordMin),
   "currentPassword": zod.string().optional()
@@ -2748,6 +2927,7 @@ export const CompleteUcTemporaryPasswordChangeAliasResponse = zod.object({
  */
 
 export const listUcOfflineClientsResponseClientsItemProductsItemLitresPerUnitMin = 0;
+
 
 
 export const ListUcOfflineClientsResponse = zod.object({
@@ -2788,6 +2968,7 @@ export const createUcOfflineClientBodyProductsItemLitresPerUnitMin = 0;
 export const createUcOfflineClientBodyIdempotencyKeyMin = 8;
 
 
+
 export const CreateUcOfflineClientBody = zod.object({
   "clientRef": zod.string().optional(),
   "firstName": zod.string().optional(),
@@ -2808,6 +2989,7 @@ export const CreateUcOfflineClientBody = zod.object({
 
 
 export const createUcOfflineClientResponseClientProductsItemLitresPerUnitMin = 0;
+
 
 
 export const CreateUcOfflineClientResponse = zod.object({
@@ -2849,6 +3031,8 @@ export const UpdateUcOfflineClientParams = zod.object({
 export const updateUcOfflineClientBodyProductsItemLitresPerUnitMin = 0;
 
 
+
+
 export const UpdateUcOfflineClientBody = zod.object({
   "clientRef": zod.string().optional(),
   "phone": zod.string().optional().describe('International phone number'),
@@ -2866,6 +3050,7 @@ export const UpdateUcOfflineClientBody = zod.object({
 
 
 export const updateUcOfflineClientResponseClientProductsItemLitresPerUnitMin = 0;
+
 
 
 export const UpdateUcOfflineClientResponse = zod.object({
@@ -2905,6 +3090,7 @@ export const RetryUcOfflineClientDeliveryParams = zod.object({
 
 
 export const retryUcOfflineClientDeliveryResponseClientProductsItemLitresPerUnitMin = 0;
+
 
 
 export const RetryUcOfflineClientDeliveryResponse = zod.object({
@@ -2962,6 +3148,9 @@ export const ListMembersResponse = zod.array(ListMembersResponseItem)
  */
 
 
+
+
+
 export const CreateMemberBody = zod.object({
   "name": zod.string().min(1),
   "email": zod.string().min(1),
@@ -2999,6 +3188,10 @@ export const GetMemberResponse = zod.object({
 export const UpdateMemberParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
+
 
 
 export const UpdateMemberBody = zod.object({
@@ -3049,6 +3242,7 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
  */
 
 
+
 export const CreateProjectBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string(),
@@ -3089,6 +3283,8 @@ export const GetProjectResponse = zod.object({
 export const UpdateProjectParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateProjectBody = zod.object({
@@ -3171,6 +3367,7 @@ export const ListTasksResponse = zod.array(ListTasksResponseItem)
  */
 
 
+
 export const CreateTaskBody = zod.object({
   "projectId": zod.number(),
   "title": zod.string().min(1),
@@ -3238,6 +3435,8 @@ export const GetTaskResponse = zod.object({
 export const UpdateTaskParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateTaskBody = zod.object({
@@ -3335,6 +3534,7 @@ export const ListAnthropicConversationsResponse = zod.array(ListAnthropicConvers
 export const createAnthropicConversationBodyTitleMax = 80;
 
 
+
 export const CreateAnthropicConversationBody = zod.object({
   "title": zod.string().max(createAnthropicConversationBodyTitleMax)
 })
@@ -3413,6 +3613,7 @@ export const SendAnthropicMessageResponse = zod.unknown()
  */
 
 
+
 export const AiQueryBody = zod.object({
   "question": zod.string().min(1),
   "source": zod.string().optional().describe('Identifier of the calling agent (e.g. \"orchestrator\", \"analytics-agent\")')
@@ -3485,6 +3686,7 @@ export const ListAiPushEventsResponse = zod.array(ListAiPushEventsResponseItem)
  */
 
 
+
 export const AiPushEchoBody = zod.object({
   "pushId": zod.string().min(1),
   "status": zod.enum(['received', 'processing', 'completed', 'failed']),
@@ -3515,6 +3717,7 @@ export const ListContactsResponse = zod.array(ListContactsResponseItem)
 /**
  * @summary Create a new contact
  */
+
 
 
 export const CreateContactBody = zod.object({
@@ -3566,6 +3769,8 @@ export const GetContactResponse = zod.object({
 export const UpdateContactParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateContactBody = zod.object({
@@ -3621,6 +3826,9 @@ export const AddContactMethodParams = zod.object({
 })
 
 
+
+
+
 export const AddContactMethodBody = zod.object({
   "channelType": zod.string().min(1),
   "channelValue": zod.string().min(1),
@@ -3644,6 +3852,9 @@ export const UpdateContactMethodParams = zod.object({
   "id": zod.coerce.number(),
   "methodId": zod.coerce.number()
 })
+
+
+
 
 
 export const UpdateContactMethodBody = zod.object({
@@ -3756,6 +3967,7 @@ export const GetRuntimeReadinessResponse = zod.unknown()
 export const getRuntimeMonitoringQueryReleaseMax = 40;
 
 
+
 export const GetRuntimeMonitoringQueryParams = zod.object({
   "app": zod.enum(['companion', 'projecthub']).optional(),
   "environment": zod.enum(['production', 'development', 'preview']).optional(),
@@ -3800,6 +4012,7 @@ export const ListSystemStatusResponse = zod.array(ListSystemStatusResponseItem)
 /**
  * @summary Register a new platform to monitor
  */
+
 
 
 export const CreateSystemStatusBody = zod.object({
@@ -3916,6 +4129,7 @@ export const DispatchNotificationResponse = zod.object({
 export const changePasscodeBodyNewPasscodeMin = 8;
 
 
+
 export const ChangePasscodeBody = zod.object({
   "currentPasscode": zod.string().min(1).describe('The current team passcode (used to verify identity)'),
   "newPasscode": zod.string().min(changePasscodeBodyNewPasscodeMin).describe('The new passcode (minimum 8 characters)')
@@ -3933,6 +4147,7 @@ export const ChangePasscodeResponse = zod.object({
  * configured on the server.
  * @summary Exchange the team passcode for a signed team-session JWT
  */
+
 
 
 export const IssueTeamTokenBody = zod.object({
@@ -3984,6 +4199,8 @@ export const DisconnectWhatsAppResponse = zod.object({
  */
 
 
+
+
 export const SendWhatsAppQuickMessageBody = zod.object({
   "to": zod.string().min(1).describe('Recipient phone number (e.g. +254712345678)'),
   "message": zod.string().min(1).describe('Plain-text message body')
@@ -4027,12 +4244,14 @@ export const IngestWebhookResponse = zod.object({
 export const validateUcReferralOrPromotionCodeBodyCodeMax = 40;
 
 
+
 export const ValidateUcReferralOrPromotionCodeBody = zod.object({
   "code": zod.string().min(1).max(validateUcReferralOrPromotionCodeBodyCodeMax)
 })
 
 export const validateUcReferralOrPromotionCodeResponseDiscountPercentMin = 0;
 export const validateUcReferralOrPromotionCodeResponseDiscountPercentMax = 100;
+
 
 
 export const ValidateUcReferralOrPromotionCodeResponse = zod.object({
@@ -4119,6 +4338,7 @@ export const ListAgentOauthClientsResponse = zod.object({
 export const createAgentOauthClientBodyNameMax = 120;
 
 
+
 export const CreateAgentOauthClientBody = zod.object({
   "name": zod.string().min(1).max(createAgentOauthClientBodyNameMax),
   "scopes": zod.array(zod.enum(['companion.monitor.read', 'companion.users.read', 'interactions.read', 'alison.read'])),
@@ -4167,6 +4387,7 @@ export const ListAgentAlisonFeedbackResponse = zod.unknown()
  */
 export const listAgentAlisonChatsQueryLimitDefault = 50;
 export const listAgentAlisonChatsQueryLimitMax = 100;
+
 
 
 export const ListAgentAlisonChatsQueryParams = zod.object({
@@ -4267,6 +4488,7 @@ export const listPublishedCompanionBlogArticlesQueryLimitMax = 20;
 export const listPublishedCompanionBlogArticlesQuerySearchMax = 120;
 
 export const listPublishedCompanionBlogArticlesQueryCategoryMax = 80;
+
 
 
 export const ListPublishedCompanionBlogArticlesQueryParams = zod.object({
@@ -4420,6 +4642,7 @@ export const createEditorialBlogArticleBodyRationaleMax = 1000;
 export const createEditorialBlogArticleBodyFilenameMax = 255;
 
 export const createEditorialBlogArticleBodyBase64ContentMax = 6000000;
+
 
 
 export const CreateEditorialBlogArticleBody = zod.object({
@@ -4603,6 +4826,7 @@ export const updateEditorialBlogArticleBodySourcesMax = 8;
 export const updateEditorialBlogArticleBodyRationaleMax = 1000;
 
 
+
 export const UpdateEditorialBlogArticleBody = zod.object({
   "slug": zod.string().max(updateEditorialBlogArticleBodySlugMax).optional(),
   "title": zod.string().min(1).max(updateEditorialBlogArticleBodyTitleMax),
@@ -4750,6 +4974,7 @@ export const RejectEditorialBlogArticleParams = zod.object({
 export const rejectEditorialBlogArticleBodyFeedbackMax = 1000;
 
 
+
 export const RejectEditorialBlogArticleBody = zod.object({
   "feedback": zod.string().min(1).max(rejectEditorialBlogArticleBodyFeedbackMax)
 })
@@ -4774,6 +4999,7 @@ export const requestCompanionBlogDraftFromBriefBodyBriefMin = 10;
 export const requestCompanionBlogDraftFromBriefBodyBriefMax = 1000;
 
 export const requestCompanionBlogDraftFromBriefBodyIdempotencyKeyMax = 120;
+
 
 
 export const RequestCompanionBlogDraftFromBriefBody = zod.object({
@@ -4838,6 +5064,7 @@ export const submitCompanionBlogTopicProposalsBodyTopicsItemSourcesMax = 8;
 export const submitCompanionBlogTopicProposalsBodyTopicsMax = 10;
 
 
+
 export const SubmitCompanionBlogTopicProposalsBody = zod.object({
   "topics": zod.array(zod.object({
   "topic": zod.string().min(1).max(submitCompanionBlogTopicProposalsBodyTopicsItemTopicMax),
@@ -4899,6 +5126,7 @@ export const submitCompanionBlogDraftsBodyArticlesItemTwoSourcesMax = 8;
 export const submitCompanionBlogDraftsBodyArticlesMax = 3;
 
 
+
 export const SubmitCompanionBlogDraftsBody = zod.object({
   "articles": zod.array(zod.object({
   "slug": zod.string().max(submitCompanionBlogDraftsBodyArticlesItemOneSlugMax).optional(),
@@ -4952,6 +5180,7 @@ export const createUcAdminGuideBodySlugRegExp = new RegExp('^[a-z0-9-]{3,120}$')
 export const createUcAdminGuideBodyTitleMax = 200;
 
 export const createUcAdminGuideBodySummaryMax = 1000;
+
 
 
 export const CreateUcAdminGuideBody = zod.object({
@@ -5085,6 +5314,7 @@ export const updateUcAdminGuideBodyTitleMax = 200;
 export const updateUcAdminGuideBodySummaryMax = 1000;
 
 
+
 export const UpdateUcAdminGuideBody = zod.object({
   "slug": zod.string().regex(updateUcAdminGuideBodySlugRegExp),
   "title": zod.string().min(1).max(updateUcAdminGuideBodyTitleMax),
@@ -5140,6 +5370,8 @@ export const UnpublishUcAdminGuideResponse = zod.unknown()
  */
 
 
+
+
 export const LookupCustomerLifecycleResponse = zod.object({
   "identity": zod.object({
   "customerId": zod.number().min(1),
@@ -5180,6 +5412,7 @@ export const registerCustomerFilterFromPurchaseBodyIdempotencyKeyMin = 8;
 export const registerCustomerFilterFromPurchaseBodyIdempotencyKeyMax = 200;
 
 
+
 export const RegisterCustomerFilterFromPurchaseBody = zod.object({
   "purchaseLineId": zod.number(),
   "activatedAt": zod.coerce.date(),
@@ -5190,6 +5423,7 @@ export const RegisterCustomerFilterFromPurchaseBody = zod.object({
 export const registerCustomerFilterFromPurchaseResponseMaintenanceCountMin = 0;
 
 export const registerCustomerFilterFromPurchaseResponseVerifiedLitresMin = 0;
+
 
 
 export const RegisterCustomerFilterFromPurchaseResponse = zod.object({
@@ -5214,6 +5448,7 @@ export const listCustomerLegacyRegistrationReviewsResponseItemsItemReceiptRefere
 export const listCustomerLegacyRegistrationReviewsResponseItemsItemSerialOrQrReferenceMax = 200;
 
 export const listCustomerLegacyRegistrationReviewsResponseItemsItemSellerChannelMax = 120;
+
 
 
 export const ListCustomerLegacyRegistrationReviewsResponse = zod.object({
@@ -5254,6 +5489,7 @@ export const submitCustomerLegacyRegistrationReviewBodyIdempotencyKeyMin = 8;
 export const submitCustomerLegacyRegistrationReviewBodyIdempotencyKeyMax = 200;
 
 
+
 export const SubmitCustomerLegacyRegistrationReviewBody = zod.object({
   "productId": zod.number(),
   "productName": zod.string().min(1).max(submitCustomerLegacyRegistrationReviewBodyProductNameMax),
@@ -5270,6 +5506,7 @@ export const submitCustomerLegacyRegistrationReviewResponseReceiptReferenceMax =
 export const submitCustomerLegacyRegistrationReviewResponseSerialOrQrReferenceMax = 200;
 
 export const submitCustomerLegacyRegistrationReviewResponseSellerChannelMax = 120;
+
 
 
 export const SubmitCustomerLegacyRegistrationReviewResponse = zod.object({
@@ -5301,6 +5538,7 @@ export const getCanonicalCustomerHistoryResponseFiltersItemVerifiedLitresMin = 0
 export const getCanonicalCustomerHistoryResponsePersonalImpactVerifiedLitresMin = 0;
 
 export const getCanonicalCustomerHistoryResponsePersonalImpactMaintenanceCountMin = 0;
+
 
 
 export const GetCanonicalCustomerHistoryResponse = zod.object({
@@ -5367,6 +5605,7 @@ export const getCanonicalImpactShareResponseGlobalImpactVerifiedLitresMin = 0;
 export const getCanonicalImpactShareResponseGlobalImpactMaintenanceCountMin = 0;
 
 
+
 export const GetCanonicalImpactShareResponse = zod.object({
   "heading": zod.enum(['The Ultra Clear Impact']),
   "personalImpact": zod.object({
@@ -5393,6 +5632,7 @@ export const recordLocationTierAnalyticsBodyIdempotencyKeyMin = 8;
 export const recordLocationTierAnalyticsBodyIdempotencyKeyMax = 200;
 
 
+
 export const RecordLocationTierAnalyticsBody = zod.object({
   "event": zod.enum(['permission_granted', 'permission_denied', 'tier_selected', 'no_results_within_10km']),
   "tier": zod.union([zod.literal('tier_1_0_to_2km'),zod.literal('tier_2_2_to_5km'),zod.literal('tier_3_5_to_10km'),zod.literal(null)]).nullable(),
@@ -5413,6 +5653,7 @@ export const listLifecycleRegistrationReviewsQueryLimitDefault = 50;
 export const listLifecycleRegistrationReviewsQueryLimitMax = 100;
 
 
+
 export const ListLifecycleRegistrationReviewsQueryParams = zod.object({
   "status": zod.enum(['pending_review', 'approved', 'rejected', 'correction_requested']).optional(),
   "page": zod.coerce.number().min(1).default(listLifecycleRegistrationReviewsQueryPageDefault),
@@ -5426,6 +5667,7 @@ export const listLifecycleRegistrationReviewsResponseItemsItemOneSerialOrQrRefer
 export const listLifecycleRegistrationReviewsResponseItemsItemOneSellerChannelMax = 120;
 
 export const listLifecycleRegistrationReviewsResponseItemsItemTwoEvidenceObjectPathMax = 500;
+
 
 
 export const ListLifecycleRegistrationReviewsResponse = zod.object({
@@ -5467,6 +5709,7 @@ export const decideLifecycleRegistrationReviewBodyIdempotencyKeyMin = 8;
 export const decideLifecycleRegistrationReviewBodyIdempotencyKeyMax = 200;
 
 
+
 export const DecideLifecycleRegistrationReviewBody = zod.object({
   "decision": zod.enum(['approved', 'rejected', 'correction_requested', 'merged']),
   "reason": zod.string().min(1).max(decideLifecycleRegistrationReviewBodyReasonMax),
@@ -5482,6 +5725,7 @@ export const decideLifecycleRegistrationReviewResponseOneSerialOrQrReferenceMax 
 export const decideLifecycleRegistrationReviewResponseOneSellerChannelMax = 120;
 
 export const decideLifecycleRegistrationReviewResponseTwoEvidenceObjectPathMax = 500;
+
 
 
 export const DecideLifecycleRegistrationReviewResponse = zod.object({
@@ -5537,6 +5781,7 @@ export const resolveLifecycleIdentityConflictBodyIdempotencyKeyMin = 8;
 export const resolveLifecycleIdentityConflictBodyIdempotencyKeyMax = 200;
 
 
+
 export const ResolveLifecycleIdentityConflictBody = zod.object({
   "customerId": zod.number().min(1),
   "reason": zod.string().min(1).max(resolveLifecycleIdentityConflictBodyReasonMax),
@@ -5560,6 +5805,7 @@ export const listLifecycleReconciliationConflictsQueryPageDefault = 1;
 
 export const listLifecycleReconciliationConflictsQueryLimitDefault = 50;
 export const listLifecycleReconciliationConflictsQueryLimitMax = 100;
+
 
 
 export const ListLifecycleReconciliationConflictsQueryParams = zod.object({
@@ -5610,6 +5856,7 @@ export const getCustomerLifecycleMissionControlResponseLocationNoResultRateMin =
 export const getCustomerLifecycleMissionControlResponseLocationNoResultRateMax = 1;
 
 
+
 export const GetCustomerLifecycleMissionControlResponse = zod.object({
   "eligibleCustomers": zod.number().min(getCustomerLifecycleMissionControlResponseEligibleCustomersMin),
   "registrationAttempts": zod.number().min(getCustomerLifecycleMissionControlResponseRegistrationAttemptsMin),
@@ -5632,6 +5879,7 @@ export const getCustomerLifecycleTimelineQueryPageDefault = 1;
 
 export const getCustomerLifecycleTimelineQueryLimitDefault = 50;
 export const getCustomerLifecycleTimelineQueryLimitMax = 100;
+
 
 
 export const GetCustomerLifecycleTimelineQueryParams = zod.object({
@@ -5662,6 +5910,7 @@ export const listCustomerLifecycleAuditEventsQueryPageDefault = 1;
 
 export const listCustomerLifecycleAuditEventsQueryLimitDefault = 50;
 export const listCustomerLifecycleAuditEventsQueryLimitMax = 100;
+
 
 
 export const ListCustomerLifecycleAuditEventsQueryParams = zod.object({

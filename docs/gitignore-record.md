@@ -1,5 +1,12 @@
 # Git ignore record
 
+## Editable product pages — 2026-10-07
+
+No ignore rule changed. Editorial schema/migration, shared content and tests,
+browser screenshot and verification/development documents are tracked.
+Disposable API test databases were dropped; build exports and test logs remain
+under `/tmp`. No credentials or private runtime data were added.
+
 ## Record product preparation — 2026-10-07
 
 No ignore rule was added or removed. Supplied product JSON/schema, the standalone

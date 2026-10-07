@@ -37,6 +37,13 @@ function createPublicData(apiOrigin, fetchImpl = fetch) {
   }
   return {
     mediaOrigin: origin.origin,
+    editorialRecords: async () => {
+      const value = await read('product-records');
+      if (!Array.isArray(value.products) || !Array.isArray(value.topics)) throw new PublicDataError();
+      return { ...value, identities: value.products.map(p => ({ code: p.code, parentSku: p.parentSku,
+        variants: p.variants.map(v => v.childSku) })) };
+    },
+    editorialProduct: async key => read(`product-records/${encodeURIComponent(key)}`),
     products: async () => array(await read('products?publicationSafe=true', 'woocommerce-published')),
     productOperation: async id => read(`products/${id}?publicationSafe=true`, 'woocommerce-live'),
     guides: async () => array((await read('guides')).guides),

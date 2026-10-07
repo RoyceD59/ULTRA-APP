@@ -62,7 +62,7 @@ async function recordOperation(record, identity, data, inventory = null) {
   if (!availability) diagnostics.push('live-stock-unknown');
   const operationalPrice = live?.salePrice || live?.price || live?.regularPrice;
   if (operationalPrice !== undefined && operationalPrice !== '' && record.price !== null && Number(operationalPrice) !== record.price) {
-    diagnostics.push('record-commerce-price-disagreement');
+    diagnostics.push('commerce-price-differs-from-approved');
   }
   const images = uploadedPhotos(live || match.parent, data.mediaOrigin);
   if (!images.length) diagnostics.push('product-photo-missing');

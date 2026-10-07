@@ -7,6 +7,13 @@
  */
 
 export interface UcCustomerOrderItem {
+  productId?: number;
+  /** @nullable */
+  variationId?: number | null;
+  /** @nullable */
+  childSku?: string | null;
+  /** @nullable */
+  variantLabel?: string | null;
   name: string;
   quantity: number;
   total: string;

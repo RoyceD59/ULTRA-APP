@@ -233,7 +233,7 @@ describe("createOrder — WooCommerce path — sendViaResend is called", () => {
         const u = String(url);
 
         // WC orders POST → mock WooCommerce response with one line item.
-        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
         if (u.includes("wc.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -343,7 +343,7 @@ describe("createOrder — WooCommerce COD path — sendViaResend is called", () 
         const u = String(url);
 
         // WC orders POST → mock WooCommerce order for COD.
-        if (u.includes("/products")) return new Response(JSON.stringify([{id:2,name:"Truva Go",price:"2599",stock_status:"instock"}]));
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:2,name:"Truva Go",price:"2599",stock_status:"instock",status:"publish"}]));
         if (u.includes("wc-cod.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -458,7 +458,7 @@ describe("createOrder — WooCommerce path — empty line_items — fallback rec
         const u = String(url);
 
         // WC orders POST → mock WooCommerce response with NO line items.
-        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock"}]));
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
         if (u.includes("wc-empty.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({

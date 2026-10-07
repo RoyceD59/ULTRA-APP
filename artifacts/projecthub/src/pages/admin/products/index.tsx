@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { isTeamAdmin } from "@/lib/team-auth";
 import { useProducts } from "@/hooks/use-products";
+import { useAuthoredRecords } from "@/hooks/use-product-records";
 import { Card, CardContent } from "@/components/ui/card";
 import { API_ORIGIN } from "@/lib/api-base";
 
@@ -13,6 +14,8 @@ export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [stockFilter, setStockFilter] = useState<"all" | "instock" | "outofstock" | "onbackorder">("all");
   const { data: products, isLoading, error } = useProducts();
+  const authored = useAuthoredRecords();
+  const matched = new Set((products ?? []).map(p => p.sku));
 
   if (!isTeamAdmin()) {
     return (
@@ -70,6 +73,25 @@ export default function AdminProductsPage() {
           Showing {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
         </div>
       </div>
+
+      <Card><CardContent className="p-4 space-y-3">
+        <h2 className="font-semibold text-sm">Authored page records</h2>
+        {authored.isLoading ? <div className="text-sm text-muted-foreground flex gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading records...</div>
+          : authored.isError ? <div className="text-sm text-destructive">Records unavailable: {authored.error.message} <Button size="sm" variant="outline" onClick={() => authored.refetch()}>Retry</Button></div>
+          : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {(authored.data ?? []).filter(r => !normalizedSearch || r.name.toLocaleLowerCase().includes(normalizedSearch) || r.parent_sku.toLocaleLowerCase().includes(normalizedSearch)).map(r => (
+              <div key={r.code} className="flex items-center justify-between gap-2 rounded-md border p-3">
+                <div className="min-w-0"><div className="text-sm font-medium truncate">{r.name}</div>
+                  <div className="text-xs font-mono text-muted-foreground">{r.parent_sku}</div>
+                  <div className="flex gap-1 mt-1">
+                    <Badge variant={r.publishable ? "default" : "secondary"}>{r.publishable ? "Publishable" : "Held back"}</Badge>
+                    {!matched.has(r.parent_sku) && <Badge variant="outline">No commerce match</Badge>}
+                  </div></div>
+                <Button size="sm" variant="secondary" asChild><Link href={products?.filter(p => p.sku === r.parent_sku).length === 1
+                  ? `/admin/products/${products.find(p => p.sku === r.parent_sku)!.id}` : `/admin/products/record/${r.slug}`}><Edit className="w-3.5 h-3.5 mr-1.5" />Page</Link></Button>
+              </div>))}
+          </div>}
+      </CardContent></Card>
 
       {isLoading ? (
         <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">

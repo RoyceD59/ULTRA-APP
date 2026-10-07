@@ -271,6 +271,10 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
       .uc-gallery figure { margin: 0; min-width: 0; } .uc-gallery img { width: 100%; max-height: 500px; object-fit: contain; }
       .uc-record-document details, #uc-public-content details { margin: 12px 0; border: 1px solid #dbe7ea; padding: 12px; }
       .uc-record-document summary, #uc-public-content summary { cursor: pointer; font-weight: 600; }
+      #uc-public-content .uc-product-card { background: #e9f6f7; border-radius: 16px; padding: 18px; margin-block: 12px; }
+      #uc-public-content section { padding-block: 24px; border-top: 1px solid #dbe7ea; }
+      #uc-public-content h1, #uc-public-content h2, #uc-public-content h3 { color: #0d2a4a; }
+      #uc-public-content .uc-price { font-size: 1.7rem; font-weight: 700; }
       .uc-record-document a { color: #005d8f; }
       .uc-record-document :focus-visible, #uc-public-content :focus-visible { outline: 3px solid #005d8f; outline-offset: 3px; }
     </style>
