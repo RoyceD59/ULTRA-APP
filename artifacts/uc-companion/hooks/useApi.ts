@@ -372,7 +372,7 @@ export interface OfflinePurchaseItem {
   capacityLitres: number;
   unavailableReason: string | null;
   availableUnitIds: string[];
-  registeredUnits: { unitId: string; installationDate: string; active: boolean }[];
+  registeredUnits: { registeredFilterId?: number; unitId: string; installationDate: string; active: boolean }[];
 }
 export interface OfflinePurchase {
   source: 'offline';

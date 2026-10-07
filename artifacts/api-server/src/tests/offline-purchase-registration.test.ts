@@ -111,7 +111,7 @@ describe("offline source registration", () => {
     assert.equal(healed.registration.activatedAt, results[0].registration.activatedAt);
     assert.equal(healed.registration.lifespanDays, 90);
     assert.equal(healed.registration.maintenanceCount, 3);
-    assert.deepEqual((await purchase()).items[0].registeredUnits, [{ unitId, installationDate: "2026-01-02", active: true }]);
+    assert.deepEqual((await purchase()).items[0].registeredUnits, [{ registeredFilterId: results[0].registration.id, unitId, installationDate: "2026-01-02", active: true }]);
     await unchangedFinancials();
   });
   it("preserves identities on reorder/add, enforces quantity reductions, and retains history on replacement/removal/delete", async () => {

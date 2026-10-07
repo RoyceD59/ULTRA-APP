@@ -52,6 +52,7 @@ import { DAY_OFFSETS, closestDayOffset } from '@/hooks/filterNudge';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
+  unified?: boolean;
   activation:    FilterActivation | null;
   onActivationChange: (a: FilterActivation | null) => void;
   /** Receipt registration also creates a server-side capacity-tracked filter. */
@@ -71,7 +72,7 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function FilterTrackerSection({ activation, onActivationChange, onRegistrationCommitted,
-  impact, usageLoading = false, usageUnavailable = false, onUsageRefresh }: Props) {
+  impact, usageLoading = false, usageUnavailable = false, onUsageRefresh, unified = false }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -208,7 +209,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
 
       {/* ── Card ─────────────────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>My Filter</Text>
+        {!unified && <Text style={[styles.sectionTitle, { color: colors.text }]}>My Filter</Text>}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {activation ? (
             <>
@@ -218,14 +219,15 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                   <Ionicons name="water" size={20} color={barColor} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
+                  <Text style={[styles.productName, { color: colors.text }]}>
                     {activation.productName}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={openRegisterModal} style={[styles.replaceBtn, { borderColor: colors.primary }]}>
-                  <Text style={[styles.replaceBtnTxt, { color: colors.primary }]}>Another receipt</Text>
-                </TouchableOpacity>
               </View>
+              <Text style={[styles.subText, { color: colors.mutedForeground }]}>
+                Installed {activation.activatedAt.slice(0, 10)}
+                {activation.lastCleanedAt ? ` · Last cleaned ${activation.lastCleanedAt.slice(0, 10)}` : ''}
+              </Text>
 
               <View testID="filter-lifespan-gauge" style={[styles.row, { marginVertical: 12, alignItems: 'center' }]}>
                 <FilterLifeGauge percent={life?.percent ?? null} color={barColor}
@@ -245,7 +247,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                       : usageLoading ? 'Refreshing capacity…' : usageUnavailable ? 'Capacity unavailable · could not refresh (possibly offline)' : 'Capacity unavailable · no verified cycle link or rating'}
                   </Text>
                   {usageLoading && life?.remainingLitres != null ? <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>Refreshing recorded usage…</Text> : null}
-                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh filter usage" onPress={onUsageRefresh}>
+                  <TouchableOpacity style={{ minHeight: 44, justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Refresh filter usage" onPress={onUsageRefresh}>
                     <Text style={[styles.progressLabel, { color: colors.primary }]}>Refresh usage</Text>
                   </TouchableOpacity>
                 </View>
@@ -300,6 +302,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
               {/* Last performance check-in badge */}
               {perfBadge && (
                 <TouchableOpacity
+                  accessibilityRole="button"
                   onPress={openPerfModal}
                   activeOpacity={0.8}
                   style={[styles.perfBadge, { backgroundColor: perfBadge.color + '12', borderColor: perfBadge.color + '30' }]}>
@@ -314,6 +317,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
               {/* Check performance button (when no check-in yet) */}
               {!perfBadge && (
                 <TouchableOpacity
+                  accessibilityRole="button"
                   onPress={openPerfModal}
                   activeOpacity={0.8}
                   style={[styles.checkPerfBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -363,14 +367,14 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
             </>
           ) : (
             /* Not yet registered */
-            <TouchableOpacity onPress={openRegisterModal} style={styles.registerRow} activeOpacity={0.8}>
+            <TouchableOpacity accessibilityRole="button" onPress={openRegisterModal} style={styles.registerRow} activeOpacity={0.8}>
               <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
                 <Ionicons name="water-outline" size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.productName, { color: colors.text }]}>Find a filter receipt</Text>
+                <Text style={[styles.productName, { color: colors.text }]}>Can't find your filter?</Text>
                 <Text style={[styles.subText, { color: colors.mutedForeground }]}>
-                  Purchased units are listed above. Use a receipt only for a purchase not listed there.
+                  Use your receipt to look up a purchase that is missing from My Filters.
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
@@ -378,6 +382,10 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
           )}
         </View>
       </View>
+      {activation && <TouchableOpacity accessibilityRole="button" onPress={openRegisterModal}
+        style={{ minHeight: 44, justifyContent: 'center' }}>
+        <Text style={{ color: colors.primary }}>Can't find your filter?</Text>
+      </TouchableOpacity>}
 
       {/* ── Registration / Replace Modal ─────────────────────────────────── */}
       <RegisterModal
@@ -392,11 +400,13 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
           onActivationChange(a);
           onRegistrationCommitted?.();
           setShowRegisterModal(false);
-          setToastMessage(`${a.productName} registered successfully. Your reminders are ready.`);
+          setToastMessage(activation
+            ? 'Filter registration saved. Your current tracker and reminders are unchanged.'
+            : `${a.productName} registered successfully. Your reminders are ready.`);
           setToastVisible(true);
           // Invite signed-in users to enable message reminder channels.
           // Only show the prompt once per registration (keyed by productId+activatedAt).
-          if (token && user) {
+          if (!activation && token && user) {
             const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt, user.id);
             if (!alreadySeen) {
               setReminderOptIn({ productId: a.productId, activatedAt: a.activatedAt });
@@ -633,7 +643,10 @@ export function RegisterModal({
         () => api.registerOfflinePurchase(offlineSelection.saleId, offlineSelection.unitId, installationDate),
         async committed => {
           if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
-           if (existingActivation && existingActivation.registeredFilterId !== committed.registration.id) return existingActivation;
+          const retained = existingActivation ?? await getFilterActivation(userId);
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          // Restore/registration cannot reset an existing cycle, even for the same unit.
+          if (retained) return retained;
           const r = committed.registration;
           const status = await getNotificationPermissionStatus();
           if (status !== 'granted') await requestNotificationPermission();
@@ -699,14 +712,16 @@ export function RegisterModal({
               </Text>
               <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
                 {offlineSelection.registeredInstallationDate
-                  ? 'Restore reminders using the original registration. The installation date and filter history will not be changed.'
+                  ? existingActivation
+                    ? 'This registration is already saved. Your current tracked cycle and reminders will remain unchanged.'
+                    : 'Restore reminders using the original registration. The installation date and filter history will not be changed.'
                   : 'When did you install this filter? Confirm the actual installation date, not the sale date.'}
               </Text>
               <TextInput testID="offline-installation-date" value={installationDate} onChangeText={setInstallationDate}
                 placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} editable={!saving && !offlineSelection.registeredInstallationDate}
                 accessibilityLabel="Installation date YYYY-MM-DD" style={[styles.input, { color: colors.text }]} />
               {!!lookupError && <Text style={[styles.errorText, { color: '#EF4444' }]}>{lookupError}</Text>}
-              <TouchableOpacity testID="offline-register-confirm" onPress={handleOfflineSave} disabled={saving}
+              <TouchableOpacity accessibilityRole="button" testID="offline-register-confirm" onPress={handleOfflineSave} disabled={saving}
                 style={[styles.productRow, { backgroundColor: colors.primary }]}>
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>{offlineSelection.registeredInstallationDate ? 'Restore existing registration' : 'Confirm installation and register'}</Text>}
               </TouchableOpacity>
@@ -850,17 +865,17 @@ const styles = StyleSheet.create({
   lifeSummaryDivider: { width: 1, height: 20 },
   divider:         { height: 1 },
   notifNote:       { fontSize: 12, marginLeft: 4 },
-  registerRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  registerRow:     { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   // Performance badge / check button
-  perfBadge:       { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+  perfBadge:       { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
   perfBadgeText:   { flex: 1, fontSize: 12, fontWeight: '600' as const },
   perfBadgeUpdate: { fontSize: 11, fontWeight: '500' as const },
-  checkPerfBtn:    { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 7, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  checkPerfBtn:    { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 7, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
   checkPerfBtnText:{ flex: 1, fontSize: 12, fontWeight: '600' as const },
   effWarning:      { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
   effWarningText:  { flex: 1, fontSize: 11, lineHeight: 16 },
-  askAiRow:        { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingVertical: 2 },
+  askAiRow:        { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingVertical: 2 },
   askAiText:       { flex: 1, fontSize: 12, fontWeight: '500' as const },
 
   // Modal

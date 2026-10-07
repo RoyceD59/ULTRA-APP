@@ -57,6 +57,7 @@ export * from './getUcActivationPurchases200';
 export * from './getUcActivationPurchases200PurchasesItem';
 export * from './getUcActivationPurchases200PurchasesItemItemsItem';
 export * from './getUcActivationPurchases200PurchasesItemSource';
+export * from './getUcActivationPurchases200SourceErrors';
 export * from './getUcLocationRatingAggregateParams';
 export * from './getUcProductParams';
 export * from './globalImpactAdjustment';

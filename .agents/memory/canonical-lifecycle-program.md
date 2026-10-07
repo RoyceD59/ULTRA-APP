@@ -9,6 +9,12 @@ Use one server-owned canonical lifecycle model for authenticated customer identi
 
 **How to apply:** Preserve current records through additive migration, shadow reconciliation, dual writes, and progressive rollout. Never reduce known maintenance history or let one physical purchase line create duplicate verified impact.
 
+My Filters consolidates ownership and activation presentation, not lifecycle ownership. Suppress a repeated row only with exact registered-filter or source-qualified unit identity; legacy records without proof remain visible. Adding or restoring another unit must leave the current primary cycle and its maintenance/reminders unchanged.
+
+**Why:** The user explicitly separated a unified My Filters experience from multi-filter tracking, primary switching, and historical reconciliation. Matching product names, dates, order numbers or contacts is not proof of the same physical unit.
+
+**How to apply:** Preserve authoritative eligibility and an explicit installation-date confirmation. New tracker-switching or per-filter reminder behavior requires separate scope.
+
 Identity resolution may normalize, lock, and classify candidates, but it must never authorize account reuse. Password, session, or provider proof stays in the trusted route boundary, and mixed active/deleted or cross-contact candidates fail closed.
 
 **Why:** A caller-asserted proof label or a weak email/phone match can turn reconciliation into account takeover.

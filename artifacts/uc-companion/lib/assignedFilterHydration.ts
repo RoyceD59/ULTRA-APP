@@ -16,6 +16,7 @@ export function assignedPrimaryActivation(
   return {
     productId: first.productId, productName: first.productName,
     activatedAt: first.activatedAt!, lifespanDays: first.lifespanDays,
+    registeredFilterId: first.filterId ?? undefined,
     sourceOrderId: Number(first.orderReference),
     cleanCount: Math.max(savedCleanCount, first.maintenanceCount ?? 0),
     // Hydration is not registration or reminder scheduling.

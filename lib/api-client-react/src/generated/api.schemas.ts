@@ -4062,6 +4062,12 @@ ids: string;
 
 export type GetUcCheckoutDiagnostics200 = { [key: string]: unknown };
 
+/**
+ * Independent store read failure; app records remain visible without inferring mirror eligibility.
+ */
+export type GetUcActivationPurchases200SourceErrors = {
+  store?: string;
+};
 export type GetUcActivationPurchases200PurchasesItemSource = typeof GetUcActivationPurchases200PurchasesItemSource[keyof typeof GetUcActivationPurchases200PurchasesItemSource];
 
 
@@ -4091,6 +4097,8 @@ export type GetUcActivationPurchases200PurchasesItem = {
 };
 
 export type GetUcActivationPurchases200 = {
+  /** Independent store read failure; app records remain visible without inferring mirror eligibility. */
+  sourceErrors?: GetUcActivationPurchases200SourceErrors;
   purchases: GetUcActivationPurchases200PurchasesItem[];
 };
 

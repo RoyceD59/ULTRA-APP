@@ -231,3 +231,20 @@ test("live refund of a mirrored purchase removes activation offers without mutat
   assert.equal(item.availableUnitIds.length, 0); assert.match(item.unavailableReason!, /refunded/);
   assert.equal((await pool.query("SELECT user_id FROM uc_orders WHERE id=$1", [accepted])).rows[0].user_id, String(owner));
 });
+
+test("store read failures retain independent app units but never infer mirrored eligibility", async () => {
+  const independent = (await pool.query(`INSERT INTO uc_orders(user_id,status,total,currency,payment_method,checkout_state,shipping_address)
+    VALUES($1,'pending','100','KES','cod','confirmed','{}') RETURNING id`, [String(owner)])).rows[0].id;
+  await pool.query("INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,91001,'Independent filter',2,'100')", [independent]);
+  const options = await activationPurchaseOptions(owner, "fixture@example.test",
+    { lifespans: new Map([[91001, 90]]), capacities: new Map([[91001, 150]]) },
+    { enabled: true, fetch: async () => null });
+  assert.match(options.sourceErrors.store!, /unavailable/i);
+  const standalone = options.purchases.find(p => p.source === "app" && p.orderId === independent);
+  assert.ok(standalone, "owned app purchase is retained");
+  assert.equal(standalone.items[0].availableUnitIds.length, 2);
+  const mirror = options.purchases.find(p => p.source === "app" && p.orderId === accepted)!;
+  assert.ok(mirror.items.every(i => i.availableUnitIds.length === 0));
+  assert.ok(mirror.items.every(i => /Store confirmation unavailable/.test(i.unavailableReason ?? '')));
+  assert.equal(options.purchases.filter(p => p.source === "store").length, 0);
+});

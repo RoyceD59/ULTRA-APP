@@ -13,12 +13,15 @@ const authUrl = url(`
 `);
 const notificationsUrl = url(`
   let sync, read;
+  let saved;
+  export const scheduled = [];
+  export function configureRegistration(value) { saved = value; scheduled.length = 0; }
   export function configure(syncFn, readFn) { sync = syncFn; read = readFn; }
   export function syncActivationWithCatalogue(products, id) { return sync(products, id); }
   export function getZeroLifespanNotice(id) { return read(id); }
   export function effectiveLifespanDays(a) { return a.lifespanDays; }
-  export function scheduleAllFilterNotifications() {}
-  export async function getFilterActivation() { return null; }
+  export async function scheduleAllFilterNotifications(a) { scheduled.push(a); return a; }
+  export async function getFilterActivation() { return saved ?? null; }
   export function clearFilterActivation() {}
   export function getNotificationPermissionStatus() {}
   export function requestNotificationPermission() {}
@@ -28,6 +31,16 @@ const catalogueUrl = url(`
   export function useFilterProducts() { return { products, source: 'live', loading: false }; }
 `);
 const emptyComponent = url('export default function Component() { return null; }');
+const apiUrl = url(`
+  let register;
+  export const calls = [];
+  export function configureRegister(fn) { register = fn; calls.length = 0; }
+  export function useApi() { return {
+    registerFilterPurchase(...args) { calls.push(['online', ...args]); return register(); },
+    registerOfflinePurchase(...args) { calls.push(['offline', ...args]); return register(); }
+  }; }
+  export class ApiError extends Error {}
+`);
 const mocks: Record<string, string> = {
   '@/context/AuthContext': authUrl,
   '@/hooks/useNotifications': notificationsUrl,
@@ -35,16 +48,15 @@ const mocks: Record<string, string> = {
   '@/hooks/useColors': url(`export function useColors() { return { text: '#000', primary: '#0054A6' }; }`),
   'expo-haptics': url('export const ImpactFeedbackStyle = {}; export function impactAsync() {}'),
   'expo-router': url('export function useRouter() { return {}; } export function useFocusEffect() {}'),
-  '@tanstack/react-query': url('export function useQueryClient() {}'),
+  '@tanstack/react-query': url('export function useQueryClient() { return { async invalidateQueries() {} }; }'),
   '@/components/KeyboardAwareScrollViewCompat': url('export function KeyboardAwareScrollViewCompat() {}'),
-  '@/lib/filterRegistrationCommit': url('export function commitPurchaseBackedRegistration() {}'),
-  '@/hooks/useApi': url('export function useApi() {} export class ApiError extends Error {}'),
+  '@/hooks/useApi': apiUrl,
   '@/components/FilterLifeGauge': emptyComponent,
   '@/lib/filterRemainingLife': url(`
     export function resolveCapacityCycle() { return null; }
     export function calculateRemainingLife() { return { remainingDays: 60, percent: 66, status: 'green' }; }
   `),
-  '@/lib/customerQueryKeys': url('export const customerQueryKeys = {};'),
+  '@/lib/customerQueryKeys': url('export const customerQueryKeys = { rewards: id => ["rewards", id] };'),
   '@/components/ReminderOptInSheet': url('export default function Component() {} export function wasReminderOptInSeen() {}'),
   '@/components/PerformanceCheckInModal': emptyComponent,
   '@/components/SyncToast': emptyComponent,
@@ -52,13 +64,16 @@ const mocks: Record<string, string> = {
 };
 const auth = await import(authUrl);
 const notifications = await import(notificationsUrl);
+const registrationApi = await import(apiUrl);
 const loader = registerHooks({
   resolve(specifier, context, nextResolve) {
     if (mocks[specifier]) return { url: mocks[specifier], shortCircuit: true };
     return nextResolve(specifier, context);
   },
 });
-const FilterTrackerSection = require('../FilterTrackerSection.tsx').default;
+const trackerModule = require('../FilterTrackerSection.tsx');
+const FilterTrackerSection = trackerModule.default;
+const RegisterModal = trackerModule.RegisterModal;
 loader.deregister();
 
 function deferred<T>() {
@@ -97,6 +112,78 @@ async function settle() {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 }
 
+describe('source-specific registrations preserve the primary cycle', () => {
+  const primary = { productId: 1, productName: 'Current', activatedAt: '2026-01-01T00:00:00Z', lifespanDays: 90,
+    registeredFilterId: 7, cleanCount: 4, lastCleanedAt: '2026-03-02', notifIds: ['keep'], perfCheckedAt: '2026-03-01' };
+  const online = { source: 'app', orderId: 12, phone: '+254712345678', unitId: 'app:12:3:2',
+    productId: 1, name: 'Another filter', lifespanDays: 90 };
+  const offline = { saleId: 3, saleDate: '2026-01-01', unitId: 'unit-b',
+    item: { productId: 1, name: 'Offline filter', lifespanDays: 90, capacityLitres: 150 } };
+  function all(tree: any): any[] {
+    if (!tree || typeof tree !== 'object') return [];
+    return [tree, ...[tree.props?.children].flat(Infinity).flatMap(all)];
+  }
+  function modal(selection: any, saved: any[] = []) {
+    const props = { visible: true, userId: 41, filterProducts: [],
+      existingActivation: primary, productsLoading: false, ...selection,
+      onSave: (a: any) => saved.push(a), onClose() {} };
+    const root = __testRender(() => ({ props: { value: RegisterModal(props) } }), {});
+    roots.push(root); root.flush(); return root;
+  }
+  function date(root: any) {
+    return all(root.value).find(n => n.props?.accessibilityLabel === 'Installation date YYYY-MM-DD');
+  }
+  function confirm(root: any) {
+    return all(root.value).find(n => n.props?.testID === 'offline-register-confirm'
+      || n.props?.accessibilityRole === 'button' && n.props?.onPress?.name === 'handleSelectedPurchaseSave');
+  }
+  it('online and linked offline commits retain installation, cleaning and reminder identities', async () => {
+    notifications.configureRegistration(primary);
+    for (const selection of [{ purchaseSelection: online }, { offlineSelection: offline }]) {
+      registrationApi.configureRegister(async () => ({ registration: { id: 8 }, activatedAt: '2026-04-01' }));
+      const saved: any[] = [], root = modal(selection, saved);
+      assert.equal(date(root).props.value, '', 'purchase date is not installation date');
+      date(root).props.onChangeText('2026-04-01'); root.flush();
+      await confirm(root).props.onPress(); root.flush();
+      assert.equal(saved[0], primary);
+      assert.deepEqual(saved[0].notifIds, ['keep']);
+      assert.equal(saved[0].cleanCount, 4);
+      assert.equal(notifications.scheduled.length, 0);
+      assert.equal(registrationApi.calls.length, 1);
+      root.dispose();
+    }
+  });
+  it('blank date makes no write; restore keeps original date without restarting reminders', async () => {
+    notifications.configureRegistration(primary);
+    registrationApi.configureRegister(async () => ({}));
+    const blank = modal({ offlineSelection: offline });
+    await confirm(blank).props.onPress(); blank.flush();
+    assert.equal(registrationApi.calls.length, 0);
+    blank.dispose();
+    const saved: any[] = [], restore = modal({ offlineSelection: { ...offline, registeredInstallationDate: '2026-02-03' } }, saved);
+    assert.equal(date(restore).props.value, '2026-02-03');
+    assert.equal(date(restore).props.editable, false);
+    await confirm(restore).props.onPress(); restore.flush();
+    assert.equal(registrationApi.calls[0][3], '2026-02-03');
+    assert.equal(saved[0], primary);
+    assert.equal(notifications.scheduled.length, 0);
+  });
+  it('late registration after account unmount never schedules or exposes the old activation', async () => {
+    notifications.configureRegistration(null);
+    let complete: any;
+    registrationApi.configureRegister(() => new Promise(resolve => { complete = resolve; }));
+    const saved: any[] = [], root = modal({ purchaseSelection: online, existingActivation: null }, saved);
+    date(root).props.onChangeText('2026-04-01'); root.flush();
+    const pending = confirm(root).props.onPress();
+    root.dispose();
+    complete({ registration: { id: 8, activatedAt: '2026-04-01' } });
+    await pending;
+    assert.equal(saved.length, 0);
+    assert.equal(notifications.scheduled.length, 0);
+    assert.equal(registrationApi.calls.length, 1, 'a pending write is never replayed');
+  });
+});
+
 describe('FilterTrackerSection account-scoped catalogue results', () => {
   it('account 4 can open Register Filter without a duplicate row or omitted modal', () => {
     auth.setUser(4);
@@ -109,7 +196,7 @@ describe('FilterTrackerSection account-scoped catalogue results', () => {
       if (!tree || typeof tree !== 'object') return [];
       return [tree, ...[tree.props?.children].flat(Infinity).flatMap(all)];
     }
-    const open = all(root.value).find(n => n.props?.onPress && all(n).some(c => c.props?.children === 'Find a filter receipt'));
+    const open = all(root.value).find(n => n.props?.onPress && all(n).some(c => c.props?.children === "Can't find your filter?"));
     assert.ok(open);
     open.props.onPress(); root.flush();
     assert.ok(all(root.value).some(n => n.props?.visible === true && n.props?.userId === 4));

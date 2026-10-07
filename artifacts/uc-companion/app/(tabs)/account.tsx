@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
-import PurchaseActivationSection from '@/components/PurchaseActivationSection';
+import MyFiltersSection from '@/components/MyFiltersSection';
 import { useFilterStatus } from '@/hooks/useFilterStatus';
 import CareOverviewEntry from '@/components/CareOverviewEntry';
 import * as Haptics from 'expo-haptics';
@@ -571,7 +571,11 @@ function AccountScreenContent() {
   const api         = useApi();
   const queryClient = useQueryClient();
 
-  const { editProfile } = useLocalSearchParams<{ editProfile?: string }>();
+  const { editProfile, section } = useLocalSearchParams<{ editProfile?: string; section?: string }>();
+  const accountScroll = useRef<ScrollView>(null);
+  const filtersY = useRef(0);
+  const bodyY = useRef(0);
+  const filterJumpPending = useRef(false);
 
   const [notifStatus,       setNotifStatus]       = useState<string>('undetermined');
   const [filterActivation,  setFilterActivation]  = useState<FilterActivation | null>(null);
@@ -586,6 +590,16 @@ function AccountScreenContent() {
   const [redeemVisible,      setRedeemVisible]         = useState(false);
   const [impactShareVisible, setImpactShareVisible]    = useState(false);
   const [accountFocused,     setAccountFocused]       = useState(false);
+  useEffect(() => {
+    if (section === 'my-filters' && accountFocused) {
+      filterJumpPending.current = true;
+      const timer = setTimeout(() => {
+        accountScroll.current?.scrollTo({ y: bodyY.current + filtersY.current, animated: true });
+        filterJumpPending.current = false;
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [section, accountFocused]);
   const cycleStatus = useFilterStatus();
   useEffect(() => {
     setFilterActivation(cycleStatus.activation);
@@ -798,6 +812,7 @@ function AccountScreenContent() {
   return (
     <>
       <ScrollView
+        ref={accountScroll}
         style={[styles.screen, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}>
 
@@ -844,7 +859,7 @@ function AccountScreenContent() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.body}>
+        <View style={styles.body} onLayout={event => { bodyY.current = event.nativeEvent.layout.y; }}>
           {/* Account owner details stay private until explicitly expanded. */}
           <View style={styles.section}>
             <View style={styles.sectionRow}>
@@ -1055,29 +1070,18 @@ function AccountScreenContent() {
             </View>
           </View> : null}
 
-          {/* Filter tracker */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Assigned filters</Text>
-            {assignmentsQuery.isLoading && !assignmentsQuery.data ? <PageDataLoader label="Loading assigned filters…" /> : null}
-            {assignmentsQuery.isError ? <PageDataError title="Assigned filters unavailable" error={assignmentsQuery.error} onRetry={assignmentsQuery.refetch} /> : null}
-            {!assignmentsQuery.isLoading && !assignmentsQuery.isError && !assignmentsQuery.data?.length &&
-              <Text style={{ color: colors.mutedForeground }}>No staff-assigned filters on this account.</Text>}
-            {(assignmentsQuery.data ?? []).map(assignment => <View key={`assignment:${assignment.id}`} style={{ paddingVertical: 12 }}>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{assignment.productName}</Text>
-              <Text style={{ color: colors.mutedForeground }}>Installed {String(assignment.activatedAt ?? assignment.installationDate).slice(0, 10)} · Order #{assignment.orderReference}</Text>
-              <Text style={{ color: colors.mutedForeground }}>
-                Cash: {assignment.cashCollectionState === 'collected' ? 'collected' : assignment.cashCollectionState === 'awaiting_collection' ? 'awaiting collection' : 'collection not recorded'}
-                {' · '}{assignment.maintenanceCount ?? 0} cleanings{assignment.active === false ? ' · inactive' : ''}
-              </Text>
-            </View>)}
-          </View>
-          <PurchaseActivationSection key={`activation-purchases:${user.id}`} activation={filterActivationOwner === user.id ? filterActivation : null}
+          <View onLayout={event => {
+            filtersY.current = event.nativeEvent.layout.y;
+            if (filterJumpPending.current) accountScroll.current?.scrollTo({ y: bodyY.current + filtersY.current, animated: true });
+          }}>
+          <MyFiltersSection key={`my-filters:${user.id}`} activation={filterActivationOwner === user.id ? filterActivation : null}
             onRegistered={a => {
               setFilterActivation(a); setFilterActivationOwner(user.id); refreshNotifStatus();
               void queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) });
               void queryClient.invalidateQueries({ queryKey: ['filter-cycle', user.id] });
-            }} />
+            }}>
           <FilterTrackerSection
+            unified
             key={`water-tests:${user.id}`}
             activation={filterActivationOwner === user.id ? filterActivation : null}
             impact={rewards?.impact}
@@ -1090,8 +1094,15 @@ function AccountScreenContent() {
               refreshNotifStatus();
               void queryClient.invalidateQueries({ queryKey: ['filter-cycle', user.id] });
             }}
-            onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
+            onRegistrationCommitted={() => {
+              for (const key of [
+                customerQueryKeys.rewards(user.id), ['activation-purchases', user.id],
+                ['offline-purchases', user.id], ['customer-filter-assignments', user.id], ['filter-cycle', user.id],
+              ]) void queryClient.invalidateQueries({ queryKey: key });
+            }}
           />
+          </MyFiltersSection>
+          </View>
 
           {/* Water-test history is intentionally inline so a signed-in
               customer can see every request without starting a new request. */}

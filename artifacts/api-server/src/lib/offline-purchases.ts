@@ -62,8 +62,8 @@ export async function listOfflinePurchases(id: number, catalogue: OfflineCatalog
     for (const sale of sales) {
       if (!owned(sale, id)) continue;
       await hydrate(client, sale);
-       const registrations = (await client.query<{ offline_unit_id: string; activated_at: Date; active: boolean }>(
-         "SELECT offline_unit_id, activated_at, active FROM uc_registered_filters WHERE offline_sale_id=$1 AND user_id=$2", [sale.id, id])).rows;
+       const registrations = (await client.query<{ id: number; offline_unit_id: string; activated_at: Date; active: boolean }>(
+         "SELECT id, offline_unit_id, activated_at, active FROM uc_registered_filters WHERE offline_sale_id=$1 AND user_id=$2", [sale.id, id])).rows;
        const registered = new Set(registrations.map(r => r.offline_unit_id));
       purchases.push({
         source: "offline" as const, saleId: sale.id, saleDate: sale.sale_date, label: "Offline Sale",
@@ -72,7 +72,7 @@ export async function listOfflinePurchases(id: number, catalogue: OfflineCatalog
           ...metadata(p, catalogue), availableUnitIds: p.unitIds!.slice(0, p.quantity).filter(unit => !registered.has(unit))
             .slice(0, Math.max(0, p.quantity - p.unitIds!.filter(unit => registered.has(unit)).length)),
            registeredUnits: registrations.filter(r => p.unitIds!.includes(r.offline_unit_id)).map(r => ({
-             unitId: r.offline_unit_id, installationDate: new Date(r.activated_at).toISOString().slice(0, 10), active: r.active,
+             registeredFilterId: r.id, unitId: r.offline_unit_id, installationDate: new Date(r.activated_at).toISOString().slice(0, 10), active: r.active,
            })),
         })),
       });

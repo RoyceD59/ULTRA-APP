@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GetUcActivationPurchases200PurchasesItem } from './getUcActivationPurchases200PurchasesItem';
+import type { GetUcActivationPurchases200SourceErrors } from './getUcActivationPurchases200SourceErrors';
 
 export type GetUcActivationPurchases200 = {
+  /** Independent store read failure; app records remain visible without inferring mirror eligibility. */
+  sourceErrors?: GetUcActivationPurchases200SourceErrors;
   purchases: GetUcActivationPurchases200PurchasesItem[];
 };

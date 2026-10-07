@@ -1,5 +1,37 @@
 # Development change log
 
+
+## 2026-10-07 — Unified My Filters (development only)
+
+- Replaced Account's separate assignment, purchase-activation and nested
+  offline surfaces with one My Filters block: current tracker, all ready units,
+  collapsed registered/assigned details and purchase history. Receipt lookup
+  remains a secondary recovery action.
+- Home keeps its existing health card and offers every eligible app/store
+  and linked offline unit even while another filter is active. View all filters
+  targets the Account block.
+- Display identities use exact registered IDs/source units, never names,
+  dates, contacts or raw order numbers. Offline reads expose registration IDs;
+  legacy records without proof remain honest. Independent app records survive
+  store outages without granting unconfirmed mirrored eligibility.
+- Added account-scoped reads/cancellation, focus/poll/manual refresh and
+  registration invalidation. Additional activation and restore preserve the
+  primary installation, cleaning/check-in history and reminder identities.
+  Installation date stays an explicit customer confirmation.
+- Focused client checks, 42 isolated API checks and library/API/Companion type
+  checks passed. Web, Android and iOS exports were prepared in a temporary
+  directory; browser evidence and remaining device limits are recorded in
+  `docs/my-filters-verification.md`.
+- The 24 focused client checks and a browser-only signed-in fixture pass
+  confirmed phone/tablet/desktop layout, keyboard disclosure, every unit's
+  explicit date selection, primary preservation, source recovery, Account
+  navigation/scrolling and no registration replay. The configured login
+  returned 400; fixture responses are not live ownership/payment evidence.
+  Physical-phone and deployed verification remain unavailable.
+- Ignore-rule record: no `.gitignore` or ignore policy changes. No publication,
+  release archive/serving manifest activation, hosting changes, rollout flags,
+  ownership reconciliation, payments, rewards or impact changes.
+
 ## 2026-10-07 — prepared record-backed public product pages
 
 - Imported the supplied v2.4 product records and schema, with a public allowlist,

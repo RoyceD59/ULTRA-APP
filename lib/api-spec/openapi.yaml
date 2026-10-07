@@ -156,6 +156,11 @@ paths:
                 type: object
                 required: [purchases]
                 properties:
+                  sourceErrors:
+                    type: object
+                    description: Independent store read failure; app records remain visible without inferring mirror eligibility.
+                    properties:
+                      store: { type: string }
                   purchases:
                     type: array
                     items:
