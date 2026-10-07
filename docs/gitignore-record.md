@@ -19,6 +19,20 @@ unchanged. The complete authoritative list is `.gitignore`.
 
 ## Rules for future changes
 
+### Publishing input exclusions — 2026-10-07
+
+`.replitignore` additionally excludes `.cache/`. Whole-stage and recursive
+node_modules exclusions are removed: frozen stages hold runtime server/worker
+outputs, and bundled public asset paths can contain node_modules. Their retained
+source archives and rollback inputs under `infra/` remain included. `.gitignore`
+itself is unchanged.
+
+Ignore rules alone do not reliably clean dependencies regenerated during the
+publishing build. A deployment-only post-build hook removes installed
+dependencies at the roots of marked frozen stages and their workspace packages,
+then retains the existing pnpm store prune. It does not remove stage servers,
+compiled worker output, static asset directories or rollback dependencies.
+
 ### Approved consistency rollback inputs
 
 Scoped exceptions retain `infra/cloudflare/forest/rollback-static/**/node_modules/`

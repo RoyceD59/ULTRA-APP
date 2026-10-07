@@ -1,5 +1,36 @@
 # Development change log
 
+## 2026-10-07 — Publishing image-size failure
+
+- **Cause:** The failed publishing build compiled the approved API candidate,
+  predecessor Hub and browser/iOS/Android Companion bundles successfully, then
+  failed while creating the deployment image: layers exceeded the 8 GiB limit.
+  Metro's optional debugger and Vite source-map/chunk warnings were not the
+  fatal error.
+- **Change:** Replace the store-prune-only deployment post-build hook through
+  schema-validated `.replit` replacement. First remove installed dependency
+  trees from marked frozen stages and their workspace packages, then run the
+  unchanged pnpm store prune. Refuse invalid stage markers and symlinked
+  parent/workspace directories before removal.
+- **Preserved:** Root/workspace runtime dependencies, all three source archive
+  identities, stage compiled worker output, stage/core-Node servers, browser and
+  native static builds, preparation markers and retained rollback assets. No
+  recursive node_modules-name sweep: public asset paths may use that name.
+- **Ignore record:** Exclude local tooling caches, not frozen runtime stages or
+  static asset node_modules paths. Stage dependencies are removed by the hook.
+  No `.gitignore`, application source, API/client artifact build
+  selection, schema or account/payment data changes.
+- **Verification:** Deployment cleanup fixtures and the existing 21 package/
+  consistency checks; frozen Companion runtime HTTP smoke check after cleanup;
+  frozen compiled logging-worker smoke check using retained root dependencies.
+  API/Hub preview workflows restarted; API health screenshot returned status ok.
+  Final counts and reproduction limits are recorded in publishing failure
+  evidence. No new full browser/sign-in/device test pass is claimed.
+- **Status:** Packaging correction only; not republished. Actual image-layer
+  size and successful promotion still require a publishing retry. This does not
+  incorporate recently merged application fixes into the frozen archive or
+  authorize candidate clients before the compatible API/snapshot gate.
+
 Track development progress here in Git. Record changes, verification, remaining
 work and publication status. Never include secrets or customer identifiers.
 Git history records exact file changes; entries here explain their purpose.

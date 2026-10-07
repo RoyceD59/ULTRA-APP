@@ -4,6 +4,10 @@
 # No need to store the pnpm store twice.
 .local
 
-# Only built Companion static files and its core-Node server are needed at runtime.
-# API external packages continue to use the normal root node_modules.
-.hydrate-release/**/node_modules
+# Local tooling caches are not runtime inputs.
+.cache/
+
+# Do not exclude whole frozen stages or recursively match node_modules here:
+# stages contain runtime servers/worker outputs, and public assets can use
+# node_modules in their URL paths. The deployment post-build hook removes only
+# installed staging dependencies, including copies generated during compilation.

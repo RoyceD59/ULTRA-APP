@@ -5,7 +5,7 @@ router = "application"
 deploymentTarget = "autoscale"
 
 [deployment.postBuild]
-args = ["pnpm", "store", "prune"]
+args = ["node", "scripts/prepare-deployment-image.mjs", "--post-build"]
 env = { "CI" = "true" }
 
 [workflows]
