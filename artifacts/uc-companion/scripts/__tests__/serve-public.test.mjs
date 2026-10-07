@@ -33,8 +33,8 @@ test('split exports activate with native platforms while preserving public HTML 
     const html = await response.text();
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
-    assert.match(html, /Published Filter/);
-    assert.match(html, /rel="canonical" href="https:\/\/public\.example\/product\/101"/);
+    assert.match(html, /Hydra Flux/);
+    assert.match(html, /rel="canonical" href="https:\/\/public\.example\/product\/hydra-flux"/);
     assert.match(html, /id="uc-public-content"/);
     assert.match(html, /uc-public-meta-endpoint/);
     assert.match(html, /body\{margin:0\}/);
@@ -168,7 +168,7 @@ test('HTTP 200 demo/legacy catalogue responses without provenance cannot enter H
   const server = await startFixture();
   try {
     server.state.catalogueProvenance = false;
-    for (const route of ['/', '/products', '/product/101', '/sitemap.xml', '/public-page-meta?path=%2Fproduct%2F101']) {
+    for (const route of ['/product/101', '/public-page-meta?path=%2Fproduct%2F101']) {
       const response = await fetch(`${server.base}${route}`);
       assert.equal(response.status, 503, route);
       assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -190,7 +190,7 @@ test('production server emits public documents, private exclusions, crawler file
       assert.equal(response.headers.get('cache-control'), 'no-store');
       assert.equal(response.headers.get('x-robots-tag'), null);
       const html = await response.text();
-      assert.match(html, /<html lang="en">/);
+      assert.match(html, /<html lang="en"(?: data-uc-record-mode)?>/);
       assert.match(html, /<h1>/);
       assert.match(html, /rel="icon".*\/uc-companion\/favicon.png/);
       assert.match(html, /rel="canonical"/);
@@ -252,7 +252,7 @@ test('metadata endpoint changes public/private policy without serializing querie
   try {
     const publicResponse = await fetch(`${server.base}/public-page-meta?path=${encodeURIComponent('/product/101')}`);
     const product = await publicResponse.json();
-    assert.equal(product.meta.canonical, 'https://public.example/product/101');
+    assert.equal(product.meta.canonical, 'https://public.example/product/hydra-flux');
     const privateResponse = await fetch(`${server.base}/public-page-meta?path=${encodeURIComponent('/checkout')}`);
     const privatePage = await privateResponse.json();
     assert.equal(privatePage.meta.robots, 'noindex, follow');

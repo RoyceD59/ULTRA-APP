@@ -2390,6 +2390,28 @@ export interface WhatsAppSendResult {
   to?: string;
 }
 
+export type UcProductOperationImagesItem = {
+  src: string;
+  alt: string;
+};
+
+export type UcProductOperationUploadedPhotosItem = {
+  slot: number;
+  src: string;
+  alt: string;
+};
+
+export interface UcProductOperation {
+  id: number;
+  sku: string;
+  stockStatus?: string;
+  price?: string;
+  salePrice?: string;
+  regularPrice?: string;
+  images: UcProductOperationImagesItem[];
+  uploadedPhotos: UcProductOperationUploadedPhotosItem[];
+}
+
 export interface InventoryProduct {
   id: number;
   name: string;
@@ -4323,6 +4345,13 @@ export type ListUcProductsParams = {
 publicationSafe?: boolean;
 category?: string;
 search?: string;
+};
+
+export type GetUcProductParams = {
+/**
+ * Require a fresh published WooCommerce operational read; never return demo content.
+ */
+publicationSafe?: boolean;
 };
 
 export type ListUcCustomersParams = {

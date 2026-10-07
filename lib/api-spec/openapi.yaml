@@ -1176,14 +1176,22 @@ paths:
           in: path
           required: true
           schema: { type: integer, minimum: 1 }
+        - name: publicationSafe
+          in: query
+          description: Require a fresh published WooCommerce operational read; never return demo content.
+          schema: { type: boolean }
       responses:
         "200":
           description: Customer-facing product
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/UcProduct" }
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/UcProduct" }
+                  - { $ref: "#/components/schemas/UcProductOperation" }
         "404": { description: Product not found }
         "500": { description: Failed to fetch product }
+        "503": { description: Live product could not be verified }
 
   /uc/admin/products/{id}:
     patch:
@@ -5895,6 +5903,34 @@ components:
         to: { type: string }
 
     # ─── UC Admin Schemas ─────────────────────────────────────────
+    UcProductOperation:
+      type: object
+      required: [id, sku, images, uploadedPhotos]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        stockStatus: { type: string }
+        price: { type: string }
+        salePrice: { type: string }
+        regularPrice: { type: string }
+        images:
+          type: array
+          items:
+            type: object
+            required: [src, alt]
+            properties:
+              src: { type: string }
+              alt: { type: string }
+        uploadedPhotos:
+          type: array
+          items:
+            type: object
+            required: [slot, src, alt]
+            properties:
+              slot: { type: integer }
+              src: { type: string }
+              alt: { type: string }
+
     InventoryProduct:
       type: object
       required: [id, name, sku, stockQuantity, stockStatus, syncedAt]

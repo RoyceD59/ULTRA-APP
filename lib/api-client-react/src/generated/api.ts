@@ -105,6 +105,7 @@ import type {
   GetUcCheckoutDiagnostics200,
   GetUcCheckoutDiagnosticsParams,
   GetUcLocationRatingAggregateParams,
+  GetUcProductParams,
   GlobalImpactAdjustmentInput,
   GlobalImpactAdjustmentResult,
   GlobalImpactSnapshot,
@@ -243,6 +244,7 @@ import type {
   UcProduct,
   UcProductMedia,
   UcProductMediaInput,
+  UcProductOperation,
   UcProductUpdate,
   UcProductUpdateResult,
   UcReferralSnapshot,
@@ -4068,20 +4070,29 @@ export function useListUcProducts<TData = Awaited<ReturnType<typeof listUcProduc
 
 
 
-export const getGetUcProductUrl = (id: number,) => {
+export const getGetUcProductUrl = (id: number,
+    params?: GetUcProductParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/uc/products/${id}`
+  return stringifiedParams.length > 0 ? `/api/uc/products/${id}?${stringifiedParams}` : `/api/uc/products/${id}`
 }
 
 /**
  * @summary Read one customer-facing product
  */
-export const getUcProduct = async (id: number, options?: RequestInit): Promise<UcProduct> => {
+export const getUcProduct = async (id: number,
+    params?: GetUcProductParams, options?: RequestInit): Promise<UcProduct | UcProductOperation> => {
 
-  return customFetch<UcProduct>(getGetUcProductUrl(id),
+  return customFetch<UcProduct | UcProductOperation>(getGetUcProductUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -4094,23 +4105,25 @@ export const getUcProduct = async (id: number, options?: RequestInit): Promise<U
 
 
 
-export const getGetUcProductQueryKey = (id: number,) => {
+export const getGetUcProductQueryKey = (id: number,
+    params?: GetUcProductParams,) => {
     return [
-    `/api/uc/products/${id}`
+    `/api/uc/products/${id}`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetUcProductQueryOptions = <TData = Awaited<ReturnType<typeof getUcProduct>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetUcProductQueryOptions = <TData = Awaited<ReturnType<typeof getUcProduct>>, TError = ErrorType<void>>(id: number,
+    params?: GetUcProductParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetUcProductQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetUcProductQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcProduct>>> = ({ signal }) => getUcProduct(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUcProduct>>> = ({ signal }) => getUcProduct(id,params, { signal, ...requestOptions });
 
 
 
@@ -4128,11 +4141,12 @@ export type GetUcProductQueryError = ErrorType<void>
  */
 
 export function useGetUcProduct<TData = Awaited<ReturnType<typeof getUcProduct>>, TError = ErrorType<void>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ id: number,
+    params?: GetUcProductParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUcProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetUcProductQueryOptions(id,options)
+  const queryOptions = getGetUcProductQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -1,7 +1,8 @@
 const pages = require('../data/public-pages.json');
 const { PublicDataError } = require('./public-content.cjs');
 const { articleInlineLinks } = require('@workspace/api-zod/blog-inline-links-core');
-const { identity, breadcrumbs, productModel, articleModel, guideModel, itemList } = require('./public-schema.cjs');
+const { identity, breadcrumbs, recordProductModel, articleModel, guideModel, itemList } = require('./public-schema.cjs');
+const { resolveIdentity, recordOperation } = require('./record-operations.cjs');
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -12,14 +13,18 @@ const jsonScript = value => JSON.stringify(value).replace(/</g, '\\u003c')
 const text = value => String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value);
 
-function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
+function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = require('./product-records.cjs').records }) {
   // No Host-header-derived canonicals; explicit owner-approved origin only.
   const origin = new URL(canonicalOrigin);
   if (origin.protocol !== 'https:' || origin.username || origin.password
       || origin.pathname !== '/' || origin.search || origin.hash) {
     throw new Error('Canonical origin must be an explicit HTTPS origin');
   }
-  const absolute = route => new URL(route, origin).href;
+  const absolute = route => {
+    const url = new URL(route, origin);
+    url.search = '';
+    return url.href;
+  };
   const local = route => `${basePath}${route}`;
   const link = (route, label) => `<a href="${escapeHtml(local(route))}">${escapeHtml(label)}</a>`;
   const nav = `<nav aria-label="Public pages">${Object.entries(pages)
@@ -59,18 +64,21 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
 
   async function render(route) {
     try {
+      route = new URL(route, origin).pathname.replace(/\/$/, '') || '/';
       let page = pages[route];
       let body = page ? paragraph(page.description) : '';
       let meta;
       let schemas = [];
+      let publicRecord = null;
+      let documentKind = null;
+      let canonicalRoute = route;
       const crumbs = [{ name: 'Home', path: '/' }];
       if (route === '/' || route === '/products') {
-        const products = await data.products();
+        const products = records.products;
         const entries = [];
         body += `<h2>Products</h2><ul>${products.map(product => {
-          if (!Number.isSafeInteger(Number(product.id)) || Number(product.id) <= 0 || !product.name) throw new PublicDataError();
-          entries.push({ name: product.name, path: `/product/${product.id}` });
-          return `<li>${link(`/product/${product.id}`, product.name)}${paragraph(text(product.shortDescription))}</li>`;
+          entries.push({ name: product.seo.h1, path: `/product/${product.slug}` });
+          return `<li>${link(`/product/${product.slug}`, product.seo.h1)}${paragraph(product.opening.intro)}</li>`;
         }).join('')}</ul>`;
         schemas.push(itemList(entries, origin.href));
       } else if (route === '/blog') {
@@ -92,25 +100,51 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
       } else if (route === '/map') {
         body += (await data.locations()).map(location =>
           `<section><h2>${escapeHtml(location.name)}</h2>${paragraph(location.address)}${paragraph(location.hours)}${paragraph(location.accessNotes)}</section>`).join('');
-      } else if (/^\/product\/[1-9]\d*$/.test(route)) {
-        // Catalogue membership is the publication boundary. The detail endpoint
-        // can return legacy/mock/draft records, so it is not an indexing source.
-        const product = (await data.products()).find(item => String(item.id) === route.split('/')[2]);
+      } else if (/^\/product\/[^/]+$/.test(route)) {
+        const key = route.split('/')[2];
+        let product = records.products.find(p => p.slug === key);
+        let inventory = null;
+        if (/^[1-9]\d*$/.test(key)) {
+          inventory = await data.products();
+          const matches = records.identities.filter(i => resolveIdentity(i, inventory).id === Number(key));
+          if (matches.length !== 1) return errorPage(404);
+          product = records.products.find(p => p.code === matches[0].code);
+        }
         if (!product) return errorPage(404);
-        if (!product.name) throw new PublicDataError();
-        const model = productModel(product, route, data.mediaOrigin || origin.href, origin.href);
-        page = { title: text(product.name), description: text(product.shortDescription || product.description) || text(product.name) };
-        const photos = model.images;
-        body = paragraph(page.description) + photos.map(photo => image(photo.src, photo.alt || product.name)).join('')
-          + `<h2>Product details</h2>${paragraph(model.description)}`
-          + (model.sku ? paragraph(`SKU: ${model.sku}`) : '')
-          + (model.enquiryOnly ? paragraph('Pricing on request') : model.price !== null ? paragraph(`KES ${model.price}`) : '')
-          + (!model.enquiryOnly && model.availability ? paragraph(model.availability === 'InStock' ? 'In Stock' : 'Out of Stock') : '');
-        body += link(`/enquiry?productId=${encodeURIComponent(product.id)}`, 'Enquire about this product');
-        meta = metadata(route, page.title, page.description, 'product',
-          safeUrl(photos[0]?.src) || absolute('/favicon.png'));
-        schemas = [model.schema];
+        canonicalRoute = `/product/${product.slug}`;
+        documentKind = 'product';
+        const operation = await recordOperation(product, records.identities.find(i => i.code === product.code), data, inventory);
+        publicRecord = { ...product, ...operation };
+        const model = recordProductModel(product, operation, canonicalRoute, origin.href);
+        page = { title: product.seo.h1, description: product.seo.description };
+        const slots = ['Product', 'In use', 'Parts', 'Included', 'Colours', 'Size'];
+        body = (product.seo.subline ? `<p class="uc-subline">${escapeHtml(product.seo.subline)}</p>` : '')
+          + `<p class="uc-price">${product.price !== null ? `KES ${product.price.toLocaleString('en-KE')}` : 'Pricing on request'}</p>`
+          + paragraph(product.opening.outcome) + paragraph(product.opening.intro) + paragraph(product.opening.suits)
+          + `<p class="uc-warning">${escapeHtml(product.opening.warning)}</p>`
+          + paragraph(product.opening.delivery)
+          + paragraph(operation.availability ? { InStock: 'In stock', OutOfStock: 'Out of stock', BackOrder: 'Available on back-order' }[operation.availability] : 'Live stock unavailable — please enquire before ordering.')
+          + `<div class="uc-gallery">${operation.images.map(photo => `<figure data-slot="${photo.slot}">${image(photo.src, photo.alt)}<figcaption>${escapeHtml(slots[photo.slot - 1])}</figcaption></figure>`).join('')}</div>`
+          + (!operation.images.length ? paragraph('Product photo unavailable.') : '')
+          + paragraph(`SKU: ${product.parentSku}`)
+          + (product.claims.length ? `<section><h2>Product evidence</h2>${product.claims.map(c => paragraph(c.text)
+            + paragraph(c.conditions) + c.reports.map(e => paragraph(`Tested by ${e.lab} (${e.report})`)).join('')).join('')}</section>` : '')
+          + (product.faq.length ? `<section><h2>Frequently asked questions</h2>${product.faq.map(f => `<details><summary>${escapeHtml(f.q)}</summary>${paragraph(f.a)}</details>`).join('')}</section>` : '')
+          + `<section><h2>Related topics</h2><ul>${product.topics.map(t => `<li>${link(`/topic/${t.slug}`, t.name)}</li>`).join('')}</ul></section>`
+          + link(operation.commerceId ? `/enquiry?productId=${operation.commerceId}` : '/enquiry', 'Enquire about this product')
+          + ' · ' + link('/cart', 'Cart');
+        meta = { ...metadata(canonicalRoute, page.title, page.description, 'product', safeUrl(operation.images[0]?.src)),
+          title: product.seo.title, description: product.seo.description };
+        schemas = [model.schema, ...(model.faq ? [model.faq] : [])];
         crumbs.push({ name: 'Products', path: '/products' });
+      } else if (/^\/topic\/[^/]+$/.test(route)) {
+        const topic = records.topics.find(t => t.slug === route.split('/')[2]);
+        if (!topic) return errorPage(404);
+        documentKind = 'topic';
+        page = { title: topic.name, description: '' };
+        body = `<section aria-label="Topic article"></section><nav aria-label="Related products"><h2>Related products</h2><ul>${topic.products.map(p =>
+          `<li>${link(`/product/${p.slug}`, p.name)}</li>`).join('')}</ul></nav>`;
+        meta = { ...metadata(route, page.title, '', 'website', null), robots: 'noindex, follow' };
       } else if (/^\/blog\/[^/]+$/.test(route)) {
         const slug = route.split('/')[2];
         if (!identifier(slug)) return errorPage(404);
@@ -159,7 +193,7 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
         description: meta.description, url: meta.url,
       }];
       if (route !== '/') {
-        crumbs.push({ name: page.title, path: route });
+        crumbs.push({ name: page.title, path: canonicalRoute });
         schemas.push(breadcrumbs(crumbs, origin.href));
         body = `<nav aria-label="Breadcrumb">${crumbs.map(crumb => link(crumb.path, crumb.name)).join(' / ')}</nav>` + body;
       }
@@ -168,7 +202,8 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
         const { '@context': _context, ...node } = schema;
         return node;
       })] }];
-      return { status: 200, meta, body: `<header><a href="https://ucfilters.com/">Ultra Clear</a></header><h1>${escapeHtml(page.title)}</h1>${body}${nav}`, schemas };
+      return { status: 200, meta, body: `<header><a href="https://ucfilters.com/">Ultra Clear</a></header><h1>${escapeHtml(page.title)}</h1>${body}${nav}`, schemas,
+        documentKind, publicRecord };
     } catch (error) {
       if (!(error instanceof PublicDataError)) console.error('Public rendering failed:', error.message);
       return errorPage(error instanceof PublicDataError ? error.status : 503);
@@ -176,11 +211,10 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data }) {
   }
 
   async function sitemap() {
-    const [products, articles, guides] = await Promise.all([data.products(), data.articles(), data.guides()]);
+    const [articles, guides] = await Promise.all([data.articles(), data.guides()]);
     const routes = Object.keys(pages);
-    for (const product of products) {
-      if (!Number.isSafeInteger(Number(product.id)) || Number(product.id) <= 0) throw new PublicDataError();
-      routes.push(`/product/${product.id}`);
+    for (const product of records.products) {
+      routes.push(`/product/${product.slug}`);
     }
     for (const article of articles) {
       if (!identifier(article.slug)) throw new PublicDataError();

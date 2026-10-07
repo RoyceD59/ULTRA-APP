@@ -95,7 +95,7 @@ test('JSON-LD survives script terminators, HTML entities, quotes and Unicode sep
 
 test('public HTML renders schema and the same visible data with matching real breadcrumbs', async () => {
   for (const [path, payload, type] of [
-    ['/product/123', product, 'Product'],
+    ['/product/hydra-flux', { ...product, id: 123, sku: 'UC-BOG-SSB-008' }, 'Product'],
     ['/blog/clean-water', { article }, 'BlogPosting'],
     ['/guide/installation', { guide }, 'HowTo'],
   ]) {
@@ -112,7 +112,7 @@ test('public HTML renders schema and the same visible data with matching real br
     }
     assert.match(page.body, /href="\/uc-companion\//);
     assert.doesNotMatch(page.head + page.body, /PRIVATE|<script>alert/);
-    if (type === 'Product') assert.match(page.body, /KES 1200|A &amp; B/);
+    if (type === 'Product') assert.match(page.body, /KES 4,199/);
     if (type === 'BlogPosting') assert.ok(page.body.includes(article.body));
     if (type === 'HowTo') assert.match(page.body, /Turn off water|<video controls/);
   }
@@ -141,7 +141,7 @@ test('shared identity IDs remain stable across public pages; private pages never
 });
 
 test('unverified/demo products and unpublished/API failures fail closed', async () => {
-  for (const path of ['/product/123', '/products']) {
+  for (const path of ['/product/123']) {
     assert.equal((await publicPage(path, { fetchImpl: async () => Response.json(product) })).status, 503);
   }
   assert.equal((await publicPage('/guide/draft', { fetchImpl: async () => new Response('', { status: 404 }) })).status, 404);

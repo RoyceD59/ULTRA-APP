@@ -9,7 +9,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useColors } from '@/hooks/useColors';
-import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia } from '@/hooks/useApi';
+import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia, type UCProduct } from '@/hooks/useApi';
+import { getUcProduct } from '@workspace/api-client-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { visibleStoreCategory } from '@/lib/storeCategories';
@@ -24,6 +25,7 @@ import { trackEvent } from '@/lib/analytics';
 import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
 import { headingProps } from '@/lib/accessibility';
+import PublicRecordDocument, { hasPublicRecordDelivery, type PublicRecord } from '@/components/PublicRecordDocument';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -39,6 +41,15 @@ type Slide =
   | { kind: 'video'; src: string };
 
 export default function ProductDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  if (hasPublicRecordDelivery()) {
+    return <PublicRecordDocument route={`/product/${id}`} controls={record =>
+      record.commerceId && record.availability ? <ProductCommerceScreen key={record.commerceId} publicRecord={record} /> : null} />;
+  }
+  return <ProductCommerceScreen />;
+}
+
+function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }) {
   const { id, category: returnCategory } = useLocalSearchParams<{ id: string; category?: string }>();
   const colors = useColors();
   const router = useRouter();
@@ -53,7 +64,7 @@ export default function ProductDetailScreen() {
     else router.replace('/(tabs)/products');
   };
 
-  const pid = parseInt(id ?? '');
+  const pid = publicRecord?.commerceId ?? parseInt(id ?? '');
   const queryClient = useQueryClient();
   const [slideIndex, setSlideIndex] = useState(0);
   const viewedProducts = useRef(new Set<number>());
@@ -84,9 +95,19 @@ export default function ProductDetailScreen() {
   }, [slideIndex, galleryContainerWidth]);
 
   const { data: product, isLoading, isError, error: productError, refetch: retryProduct } = useQuery({
-    queryKey: ['product', id],
-    queryFn: () => api.getProduct(pid),
-    enabled: !!id,
+    queryKey: publicRecord ? ['public-product-operation', pid] : ['product', String(pid)],
+    queryFn: async () => {
+      if (!publicRecord) return api.getProduct(pid);
+      const operation = await getUcProduct(pid, { publicationSafe: true });
+      // Only these existing commerce inputs are used by the unchanged cart
+      // callback. No live provider description, title or FAQ is rendered.
+      return { ...operation, name: publicRecord.name, categories: [], description: '',
+        shortDescription: '', enquiryOnly: !publicRecord.purchasable,
+        price: operation.price || '', salePrice: operation.salePrice || '',
+        regularPrice: operation.regularPrice || '', stockStatus: operation.stockStatus || '',
+        tagline: '', stockQuantity: null, tags: [], videoUrl: null } as UCProduct;
+    },
+    enabled: Number.isSafeInteger(pid) && pid > 0,
   });
 
   useEffect(() => {
@@ -173,7 +194,7 @@ export default function ProductDetailScreen() {
     </View>
   );
 
-  const isEnquiryOnly = product.enquiryOnly === true;
+  const isEnquiryOnly = product.enquiryOnly === true || (!!publicRecord && !publicRecord.purchasable);
   const displayPrice = product.salePrice || product.price || product.regularPrice;
   // NB: must be a real boolean — an empty-string salePrice would otherwise make
   // this '' and render a stray text node inside the surrounding View on web.
@@ -199,7 +220,7 @@ export default function ProductDetailScreen() {
   const reviewParams = { productId: String(product.id), productName: product.name };
 
   const ctaContent = (
-    <View style={[styles.footer, isDesktop && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border,
+    <View style={[styles.footer, (isDesktop || !!publicRecord) && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border,
       paddingBottom: isDesktop ? 0 : Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
       {isEnquiryOnly ? (
         <TouchableOpacity
@@ -270,6 +291,18 @@ export default function ProductDetailScreen() {
       )}
     </View>
   );
+
+  if (publicRecord) {
+    // Commerce content is not a presentation source. Use the existing cart
+    // callback with its live numeric identity/price, never the record price.
+    if (product.sku !== publicRecord.parentSku) return null;
+    if (!['instock', 'outofstock', 'onbackorder'].includes(product.stockStatus)) return <Text>Live stock unavailable — please enquire before ordering.</Text>;
+    return <View>
+      {publicRecord.price !== null && parseFloat(displayPrice) !== publicRecord.price
+        ? <Text>Current checkout price is {formatKES(displayPrice)}. The product-record price differs.</Text> : null}
+      {ctaContent}
+    </View>;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

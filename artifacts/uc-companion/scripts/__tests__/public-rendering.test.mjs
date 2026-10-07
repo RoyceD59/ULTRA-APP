@@ -25,7 +25,7 @@ test('every represented public template has initial primary content, unique meta
     assert.match(page.body, /<h1>/);
     assert.match(page.body, /<a href="\/uc-companion\//);
     assert.ok(page.meta.description);
-    assert.equal(page.meta.canonical, `https://public.example${route}`);
+    assert.equal(page.meta.canonical, `https://public.example${route === '/product/101' ? '/product/hydra-flux' : route}`);
     assert.equal(page.meta.robots, 'index, follow');
     assert.equal(page.meta.url, page.meta.canonical);
     assert.match(page.meta.image, /^https:\/\//);
@@ -41,20 +41,19 @@ test('every represented public template has initial primary content, unique meta
 });
 test('public schemas reflect available data, never fabricate offers or guide steps', async () => {
   const product = await renderer().render('/product/101');
-  assert.equal(schemaOf(product, 'Product').sku, 'FILTER-101');
-  assert.equal(schemaOf(product, 'Product').name, fixtures.products[0].name);
+  assert.equal(schemaOf(product, 'Product').sku, 'UC-BOG-SSB-008');
+  assert.equal(schemaOf(product, 'Product').name, 'Hydra Flux');
   assert.equal(schemaOf(product, 'Product').offers.priceCurrency, 'KES');
   assert.match(product.body, /KES /);
-  const quoteOnly = await renderer({
-    products: async () => [{ ...fixtures.products[0], enquiryOnly: true }],
-  }).render('/product/101');
+  const quoteOnly = await renderer().render('/product/water-atm');
   assert.equal(schemaOf(quoteOnly, 'Product').offers, undefined);
   assert.match(quoteOnly.body, /Pricing on request/);
   assert.match(product.body, /Filter front view/);
   const withoutImages = await renderer({
     products: async () => [{ ...fixtures.products[0], images: [] }],
+    productOperation: async () => ({ ...fixtures.products[0], images: [] }),
   }).render('/product/101');
-  assert.equal(withoutImages.meta.image, 'https://public.example/favicon.png');
+  assert.equal(withoutImages.meta.image, null);
   assert.ok(!('image' in schemaOf(withoutImages, 'Product')));
   const article = await renderer().render('/blog/water-care');
   assert.equal(schemaOf(article, 'BlogPosting').datePublished, fixtures.article.publishedAt);
@@ -78,7 +77,7 @@ test('unknown, invalid and unpublished identifiers are actual 404s', async () =>
 test('provider failures are 503 rather than cached mock content or false 404s', async () => {
   const failing = renderer({ products: async () => { throw new PublicDataError(); } });
   assert.equal((await failing.render('/product/101')).status, 503);
-  await assert.rejects(() => failing.sitemap(), PublicDataError);
+  assert.match(await failing.sitemap(), /hydra-flux/);
 });
 test('escaping keeps untrusted HTML, metadata and JSON non-executable', async () => {
   const hostile = '</script><script>alert(1)</script>';
@@ -94,7 +93,7 @@ test('escaping keeps untrusted HTML, metadata and JSON non-executable', async ()
 });
 test('sitemap lists only canonical public inventory and never generates modification dates', async () => {
   const xml = await renderer().sitemap();
-  assert.match(xml, /<loc>https:\/\/public.example\/product\/101<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/public.example\/product\/hydra-flux<\/loc>/);
   assert.match(xml, /\/blog\/water-care/);
   assert.match(xml, /\/guide\/filter-care/);
   assert.doesNotMatch(xml, /\/account|\/auth|\/checkout|\/rewards|\/admin|\/orders|uc-companion|lastmod|<loc>[^<]*\?/);

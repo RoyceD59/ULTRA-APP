@@ -38,6 +38,7 @@ function createPublicData(apiOrigin, fetchImpl = fetch) {
   return {
     mediaOrigin: origin.origin,
     products: async () => array(await read('products?publicationSafe=true', 'woocommerce-published')),
+    productOperation: async id => read(`products/${id}?publicationSafe=true`, 'woocommerce-live'),
     guides: async () => array((await read('guides')).guides),
     guide: async slug => {
       const value = (await read(`guides/${encodeURIComponent(slug)}`)).guide;

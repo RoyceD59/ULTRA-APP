@@ -1844,7 +1844,11 @@ export const GetUcProductParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
 
-export const GetUcProductResponse = zod.object({
+export const GetUcProductQueryParams = zod.object({
+  "publicationSafe": zod.coerce.boolean().optional().describe('Require a fresh published WooCommerce operational read; never return demo content.')
+})
+
+export const GetUcProductResponse = zod.union([zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.string(),
@@ -1869,7 +1873,23 @@ export const GetUcProductResponse = zod.object({
   "enquiryOnly": zod.boolean(),
   "totalSales": zod.number(),
   "videoUrl": zod.string().nullable()
-})
+}),zod.object({
+  "id": zod.number(),
+  "sku": zod.string(),
+  "stockStatus": zod.string().optional(),
+  "price": zod.string().optional(),
+  "salePrice": zod.string().optional(),
+  "regularPrice": zod.string().optional(),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "uploadedPhotos": zod.array(zod.object({
+  "slot": zod.number(),
+  "src": zod.string(),
+  "alt": zod.string()
+}))
+})])
 
 
 /**

@@ -1,5 +1,20 @@
 # Development change log
 
+## 2026-10-07 — prepared record-backed public product pages
+
+- Imported the supplied v2.4 product records and schema, with a public allowlist,
+  exact-SKU identity resolution, live operational stock reads, matching FAQs and
+  structured data, stable slug canonicals and empty noindex topic routes.
+- Reused the existing opt-in renderer and media reads. Browser enhancement keeps
+  document scrolling and record wording; native commerce, checkout, payments,
+  delivery and uploads remain unchanged.
+- Read-only diagnostics found 11 matched / 10 unmatched identities and 11 price
+  disagreements. The public-rendering runbook records per-product media gaps and
+  release prerequisites. No provider records or activation flags were changed.
+- Verification is local, not publication, physical-phone, Rich Results or
+  WhatsApp evidence. Source JSON/schema/validator and tests are tracked; temporary
+  exports and diagnostic reports remain under `/tmp`.
+
 ## 2026-10-07 — Publishing image-size failure
 
 - **Cause:** The failed publishing build compiled the approved API candidate,

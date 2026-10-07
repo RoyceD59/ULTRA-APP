@@ -22,7 +22,9 @@ function publicUrl(value, origin = SITE) {
 }
 
 function canonical(route, site = SITE) {
-  return new URL(route, site).href;
+  const url = new URL(route, site);
+  url.search = '';
+  return url.href;
 }
 
 function identity(site = SITE) {
@@ -78,6 +80,22 @@ function articleModel(article, route, site = SITE) {
     publishedAt: schema.datePublished, sources: Array.isArray(article.sources) ? article.sources : [] };
 }
 
+function recordProductModel(record, operation, route, site = SITE) {
+  const schema = { '@type': 'Product', '@id': `${canonical(route, site)}#product`,
+    name: record.seo.h1, sku: record.parentSku, url: canonical(route, site),
+    description: record.seo.description };
+  if (operation.images.length) schema.image = operation.images.map(p => p.src);
+  if (record.purchasable && record.price !== null) {
+    schema.offers = { '@type': 'Offer', url: canonical(route, site),
+      price: String(record.price), priceCurrency: 'KES' };
+    if (operation.availability) schema.offers.availability = `https://schema.org/${operation.availability}`;
+  }
+  const faq = record.faq.length ? { '@type': 'FAQPage', '@id': `${canonical(route, site)}#faq`,
+    mainEntity: record.faq.map(f => ({ '@type': 'Question', name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a } })) } : null;
+  return { schema, faq };
+}
+
 function guideModel(guide, route, apiOrigin, site = SITE) {
   if (!text(guide?.title) || !Array.isArray(guide.sections)) throw new Error('Invalid public guide');
   const sections = guide.sections.map(section => ({
@@ -116,4 +134,4 @@ function jsonLd(nodes) {
 }
 
 module.exports = { SITE, text, plain, publicUrl, canonical, identity, breadcrumbs,
-  productModel, articleModel, guideModel, itemList, jsonLd };
+  productModel, recordProductModel, articleModel, guideModel, itemList, jsonLd };

@@ -10,8 +10,8 @@ import { createRequire } from 'node:module';
 const { PublicDataError } = createRequire(import.meta.url)('../../../server/public-content.cjs');
 
 export const fixtures = {
-  products: [{ id: 101, name: 'Published Filter', price: '1200', shortDescription: 'Filter summary',
-    description: 'Verified product details', sku: 'FILTER-101', images: [{ src: '/api/image.png', alt: 'Filter front view' }] }],
+  products: [{ id: 101, name: 'Commerce wording must not leak', price: '4199', stockStatus: 'instock', shortDescription: 'Commerce summary must not leak',
+    description: 'Commerce details must not leak', sku: 'UC-BOG-SSB-008', images: [{ src: 'https://media.example/image.png', alt: 'Filter front view' }] }],
   guides: [{ slug: 'filter-care', title: 'Filter care', summary: 'Care summary' }],
   guide: { slug: 'filter-care', title: 'Filter care', summary: 'Care summary',
     sections: [{ heading: 'Cleaning', body: 'Care instructions', steps: ['Rinse the filter', 'Allow to dry'],
@@ -23,6 +23,7 @@ export const fixtures = {
 };
 export const data = {
   products: async () => fixtures.products,
+  productOperation: async id => fixtures.products.find(p => p.id === id),
   articles: async () => [fixtures.article],
   article: async slug => { if (slug !== fixtures.article.slug) throw new PublicDataError(404); return fixtures.article; },
   guides: async () => fixtures.guides,
@@ -41,8 +42,12 @@ export async function startFixture({ enabled = true, bundle = '', basePath = '/u
     if (route === '/api/uc/products' && state.catalogueProvenance) {
       res.setHeader('X-UC-Catalogue-Provenance', 'woocommerce-published');
     }
+    if (route === '/api/uc/products/101' && state.catalogueProvenance) {
+      res.setHeader('X-UC-Catalogue-Provenance', 'woocommerce-live');
+    }
     const values = {
       '/api/uc/products': fixtures.products,
+      '/api/uc/products/101': fixtures.products[0],
       '/api/uc/blog': { articles: [fixtures.article], nextCursor: null },
       '/api/uc/blog/water-care': { article: fixtures.article },
       '/api/uc/guides': { guides: fixtures.guides },

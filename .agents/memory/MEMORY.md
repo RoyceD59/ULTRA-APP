@@ -96,3 +96,4 @@
 - [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
 - [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
+- [Product-page deferred flows](product-page-future-flows.md) — guest sharing still requires a safeguarded saved order; later bottle comparison defaults Hydra Flux to Truva Go.

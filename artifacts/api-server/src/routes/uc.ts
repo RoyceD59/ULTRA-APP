@@ -1468,6 +1468,14 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
 
 router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(String(req.params["id"]));
+  const publicationSafe = req.query["publicationSafe"] === "true";
+  if (publicationSafe) {
+    res.setHeader("Cache-Control", "no-store");
+    if (!hasWCCredentials()) {
+      res.status(503).json({ error: "Live product provider is not configured" });
+      return;
+    }
+  }
   try {
     let payload: Record<string, unknown> | null = null;
     let publishedSource = false;
@@ -1479,6 +1487,10 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
       }
     }
     if (!payload) {
+      if (publicationSafe) {
+        res.status(503).json({ error: "Live product could not be verified" });
+        return;
+      }
       const product = MOCK_PRODUCTS.find((p) => p["id"] === id);
       if (!product) {
         res.status(404).json({ error: "Not found" });
@@ -1486,8 +1498,23 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
       }
       payload = product;
     }
+    if (publicationSafe && !publishedSource) {
+      res.status(404).json({ error: "Published product not found" });
+      return;
+    }
     const mediaMap = await fetchProductMediaMap([id]);
     res.setHeader("X-UC-Product-Source", publishedSource ? "woocommerce-published" : "unverified");
+    if (publicationSafe) {
+      const photos = (mediaMap.get(id) || []).filter(m => m.type === "photo");
+      res.setHeader("X-UC-Catalogue-Provenance", "woocommerce-live");
+      res.json({
+        id: payload["id"], sku: payload["sku"], stockStatus: payload["stockStatus"],
+        price: payload["price"], salePrice: payload["salePrice"], regularPrice: payload["regularPrice"],
+        images: payload["images"],
+        uploadedPhotos: photos.map(m => ({ slot: m.position + 1, src: m.url, alt: m.alt })),
+      });
+      return;
+    }
     res.json(applyProductMedia(payload, mediaMap.get(id)));
   } catch {
     res.status(500).json({ error: "Failed to fetch product" });

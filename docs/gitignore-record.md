@@ -1,5 +1,12 @@
 # Git ignore record
 
+## Record product preparation — 2026-10-07
+
+No ignore rule was added or removed. Supplied product JSON/schema, the standalone
+generated validator and public-page tests are tracked. Disposable web exports,
+test logs and read-only operational reports were written under `/tmp`, not added
+to source control. Existing private/runtime exclusions remain unchanged.
+
 This file and `development-change-log.md` are tracked by Git. `.gitignore`
 excludes private or reproducible runtime files, not the development history.
 

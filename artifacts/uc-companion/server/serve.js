@@ -222,8 +222,9 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
   const exportStyles = exported
     ? (exported.match(/<style\b[^>]*>[\s\S]*?<\/style>|<link\b[^>]*\brel="(?:stylesheet|preload|modulepreload)"[^>]*>/gi) || []).join('')
     : '';
+  const recordDocument = !!publicRenderer && /^\/(?:product|topic)\/[^/]+$/.test(pathname);
   const html = `<!doctype html>
-<html lang="en">
+<html lang="en"${recordDocument ? ' data-uc-record-mode' : ''}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -258,11 +259,28 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
       #uc-public-content main { max-width: 800px; margin: auto; }
       #uc-public-content a { color: #005d8f; }
       #uc-public-content a:focus-visible { outline: 3px solid #005d8f; outline-offset: 3px; }
+      html[data-uc-record-mode], html[data-uc-record-mode] body, html[data-uc-record-mode] #root { height: auto; min-height: 100%; overflow: visible; }
+      html[data-uc-record-mode] #root { height: auto; min-height: 0; flex: none; }
+      #root[hidden] { display: none !important; }
+      html[data-uc-record-mode] #uc-public-content { position: static; overflow: visible; padding: 24px; }
+      .uc-record-document { padding: 24px; color: #123047; background: #fff; font: 16px/1.6 system-ui,sans-serif; }
+      .uc-record-document main, #uc-public-content main { min-width: 0; max-width: 1000px; margin: auto; overflow-wrap: anywhere; }
+      .uc-subline { font-size: 1.2rem; } .uc-price { font-size: 1.6rem; font-weight: 700; }
+      .uc-warning { padding: 16px; background: #fff4dc; border-radius: 8px; }
+      .uc-gallery { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,260px),1fr)); gap: 16px; }
+      .uc-gallery figure { margin: 0; min-width: 0; } .uc-gallery img { width: 100%; max-height: 500px; object-fit: contain; }
+      .uc-record-document details, #uc-public-content details { margin: 12px 0; border: 1px solid #dbe7ea; padding: 12px; }
+      .uc-record-document summary, #uc-public-content summary { cursor: pointer; font-weight: 600; }
+      .uc-record-document a { color: #005d8f; }
+      .uc-record-document :focus-visible, #uc-public-content :focus-visible { outline: 3px solid #005d8f; outline-offset: 3px; }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"${recordDocument && page?.body ? ' hidden' : ''}></div>
     ${page?.body ? `<div id="uc-public-content"><main>${page.body}</main></div>` : ''}
+    ${recordDocument && page?.body ? `<script id="uc-record-document" type="application/json">${require('./public-rendering.cjs').jsonScript({
+      path: pathname, status: page.status, body: page.body, publicRecord: page.publicRecord || null,
+    })}</script>` : ''}
     ${scripts}
     ${page?.body && webBundlePath ? `<script>
       // Works with the previous bundle as well as the enhanced client.
@@ -270,8 +288,9 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
       const root = document.getElementById('root');
       const fallback = document.getElementById('uc-public-content');
       const mounted = () => {
-        if (root.textContent.trim() || root.querySelector('input, img, button, [role="button"]')) {
+        if (${recordDocument ? "root.querySelector('[data-uc-record-ready]')" : "root.textContent.trim() || root.querySelector('input, img, button, [role=\"button\"]')"}) {
           fallback?.remove();
+          root.removeAttribute('hidden');
           observer.disconnect();
         }
       };
@@ -395,13 +414,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname === '/public-page-meta') {
       const requested = url.searchParams.get('path') || '/';
-      const route = requested.length > 1 ? requested.replace(/\/$/, '') : requested;
+      const clean = requested.startsWith('/') && !requested.startsWith('//')
+        ? new URL(requested, 'https://local.invalid').pathname : '/__not-found';
+      const route = clean.length > 1 ? clean.replace(/\/$/, '') : clean;
       const classification = classifyWebRoute(route);
       const page = classification === 'private'
         ? { status: 200, meta: { title: getAppName(), description: 'Ultra-Clear Companion account and services.', robots: 'noindex, follow' }, schemas: [] }
         : await publicRenderer.render(classification === 'public' ? route : '/__not-found');
       res.writeHead(page.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
-      res.end(req.method === 'HEAD' ? undefined : JSON.stringify({ meta: page.meta, schemas: page.schemas }));
+      res.end(req.method === 'HEAD' ? undefined : JSON.stringify({
+        meta: page.meta, schemas: page.schemas, status: page.status,
+        ...(/^\/(?:product|topic)\/[^/]+$/.test(route) ? { body: page.body, publicRecord: page.publicRecord || null } : {}),
+      }));
       return;
     }
   }

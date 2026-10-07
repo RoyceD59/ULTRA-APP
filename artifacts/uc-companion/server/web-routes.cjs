@@ -5,7 +5,7 @@ const WEB_APP_ROUTES = new Set([
   'referral', 'rewards', 'water-test', 'about', 'hydration',
 ]);
 const WEB_APP_ROUTE_PREFIXES = new Set([
-  'admin', 'auth', 'blog', 'guide', 'order', 'product', 'review', 'ticket',
+  'admin', 'auth', 'blog', 'guide', 'order', 'product', 'topic', 'review', 'ticket',
 ]);
 
 function isWebAppRoute(pathname) {
@@ -19,8 +19,8 @@ function isWebAppRoute(pathname) {
 const PUBLIC_ROUTES = new Set(Object.keys(require('../data/public-pages.json')));
 function classifyWebRoute(pathname) {
   const route = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
-  if (PUBLIC_ROUTES.has(route) || /^\/(product|blog|guide)\/[^/]+$/.test(route)) return 'public';
-  if (/^\/(product|blog|guide)(\/|$)/.test(route)) return 'unknown';
+  if (PUBLIC_ROUTES.has(route) || /^\/(product|topic|blog|guide)\/[^/]+$/.test(route)) return 'public';
+  if (/^\/(product|topic|blog|guide)(\/|$)/.test(route)) return 'unknown';
   if (isWebAppRoute(route)) return 'private';
   return 'unknown';
 }

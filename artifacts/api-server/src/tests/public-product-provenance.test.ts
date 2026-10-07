@@ -59,3 +59,32 @@ test("catalogue requests published products and refuses to attest a mixed privat
       status === "publish" ? "woocommerce-published" : null);
   }
 });
+
+test("publication-safe detail reads live operations only and never fall back to mock stock", async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls++;
+    return Response.json({ id: 123, name: "PRIVATE provider wording", status: "publish",
+      sku: "UC-BOG-SSB-008", description: "PRIVATE description", price: "4199", stock_status: "outofstock",
+      images: [{ src: "https://media.example/product.jpg", alt: "Bottle" }] });
+  }) as typeof fetch;
+  for (let i = 0; i < 2; i++) {
+    const response = await realFetch(`${base}/uc/products/123?publicationSafe=true`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-uc-catalogue-provenance"), "woocommerce-live");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const body = await response.json();
+    assert.equal(body.stockStatus, "outofstock");
+    assert.equal(body.name, undefined);
+    assert.equal(body.description, undefined);
+    assert.ok(Array.isArray(body.uploadedPhotos));
+  }
+  assert.equal(calls, 2, "stock reads must bypass browsing snapshots");
+  globalThis.fetch = (async () => Response.json({ id: 123, status: "draft" })) as typeof fetch;
+  assert.equal((await realFetch(`${base}/uc/products/123?publicationSafe=true`)).status, 404);
+  globalThis.fetch = (async () => { throw new Error("offline"); }) as typeof fetch;
+  assert.equal((await realFetch(`${base}/uc/products/1?publicationSafe=true`)).status, 503);
+  delete process.env["WC_CONSUMER_KEY"];
+  assert.equal((await realFetch(`${base}/uc/products/1?publicationSafe=true`)).status, 503);
+  process.env["WC_CONSUMER_KEY"] = "fixture-key";
+});
