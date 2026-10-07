@@ -1,5 +1,14 @@
 # Security-only revision of the approved consistency candidate
 
+## Retained parent after authentication/upload integration
+
+This directory and all its archive/metadata bytes remain retained. On 2026-10-08
+the owner approved selection of the separately retained
+[`auth-upload-security`](../auth-upload-security/README.md) revision. The current
+main API handoff selects that new identity; clients still use the predecessor.
+The earlier selection described below is historical. Neither this preparation
+nor the new source selection establishes publication.
+
 Prepared with owner approval on 2026-10-06. **Not published.**
 
 | Input | SHA-256 |

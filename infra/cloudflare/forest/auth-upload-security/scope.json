@@ -1,0 +1,90 @@
+{
+  "parentSha256": "b3a298f2e19090a5da3b98a0c0b320cde8afe733f80430af48bfc9a24183921c",
+  "candidateSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "mergedRevisions": {
+    "auth": "a619d3808dfbab526b225bad7cada8395b7a00e9",
+    "uploads": "0aaa29c9e12ee43d65202964ba62f5b2097d800f",
+    "storageAdapter": "6c8aac72da5eecec5ea934c71f62dac06873fb9c"
+  },
+  "files": [
+    {
+      "path": "artifacts/api-server/src/lib/jwt.ts",
+      "beforeSha256": "cd26f0eb5736e9fe07e532c11718fee1a490265d5ace2adb42b10c8871c4292a",
+      "afterSha256": "bb0d44166b3475ca8e8aeab57b7bcf7d9c8c8aec69cc4243de6fb1dac04d6cf5",
+      "beforeBytes": 3681,
+      "afterBytes": 4229
+    },
+    {
+      "path": "artifacts/api-server/src/lib/objectStorage.ts",
+      "beforeSha256": "9c71846fd5fa89d6e1ecd8e7d9104477b0fc0ab351cf744561580b100be259e0",
+      "afterSha256": "33a57b76a9a7d6c90760c9ac2ffc9ecf8c761f5a469e615ac3f7756ad016ca12",
+      "beforeBytes": 12167,
+      "afterBytes": 12335
+    },
+    {
+      "path": "artifacts/api-server/src/lib/review-media-signature.ts",
+      "beforeSha256": "00eac14b6376ce6a7ea45a1ab17190d4973759edd3be98d80fa4b13ed91427c7",
+      "afterSha256": "63c21aad5092bffcdeb4f592914eab14f3b85cd52578e542c10628ec1898ca6a",
+      "beforeBytes": 2254,
+      "afterBytes": 3443
+    },
+    {
+      "path": "artifacts/api-server/src/routes/storage.ts",
+      "beforeSha256": "a48dc132ad3355a7250d256d6b7cf63d86dcaf79ead2953c856eba578bd3befc",
+      "afterSha256": "8123a8706a0d969fbde355ffaab2a2601afbac80c1df076b6884db5a2576a6e2",
+      "beforeBytes": 13413,
+      "afterBytes": 13824
+    },
+    {
+      "path": "artifacts/api-server/src/routes/uc.ts",
+      "beforeSha256": "fd70d3676604d964e5de412e0c389b924eb4198e52b29e4304ca73329c3794a3",
+      "afterSha256": "ed4fe1e23b5e87507c10f2ab8213e84c524d5050ef7fc3489e4b2fb84c8e1047",
+      "beforeBytes": 417368,
+      "afterBytes": 417292
+    },
+    {
+      "path": "artifacts/api-server/src/tests/customer-count-auth.test.ts",
+      "beforeSha256": null,
+      "afterSha256": "021f46283d1b96c26b438253cb1eb305830f9c18e49d52a2157b6da8cbab7d8e",
+      "beforeBytes": 0,
+      "afterBytes": 2899
+    },
+    {
+      "path": "artifacts/api-server/src/tests/jwt-session-expiry.test.ts",
+      "beforeSha256": null,
+      "afterSha256": "4babbb07f2a4bbe40c1d638b167534f3e9e9146fb98b98031b7744890a1ea34f",
+      "beforeBytes": 0,
+      "afterBytes": 3960
+    },
+    {
+      "path": "artifacts/api-server/src/tests/review-media-signature.test.ts",
+      "beforeSha256": "3d144f7a2951563927021f380f626605988810fa91d4022cd91b026e391938b4",
+      "afterSha256": "c1e3ea265e6e007a47eb9e0c583ee8196b0662949dc466e7976f0be134da13f8",
+      "beforeBytes": 1974,
+      "afterBytes": 4512
+    },
+    {
+      "path": "artifacts/api-server/src/tests/storage-public-media-security.test.ts",
+      "beforeSha256": null,
+      "afterSha256": "9c77a803185205f9df0c7c94bab2ce1586ab04bb1cbc62fda5b5b194a3763563",
+      "beforeBytes": 0,
+      "afterBytes": 3237
+    },
+    {
+      "path": "artifacts/api-server/src/tests/storage-upload-allowlist.test.ts",
+      "beforeSha256": null,
+      "afterSha256": "5b07993787e64c18ac1c9107bafcf46b5d2bde112bd691cbeae77a572113b3a2",
+      "beforeBytes": 0,
+      "afterBytes": 4356
+    }
+  ],
+  "unchangedParentFiles": 1254,
+  "excluded": [
+    "receipt payment projection",
+    "customer reporting timezone/statistics feature",
+    "schemas",
+    "client sources",
+    "dependency changes",
+    "production initialization"
+  ]
+}

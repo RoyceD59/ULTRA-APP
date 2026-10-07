@@ -1,5 +1,35 @@
 # Development change log
 
+
+## 2026-10-08 — Frozen sign-in/upload security integration
+
+- Compared the retained dependency-security archive against exact merged
+  sign-in/upload changes before transplanting. Added a deterministic narrow-hunk
+  preparation script, complete readable delta, old/new per-file hashes and byte
+  counts, separately retained archive and pinned scope verifier.
+- Carried only eight-hour session expiry, live active-team customer-count
+  access, upload MIME serving/sandbox protections, attachment byte verification,
+  the merged per-router test adapter and five exact merged regression files.
+  Preserved the frozen statistics query and all receipt/other feature bytes.
+  Six existing files changed, four tests added; 1,254 other parent files match.
+- Owner approved selection of candidate
+  `88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82`
+  after the scope and validation summary. Updated only the main handoff identity
+  and packaging guards; API-first build and post-build cleanup remain in place.
+  Clients, all previous archives and rollback files remain unchanged.
+- Frozen shared libraries and all three consumers typechecked; the API compiled;
+  all 49 transplanted security regressions passed via the disposable test
+  database wrapper, which removed its database afterward. Production build
+  guards run only the three non-database fixtures, never DB-backed tests.
+- No application workflow source, provider setting, production initialization,
+  development/production schema, account data or client source was changed.
+  No new ignore rule: checksum-scoped installations/outputs remain under the
+  existing ignored `.consistency-build/`; archive/evidence sources are tracked.
+- **Prepared and selected, not published.** Publishing must explain the one-time
+  sign-in for expiry-free customer sessions. API publication, live compatibility,
+  agreeing fresh public-host snapshots, actual final image size and eventual
+  client/native/device verification remain separate, unclaimed operations.
+
 ## 2026-10-07 — Editable shared product pages (development only)
 
 - Added validated persistent v2.4 editorial records, conflict-aware ProjectHub

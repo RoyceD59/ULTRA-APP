@@ -21,6 +21,16 @@ Compile the frozen candidate itself, including its dependent contracts; a workin
 
 **How to apply:** Prepare an additive candidate without selecting it, typecheck its consumer apps, and verify its actually selected manifest/launch bytes separately from signed-in working-preview behavior.
 
+Owner approval of a retained source revision's byte scope and main build
+selection is not approval to publish it or advance clients.
+
+**Why:** The owner chose security-only candidate selection while publication,
+production initialization and client advancement were explicitly excluded.
+
+**How to apply:** Keep source-selection evidence distinct from live deployment
+evidence. Ask separately before publishing; keep any API compatibility and
+fresh-public-snapshot client gates in force.
+
 A healthy preview endpoint does not establish that the current source is running.
 
 **Why:** An older API process continued answering HTTP 200 while its managed workflow failed with a port conflict. New clients rejected its older response contract despite successful current-source compilation and isolated API tests.

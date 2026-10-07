@@ -4,7 +4,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { archive, originalArchive, verifyHandoff, here } from './consistency-handoff.mjs';
+import { originalArchive, verifyHandoff, here } from './consistency-handoff.mjs';
+import { dependencyArchive as archive } from './auth-upload-security.mjs';
 import { securityLock } from './consistency-security.mjs';
 
 test('security revision changes only the lockfile, preserving all approved application bytes', async () => {

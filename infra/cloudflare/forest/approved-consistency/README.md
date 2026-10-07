@@ -1,5 +1,13 @@
 # Approved consistency source — inactive handoff
 
+## Authentication/upload integration addendum (2026-10-08)
+
+The original candidate and dependency-security parent remain intact. The owner
+approved the separately retained [`auth-upload-security`](../auth-upload-security/README.md)
+byte scope. Main API preparation now selects that identity, without publishing,
+advancing clients, changing schemas or initializing production. The older
+selection descriptions below are historical.
+
 ## Security-only preparation addendum (2026-10-06)
 
 The original approved archive below remains intact. With owner approval, the

@@ -7,6 +7,7 @@ import { cp, mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises'
 import { resolve } from 'node:path';
 import { APPROVED_CANDIDATE, SOURCE_IDENTITY, archive, stage, root, verifyHandoff, verifyLiveApi, retainRollback } from './consistency-handoff.mjs';
 import { here } from './consistency-handoff.mjs';
+import { DEPENDENCY_CANDIDATE } from './auth-upload-security.mjs';
 
 const [mode, ...flags] = process.argv.slice(2);
 const packages = { api: '@workspace/api-server', hub: '@workspace/projecthub', companion: '@workspace/uc-companion' };
@@ -34,7 +35,7 @@ if (!localOnly && mode !== 'serve-companion') {
   if (!response.ok) throw new Error('Cannot verify live source baseline');
   const live = await response.json();
   if (![frozen.liveBaseRevision, frozen.integrationRevision,
-    frozen.previousIntegrationRevision, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
+    frozen.previousIntegrationRevision, `consistency-${DEPENDENCY_CANDIDATE}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
     throw new Error('Live source baseline changed; reconcile before preparing deployment outputs');
   }
 }
@@ -108,6 +109,13 @@ if (mode === 'serve-companion') {
   // Exercise the actual frozen consumers before any deployment output is copied.
   await run('node', ['--test', 'scripts/tests/dependency-security.test.mjs']);
   await run('node', ['--test', resolve(here, 'consistency-security-runtime.test.mjs')]);
+  // These exact merged fixtures never query/mutate a database or reach storage.
+  // DB-backed access/upload fixtures are validated separately in disposable test
+  // databases during local preparation, not in a production deployment build.
+  await run('node', ['--import', 'tsx/esm', '--test', '--test-force-exit',
+    '--test-concurrency=1',
+    'src/tests/{jwt-session-expiry,review-media-signature,storage-public-media-security}.test.ts'],
+  resolve(stage, 'artifacts/api-server'), { ...inheritedEnv, NODE_ENV: 'test', GOMAXPROCS: '2' });
   await run('pnpm', ['--filter', packages[mode], 'run', 'typecheck']);
   const env = { ...inheritedEnv };
   if (mode === 'hub') { env.PORT ||= '20100'; env.BASE_PATH = '/'; }

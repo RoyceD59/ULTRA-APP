@@ -5,8 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ORIGINAL_CANDIDATE, securityLock } from './consistency-security.mjs';
+import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE, SCOPE_SHA256, authUploadArchive, dependencyArchive, verifyAuthUploadRevision } from './auth-upload-security.mjs';
 
-export const APPROVED_CANDIDATE = 'b3a298f2e19090a5da3b98a0c0b320cde8afe733f80430af48bfc9a24183921c';
+export const APPROVED_CANDIDATE = AUTH_UPLOAD_CANDIDATE;
 export const PREDECESSOR = 'bdc71175d7f653c99d9d431770200915acd2e8333220c59b8b66a3d48e03d3b2';
 export const API_ORIGINS = [
   'https://api.ucfilters.com',
@@ -16,27 +17,34 @@ export const SOURCE_IDENTITY = `consistency-${APPROVED_CANDIDATE}`;
 export const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../../..');
 export const originalArchive = resolve(here, 'approved-consistency/release-sources.tar.gz');
-export const archive = resolve(here, 'security-consistency/release-sources.tar.gz');
+export const archive = authUploadArchive;
 export const stage = resolve(root, '.consistency-build', APPROVED_CANDIDATE);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
 /** Verify saved bytes, not today's workspace or a regenerated candidate. */
 export async function verifyHandoff() {
   const original = JSON.parse(await readFile(resolve(here, 'approved-consistency/candidate.json'), 'utf8'));
-  const info = JSON.parse(await readFile(resolve(here, 'security-consistency/candidate.json'), 'utf8'));
+  const dependency = JSON.parse(await readFile(resolve(here, 'security-consistency/candidate.json'), 'utf8'));
+  const approval = JSON.parse(await readFile(resolve(here, 'auth-upload-security/owner-approval.json'), 'utf8'));
+  const info = await verifyAuthUploadRevision();
   if (info.candidateSha256 !== APPROVED_CANDIDATE || info.baselineSha256 !== PREDECESSOR
       || digest(await readFile(archive)) !== APPROVED_CANDIDATE
       || original.candidateSha256 !== ORIGINAL_CANDIDATE || original.baselineSha256 !== PREDECESSOR
       || digest(await readFile(originalArchive)) !== ORIGINAL_CANDIDATE
       || info.originalCandidateSha256 !== ORIGINAL_CANDIDATE
-      || JSON.stringify(info.securityChangedPaths) !== '["pnpm-lock.yaml"]'
+      || dependency.candidateSha256 !== DEPENDENCY_CANDIDATE || dependency.baselineSha256 !== PREDECESSOR
+      || dependency.originalCandidateSha256 !== ORIGINAL_CANDIDATE
+      || JSON.stringify(dependency.securityChangedPaths) !== '["pnpm-lock.yaml"]'
+      || approval.candidateSha256 !== APPROVED_CANDIDATE || approval.scopeSha256 !== SCOPE_SHA256
+      || approval.selectionApproved !== true || approval.publicationApproved !== false
       || digest(await readFile(resolve(here, 'release-sources.tar.gz'))) !== PREDECESSOR) {
     throw new Error('Approved candidate or retained predecessor checksum mismatch');
   }
   const lock = file => execFileSync('tar', ['-xOf', file, 'pnpm-lock.yaml'], {
     encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
   });
-  if (securityLock(lock(originalArchive)) !== lock(archive)) {
+  if (securityLock(lock(originalArchive)) !== lock(dependencyArchive)
+      || lock(dependencyArchive) !== lock(archive)) {
     throw new Error('Security candidate includes an unapproved dependency delta');
   }
   return info;
