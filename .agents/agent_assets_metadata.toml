@@ -93,3 +93,17 @@ mtime_ms = 1791288847526
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/0eeda23e-c97a-4618-b758-77bb7b7747b4/15553ee9-4b2e-419f-acbf-594c6f6bcf33"
 storage_version_token = "1791288847942318"
 content_type = "text/html"
+
+[[outputs]]
+id = "XtRoMdo2-rkscRPeVp0Xh"
+uri = "file://.local/reports/consistency-rollout/main-reinspection.html"
+type = "html"
+title = "Main rollout: deployment and full schema inspection"
+description = "Verified prepared files and empty full production schema diff. Public hosts still serve the legacy response; clients and publication remain gated."
+logical_id = "5ab6d5a7-6c67-43a6-8c9b-b9ca1add66f9"
+content_hash = "sha256:c0e11b411ef8168b41291508ac9eeb114edc8bae49674e8f03b72402206d7de7"
+size = 3156
+mtime_ms = 1791331993917
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/5ab6d5a7-6c67-43a6-8c9b-b9ca1add66f9/7daf2b5b-0901-4665-96b8-19cf9b5e106a"
+storage_version_token = "1791331994375693"
+content_type = "text/html"

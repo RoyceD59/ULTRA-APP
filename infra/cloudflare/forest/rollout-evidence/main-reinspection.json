@@ -1,0 +1,73 @@
+{
+  "checkedAt": "2026-10-07T00:13:13.451Z",
+  "deployment": {
+    "additionalUrls": [],
+    "deploymentType": "autoscale",
+    "hasSuccessfulBuild": true,
+    "isDeployed": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "success": true,
+    "visibility": "public"
+  },
+  "fullSchemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": false,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "mainPreparation": {
+    "candidateSha256": "b3a298f2e19090a5da3b98a0c0b320cde8afe733f80430af48bfc9a24183921c",
+    "archiveHashesVerified": true,
+    "packagingChecksPassed": 21,
+    "packagingChecksFailed": 0,
+    "workingTreeCleanAtInspection": true,
+    "apiBuildSelected": "node infra/cloudflare/forest/build-approved-consistency.mjs api --copy-output",
+    "clientSourceSelection": "retained predecessor; unchanged"
+  },
+  "publicHosts": [
+    {
+      "origin": "https://api.ucfilters.com",
+      "httpStatus": 200,
+      "snapshotId": null,
+      "adjustmentRevision": null,
+      "calculatedAt": null,
+      "maxAgeSeconds": null,
+      "totals": {
+        "totalUsers": 5,
+        "litresFiltered": 1150,
+        "plasticsAvoided": 2300,
+        "cleanWaterDays": 0
+      }
+    },
+    {
+      "origin": "https://team-horizon--jerryaroyce.replit.app",
+      "httpStatus": 200,
+      "snapshotId": null,
+      "adjustmentRevision": null,
+      "calculatedAt": null,
+      "maxAgeSeconds": null,
+      "totals": {
+        "totalUsers": 5,
+        "litresFiltered": 1150,
+        "plasticsAvoided": 2300,
+        "cleanWaterDays": 0
+      }
+    }
+  ],
+  "clientGate": "BLOCKED: compatible recent live snapshot unavailable",
+  "publicationGate": "Pending Security Center review; no scanner-wide pass established",
+  "actions": {
+    "published": false,
+    "clientsSelected": false,
+    "baselineInitialized": false,
+    "schemaApplied": false
+  },
+  "next": "Finish pending security review, then owner API-first Publish action; verify live compatible API before initialization or advancing client source selection."
+}
