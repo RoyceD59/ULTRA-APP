@@ -16,6 +16,7 @@ import { prepareCheckoutOrder, bindCheckoutPayment, confirmCheckoutOrder } from 
 import { getTeamAlertEmail, notifyConfirmedCheckout, verifyPaymentOnServer } from "./uc.js";
 import { verifyToken } from "../lib/jwt.js";
 import { validatePhone } from "../lib/order-validation.js";
+import { paymentMocksAllowed, paymentProviderConfigured, mpesaConfigured } from "../lib/payment-configuration.js";
 
 async function enqueueReferralSettlementIfReady(order: { id: number; userId: string; webhookRecovery: boolean }): Promise<void> {
   // Provider recovery rows carry an email/phone placeholder until /uc/orders
@@ -116,6 +117,10 @@ router.post(["/payments/paystack/init", "/payments/mpesa", "/payments/stripe/ses
   const method = req.path.includes("paystack") ? "paystack" : req.path.includes("mpesa") ? "mpesa" : "stripe";
   if (method === "mpesa" && (typeof req.body.phone !== "string" || !validatePhone(req.body.phone, "KE").valid)) {
     res.status(400).json({error:"Enter a valid M-Pesa phone number.",fields:{phone:"Enter a valid M-Pesa phone number."}});
+    return;
+  }
+  if (!paymentProviderConfigured(method) && !paymentMocksAllowed()) {
+    res.status(503).json({ error: `${method} payments are currently unavailable`, retryable: true });
     return;
   }
   try {
@@ -291,8 +296,7 @@ async function getStripe(): Promise<Stripe | null> {
 
 // ─── M-Pesa credential validation ─────────────────────────────────────────────
 // Daraja shortcodes are numeric (Paybill/Till numbers, e.g. sandbox 174379).
-// Placeholder values like "NA" must route checkout to demo mode instead of
-// sending doomed STK pushes to Safaricom that fail with "Invalid BusinessShortCode".
+// Placeholder values like "NA" are unconfigured; production rejects them.
 export function getMpesaShortcode(): string | null {
   const sc = process.env["MPESA_SHORTCODE"]?.trim();
   return sc && /^\d{4,10}$/.test(sc) ? sc : null;
@@ -300,17 +304,18 @@ export function getMpesaShortcode(): string | null {
 
 // ─── Payment method availability ──────────────────────────────────────────────
 // Server-driven config so the mobile app only shows methods that can actually
-// process a payment. M-Pesa stays visible even in demo mode (mock flow works);
-// Stripe is hidden entirely when deactivated.
+// process a payment. Demo flows are only available in development/test.
 router.get("/payments/config", (_req: Request, res: Response): void => {
   res.json({
     methods: {
-      paystack: true,
-      mpesa: true,
+      paystack: paymentProviderConfigured("paystack") || paymentMocksAllowed(),
+      mpesa: mpesaConfigured() || paymentMocksAllowed(),
       stripe: stripeEnabled() && !!process.env["STRIPE_SECRET_KEY"],
       cod: true,
     },
-    mpesaMode: getMpesaShortcode() && process.env["MPESA_PASSKEY"] ? "live" : "demo",
+    // Preserve the existing mode enum; methods.mpesa is the availability gate.
+    // A "demo" label does not enable simulated payments outside development/test.
+    mpesaMode: mpesaConfigured() ? "live" : "demo",
   });
 });
 
@@ -326,6 +331,7 @@ async function getMpesaToken(): Promise<string | null> {
       `https://${env}.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials`,
       { headers: { Authorization: `Basic ${creds}` } }
     );
+    if (!res.ok) return null;
     const data = (await res.json()) as { access_token?: string };
     return data.access_token ?? null;
   } catch {
@@ -344,9 +350,15 @@ router.post("/payments/mpesa", async (req: Request, res: Response): Promise<void
     return;
   }
 
-    const shortcode = getMpesaShortcode();
-    const passkey = process.env["MPESA_PASSKEY"];
-    const token = shortcode && passkey ? await getMpesaToken() : null;
+  const shortcode = getMpesaShortcode();
+  const passkey = process.env["MPESA_PASSKEY"];
+  const configured = mpesaConfigured();
+  const token = configured ? await getMpesaToken() : null;
+
+  if ((configured && !token) || (!configured && !paymentMocksAllowed())) {
+    res.status(503).json({ error: "M-Pesa payments are currently unavailable", retryable: true });
+    return;
+  }
 
   const normalizedPhone = phone.replace(/^\+/, "").replace(/^0/, "254");
   const expectedAmount  = Math.ceil(amount);
@@ -497,7 +509,13 @@ router.get(
   async (req: Request, res: Response): Promise<void> => {
     const shortcode = getMpesaShortcode();
     const passkey = process.env["MPESA_PASSKEY"];
-    const token = shortcode && passkey ? await getMpesaToken() : null;
+    const configured = mpesaConfigured();
+    const token = configured ? await getMpesaToken() : null;
+
+    if ((configured && !token) || (!configured && !paymentMocksAllowed())) {
+      res.status(503).json({ error: "M-Pesa verification is currently unavailable", retryable: true });
+      return;
+    }
 
     if (!token || !shortcode || !passkey) {
       res.json({ status: Math.random() > 0.4 ? "success" : "pending" });
@@ -585,6 +603,10 @@ router.post(
 
     const stripe = await getStripe();
     if (!stripe) {
+      if (!paymentMocksAllowed()) {
+        res.status(503).json({ error: "Card payments are currently unavailable", retryable: true });
+        return;
+      }
       // Mock: return a fake hosted-checkout URL for demo
       res.json({
         sessionId: `cs_mock_${Date.now()}`,
@@ -625,6 +647,10 @@ router.get(
   async (req: Request, res: Response): Promise<void> => {
     const stripe = await getStripe();
     if (!stripe) {
+      if (!paymentMocksAllowed()) {
+        res.status(503).json({ error: "Card payment verification is currently unavailable", retryable: true });
+        return;
+      }
       res.json({ status: "paid", paymentStatus: "paid" });
       return;
     }
@@ -659,6 +685,10 @@ router.post(
 
     const secretKey = process.env["PAYSTACK_SECRET_KEY"];
     if (!secretKey) {
+      if (!paymentMocksAllowed()) {
+        res.status(503).json({ error: "Paystack payments are currently unavailable", retryable: true });
+        return;
+      }
       const ref = res.locals.checkoutReference ?? `PS_MOCK_${Date.now()}`;
       res.json({
         authorizationUrl: `https://checkout.paystack.com/mock`,
@@ -718,6 +748,10 @@ router.get(
   async (req: Request, res: Response): Promise<void> => {
     const secretKey = process.env["PAYSTACK_SECRET_KEY"];
     if (!secretKey) {
+      if (!paymentMocksAllowed()) {
+        res.status(503).json({ error: "Paystack verification is currently unavailable", retryable: true });
+        return;
+      }
       res.json({ success: true, status: "success" });
       return;
     }

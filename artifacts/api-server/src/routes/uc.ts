@@ -16,6 +16,7 @@ import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
 import { getCustomerStatistics } from "../lib/customer-statistics.js";
 import { validateCodShipping } from "../lib/order-validation.js";
+import { paymentMocksAllowed, paymentProviderConfigured } from "../lib/payment-configuration.js";
 import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
 import { activationEligibility, validInstallationDate, purchaseUnitIds } from "../lib/activation-eligibility.js";
 import { activationPurchaseOptions } from "../lib/activation-purchases.js";
@@ -3963,16 +3964,17 @@ export async function verifyPaymentOnServer(
 
   if (!reference) return { ok: false, reason: "No payment reference provided" };
 
+  if (["mpesa", "stripe", "paystack"].includes(method) && !paymentProviderConfigured(method)) {
+    if (paymentMocksAllowed()) return { ok: true };
+    return { ok: false, reason: `${method} payment verification is unavailable`, retryable: true };
+  }
+
   // ── M-Pesa ──
   if (method === "mpesa") {
     const shortcode = process.env["MPESA_SHORTCODE"];
     const passkey = process.env["MPESA_PASSKEY"];
     const key = process.env["MPESA_CONSUMER_KEY"];
     const secret = process.env["MPESA_CONSUMER_SECRET"];
-    if (!key || !secret || !shortcode || !passkey) {
-      // Mock mode: accept any reference
-      return { ok: true };
-    }
     try {
       const creds = Buffer.from(`${key}:${secret}`).toString("base64");
       const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
@@ -4005,13 +4007,9 @@ export async function verifyPaymentOnServer(
   // ── Stripe ──
   if (method === "stripe") {
     const stripeKey = process.env["STRIPE_SECRET_KEY"];
-    if (!stripeKey) {
-      // Mock mode: accept any session ID
-      return { ok: true };
-    }
     try {
       const StripeSDK = await import("stripe");
-      const stripe = new StripeSDK.default(stripeKey, { timeout: 10_000, maxNetworkRetries: 0 });
+      const stripe = new StripeSDK.default(stripeKey!, { timeout: 10_000, maxNetworkRetries: 0 });
       const session = await stripe.checkout.sessions.retrieve(reference);
       const ok = session.payment_status === "paid";
       return ok ? { ok: true, amount: Number(session.amount_total) / 100, currency: session.currency?.toUpperCase() } : { ok: false, failureFinal: session.status === "expired", reason: `Stripe session status: ${session.payment_status}` };
@@ -4023,10 +4021,6 @@ export async function verifyPaymentOnServer(
   // ── Paystack ──
   if (method === "paystack") {
     const secretKey = process.env["PAYSTACK_SECRET_KEY"];
-    if (!secretKey) {
-      // Mock mode: accept any reference
-      return { ok: true };
-    }
     try {
       const vRes = await fetch(
         `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,

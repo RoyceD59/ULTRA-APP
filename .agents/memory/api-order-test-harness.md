@@ -25,7 +25,7 @@ delete process.env["WC_CONSUMER_SECRET"];
 **Why:**
 - With WC creds present, orders take the WooCommerce path. For reference-bearing (paid) orders it *fails closed* with a retriable 503 unless the WC POST returns a real order — a stubbed fetch cannot satisfy it cleanly.
 - A generic fetch stub returning `{ id: "anything" }` is mistaken for a real WC order: the route returns it as the created order (string id ends up in the response and breaks DB follow-up queries). If a stub must answer WC calls, return `[]` for GETs and `{}` (no `id`) for POSTs.
-- With M-Pesa creds present, mpesa references are verified against Daraja; without them the server uses mock mode and accepts any reference.
+- With M-Pesa creds present, mpesa references are verified against Daraja; credential-free order fixtures require explicit `NODE_ENV=test` (set by the isolated runner). Production and unset environments reject them.
 
 **How to apply:** mirror the `mpesa-idempotency.test.ts` harness (own http server, env deletion, fetch stub, cleanup). With creds deleted, orders take the local DB path — assert stored data (e.g. normalized phone) by querying `ucOrdersTable`, since the DB-path response body does not include `shippingAddress`.
 

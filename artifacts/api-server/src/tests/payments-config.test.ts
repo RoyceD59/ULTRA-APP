@@ -31,6 +31,8 @@ let base: string;
 const ENV_KEYS = [
   "MPESA_SHORTCODE",
   "MPESA_PASSKEY",
+  "MPESA_CONSUMER_KEY",
+  "MPESA_CONSUMER_SECRET",
   "STRIPE_ENABLED",
   "STRIPE_SECRET_KEY",
 ] as const;
@@ -71,6 +73,8 @@ beforeEach(() => {
   for (const k of ENV_KEYS) {
     savedEnv[k] = process.env[k];
   }
+  process.env["MPESA_CONSUMER_KEY"] = "config-test-key";
+  process.env["MPESA_CONSUMER_SECRET"] = "config-test-secret";
 });
 
 afterEach(() => {

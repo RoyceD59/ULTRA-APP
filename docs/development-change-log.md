@@ -4,6 +4,41 @@ Track development progress here in Git. Record changes, verification, remaining
 work and publication status. Never include secrets or customer identifiers.
 Git history records exact file changes; entries here explain their purpose.
 
+## 2026-10-07 — Payment verification hardening
+
+- Restricted credential-free payment simulations to explicit development/test
+  environments. Production, unset and unrecognized environments fail closed
+  for Paystack, Stripe and M-Pesa verification, including guest legacy orders.
+- Unconfigured providers return an unavailable error from public initialization
+  and status endpoints instead of fake references or successful payment status.
+  Initialization rejects before reserving a checkout; production availability
+  hides unconfigured methods without changing the existing mode enum.
+- M-Pesa OAuth failures no longer fall back to demo initiation or status,
+  even in development. Numeric shortcode and all server credentials are required
+  for real M-Pesa readiness. COD and explicitly permitted local demos remain intact.
+- Added production regression coverage for forged guest references, missing and
+  partial credentials, initialization/status endpoints, provider-confirmed
+  Paystack verification, and M-Pesa authentication failure.
+- Verification: shared-library and API type checks passed; 103 focused payment
+  tests passed. The final 19 security regressions also passed after preserving
+  the existing config enum and adding the initialization OAuth-failure assertion.
+  Development API restarted successfully. No production publication or live
+  secret inspection was performed; no ignore rules changed.
+- Initial completion checks also passed code review, the full API test suite,
+  all four project type checks and Companion startup-font verification, but
+  Expo Doctor rejected six stale installed Expo packages.
+- With owner approval, restored the installation using the existing frozen
+  lockfile. The manifest and lockfile already specified the required versions;
+  neither needed changes. Verified the six versions against the official Expo
+  packages in the registry. Expo Doctor now passes all 20 checks, and the
+  Companion preview restarted with the updated installation.
+- Dependency audit reported seven existing advisories (one critical, four high,
+  two moderate). Existing patches for braces, http-cache-semantics and node-forge
+  passed all seven dependency-security regression tests. Unresolved shell-quote
+  and sharp advisories remain outside this payment patch and block a production
+  readiness claim; moderate fast-copy and postcss-selector-parser findings also
+  remain. No production publication or broader dependency upgrade was performed.
+
 ## 2026-10-05 — Consistency release preparation
 
 **Scope:** The owner approved splitting preparation in the isolated task from

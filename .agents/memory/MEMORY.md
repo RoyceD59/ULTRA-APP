@@ -13,7 +13,8 @@
 - [pnpm Nix version bootstrap](pnpm-nix-version-bootstrap.md) — automatic version management can recurse through the provisioned binary and exhaust workspace processes.
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
 - [WooCommerce catalogue pagination](woocommerce-catalog-pagination.md) — category resolution and local category fallback must page all WooCommerce results or fail explicitly; never serve a silently truncated catalogue.
-- [Payment gateway status](payment-gateway-status.md) — WooCommerce+Paystack live; Stripe off via STRIPE_ENABLED; M-Pesa demo (placeholder shortcode); method list served by /api/payments/config.
+- [Payment gateway status](payment-gateway-status.md) — provider activation choices; Stripe stays off until WooCommerce connection; checkout method availability is server-driven.
+- [Payment demo boundary](payment-demo-boundary.md) — simulations require explicit development/test; production and unknown environments fail closed; provider outages never authorize demo success.
 - [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines drop exports; spliced handler code → restore file from last good commit + re-apply legit lines.
 - [API test-DB isolation](api-test-db-isolation.md) — tests run in a per-run database; drizzle push always diffs public of the connected DB; raw-SQL-only tables (startup migrations) must be mirrored in lib/db schema.
 - [API test resource budgets](api-test-resource-budget.md) — bound test workers and transform threads; host CPU count can exceed the container's OS-thread budget.
