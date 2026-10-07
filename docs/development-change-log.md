@@ -4,6 +4,58 @@ Track development progress here in Git. Record changes, verification, remaining
 work and publication status. Never include secrets or customer identifiers.
 Git history records exact file changes; entries here explain their purpose.
 
+
+## 2026-10-07 — Authentication session hardening
+
+**Scope:** Security fixes only; no new login, refresh or logout flows.
+
+**Changes:**
+- All server-issued sessions now receive an eight-hour expiry by default.
+  This covers customer password login, registration, WooCommerce and social
+  login, development fallback, and password-change replacement sessions.
+- Verification requires a valid expiry and rejects tokens at the exact expiry
+  boundary. Existing customer tokens without expiry must sign in again.
+  Explicit team-session expiry remains unchanged.
+- Customer-count statistics now reload the live team account and reject
+  deactivated, deleted, unknown and legacy passcode principals. Active members
+  retain access; admin role claims do not bypass the account check.
+- Added focused expiry and live-team-account regression tests.
+
+**Ignore changes:** None.
+
+**Verification:** Shared-library and API typechecks passed. The 36 existing
+credential-version, Woo identity, social email, temporary-password and admin
+gate tests passed. The final focused run passed all nine new expiry/count
+authorization tests after correcting a test-only camelCase field assertion.
+The development API rebuilt and started cleanly; proxied health returned 200
+and unauthenticated customer-count access returned 401.
+
+**Status:** Source changes and development verification only; not published.
+
+
+### Approved completion-blocker fixes
+
+**Scope/approval:** The owner approved fixing the unrelated Expo check and
+receipt projection findings that blocked authentication-task completion.
+
+- Preserved WooCommerce's verified paid state when merging a linked local
+  order whose COD collection ledger has not yet caught up. This changes the
+  customer display projection only; it does not mark local cash as collected.
+- Added regression coverage through the real `/uc/orders` response into receipt
+  email, page/PDF HTML and sharing text. Unpaid orders remain unpaid, and local
+  staff-confirmed collection still overrides a stale unpaid Woo mirror.
+- Resynchronized installed Expo dependencies with the already committed
+  lockfile using `pnpm install --frozen-lockfile`. No manifest or lockfile edits:
+  expo 57.0.27, expo-auth-session 57.0.14, expo-constants 57.0.21,
+  expo-linking 57.0.12, expo-router 57.0.25, expo-notifications 57.0.22.
+- Verification: all 11 receipt/order-scope tests and API typecheck passed;
+  Expo Doctor passed all 20 checks. Development API rebuilt and restarted.
+- Dependency audit: existing advisory totals are one critical, four high and
+  two moderate (including patched packages reported by version). No new
+  dependency was added. This is not a clean security-audit or shipping claim.
+
+**Ignore changes:** None. **Status:** Development verification only; no publish.
+
 ## 2026-10-07 — Payment verification hardening
 
 - Restricted credential-free payment simulations to explicit development/test

@@ -4128,6 +4128,9 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
               ? {
                 ...normalized,
                 ...orderEvidence({ ...projection, status: String(normalized.status) }),
+                // A lagging local COD collection ledger must not overwrite
+                // Woo's explicit date_paid evidence with awaiting_collection.
+                ...(normalized.paymentStatus === "paid" ? { paymentStatus: "paid" } : {}),
                 shippingAddress: projection.shippingAddress ?? normalized.shippingAddress,
                 ...(projection.customerStage ? {
                   customerStage: projection.customerStage,
@@ -9452,6 +9455,14 @@ router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
     return;
   }
   try {
+    // Identity claims alone cannot prove this is still an active team account.
+    // Keep member access, but reject deactivated/deleted and legacy principals.
+    const [teamUser] = await db.select({ isActive: teamUsersTable.isActive })
+      .from(teamUsersTable).where(eq(teamUsersTable.id, String(claims.id))).limit(1);
+    if (!teamUser?.isActive) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
     res.json(await getCustomerStatistics());
   } catch (err) {
     logger.error({ err }, "[customers/count] query failed");

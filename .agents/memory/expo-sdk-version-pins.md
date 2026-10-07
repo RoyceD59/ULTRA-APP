@@ -17,3 +17,5 @@ manifest and lockfile already contained every required SDK patch.
 
 **How to apply:** When the recorded versions are correct, restore the frozen
 lockfile installation first instead of introducing additional dependency changes.
+Stale installations can remain after newer pins arrive from a merge. Rerun
+Expo Doctor after installation without suppressing its checks.

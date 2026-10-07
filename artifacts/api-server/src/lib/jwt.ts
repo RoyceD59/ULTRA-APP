@@ -11,6 +11,9 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const ALG_HEADER = Buffer.from('{"alg":"HS256","typ":"JWT"}').toString("base64url");
 
+/** Customer sessions use the same bounded lifetime as team sessions. */
+export const CUSTOMER_SESSION_TTL_SECONDS = 8 * 60 * 60;
+
 function secret(): string {
   const s = process.env["SESSION_SECRET"];
   if (!s) {
@@ -25,9 +28,14 @@ function sign(headerDotBody: string): string {
     .digest("base64url");
 }
 
-/** Issue a signed JWT containing `payload` as the claims. */
+/** Issue a signed JWT. All issuance paths, including social/Woo login and
+ * password changes, get a bounded session even when no expiry is supplied. */
 export function issueToken(payload: Record<string, unknown>): string {
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const claims = {
+    ...payload,
+    exp: payload.exp ?? Math.floor(Date.now() / 1000) + CUSTOMER_SESSION_TTL_SECONDS,
+  };
+  const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
   const unsigned = `${ALG_HEADER}.${body}`;
   return `${unsigned}.${sign(unsigned)}`;
 }
@@ -61,7 +69,8 @@ export interface JwtClaims {
 /**
  * Verify a Bearer JWT issued by this server.
  * Returns the decoded claims on success, or null if the signature is invalid,
- * the token is malformed, the algorithm is `none`, or the token has expired.
+ * the token is malformed, the algorithm is `none`, or its expiry is missing,
+ * invalid, or reached. Legacy unbounded sessions must sign in again.
  */
 export function verifyToken(authHeader: string | undefined): JwtClaims | null {
   if (!authHeader?.startsWith("Bearer ")) return null;
@@ -99,8 +108,10 @@ export function verifyToken(authHeader: string | undefined): JwtClaims | null {
   try {
     const claims = JSON.parse(Buffer.from(body, "base64url").toString()) as JwtClaims;
 
-    // Enforce expiry claim: reject tokens past their exp timestamp
-    if (claims.exp !== undefined && claims.exp < Math.floor(Date.now() / 1000)) {
+    // Fail closed for old unbounded tokens and malformed expiry claims.
+    // JWT exp is exclusive: the token is invalid at, not just after, exp.
+    if (typeof claims.exp !== "number" || !Number.isSafeInteger(claims.exp)
+      || claims.exp <= Math.floor(Date.now() / 1000)) {
       return null;
     }
 

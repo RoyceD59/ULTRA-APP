@@ -1,4 +1,5 @@
 - [ProjectHub auth rewrite](projecthub-auth-rewrite.md) — team-session accounts; live DB admin checks; configured break-glass admin is reconciled without replacing its password.
+- [Customer session lifetime](session-lifetime-policy.md) — eight-hour sessions; reject legacy expiry-free tokens; publication requires explaining the one-time sign-in.
 - [Credential mutation concurrency](credential-mutation-concurrency.md) — temporary issuance and self-service resets must share one per-user lock across provider delivery.
 - [Orval date fields vs Drizzle string-mode dates](orval-drizzle-date-mismatch.md) — Zod coerces `format: date` to JS Date; string-mode Drizzle date columns need manual YYYY-MM-DD conversion at the DB boundary.
 - [Orval schema naming collision with operationId](orval-schema-naming-collision.md) — rename any openapi.yaml schema whose name matches an operationId-derived response/body type before codegen.
