@@ -5,6 +5,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import sharp from "sharp";
 
 import { getOrCreateDerivative, snapWidth } from "../lib/image-derivatives";
+import { IMAGE_TYPES, VIDEO_TYPES, mediaMimeFamily } from "../lib/review-media-signature.js";
 
 import { verifyToken } from "../lib/jwt.js";
 import { pool } from "@workspace/db";
@@ -24,26 +25,9 @@ type StorageAdapter = Pick<ObjectStorageService,
 const STORAGE_THUMB_CACHE_DIR = path.join(os.tmpdir(), "uc-storage-thumb-cache");
 
 // ─── Upload allowlist ─────────────────────────────────────────────────────────
-// Only these MIME types may receive a presigned PUT URL. Everything else is
-// rejected before a URL is minted so unsafe files (executables, HTML, SVG with
-// XSS payloads, etc.) never land in the storage bucket.
-const IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  // iOS devices often produce HEIC/HEIF; safe to allow, rejected at serve time
-  // if not image/* (forced to octet-stream attachment).
-  "image/heic",
-  "image/heif",
-]);
-const VIDEO_TYPES = new Set([
-  "video/mp4",
-  "video/quicktime",
-  // Android devices commonly produce webm/3gpp; both are safe container formats.
-  "video/webm",
-  "video/3gpp",
-]);
+// These types may receive a presigned PUT URL, but the signer does not bind
+// Content-Type. Serving and attachment verification must independently enforce
+// the safe-media allowlist; the declaration alone never proves stored content.
 const PDF_TYPES = new Set(["application/pdf"]);
 
 /** Instance-local adapter keeps route tests independent of real object storage. */
@@ -224,6 +208,7 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         res.setHeader("Content-Type", "image/webp");
         res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
         res.sendFile(cachePath);
         return;
       } catch (err) {
@@ -238,16 +223,21 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
     // These are user-uploaded bytes served from our origin: never let the
-    // browser sniff HTML/JS out of them, and only render image/video inline.
+    // browser sniff HTML/JS out of them. Never treat arbitrary image/* (SVG)
+    // or video/* metadata as safe: it was supplied by the uploader.
     res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
     // uploads/<uuid> content never changes once written — let devices and any
     // intermediate cache keep it for a year instead of re-downloading review
     // photos and product media on every visit.
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    const contentType = String(response.headers.get("content-type") ?? "");
-    if (!contentType.startsWith("image/") && !contentType.startsWith("video/")) {
+    const contentType = String(response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    if (!mediaMimeFamily(contentType)) {
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader("Content-Disposition", "attachment");
+    } else {
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", "inline");
     }
 
     if (response.body) {

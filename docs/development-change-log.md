@@ -5,6 +5,30 @@ work and publication status. Never include secrets or customer identifiers.
 Git history records exact file changes; entries here explain their purpose.
 
 
+## 2026-10-07 — Public upload SVG execution hardening
+
+- Replaced broad image/video MIME-prefix trust with a shared explicit safe-media
+  allowlist. Public SVG, HTML, XML, unknown media and documents are forced to
+  octet-stream downloads, including the thumbnail failure path.
+- Added restrictive sandbox content-security headers and retained nosniff for
+  public originals and generated thumbnails. Supported raster photos and videos
+  remain inline; no new upload flow or storage migration was introduced.
+- Attachment validation now inspects a bounded byte prefix even when an
+  uploader supplies allowlisted stored MIME metadata. SVG/HTML disguised as
+  photos or videos are rejected; unlabelled legitimate media still use the
+  existing declaration/size checks and detected metadata repair.
+- The sidecar signer still does not bind Content-Type. The security boundary
+  is therefore independently enforced at public serving and attachment, not
+  solely in the upload-URL request.
+- Verification: 42 focused upload, public-serving, signature and private-evidence
+  tests passed in an isolated database; shared-library and API type checks
+  passed. Development API restarted and its health endpoint returned OK.
+  Completion code review, the full API suite, all project type checks and
+  Companion startup-font validation passed. The initial Expo Doctor check found
+  six stale installed Expo packages despite correct manifest/lockfile versions;
+  restored the existing frozen-lockfile installation without dependency-file
+  changes. No production publication or ignore-rule changes.
+
 ## 2026-10-07 — Authentication session hardening
 
 **Scope:** Security fixes only; no new login, refresh or logout flows.

@@ -5,15 +5,19 @@ description: Enforcement contract for presigned object-storage uploads and admin
 
 ## Attach-time verification is the enforcement point
 
-Presigned PUT URLs cannot bind size or content-type, so upload caps are enforced when an object URL is **attached** to a record (reviews, tickets, water tests, admin product media), by reading the stored object's GCS metadata (size + contentType vs declared photo/video kind).
+The sidecar presigned PUT signer does not bind size or content-type. Treat both the upload declaration and stored MIME metadata as untrusted. At attachment, enforce size caps, the explicit photo/video MIME allowlist, and a matching file signature even when MIME metadata is already populated.
 
-**Why:** a review round found authenticated users could bypass the request-url caps by PUTting anything to the presigned URL; the sink-side metadata check is what actually enforces limits.
+**Why:** authenticated users can PUT different content than declared. Metadata-only checks accepted SVGs or SVG bytes labelled as a raster photo; safe attachment requires independent byte verification.
 
 **How to apply:** any NEW endpoint that accepts media URLs must run the sanitize (URL whitelist) + verify (metadata) helpers already in the UC routes before persisting. Never persist raw client-supplied URL arrays.
 
 ## Public serving is scoped to uploads/<uuid>
 
-Only objects minted by the upload endpoint (`uploads/<uuid>` inside the private object dir) are publicly servable, with `X-Content-Type-Options: nosniff` and inline rendering only for image/* and video/* (everything else forced to octet-stream attachment). Anything else under PRIVATE_OBJECT_DIR must remain unreachable from public routes.
+Generic uploads are publicly retrievable even before attachment, so their public serving boundary must independently enforce safety. Render inline only explicitly allowlisted raster image/video MIME types, never arbitrary image/* or video/*. Unsupported types (including SVG) must be octet-stream attachments with nosniff and a restrictive sandbox CSP. Other private objects remain unreachable unless a dedicated authorized serving path exists.
+
+**Why:** correctly labelled SVG documents execute scripts despite nosniff, and attachment checks cannot protect a public object that has not been attached yet.
+
+**How to apply:** retain serving protections for originals and thumbnail fallback; do not rely on client declarations or attachment approval to prevent same-origin active documents.
 
 ## Assessment evidence is always private
 
