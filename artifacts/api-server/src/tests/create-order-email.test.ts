@@ -610,6 +610,10 @@ describe("createOrder — DB path — sendViaResend is called", () => {
         bodyText.includes("Bottle Filter Cartridge"),
         "email body must contain the line-item name",
       );
+      assert.ok(bodyText.includes("Cash on Delivery"), "raw-SQL orders must retain their payment method");
+      assert.ok(bodyText.includes("Payment pending"), "uncollected COD must remain pending");
+      assert.ok(typeof orderBody["receiptSerial"] === "string" && bodyText.includes(orderBody["receiptSerial"]),
+        "the issued serial must match the confirmation-page response");
 
       if (typeof orderId === "number") createdOrderIds.push(orderId);
 

@@ -6,6 +6,7 @@ import { validateCodShipping, validatePhone } from "./order-validation.js";
 import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
 import { orderEvidence } from "./order-evidence.js";
 import { hasWCCredentials, wcFetchArray, wcCreateCheckoutOrder } from "../routes/uc.js";
+import { orderReceiptSerial } from "@workspace/api-zod/order-receipt";
 
 export interface CheckoutInput {
   lineItems: { productId: number; quantity: number }[];
@@ -111,6 +112,9 @@ export async function checkoutOrderResponse(order: any) {
       paymentConfirmedAt: order.payment_confirmed_at, wcOrderId: order.wc_order_id, codCollectionStatus: order.cod_collection_status,
       shippingAddress: order.shipping_address }),
     dateCreated: order.date_created, paymentMethod: order.payment_method, shippingAddress: order.shipping_address,
+    receiptSerial: orderReceiptSerial(order.wc_order_id ?? order.id, order.date_created),
+    codCollectionStatus: order.cod_collection_status ?? null,
+    paymentReference: order.payment_method === "cod" ? "" : order.mpesa_receipt || order.payment_reference || "",
     fulfillment: order.shipping_address?.fulfillment, shippingAmount: Number(order.shipping_address?.shippingAmount ?? 0),
     discountAmount: Number(order.discount_amount), promoCode: order.promo_code, mpesaReceipt: order.mpesa_receipt ?? "",
     lineItems: items.rows.map(i => ({ productId: i.product_id, name: i.name, quantity: i.quantity, total: i.total })) };

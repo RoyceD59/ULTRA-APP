@@ -29,6 +29,7 @@ import { installCompanionDiagnostics, setDiagnosticRoute } from '@/lib/runtimeDi
 // Set API base URL before any component renders
 import ConnectionStatusFrame from '@/components/ConnectionStatusFrame';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react/config';
+import { CheckoutReceiptProvider } from '@/context/CheckoutReceiptContext';
 const apiBase = getApiBase();
 if (apiBase) {
   setBaseUrl(apiBase);
@@ -173,6 +174,7 @@ export default function RootLayout() {
   const app = (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <CheckoutReceiptProvider>
         <CartProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
@@ -182,6 +184,7 @@ export default function RootLayout() {
             </KeyboardProvider>
           </GestureHandlerRootView>
         </CartProvider>
+        </CheckoutReceiptProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

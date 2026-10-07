@@ -138,6 +138,10 @@ export interface UCOrder {
   status: string;
   /** Separate payment and fulfilment values stay current after order sync. */
   paymentStatus?: string;
+  paymentConfirmedAt?: string | null;
+  paymentReference?: string;
+  receiptSerial?: string;
+  codCollectionStatus?: string | null;
   fulfillmentStatus?: string;
   dateCreated: string;
   total: string;

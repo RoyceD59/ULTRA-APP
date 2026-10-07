@@ -38,6 +38,7 @@ minimumReleaseAgeExclude:
   - expo
   - 'expo-*'
   - '@expo/*'
+  - babel-preset-expo
 
 onlyBuiltDependencies:
   - '@swc/core'

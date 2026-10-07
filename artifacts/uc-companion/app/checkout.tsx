@@ -33,6 +33,7 @@ import { useApi, UCAddress, ApiError, type PaymentsConfig, type CheckoutPromotio
 import { quoteMatchesCheckout } from '@/hooks/checkoutQuoteIdentity';
 import ContactCompletion from '@/components/ContactCompletion';
 import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
+import { useCheckoutReceipt } from '@/context/CheckoutReceiptContext';
 
 const DELIVERY_FEE = 500;
 
@@ -134,6 +135,7 @@ export default function CheckoutScreen() {
   const colors = useColors();
   const router = useRouter();
   const { items, totalPrice, clearCart, cartHydrated, cartLoadError, refreshCart } = useCart();
+  const { retainOrder } = useCheckoutReceipt();
   const { user } = useAuth();
   const api = useApi();
   const queryClient = useQueryClient();
@@ -1124,6 +1126,7 @@ export default function CheckoutScreen() {
       setAppliedQuote(null);
       setUsingReferralDiscount(false);
       setPromoInput('');
+      retainOrder(order);
       clearCart();
       setMpesaWaiting(false);
       setProcessing(false);

@@ -12,6 +12,10 @@ import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
+import OrderReceiptCard from '@/components/OrderReceiptCard';
+import { useCheckoutReceipt } from '@/context/CheckoutReceiptContext';
+import { buildCustomerReceipt, receiptOrderPaymentStatus } from '@workspace/api-zod/order-receipt';
+import { saveReceiptPdf, shareReceipt, shareReceiptToWhatsApp } from '@/utils/receiptExport';
 
 /**
  * Gentle nudge shown to guests after checkout: creating a free account lets
@@ -107,6 +111,9 @@ export default function OrderDetailScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const { order: checkoutOrder } = useCheckoutReceipt();
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<ReturnReason | ''>('');
   const [details, setDetails] = useState('');
@@ -130,7 +137,30 @@ export default function OrderDetailScreen() {
     }
   });
 
-  const order = singleOrder;
+  const order = singleOrder ?? (String(checkoutOrder?.id) === id ? checkoutOrder : undefined);
+  const receipt = order ? buildCustomerReceipt({
+    ...order,
+    paymentStatus: receiptOrderPaymentStatus(order),
+  }) : null;
+
+  async function exportReceipt(action: 'save' | 'share' | 'whatsapp') {
+    if (!receipt || receiptBusy) return;
+    setReceiptBusy(true);
+    setReceiptError('');
+    try {
+      if (action === 'save') await saveReceiptPdf(receipt);
+      else if (action === 'whatsapp') await shareReceiptToWhatsApp(receipt);
+      else await shareReceipt(receipt);
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        const message = error instanceof Error ? error.message : 'Please try again or take a screenshot of your receipt.';
+        setReceiptError(message);
+        if (Platform.OS !== 'web') Alert.alert('Receipt could not be shared', message);
+      }
+    } finally {
+      setReceiptBusy(false);
+    }
+  }
 
   useFocusEffect(
     React.useCallback(() => {
@@ -194,7 +224,7 @@ export default function OrderDetailScreen() {
         <Text style={[styles.successTitle, { color: colors.text }]}>Order Confirmed!</Text>
         <Text style={[styles.successSub, { color: colors.mutedForeground }]}>Order #{id}</Text>
         <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
-          You'll receive a confirmation message shortly.
+          For a saved copy, check your confirmation email. If you used an account for this order, sign in to reopen it here.
         </Text>
         <View style={{ alignSelf: 'stretch', paddingHorizontal: 20, marginTop: 24 }}>
           <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
@@ -292,6 +322,11 @@ export default function OrderDetailScreen() {
       )}
 
       {/* ── Guest account nudge (filter reminders) ──────────── */}
+      {receipt ? <OrderReceiptCard receipt={receipt} busy={receiptBusy}
+        onSave={() => void exportReceipt('save')}
+        onShare={() => void exportReceipt('share')}
+        onWhatsApp={() => void exportReceipt('whatsapp')} /> : null}
+      {receiptError ? <Text accessibilityRole="alert" style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{receiptError}</Text> : null}
       <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
 
       {/* ── Order info ──────────────────────────────────────── */}

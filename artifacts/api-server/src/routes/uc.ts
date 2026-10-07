@@ -23,6 +23,7 @@ import { orderEvidence } from "../lib/order-evidence.js";
 import { registerOrderUnit } from "../lib/register-order-unit.js";
 import { checkoutDiagnostics } from "../lib/checkout-diagnostics.js";
 import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
+import { receiptOrderPaymentStatus } from "@workspace/api-zod/order-receipt";
 import { remoteImageProxyPath } from "./product-images.js";
 import { CatalogueCache } from "../lib/catalogue-cache.js";
 import { authLimiter, lookupLimiter, locationQualityLimiter } from "../lib/rate-limiters.js";
@@ -4363,6 +4364,8 @@ router.get("/uc/orders/:orderId", async (req: Request, res: Response): Promise<v
       customerStageUpdatedAt: order.customerStageUpdatedAt,
       fulfillmentStatus,
       ...orderEvidence(order),
+      receiptSerial: orderReceiptSerial(order.wcOrderId ?? order.id, order.dateCreated),
+      paymentReference: order.paymentMethod === "cod" ? "" : order.mpesaReceipt || order.paymentReference || "",
       total: order.total,
       currency: order.currency,
       paymentMethod: order.paymentMethod,
@@ -5919,6 +5922,7 @@ export function sendOrderConfirmationEmail(
     total:           string;
     currency:        string;
     paymentMethod:   string;
+    paymentStatus?:  string;
     shippingAddress?: Record<string, string>;
     discountAmount?:  number;
     promoCode?:       string;
@@ -5945,6 +5949,7 @@ export function sendOrderConfirmationEmail(
         total:           order.total,
         currency:        order.currency,
         paymentMethod:   order.paymentMethod,
+        paymentStatus:   order.paymentStatus,
         shippingAddress: order.shippingAddress,
         discountAmount:  order.discountAmount,
         promoCode:       order.promoCode,
@@ -5969,7 +5974,9 @@ export function sendOrderConfirmationEmail(
         }
       });
     }
-  }).catch(() => {});
+  }).catch((err: unknown) => {
+    logger.error({ err, orderId: order.orderId }, "Order receipt preparation failed");
+  });
 }
 
 export async function notifyConfirmedCheckout(order: any) {
@@ -5985,7 +5992,8 @@ export async function notifyConfirmedCheckout(order: any) {
   sendOrderConfirmationEmail(order.user_id, { orderId: response.id, lineItems: response.lineItems,
     total: response.total, currency: response.currency, paymentMethod: order.payment_method,
     shippingAddress: response.shippingAddress, discountAmount: response.discountAmount, promoCode: response.promoCode,
-    dateCreated: response.dateCreated, paymentReference: order.mpesa_receipt || order.payment_reference });
+    dateCreated: response.dateCreated, paymentStatus: response.paymentStatus,
+    paymentReference: order.payment_method === "cod" ? "" : order.mpesa_receipt || order.payment_reference });
 }
 
 // ─── Filter registration from purchase record ────────────────────────────────
@@ -6467,6 +6475,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             total:         existingOrder.total,
             currency:      existingOrder.currency,
             paymentMethod: existingOrder.paymentMethod,
+            paymentStatus: receiptOrderPaymentStatus(existingOrder),
             shippingAddress: existingOrder.shippingAddress as Record<string, string> | undefined,
             dateCreated:   existingOrder.dateCreated,
             // Prefer the customer-recognisable M-Pesa code when the callback stored one.
@@ -6772,7 +6781,10 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:         String(normalized["total"] ?? "0"),
       currency:      String(normalized["currency"] ?? "KES"),
       paymentMethod: String(normalized["paymentMethod"] ?? ""),
+      paymentStatus: String(normalized["paymentStatus"] ?? "pending"),
       shippingAddress: normalized["shippingAddress"] as Record<string, string> | undefined,
+      discountAmount: Number(normalized["discountAmount"] ?? discountAmount),
+      promoCode: String(normalized["promoCode"] ?? promoCode ?? ""),
       dateCreated:   normalized["dateCreated"] as string | undefined,
       paymentReference: paymentReference ?? "",
     });
@@ -7254,7 +7266,24 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
            VALUES ($1,$2,$3,'KES',$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
           [orderUserId, paymentMethod === "cod" ? "pending" : "processing", String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), idempotencyKey!.trim(), paymentMethod === "cod" ? "awaiting_collection" : null],
         );
-        dbOrder = inserted.rows[0];
+        const insertedOrder = inserted.rows[0];
+        // Raw SQL returns snake_case; the shared receipt/notification path
+        // below consumes the same camelCase fields as Drizzle-returned orders.
+        dbOrder = {
+          ...insertedOrder,
+          userId: insertedOrder.user_id,
+          dateCreated: insertedOrder.date_created,
+          paymentMethod: insertedOrder.payment_method,
+          paymentReference: insertedOrder.payment_reference,
+          paymentConfirmedAt: insertedOrder.payment_confirmed_at,
+          codCollectionStatus: insertedOrder.cod_collection_status,
+          checkoutState: insertedOrder.checkout_state,
+          wcOrderId: insertedOrder.wc_order_id,
+          shippingAddress: insertedOrder.shipping_address,
+          discountPercent: insertedOrder.discount_percent,
+          discountAmount: insertedOrder.discount_amount,
+          promoCode: insertedOrder.promo_code,
+        };
         const promotionUse = durableCheckoutPromotion ? await consumePromotionOnClient(client, {
           quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout",
           actor: `customer:${orderNumericId}`, idempotencyKey: idempotencyKey!.trim(),
@@ -7369,6 +7398,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           dbOrder!.total,
       currency:        dbOrder!.currency,
       paymentMethod:   dbOrder!.paymentMethod,
+      paymentStatus:   receiptOrderPaymentStatus(dbOrder!),
+      receiptSerial:   orderReceiptSerial(dbOrder!.wcOrderId ?? dbOrder!.id, dbOrder!.dateCreated),
       codCollectionStatus: dbOrder!.codCollectionStatus ?? null,
       shippingAddress: dbOrder!.shippingAddress ?? {},
       discountPercent,
@@ -7393,6 +7424,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           newOrder.total,
       currency:        newOrder.currency,
       paymentMethod:   newOrder.paymentMethod,
+      paymentStatus:   receiptOrderPaymentStatus(dbOrder!),
       shippingAddress: newOrder.shippingAddress as Record<string, string> | undefined,
       discountAmount:  newOrder.discountAmount,
       promoCode:       newOrder.promoCode,
@@ -7492,6 +7524,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           fallbackOrder.total,
       currency:        fallbackOrder.currency,
       paymentMethod:   fallbackOrder.paymentMethod,
+      paymentStatus:   receiptOrderPaymentStatus(fallbackOrder),
       shippingAddress: fallbackOrder.shippingAddress as Record<string, string> | undefined,
       discountAmount:  fallbackOrder.discountAmount,
       promoCode:       fallbackOrder.promoCode,
