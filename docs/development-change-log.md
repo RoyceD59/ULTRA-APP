@@ -1,5 +1,24 @@
 # Development change log
 
+## 2026-10-08 — Unsafe release archive path regressions
+
+**Scope:** Disposable test fixtures only; no retained archive, rollback asset,
+publication configuration or production verifier changes.
+
+- Added literal ustar fixtures containing an absolute member path, leading and
+  nested parent-directory traversal, and duplicate member names. Tests verify
+  that archive listing preserves the exact offending names.
+- Each fixture first fails its archive checksum, then fails with `Unsafe archive
+  paths` after fixture-only outer pins advance. Both verifiers and all three
+  existing approved-builder invocations exercise these failures.
+- Subprocess probes block extraction before it can run, alongside existing
+  compilation/network/output-copy probes. Assertions require empty fixture
+  temporary directories, no staging or escaped output, and unchanged output
+  sentinels and original retained-input hashes.
+- Verification: `node --test
+  infra/cloudflare/forest/release-integrity-negative.test.mjs` passed all 21
+  checks; `git diff --check` passed. No ignore-rule changes were needed.
+
 
 ## 2026-10-08 — Approved security release corruption regressions
 

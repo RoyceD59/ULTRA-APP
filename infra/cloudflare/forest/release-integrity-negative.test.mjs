@@ -6,6 +6,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -44,6 +45,8 @@ async function withFixture(run) {
     }
     fixture.probe = resolve(root, 'probe.mjs');
     fixture.effects = resolve(root, 'unexpected-effects.txt');
+    fixture.temporary = resolve(root, 'temporary');
+    await mkdir(fixture.temporary);
     // A missing/late integrity gate must not actually install, compile, fetch,
     // or copy output even when a negative test regresses.
     await writeFile(fixture.probe, `
@@ -56,6 +59,14 @@ async function withFixture(run) {
         throw new Error('UNEXPECTED_BUILD_EFFECT: ' + operation);
       };
       childProcess.spawn = () => fail('spawn');
+      const execFileSync = childProcess.execFileSync;
+      childProcess.execFileSync = (file, args, ...rest) => {
+        if (process.env.REJECT_FIXTURE_EXTRACTION === '1' && file === 'tar'
+            && args.some(arg => /^-[^-]*x/.test(arg) || arg === '--extract')) {
+          fail('extract');
+        }
+        return execFileSync(file, args, ...rest);
+      };
       promises.cp = async () => fail('copy-output');
       globalThis.fetch = async () => fail('fetch');
       syncBuiltinESMExports();
@@ -70,25 +81,30 @@ async function withFixture(run) {
   }
 }
 
-async function rejectsBeforeBuild(fixture, expected, { auth = true } = {}) {
+async function rejectsBeforeBuild(fixture, expected, { auth = true, noExtraction = false } = {}) {
+  const env = {
+    ...process.env, TMPDIR: fixture.temporary,
+    REJECT_FIXTURE_EXTRACTION: noExtraction ? '1' : '0',
+  };
   // Import fresh modules in each process: no module cache masks modified inputs.
   for (const [module, verifier] of [
     ...(auth ? [['auth-upload-security.mjs', 'verifyAuthUploadRevision']] : []),
     ['consistency-handoff.mjs', 'verifyHandoff'],
   ]) {
-    const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    const result = spawnSync(process.execPath, ['--import', fixture.probe, '--input-type=module', '-e',
       `const m = await import(${JSON.stringify(pathToFileURL(resolve(fixture.tools, module)).href)});
        await m.${verifier}();`], {
-      cwd: fixture.root, encoding: 'utf8', timeout: 30_000,
+      cwd: fixture.root, env, encoding: 'utf8', timeout: 30_000,
     });
     assert.ifError(result.error);
     assert.equal(result.status, 1, `${verifier}: ${result.stdout}\n${result.stderr}`);
     assert.match(result.stderr, expected, verifier);
+    assert.doesNotMatch(result.stderr, /UNEXPECTED_BUILD_EFFECT/);
   }
   for (const args of [['api', '--local-only'], ['api', '--copy-output'], ['hub', '--copy-output']]) {
     const result = spawnSync(process.execPath, ['--import', fixture.probe,
       resolve(fixture.tools, 'build-approved-consistency.mjs'), ...args], {
-      cwd: fixture.root, encoding: 'utf8', timeout: 30_000,
+      cwd: fixture.root, env, encoding: 'utf8', timeout: 30_000,
     });
     assert.ifError(result.error);
     assert.equal(result.status, 1, `${args}: ${result.stdout}\n${result.stderr}`);
@@ -97,11 +113,45 @@ async function rejectsBeforeBuild(fixture, expected, { auth = true } = {}) {
   }
   assert.ok(!(await readdir(fixture.root)).includes('.consistency-build'), 'must reject before staging');
   assert.ok(!(await readdir(fixture.root)).includes('unexpected-effects.txt'), 'no build or network effects');
+  if (noExtraction) {
+    assert.deepEqual(await readdir(fixture.temporary), [], 'must reject before creating extraction directories');
+  }
   for (const dir of ['api-server', 'projecthub']) {
     const output = resolve(fixture.root, 'artifacts', dir, 'dist');
     assert.deepEqual(await readdir(output), ['retained.txt']);
     assert.equal(await readFile(resolve(output, 'retained.txt'), 'utf8'), 'retained-output');
   }
+}
+
+async function writePathArchive(fixture, names) {
+  // Construct literal ustar members: tar's creation CLI otherwise normalizes
+  // absolute/traversal names. Payloads and any potential destinations stay
+  // disposable; the subprocess probe blocks extraction even if the guard regresses.
+  const members = names.map(name => {
+    assert.ok(Buffer.byteLength(name) <= 100, 'fixture name fits ustar header');
+    const header = Buffer.alloc(512);
+    header.write(name, 0, 100);
+    for (const [offset, width, value] of [
+      [100, 8, 0o644], [108, 8, 0], [116, 8, 0], [124, 12, 1], [136, 12, 0],
+    ]) {
+      header.write(value.toString(8).padStart(width - 1, '0') + '\0', offset, width);
+    }
+    header.fill(32, 148, 156);
+    header.write('0', 156); // Regular file.
+    header.write('ustar\0', 257);
+    header.write('00', 263);
+    const checksum = header.reduce((sum, byte) => sum + byte, 0);
+    header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8);
+    const payload = Buffer.alloc(512);
+    payload[0] = 120;
+    return Buffer.concat([header, payload]);
+  });
+  const archive = resolve(fixture.tools, archivePath);
+  await writeFile(archive, gzipSync(Buffer.concat([...members, Buffer.alloc(1024)])));
+  // Confirm the fixtures contain the exact offending names, not normalized ones.
+  const listed = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    .split('\n').filter(Boolean);
+  assert.deepEqual(listed, names);
 }
 
 async function alterArchive(fixture, mutate) {
@@ -168,6 +218,21 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
       await changeJson(fixture, scopePath, value => { value.files[0].afterSha256 = '0'.repeat(64); });
       await rejectsBeforeBuild(fixture, mismatch);
     }));
+    for (const [name, members] of [
+      ['absolute member path', fixture => [resolve(fixture.root, 'absolute-escape.txt')]],
+      ['parent-directory traversal', () => ['../parent-escape.txt']],
+      ['nested parent-directory traversal', () => ['artifacts/../../parent-escape.txt']],
+      ['duplicate member names', () => ['artifacts/uc-companion/app.json', 'artifacts/uc-companion/app.json']],
+    ]) {
+      await t.test(name, () => withFixture(async fixture => {
+        const rootEntries = await readdir(fixture.root);
+        await writePathArchive(fixture, members(fixture));
+        await rejectsBeforeBuild(fixture, mismatch, { noExtraction: true });
+        await repinFixtureEnvelope(fixture);
+        await rejectsBeforeBuild(fixture, /Unsafe archive paths/, { noExtraction: true });
+        assert.deepEqual(await readdir(fixture.root), rootEntries, 'no escaped extraction output');
+      }));
+    }
     for (const [key, value] of [
       ['candidateSha256', '0'.repeat(64)], ['scopeSha256', '0'.repeat(64)],
       ['selectionApproved', false], ['publicationApproved', true],
