@@ -168,25 +168,35 @@ async function alterArchive(fixture, mutate) {
   execFileSync('tar', ['-czf', archive, '-C', extracted, '-T', list]);
 }
 
+async function repinFixtureScope(fixture) {
+  // TEST ONLY: allow a forged review record through its outer checksum gate.
+  // Candidate archives, candidate metadata and release selections stay untouched.
+  const scopeHash = digest(await readFile(resolve(fixture.tools, scopePath)));
+  await changeJson(fixture, approvalPath, value => { value.scopeSha256 = scopeHash; });
+  const module = resolve(fixture.tools, 'auth-upload-security.mjs');
+  const source = await readFile(module, 'utf8');
+  assert.match(source, /export const SCOPE_SHA256 = '[a-f0-9]{64}'/);
+  await writeFile(module, source
+    .replace(/(export const SCOPE_SHA256 = ')[a-f0-9]{64}/, `$1${scopeHash}`));
+}
+
 async function repinFixtureEnvelope(fixture) {
   // TEST ONLY: move outer pins together so deliberately corrupted contents
   // reach the independent byte-scope/path guards. Never modify production tools,
   // review file hashes/lengths, or the retained source/rollback inputs.
   const candidate = digest(await readFile(resolve(fixture.tools, archivePath)));
   await changeJson(fixture, scopePath, value => { value.candidateSha256 = candidate; });
-  const scopeHash = digest(await readFile(resolve(fixture.tools, scopePath)));
   await changeJson(fixture, 'auth-upload-security/candidate.json', value => {
     value.candidateSha256 = candidate;
   });
   await changeJson(fixture, approvalPath, value => {
     value.candidateSha256 = candidate;
-    value.scopeSha256 = scopeHash;
   });
   const module = resolve(fixture.tools, 'auth-upload-security.mjs');
   const source = await readFile(module, 'utf8');
   await writeFile(module, source
-    .replace(/(export const AUTH_UPLOAD_CANDIDATE = ')[a-f0-9]{64}/, `$1${candidate}`)
-    .replace(/(export const SCOPE_SHA256 = ')[a-f0-9]{64}/, `$1${scopeHash}`));
+    .replace(/(export const AUTH_UPLOAD_CANDIDATE = ')[a-f0-9]{64}/, `$1${candidate}`));
+  await repinFixtureScope(fixture);
 }
 
 test('corrupted release inputs fail closed in isolated copies', async t => {
@@ -218,6 +228,29 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
       await changeJson(fixture, scopePath, value => { value.files[0].afterSha256 = '0'.repeat(64); });
       await rejectsBeforeBuild(fixture, mismatch);
     }));
+    for (const field of ['beforeSha256', 'beforeBytes', 'afterBytes', 'unchangedParentFiles']) {
+      await t.test(`forged review record: ${field}`, () => withFixture(async fixture => {
+        const scope = await json(fixture, scopePath);
+        const file = scope.files[0];
+        assert.ok(file.beforeSha256 && file.beforeBytes > 0 && file.afterBytes > 0,
+          'use an existing changed file so each forged field independently mismatches');
+        await changeJson(fixture, scopePath, value => {
+          if (field === 'unchangedParentFiles') value[field]++;
+          else if (field === 'beforeSha256') {
+            value.files[0][field] = (file[field][0] === '0' ? '1' : '0') + file[field].slice(1);
+          } else value.files[0][field]++;
+        });
+        // First confirm the unchanged outer pins reject the forged scope.
+        await rejectsBeforeBuild(fixture, mismatch);
+        // Advance only disposable scope pins, leaving every archive byte and
+        // all other review fields intact, to exercise the independent guard.
+        await repinFixtureScope(fixture);
+        const expected = field === 'unchangedParentFiles'
+          ? /^Error: Unchanged parent file count mismatch$/m
+          : new RegExp(`^Error: Unapproved security bytes: ${file.path.replaceAll('.', '\\.')}\\s*$`, 'm');
+        await rejectsBeforeBuild(fixture, expected);
+      }));
+    }
     for (const [name, members] of [
       ['absolute member path', fixture => [resolve(fixture.root, 'absolute-escape.txt')]],
       ['parent-directory traversal', () => ['../parent-escape.txt']],

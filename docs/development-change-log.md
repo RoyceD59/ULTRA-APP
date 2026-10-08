@@ -1,5 +1,22 @@
 # Development change log
 
+## 2026-10-08 — Forged security file-review regressions
+
+**Scope:** Isolated tests only; no real approval record, release selection,
+archive, production verifier or publication changes.
+
+- Added separate forged-record cases for the before-file digest, before and
+  after byte counts, and unchanged-parent file count.
+- Each case first fails the original scope checksum, then advances only the
+  disposable scope checksum pins to reach its independent review-record guard.
+  Candidate archive bytes and candidate metadata remain unchanged.
+- Both verifiers and all three existing approved-builder invocations reject
+  each forgery before staging, compilation, network calls or output copying.
+  Retained output sentinels and original retained-input hashes remain unchanged.
+- Verification: `node --test
+  infra/cloudflare/forest/release-integrity-negative.test.mjs` passed all 25
+  checks; `git diff --check` passed. No ignore-rule changes were needed.
+
 ## 2026-10-08 — Unsafe release archive path regressions
 
 **Scope:** Disposable test fixtures only; no retained archive, rollback asset,

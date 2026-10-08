@@ -1,5 +1,12 @@
 # Git ignore record
 
+## Forged security file-review fixtures — 2026-10-08
+
+No ignore patterns changed. Forged records and scope checksum adjustments exist
+only in disposable temporary fixture copies, which are removed after each case.
+Regression tests and development evidence are tracked; real approval records,
+candidate archives and release selections are untouched.
+
 ## Security release corruption fixtures — 2026-10-08
 
 No ignore patterns changed. Regression code and its documentation are tracked.
