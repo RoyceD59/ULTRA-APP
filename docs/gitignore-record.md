@@ -1,5 +1,12 @@
 # Git ignore record
 
+## Security release corruption fixtures — 2026-10-08
+
+No ignore patterns changed. Regression code and its documentation are tracked.
+Copied archives, mutated metadata, extracted sources and output sentinels live
+only in disposable operating-system temporary directories and are removed after
+each case. Real retained archives and rollback assets are untouched.
+
 ## Saved-order guest-payment source — 2026-10-07
 
 No ignore patterns were changed. Capability lifecycle, migration, checkout

@@ -457,3 +457,23 @@ candidate without changing the approved archive or active release.
 `companion-consistency-package.test.mjs` verifies unchanged frozen files and
 browser/Expo Go selection against the prepared server. This is not publication,
 a compiled native binary, a configured OTA service or physical-device evidence.
+
+### Auth/upload release integrity regression checks
+
+Run the positive scope/restoration checks and isolated corruption fixtures with:
+
+```sh
+node --test infra/cloudflare/forest/auth-upload-security.test.mjs \
+  infra/cloudflare/forest/consistency-handoff.test.mjs \
+  infra/cloudflare/forest/release-integrity-negative.test.mjs
+```
+
+The negative fixtures copy retained inputs into temporary directories and remove
+them afterward; real archives and rollback assets are not edited. They cover
+single-byte archive corruption, changed scope hashes, mismatched owner approval,
+altered route/test bytes, and extra or missing paths. Fixture-only re-pinning of
+outer hashes also exercises the independent per-file scope checks, without
+changing reviewed file hashes or production tools. Build subprocesses block
+network requests, compilation and output copying and assert that integrity
+failures occur before staging or changing retained output. These tests do not
+publish, mutate schemas, or change release/client selection.

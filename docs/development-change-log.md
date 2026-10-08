@@ -1,5 +1,30 @@
 # Development change log
 
+
+## 2026-10-08 — Approved security release corruption regressions
+
+**Scope:** Isolated tests only; no production publication, schema mutation, or
+release/client selection change.
+
+- Added disposable byte-copy fixtures for the auth/upload verifier, handoff
+  verifier and approved builder. Unmodified copies pass both verifiers.
+- Negative cases cover a changed byte in each retained archive, altered scope
+  hash, mismatched approval identity/flags, same-length route/test/frozen-file
+  corruption, and extra/missing reviewed or frozen paths.
+- Fixture-only outer re-pinning tests the independent file-scope/path guards
+  rather than stopping every case at the complete-archive checksum.
+- Builder probes prohibit network, child build processes and output copying;
+  tests assert no stage is created and retained output sentinels are unchanged.
+  Original retained inputs are hash-checked after all cases. Temporary fixtures
+  are removed in cleanup; real rollback files are not used or modified.
+- Documented the focused Node test command in the forest README. The existing
+  positive hash/scope, exact merged-file and narrow-route restoration tests
+  remain unchanged. No ignore-rule changes were needed.
+- Verification: all 13 existing positive/handoff checks passed alongside the
+  initial negative suite. After adding the disposable-copy positive control,
+  all 17 checks in the final negative test file passed. `git diff --check` passed.
+
+
 ## 2026-10-08 — Consolidated source review prepared, not selected or published
 
 - **Owner direction:** Prepare/review the merged feature and security scope
