@@ -14,11 +14,31 @@ export const dependencyArchive = resolve(here, 'security-consistency/release-sou
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export const SECURITY_FIXTURE_GLOB = 'src/tests/{jwt-session-expiry,customer-count-auth,review-media-signature,storage-public-media-security,storage-upload-allowlist}.test.ts';
 
-function paths(archive) {
-  const list = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).split('\n').filter(Boolean);
+function paths(archiveBytes) {
+  const list = execFileSync('tar', ['-tzf', '-'], { encoding: 'utf8', input: archiveBytes })
+    .split('\n').filter(Boolean);
   if (list.some(path => path.startsWith('/') || path.split('/').includes('..'))
       || new Set(list).size !== list.length) throw new Error('Unsafe archive paths');
   return list.filter(path => !path.endsWith('/')).sort();
+}
+
+function preflightArchiveMembers(archiveBytes) {
+  const members = execFileSync('tar', ['-tvzf', '-'], { encoding: 'utf8', input: archiveBytes })
+    .split('\n').filter(Boolean);
+  for (const member of members) {
+    const type = member[0];
+    if (type === 'l' || type === 'h') {
+      const marker = type === 'l' ? ' -> ' : ' link to ';
+      const targetStart = member.lastIndexOf(marker);
+      const target = targetStart < 0 ? '' : member.slice(targetStart + marker.length);
+      const kind = type === 'l' ? 'symbolic' : 'hard';
+      throw new Error(`Unsafe archive links: ${kind} links are prohibited regardless of target`
+        + (target ? ` (target: ${JSON.stringify(target)})` : ''));
+    }
+    if (type !== '-' && type !== 'd') {
+      throw new Error(`Unsafe archive member type: only regular files and directories are allowed (${JSON.stringify(type)})`);
+    }
+  }
 }
 
 /** Pin both the complete archive and its byte-by-byte scope, not an allowlist alone. */
@@ -26,24 +46,28 @@ export async function verifyAuthUploadRevision() {
   const scopeBytes = await readFile(resolve(here, 'auth-upload-security/scope.json'));
   const scope = JSON.parse(scopeBytes);
   const info = JSON.parse(await readFile(resolve(here, 'auth-upload-security/candidate.json')));
+  const beforeBytes = await readFile(dependencyArchive);
+  const afterBytes = await readFile(authUploadArchive);
   if (digest(scopeBytes) !== SCOPE_SHA256
       || scope.parentSha256 !== DEPENDENCY_CANDIDATE || scope.candidateSha256 !== AUTH_UPLOAD_CANDIDATE
-      || digest(await readFile(dependencyArchive)) !== DEPENDENCY_CANDIDATE
-      || digest(await readFile(authUploadArchive)) !== AUTH_UPLOAD_CANDIDATE
+      || digest(beforeBytes) !== DEPENDENCY_CANDIDATE
+      || digest(afterBytes) !== AUTH_UPLOAD_CANDIDATE
       || info.candidateSha256 !== AUTH_UPLOAD_CANDIDATE || info.parentSecuritySha256 !== DEPENDENCY_CANDIDATE
       || JSON.stringify(info.securityChangedPaths) !== JSON.stringify(scope.files.map(file => file.path))) {
     throw new Error('Auth/upload archive or reviewed byte scope mismatch');
   }
-  const beforePaths = paths(dependencyArchive), afterPaths = paths(authUploadArchive);
+  preflightArchiveMembers(beforeBytes);
+  preflightArchiveMembers(afterBytes);
+  const beforePaths = paths(beforeBytes), afterPaths = paths(afterBytes);
   const changes = new Map(scope.files.map(file => [file.path, file]));
   const expectedPaths = [...new Set([...beforePaths, ...scope.files.map(file => file.path)])].sort();
   if (JSON.stringify(expectedPaths) !== JSON.stringify(afterPaths)) throw new Error('Unapproved archive path delta');
   const temporary = await mkdtemp(resolve(tmpdir(), 'auth-upload-scope-'));
   let unchanged = 0;
   try {
-    for (const [archive, name] of [[dependencyArchive, 'before'], [authUploadArchive, 'after']]) {
+    for (const [archiveBytes, name] of [[beforeBytes, 'before'], [afterBytes, 'after']]) {
       await mkdir(resolve(temporary, name));
-      execFileSync('tar', ['-xzf', archive, '-C', resolve(temporary, name)]);
+      execFileSync('tar', ['-xzf', '-', '-C', resolve(temporary, name)], { input: archiveBytes });
     }
     for (const path of afterPaths) {
       const after = await readFile(resolve(temporary, 'after', path));
