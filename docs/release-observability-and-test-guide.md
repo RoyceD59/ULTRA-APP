@@ -299,3 +299,260 @@ Client / production-init approvals (separate):
 Decision: passed / failed / unverified
 Recovery owner and approved next action:
 ```
+
+## 9. Full observability: testing locations and ordered procedure
+
+This section implements the testing requirement in the approved
+`docs/superpowers/specs/2026-10-08-full-observability-rollout-design.md`.
+It is a procedure, **not a record of tests run** or permission to publish.
+
+### 9.1 Choose the correct test location
+
+| Location | How to access it | Allowed checks and limits |
+| --- | --- | --- |
+| Repository-root shell | Replit Shell at the project root | Integrity guards, metadata verification and source inspection. These do not prove the frozen application or live API. |
+| Frozen candidate stage | `.consistency-build/<exact candidate SHA-256>/` | Dependency, application, typecheck and compilation checks against the exact archived source. No output copy or release selection. |
+| Disposable API test DB | Existing `artifacts/api-server` test wrapper inside that stage | Schema, permission, diagnostics, storage failures and alert-provider fixtures. Confirm creation and cleanup; never connect it to production. |
+| Development ProjectHub | ProjectHub preview → sign in as an authorized test staff user → Monitoring (`/monitoring`) | Synthetic events, display, permission and no-send checks. Start/fix the existing managed web/API workflows first if they have failed. |
+| Development Companion browser | Companion preview; use the Expo web origin if the shared preview is slow | Browser JavaScript event ingestion and loaded build/environment identity. Not native OS coverage. |
+| Expo Go on a physical phone | Open the development Expo QR code on iOS/Android | Native JavaScript hook, launch and usability checks. Not native SDK crash coverage. |
+| Signed native test distribution | Separately approved iOS test distribution / Android internal distribution | Native crash/hang SDK and symbol tests after that phase is implemented and approved. Never claim this from an Expo web export. |
+| Public production API | `https://api.ucfilters.com` and the current verified deployment URL | GET-only health, readiness and snapshot checks. The last deployment metadata lookup confirmed `https://team-horizon--jerryaroyce.replit.app`; verify the target again before testing. |
+| Approved external uptime service | Its separate dashboard after provider selection | Outage/recovery tests in an isolated target first. Production outage drills need separate approval. |
+
+Do not use `localhost` as a customer/browser testing URL. Use the artifact
+preview or its managed Expo origin. A failed development workflow is not proof
+of a production outage.
+
+### 9.2 Before starting
+
+1. Record UTC time, operator, intended source commit, archive SHA-256 and test
+   environment. Use designated test identities; obtain credentials through
+   the existing secure process, never in the guide or raw logs.
+2. Read the current candidate metadata and approval record. The earlier review
+   `57b70b22…` is a historical preparation package, not the post-merge final
+   release. The approved builder in Section 3 still pins the auth/upload
+   predecessor `88f896ab…`; it does **not** build the consolidated review.
+3. Start/fix the existing development API, ProjectHub and Companion workflows
+   before browser checks. Do not create duplicate servers. Confirm the test
+   environment and database are development/isolated, not production.
+4. Confirm the test wrapper can create/drop its own database through approved
+   development infrastructure. Never print a connection string or run
+   `drizzle push`, seeding, direct mutating SQL, or test fixtures against
+   production.
+5. Stop on unapproved source, schema, runtime-dependency or environment changes.
+   An unavailable check is **unverified**, never passed.
+
+### 9.3 Check archive guards in the root shell
+
+```sh
+node --test --test-concurrency=1 \
+  infra/cloudflare/forest/release-integrity-negative.test.mjs \
+  infra/cloudflare/forest/auth-upload-security.test.mjs \
+  infra/cloudflare/forest/consistency-handoff.test.mjs \
+  scripts/tests/deployment-image.test.mjs
+```
+
+Expected: exit 0, no failed tests, disposable archive fixtures cleaned up, and
+retained approval/source files unchanged. These guard tests cannot replace
+exact-candidate application tests. Include subsequently merged guard cases
+when preparing the final release.
+
+### 9.4 Select the prepared stage — do not activate it
+
+After an exact consolidated candidate has been prepared and its metadata
+reviewed, run from the root:
+
+```sh
+export CANDIDATE_SHA="$(node -p "require('./infra/cloudflare/forest/consolidated-review/candidate.json').candidateSha256")"
+export STAGE="$(pwd)/.consistency-build/$CANDIDATE_SHA"
+test -d "$STAGE/artifacts/api-server" || exit 1
+```
+
+Check that this hash is the intended candidate, not merely whichever record
+currently exists. Stop if the stage is missing or incomplete; do not substitute
+the working tree. Installation/preparation must use the reviewed frozen lock,
+the existing dependency-age rules and the approved package-management process.
+These commands do not confer source-selection or publication approval.
+
+### 9.5 Run frozen-source automated checks
+
+Run the following in order. Keep exit codes and summaries, not raw private
+payloads. Stop and investigate a failure.
+
+```sh
+(
+  cd "$STAGE" &&
+  pnpm run typecheck:libs &&
+  pnpm --filter @workspace/api-server run typecheck &&
+  pnpm --filter @workspace/projecthub run typecheck &&
+  pnpm --filter @workspace/uc-companion run typecheck &&
+  node --test scripts/tests/dependency-security.test.mjs
+)
+
+(
+  cd "$STAGE/artifacts/api-server" &&
+  TEST_GLOB='src/tests/runtime-*.test.ts' pnpm test
+)
+
+(
+  cd "$STAGE/artifacts/projecthub" &&
+  PORT=20100 BASE_PATH=/ pnpm exec vitest run src/runtime-monitoring.test.tsx
+)
+
+(
+  cd "$STAGE/artifacts/uc-companion" &&
+  pnpm test &&
+  pnpm exec expo install --check
+)
+```
+
+Locations and expected outcomes:
+
+- API runtime tests: `artifacts/api-server/src/tests/runtime-*.test.ts`.
+  Require bounded/privacy-safe diagnostics, schema parity, environment
+  validation, permissions, retention, unknown states and no-send/at-most-once
+  provider behavior. The wrapper must report test database creation and drop.
+- ProjectHub: `artifacts/projecthub/src/runtime-monitoring.test.tsx`.
+  Require authorized rendering, stale/unavailable state and no-send feedback.
+- Companion: its declared `pnpm test` script installs `test-setup.mjs` and uses
+  `tsconfig.test.json`. Do not omit that setup in ad hoc Node commands.
+  A pre-existing failure is still a failed gate; do not silently skip it.
+- Dependency tests exercise retained backports, not a clean vulnerability
+  audit. Repeat dependency/SAST/privacy scans for the exact final graph and
+  adjudicate every high/critical finding before release.
+- Include the sign-in/upload/impact and other changed-feature fixtures from
+  Sections 3 and 6 against this exact stage. Test selection must match the
+  final source scope, not only runtime monitoring.
+
+For the currently reviewed dependency overlays, the root command
+`node --test infra/cloudflare/forest/consolidated-dependency-runtime.test.mjs`
+checks installed Sharp/librsvg, shell quoting and deep-copy bounds in the
+metadata-selected stage. Revisit those expected versions if the final approved
+dependency graph changes.
+
+### 9.6 Compile only in the isolated stage
+
+```sh
+(
+  cd "$STAGE" &&
+  pnpm --filter @workspace/api-server run build &&
+  PORT=20100 BASE_PATH=/ pnpm --filter @workspace/projecthub run build &&
+  SOURCE_REVISION="review-$CANDIDATE_SHA" \
+    EXPO_PUBLIC_DOMAIN=app.ucfilters.com \
+    EXPO_PUBLIC_API_DOMAIN=api.ucfilters.com \
+    BASE_PATH=/uc-companion/ METRO_PORT=0 NODE_ENV=production \
+    pnpm --filter @workspace/uc-companion run build
+)
+```
+
+Expected: successful API/Hub compilation and Companion web/iOS/Android
+**JavaScript** export. No main output copy, client pointer change, native
+binary, OTA or publication. Inspect emitted identity and origins; setting an
+environment variable alone is not proof of the resulting metadata. In nested
+staging folders, a Git lookup can identify the parent repository instead of the
+frozen source: any identity mismatch blocks release.
+
+Verify actual external/native runtime versions separately after approved main
+dependency alignment. A fixed Sharp binary inside the stage does not replace
+main's older externalized Sharp package.
+
+### 9.7 Conduct the development browser test
+
+1. Open ProjectHub in its preview, sign in with designated Monitoring access,
+   and open **Monitoring**. Record loaded release/environment and collector
+   freshness. Start from alerts **off**.
+2. In browser developer tools, keep Network open and filter for `diagnostics`.
+   On development/isolated staging only, dispatch a standard synthetic error:
+
+   ```js
+   window.dispatchEvent(new ErrorEvent('error', {
+     message: 'Synthetic observability verification',
+     error: new Error('Synthetic observability verification')
+   }));
+   ```
+
+3. Expected: a bounded diagnostic request, HTTP 202, no identity/URL/query/body
+   or arbitrary message/raw stack in the transmitted envelope, and the correct
+   environment/build group visible in Monitoring. Inspect only the sanitized
+   payload. Wait at least a minute before repeating the same event because of
+   deliberate client deduplication. A development error overlay may appear.
+4. Repeat on the Companion **browser** preview with its correct environment.
+   No request, rejection, missing persisted group or wrong release is failed or
+   unverified coverage—not a successful crash test. Investigate rather than
+   manufacturing an approved release identity.
+5. On development only, locate the Monitoring snapshot request in Network and
+   use browser request blocking to simulate its failure. Refresh Monitoring.
+   Expected: unavailable/unknown state, not healthy zeroes. This checks browser
+   behavior; database failure semantics are tested through the isolated API
+   fixtures, not by disabling a live database.
+6. Choose **Test without sending**. Expected: dry-run/no-delivery feedback and
+   no provider call or incident-state mutation. Do not switch to live delivery.
+7. Verify a test user without Monitoring access is denied. Test account role
+   mutations only in isolated fixtures; never deactivate real staff.
+8. Capture sanitized results and remove any authorized test fixtures. These
+   checks do not prove production, recipient delivery or native OS coverage.
+
+### 9.8 Conduct GET-only production checks after API publication
+
+Before doing this, verify deployment target, explicit publication/schema
+approval and build-to-runtime provenance. Reuse Section 5 for health and the
+validated snapshot comparison. For readiness:
+
+```sh
+for origin in https://api.ucfilters.com https://team-horizon--jerryaroyce.replit.app; do
+  curl --silent --show-error --max-time 15 --include \
+    -H 'Cache-Control: no-cache' "$origin/api/readyz"
+  printf '\n'
+done
+```
+
+Check status, JSON content type and the current documented readiness contract;
+a 200 HTML fallback is not a pass. A missing readiness endpoint on an older
+release is unverified, not proof that the new implementation is live.
+
+Then run the Section 5 `verifyLiveApi()` comparison. Both hosts must agree and
+be fresh at the time of the check. Retain UTC time and sanitized source/build
+evidence. Repeat immediately before any client advancement. Do not send
+synthetic diagnostics, mutate accounts, exercise uploads, force failures,
+activate alerts or modify production data under this read-only procedure.
+
+### 9.9 Independent uptime and native-device tests
+
+These tests begin only after their separate sub-designs are implemented and
+approved:
+
+1. **Uptime:** use an isolated health target; confirm normal readiness, an
+   agreed unavailable response, threshold crossing, staff alert and recovery.
+   Prove the external alert can operate while the target API/database cannot.
+   Repeat a production outage drill only with explicit approval.
+2. **Native:** install the approved signed test build on physical iOS and
+   Android devices. Record platform/version/build, induce only the approved
+   synthetic native crash/hang class, relaunch, verify ingestion and symbol
+   mapping, and check sensitive test strings are scrubbed.
+3. Test each claimed class independently. Expo Go JavaScript events cannot
+   establish Objective-C/Java crashes, ANRs or memory-kill coverage.
+4. Record unsupported classes explicitly and verify rollback/collection-off
+   controls before store distribution.
+
+### 9.10 Record the result and stop conditions
+
+Use the Section 8 implementation record and add:
+
+```text
+Test location: root / exact stage / disposable DB / preview / physical device / production GET
+Source commit, archive SHA and loaded build:
+Commands or manual steps:
+UTC start/end:
+Expected result:
+Observed result and sanitized evidence:
+Database/test-fixture cleanup:
+Privacy and permission checks:
+Result: passed / failed / unverified
+Unsupported or untested coverage:
+```
+
+Stop on unapproved source/schema/dependency changes, a failed test, missing
+cleanup, PII in telemetry, false healthy states, source mismatch, stale/disagreeing
+hosts, duplicate/ambiguous delivery replay, or missing rollback. Never turn a
+merged task, build success or unreachable check into evidence of a live fix.

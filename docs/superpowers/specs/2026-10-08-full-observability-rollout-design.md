@@ -1,7 +1,7 @@
 # Full Observability Rollout — Design
 
-**Status:** Draft for user review. The staged design was approved in chat; this
-written specification must be reviewed before detailed implementation planning.
+**Status:** Approved for detailed implementation planning, with the requested
+testing locations and step-by-step procedures added below.
 **Production status:** No schema changes, release selection, provider activation,
 or publication is authorized by this document.
 
@@ -155,12 +155,19 @@ configured and must not depend on this database-backed delivery path.
 
 ## Rollout stages and gates
 
+Detailed execution order:
+`docs/superpowers/plans/2026-10-08-full-observability-implementation-release-plan.md`.
+
+Testing locations, commands, manual steps, expected results and evidence:
+`docs/release-observability-and-test-guide.md`, Section 9. Its earlier
+auth/upload-candidate commands remain specific to that retained predecessor;
+they must not be mistaken for commands selecting a new consolidated package.
+
 ### Stage 0 — Re-establish the exact review candidate
 
-- Inspect the merged release-integrity tests, including Task #1035, and the
-  active unsafe-link guard work before selecting a final package. The previously
-  sealed consolidated package predates these merges and is not the final
-  current-main package.
+- Inspect all merged release-integrity tests and unsafe-link guards before
+  selecting a final package. The previously sealed consolidated package
+  predates these merges and is not the final current-main package.
 - Resolve or explicitly disposition any remaining release-extraction guard
   work that can affect the selected archive. Run the complete integrity test
   suite against both the candidate and any predecessor archive used for

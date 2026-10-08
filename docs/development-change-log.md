@@ -1,5 +1,26 @@
 # Development change log
 
+## 2026-10-08 — Approved observability roadmap and testing procedures
+
+- Recorded approval of the written staged specification and added the requested
+  testing locations and steps.
+- Added an eight-milestone implementation/release plan covering exact source,
+  integrity/security, isolated checks, API-only publication, live verification,
+  independent uptime, native coverage and final acceptance.
+- Extended `docs/release-observability-and-test-guide.md` rather than creating a
+  competing command guide. Section 9 separates root guards, frozen stages,
+  disposable databases, development browser/Expo Go, signed native devices,
+  read-only production checks and external uptime tests.
+- Included exact current test commands, browser synthetic-event steps,
+  expected results, cleanup, privacy/permission checks and stop conditions.
+  Working-tree, frozen-package, production and physical-device evidence are
+  explicitly distinct.
+- Inspected the merged security handoff: its source-live check remains
+  unverified; a merged guide/evidence file is not publication proof.
+- Documentation-only changes. No production writes, release selection,
+  application code/dependencies, provider activation, client advancement or
+  publication. No ignore rules changed.
+
 
 ## 2026-10-08 — Extended archive link metadata checks
 

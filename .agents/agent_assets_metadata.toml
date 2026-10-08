@@ -163,3 +163,17 @@ mtime_ms = 1791480997463
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/9b5407df-1618-442c-aa6b-251110cc4a48/c4b7f1fe-f69f-4bad-8abf-5a1ac370289e"
 storage_version_token = "1791481020861726"
 content_type = "text/html"
+
+[[outputs]]
+id = "54NnTiZGyYJtEXTmEkaP2"
+uri = "file://exports/full-observability-roadmap-and-testing.html"
+type = "html"
+title = "Full observability roadmap and testing steps"
+description = "Eight release milestones, testing locations, exact commands, browser/device procedures, pass criteria and safety gates."
+logical_id = "af58b85f-ab36-4785-a0a4-810339edb96a"
+content_hash = "sha256:537a3818000f878ba403f670fc9a492298bad8ffbff32eee97d0efa40a6bc134"
+size = 40228
+mtime_ms = 1791483585193
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/af58b85f-ab36-4785-a0a4-810339edb96a/75e728ec-9434-494c-bf1e-3c8675471d0a"
+storage_version_token = "1791483585961697"
+content_type = "text/html"
