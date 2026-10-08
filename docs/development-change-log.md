@@ -1,5 +1,25 @@
 # Development change log
 
+## 2026-10-08 — Alternate release-path duplicate checks
+
+- **Scope:** Disposable regression fixtures only; production verifier and builder
+  behavior, retained releases, rollback assets and publication settings unchanged.
+- **Changes:** Added leading/inner `./` and repeated-separator aliases for the
+  approved Companion `app.json` member. Each fixture keeps all original approved
+  archive members and appends one literal alias without extracting it. Assertions
+  confirm the two distinct names resolve to the same file.
+- **Verification:** `node --test
+  infra/cloudflare/forest/release-integrity-negative.test.mjs` passed all 33 checks.
+  Before fixture-only envelope re-pinning, checksum gates reject each archive;
+  afterward, the approved literal-path delta guard rejects it. Direct auth/upload
+  verification, handoff verification and API local-only/API copy-output/Hub
+  copy-output builders all reject before extraction or staging. Subprocess probes
+  forbid installation, compilation, fetching and output copying; retained output
+  sentinels and production input/tool/config hashes remain unchanged.
+- **Ignore changes:** None; all forged archives and envelope pins are temporary
+  copies cleaned up by the fixture harness.
+- **Status:** Tests verified locally; no publication or production re-pinning.
+
 ## 2026-10-08 — Release archive external-link boundary checks
 
 **Scope:** Disposable regressions and evidence only; retained archives,

@@ -132,7 +132,7 @@ async function rejectsBeforeBuild(fixture, expected, { auth = true, noExtraction
   }
 }
 
-async function writePathArchive(fixture, names) {
+async function writePathArchive(fixture, names, { preserveApprovedPaths = false } = {}) {
   // Construct literal ustar members: tar's creation CLI otherwise normalizes
   // absolute/traversal names. Payloads and any potential destinations stay
   // disposable; the subprocess probe blocks extraction even if the guard regresses.
@@ -156,11 +156,31 @@ async function writePathArchive(fixture, names) {
     return Buffer.concat([header, payload]);
   });
   const archive = resolve(fixture.tools, archivePath);
-  await writeFile(archive, gzipSync(Buffer.concat([...members, Buffer.alloc(1024)])));
+  let bytes = Buffer.concat([...members, Buffer.alloc(1024)]);
+  let expected = names;
+  if (preserveApprovedPaths) {
+    // Keep every approved member intact so rejection cannot be explained by
+    // unrelated missing paths. Append only the forged alias, without extraction.
+    const original = gunzipSync(await readFile(archive));
+    const originalNames = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' })
+      .split('\n').filter(Boolean);
+    const temporary = await mkdtemp(resolve(fixture.root, 'alias-archive-'));
+    try {
+      const base = resolve(temporary, 'base.tar'), extra = resolve(temporary, 'extra.tar');
+      await writeFile(base, original);
+      await writeFile(extra, bytes);
+      execFileSync('tar', ['--concatenate', '-f', base, extra]);
+      bytes = await readFile(base);
+      expected = [...originalNames, ...names];
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }
+  await writeFile(archive, gzipSync(bytes));
   // Confirm the fixtures contain the exact offending names, not normalized ones.
   const listed = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
     .split('\n').filter(Boolean);
-  assert.deepEqual(listed, names);
+  assert.deepEqual(listed, expected);
 }
 
 async function alterArchive(fixture, mutate) {
@@ -364,6 +384,28 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
         await repinFixtureEnvelope(fixture);
         await rejectsBeforeBuild(fixture, /Unsafe archive paths/, { noExtraction: true });
         assert.deepEqual(await readdir(fixture.root), rootEntries, 'no escaped extraction output');
+      }));
+    }
+    for (const alias of [
+      './artifacts/uc-companion/app.json',
+      'artifacts/./uc-companion/app.json',
+      'artifacts//uc-companion/app.json',
+      'artifacts/uc-companion//app.json',
+    ]) {
+      await t.test(`distinct member names resolve to one file: ${alias}`, () => withFixture(async fixture => {
+        const canonical = 'artifacts/uc-companion/app.json';
+        assert.notEqual(alias, canonical, 'not a literal duplicate-name fixture');
+        assert.equal(resolve(fixture.root, alias), resolve(fixture.root, canonical),
+          'both literal member names target the same extracted file');
+        const rootEntries = await readdir(fixture.root);
+        await writePathArchive(fixture, [alias], { preserveApprovedPaths: true });
+        await rejectsBeforeBuild(fixture, mismatch, { noExtraction: true });
+        await repinFixtureEnvelope(fixture);
+        // The production verifier compares literal names to the approved path
+        // set. It rejects these aliases as a path delta, not a raw-name duplicate.
+        await rejectsBeforeBuild(fixture, /^Error: Unapproved archive path delta$/m,
+          { noExtraction: true });
+        assert.deepEqual(await readdir(fixture.root), rootEntries, 'no aliased extraction output');
       }));
     }
     for (const [kind, type, relativeTarget] of [
