@@ -157,9 +157,10 @@ configured and must not depend on this database-backed delivery path.
 
 ### Stage 0 — Re-establish the exact review candidate
 
-- Wait for release-integrity test task #1035 and inspect its merged result. The
-  previously sealed consolidated package predates merged tasks #1031–#1034 and
-  is not the current final package.
+- Inspect the merged release-integrity tests, including Task #1035, and the
+  active unsafe-link guard work before selecting a final package. The previously
+  sealed consolidated package predates these merges and is not the final
+  current-main package.
 - Resolve or explicitly disposition any remaining release-extraction guard
   work that can affect the selected archive. Run the complete integrity test
   suite against both the candidate and any predecessor archive used for
@@ -283,7 +284,7 @@ selected platform and test evidence establish that claim.
 | Source provenance | Exact live API build matches the approved candidate; a local archive or standby build alone is insufficient. |
 | API availability | Both public hosts answer fresh, agreeing snapshots; readiness is database-aware and liveness remains shallow. |
 | Event privacy | Synthetic payload contains no identity, IP, entered content, URL/query, cookies, credentials, request body or raw stack. |
-| Persistence | Valid bounded samples survive restarts; missing/stale/storage-failed data is unknown, not zero. Retention is bounded and deletion is tested. |
+| Persistence | Valid bounded samples survive restarts; missing/stale/storage-failed data is unknown, not zero. Time-based retention pruning is bounded and verified. |
 | Access | Current database-backed permissions gate Monitoring reads, settings and incident actions; responses are not cacheable. |
 | Correlation | An authorized support operator can connect a generated correlation ID to the correct sanitized server log entry. |
 | Delivery | Off/dry-run guarantees no send/state mutation; live outcomes distinguish provider acceptance, failure and ambiguity. No automatic resend after an ambiguous claim. |
@@ -298,6 +299,6 @@ connections, new native SDK dependencies, payment/provider checks, or production
 destinations are added by this design. These require separate owner approval.
 
 The exact current production schema, live source provenance, approval status,
-dependency findings, rollback assets and Task #1035 result must be rechecked
+dependency findings, rollback assets and merged integrity-test results must be rechecked
 before implementation planning; values in the previous review report are
 historical evidence, not a fresh release attestation.

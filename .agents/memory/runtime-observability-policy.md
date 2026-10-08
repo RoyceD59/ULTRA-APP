@@ -3,6 +3,18 @@ name: Runtime observability safety policy
 description: Operational evidence boundaries and intentional alert delivery tradeoffs.
 ---
 
+Deliver full observability in separate stages: release and verify first-party
+JavaScript/API diagnostics first, then independent uptime and native-crash
+coverage. Do not add external telemetry providers or native SDKs to the first
+diagnostic release without their own scope, privacy and release approvals.
+
+**Why:** The user approved this staged approach to the finished observability
+system instead of delaying the existing API release for new monitoring layers.
+
+**How to apply:** Keep API-first client gates; design provider/data-sharing and
+native distribution separately, and require physical-device evidence for
+native coverage claims.
+
 Runtime diagnostics are untrusted operational evidence, never proof of authenticated
 customer activity, functional success, recipient delivery or physical-device coverage.
 Keep this separate from approved business analytics and customer decisions.
