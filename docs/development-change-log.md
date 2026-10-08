@@ -1,5 +1,24 @@
 # Development change log
 
+
+## 2026-10-08 — Release observability and implementation test guide
+
+- **Scope:** User-requested operating guide; no publication approval supplied.
+- **Changes:** Added `docs/release-observability-and-test-guide.md` with exact
+  retained-candidate checks, disposable-database test commands, live snapshot
+  gates, build/image-size evidence, privacy-safe monitoring and recovery criteria.
+- **Evidence:** Read-only public snapshots agreed at the recorded probe time.
+  Live API source identity and actual candidate publishing/image size remain
+  unverified; the guide does not describe historical freshness as a current pass.
+- **Verification:** Checked command targets, frozen test-wrapper filtering and
+  documentation whitespace. No production-write or signed-in checks performed.
+- **Ignore changes:** None.
+- **Status:** Documentation prepared; no runtime, client selection, cleanup,
+  schema, production initialization or publication changes.
+- **Remaining:** Separate publication approval and authoritative build-to-runtime
+  evidence are required before declaring the security candidate live.
+
+
 ## 2026-10-08 — Alternate release-path duplicate checks
 
 - **Scope:** Disposable regression fixtures only; production verifier and builder

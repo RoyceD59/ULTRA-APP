@@ -149,3 +149,17 @@ mtime_ms = 1791480450485
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/0ef2b7e7-daa3-466f-99f3-7b269949eea3/d7b342aa-2066-47d2-b091-a40a93e43128"
 storage_version_token = "1791480451027567"
 content_type = "text/html"
+
+[[outputs]]
+id = "rrWkJmLO8eU0iczq99tHF"
+uri = "file://exports/release-observability-and-test-guide.html"
+type = "html"
+title = "Release observability and test guide"
+description = "Printable operating guide for release identity, isolated security tests, live API snapshot gates, build/image evidence and privacy-safe monitoring. Publication remains separately gated."
+logical_id = "9b5407df-1618-442c-aa6b-251110cc4a48"
+content_hash = "sha256:fd325e1894a2cb823f83d03c5c4de015ad84f85748eca2af50bb6eaedb905e1f"
+size = 16660
+mtime_ms = 1791480997463
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/9b5407df-1618-442c-aa6b-251110cc4a48/c4b7f1fe-f69f-4bad-8abf-5a1ac370289e"
+storage_version_token = "1791481020861726"
+content_type = "text/html"
