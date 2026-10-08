@@ -1,5 +1,44 @@
 # Development change log
 
+## 2026-10-08 — Coordinated consistency and security-live verification in main
+
+- **Scope:** Continue the consistency rollout and its security-live verification
+  handoff; confirm actual deployment rather than equating merged task status
+  with public delivery. No candidate expansion or client selection change.
+- **Prepared main:** Verified archive and owner-approved scope identity
+  `88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82`.
+  All 13 auth/upload scope and main handoff checks passed. Existing immutable
+  archive compilation/regression evidence remains separate from live evidence.
+- **Production target/schema:** Public successful Autoscale deployment. Full
+  schema diff now contains 11 additive statements for guest-payment links,
+  product editorial records, order variants and AI feedback. No removals,
+  truncations, structural data loss, compatibility warnings or other warnings
+  were reported. These statements are outside this approved package's schema
+  scope, so publication stopped rather than silently applying them.
+- **Live impact:** Both public API hosts returned fresh agreeing snapshot IDs,
+  revision 1 and numeric totals at the recorded probe time. Production read-only
+  queries confirmed the existing zero offsets, approved legacy hash and one
+  attributed legacy-import audit. Preserve them; no reinitialization is needed.
+- **Security-live provenance:** Latest successful publication used a standby
+  build. Referenced source-build details were unavailable from the deployment
+  callback and a narrowly filtered runtime-log query found no package identity.
+  Fresh global-impact responses establish compatibility, not exact live
+  authentication/upload source or a blanket security pass.
+- **Other merged work:** Compared runtime paths from receipt, session, upload,
+  My Filters, record-driven/editorial page, guest-payment and AI changes against
+  the frozen package. Multiple feature/AI modules are absent. Approved partial
+  security transplants remain valid; whole-file differences in the large route
+  do not invalidate their verified scope. Existing served clients are still
+  predecessor on both hosts. Do not claim all merged features are deployed.
+- **Preserved:** Four pre-existing generated client/Zod modifications were left
+  untouched. No application code edit, workflow restart, schema mutation,
+  production write, publication, provider call or client activation performed.
+  No new sign-in, payment-sandbox or physical-device QA pass claimed.
+- **Evidence:** `infra/cloudflare/forest/rollout-evidence/main-coordinated-verification-2026-10-08.json`
+  records the full schema diff, source inventory and safe public/audit summaries.
+  Broader release/scope review and exact live-security provenance are required
+  before client rollout. The public freshness gate must be repeated at build time.
+
 
 ## 2026-10-07 — AI endpoint access and feedback integrity
 

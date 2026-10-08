@@ -5,6 +5,18 @@ description: Verify narrow production fixes reach the live app without publishin
 
 Treat a successful publish as confirmation that the selected package built and started, not proof that the newest working-tree fix was included.
 
+A standby-based publication can omit compilation/source-archive evidence from
+its logs. The referenced standby build may not be retrievable through the
+published-build details callback.
+
+**Why:** A successful promotion identified a standby build but its source details
+were unavailable; current main selection and fresh public snapshots could not
+establish the exact live authentication/upload revision.
+
+**How to apply:** Trace the promoted source build or obtain safe served-source/
+feature evidence. If unavailable, record exact live source as unverified; never
+substitute the current selector or unrelated client version metadata as proof.
+
 **Why:** publishing succeeded while the WhatsApp recovery controls remained old because the production build used a frozen source package. Repeated publishing alone could not include the approved fix.
 
 **How to apply:** inspect the actual live feature or bundle before doing operational recovery. If production is intentionally frozen, add only the explicitly approved fix to the package, verify unrelated archived files are unchanged, and test the packaged implementation. Do not bypass the frozen release by switching to whole-working-tree builds.

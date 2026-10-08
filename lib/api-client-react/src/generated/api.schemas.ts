@@ -954,6 +954,21 @@ export interface AlisonTurnResponse {
 }
 
 export type AlisonFeedbackInputRating = typeof AlisonFeedbackInputRating[keyof typeof AlisonFeedbackInputRating];
+
+
+export const AlisonFeedbackInputRating = {
+  up: 'up',
+  down: 'down',
+} as const;
+
+export interface AlisonFeedbackInput {
+  rating: AlisonFeedbackInputRating;
+  question: string;
+  answer: string;
+  /** @maxLength 2048 */
+  feedbackToken: string;
+}
+
 export type AlisonTranscriptMessageRole = typeof AlisonTranscriptMessageRole[keyof typeof AlisonTranscriptMessageRole];
 
 
@@ -4679,6 +4694,7 @@ export type IssueAgentClientTokenBody = {
 export type SubmitUcAlisonFeedback200 = {
   ok: boolean;
 };
+
 export type SuspendAgentOauthClientBodyStatus = typeof SuspendAgentOauthClientBodyStatus[keyof typeof SuspendAgentOauthClientBodyStatus];
 
 
@@ -4846,16 +4862,3 @@ page?: number;
  */
 limit?: number;
 };
-
-export interface AlisonFeedbackInput {
-  rating: AlisonFeedbackInputRating;
-  question: string;
-  answer: string;
-  /** @maxLength 2048 */
-  feedbackToken: string;
-}
-
-export const AlisonFeedbackInputRating = {
-  up: 'up',
-  down: 'down',
-} as const;

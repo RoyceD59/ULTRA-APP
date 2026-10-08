@@ -107,3 +107,17 @@ mtime_ms = 1791331993917
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/5ab6d5a7-6c67-43a6-8c9b-b9ca1add66f9/7daf2b5b-0901-4665-96b8-19cf9b5e106a"
 storage_version_token = "1791331994375693"
 content_type = "text/html"
+
+[[outputs]]
+id = "0lBdBqRTyf2ukjGAqhw0w"
+uri = "file://.local/reports/consistency-rollout/coordinated-main-verification.html"
+type = "html"
+title = "Coordinated rollout: main, production and security coverage"
+description = "Approved package verified; fresh snapshots agree. Full additive schema diff and merged-feature coverage show why publication and blanket deployed claims remain blocked."
+logical_id = "dc6b41a3-1501-42c1-b353-88b33073f1f8"
+content_hash = "sha256:b214208027b2dc820448f6ba2c1443860c0dcdee5871df7c4d26f705fa03bb95"
+size = 14832
+mtime_ms = 1791473702181
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/dc6b41a3-1501-42c1-b353-88b33073f1f8/2f171276-c9c5-4750-ada8-ddf9a665ca37"
+storage_version_token = "1791473702842071"
+content_type = "text/html"

@@ -1,0 +1,291 @@
+{
+  "checkedAt": "2026-10-08T15:35:01.397Z",
+  "tasks": {
+    "consistency": "#1007",
+    "securityLiveVerification": "#1030",
+    "coordination": "One main handoff; no duplicate publication, candidate activation or production initialization"
+  },
+  "approvedMainPackage": {
+    "sha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+    "sourceIdentity": "consistency-88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+    "archiveAndOwnerScopeVerified": true,
+    "publicationApprovalRecord": false,
+    "scopeAndHandoffTests": {
+      "passed": 13,
+      "failed": 0
+    },
+    "clients": "retained predecessor"
+  },
+  "deployment": {
+    "additionalUrls": [],
+    "deploymentType": "autoscale",
+    "hasSuccessfulBuild": true,
+    "isDeployed": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "success": true,
+    "visibility": "public"
+  },
+  "fullSchemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": true,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [
+      "CREATE TABLE \"uc_guest_pay_links\" (\n\t\"id\" serial PRIMARY KEY NOT NULL,\n\t\"order_id\" integer NOT NULL,\n\t\"generation\" text NOT NULL,\n\t\"token_hash\" text NOT NULL,\n\t\"expires_at\" timestamp with time zone DEFAULT (now() + '72:00:00'::interval) NOT NULL,\n\t\"revoked_at\" timestamp with time zone,\n\t\"opened_at\" timestamp with time zone,\n\t\"paid_event_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "CREATE TABLE \"uc_product_editorial\" (\n\t\"code\" text PRIMARY KEY NOT NULL,\n\t\"revision\" integer DEFAULT 1 NOT NULL,\n\t\"record\" jsonb NOT NULL,\n\t\"gallery_mapped\" boolean DEFAULT false NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"price_import_revision\" integer DEFAULT 0 NOT NULL\n);\n",
+      "ALTER TABLE \"uc_order_items\" ADD COLUMN \"variation_id\" integer;",
+      "ALTER TABLE \"uc_order_items\" ADD COLUMN \"child_sku\" text;",
+      "ALTER TABLE \"uc_order_items\" ADD COLUMN \"variant_label\" text;",
+      "ALTER TABLE \"uc_ai_feedback\" ADD COLUMN \"user_id\" integer;",
+      "ALTER TABLE \"uc_ai_feedback\" ADD COLUMN \"feedback_key\" text;",
+      "ALTER TABLE \"uc_guest_pay_links\" ADD CONSTRAINT \"uc_guest_pay_links_order_id_uc_orders_id_fk\" FOREIGN KEY (\"order_id\") REFERENCES \"public\".\"uc_orders\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "CREATE UNIQUE INDEX \"uc_guest_pay_active_order\" ON \"uc_guest_pay_links\" USING btree (\"order_id\") WHERE (revoked_at IS NULL);",
+      "CREATE UNIQUE INDEX \"uc_guest_pay_links_token_hash_unique\" ON \"uc_guest_pay_links\" USING btree (\"token_hash\");",
+      "CREATE UNIQUE INDEX \"uc_ai_feedback_key_idx\" ON \"uc_ai_feedback\" USING btree (\"feedback_key\");"
+    ],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "schemaGate": "STOP: eleven additive statements outside the approved consistency/auth-upload package; no destructive changes",
+  "snapshots": {
+    "checkedAt": "2026-10-08T15:29:46Z",
+    "hosts": [
+      "https://api.ucfilters.com",
+      "https://team-horizon--jerryaroyce.replit.app"
+    ],
+    "httpStatus": 200,
+    "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+    "adjustmentRevision": 1,
+    "maxAgeSeconds": 60,
+    "calculatedAt": [
+      "2026-10-08T15:29:46.187Z",
+      "2026-10-08T15:29:45.863Z"
+    ],
+    "totals": {
+      "totalUsers": 6,
+      "litresFiltered": 1550,
+      "plasticsAvoided": 3100,
+      "cleanWaterDays": 0
+    },
+    "agreementGate": "PASS at probe time; must recheck immediately before client preparation"
+  },
+  "productionAdjustment": {
+    "rowPresent": true,
+    "litresOffset": 0,
+    "usersOffset": 0,
+    "revision": 1,
+    "lastUpdatedAt": null,
+    "legacySha256": "90d07bcb36e9ba92333937abe2e1887bb6e754dc79bb53a4bed50228d3aec3ad",
+    "auditCount": 1,
+    "auditAction": "legacy-import",
+    "actorRecorded": true,
+    "auditAt": "2026-10-07T07:22:55.838137Z",
+    "initializationPerformedThisTurn": false
+  },
+  "actualServedClients": {
+    "buildId": "1791410160983-484",
+    "revision": "a787b1a16fad710f8725a9e1fb7722a89661c54e",
+    "bothPublicHostsAgree": true,
+    "advancedThisTurn": false
+  },
+  "securityLiveSourceEvidence": {
+    "latestPublishSuccessful": true,
+    "standbySourceBuildReferenced": true,
+    "standbySourceBuildDetailsAvailable": false,
+    "sourceHashDeploymentLogsFound": false,
+    "exact88f896CandidateLive": "UNPROVEN; matching public impact contract does not prove auth/upload implementation"
+  },
+  "mergedSourceInventory": [
+    {
+      "area": "receipts",
+      "runtimePaths": 10,
+      "exactCurrentMainMatches": 0,
+      "absent": [
+        "artifacts/api-server/src/lib/checkout-orders.ts",
+        "artifacts/uc-companion/components/OrderReceiptCard.tsx",
+        "artifacts/uc-companion/context/CheckoutReceiptContext.tsx",
+        "artifacts/uc-companion/utils/receiptExport.ts"
+      ],
+      "different": [
+        "artifacts/api-server/src/lib/email.ts",
+        "artifacts/api-server/src/routes/uc.ts",
+        "artifacts/uc-companion/app/_layout.tsx",
+        "artifacts/uc-companion/app/checkout.tsx",
+        "artifacts/uc-companion/app/order/[id].tsx",
+        "artifacts/uc-companion/hooks/useApi.ts"
+      ]
+    },
+    {
+      "area": "session safeguards",
+      "runtimePaths": 2,
+      "exactCurrentMainMatches": 1,
+      "absent": [],
+      "different": [
+        "artifacts/api-server/src/routes/uc.ts"
+      ]
+    },
+    {
+      "area": "upload safeguards",
+      "runtimePaths": 4,
+      "exactCurrentMainMatches": 3,
+      "absent": [],
+      "different": [
+        "artifacts/api-server/src/routes/uc.ts"
+      ]
+    },
+    {
+      "area": "My Filters",
+      "runtimePaths": 11,
+      "exactCurrentMainMatches": 0,
+      "absent": [
+        "artifacts/api-server/src/lib/activation-purchases.ts",
+        "artifacts/api-server/src/lib/offline-purchases.ts",
+        "artifacts/uc-companion/components/MyFiltersSection.tsx",
+        "artifacts/uc-companion/components/PurchaseActivationSection.tsx",
+        "artifacts/uc-companion/hooks/useMyFilters.ts",
+        "artifacts/uc-companion/lib/assignedFilterHydration.ts",
+        "artifacts/uc-companion/lib/myFiltersPresentation.ts"
+      ],
+      "different": [
+        "artifacts/uc-companion/app/(tabs)/account.tsx",
+        "artifacts/uc-companion/components/FilterTrackerSection.tsx",
+        "artifacts/uc-companion/components/RegisterFilterPrompt.tsx",
+        "artifacts/uc-companion/hooks/useApi.ts"
+      ]
+    },
+    {
+      "area": "record-driven pages",
+      "runtimePaths": 15,
+      "exactCurrentMainMatches": 0,
+      "absent": [
+        "artifacts/uc-companion/app/topic/[slug].tsx",
+        "artifacts/uc-companion/components/PublicRecordDocument.tsx",
+        "artifacts/uc-companion/hooks/usePublicWebDocument.ts",
+        "artifacts/uc-companion/scripts/audit-product-records.cjs",
+        "artifacts/uc-companion/scripts/generate-product-validator.cjs",
+        "artifacts/uc-companion/server/product-records.cjs",
+        "artifacts/uc-companion/server/public-content.cjs",
+        "artifacts/uc-companion/server/public-rendering.cjs",
+        "artifacts/uc-companion/server/public-schema.cjs",
+        "artifacts/uc-companion/server/record-operations.cjs",
+        "artifacts/uc-companion/server/records/validate-products.cjs"
+      ],
+      "different": [
+        "artifacts/api-server/src/routes/uc.ts",
+        "artifacts/uc-companion/app/product/[id].tsx",
+        "artifacts/uc-companion/server/serve.js",
+        "artifacts/uc-companion/server/web-routes.cjs"
+      ]
+    },
+    {
+      "area": "editable product pages",
+      "runtimePaths": 34,
+      "exactCurrentMainMatches": 0,
+      "absent": [
+        "artifacts/api-server/src/lib/checkout-orders.ts",
+        "artifacts/api-server/src/lib/checkout-pricing.ts",
+        "artifacts/api-server/src/lib/product-editorial.ts",
+        "artifacts/api-server/src/routes/uc-product-records.ts",
+        "artifacts/projecthub/src/components/product-record-editor.tsx",
+        "artifacts/projecthub/src/hooks/use-product-records.ts",
+        "artifacts/projecthub/src/pages/admin/products/record-editor.tsx",
+        "artifacts/uc-companion/components/product/ProductCompare.tsx",
+        "artifacts/uc-companion/components/product/ProductRecordPage.tsx",
+        "artifacts/uc-companion/components/product/theme.ts",
+        "artifacts/uc-companion/hooks/checkoutQuoteIdentity.ts",
+        "artifacts/uc-companion/lib/productAnalytics.ts",
+        "artifacts/uc-companion/lib/productRecord.ts",
+        "artifacts/uc-companion/server/product-records.cjs",
+        "artifacts/uc-companion/server/public-content.cjs",
+        "artifacts/uc-companion/server/public-rendering.cjs",
+        "artifacts/uc-companion/server/public-schema.cjs",
+        "artifacts/uc-companion/server/record-operations.cjs"
+      ],
+      "different": [
+        "artifacts/api-server/build.mjs",
+        "artifacts/api-server/src/index.ts",
+        "artifacts/api-server/src/routes/index.ts",
+        "artifacts/api-server/src/routes/uc.ts",
+        "artifacts/projecthub/src/App.tsx",
+        "artifacts/projecthub/src/lib/team-auth.ts",
+        "artifacts/projecthub/src/pages/admin/products/editor.tsx",
+        "artifacts/projecthub/src/pages/admin/products/index.tsx",
+        "artifacts/uc-companion/app/_layout.tsx",
+        "artifacts/uc-companion/app/cart.tsx",
+        "artifacts/uc-companion/app/checkout.tsx",
+        "artifacts/uc-companion/app/product/[id].tsx",
+        "artifacts/uc-companion/context/CartContext.tsx",
+        "artifacts/uc-companion/context/cartStorage.ts",
+        "artifacts/uc-companion/hooks/useApi.ts",
+        "artifacts/uc-companion/server/serve.js"
+      ]
+    },
+    {
+      "area": "guest payments",
+      "runtimePaths": 21,
+      "exactCurrentMainMatches": 0,
+      "absent": [
+        "artifacts/api-server/src/lib/checkout-cancellation.ts",
+        "artifacts/api-server/src/lib/checkout-diagnostics.ts",
+        "artifacts/api-server/src/lib/guest-pay.ts",
+        "artifacts/api-server/src/lib/runtime-observability.ts",
+        "artifacts/uc-companion/components/SavedOrderSharing.tsx",
+        "artifacts/uc-companion/components/product/ProductRecordPage.tsx",
+        "artifacts/uc-companion/hooks/checkoutRecovery.ts",
+        "artifacts/uc-companion/server/guest-pay-delivery.cjs",
+        "artifacts/uc-companion/server/guest-pay-page.cjs"
+      ],
+      "different": [
+        "artifacts/api-server/src/app.ts",
+        "artifacts/api-server/src/index.ts",
+        "artifacts/api-server/src/lib/rate-limiters.ts",
+        "artifacts/api-server/src/lib/resend.ts",
+        "artifacts/api-server/src/lib/sms.ts",
+        "artifacts/api-server/src/routes/payments.ts",
+        "artifacts/api-server/src/routes/uc.ts",
+        "artifacts/uc-companion/app/checkout.tsx",
+        "artifacts/uc-companion/hooks/useApi.ts",
+        "artifacts/uc-companion/metro.config.js",
+        "artifacts/uc-companion/server/serve.js",
+        "artifacts/uc-companion/server/web-routes.cjs"
+      ]
+    },
+    {
+      "area": "AI safeguards",
+      "runtimePaths": 8,
+      "exactCurrentMainMatches": 0,
+      "absent": [
+        "artifacts/api-server/src/lib/ai-feedback-receipt.ts",
+        "artifacts/uc-companion/lib/chatConversations.ts"
+      ],
+      "different": [
+        "artifacts/api-server/src/index.ts",
+        "artifacts/api-server/src/routes/ai/monitor.ts",
+        "artifacts/api-server/src/routes/index.ts",
+        "artifacts/api-server/src/routes/uc-water-chat.ts",
+        "artifacts/uc-companion/app/ai-chat.tsx",
+        "artifacts/uc-companion/hooks/useApi.ts"
+      ]
+    }
+  ],
+  "mainWorktree": {
+    "generatedClientAndZodFilesModifiedAtStart": true,
+    "unownedModificationsPreserved": true
+  },
+  "conclusion": "NO-GO for publication or certifying all merged work as deployed. Broader release/scope/schema review required; keep all client gates.",
+  "actions": {
+    "published": false,
+    "schemaApplied": false,
+    "productionWrites": false,
+    "clientSelectionChanged": false
+  },
+  "limits": [
+    "No sign-in, provider payment, physical-device or feature-activation pass claimed",
+    "Merged source status is not deployed evidence",
+    "Previously expiry-free sessions will require one-time sign-in when the eight-hour security package is verified live"
+  ]
+}
