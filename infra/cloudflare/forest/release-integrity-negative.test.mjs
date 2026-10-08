@@ -85,6 +85,7 @@ async function withFixture(run) {
     await run(fixture);
   } finally {
     await rm(root, { recursive: true, force: true });
+    await assert.rejects(readdir(root), { code: 'ENOENT' }, 'disposable fixture is fully removed');
   }
 }
 
@@ -198,7 +199,39 @@ async function alterArchive(fixture, mutate) {
   execFileSync('tar', ['-czf', archive, '-C', extracted, '-T', list]);
 }
 
-async function writeLinkArchive(fixture, type, target) {
+function tarChecksum(header) {
+  header.fill(32, 148, 156);
+  header.write(header.reduce((sum, byte) => sum + byte, 0).toString(8)
+    .padStart(6, '0') + '\0 ', 148, 8);
+}
+
+function paxLinkpath(target) {
+  const record = ` linkpath=${target}\n`;
+  let length = Buffer.byteLength(record) + 1;
+  while (length !== Buffer.byteLength(record) + String(length).length) {
+    length = Buffer.byteLength(record) + String(length).length;
+  }
+  const payload = Buffer.from(`${length}${record}`);
+  assert.equal(payload.length, length, 'PAX record length includes its own decimal prefix');
+  return payload;
+}
+
+function linkMetadata(header, encoding, target) {
+  const payload = encoding === 'pax' ? paxLinkpath(target) : Buffer.from(target + '\0');
+  const extension = Buffer.from(header);
+  extension.fill(0, 0, 100);
+  extension.write(encoding === 'pax' ? 'PaxHeaders/link' : '././@LongLink', 0, 100);
+  extension.fill(0, 345, 500); // No inherited member prefix.
+  extension.write(payload.length.toString(8).padStart(11, '0') + '\0', 124, 12);
+  extension.write(encoding === 'pax' ? 'x' : 'K', 156, 1);
+  extension.fill(0, 157, 257);
+  tarChecksum(extension);
+  const padded = Buffer.alloc(Math.ceil(payload.length / 512) * 512);
+  payload.copy(padded);
+  return Buffer.concat([extension, padded]);
+}
+
+async function writeLinkArchive(fixture, type, target, encoding = 'ustar') {
   // Replace one real member, keeping the exact approved path set. An archive
   // consisting only of a malicious link would stop at the path-delta guard
   // and would not tell us whether link targets get checked before extraction.
@@ -209,7 +242,10 @@ async function writeLinkArchive(fixture, type, target) {
   const chunks = [];
   let replaced = 0;
   assert.ok(['1', '2'].includes(type), 'ustar hard-link or symbolic-link type');
-  assert.ok(Buffer.byteLength(target) <= 100, 'link target fits ustar header');
+  assert.ok(['ustar', 'pax', 'gnu'].includes(encoding), 'supported link fixture encoding');
+  if (encoding === 'ustar') assert.ok(Buffer.byteLength(target) <= 100, 'link target fits ustar header');
+  else assert.ok(Buffer.byteLength(target) > 100, 'extended target cannot fit in literal linkname');
+  const literalTarget = encoding === 'ustar' ? target : 'harmless-short-target';
   for (let offset = 0; offset < original.length;) {
     const header = original.subarray(offset, offset + 512);
     if (header.every(byte => byte === 0)) {
@@ -228,11 +264,12 @@ async function writeLinkArchive(fixture, type, target) {
       link.write('00000000000\0', 124, 12); // Links carry no file payload.
       link.write(type, 156, 1);
       link.fill(0, 157, 257);
-      link.write(target, 157, 100);
-      link.fill(32, 148, 156);
-      link.write(link.reduce((sum, byte) => sum + byte, 0).toString(8)
-        .padStart(6, '0') + '\0 ', 148, 8);
-      assert.equal(link.subarray(157, 257).toString().split('\0')[0], target);
+      link.write(literalTarget, 157, 100);
+      tarChecksum(link);
+      assert.equal(link.subarray(157, 257).toString().split('\0')[0], literalTarget);
+      // Only the extension contains the unsafe destination. A checker that
+      // reads the literal ustar linkname alone would see a harmless relative name.
+      if (encoding !== 'ustar') chunks.push(linkMetadata(header, encoding, target));
       chunks.push(link);
       replaced++;
     } else chunks.push(original.subarray(offset, end));
@@ -248,7 +285,7 @@ async function writeLinkArchive(fixture, type, target) {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   }).split('\n').find(line => line.includes(` ${member} `));
   assert.ok(verbose?.startsWith(type === '2' ? 'l' : 'h'), 'tar recognizes the link type');
-  assert.ok(verbose.endsWith(target), 'tar recognizes the literal external link target');
+  assert.ok(verbose.endsWith(target), 'tar resolves the effective external link target');
 }
 
 async function repinFixtureScope(fixture) {
@@ -373,24 +410,37 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
         assert.deepEqual(await readdir(fixture.root), rootEntries, 'no aliased extraction output');
       }));
     }
-    for (const [kind, type, relativeTarget] of [
-      ['symbolic', '2', '../../../../link-target.txt'],
-      ['hard', '1', '../../link-target.txt'],
+    for (const [kind, type, parentTraversal] of [
+      ['symbolic', '2', '../../../../'],
+      ['hard', '1', '../../'],
     ]) {
-      for (const absolute of [true, false]) {
-        await t.test(`${kind} link with ${absolute ? 'absolute' : 'relative'} external target is rejected before extraction`,
+      for (const encoding of ['ustar', 'pax', 'gnu']) {
+        for (const absolute of [true, false]) {
+          await t.test(`${encoding} ${kind} link with ${absolute ? 'absolute' : 'relative'} external target is rejected before extraction`,
           () => withFixture(async fixture => {
-            const sentinel = resolve(absolute ? fixture.root : fixture.temporary, 'link-target.txt');
-            const target = absolute ? sentinel : relativeTarget;
-            await writeLinkArchive(fixture, type, target);
+            const filename = encoding === 'ustar' ? 'link-target.txt'
+              : `${'extended-link-target-'.repeat(6)}.txt`;
+            const sentinel = resolve(absolute ? fixture.root : fixture.temporary, filename);
+            const target = absolute ? sentinel : parentTraversal + filename;
+            const extractionRoot = resolve(fixture.temporary, 'auth-upload-scope-fixture', 'after');
+            const targetBase = kind === 'symbolic'
+              ? resolve(extractionRoot, 'artifacts/uc-companion') : extractionRoot;
+            assert.equal(resolve(targetBase, target), sentinel,
+              'effective link destination is fixture-owned and outside the extraction root');
+            assert.ok(!sentinel.startsWith(extractionRoot + '/'));
+            await writeLinkArchive(fixture, type, target, encoding);
             await rejectsBeforeBuild(fixture, mismatch, { noExtraction: true });
             await repinFixtureEnvelope(fixture);
             await writeFile(sentinel, 'external-link-target-must-not-change\n');
             const rootEntries = await readdir(fixture.root);
+            // Require the hardened verifier's link-type error. A tar warning,
+            // extraction refusal, path-delta error or byte mismatch is not
+            // evidence of preflight protection. All extraction (including the
+            // safe predecessor) is blocked by the probe if this gate regresses.
             await rejectsBeforeBuild(fixture,
               new RegExp(`Unsafe archive links: ${kind} links are prohibited regardless of target`), {
                 noExtraction: true,
-                temporaryEntries: absolute ? [] : ['link-target.txt'],
+                temporaryEntries: absolute ? [] : [filename],
               });
             assert.equal(await readFile(sentinel, 'utf8'), 'external-link-target-must-not-change\n');
             assert.deepEqual(await readdir(fixture.root), rootEntries,
@@ -401,6 +451,7 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
               assert.equal(await readFile(resolve(output, 'retained.txt'), 'utf8'), 'retained-output');
             }
           }));
+        }
       }
     }
     for (const [key, value] of [

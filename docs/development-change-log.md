@@ -1,6 +1,33 @@
 # Development change log
 
 
+## 2026-10-08 — Extended archive link metadata checks
+
+- **Scope:** Disposable regression evidence only. No production verifier edits,
+  real release re-pinning, archive changes, rollback changes or publication.
+- **Changes:** Extended the existing symbolic/hard-link matrix with PAX
+  `linkpath` and GNU `K` long-link metadata for both absolute and parent-relative
+  external targets. Each extension overrides a harmless literal linkname with a
+  target longer than the ustar field can hold. Exactly one approved regular
+  member is replaced; tar listing confirms the complete approved name order
+  and the effective link target. All possible destinations belong to the fixture.
+- **Verification:** `node --test
+  infra/cloudflare/forest/release-integrity-negative.test.mjs` passed all 41 checks
+  with GNU tar 1.35, including eight new extended-header cases. Unchanged outer
+  pins reject the forgery first. After fixture-only envelope re-pinning, direct
+  auth/upload verification, handoff and all three builder entry points must
+  report the hardened link preflight error. Probes block every extraction and
+  build/network/output effect; external and retained-output sentinels remain
+  unchanged, no extraction directory appears, and fixture removal is asserted.
+  Real retained input/tool/publication-config hashes remain unchanged.
+- **Evidence limit:** These checks depend on tar recognizing the metadata during
+  listing; they do not exercise forged extraction or prove tar's own extraction
+  defenses. Expectations use the existing hardening policy prohibiting all
+  symbolic/hard links, rather than accepting tar-specific warnings or later
+  byte/path failures as preflight evidence.
+- **Ignore changes:** None. Forged archives and pins remain disposable copies.
+- **Status:** Locally verified only; no publication or release selection change.
+
 ## 2026-10-08 — Release observability and implementation test guide
 
 - **Scope:** User-requested operating guide; no publication approval supplied.

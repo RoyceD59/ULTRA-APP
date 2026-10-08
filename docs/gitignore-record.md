@@ -1,5 +1,13 @@
 # Git ignore record
 
+## Extended archive link metadata fixtures — 2026-10-08
+
+No ignore patterns changed. PAX/GNU forged archive bytes, fixture-only envelope
+pins and external-target sentinels stay in disposable temporary directories;
+the harness asserts their removal. Only regression code and evidence notes
+are tracked. Real release archives, pins, rollback assets and publication
+configuration remain untouched.
+
 ## Forged security file-review fixtures — 2026-10-08
 
 No ignore patterns changed. Forged records and scope checksum adjustments exist
