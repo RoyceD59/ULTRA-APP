@@ -6,7 +6,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -61,9 +61,18 @@ async function withFixture(run) {
       childProcess.spawn = () => fail('spawn');
       const execFileSync = childProcess.execFileSync;
       childProcess.execFileSync = (file, args, ...rest) => {
-        if (process.env.REJECT_FIXTURE_EXTRACTION === '1' && file === 'tar'
-            && args.some(arg => /^-[^-]*x/.test(arg) || arg === '--extract')) {
-          fail('extract');
+        if (file === 'tar' && args.some(arg => /^-[^-]*x/.test(arg) || arg === '--extract')) {
+          if (process.env.REJECT_FIXTURE_EXTRACTION === '1') fail('extract');
+          if (process.env.PROBE_LINK_EXTRACTION === '1') {
+            fs.appendFileSync(${JSON.stringify(resolve(fixture.root, 'extraction-attempts.jsonl'))},
+              JSON.stringify(args) + '\\n');
+            // Never execute the forged candidate, even if tar itself would refuse
+            // it. Only the pinned, copied predecessor may extract in this mode.
+            const destination = args[args.indexOf('-C') + 1];
+            if (args[1] !== ${JSON.stringify(resolve(fixture.tools, 'security-consistency/release-sources.tar.gz'))}
+                || !destination?.startsWith(${JSON.stringify(fixture.temporary + '/')})
+                || !destination.endsWith('/before')) fail('extract-link-candidate');
+          }
         }
         return execFileSync(file, args, ...rest);
       };
@@ -168,6 +177,97 @@ async function alterArchive(fixture, mutate) {
   execFileSync('tar', ['-czf', archive, '-C', extracted, '-T', list]);
 }
 
+async function writeLinkArchive(fixture, type, target) {
+  // Replace one real member, keeping the exact approved path set. An archive
+  // consisting only of a malicious link would stop at the path-delta guard
+  // and would not tell us whether link targets get checked before extraction.
+  const archive = resolve(fixture.tools, archivePath);
+  const names = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+  const original = gunzipSync(await readFile(archive));
+  const member = 'artifacts/uc-companion/app.json';
+  const chunks = [];
+  let replaced = 0;
+  assert.ok(['1', '2'].includes(type), 'ustar hard-link or symbolic-link type');
+  assert.ok(Buffer.byteLength(target) <= 100, 'link target fits ustar header');
+  for (let offset = 0; offset < original.length;) {
+    const header = original.subarray(offset, offset + 512);
+    if (header.every(byte => byte === 0)) {
+      chunks.push(original.subarray(offset));
+      break;
+    }
+    const text = (start, end) => header.subarray(start, end).toString().split('\0')[0];
+    const name = [text(345, 500), text(0, 100)].filter(Boolean).join('/');
+    const size = parseInt(text(124, 136).trim(), 8);
+    assert.ok(Number.isSafeInteger(size) && size >= 0, 'ordinary octal ustar size');
+    const end = offset + 512 + Math.ceil(size / 512) * 512;
+    assert.ok(end <= original.length, 'complete tar member');
+    if (name === member) {
+      assert.equal(text(156, 157), '0', 'replace a regular file, not an extension header');
+      const link = Buffer.from(header);
+      link.write('00000000000\0', 124, 12); // Links carry no file payload.
+      link.write(type, 156, 1);
+      link.fill(0, 157, 257);
+      link.write(target, 157, 100);
+      link.fill(32, 148, 156);
+      link.write(link.reduce((sum, byte) => sum + byte, 0).toString(8)
+        .padStart(6, '0') + '\0 ', 148, 8);
+      assert.equal(link.subarray(157, 257).toString().split('\0')[0], target);
+      chunks.push(link);
+      replaced++;
+    } else chunks.push(original.subarray(offset, end));
+    offset = end;
+  }
+  assert.equal(replaced, 1, 'exactly one link member replaces an approved path');
+  await writeFile(archive, gzipSync(Buffer.concat(chunks)));
+  assert.equal(execFileSync('tar', ['-tzf', archive, '-P'], { encoding: 'utf8' }), names,
+    'link fixture preserves every approved member name and order');
+  // Listing only: GNU tar otherwise strips absolute/../ hard-link targets
+  // from its display. Never give -P to an extraction command.
+  const verbose = execFileSync('tar', ['-tzvf', archive, '-P'], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+  }).split('\n').find(line => line.includes(` ${member} `));
+  assert.ok(verbose?.startsWith(type === '2' ? 'l' : 'h'), 'tar recognizes the link type');
+  assert.ok(verbose.endsWith(target), 'tar recognizes the literal external link target');
+}
+
+async function observesMissingLinkPreflight(fixture, type, target, sentinel) {
+  // Characterization, not a safety claim: fail at the candidate extraction
+  // boundary before tar can create a link, follow it, read its target or write.
+  const result = spawnSync(process.execPath, ['--import', fixture.probe, '--input-type=module', '-e',
+    `const m = await import(${JSON.stringify(pathToFileURL(resolve(fixture.tools, 'auth-upload-security.mjs')).href)});
+     await m.verifyAuthUploadRevision();`], {
+    cwd: fixture.root, encoding: 'utf8', timeout: 30_000,
+    env: { ...process.env, TMPDIR: fixture.temporary,
+      REJECT_FIXTURE_EXTRACTION: '0', PROBE_LINK_EXTRACTION: '1' },
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /UNEXPECTED_BUILD_EFFECT: extract-link-candidate/,
+    'known limitation: external link target is not rejected before extraction');
+  assert.doesNotMatch(result.stderr, /Unsafe archive paths|Unapproved archive path delta/);
+  const attempts = (await readFile(resolve(fixture.root, 'extraction-attempts.jsonl'), 'utf8'))
+    .trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(attempts.length, 2, 'pinned predecessor then blocked candidate extraction');
+  for (const [index, name] of ['before', 'after'].entries()) {
+    const args = attempts[index];
+    assert.equal(args[0], '-xzf');
+    assert.equal(args[1], resolve(fixture.tools, index === 0
+      ? 'security-consistency/release-sources.tar.gz' : archivePath));
+    assert.ok(args[3].startsWith(fixture.temporary + '/auth-upload-scope-'));
+    assert.ok(args[3].endsWith('/' + name));
+    assert.equal(args[2], '-C');
+  }
+  const extractionRoot = attempts[1][3];
+  const linkBase = type === '2'
+    ? resolve(extractionRoot, 'artifacts/uc-companion') : extractionRoot;
+  assert.equal(resolve(linkBase, target), sentinel,
+    'link really targets the fixture sentinel outside this extraction directory');
+  assert.ok(!sentinel.startsWith(extractionRoot + '/'), 'target escapes the extraction root');
+  assert.equal(await readFile(fixture.effects, 'utf8'), 'extract-link-candidate\n',
+    'only the candidate extraction probe fired; no build/network/output effects');
+  assert.ok(!(await readdir(fixture.root)).includes('.consistency-build'));
+}
+
 async function repinFixtureScope(fixture) {
   // TEST ONLY: allow a forged review record through its outer checksum gate.
   // Candidate archives, candidate metadata and release selections stay untouched.
@@ -200,7 +300,7 @@ async function repinFixtureEnvelope(fixture) {
 }
 
 test('corrupted release inputs fail closed in isolated copies', async t => {
-  const originals = new Map(await Promise.all(retainedInputs.map(async name =>
+  const originals = new Map(await Promise.all([...retainedInputs, ...tools, 'wrangler.jsonc'].map(async name =>
     [name, digest(await readFile(resolve(here, name)))])));
   try {
     await t.test('unmodified disposable copies pass both verifiers', () => withFixture(async fixture => {
@@ -265,6 +365,35 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
         await rejectsBeforeBuild(fixture, /Unsafe archive paths/, { noExtraction: true });
         assert.deepEqual(await readdir(fixture.root), rootEntries, 'no escaped extraction output');
       }));
+    }
+    for (const [kind, type, relativeTarget] of [
+      ['symbolic', '2', '../../../../link-target.txt'],
+      ['hard', '1', '../../link-target.txt'],
+    ]) {
+      for (const absolute of [true, false]) {
+        await t.test(`${kind} link with ${absolute ? 'absolute' : 'relative'} external target: known preflight gap`,
+          () => withFixture(async fixture => {
+            const sentinel = resolve(absolute ? fixture.root : fixture.temporary, 'link-target.txt');
+            const target = absolute ? sentinel : relativeTarget;
+            await writeLinkArchive(fixture, type, target);
+            await rejectsBeforeBuild(fixture, mismatch, { noExtraction: true });
+            await repinFixtureEnvelope(fixture);
+            await writeFile(sentinel, 'external-link-target-must-not-change\n');
+            const rootEntries = await readdir(fixture.root);
+            await observesMissingLinkPreflight(fixture, type, target, sentinel);
+            assert.equal(await readFile(sentinel, 'utf8'), 'external-link-target-must-not-change\n');
+            assert.deepEqual(await readdir(fixture.temporary), absolute ? [] : ['link-target.txt'],
+              'verifier cleans extraction trees without touching the external target');
+            assert.deepEqual((await readdir(fixture.root)).sort(), [...rootEntries,
+              'extraction-attempts.jsonl', 'unexpected-effects.txt'].sort(),
+            'only probe logs added; no escaped extraction output');
+            for (const dir of ['api-server', 'projecthub']) {
+              const output = resolve(fixture.root, 'artifacts', dir, 'dist');
+              assert.deepEqual(await readdir(output), ['retained.txt']);
+              assert.equal(await readFile(resolve(output, 'retained.txt'), 'utf8'), 'retained-output');
+            }
+          }));
+      }
     }
     for (const [key, value] of [
       ['candidateSha256', '0'.repeat(64)], ['scopeSha256', '0'.repeat(64)],

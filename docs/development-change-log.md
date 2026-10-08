@@ -1,5 +1,39 @@
 # Development change log
 
+## 2026-10-08 — Release archive external-link boundary checks
+
+**Scope:** Disposable regressions and evidence only; retained archives,
+rollback assets, production verifiers, approved pins, publication configuration
+and release selections are unchanged.
+
+- Added symbolic-link and hard-link members with absolute and parent-relative
+  targets outside the candidate extraction directory, but inside each temporary
+  fixture. Replaced one real member without changing the complete member-name
+  list, so the path-delta check cannot mask the link-target check.
+- Each forged archive first fails the unchanged outer checksum gates before
+  extraction. Fixture-only outer re-pinning then exercises the auth/upload
+  verifier directly, without changing any per-file reviewed hashes or lengths.
+- **Finding:** All four repinned link fixtures reach candidate extraction
+  without a link-type/target rejection. The unchanged predecessor is extracted
+  first, so this is not a rejection before filesystem writes. The production
+  verifier's name-only path check does not supply a link preflight guard.
+- A subprocess probe allows only the pinned fixture predecessor to extract and
+  blocks the forged candidate before tar runs. Assertions check exact extraction
+  arguments, actual link-target resolution outside the extraction root, cleanup,
+  unchanged external sentinels, retained outputs and production input/tool/config
+  hashes. Tests characterize the guard limitation; they do not demonstrate an
+  actual outside write or establish GNU tar's extraction defenses.
+- Literal ustar targets are checked in raw headers and in listing-only `tar -P`
+  output, because ordinary GNU tar listings strip leading `/` and `../` from
+  hard-link targets. `-P` is never used for extraction.
+- No ignore-rule changes, publication, real archive re-pinning or rollback
+  modification was needed.
+- Verification: `node --test
+  infra/cloudflare/forest/auth-upload-security.test.mjs
+  infra/cloudflare/forest/consistency-handoff.test.mjs
+  infra/cloudflare/forest/release-integrity-negative.test.mjs` passed all 42
+  checks; `git diff --check` passed.
+
 ## 2026-10-08 — Forged security file-review regressions
 
 **Scope:** Isolated tests only; no real approval record, release selection,

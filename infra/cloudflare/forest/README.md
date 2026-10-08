@@ -477,3 +477,18 @@ changing reviewed file hashes or production tools. Build subprocesses block
 network requests, compilation and output copying and assert that integrity
 failures occur before staging or changing retained output. These tests do not
 publish, mutate schemas, or change release/client selection.
+
+**Link-target limitation:** The disposable link cases preserve all approved
+member names while replacing one regular file with a symbolic or hard link.
+Absolute and parent-relative targets point to fixture-owned sentinels outside
+the candidate extraction directory. Original archive pins reject all four
+fixtures before extraction. After fixture-only outer re-pinning,
+`verifyAuthUploadRevision()` reaches candidate extraction without rejecting the
+link target: its path listing checks names, not member types or link targets.
+These are characterization tests of a known missing preflight guard, not proof
+that unsafe links are rejected. A subprocess probe permits only the unchanged,
+pinned predecessor to extract and blocks the forged candidate before tar runs.
+Both extraction attempts are recorded; sentinels, retained outputs and real
+input hashes are checked afterward. No malicious link is actually extracted,
+so these tests do not establish whether the installed tar would permit an
+outside write. Do not remove approved checksum pins to work around this finding.
