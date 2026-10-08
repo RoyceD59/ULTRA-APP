@@ -135,3 +135,17 @@ mtime_ms = 1791475797361
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/1a6c24db-78c0-47c7-97cf-6b0e006dd3df/f944e48d-1132-4eb6-aa58-dfed42ac41e0"
 storage_version_token = "1791475798683113"
 content_type = "text/html"
+
+[[outputs]]
+id = "63s9D6aH3i7e0cWHPQpI6"
+uri = "file://.local/reports/observability-roadmap/design-review.html"
+type = "html"
+title = "Full observability roadmap — written design review"
+description = "API-first release sequence, implementation boundaries, privacy rules, acceptance checks, independent uptime and native-crash phases."
+logical_id = "0ef2b7e7-daa3-466f-99f3-7b269949eea3"
+content_hash = "sha256:f2531bb5b38d0821d577f654d5b65f400e2b8002e64988b5e99e26d3161f68df"
+size = 19235
+mtime_ms = 1791480450485
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/0ef2b7e7-daa3-466f-99f3-7b269949eea3/d7b342aa-2066-47d2-b091-a40a93e43128"
+storage_version_token = "1791480451027567"
+content_type = "text/html"
