@@ -3,6 +3,18 @@ name: Frozen deployment image budget
 description: Trim generated build dependencies without removing runtime staging paths or rollback assets.
 ---
 
+An isolated release's dependency graph does not establish the versions loaded
+by externalized modules in the main runtime. Align separately approved root
+manifests/lockfile and actual installed external dependencies before publication.
+
+**Why:** A reviewed staging graph loaded fixed sharp/librsvg, but the API bundle
+externalizes sharp and main still had its older dependency. Selecting/copying
+the compiled archive alone would not deliver that security fix.
+
+**How to apply:** Check external native dependency versions from the runtime
+package context, retain them through image cleanup, and treat any mismatch with
+the approved release graph as an API-publication blocker.
+
 Keep generated build-stage dependency trees out of the final publishing image,
 but do not delete whole frozen stages merely because compilation finished.
 

@@ -1,5 +1,54 @@
 # Development change log
 
+## 2026-10-08 — Consolidated source review prepared, not selected or published
+
+- **Owner direction:** Prepare/review the merged feature and security scope
+  together. This is not candidate-selection, publication, schema, feature-
+  activation or native-distribution approval.
+- **Retained review:** Committed source snapshot plus three narrowly constrained
+  dependency-overlay inputs produces candidate
+  `57b70b22b6faf692cc14c17b7858da52111d208354acab84f4e5d14f24c36feb`.
+  It includes 1,908 source files and a complete 928-path source/execute-mode
+  comparison against the narrow auth/upload parent. Thirteen central approved
+  consistency/security files remain byte-identical. Original archives and the
+  initial committed-only review archive are retained.
+- **Additional isolated fixes:** Registry-verified sharp 0.35.5 (Apache-2.0),
+  shell-quote 1.11.0 (MIT), fast-copy 4.1.0 (MIT). Existing dependency age
+  restrictions were unchanged. Actual installed sharp/librsvg and quote/copy
+  regressions passed. Root manifests/lock and production dependencies were
+  not changed.
+- **Local checks:** Shared libraries and all three consumers typecheck; API and
+  ProjectHub compile; Companion exports web/iOS/Android JavaScript. Expo
+  dependency alignment passes. Focused API checks: 130 passed, zero failed,
+  disposable database dropped. Client-state checks: 19 passed. Existing
+  dependency/backport/mail checks: 7 passed. New installed-dependency checks:
+  3 passed. Scope/non-activation checks: 2 passed.
+- **Scanner evidence:** Workspace scan had five high/two moderate version
+  advisories. Isolated final candidate audit has zero critical, three high and
+  one moderate. Three retained high-version advisories have installed backport
+  evidence, not a clean scanner result or new risk acceptance. Two medium SAST
+  findings concern preview infrastructure outside the archive. Privacy scan
+  returned no findings. Remaining scanner and CSS-parser review is explicit.
+- **Publication blocker:** API compilation externalizes sharp; a future
+  separately approved publication must apply the matching root runtime
+  manifest/lock first. A secure staging graph alone does not update main's
+  external native dependency.
+- **Main verification:** Existing managed API and ProjectHub workflows were
+  restarted once and came up. Normal development API startup/reconciliation
+  ran. Public ProjectHub sign-in screenshot renders normally. These are not
+  production or signed-in journey proofs.
+- **Unchanged gates:** Auth/upload parent remains selected; clients remain
+  predecessor. No production writes, initialization, schema application,
+  publication, client/native activation or provider-setting changes. Preserve
+  production revision/audit, inspect/review the eleven additive statements,
+  prove actual live API source, recheck fresh public agreement, recapture the
+  current served rollback assets and complete approved provider/device checks.
+- **Handoff:** `infra/cloudflare/forest/consolidated-review/README.md`,
+  `candidate.json`, `scope.json`, `validation.json`, `security-scans.json`.
+  Staging remains under the existing ignored `.consistency-build/` convention;
+  no new ignore rule was introduced. Review artifacts are tracked; credentials,
+  runtime records, raw logs and unrelated products are excluded.
+
 ## 2026-10-08 — Coordinated consistency and security-live verification in main
 
 - **Scope:** Continue the consistency rollout and its security-live verification

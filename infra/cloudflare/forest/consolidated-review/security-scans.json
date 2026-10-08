@@ -1,0 +1,153 @@
+{
+  "scope": "Workspace scanners at committed-source preparation time; root dependency graph unchanged. Isolated final archive audit and installed regressions are separate checks.",
+  "sourceCommit": "e91771af7f56fd838152d2b66560ecacfc451b85",
+  "scans": [
+    {
+      "scanner": "dependency",
+      "status": "completed",
+      "severityCounts": {
+        "high": 5,
+        "moderate": 2
+      },
+      "findings": [
+        {
+          "severity": "high",
+          "package": {
+            "ecosystem": "npm",
+            "name": "braces",
+            "purl": "pkg:npm/braces",
+            "version": "3.0.3"
+          },
+          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns"
+        },
+        {
+          "severity": "moderate",
+          "package": {
+            "ecosystem": "npm",
+            "name": "fast-copy",
+            "purl": "pkg:npm/fast-copy",
+            "version": "4.0.4"
+          },
+          "title": "fast-copy: Stack exhaustion in fast-copy when copying deeply-nested values",
+          "fix": {
+            "available": true,
+            "requiresMajorUpdate": false,
+            "version": "4.1.0"
+          }
+        },
+        {
+          "severity": "high",
+          "package": {
+            "ecosystem": "npm",
+            "name": "http-cache-semantics",
+            "purl": "pkg:npm/http-cache-semantics",
+            "version": "4.2.0"
+          },
+          "title": "http-cache-semantics max-stale handling can disclose cross-user cached responses"
+        },
+        {
+          "severity": "high",
+          "package": {
+            "ecosystem": "npm",
+            "name": "node-forge",
+            "purl": "pkg:npm/node-forge",
+            "version": "1.4.0"
+          },
+          "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements"
+        },
+        {
+          "severity": "moderate",
+          "package": {
+            "ecosystem": "npm",
+            "name": "postcss-selector-parser",
+            "purl": "pkg:npm/postcss-selector-parser",
+            "version": "6.0.10"
+          },
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "fix": {
+            "available": true,
+            "requiresMajorUpdate": true,
+            "version": "7.1.6"
+          }
+        },
+        {
+          "severity": "high",
+          "package": {
+            "ecosystem": "npm",
+            "name": "sharp",
+            "purl": "pkg:npm/sharp",
+            "version": "0.35.4"
+          },
+          "title": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+          "fix": {
+            "available": true,
+            "requiresMajorUpdate": false,
+            "version": "0.35.5"
+          }
+        },
+        {
+          "severity": "high",
+          "package": {
+            "ecosystem": "npm",
+            "name": "shell-quote",
+            "purl": "pkg:npm/shell-quote",
+            "version": "1.10.0"
+          },
+          "title": "shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
+          "fix": {
+            "available": true,
+            "requiresMajorUpdate": false,
+            "version": "1.11.0"
+          }
+        }
+      ]
+    },
+    {
+      "scanner": "sast",
+      "status": "completed",
+      "severityCounts": {
+        "MEDIUM": 2
+      },
+      "findings": [
+        {
+          "severity": "MEDIUM",
+          "title": "A secret is hard-coded in the application. Secrets stored in source code, such as credentials, identifiers, and other types of sensitive data, can be leaked and used by internal or external malicious actors. It is recommended to rotate the secret and retrieve them from a secure secret vault or Hardware Security Module (HSM), alternatively environment variables can be used if allowed by your company policy.",
+          "location": {
+            "end": {
+              "col": 80,
+              "line": 29
+            },
+            "lines": "",
+            "path": "infra/preview/compose.yaml",
+            "start": {
+              "col": 21,
+              "line": 29
+            }
+          }
+        },
+        {
+          "severity": "MEDIUM",
+          "title": "A secret is hard-coded in the application. Secrets stored in source code, such as credentials, identifiers, and other types of sensitive data, can be leaked and used by internal or external malicious actors. It is recommended to rotate the secret and retrieve them from a secure secret vault or Hardware Security Module (HSM), alternatively environment variables can be used if allowed by your company policy.",
+          "location": {
+            "end": {
+              "col": 80,
+              "line": 52
+            },
+            "lines": "",
+            "path": "infra/preview/compose.yaml",
+            "start": {
+              "col": 21,
+              "line": 52
+            }
+          }
+        }
+      ]
+    },
+    {
+      "scanner": "privacy",
+      "status": "completed",
+      "severityCounts": {},
+      "findings": []
+    }
+  ]
+}

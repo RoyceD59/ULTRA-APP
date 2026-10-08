@@ -121,3 +121,17 @@ mtime_ms = 1791473702181
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/dc6b41a3-1501-42c1-b353-88b33073f1f8/2f171276-c9c5-4750-ada8-ddf9a665ca37"
 storage_version_token = "1791473702842071"
 content_type = "text/html"
+
+[[outputs]]
+id = "jaYu4zuJ43_3O8DJFdUHT"
+uri = "file://.local/reports/consistency-rollout/consolidated-review.html"
+type = "html"
+title = "Consolidated release review — validated, not published"
+description = "Merged feature/security package, isolated dependency fixes, passed checks and the remaining API-first, schema, scanner and runtime dependency gates."
+logical_id = "1a6c24db-78c0-47c7-97cf-6b0e006dd3df"
+content_hash = "sha256:8231c3416910eb7636e5f2986824d8703adbc526dbf440a487f73d7e285edc20"
+size = 10111
+mtime_ms = 1791475797361
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/1a6c24db-78c0-47c7-97cf-6b0e006dd3df/f944e48d-1132-4eb6-aa58-dfed42ac41e0"
+storage_version_token = "1791475798683113"
+content_type = "text/html"
