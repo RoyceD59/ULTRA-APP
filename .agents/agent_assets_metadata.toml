@@ -177,3 +177,17 @@ mtime_ms = 1791483585193
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/af58b85f-ab36-4785-a0a4-810339edb96a/75e728ec-9434-494c-bf1e-3c8675471d0a"
 storage_version_token = "1791483585961697"
 content_type = "text/html"
+
+[[outputs]]
+id = "GMEjM7j1GWLXe1Bdl2Lp2"
+uri = "file://exports/security-only-dependency-review.html"
+type = "html"
+title = "Verified security-only package — scope and release review"
+description = "Exact archive, three dependency changes, 72 passing checks, builds, audit findings and API-first publication gates. Not selected or published."
+logical_id = "896c81e6-12b8-4850-a809-8ed8983f7134"
+content_hash = "sha256:645e7e5e4e8085f0e04006b688e3481586430c72167f99a0f730a83aefe11a53"
+size = 15021
+mtime_ms = 1791539843440
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/896c81e6-12b8-4850-a809-8ed8983f7134/5189485c-2086-44e2-99cf-636b01d522ed"
+storage_version_token = "1791539957700730"
+content_type = "text/html"

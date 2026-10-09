@@ -1,5 +1,29 @@
 # Development change log
 
+## 2026-10-09 — Unselected security-only dependency review
+
+- Prepared an exact dependency-only archive derived from the approved frozen
+  parent. Only the root/API manifests and lockfile change; all 1,261 other
+  retained files remain byte-identical. No consolidated feature changes.
+- Registry-verified sharp 0.35.5 (Apache-2.0), shell-quote 1.11.0 (MIT) and
+  music-metadata 11.16.0 (MIT). Preserved unrelated frozen lock importers and
+  codegen peer contexts instead of accepting incidental pnpm pruning.
+- The exact installed candidate passes shared-library and all three consumer
+  typechecks, API/ProjectHub/Companion static builds and 72 targeted checks.
+  Auth/upload tests used a disposable database and dropped it afterward.
+- The candidate production audit reports zero critical, zero moderate and
+  two high version-based advisories covered by unchanged backports and
+  installed-consumer tests. The advisory feed is not declared clean; risk
+  review remains a selection/publication gate.
+- Added deterministic byte-scope verification, negative scope tests, runtime
+  dependency regressions and a review README/evidence. Main still selects the
+  earlier archive. External runtime dependencies must be aligned in main
+  before a later API publication; prepared archive bytes alone are not a live
+  sharp fix.
+- No production writes, schema changes, provider changes, deployment output
+  copies, active client changes, native binary distribution or publication.
+  No ignore rules changed.
+
 ## 2026-10-09 — Fresh client-publication gate and dependency blocker
 
 - Revalidated the selected archive and fresh agreeing snapshots on both public

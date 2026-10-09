@@ -18,6 +18,17 @@ separately from unpatched findings. Do not substitute working-tree or
 consolidated-package results, and do not bypass a critical/high release blocker
 just because live snapshot compatibility passes.
 
+Check lockfile semantics, not just the names/count of changed files, when
+preparing a dependency-only revision from frozen source.
+
+**Why:** Regenerating a frozen lock pruned an importer absent from the source
+archive and changed unrelated codegen peer contexts. A three-file allowlist
+alone did not prevent that incidental scope expansion.
+
+**How to apply:** Preserve unrelated importer versions and complete peer-context
+dependency graphs, verify their semantics against the parent, and require a
+successful frozen-lockfile installation before sealing validation evidence.
+
 A standby-based publication can omit compilation/source-archive evidence from
 its logs. The referenced standby build may not be retrievable through the
 published-build details callback.

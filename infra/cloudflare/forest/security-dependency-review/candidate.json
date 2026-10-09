@@ -1,0 +1,21 @@
+{
+  "parentSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "candidateSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "changedPaths": [
+    "artifacts/api-server/package.json",
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "unchangedParentFiles": 1261,
+  "dependencyPins": {
+    "sharp": "0.35.5",
+    "shell-quote": "1.11.0",
+    "music-metadata": "11.16.0"
+  },
+  "scopeSha256": "4ee4d0f8c6741da1fd5e7b5c840286ec79214d6f561662ed3a85f332fc546cb6",
+  "status": "dependency-only review; NOT SELECTED; NOT PUBLISHED",
+  "selectionApproved": false,
+  "publicationApproved": false,
+  "schemaApplied": false,
+  "clientAdvancement": false
+}
