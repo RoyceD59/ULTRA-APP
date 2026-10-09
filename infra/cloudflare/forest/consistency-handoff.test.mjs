@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { readFile, mkdir, mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { cp } from 'node:fs/promises';
@@ -123,7 +123,9 @@ test('production serving works with all external fetches unavailable, while clie
     await mkdir(resolve(tools, 'auth-upload-security'), { recursive: true });
     await mkdir(resolve(tools, 'security-dependency-review'), { recursive: true });
     await mkdir(serverDir, { recursive: true });
-    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
+    await mkdir(resolve(tools, 'security-center-cache-review'));
+    await symlink(resolve(here, '../../../node_modules'), resolve(fixture, 'node_modules'), 'dir');
+    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'security-center-selection.mjs', 'prepare-security-center-cache-review.py', 'prepare-security-center-review.py', 'prepare-security-dependency-review.py', 'verify-security-center-lock.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
       await cp(resolve(here, name), resolve(tools, name));
     }
     for (const name of ['candidate.json', 'release-sources.tar.gz']) {
@@ -133,6 +135,7 @@ test('production serving works with all external fetches unavailable, while clie
     for (const name of ['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']) {
       await cp(resolve(here, 'auth-upload-security', name), resolve(tools, 'auth-upload-security', name));
       await cp(resolve(here, 'security-dependency-review', name), resolve(tools, 'security-dependency-review', name));
+      await cp(resolve(here, 'security-center-cache-review', name), resolve(tools, 'security-center-cache-review', name));
     }
     await writeFile(resolve(frozenStage, '.prepared'), APPROVED_CANDIDATE);
     await writeFile(resolve(frozenStage, 'companion-build.json'), JSON.stringify({

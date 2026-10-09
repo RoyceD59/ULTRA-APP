@@ -1,4 +1,4 @@
-# Security-only cache/install revision — verified, unselected, unpublished
+# Security-only cache/install revision — selected, unpublished
 
 Exact archive: `d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921`
 
@@ -44,8 +44,9 @@ behavior is unchanged.
   node-forge 1.4.0 retain the existing tested backports; findings are not
   suppressed. No cache advisory or new cache risk waiver is retained.
 - Full immutable scope verification: passed.
-- The broader existing release-integrity matrix timed out after six successful
-  cases; no failure was reported before timeout. It is not recorded as passed.
+- The initial broader integrity run timed out after six successful cases.
+  Following approved selection, the complete combined selection/handoff/
+  integrity/negative-lock suite passed **74 tests**, including that matrix.
 
 Production preflight: public autoscale target has a successful build, full
 schema diff is empty, no statements/destructive flags/warnings. Both existing
@@ -70,17 +71,23 @@ SECURITY_CENTER_STAGE=.consistency-build/security-center-cache-cold \
   node --test infra/cloudflare/forest/security-center-runtime.test.mjs
 ```
 
-## Remaining approval/publication gates
+## Approved selection and remaining publication gates
 
-1. Exact-source selection approval, explicitly retaining the two tested
-   braces/node-forge advisory exceptions.
-2. Align main runtime pins/lock and selection verification without importing
-   unrelated features. Do not switch client selectors.
+1. Exact-source selection was approved, explicitly retaining the two tested
+   braces/node-forge advisory exceptions. Authoritative approval is recorded
+   separately in `owner-approval.json`; immutable preparation metadata retains
+   its historical preparation flags and bytes.
+2. Main runtime pins/lock and selection verification are aligned. Full main
+   graph comparison preserves all 11 importers and unrelated resolutions.
+   Main's seven backport and seven actual-consumer fixtures pass, all four
+   typechecks pass, and main's all-scope audit matches the two retained highs.
 3. Separate API publication approval after checking the then-current target and
    full schema diff. Stop on unrelated/destructive changes.
 4. Verify the matching new API source is actually live.
 5. Repeat both hosts' fresh snapshot agreement immediately before client
    publication. Existing fresh agreement alone cannot authorize that step.
 
-No runtime manifest/lock, selected archive pointer, client selector, production
-schema or publication output was changed during this preparation.
+Runtime manifest/lock and the approved source selector now reference this
+package. Actual published client pointers, production schema and publication
+outputs remain unchanged. API publication and client advancement are not
+approved by selection.

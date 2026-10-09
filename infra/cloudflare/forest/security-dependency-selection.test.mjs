@@ -6,14 +6,15 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { verifyHandoff, APPROVED_CANDIDATE, here } from './consistency-handoff.mjs';
 import { SECURITY_DEPENDENCY_CANDIDATE, verifyMainSecurityRuntimePins } from './security-dependency-selection.mjs';
+import { SECURITY_CENTER_CANDIDATE } from './security-center-selection.mjs';
 
 test('main selects the exact security revision without publication approval', async () => {
   const info = await verifyHandoff();
-  assert.equal(APPROVED_CANDIDATE, SECURITY_DEPENDENCY_CANDIDATE);
-  assert.equal(info.candidateSha256, SECURITY_DEPENDENCY_CANDIDATE);
+  assert.equal(APPROVED_CANDIDATE, SECURITY_CENTER_CANDIDATE);
+  assert.equal(info.candidateSha256, SECURITY_CENTER_CANDIDATE);
   assert.equal(info.selectionApproved, true);
   assert.equal(info.publicationApproved, false);
-  assert.equal(info.unchangedParentFiles, 1261);
+  assert.equal(info.unchangedParentFiles, 1262);
 });
 
 test('actual main external dependencies match the approved security pins', async () => {

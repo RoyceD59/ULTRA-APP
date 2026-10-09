@@ -1,5 +1,29 @@
 # Development change log
 
+## 2026-10-09 — Approved security package selected and main aligned
+
+- Recorded explicit exact-source selection and braces/forge backport acceptance
+  for the verified cache revision. Immutable preparation archive/metadata and
+  prior candidates remain retained.
+- Updated handoff source and main's three dependency overrides/cache patch key;
+  reused the identical guard file. Deterministic full-lock comparison preserved
+  all 11 importers and unrelated resolutions instead of replacing main's graph
+  with the older archived graph.
+- Main frozen forced install, seven backport and seven actual-consumer checks,
+  four typechecks, and 74 complete selection/handoff/integrity/policy tests pass.
+  The earlier partial integrity timeout is resolved by this completed run.
+- Main all-scope audit: two retained high braces/forge findings, zero critical
+  or moderate. Findings are not suppressed.
+- Relevant managed development workflows restarted and serving; ProjectHub
+  preview checked. Existing optional native DevTools missing-library warning
+  remains outside this security dependency scope.
+- Latest read-only production target remains a successful public autoscale
+  build. Full schema diff remains empty, without warnings/destructive changes.
+  No production schema/data writes or publication performed; live API identity
+  is not yet verified against the newly selected package.
+- No published client pointers, publication outputs, product v2.4 source,
+  unrelated feature files or ignore rules changed during this selection.
+
 ## 2026-10-09 — Security cache installation blocker resolved in a separate review
 
 - Forced frozen reimport restored the existing cache backport; preserved

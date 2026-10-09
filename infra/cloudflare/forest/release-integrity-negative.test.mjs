@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,10 +18,15 @@ const retainedInputs = [
     .map(name => `auth-upload-security/${name}`),
   ...['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']
     .map(name => `security-dependency-review/${name}`),
+  ...['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']
+    .map(name => `security-center-cache-review/${name}`),
 ];
 const tools = [
   'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'consistency-handoff.mjs',
   'consistency-security.mjs', 'build-approved-consistency.mjs',
+  'security-center-selection.mjs', 'prepare-security-center-cache-review.py',
+  'prepare-security-center-review.py', 'prepare-security-dependency-review.py',
+  'verify-security-center-lock.mjs',
 ];
 const archivePath = 'auth-upload-security/release-sources.tar.gz';
 const scopePath = 'auth-upload-security/scope.json';
@@ -53,6 +58,7 @@ async function withFixture(run) {
       // Copy bytes, never hard-link inputs that corruption tests will overwrite.
       await cp(resolve(here, name), destination);
     }
+    await symlink(resolve(here, '../../../node_modules'), resolve(root, 'node_modules'), 'dir');
     fixture.probe = resolve(root, 'probe.mjs');
     fixture.effects = resolve(root, 'unexpected-effects.txt');
     fixture.temporary = resolve(root, 'temporary');

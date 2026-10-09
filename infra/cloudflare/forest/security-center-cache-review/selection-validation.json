@@ -1,0 +1,85 @@
+{
+  "observedAt": "2026-10-09T15:09:05.580Z",
+  "approval": {
+    "date": "2026-10-09",
+    "candidateSha256": "d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+    "scopeSha256": "f2f190773180b02ec45fde79addbb39a48c9cdd5f583071b026892d20ef5b320",
+    "selectionApproved": true,
+    "testedBackportMitigationsAccepted": true,
+    "publicationApproved": false,
+    "clientAdvancementApproved": false,
+    "decision": "Select verified package and tested backports",
+    "scope": "Select the exact security-only cache revision for API-first review and align main runtime pins. No publication, schema writes or client advancement.",
+    "acceptedAdvisoryIds": [
+      "GHSA-vfj7-8cjw-p6xm",
+      "GHSA-86w9-cpqp-85rv"
+    ]
+  },
+  "mainRuntimeAligned": true,
+  "mainLockImportersUnchanged": 11,
+  "unrelatedMainLockResolutionsUnchanged": true,
+  "sourceArchiveUnchanged": true,
+  "checks": {
+    "combinedReleaseSelectionHandoffIntegrityPolicyTestsPassed": 74,
+    "mainBackportCasesPassed": 7,
+    "mainActualConsumerCasesPassed": 7,
+    "sharedLibraryApiHubCompanionTypechecks": "passed",
+    "broaderIntegrityMatrix": "completed and passed; prior timeout resolved",
+    "managedDevelopmentWorkflows": "restarted and running",
+    "projectHubPreview": "healthy sign-in page",
+    "optionalNativeDevTools": "pre-existing missing libglib warning; not resolved in this scope"
+  },
+  "audit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 2,
+      "critical": 0
+    },
+    "advisories": [
+      {
+        "id": "GHSA-86w9-cpqp-85rv",
+        "name": "node-forge",
+        "severity": "high"
+      },
+      {
+        "id": "GHSA-vfj7-8cjw-p6xm",
+        "name": "braces",
+        "severity": "high"
+      }
+    ]
+  },
+  "productionPreflight": {
+    "observedAt": "2026-10-09T15:06:44.143Z",
+    "deployment": {
+      "additionalUrls": [],
+      "deploymentType": "autoscale",
+      "hasSuccessfulBuild": true,
+      "isDeployed": true,
+      "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+      "success": true,
+      "visibility": "public"
+    },
+    "schemaDiff": {
+      "columnsToRemove": [],
+      "hasDiff": false,
+      "hasStructuralDataLoss": false,
+      "matViewsToRemove": [],
+      "maybeNonBackwardsCompatible": false,
+      "schemasToRemove": [],
+      "statementsToExecute": [],
+      "success": true,
+      "tablesToRemove": [],
+      "tablesToTruncate": [],
+      "warnings": []
+    },
+    "applied": false,
+    "newCandidateLiveVerified": false
+  },
+  "publicationPerformed": false,
+  "productionSchemaWritesPerformed": false,
+  "publishedClientPointersChanged": false,
+  "newLiveApiReleaseVerified": false,
+  "nextGate": "Separate API publication approval; then verify matching release and repeat both fresh agreeing snapshots before any client publication"
+}

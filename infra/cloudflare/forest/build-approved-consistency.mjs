@@ -8,7 +8,8 @@ import { resolve } from 'node:path';
 import { APPROVED_CANDIDATE, SOURCE_IDENTITY, archive, stage, root, verifyHandoff, verifyLiveApi, retainRollback } from './consistency-handoff.mjs';
 import { here } from './consistency-handoff.mjs';
 import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE } from './auth-upload-security.mjs';
-import { verifyMainSecurityRuntimePins } from './security-dependency-selection.mjs';
+import { SECURITY_DEPENDENCY_CANDIDATE } from './security-dependency-selection.mjs';
+import { verifyMainSecurityCenterRuntimePins } from './security-center-selection.mjs';
 
 const [mode, ...flags] = process.argv.slice(2);
 const packages = { api: '@workspace/api-server', hub: '@workspace/projecthub', companion: '@workspace/uc-companion' };
@@ -26,7 +27,7 @@ if (copyOutput && (localOnly || !['api', 'hub'].includes(mode))) {
   throw new Error('--copy-output is only for approved main-workspace API/Hub deployment builds');
 }
 await verifyHandoff();
-if (mode === 'api') await verifyMainSecurityRuntimePins();
+if (mode === 'api') await verifyMainSecurityCenterRuntimePins();
 // Serving already-approved static bytes must work through API outages. External
 // checks belong to deployment preparation, never process startup/restart.
 if (!localOnly && mode !== 'serve-companion') {
@@ -38,7 +39,8 @@ if (!localOnly && mode !== 'serve-companion') {
   const live = await response.json();
   if (![frozen.liveBaseRevision, frozen.integrationRevision,
     frozen.previousIntegrationRevision, `consistency-${DEPENDENCY_CANDIDATE}`,
-    `consistency-${AUTH_UPLOAD_CANDIDATE}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
+    `consistency-${AUTH_UPLOAD_CANDIDATE}`, `consistency-${SECURITY_DEPENDENCY_CANDIDATE}`,
+    SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
     throw new Error('Live source baseline changed; reconcile before preparing deployment outputs');
   }
 }
