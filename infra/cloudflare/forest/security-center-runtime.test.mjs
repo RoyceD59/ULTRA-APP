@@ -22,7 +22,8 @@ const version = entry => JSON.parse(readFileSync(resolve(dirname(entry), '../pac
 test('logging/typography use fixed releases; Expo cache retains the verified backport', () => {
   assert.match(fastCopyPath, /fast-copy@4\.1\.0/);
   assert.match(parserPath, /postcss-selector-parser@7\.1\.6/);
-  assert.match(policyPath, /http-cache-semantics@4\.2\.0.*patch_hash/);
+  assert.match(policyPath, process.env.SECURITY_CENTER_CACHE_REVIEW === '1'
+    ? /http-cache-semantics@4\.3\.0.*patch_hash/ : /http-cache-semantics@4\.2\.0.*patch_hash/);
   assert.match(readFileSync(policyPath, 'utf8'), /max-stale must not revive/);
 });
 

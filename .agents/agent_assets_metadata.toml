@@ -219,3 +219,17 @@ mtime_ms = 1791547555609
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/de8f542f-9412-4569-a0ec-bf4a270ab81e/1a509294-3572-4981-b53d-97a6f8ce9dc4"
 storage_version_token = "1791547556340520"
 content_type = "text/html"
+
+[[outputs]]
+id = "qzJY2IyUBhm8O2VpIM7MM"
+uri = "file://exports/security-cache-installation-resolved.html"
+type = "html"
+title = "Security installation blocker resolved — exact package review"
+description = "Cold-install proof, three fixed dependency versions, remaining tested-backport advisories, production schema/host observations and approval gates."
+logical_id = "8804db49-1b07-4018-a468-2f8b27998c54"
+content_hash = "sha256:e67f9fbfe0a465aab3619336993545cc0a18e92822e6f68eb61c32572cdff95e"
+size = 7066
+mtime_ms = 1791557325360
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/8804db49-1b07-4018-a468-2f8b27998c54/cad0dc72-c7f2-4b3f-a11a-7fdb7470a0da"
+storage_version_token = "1791557325836061"
+content_type = "text/html"

@@ -99,7 +99,9 @@ if (mode === 'serve-companion') {
       // Refuse to overwrite an incomplete prior extraction.
       if ((await readdir(stage)).length) throw new Error('Stage is nonempty without a valid marker; investigate before rebuilding');
       await run('tar', ['-xzf', archive, '-C', stage], root);
-      await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], stage, { ...inheritedEnv, CI: '1' });
+      // Reimport dependencies: an inactive cached side-effect entry can otherwise
+      // masquerade as a patched installation. Consumer tests below still gate it.
+      await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts', '--force', '--prod=false'], stage, { ...inheritedEnv, CI: '1' });
       await run('pnpm', ['run', 'typecheck:libs']);
       await writeFile(marker, `${APPROVED_CANDIDATE}\n`);
     }

@@ -45,3 +45,14 @@ backports without changing their source or declared package versions.
 refresh the frozen installation rather than weakening fixtures or silently
 editing node_modules. Execute real-consumer checks again during release build
 preparation so cache reuse cannot bypass security verification.
+
+For frozen release preparation, force dependency reimport and explicitly retain
+build dependencies until compilation and consumer checks finish.
+
+**Why:** Forced frozen reimport also restored the missing guard in independently
+extracted review stages. Production NODE_ENV can omit the development-only
+consumers needed to certify patches if build dependencies are not explicit.
+
+**How to apply:** Use the frozen lock with forced import, test real installed
+consumers before copying outputs, and only prune after all builds. Do not
+manually alter installed dependencies or skip security fixtures.

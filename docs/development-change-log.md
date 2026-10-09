@@ -1,5 +1,27 @@
 # Development change log
 
+## 2026-10-09 — Security cache installation blocker resolved in a separate review
+
+- Forced frozen reimport restored the existing cache backport; preserved
+  manifest/lock checksums and did not edit installed code.
+- Prepared genuine cache 4.3.0 with the identical retained guard, alongside
+  fast-copy 4.1.0 and selector-parser 7.1.6. Source delta remains root manifest
+  and lock only; all other 1,262 source files/modes and 11 importers unchanged.
+- Two independent installations, including a clean exact-archive extraction
+  with production NODE_ENV, passed both seven-case consumer/security suites.
+  Fifteen lock/negative/policy checks passed, plus all consumer typechecks and
+  API/Hub builds. Audit now has two high retained backport versions, no
+  critical/moderate findings. Broader old integrity matrix timed out after six
+  passing cases and is not claimed complete.
+- Preparation uses forced frozen import and explicit build dependencies;
+  consumer gates still run before output copy. Existing deployment pruning and
+  schema/publication logic remain unchanged.
+- Read-only production preflight: successful public autoscale build; empty full
+  schema diff; both current hosts returned fresh agreeing snapshots. New package
+  is not verified live and these observations do not authorize client advance.
+- No runtime pins/lock/selection/client pointers, production data/schema,
+  publication outputs or ignore rules changed. Prior review archives retained.
+
 ## 2026-10-09 — Uploaded Companion water-loader artwork applied in development
 
 - Replaced shared bundled loading artwork with the supplied glossy falling
