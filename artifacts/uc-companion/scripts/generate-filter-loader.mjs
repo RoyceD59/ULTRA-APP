@@ -1,36 +1,48 @@
-// Deterministic crystal-blue droplet artwork; no logo is altered.
-// Requires ImageMagick only when regenerating, not when running the app.
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+// Deterministic glossy falling-water artwork built from the retained source SVGs in
+// assets/loading/source. The uploaded SVG is static (no native animation); this
+// generator rasterises one falling drop and expanding ripples (motion modelled on the
+// HTML reference) into lossless animated WebP and a still PNG. ImageMagick is needed only to regenerate.
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-export const FRAME_COUNT = 24;
+export const FRAME_COUNT = 15; // 15 x 100 ms = 1.5 s loop
+export const FRAME_DELAY_CS = 10;
+const src = readFileSync(new URL('../assets/loading/source/companion-water-loader.svg', import.meta.url), 'utf8');
+const defs = src.match(/<defs>([\s\S]*?)<\/defs>/)[1].replace(/<g id="cw-wave-ring">[\s\S]*?<\/g>\s*(?=<radialGradient id="cw-glass")/, '');
+const ring = src.match(/<g id="cw-wave-ring">([\s\S]*?)<\/g>/)[1];
+const dropPaths = [...src.matchAll(/<path d="(M12 1c[^"]+)" fill="url\(#(cw-glass|cw-reflection)\)"\/>/g)];
+const surface = src.match(/<ellipse cx="12" cy="21" rx="11"[^>]*\/>/)[0];
+const ease = (t) => t * t; // gravity
+
+export function renderStillFrame() {
+  return readFileSync(new URL('../assets/loading/source/companion-water-loader-static.svg', import.meta.url), 'utf8')
+    .replace(/<svg\b[^>]*>/, '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 -2 24 28">');
+}
 
 export function renderDropletFrame(frame) {
-  // Smooth 2.4-second loop: 6% growth about the visual centre, no travel or flashing.
-  const pulse = (1 - Math.cos(2 * Math.PI * ((frame % FRAME_COUNT) / FRAME_COUNT))) / 2;
-  const scale = 1.65 * (0.94 + 0.06 * pulse);
-  const droplet = `<g data-droplet="single" transform="translate(48 56) scale(${scale}) translate(0 4)">
-        <path d="M0 -26 C-3 -18 -14 -8 -14 3 C-14 22 14 22 14 3 C14 -8 3 -18 0 -26Z"
-          fill="url(#water)" stroke="#005d8f" stroke-width="1.4"/>
-        <path d="M0 -23 C-3 -15 -11 -7 -11 2" fill="none"
-          stroke="#52b6dc" stroke-width="1.6" stroke-linecap="round"/>
-        <path d="M-5 -9 C-8 -5 -10 -1 -9 4" fill="none"
-          stroke="white" stroke-width="3" stroke-linecap="round"/>
-        <ellipse cx="-7" cy="8" rx="1.6" ry="2" fill="white"/>
-        <path d="M1 14 C6 14 10 10 11 6" fill="none"
-          stroke="#52b6dc" stroke-width="1.5" stroke-linecap="round"/>
-      </g>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 0 96 112">
-      <defs><linearGradient id="water" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#52b6dc"/>
-        <stop offset="0.4" stop-color="#52b6dc"/>
-        <stop offset="1" stop-color="#005d8f"/>
-      </linearGradient></defs>
-      ${droplet}
-      </svg>`;
+  const t = (frame % FRAME_COUNT) / FRAME_COUNT;
+  const fall = 0.62; // fraction of loop spent falling
+  let drop = '';
+  if (t < fall) {
+    const p = ease(t / fall);
+    const dy = 11.2 * p; // tip-to-surface travel
+    const sx = 0.78 + 0.1 * p, sy = 0.95 + 0.1 * p;
+    drop = `<g transform="translate(12 ${1 + dy}) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(-12 -1)">${dropPaths.map((m) => `<path d="${m[1]}" fill="url(#${m[2]})"/>`).join('')}</g>`;
+  }
+  const rings = [0, 0.14].map((lag) => {
+    const q = (t - fall - lag + 1) % 1;
+    // Waves survive the loop boundary while the next droplet starts falling.
+    const span = 0.7;
+    if (q >= span) return '';
+    const k = q / span;
+    const s = 0.15 + 0.85 * k;
+    return `<g opacity="${(0.9 * (1 - k)).toFixed(3)}" transform="translate(12 21) scale(${s.toFixed(3)}) translate(-12 -21)">${ring}</g>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 -2 24 28">
+      <defs>${defs}</defs>${surface}${rings}${drop}</svg>`;
 }
 
 export function generateArtwork() {
@@ -39,18 +51,23 @@ export function generateArtwork() {
   const frames = [];
   try {
     for (let frame = 0; frame < FRAME_COUNT; frame++) {
-      const svg = renderDropletFrame(frame);
       const source = join(temp, `${frame}.svg`);
       const png = join(temp, `${frame}.png`);
-      writeFileSync(source, svg);
+      writeFileSync(source, renderDropletFrame(frame));
       execFileSync('convert', ['-background', 'none', '-density', '288', source,
         '-resize', '96x112', '-strip', png]);
       frames.push(png);
     }
-    execFileSync('convert', [frames[0], '-strip', join(out, 'water-still.png')]);
-    // Full transparent frames with background disposal avoid trails on dark UI.
-    execFileSync('convert', ['-delay', '10', '-dispose', 'Background', ...frames,
-      '-channel', 'A', '-threshold', '50%', '+channel', '-loop', '0', '-colors', '64',
+    // Use the supplied static droplet, not a post-impact animation frame without a drop.
+    const still = join(temp, 'still.svg');
+    writeFileSync(still, renderStillFrame());
+    execFileSync('convert', ['-background', 'none', '-density', '288', still, '-resize', '96x112', '-strip', join(out, 'water-still.png')]);
+    // Expo Image supports animated WebP, which preserves full alpha unlike GIF.
+    execFileSync('convert', ['-delay', String(FRAME_DELAY_CS), '-dispose', 'Background', ...frames,
+      '-loop', '0', '-define', 'webp:lossless=true', '-quality', '100', join(out, 'water.webp')]);
+    execFileSync('convert', ['-delay', String(FRAME_DELAY_CS), '-dispose', 'Background', ...frames,
+      // GIF has binary alpha: dither partial opacity so soft fading ripples survive.
+      '-channel', 'A', '-ordered-dither', 'o8x8,2', '+channel', '-loop', '0', '-colors', '64',
       join(out, 'water.gif')]);
   } finally {
     rmSync(temp, { recursive: true, force: true });

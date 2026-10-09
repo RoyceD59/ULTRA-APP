@@ -11,7 +11,7 @@ export default function FilterDropIllustration({ animate = false }: { animate?: 
   return (
     <Image key={animate ? 'animated' : 'still'}
       testID={animate ? 'water-loader-animated' : 'water-loader-still'}
-      source={animate ? require('@/assets/loading/water.gif') : require('@/assets/loading/water-still.png')}
+      source={animate ? require('@/assets/loading/water.webp') : require('@/assets/loading/water-still.png')}
       style={{ width: 56, height: 64 }} contentFit="contain" accessible={false}
       autoplay={animate} onError={() => setFailed(true)} />
   );

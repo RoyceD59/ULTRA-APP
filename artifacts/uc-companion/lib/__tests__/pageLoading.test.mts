@@ -41,7 +41,7 @@ describe('local media and non-blocking fallback contracts', () => {
     assert.ok(gif.includes(Buffer.from('NETSCAPE2.0'))); // looping extension
     assert.ok(statSync(new URL('assets/loading/water-still.png', base)).size > 0);
   });
-  it('bundles a transparent, gently pulsing loop at the original illustration footprint', () => {
+  it('bundles a transparent falling-drop loop at the original illustration footprint', async () => {
     const gif = readFileSync(new URL('assets/loading/water.gif', base));
     assert.equal(gif.readUInt16LE(6), 96);
     assert.equal(gif.readUInt16LE(8), 112);
@@ -75,17 +75,44 @@ describe('local media and non-blocking fallback contracts', () => {
         frames++;
       }
     }
-    assert.equal(frames, 24);
+    assert.equal(frames, 15, '1.5 s loop');
     assert.equal(controls, frames);
     const still = readFileSync(new URL('assets/loading/water-still.png', base));
     assert.equal(still.readUInt32BE(16), 96);
     assert.equal(still.readUInt32BE(20), 112);
     assert.ok(still.length < 25_000);
     const artwork = readFileSync(new URL('scripts/generate-filter-loader.mjs', base), 'utf8');
-    assert.match(artwork, /#52b6dc/);
-    assert.match(artwork, /#005d8f/);
-    assert.match(artwork, /stroke="white"/);
-    assert.match(artwork, /frames\[0\].*water-still.png/);
+    assert.match(artwork, /source\/companion-water-loader.svg/);
+    assert.match(artwork, /FRAME_COUNT = 15/);
+    assert.match(artwork, /water-still.png/);
+    for (const f of ['companion-water-loader.svg', 'companion-water-loader-static.svg']) {
+      const svg = readFileSync(new URL(`assets/loading/source/${f}`, base), 'utf8');
+      assert.doesNotMatch(svg, /<animate|@keyframes/, 'uploaded SVG is not natively animated');
+    }
+    const live = readFileSync(new URL('assets/loading/source/companion-water-loader.svg', base), 'utf8');
+    for (const c of ['#b5e7ee', '#76c8dd', '#08475f']) assert.match(live, new RegExp(c));
+    const mod = await import('../../scripts/generate-filter-loader.mjs');
+    assert.equal(mod.renderDropletFrame(0), mod.renderDropletFrame(15)); // deterministic loop
+    assert.notEqual(mod.renderDropletFrame(3), mod.renderDropletFrame(12));
+    assert.match(mod.renderDropletFrame(12), /cw-wave/); // ripples after impact
+    assert.match(mod.renderDropletFrame(0), /stroke="url\(#cw-wave\)"/); // waves overlap the next fall
+    assert.match(mod.renderStillFrame(), /M12 5c/); // supplied still retains a visible droplet
+    assert.match(mod.renderStillFrame(), /fill="url\(#water\)"/);
+    const webp = readFileSync(new URL('assets/loading/water.webp', base));
+    assert.equal(webp.subarray(0, 4).toString(), 'RIFF');
+    assert.equal(webp.subarray(8, 12).toString(), 'WEBP');
+    assert.ok(webp.includes(Buffer.from('ANIM')), 'bundled animation');
+    let cursor = 12;
+    let webpFrames = 0;
+    while (cursor + 8 <= webp.length) {
+      const size = webp.readUInt32LE(cursor + 4);
+      if (webp.subarray(cursor, cursor + 4).toString() === 'ANMF') {
+        webpFrames++;
+        assert.equal(webp.readUIntLE(cursor + 20, 3), 100);
+      }
+      cursor += 8 + size + (size % 2);
+    }
+    assert.equal(webpFrames, 15);
   });
   it('always renders header children independently of image failure', () => {
     const source = readFileSync(new URL('components/PhotoHeader.tsx', base), 'utf8');
@@ -105,7 +132,7 @@ describe('local media and non-blocking fallback contracts', () => {
       assert.match(page, /<PhotoHeader initialView /);
     }
   });
-  it('unmounts GIF when not animating and exposes an accessible loading label', () => {
+  it('unmounts the animation when motion is disabled and exposes an accessible loading label', () => {
     const source = readFileSync(new URL('components/PageDataLoader.tsx', base), 'utf8');
     const illustration = readFileSync(new URL('components/FilterDropIllustration.tsx', base), 'utf8');
     assert.match(illustration, /key=\{animate \? 'animated' : 'still'\}/);
@@ -115,7 +142,7 @@ describe('local media and non-blocking fallback contracts', () => {
     assert.match(illustration, /width: 56, height: 64/);
     assert.match(illustration, /autoplay=\{animate\}/);
     assert.match(illustration, /animate = false/);
-    assert.match(illustration, /require\('@\/assets\/loading\/water.gif'\)/);
+    assert.match(illustration, /require\('@\/assets\/loading\/water.webp'\)/);
     assert.match(illustration, /require\('@\/assets\/loading\/water-still.png'\)/);
     assert.doesNotMatch(illustration, /https?:\/\//);
     assert.match(source, /<FilterDropIllustration animate=\{animate\}/);

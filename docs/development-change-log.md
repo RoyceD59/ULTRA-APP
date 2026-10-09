@@ -1,5 +1,21 @@
 # Development change log
 
+## 2026-10-09 — Uploaded Companion water-loader artwork applied in development
+
+- Replaced shared bundled loading artwork with the supplied glossy falling
+  droplet and two expanding ripples; retained the supplied SVG source geometry
+  and gradients with a deterministic 1.5-second animated WebP conversion for
+  Expo Image. Full alpha preserves soft ripples that binary GIF alpha discarded.
+- Generated reduced-motion/error PNG from the actual supplied static SVG.
+  Kept visible loading labels, motion/focus/background gates, layout footprint,
+  retry behavior and all request/payment/authentication/navigation logic.
+- Loader-specific regression checks passed; source frames and mobile app
+  preview inspected. An existing broader layout test still expects obsolete
+  immediate AuthProvider/CartProvider nesting and was not altered.
+- No packages, manifests, lockfiles, frozen selectors, publication outputs,
+  production schemas or ignore rules changed. This development artwork is not
+  included in the retained security-only release package.
+
 ## 2026-10-09 — Additional dependency review; release blocked on patch installation
 
 - Owner chose security-only remediation with a separate product-schema review.
