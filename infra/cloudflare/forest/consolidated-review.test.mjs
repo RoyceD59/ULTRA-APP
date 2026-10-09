@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APPROVED_CANDIDATE, verifyHandoff } from './consistency-handoff.mjs';
+import { AUTH_UPLOAD_CANDIDATE } from './auth-upload-security.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../../..');
@@ -60,6 +61,7 @@ test('consolidated review covers merged feature/security modules without activat
   assert.ok(paths.every(path => !/\/(?:node_modules|dist|static-build|\.whatsapp-session)\//.test(path)
     && !path.startsWith('artifacts/api-server/data/') && !/(?:^|\/)\.env/.test(path)
     && !path.startsWith('artifacts/mockup-sandbox/') && !path.startsWith('.agents/')));
-  assert.equal(APPROVED_CANDIDATE, meta.parentSha256);
-  assert.equal((await verifyHandoff()).candidateSha256, meta.parentSha256);
+  assert.equal(AUTH_UPLOAD_CANDIDATE, meta.parentSha256);
+  assert.equal((await verifyHandoff()).candidateSha256, APPROVED_CANDIDATE);
+  assert.notEqual(APPROVED_CANDIDATE, meta.candidateSha256);
 });

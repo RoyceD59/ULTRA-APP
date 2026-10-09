@@ -29,6 +29,25 @@ alone did not prevent that incidental scope expansion.
 dependency graphs, verify their semantics against the parent, and require a
 successful frozen-lockfile installation before sealing validation evidence.
 
+Do not blindly add a prepared marker to a populated verification stage.
+
+**Why:** A valid review stage lacked the handoff marker; its existing compilation
+outputs did not prove its retained source bytes still matched the selection.
+
+**How to apply:** Before adopting a pre-existing stage, compare every retained
+source file and mode with the pinned archive and verify its installed dependency
+graph. Preserve retained outputs and record that verification rather than
+deleting the stage or bypassing the nonempty-stage guard.
+
+Production-only dependency audits do not cover every dependency baked into
+runtime build outputs.
+
+**Why:** A logging dependency classified as development-only was reported by the
+broader scan but omitted from the production-only package-manager audit.
+
+**How to apply:** Compare broader scanner results and actual compiled workers;
+do not dismiss a finding solely because the manifest labels it dev-only.
+
 A standby-based publication can omit compilation/source-archive evidence from
 its logs. The referenced standby build may not be retrievable through the
 published-build details callback.

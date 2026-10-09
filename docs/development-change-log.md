@@ -1,5 +1,33 @@
 # Development change log
 
+## 2026-10-09 — Select verified security-only dependency revision in main
+
+- Owner approved the exact three-file revision and its two tested backport
+  mitigations. Saved a separate selection-only approval; retained previous
+  archives, original preparation evidence and prior owner records unchanged.
+- Main handoff selects the exact reviewed archive. Root runtime pins are aligned
+  for sharp, shell-quote and music-metadata without replacing main manifests
+  with frozen ones or activating consolidated feature source.
+- Preserved main importer semantics except the approved sharp version and its
+  existing WhatsApp peer reference. Retained original codegen peer contexts and
+  minimized generated-lock formatting churn.
+- Verified all 1,264 retained source files/modes before adopting the previously
+  installed review stage. Local-only handoff/API compilation passes. Seven
+  selection/runtime approval checks and all 41 archive-safety checks pass;
+  patched startup and consolidated-review fixtures remain compatible.
+- Main and selected source typechecks/build verification pass. Development API
+  and Companion services restarted successfully; API health endpoint responds.
+- Production target inspected read-only: public autoscale, successful build.
+  Full current schema diff is empty, with no destructive or compatibility
+  warnings. Public API snapshots agree/fresh at 10:44 UTC, but this does not
+  prove the new selected source is published.
+- Production-only audit reports zero critical/zero moderate/two accepted
+  backport advisories. Broader Security Center reports three high version-based
+  backport advisories and two additional moderate findings. Publication remains
+  on hold for that additional review; no implicit extra risk acceptance.
+- No production publication/schema application, deployment-output copies,
+  client selector changes or native distribution. No ignore rules changed.
+
 ## 2026-10-09 — Unselected security-only dependency review
 
 - Prepared an exact dependency-only archive derived from the approved frozen

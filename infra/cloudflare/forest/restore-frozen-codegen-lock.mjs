@@ -4,13 +4,15 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-const [draftInput, parserStageInput] = process.argv.slice(2);
+const [draftInput, parserStageInput, parentLockInput] = process.argv.slice(2);
 if (!draftInput || !parserStageInput) throw new Error('Supply draft and installed parser stage');
 const draft = resolve(draftInput);
 const parserStage = resolve(parserStageInput);
 const require = createRequire(resolve(parserStage, 'package.json'));
 const yaml = require(resolve(parserStage, 'node_modules/.pnpm/yaml@2.9.0/node_modules/yaml'));
-const before = yaml.parseDocument(execFileSync('tar', ['-xOf',
+const before = yaml.parseDocument(parentLockInput
+  ? await readFile(resolve(parentLockInput), 'utf8')
+  : execFileSync('tar', ['-xOf',
   'infra/cloudflare/forest/auth-upload-security/release-sources.tar.gz',
   'pnpm-lock.yaml'], { encoding: 'utf8' }));
 const lockPath = resolve(draft, 'pnpm-lock.yaml');
@@ -58,4 +60,9 @@ while (queue.length) {
     if (!snapshots.has(dependency) && oldSnapshots.has(dependency)) queue.push(dependency);
   }
 }
-await writeFile(lockPath, after.toString({ lineWidth: 0 }));
+await writeFile(lockPath, after.toString({
+  lineWidth: 0,
+  // Keep the sealed review's original formatting, but retain pnpm's compact
+  // flow-map style when aligning main to its own saved pre-refresh lock.
+  flowCollectionPadding: !parentLockInput,
+}));

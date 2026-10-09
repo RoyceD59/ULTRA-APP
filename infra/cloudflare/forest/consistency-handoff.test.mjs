@@ -121,8 +121,9 @@ test('production serving works with all external fetches unavailable, while clie
     await mkdir(resolve(tools, 'approved-consistency'), { recursive: true });
     await mkdir(resolve(tools, 'security-consistency'), { recursive: true });
     await mkdir(resolve(tools, 'auth-upload-security'), { recursive: true });
+    await mkdir(resolve(tools, 'security-dependency-review'), { recursive: true });
     await mkdir(serverDir, { recursive: true });
-    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
+    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
       await cp(resolve(here, name), resolve(tools, name));
     }
     for (const name of ['candidate.json', 'release-sources.tar.gz']) {
@@ -131,6 +132,7 @@ test('production serving works with all external fetches unavailable, while clie
     }
     for (const name of ['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']) {
       await cp(resolve(here, 'auth-upload-security', name), resolve(tools, 'auth-upload-security', name));
+      await cp(resolve(here, 'security-dependency-review', name), resolve(tools, 'security-dependency-review', name));
     }
     await writeFile(resolve(frozenStage, '.prepared'), APPROVED_CANDIDATE);
     await writeFile(resolve(frozenStage, 'companion-build.json'), JSON.stringify({

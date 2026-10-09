@@ -16,9 +16,11 @@ const retainedInputs = [
   'security-consistency/candidate.json', 'security-consistency/release-sources.tar.gz',
   ...['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']
     .map(name => `auth-upload-security/${name}`),
+  ...['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']
+    .map(name => `security-dependency-review/${name}`),
 ];
 const tools = [
-  'auth-upload-security.mjs', 'consistency-handoff.mjs',
+  'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'consistency-handoff.mjs',
   'consistency-security.mjs', 'build-approved-consistency.mjs',
 ];
 const archivePath = 'auth-upload-security/release-sources.tar.gz';

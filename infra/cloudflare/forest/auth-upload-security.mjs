@@ -14,7 +14,7 @@ export const dependencyArchive = resolve(here, 'security-consistency/release-sou
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export const SECURITY_FIXTURE_GLOB = 'src/tests/{jwt-session-expiry,customer-count-auth,review-media-signature,storage-public-media-security,storage-upload-allowlist}.test.ts';
 
-function paths(archiveBytes) {
+export function paths(archiveBytes) {
   const list = execFileSync('tar', ['-tzf', '-'], { encoding: 'utf8', input: archiveBytes })
     .split('\n').filter(Boolean);
   if (list.some(path => path.startsWith('/') || path.split('/').includes('..'))
@@ -22,7 +22,7 @@ function paths(archiveBytes) {
   return list.filter(path => !path.endsWith('/')).sort();
 }
 
-function preflightArchiveMembers(archiveBytes) {
+export function preflightArchiveMembers(archiveBytes) {
   const members = execFileSync('tar', ['-tvzf', '-'], { encoding: 'utf8', input: archiveBytes })
     .split('\n').filter(Boolean);
   for (const member of members) {

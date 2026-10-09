@@ -1,8 +1,15 @@
-# Security-only dependency review — not selected or published
+# Selected security-only dependency revision — not published
 
-Prepared after owner approval to prepare a security-only revision. This is not
-approval to select this archive, publish the API, advance clients, apply schemas
-or distribute native binaries.
+Prepared after owner approval to prepare a security-only revision. The owner
+subsequently approved selection and the two documented backport mitigations.
+Main now selects this exact archive and its runtime dependency pins are aligned.
+This is **not** approval to publish the API, advance clients, apply schemas or
+distribute native binaries.
+
+`candidate.json` and `validation.json` retain their original preparation-time
+status/evidence. Current selection approval is recorded separately in
+`owner-approval.json`; current verification is in `selection-validation.json`.
+Prior approval records and source archives have not been rewritten.
 
 ## Exact package
 
@@ -124,16 +131,21 @@ review archive with a different package.
 
 ## Remaining API-first gates
 
-1. Review this exact byte scope and the two backported high findings.
-2. Obtain separate selection approval; keep clients on their predecessor.
-3. Align main's runtime dependencies using minimal security-only hunks,
-   preserving main's other scripts/features. **Sharp is external to the API
-   bundle. A fixed archive alone does not fix the published runtime's
-   node_modules.** Confirm all actual runtime dependency copies and regenerate
-   main's compatible lock before publication.
-4. Update and validate the handoff selection for this approved archive; do not
-   rewrite prior archives or owner records as if they approved this new hash.
-5. Inspect the full production schema diff again. Stop on unrelated or
+1. Completed: owner reviewed/approved this exact scope and the two backported
+   high findings; selection is recorded separately from publication.
+2. Completed: main's exact pins and installed consumers are aligned. Unrelated
+   main workspace importer semantics are preserved, including codegen peer
+   contexts. The API builder checks actual main external runtime pins.
+3. Completed: handoff selects the approved archive; all 1,264 retained source
+   files and modes were verified before adopting its previously installed
+   review stage. Local-only API compilation passes and copies no outputs.
+4. Review the broader Security Center scan: three high version-based findings
+   (braces, http-cache-semantics, node-forge) and two moderate findings
+   (fast-copy, postcss-selector-parser). The production-only pnpm audit reports
+   two highs, zero critical and zero moderate. These are different scopes/feeds;
+   do not dismiss the additional findings as covered by the two new approvals.
+5. Current production schema diff is empty, with no warnings or removal/data-loss
+   lists. Inspect it again immediately before publication. Stop on unrelated or
    destructive changes. Preparation changes no schemas.
 6. Offer API-only publication after the main security/release checks pass.
    Verify matching publication provenance and both public API hosts' fresh,
@@ -143,6 +155,11 @@ review archive with a different package.
    separately approved client publication. Do not advance client pointers based
    on the local compilation above.
 
-See `validation.json` for the structured evidence. Main still selects the
-parent archive; no production writes, outputs copied, client activation, live
-provider changes or publication occurred during this preparation.
+Both public API hosts returned fresh, agreeing snapshots at 2026-10-09 10:44 UTC.
+That check does not prove the newly selected security package is live and must
+be repeated before client publication.
+
+See `selection-validation.json` for current evidence. No production schemas
+were applied, deployment outputs copied, client activation, provider
+configuration changes or publication occurred during selection. Development
+services were restarted to load the aligned runtime dependencies.

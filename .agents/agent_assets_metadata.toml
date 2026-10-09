@@ -191,3 +191,17 @@ mtime_ms = 1791539843440
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/896c81e6-12b8-4850-a809-8ed8983f7134/5189485c-2086-44e2-99cf-636b01d522ed"
 storage_version_token = "1791539957700730"
 content_type = "text/html"
+
+[[outputs]]
+id = "oOyUuk3raBu29JspG2G7e"
+uri = "file://exports/security-only-selection-status.html"
+type = "html"
+title = "Security-only selection verified — publication still on hold"
+description = "Main pins, exact-source verification, production schema diff, public API checks and additional Security Center findings."
+logical_id = "d3375de8-12f9-424a-a2d0-3e72ead1705c"
+content_hash = "sha256:fd1738242c958c92e38b2ceb49e774b8b7bac2fe9f6bbbd4df9c05147f2ca1bf"
+size = 9952
+mtime_ms = 1791542820214
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/d3375de8-12f9-424a-a2d0-3e72ead1705c/14939c33-66c5-4e03-82db-b29f554de846"
+storage_version_token = "1791542821000425"
+content_type = "text/html"
