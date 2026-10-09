@@ -1,5 +1,24 @@
 # Development change log
 
+## 2026-10-09 — Fresh client-publication gate and dependency blocker
+
+- Revalidated the selected archive and fresh agreeing snapshots on both public
+  API hosts. The full current production schema diff remains empty.
+- Inspected the newly served predecessor client build. All three bundles and
+  56 referenced assets are available; active native manifest routes identify
+  the matching build. Versioned manifest paths return 404, but the existing
+  active/root-manifest fallback works. Availability does not constitute a
+  complete retained rollback copy.
+- Audited production dependencies from the exact frozen archive in a
+  disposable `/tmp` extraction, without installing or modifying dependencies.
+  The audit reports one critical, three high and three moderate advisories.
+  Braces and node-forge have recorded backports; shell-quote and sharp fixes
+  are absent from the selected package and block further publication.
+- Recorded the gate result in
+  `infra/cloudflare/forest/rollout-evidence/fresh-client-release-gate-2026-10-09.json`.
+  No publication, client pointer changes, production writes, dependency/source
+  changes or application tests were performed. No ignore rules changed.
+
 ## 2026-10-09 — Coordinated main consistency/security release verification
 
 - Verified the exact selected retained archive and saved owner scope without

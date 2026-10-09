@@ -5,6 +5,19 @@ description: Verify narrow production fixes reach the live app without publishin
 
 Treat a successful publish as confirmation that the selected package built and started, not proof that the newest working-tree fix was included.
 
+Repeat dependency risk checks against the exact frozen archive before a later
+publication; earlier approval and passing fixtures are not a permanent
+security pass.
+
+**Why:** A previously approved archive remained selected while newer dependency
+fixes existed only in an unselected consolidated candidate. A fresh audit
+exposed an unpatched critical finding despite earlier preparation evidence.
+
+**How to apply:** Audit the selected lockfile and validate documented backports
+separately from unpatched findings. Do not substitute working-tree or
+consolidated-package results, and do not bypass a critical/high release blocker
+just because live snapshot compatibility passes.
+
 A standby-based publication can omit compilation/source-archive evidence from
 its logs. The referenced standby build may not be retrievable through the
 published-build details callback.
