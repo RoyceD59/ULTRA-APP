@@ -1,5 +1,25 @@
 # Development change log
 
+## 2026-10-09 — Coordinated main consistency/security release verification
+
+- Verified the exact selected retained archive and saved owner scope without
+  changing selection. Inspected the verified public autoscale target and full
+  production schema diff: zero pending statements and no destructive warnings.
+- Fetched matching successful publication build logs. They identify the
+  checksum-specific approved API stage, passing retained fixtures, compilation
+  and successful publication; runtime-log search alone had returned no logs.
+- Found eleven additive schema statements outside the narrow consistency
+  source scope in that prior publication. Recorded them in the coordinated
+  evidence and stopped client advancement for scope review.
+- Verified fresh agreeing snapshots from both public API hosts. API version
+  probes still lack public source attestation. The served Companion retains
+  its predecessor revision with a newly served build ID, so older rollback
+  evidence is insufficient.
+- Updated the shared guide to distinguish latest evidence from the historical
+  security handoff. No publication, production writes, initialization, source
+  selection or application/dependency changes. Existing development port
+  mapping changes were left untouched; no ignore rules changed.
+
 ## 2026-10-08 — Approved observability roadmap and testing procedures
 
 - Recorded approval of the written staged specification and added the requested

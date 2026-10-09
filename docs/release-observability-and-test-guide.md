@@ -18,6 +18,33 @@ Expected build source identity:
 
 `consistency-88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82`
 
+### Latest verification — 2026-10-09
+
+The retained archive and owner scope pass verification. The latest successful
+publication's full build logs now show the checksum-specific API stage,
+API compilation/deployment preparation and successful publication. This
+provides stronger package provenance than the October 8 check below; public
+API `/version.json` responses still do not provide runtime attestation.
+
+The current full production schema diff is empty, with no destructive or
+compatibility warnings. However, the successful publication logged eleven
+additional additive statements for guest-payment links, product editorial,
+order variants and AI feedback. These are outside the narrow consistency
+package. **Stop client advancement pending scope review**; an empty current
+diff must not conceal changes already included in the preceding publication.
+
+At **06:15 UTC**, both public API hosts returned compatible, fresh, agreeing
+snapshots. The served Companion remains on the predecessor revision, but now
+has build ID `1791490658960-487`; rollback evidence must match the actual served
+build, not an older captured build. Remaining security-live checks are not
+established by these read-only probes. No publication or production writes
+were performed during this verification.
+
+Evidence:
+`infra/cloudflare/forest/rollout-evidence/main-coordinated-verification-2026-10-09.json`.
+
+### Historical verification — 2026-10-08
+
 At the read-only check on **2026-10-08 at 15:20 UTC**, both public API hosts
 returned compatible, fresh, agreeing impact snapshots. The API custom host
 returned 404 for `/version.json`; the Replit host returned HTML rather than
@@ -200,7 +227,7 @@ Timeout, stale calculation, incompatible fields, disagreement or an old
 zero fallback blocks advancement. An unavailable probe does not prove downtime.
 Capture UTC time and check clock accuracy before interpreting age failures.
 
-### Source identity — currently an evidence gap
+### Source identity — publication provenance versus public attestation
 
 Do not assume `/version.json` exists on the API. Do not accept a 200 HTML
 fallback as revision JSON. The Companion version at

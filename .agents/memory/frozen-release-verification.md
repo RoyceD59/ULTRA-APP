@@ -33,6 +33,19 @@ Compile the frozen candidate itself, including its dependent contracts; a workin
 
 **How to apply:** Prepare an additive candidate without selecting it, typecheck its consumer apps, and verify its actually selected manifest/launch bytes separately from signed-in working-preview behavior.
 
+A frozen source package does not by itself limit the production schema changes
+included in publication. An empty current schema diff also cannot establish
+that a prior publication respected the narrow approved scope.
+
+**Why:** A successful frozen API publication included unrelated additive schema
+changes; the next development-to-production diff was empty because those
+changes were already present.
+
+**How to apply:** Review the full schema diff before publication and the
+matching publication's migration logs afterward. Keep source approval,
+schema approval and client advancement separate; stop advancement when the
+prior publication includes unreviewed changes outside the approved scope.
+
 Owner approval of a retained source revision's byte scope and main build
 selection is not approval to publish it or advance clients.
 
