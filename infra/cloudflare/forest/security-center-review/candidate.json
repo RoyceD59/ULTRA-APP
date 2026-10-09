@@ -1,0 +1,19 @@
+{
+  "parentSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "candidateSha256": "a982fb107d05be012dc560e06823ecee97c4f0a5a307f98e00cc3880d319a387",
+  "changedPaths": [
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "unchangedParentFiles": 1262,
+  "dependencyPins": {
+    "fast-copy": "4.1.0",
+    "postcss-selector-parser": "7.1.6"
+  },
+  "scopeSha256": "3a560981d4f774353707a7e80f4b74c63de59d2914d4c4079273aff80e397c48",
+  "status": "dependency-only review; NOT SELECTED; NOT PUBLISHED",
+  "selectionApproved": false,
+  "publicationApproved": false,
+  "schemaApplied": false,
+  "clientAdvancement": false
+}

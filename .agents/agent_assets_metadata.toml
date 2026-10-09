@@ -205,3 +205,17 @@ mtime_ms = 1791542820214
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/d3375de8-12f9-424a-a2d0-3e72ead1705c/14939c33-66c5-4e03-82db-b29f554de846"
 storage_version_token = "1791542821000425"
 content_type = "text/html"
+
+[[outputs]]
+id = "8h9ksItUUfEytR9m5nEUX"
+uri = "file://exports/security-center-review-blocked.html"
+type = "html"
+title = "Security-only review — installation blocker recorded"
+description = "Exact narrow package, dependency findings, verified progress, cache installation failure and release gates."
+logical_id = "de8f542f-9412-4569-a0ec-bf4a270ab81e"
+content_hash = "sha256:9f4bfd78428a1d0db252e73a4cf1a0772295d766aed034f4eb3c1424284e59f6"
+size = 6731
+mtime_ms = 1791547555609
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/de8f542f-9412-4569-a0ec-bf4a270ab81e/1a509294-3572-4981-b53d-97a6f8ce9dc4"
+storage_version_token = "1791547556340520"
+content_type = "text/html"

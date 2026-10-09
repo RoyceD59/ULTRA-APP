@@ -1,5 +1,27 @@
 # Development change log
 
+## 2026-10-09 — Additional dependency review; release blocked on patch installation
+
+- Owner chose security-only remediation with a separate product-schema review.
+  Prepared a separate unselected archive with only root manifest/lock changes
+  for fast-copy 4.1.0 and postcss-selector-parser 7.1.6.
+- Genuine registry releases/licenses/integrities verified; preserved every
+  non-target package, all 11 importers, peer contexts and 1,262 other source
+  files/modes. Rejected resolver pruning rather than including unrelated changes.
+- Verified upgraded logging/selector consumers and compiled logging-worker
+  dependency. API/typography builds and typechecks passed during review.
+- Cache 4.3.0 failed the existing private/max-stale safety fixture. Original-hash
+  and distinct-hash rebased declarations also failed installed-consumer checks.
+  Stopped that upgrade path; review source retains the original 4.2.0 backport.
+- Isolated installation of the retained cache backport also lacks its guard
+  despite frozen-install success and a hash-qualified path. Main and its
+  unchanged selected parent's installed consumers retain the guard. Root cause
+  is unresolved; archive is explicitly blocked, not release-ready.
+- Candidate all-scope audit: zero critical/moderate, three retained high versions.
+  No suppressed advisories or implied additional risk acceptance.
+- No main manifest/lock/handoff selector updates, client advances, schema writes
+  or publication. No ignore-rule changes; unrelated uploaded assets untouched.
+
 ## 2026-10-09 — Select verified security-only dependency revision in main
 
 - Owner approved the exact three-file revision and its two tested backport

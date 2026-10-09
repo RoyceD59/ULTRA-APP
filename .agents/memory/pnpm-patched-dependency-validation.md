@@ -11,6 +11,18 @@ When testing a pnpm `patchedDependencies` fix, resolve the package from a consum
 
 **How to apply:** Confirm the patch marker in the hash-qualified installed source, then run the regression fixture against that exact path. Keep the patch file and the lockfile's `patchedDependencies` entry together.
 
+A successful frozen install and a hash-qualified path do not certify that the
+patch code was applied in a fresh release stage.
+
+**Why:** A new isolated stage resolved a hash-qualified cache library but lacked
+its guard, while the unchanged parent and main consumers contained it. Version
+scans and installation success alone would have missed this safety failure.
+
+**How to apply:** Validate marker presence and security behavior in a fresh
+installation, not only a warmed development/parent cache. Block release on any
+discrepancy; do not relax the regression or manually edit installed code to
+manufacture a passing result.
+
 Generate multi-file patches with `pnpm patch` and `pnpm patch-commit`, and verify
 behavior through real consumers after installing; a patch hash alone is not
 proof that every file was modified.
