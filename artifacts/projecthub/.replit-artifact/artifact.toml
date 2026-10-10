@@ -14,7 +14,7 @@ localPort = 20100
 run = "pnpm --filter @workspace/projecthub run dev"
 
 [services.production]
-build = [ "node", "infra/cloudflare/forest/release-build.mjs", "hub" ]
+build = [ "node", "infra/cloudflare/forest/build-approved-consistency.mjs", "hub", "--copy-output" ]
 serve = "static"
 publicDir = "artifacts/projecthub/dist/public"
 
