@@ -56,3 +56,8 @@ consumers needed to certify patches if build dependencies are not explicit.
 **How to apply:** Use the frozen lock with forced import, test real installed
 consumers before copying outputs, and only prune after all builds. Do not
 manually alter installed dependencies or skip security fixtures.
+Advisories with no upstream patched release (braces stack exhaustion, node-forge DigestInfo verification, as of 2026-10-10: audit reports patched `<0.0.0`, latest published versions are the vulnerable ones) are mitigated only by the local `patchedDependencies` backports.
+
+**Why:** a scanner keys on version, so it keeps flagging these even though the dependency-security fixtures prove the guards are active; no version bump or override can clear them.
+
+**How to apply:** when asked to "fix" such findings, re-check `pnpm audit` for a patched version first; if none exists, keep the patches and fixtures, do not suppress the finding, and re-test when upstream publishes a fix.
