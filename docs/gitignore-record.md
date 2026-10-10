@@ -1,5 +1,12 @@
 # Git ignore record
 
+## WhatsApp session backup retry — 2026-10-10
+
+No ignore rules changed. New retry source, isolated fixtures and design/evidence
+documentation are tracked. Tests use synthetic in-memory storage rather than
+credential files, real session directories or the live storage prefix. No new
+generated output, credentials or raw provider logs were added to the repository.
+
 ## Independent public-impact monitor evidence — 2026-10-10
 
 Added `/generated-artifacts/public-impact-monitor/` to `.gitignore` and

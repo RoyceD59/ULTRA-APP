@@ -1040,6 +1040,36 @@ initialization, then client delivery and exact live snapshot comparisons.
   followed by scheduled evidence and separately approved recipient-delivery
   verification. Indefinite scheduler failure needs a separate dead-man monitor.
 
+## 2026-10-10 — Bounded WhatsApp session backup retries
+
+- **Scope/approval:** Owner approved retrying failed credential uploads only,
+  with four application-level save calls and one-, two- and four-second backoff.
+  Transient network/TLS, timeout, rate-limit and server failures are eligible;
+  unknown, permission, configuration and certificate-trust failures are not.
+- **Changes:** Added an injected session-sync helper with safe structured
+  categories and cancellable backoff. Production wiring captures the socket
+  generation and aborts obsolete backoff on Disconnect/new lifecycle. Every
+  admitted parallel upload settles before the serialized queue returns, so
+  existing Disconnect cleanup cannot run ahead of another pending write.
+  Re-read local bytes before retry; do not replay successful sibling uploads.
+  Removed raw exception text from upload and credential-queue failure logs.
+- **Verification:** All 20 isolated checks passed. Storage/timer fixtures cover transient recovery
+  without another credential event, retry exhaustion, permanent failures,
+  generation changes during read/backoff/save, cancellation, parallel-write
+  draining and Disconnect cleanup. Existing reset-ordering tests are included.
+  API typecheck passed. Development API compiled/restarted and returned
+  health status `ok` after startup; no Connect/Disconnect endpoint was invoked.
+  These checks establish source/development behavior, not a production backup.
+- **Privacy/isolation:** Synthetic in-memory storage only. No live WhatsApp
+  prefix, real credential files, customer notifications or operational resets
+  used in tests. New logs contain fixed categories, attempt counts and delay
+  durations, not filenames, credential contents, provider messages or URLs.
+- **Ignore changes:** None. No packages, manifests, locks, schemas, production
+  data, frozen selectors, retained assets or publication settings changed.
+- **Status:** Development source verified; production publication and actual
+  session backup health remain unverified. Existing SDK internal retries are
+  unchanged; four calls is not a hard end-to-end network deadline.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

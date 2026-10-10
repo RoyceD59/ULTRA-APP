@@ -15,3 +15,7 @@ description: Where Baileys session credentials live and the git-history leak cav
 - Production session persistence across republishing has been confirmed by the user: WhatsApp reconnected without another QR scan.
 - **Why:** restoring stored files alone does not establish that WhatsApp accepts the session after container replacement; the user confirmed the live reconnect after being asked to republish.
 - **How to apply:** preserve the established pairing for future deployment checks. Distinguish a full republish from pressing Connect; use storage checks as supporting evidence, not a substitute for live connection status.
+
+- Session-backup retry approval is not permission to reset/re-pair the real session or test failures against its live storage prefix.
+- **Why:** The owner approved bounded per-file transient upload recovery on 2026-10-10; the assignment explicitly required isolated storage tests and preserving disconnect protections.
+- **How to apply:** Use injected synthetic storage for failure/race checks. Keep operational session changes and actual production publication/verification separately authorized.

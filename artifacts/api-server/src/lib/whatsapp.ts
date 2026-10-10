@@ -40,6 +40,7 @@ import { sendEmail, buildWhatsAppAlertEmail } from "./email";
 import { sendViaResend } from "./resend";
 import { pushReceiptUpdate } from "./receiptStream";
 import { WhatsAppOperations } from "./whatsapp-operations";
+import { syncSessionFiles } from "./whatsapp-session-sync";
 
 // Credentials are stored in AUTH_DIR so they survive hot-reloads and process
 // restarts.  The path is controlled by the WHATSAPP_SESSION_DIR env var; the
@@ -237,28 +238,27 @@ async function syncFromObjectStorage(): Promise<void> {
  * Called on every creds.update event so the bucket always has the latest tokens.
  * No-op when SESSION_BUCKET_PATH is not set.
  */
-async function syncToObjectStorage(): Promise<void> {
-  if (!SESSION_BUCKET_PATH) return;
+async function syncToObjectStorage(generation: number, signal: AbortSignal): Promise<void> {
+  if (!SESSION_BUCKET_PATH || signal.aborted || generation !== lifecycleGeneration) return;
   try {
     const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
     const bucket = objectStorageClient.bucket(bucketName);
-    let fileNames: string[];
-    try {
-      fileNames = await readdir(AUTH_DIR);
-    } catch {
-      return; // AUTH_DIR doesn't exist yet
-    }
-    await Promise.all(
-      fileNames.map(async (name) => {
-        const localPath = join(AUTH_DIR, name);
-        const contents = await readFile(localPath);
+    await syncSessionFiles({
+      signal,
+      isCurrent: () => generation === lifecycleGeneration,
+      listFiles: () => readdir(AUTH_DIR),
+      readFile: name => readFile(join(AUTH_DIR, name)),
+      saveFile: async (name, contents) => {
         const objectName = prefix ? `${prefix}/${name}` : name;
-        await bucket.file(objectName).save(contents, { resumable: false });
-      })
-    );
-  } catch (err) {
+        await bucket.file(objectName).save(Buffer.from(contents), { resumable: false });
+      },
+      log: event => console.warn("[whatsapp] Session backup:", JSON.stringify(event)),
+    });
+  } catch {
     // Non-fatal: credential sync failure should never crash the main process
-    console.error("[whatsapp] Failed to push session to Object Storage:", err);
+    console.error("[whatsapp] Session backup:", JSON.stringify({
+      operation: "whatsapp_session_backup", status: "failed", category: "permanent",
+    }));
   }
 }
 
@@ -290,6 +290,7 @@ let sessionSyncQueue: Promise<void> = Promise.resolve();
 // Invalidated by disconnect (and by a manual retry) so work belonging to an
 // old socket cannot install a session or change the state of a newer socket.
 let lifecycleGeneration = 0;
+let sessionBackupAbort = new AbortController();
 
 /**
  * A QR update can start an asynchronous conversion while Baileys emits a
@@ -560,6 +561,9 @@ async function startWhatsApp(): Promise<void> {
   // A manual retry starts a new lifecycle. Events from an older socket must
   // not be allowed to move the new connection back to a stale state.
   const generation = ++lifecycleGeneration;
+  sessionBackupAbort.abort();
+  sessionBackupAbort = new AbortController();
+  const backupSignal = sessionBackupAbort.signal;
   let latestQrSequence = 0;
   const previousSock = sock;
   sock = null;
@@ -602,12 +606,11 @@ async function startWhatsApp(): Promise<void> {
           if (generation !== lifecycleGeneration) return;
           await saveCreds();
           if (generation !== lifecycleGeneration) return;
-          await syncToObjectStorage();
+          await syncToObjectStorage(generation, backupSignal);
         })
-        .catch((err) => {
+        .catch(() => {
           console.error(
-            "[whatsapp] Session sync queue failed:",
-            err instanceof Error ? err.message : "unknown error",
+            "[whatsapp] Session sync queue failed: credential write unavailable",
           );
         });
       await sessionSyncQueue;
@@ -817,6 +820,7 @@ function invalidateSession(): void {
   // Invalidate all in-flight storage/auth work and event handlers before
   // awaiting logout. Baileys may emit a late "close" event after logout.
   lifecycleGeneration++;
+  sessionBackupAbort.abort();
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
