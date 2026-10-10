@@ -1010,6 +1010,36 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Retained and selected in configuration; clients not yet published.
 - **Remaining:** Publish click, served-asset verification on both hosts, signed-out/admin/customer snapshot comparison (second customer identifier and access needed), physical-phone checks with the separate usability task.
 
+## 2026-10-10 — Owner-approved independent public-impact monitor prepared
+
+- **Scope/approval:** Owner approved GitHub Actions with a dedicated issue,
+  five-minute probes, fifteen-second request timeouts, three matching failures
+  to warn and two healthy checks to recover. Activation remains separate opt-in.
+- **Changes:** Added standalone read-only health/impact probes reusing the
+  existing compatibility/freshness/agreement contract. Added strict persisted
+  issue state, serialized opt-in scheduling, claimed-before-send comments,
+  uncertain-delivery reporting and fourteen-day sanitized evidence retention.
+  Added the approved design and guide section 10 with no-send, activation,
+  investigation and disable steps.
+- **Verification:** 41 isolated checks passed, including unavailable-target
+  external delivery, threshold/recovery boundaries, corrupted state,
+  oversized/hung bodies, duplicate/gapped runs and ambiguous write outcomes.
+  Workflow YAML parsed; schedule and safe manual default verified. At
+  2026-10-10T13:56:30.193Z, a no-send public check returned HTTP 200 health and
+  fresh compatible agreeing snapshots from both hosts: adjustment revision 1,
+  six users, 1,550 litres, 3,100 plastics and zero clean-water days.
+  Public snapshot agreement is not running API-source identity evidence.
+- **Ignore changes:** Added only `/generated-artifacts/public-impact-monitor/`
+  to Git and publication ignores; reason recorded in `docs/gitignore-record.md`.
+- **Status:** Source prepared and locally verified, not active or published.
+  GitHub issue setup, scheduler execution and recipient delivery are unverified.
+  No issue created, repository opt-in changed, live alert sent, production row
+  initialized, schema applied, client advanced or hosting/DNS/auth/OTA/native
+  distribution changed. Existing application workflows were not changed.
+- **Remaining:** Owner-controlled issue/subscriptions and explicit activation,
+  followed by scheduled evidence and separately approved recipient-delivery
+  verification. Indefinite scheduler failure needs a separate dead-man monitor.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

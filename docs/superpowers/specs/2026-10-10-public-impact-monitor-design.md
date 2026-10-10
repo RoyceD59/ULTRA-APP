@@ -6,9 +6,9 @@ The owner approved an independent monitor on 2026-10-10: check every five
 minutes, use a fifteen-second request timeout, warn after three consecutive
 matching failures, and report recovery after two healthy checks.
 
-This design proposes GitHub Actions as the scheduler and a dedicated GitHub
-issue as the warning destination and durable incident state. Destination
-approval is required before implementation. Activation is a separate opt-in:
+The owner approved GitHub Actions as the scheduler and a dedicated GitHub
+issue as the warning destination and durable incident state on 2026-10-10.
+Activation is a separate opt-in:
 the workflow must remain disabled until the owner enables its repository
 variable after reviewing a no-send run.
 
@@ -46,8 +46,11 @@ resolve a snapshot incident.
 Persist state independently of the target API, in one dedicated GitHub issue.
 Use a bounded machine-readable state record, with no customer information.
 On a threshold crossing, update that issue with the warning or recovery and
-state in one request. Do not post repeated reminders or blindly retry ambiguous
-GitHub writes. Read state again on a later run to reconcile an uncertain result.
+state in one request, reserving the notification before posting one combined
+warning/recovery comment. Body edits alone are not relied on for notifications.
+Record provider acceptance or uncertainty separately. Do not post repeated
+reminders or blindly retry ambiguous GitHub writes. Read state again on a
+later run to reconcile an uncertain result.
 If state cannot be safely read or persisted, report monitor-state unavailability
 and do not claim that a warning was delivered.
 

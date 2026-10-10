@@ -1,5 +1,14 @@
 # Git ignore record
 
+## Independent public-impact monitor evidence — 2026-10-10
+
+Added `/generated-artifacts/public-impact-monitor/` to `.gitignore` and
+`.replitignore`. The checker writes sanitized per-run evidence there; CI retains
+it for fourteen days rather than adding runtime observations to source or
+publication inputs. Monitor code, fixtures, approved design and operating guide
+are tracked. Existing release archives, retained assets and other ignore rules
+are unchanged.
+
 ## Extended archive link metadata fixtures — 2026-10-08
 
 No ignore patterns changed. PAX/GNU forged archive bytes, fixture-only envelope

@@ -583,3 +583,124 @@ Stop on unapproved source/schema/dependency changes, a failed test, missing
 cleanup, PII in telemetry, false healthy states, source mismatch, stale/disagreeing
 hosts, duplicate/ambiguous delivery replay, or missing rollback. Never turn a
 merged task, build success or unreachable check into evidence of a live fix.
+
+## 10. Independent public-impact snapshot monitor
+
+The owner approved the independent GitHub Actions/issue design and thresholds
+on 2026-10-10. This is a separate **opt-in source implementation**, not a
+published app, active schedule, delivered alert or API-source attestation.
+Design: `docs/superpowers/specs/2026-10-10-public-impact-monitor-design.md`.
+Workflow: `.github/workflows/public-impact-monitor.yml`.
+
+### Contract, timing and interpretation
+
+- Probe the two fixed `API_ORIGINS` from `consistency-handoff.mjs`, with
+  unauthenticated GETs to `/api/healthz` and `/api/uc/impact`. No database, cookies,
+  application credentials, write endpoints or release tools are used.
+- Reuse `validateSnapshot()` and `verifyLiveApi()` comparison fields.
+  The age limit remains sixty seconds with sixty seconds of future-clock
+  tolerance. Calculation times may differ; comparison fields must agree.
+- Five-minute schedule; fifteen-second timeouts covering headers and bodies;
+  bounded JSON and no redirects. GitHub schedules can be delayed or skipped.
+  Three consecutive matching failures create a warning. Two healthy observations
+  resolve active incidents. There is no notification for the initial healthy
+  baseline or a recurring reminder for an already warned category.
+- Keep per-host health/impact incidents separate. Changing categories starts a
+  new streak and retains unresolved incidents until health is established.
+  Agreement is **unverified** when either snapshot cannot validate; that cannot
+  resolve a mismatch. Gaps over fifteen minutes reset pending streaks, not active
+  incidents. Checks less than four minutes apart and older/duplicate observations
+  do not advance state; this also prevents rapid manual runs crossing thresholds.
+- `probe_unavailable` means the monitor could not obtain evidence, **not confirmed
+  downtime**. HTTP errors are observed HTTP failures, not proof of their cause.
+  `stale`, `future_clock`, `incompatible`, `invalid_response` and `disagree` are
+  separate categories. The health endpoint establishes liveness, not DB readiness.
+  Matching totals never attest API source identity or authorize client advancement.
+
+### No-send verification
+
+From the repository root, without installing dependencies:
+
+```sh
+node --test infra/cloudflare/forest/public-impact-monitor.test.mjs
+node infra/cloudflare/forest/run-public-impact-monitor.mjs --dry-run
+```
+
+The dry-run makes only four public GET probes. It never reads or changes GitHub
+state and never sends a warning, even when a token or live configuration exists.
+Its fresh baseline does not accumulate consecutive checks across invocations.
+Failure/recovery thresholds and uncertain-delivery behavior are tested with
+injected fixtures, not a production outage drill.
+
+The JSON report is `generated-artifacts/public-impact-monitor/evidence.json`.
+It contains UTC timestamps, sanitized reason codes, HTTP status, duration and
+allowlisted validated public totals. Invalid bodies and provider exception text
+are discarded. No attribution, headers, cookies, tokens, customer identifiers
+or raw logs are saved. GitHub CI retains the report for fourteen days; local
+output is excluded from Git and publication inputs.
+
+### Owner activation — separate from application publication
+
+1. Review the approved workflow in the intended repository's default branch.
+   It must have Actions enabled and permit the workflow's built-in token to
+   update issues. Do not add application secrets or weaken protected branches.
+2. Generate the initial dedicated issue body:
+
+   ```sh
+   node infra/cloudflare/forest/run-public-impact-monitor.mjs --issue-template
+   ```
+
+   The owner creates an **open issue**, not a pull request, titled exactly
+   `Public impact monitor — state and warnings`, with that generated body.
+   This initializes monitor state in GitHub only; it never initializes any
+   production application row. Do not reuse an unrelated issue.
+3. Subscribe the intended staff recipients to that issue. In repository
+   Settings → Secrets and variables → Actions → Variables, set the non-secret
+   `PUBLIC_IMPACT_MONITOR_ISSUE` to its number. Leave
+   `PUBLIC_IMPACT_MONITOR_ENABLED` absent or `false`.
+4. In Actions → Public impact snapshot monitor → Run workflow, keep `dry_run`
+   checked. Review the sanitized evidence artifact. Initial compatibility,
+   freshness and agreement must be established; correct runner-clock problems
+   before interpreting age failures.
+5. Only after the owner approves activation, set the repository variable
+   `PUBLIC_IMPACT_MONITOR_ENABLED` to exactly `true`. Neither approval of this
+   design nor merging it enables that variable. The first scheduled run establishes
+   state; inspect the issue timestamp and workflow artifact to verify execution.
+   Manual live runs require both that opt-in and explicitly unchecked `dry_run`.
+6. Record actual UTC scheduler evidence and permission failures separately.
+   A green local suite does not verify GitHub execution or recipient delivery.
+   No real warning/recovery drill or deliberate production failure is authorized
+   by these instructions. Use an independently approved isolated target to
+   verify actual notification receipt; do not redirect the production checker.
+
+### Delivery, recovery and disabling
+
+The dedicated issue body holds bounded, strictly validated state. Serialized
+workflow runs save the transition and **claim** before sending one combined
+warning/recovery comment. Comments, not body edits, provide the notification
+event. After sending, state records `accepted` or `uncertain`. Acceptance means
+GitHub accepted the comment, not that anyone read or received it.
+
+Live CLI execution is restricted to the named GitHub workflow, which serializes
+scheduled and manual runs in one concurrency group. Do not duplicate this
+workflow, assign the same issue to another monitor or edit its machine state;
+GitHub issues do not provide a database-style atomic compare-and-swap.
+
+No provider-write retry is automatic. An ambiguous save prevents sending; a
+crash after claiming may lose a notification rather than duplicate it. A later
+run reads the stored transition and never blindly replays its comment. Inspect
+`claimed`, `uncertain` and `delivery_state_unavailable` outcomes manually.
+Preserve existing incident state; do not clear it to force another notification.
+If GitHub or state is unavailable/corrupt, the run fails closed without creating
+a replacement baseline or claiming that a warning was sent.
+
+To disable, set `PUBLIC_IMPACT_MONITOR_ENABLED` to `false`, and stop any already
+running monitor job if immediate cessation is required. Keep the issue and its
+state for investigation. Manual no-send checks remain available. Disabling does
+not modify the API, clients, retained release assets, adjustment row or audit.
+
+This monitor does not detect its own scheduler's indefinite failure while it is
+not running. Check the last UTC evidence and GitHub Actions status; independent
+dead-man monitoring requires separate approval. GitHub/API outages may prevent
+incident persistence or notifications. GitHub issue notification subscriptions
+and scheduler operation remain unverified until separately observed.

@@ -49,6 +49,9 @@ Thumbs.db
 .cache/
 .local/
 
+# Generated monitor evidence is retained by CI, not source or release input.
+/generated-artifacts/public-impact-monitor/
+
 # WhatsApp session state — live credentials written at runtime; never commit
 artifacts/api-server/.whatsapp-session/
 
