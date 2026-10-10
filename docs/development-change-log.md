@@ -1070,6 +1070,31 @@ initialization, then client delivery and exact live snapshot comparisons.
   session backup health remain unverified. Existing SDK internal retries are
   unchanged; four calls is not a hard end-to-end network deadline.
 
+## 2026-10-10 — Complete WooCommerce disconnection design
+
+- **Scope/approval:** Owner requested Companion-owned products with the shared
+  ProjectHub schema, then selected complete disconnection including Woo-backed
+  authentication and historical order syncing. Detailed design is proposed for
+  review, not yet implementation/cutover approval.
+- **Investigation:** Phone evidence showed a product-verification checkout
+  failure, not a receipt PDF result. Reproduced HTTP 422 with a read-only
+  development quote. Fresh provider metadata showed the EcoSmart product
+  published/in-stock with price 9799 but not purchasable. Public deployed API
+  also lacked the current source quote route; the phone's precise build/origin
+  was not established. No order, payment or customer communication was created.
+- **Changes:** Wrote the shared product/inventory, local commerce, identity and
+  historical-data migration design with retirement and release safeguards.
+  Updated remembered owner direction so Woo verification is not incorrectly
+  retained as a permanent catalogue requirement.
+- **Verification:** Read-only source/provider inspection only. No code, schema,
+  production data, store configuration, secret or release selector changed.
+  Existing browser/unit receipt evidence does not prove native OS handoff;
+  iPhone/Android saving/sharing/cleanup verification remains incomplete.
+- **Ignore changes:** None. Design and development history are tracked; supplied
+  screenshots containing contact information are not copied into documentation.
+- **Status:** Complete migration scope confirmed; written design awaits review.
+  No migration, operational cutover or publication is claimed.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

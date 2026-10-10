@@ -16,8 +16,13 @@ to Companion's new schema. Product ownership must be shared between Companion
 and ProjectHub, not split between an app-owned catalogue and WooCommerce
 purchase eligibility.
 
+The owner subsequently selected complete WooCommerce disconnection, including
+replacement of Woo-backed customer authentication and historical order syncing,
+rather than the products/new-orders-only option.
+
 **Why:** The owner explicitly instructed this after WooCommerce purchase
-eligibility blocked Companion checkout.
+eligibility blocked Companion checkout, and explicitly chose complete
+disconnection on 2026-10-10.
 
 **How to apply:** Use this as the migration requirement, not evidence that the
 existing implementation or published app has already been disconnected.
