@@ -1006,8 +1006,9 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Verification:** The builder's retention check passed on the new directory; consistency handoff tests (9) passed; handoff, schema diff (no statements) and both-host snapshot gate (fresh, compatible, agreeing, revision 1) checked at about 11:15Z. API build evidence is in the record: candidate, command, cleanup result, 3346.4 MiB against the 7168 MiB warning threshold, startup. Unverified and marked as such: publication-approval timestamp, runtime attestation of the running API source, platform hard image limit.
 - **Lineage finding:** The published API was compiled from `d7ee99bd…` (main's selected security-only revision), not `db2ef861…` as the instruction states. A byte comparison shows only security-only API changes and dependency pins; Hub, Companion, impact routes, schema and generated clients are identical. The saved approval record for `d7ee99bd` still reads client advancement not approved.
 - **Ignore changes:** None; the existing rollback-static node_modules exception already covers the retained dependency files.
+- **Owner confirmation:** The owner confirmed in chat that client advancement covers the `d7ee99bd` lineage.
 - **Status:** Retained and selected in configuration; clients not yet published.
-- **Remaining:** Owner confirmation of the lineage point, Publish click, served-asset verification on both hosts, signed-out/admin/customer snapshot comparison (second customer identifier and access needed), physical-phone checks with the separate usability task.
+- **Remaining:** Publish click, served-asset verification on both hosts, signed-out/admin/customer snapshot comparison (second customer identifier and access needed), physical-phone checks with the separate usability task.
 
 ### YYYY-MM-DD — Change title
 
