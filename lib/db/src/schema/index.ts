@@ -87,4 +87,5 @@ export * from "./uc-refill-governance";
 export * from "./uc-hydrate-trees";
 export * from "./uc-customer-assignments";
 export * from "./uc-catalogue-inventory";
+export * from "./uc-sku-register";
 export * from "./uc-commerce-migration";

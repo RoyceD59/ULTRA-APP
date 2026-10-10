@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const source = require('./records/products_v2.4.json');
-const retail = require('./records/retail-prices_v6.json');
+const retail = require('./records/retail-prices_v7.json');
 const validate = require('./records/validate-products.cjs');
 const schemaHash = crypto.createHash('sha256').update(fs.readFileSync(require.resolve('./records/product_content_v2.4.schema.json'))).digest('hex');
 if (validate.schemaHash !== schemaHash) throw new Error('Product validator is stale');

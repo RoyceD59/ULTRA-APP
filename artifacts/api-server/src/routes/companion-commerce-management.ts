@@ -41,6 +41,20 @@ router.get("/uc/admin/commerce-migration", async (req, res) => {
     unknownInventoryCount: inventory.unknown, unresolvedOrders: review.rows,
     productionCutoverApproved: false });
 });
+router.get("/uc/admin/sku-register", async (req, res) => {
+  if (!await isAdminRequest(req.headers.authorization)) { res.status(403).json({ error: "Admin access required" }); return; }
+  const result = await pool.query(`SELECT s.sku,s.parent_sku,s.model,s.variant,s.colour,s.filter_life_litres,
+      s.life_source,s.lifecycle,s.sheet_stock_status,s.sheet_quantity,s.retail_price_kes,s.source,
+      i.code AS page_code,i.stock_status AS app_stock_status,i.stock_quantity AS app_stock_quantity
+    FROM uc_sku_register s LEFT JOIN uc_catalogue_inventory i ON i.sku=s.sku AND NOT i.archived
+    ORDER BY s.parent_sku,s.sku`);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ source: result.rows[0]?.source ?? null, skus: result.rows.map(r => ({
+    sku: r.sku, parentSku: r.parent_sku, model: r.model, variant: r.variant, colour: r.colour,
+    filterLifeLitres: r.filter_life_litres, lifecycle: r.lifecycle, sheetStockStatus: r.sheet_stock_status,
+    sheetQuantity: r.sheet_quantity, retailPriceKes: r.retail_price_kes === null ? null : Number(r.retail_price_kes),
+    productPage: r.page_code, appStockStatus: r.app_stock_status, appStockQuantity: r.app_stock_quantity })) });
+});
 router.use("/uc/admin/products", async (req, res, next) => {
   if (!await isAdminRequest(req.headers.authorization)) {
     res.status(403).json({ error: "Admin access required" }); return;

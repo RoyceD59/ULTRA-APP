@@ -101,3 +101,4 @@
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
 - [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.
 - [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked/non-stage folders are scratch (deps stripped); wrong markers and symlinks still fail publish; image summary warns over 7 GiB.
+- [Master workbook SKU register](master-workbook-sku-register.md) — v7 workbook is price/SKU authority; stock snapshot applied only by explicit script to unknown rows; no cost data in repo.

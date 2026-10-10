@@ -1128,6 +1128,15 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Complete migration scope confirmed; written design awaits review.
   No migration, operational cutover or publication is claimed.
 
+### 2026-10-10 — Company master workbook v7: retail prices and SKU register
+
+- **Scope/approval:** Owner supplied `UC_MASTER_v7_FINAL_7Oct2026` as the company SKU and price authority and asked for it to be saved in ProjectHub and applied to the earlier uploaded product pages (not WooCommerce). Development workspace only.
+- **Changes:** `retail-prices_v7.json` (revision 2) replaces v6; the one-time price import therefore re-prices matching pages once at startup (Hydra Flux 4399 to 4199, Aqua Stream UC-COM-ROS-002 49990 to 56999, Derma Flux gains 7099 but stays not purchasable). `sku-master_v7.json` holds the 49 child SKUs; `uc_sku_register` stores them (no cost, margin or trade prices) and ProjectHub Inventory shows them. `apply-sku-master-stock.ts` copies the workbook quantities into app stock only for rows still "unknown" (explicit action, audited). `build-sku-master.mjs --check` verifies the JSON against the workbook.
+- **Verification:** API and ProjectHub typecheck; `sku-master.test.ts`; dev API shows the new prices and stock. `product-editorial.test.ts` already failed 6 tests before this change.
+- **Ignore changes:** None.
+- **Status:** Source and development data only. Not published.
+- **Remaining:** Production stock application needs separate approval (`--approved-production-import`). Publishing runs the price revision automatically. Workbook stock provenance is unconfirmed.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

@@ -82,7 +82,7 @@ test('every authored product has visible fields, exact SEO, FAQ parity, safe pub
   const hydra = await renderer().render('/product/hydra-flux');
   assert.match(hydra.body, /<h1>Hydra Flux<\/h1>/);
   assert.match(hydra.body, /750 ml Insulated Water Filter Bottle/);
-  assert.match(hydra.body, /KES 4,399/);
+  assert.match(hydra.body, /KES 4,199/);
   assert.match(hydra.body, /Remove the filter before filling with hot or boiling liquids, juice, coffee or tea\./);
 });
 
@@ -148,7 +148,7 @@ test('live stock cannot inherit a snapshot; failures retain readable records but
   assert.doesNotMatch(renderHead(noIdentity.meta, noIdentity.schemas), /og:image|favicon|logo/);
   const mismatch = await renderer({ productOperation: async () => ({ ...inventory[0], price: '999' }) }).render('/product/hydra-flux');
   assert.ok(mismatch.publicRecord.diagnostics.includes('commerce-price-differs-from-approved'));
-  assert.equal(productNode(mismatch).offers.price, '4399');
+  assert.equal(productNode(mismatch).offers.price, '4199');
   assert.equal(productNode(mismatch).offers.availability, 'https://schema.org/InStock');
 });
 

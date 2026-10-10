@@ -24,6 +24,7 @@ import { sampleOperationalHealth } from "./lib/runtime-health.js";
 import { ensureGlobalImpactSchema } from "./lib/global-impact-store.js";
 import { ensureProductEditorialSchema } from "./lib/product-editorial.js";
 import { ensureCompanionCatalogueSchema } from "./lib/companion-catalogue.js";
+import { ensureSkuRegister } from "./lib/sku-master.js";
 import { ensureCompanionHistorySchema } from "./lib/companion-history-import.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ async function applyStartupMigrations(): Promise<void> {
   await ensureGlobalImpactSchema();
   await ensureProductEditorialSchema();
   await ensureCompanionCatalogueSchema();
+  await ensureSkuRegister();
   await ensureCompanionHistorySchema();
   await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
   // Guide metadata is also created here for existing deployments that predate

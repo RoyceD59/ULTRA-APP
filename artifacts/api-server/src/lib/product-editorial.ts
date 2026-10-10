@@ -14,7 +14,8 @@ export const editorialContract = require(location) as {
   source: any; createRecordCollection: (input: any) => any;
 };
 const seed = editorialContract.source;
-export const spreadsheetRetail = require(resolve(location, "../records/retail-prices_v6.json")) as {
+export const productRecordsDir = resolve(location, "../records");
+export const spreadsheetRetail = require(resolve(productRecordsDir, "retail-prices_v7.json")) as {
   revision: number; prices: Record<string, number>;
 };
 function collectionInput(products: any[]) {

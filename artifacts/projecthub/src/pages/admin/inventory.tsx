@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { isTeamAdmin, getAuthHeaders } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import { SkuRegisterPanel } from "@/components/sku-register-panel";
 import { useProducts, useUpdateProduct, STOCK_LABELS, type StockStatus } from "@/hooks/use-products";
 
 const BASE = API_ORIGIN;
@@ -906,6 +907,8 @@ export default function AdminInventoryPage() {
           {products.length} product{products.length !== 1 ? "s" : ""} · Hover a quantity to edit inline · Blank quantity saves as unmanaged
         </p>
       )}
+
+      <SkuRegisterPanel />
     </div>
   );
 }

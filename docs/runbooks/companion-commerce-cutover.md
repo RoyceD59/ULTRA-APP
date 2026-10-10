@@ -75,6 +75,16 @@ records the operator's decision and is not authorization from this agent.
 Output contains counts only. Repeating an identical import does not duplicate
 an imported order. Changed snapshots and existing anchors remain under review.
 
+## Master workbook stock snapshot
+
+The v7 workbook quantities are not applied by startup or publication. Run
+`pnpm exec tsx scripts/apply-sku-master-stock.ts` to preview and add `--apply`
+to write (development by default; production also needs
+`--approved-production-import` and owner sign-off). Only rows still "unknown"
+change, so repeats and later staff counts are safe. Retail prices, by contrast,
+are re-imported once automatically when a publish starts the API with the new
+price revision.
+
 ## Limits of preparation
 
 - The public history notice remains pending until completeness has been

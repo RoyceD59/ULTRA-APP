@@ -77,8 +77,8 @@ test("fresh seed, live admin authorization, revocation, all-record listing and m
   assert.equal((await request("/uc/admin/product-records")).body.records.length, 21);
   const a = await request(adminPath);
   assert.equal(a.status, 200);
-  assert.equal(a.body.record.price_kes, 4399, "the uploaded Excel retail value wins over the earlier brief");
-  assert.equal(a.body.record.ownership.product_price_kes, 4399);
+  assert.equal(a.body.record.price_kes, 4199, "the uploaded Excel retail value wins over the earlier brief");
+  assert.equal(a.body.record.ownership.product_price_kes, 4199);
   assert.equal(a.body.record.images[0].file, "https://example.test/product-real.png");
   assert.equal(a.body.record.images[0].alt, "Real product front");
   const b = await request(adminPath);
@@ -158,10 +158,10 @@ test("verified variation identity, independent child pricing, stock, ambiguity a
   assert.equal((await serverPricedLines([{ productId, quantity: 1, variationId: 810100, childSku: child }]))?.[0].subtotal, seed.price_kes,
     "Excel-seeded approved price supersedes WooCommerce reference price");
   const approved = (await request(`/uc/product-records/${seed.slug}`)).body;
-  assert.equal(approved.price, 4399);
+  assert.equal(approved.price, 4199);
   assert.equal(approved.priceAuthority, "companion");
   assert.equal(approved.livePrice, 1, "raw Woo price remains truthful, not relabelled");
-  assert.equal(approved.variants[0].price, 4399);
+  assert.equal(approved.variants[0].price, 4199);
   assert.equal(approved.variants[0].commercePrice, 1);
   assert.ok(approved.diagnostics.includes("commerce-price-differs-from-approved"));
   price = seed.price_kes; duplicate = true;

@@ -51,7 +51,7 @@ preserve the selected SKU; they do not let someone pay a saved buyer order.
   **63/63 passed** in the combined regression run. The new editorial saved-order
   test initially called a helper with the wrong return shape; corrected and
   included in the final editorial run. No production order/payment was executed.
-- Spreadsheet verification: `python artifacts/uc-companion/scripts/verify-retail-prices.py`
+- Spreadsheet verification: `node artifacts/uc-companion/scripts/build-sku-master.mjs --check`
   verifies all extracted prices and priced child identities against the uploaded
   workbook without importing cost data, stale stock or formula estimates.
 - Companion cart persistence, selection/quote identity, sharing/analytics,
