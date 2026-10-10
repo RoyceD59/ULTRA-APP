@@ -6,7 +6,10 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { cleanupBuildDependencies } from '../prepare-deployment-image.mjs';
+import {
+  cleanupBuildDependencies, reportDeploymentImage, formatImageReport,
+  resolveImageLimit, DEFAULT_IMAGE_WARN_BYTES,
+} from '../prepare-deployment-image.mjs';
 import { stage as actualCandidateStage } from '../../infra/cloudflare/forest/consistency-handoff.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -29,7 +32,7 @@ test('post-build removes only marked stage dependency trees; archives and static
     'infra/cloudflare/forest/security-consistency/release-sources.tar.gz',
     'infra/cloudflare/forest/rollback-static/build/node_modules/fonts/font.ttf',
     'artifacts/api-server/data/do-not-touch.jsonl',
-    '.consistency-build/unrecognized/node_modules/keep.js',
+    '.consistency-build/unrecognized/dist/keep.js',
   ];
   for (const stage of stages) {
     await put(path, `${stage}/.prepared`, sha);
@@ -56,6 +59,118 @@ test('invalid preparation marker stops before any dependency removal', async t =
   await put(path, `.consistency-build/${sha}/.prepared`, 'b'.repeat(64));
   await assert.rejects(cleanupBuildDependencies(path), /Unrecognized preparation marker/);
   assert.equal(await readFile(resolve(path, '.hydrate-release/node_modules/keep.js'), 'utf8'), 'keep');
+});
+
+test('unmarked hash-named folder is scratch: no abort, dependencies removed, everything else kept', async t => {
+  const path = await fixture(t);
+  const unmarked = `.consistency-build/${'c'.repeat(64)}`;
+  await put(path, `.consistency-build/${sha}/.prepared`, sha);
+  await put(path, `.consistency-build/${sha}/node_modules/dependency.js`);
+  for (const part of ['node_modules', 'artifacts/api-server/node_modules', 'lib/db/node_modules']) {
+    await put(path, `${unmarked}/${part}/dependency.js`);
+  }
+  await put(path, `${unmarked}/artifacts/api-server/dist/index.mjs`);
+  await put(path, `${unmarked}/package.json`);
+  const result = await cleanupBuildDependencies(path);
+  assert.deepEqual(result.scratch, [unmarked]);
+  assert.deepEqual(result.approved, [`.consistency-build/${sha}`]);
+  assert.equal(result.removed.length, 4);
+  for (const part of ['node_modules', 'artifacts/api-server/node_modules', 'lib/db/node_modules']) {
+    await assert.rejects(readFile(resolve(path, unmarked, part, 'dependency.js')), { code: 'ENOENT' });
+  }
+  assert.equal(await readFile(resolve(path, unmarked, 'artifacts/api-server/dist/index.mjs'), 'utf8'), 'keep');
+  assert.equal(await readFile(resolve(path, unmarked, 'package.json'), 'utf8'), 'keep');
+  const report = await reportDeploymentImage(path);
+  assert.equal(report.folders.find(folder => folder.name === unmarked).status, 'scratch');
+});
+
+test('scratch folder with node_modules loses only dependency trees; static node_modules assets and the folder survive', async t => {
+  const path = await fixture(t);
+  const scratch = '.consistency-build/security-center-cache-cold';
+  for (const part of ['node_modules', 'artifacts/uc-companion/node_modules', 'lib/db/node_modules']) {
+    await put(path, `${scratch}/${part}/dependency.js`);
+  }
+  await put(path, `${scratch}/artifacts/uc-companion/static-build/b/node_modules/fonts/font.ttf`);
+  await put(path, `${scratch}/src/keep.txt`);
+  await put(path, '.consistency-build/abandoned-x/.prepared', 'not-a-checksum'); // marker names carry no approval
+  await put(path, '.consistency-build/abandoned-x/node_modules/dependency.js');
+  await put(path, `.consistency-build/${sha}.lock/.keep`); // lock directory is scratch with nothing to strip
+  const result = await cleanupBuildDependencies(path);
+  assert.equal(result.removed.length, 4);
+  assert.deepEqual(result.scratch, [
+    `.consistency-build/${sha}.lock`, '.consistency-build/abandoned-x', scratch,
+  ]);
+  assert.equal(await readFile(resolve(path, scratch, 'artifacts/uc-companion/static-build/b/node_modules/fonts/font.ttf'), 'utf8'), 'keep');
+  assert.equal(await readFile(resolve(path, scratch, 'src/keep.txt'), 'utf8'), 'keep');
+  assert.equal(await readFile(resolve(path, `.consistency-build/${sha}.lock/.keep`), 'utf8'), 'keep');
+  assert.deepEqual((await cleanupBuildDependencies(path)).removed, []);
+});
+
+test('a wrong marker still fails closed and leaves scratch dependencies untouched', async t => {
+  const path = await fixture(t);
+  await put(path, `.consistency-build/${sha}/.prepared`, 'b'.repeat(64));
+  await put(path, '.consistency-build/scratch/node_modules/keep.js');
+  await put(path, `.consistency-build/${'d'.repeat(64)}/node_modules/keep.js`);
+  await assert.rejects(cleanupBuildDependencies(path), /Unrecognized preparation marker/);
+  assert.equal(await readFile(resolve(path, '.consistency-build/scratch/node_modules/keep.js'), 'utf8'), 'keep');
+  assert.equal(await readFile(resolve(path, `.consistency-build/${'d'.repeat(64)}/node_modules/keep.js`), 'utf8'), 'keep');
+  const report = await reportDeploymentImage(path);
+  assert.equal(report.folders.find(folder => folder.name.endsWith(sha)).status, 'invalid-marker');
+  // The legacy stage keeps its strict rule: it must carry a marker.
+  const legacy = await fixture(t);
+  await put(legacy, '.hydrate-release/node_modules/keep.js');
+  await assert.rejects(cleanupBuildDependencies(legacy), /Missing ordinary preparation marker/);
+});
+
+test('scratch folder symlinks and symlinked scratch workspace packages fail closed without following targets', async t => {
+  const path = await fixture(t);
+  const outside = await fixture(t);
+  await put(outside, 'node_modules/keep.js');
+  await mkdir(resolve(path, '.consistency-build'), { recursive: true });
+  await symlink(outside, resolve(path, '.consistency-build/linked'));
+  await assert.rejects(cleanupBuildDependencies(path), /symlink/);
+  await rm(resolve(path, '.consistency-build/linked'));
+  await mkdir(resolve(path, '.consistency-build/scratch/artifacts'), { recursive: true });
+  await symlink(outside, resolve(path, '.consistency-build/scratch/artifacts/uc-companion'));
+  await assert.rejects(cleanupBuildDependencies(path), /Symlinked workspace package/);
+  assert.equal(await readFile(resolve(outside, 'node_modules/keep.js'), 'utf8'), 'keep');
+});
+
+test('pre-upload summary reports each folder status and size, totals the image, and warns over the limit', async t => {
+  const path = await fixture(t);
+  const scratch = '.consistency-build/scratch-stage';
+  await put(path, `.consistency-build/${sha}/.prepared`, sha);
+  await put(path, `.consistency-build/${sha}/artifacts/api-server/dist/index.mjs`, 'x'.repeat(2000));
+  await put(path, `${scratch}/src/a.txt`, 'y'.repeat(1000));
+  await put(path, '.consistency-build/stray-file.txt', 'ignored: not a folder');
+  await put(path, 'node_modules/runtime/index.js', 'z'.repeat(500));
+  await put(path, '.local/big.bin', 'q'.repeat(10_000));
+  await put(path, '.git/objects/pack', 'g'.repeat(10_000));
+  await put(path, '.replitignore', '# comment\n.local\n.cache/\n');
+  const ignoreSize = (await readFile(resolve(path, '.replitignore'))).length;
+  await cleanupBuildDependencies(path);
+  const report = await reportDeploymentImage(path, { limitBytes: 100_000 });
+  assert.deepEqual(report.folders.map(({ name, status, bytes }) => ({ name, status, bytes })), [
+    { name: `.consistency-build/${sha}`, status: 'approved', bytes: 2000 + 64 },
+    { name: scratch, status: 'scratch', bytes: 1000 },
+  ]);
+  // Ignored top-level names and .git are excluded; stray files still ship.
+  assert.equal(report.totalBytes, 2064 + 1000 + 'ignored: not a folder'.length + 500 + ignoreSize);
+  assert.equal(report.overLimit, false);
+  assert.ok(!formatImageReport(report).join('\n').includes('WARNING'));
+  const text = formatImageReport(await reportDeploymentImage(path, { limitBytes: 1000 })).join('\n');
+  assert.match(text, /!!! WARNING: image content is over/);
+  assert.match(text, new RegExp(`${scratch}\\s+scratch\\s`));
+  assert.match(text, new RegExp(`${sha}\\s+approved\\s`));
+});
+
+test('image warning limit defaults near the real limit and an environment override must be valid', () => {
+  assert.equal(resolveImageLimit({}), DEFAULT_IMAGE_WARN_BYTES);
+  assert.ok(DEFAULT_IMAGE_WARN_BYTES > 6 * 1024 ** 3 && DEFAULT_IMAGE_WARN_BYTES < 8 * 1024 ** 3);
+  assert.equal(resolveImageLimit({ DEPLOYMENT_IMAGE_WARN_BYTES: '12345' }), 12345);
+  for (const bad of ['0', '-1', '1.5', 'big']) {
+    assert.throws(() => resolveImageLimit({ DEPLOYMENT_IMAGE_WARN_BYTES: bad }), /positive whole number/);
+  }
 });
 
 test('stage or workspace symlinks fail closed; dependency symlinks are unlinked without following targets', async t => {

@@ -1,15 +1,9 @@
 ---
 name: Deployment stage marker gate
-description: Post-build image cleanup fails the whole publish if any 64-hex stage under .consistency-build lacks a valid .prepared marker.
+description: How the post-build image cleanup treats approved, scratch and invalid build folders, and what still fails the publish.
 ---
-Any directory in `.consistency-build/` whose name is a 64-hex checksum must contain a matching `.prepared` marker, or the post-build cleanup aborts the publish after all builds succeed.
+Post-build cleanup classifies each folder under `.consistency-build/` and `.hydrate-release`. Approved stages (64-hex name with a `.prepared` marker equal to the name, plus the legacy `.hydrate-release` stage) are strictly checked. Any other folder, including an unmarked 64-hex one, is scratch and only has its installed `node_modules` stripped (root, `artifacts/*`, `lib/*`). A marker that exists but is wrong, a legacy stage without a marker, and any symlinked folder or workspace package still fail the publish before anything is removed.
 
-**Why:** an interrupted or abandoned trial extraction left two unmarked checksum-named stages and a publish failed at the very last step ("Missing ordinary preparation marker").
+**Why:** two publishes failed after every build passed: an unmarked hash-named folder aborted cleanup, then about 9 GiB of installed dependencies in scratch folders made the image layer push fail with a closed-pipe error.
 
-**How to apply:** name scratch or trial extractions with a non-checksum name (e.g. `abandoned-...`, `*-draft`), or rename them rather than deleting. Before suggesting a publish, confirm every 64-hex stage has a marker equal to its own name.
-
-Scratch stages are not covered by the post-build dependency cleanup (it only handles `.hydrate-release` and 64-hex stages), so their installed `node_modules` ship in the image.
-
-**Why:** three trial extractions plus one abandoned stage held about 9 GiB of installed dependencies; the image layer push then failed with a closed-pipe error after the build and cleanup had succeeded.
-
-**How to apply:** after any trial or cold-install extraction under `.consistency-build/`, remove its `node_modules` (root, `artifacts/*`, `lib/*`) before suggesting a publish. Sources can stay; installs are regenerable from the sealed archive.
+**How to apply:** scratch trial extractions are now safe to leave in place, but a hash-named folder should never carry a marker that is not its own name. The build prints a per-folder status/size summary and warns above 7 GiB (override with `DEPLOYMENT_IMAGE_WARN_BYTES`); treat that warning as a reason to remove large inputs before publishing. The summary walk takes about a minute on a full workspace.

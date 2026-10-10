@@ -990,6 +990,15 @@ initialization, then client delivery and exact live snapshot comparisons.
   sandbox/physical-device/notification/collector/ingress release gates
   before any later approved activation.
 
+### 2026-10-10 — Fail-safe publish scratch folders
+
+- **Scope/approval:** Task: stop leftover build folders from failing a publish after every build step passed. No publication, API or client behavior, or database change.
+- **Changes:** The post-build cleanup now classifies folders under `.consistency-build/` and `.hydrate-release` as approved, scratch or invalid-marker. Unmarked hash-named and other non-stage folders are scratch and only lose installed `node_modules`; wrong markers, a legacy stage without a marker and symlinks still fail closed before any removal. The build prints a per-folder status/size summary and an image total, with a warning above 7 GiB (`DEPLOYMENT_IMAGE_WARN_BYTES` overrides).
+- **Verification:** `scripts/tests/deployment-image.test.mjs` (12 tests) including unmarked hash-named, scratch-with-dependencies, approved-stage, wrong-marker, symlink, summary and limit cases. Read-only report run on the real workspace.
+- **Ignore changes:** None.
+- **Status:** Source implemented and tested locally; not published.
+- **Remaining:** Confirm the next real publish shows the summary and completes the image upload.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
