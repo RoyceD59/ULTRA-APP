@@ -24,6 +24,12 @@ export default function OrdersScreen() {
     queryFn: () => api.getOrders(),
     enabled: !!user,
   });
+  const commerce = useQuery({
+    queryKey: ['commerce-status', user?.id],
+    queryFn: () => api.getCommerceStatus(),
+    enabled: !!user,
+    staleTime: 60_000,
+  });
 
   const refetchOrders = orders.refetch;
 
@@ -47,6 +53,13 @@ export default function OrdersScreen() {
         <Text style={[styles.title, { color: colors.text }]}>My Orders</Text>
         <View style={{ width: 26 }} />
       </View>
+      {!!user && commerce.data?.legacyHistory !== 'reviewed' ? (
+        <View style={{ padding: 12, marginBottom: 12, borderRadius: 8, backgroundColor: colors.card }}>
+          <Text style={{ color: colors.text }}>
+            Saved Companion orders are shown below. Historical store orders are pending staff review and may not appear yet.
+          </Text>
+        </View>
+      ) : null}
       {!user ? (
         <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/auth/login')} style={styles.state}>
           <Text style={{ color: colors.primary }}>Sign in to view your orders</Text>
@@ -58,7 +71,7 @@ export default function OrdersScreen() {
       ) : !orders.data?.length ? (
         <View style={styles.state}>
           <Ionicons name="bag-outline" size={44} color={colors.mutedForeground} />
-          <Text style={[styles.empty, { color: colors.mutedForeground }]}>You have no orders yet.</Text>
+          <Text style={[styles.empty, { color: colors.mutedForeground }]}>No Companion orders are recorded here yet.</Text>
         </View>
       ) : (
         <View style={styles.list}>

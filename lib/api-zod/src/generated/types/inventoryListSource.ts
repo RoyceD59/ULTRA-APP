@@ -10,6 +10,5 @@ export type InventoryListSource = typeof InventoryListSource[keyof typeof Invent
 
 
 export const InventoryListSource = {
-  woocommerce: 'woocommerce',
-  mock: 'mock',
+  companion: 'companion',
 } as const;

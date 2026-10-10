@@ -68,6 +68,30 @@ paths:
         "404": { description: Not publishable or no full record }
         "503": { description: Identity or editorial store unavailable }
   /uc/admin/product-records:
+    post:
+      operationId: createCompanionProductRecord
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      summary: Create an app-owned draft with unknown stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [record]
+              additionalProperties: false
+              properties:
+                record: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Created private draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+        "400": { description: Invalid authored record }
+        "403": { description: Admin access required }
+        "409": { description: Identity conflict }
     get:
       operationId: listAdminProductEditorialRecords
       tags: [admin]
@@ -87,6 +111,22 @@ paths:
   /uc/admin/product-records/{key}:
     parameters:
       - { name: key, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: archiveCompanionProductRecord
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      summary: Archive without deleting historical orders or filter records
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties: { ok: { type: boolean } }
+        "403": { description: Admin access required }
+        "404": { description: Record not found }
     get:
       operationId: getAdminProductEditorialRecord
       tags: [admin]
@@ -108,7 +148,7 @@ paths:
             schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
       responses:
         "200":
-          description: Saved record and incremented revision; prices and stock are not synchronized to WooCommerce
+          description: Saved shared record and incremented revision; Companion and ProjectHub use the same price
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
@@ -1197,7 +1237,7 @@ paths:
     get:
       operationId: listUcInventory
       tags: [uc-admin]
-      summary: List all UC products with live stock from WooCommerce
+      summary: List app-owned parent and variant stock, including unknown and unmanaged states
       security:
         - bearerAuth: []
       responses:
@@ -1270,7 +1310,64 @@ paths:
         "500": { description: Failed to fetch product }
         "503": { description: Live product could not be verified }
 
+  /uc/commerce/status:
+    get:
+      operationId: getCompanionCommerceStatus
+      tags: [uc]
+      summary: Public history completeness notice without customer data
+      responses:
+        "200":
+          description: Catalogue authority and historical review state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authority, legacyHistory]
+                properties:
+                  authority: { type: string, enum: [companion] }
+                  legacyHistory: { type: string, enum: [pending_review, reviewed] }
+
+  /uc/admin/commerce-migration:
+    get:
+      operationId: getCompanionCommerceMigrationReview
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      summary: Protected stock and historical import review counts
+      responses:
+        "200":
+          description: Review status, not production activation approval
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "403": { description: Admin access required }
+
+  /uc/admin/products:
+    get:
+      operationId: listManagedCompanionProducts
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: App-owned parents including drafts and archived records
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/UcProduct" } }
+        "403": { description: Admin access required }
   /uc/admin/products/{id}:
+    get:
+      operationId: getManagedCompanionProduct
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Protected app-owned product or variant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProduct" }
+        "403": { description: Admin access required }
+        "404": { description: Product not found }
     patch:
       operationId: updateUcProduct
       tags: [uc-admin]
@@ -1288,13 +1385,13 @@ paths:
             schema: { $ref: "#/components/schemas/UcProductUpdate" }
       responses:
         "200":
-          description: Product fields accepted by WooCommerce
+          description: Shared product and inventory update persisted
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UcProductUpdateResult" }
         "400": { description: Invalid product id or update field }
         "401": { description: Unauthorized }
-        "502": { description: WooCommerce update failed or unreachable }
+        "409": { description: Revision or reservation conflict }
 
   /uc/admin/products/{id}/media:
     get:
@@ -6117,8 +6214,14 @@ components:
         id:            { type: integer }
         name:          { type: string }
         sku:           { type: string }
-        stockQuantity: { type: integer }
+        stockQuantity: { type: ["integer", "null"] }
         stockStatus:   { type: string }
+        revision: { type: integer }
+        manageStock: { type: boolean }
+        reservedQuantity: { type: integer }
+        availableQuantity: { type: ["integer", "null"] }
+        recordCode: { type: string }
+        parentId: { type: ["integer", "null"] }
         permalink:     { type: ["string", "null"] }
         syncedAt:      { type: string, format: date-time }
 
@@ -6242,15 +6345,17 @@ components:
             $ref: "#/components/schemas/InventoryProduct"
         source:
           type: string
-          enum: [woocommerce, mock]
+          enum: [companion]
 
     InventoryStockUpdate:
       type: object
       required: [stockQuantity]
       properties:
         stockQuantity:
-          type: integer
+          type: ["integer", "null"]
           minimum: 0
+        stockStatus: { type: string, enum: [unknown, instock, outofstock, onbackorder] }
+        revision: { type: integer, minimum: 1 }
 
     InventoryUpdateResult:
       type: object
@@ -6258,7 +6363,7 @@ components:
       properties:
         ok:            { type: boolean }
         productId:     { type: integer }
-        stockQuantity: { type: integer }
+        stockQuantity: { type: ["integer", "null"] }
         source:        { type: string }
 
     InventoryWishlistDemand:

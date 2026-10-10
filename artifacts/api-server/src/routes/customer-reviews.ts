@@ -17,7 +17,6 @@ async function requireReviewsAdmin(req: Request, res: Response) {
 export const reviewCatalogue = {
   resolve: async (ids: number[]): Promise<Map<number, string>> => {
     const labels = new Map<number, string>();
-    if (!process.env.WC_CONSUMER_KEY || !process.env.WC_CONSUMER_SECRET) return labels;
     const signal = AbortSignal.timeout(5_000);
     // One catalogue call per batch, never one per review. Labels may be missing
     // during an upstream outage; the review log itself remains available.

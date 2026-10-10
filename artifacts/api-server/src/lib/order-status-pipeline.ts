@@ -5,6 +5,7 @@ import { logger } from "./logger.js";
 import { reconcileCanonicalPurchaseDualWrite } from "./canonical-purchase-dual-write.js";
 import { sendSmsAwaitable, orderShippedSms, orderReadyToCollectSms, type OrderFulfillmentDetails } from "./sms.js";
 import { sendViaResend } from "./resend.js";
+import { settleCompanionInventory } from "./companion-catalogue.js";
 
 export const ORDER_CUSTOMER_STAGES = ["accepted", "shipped", "delivered"] as const;
 export type OrderCustomerStage = (typeof ORDER_CUSTOMER_STAGES)[number];
@@ -269,6 +270,7 @@ export async function transitionOrderStatus(input: {
         { code: "INVALID_STAGE_TRANSITION" },
       );
     }
+    await settleCompanionInventory(client, order, normalizedStatus);
     const stageChanged = requestedIndex > currentIndex;
     const nextStage = stageChanged ? requestedStage : order.customer_stage;
     if (input.fulfillment) {
@@ -552,38 +554,8 @@ export async function processOrderNotificationOutbox(limit = 50): Promise<Outbox
 
 /** Repair local projections when a Woo webhook was delayed or unavailable. */
 export async function reconcileWooOrderStatuses(limit = 100): Promise<{ checked: number; updated: number }> {
-  const base = process.env["WC_BASE_URL"];
-  const key = process.env["WC_CONSUMER_KEY"];
-  const secret = process.env["WC_CONSUMER_SECRET"];
-  if (!base || !key || !secret) return { checked: 0, updated: 0 };
-  const local = await pool.query(
-    "SELECT id,wc_order_id FROM uc_orders WHERE wc_order_id IS NOT NULL ORDER BY id DESC LIMIT $1",
-    [limit],
-  );
-  let updated = 0;
-  for (const row of local.rows as Array<{ id: number; wc_order_id: number }>) {
-    try {
-      const response = await fetch(
-        `${base.replace(/\/$/, "")}/wp-json/wc/v3/orders/${row.wc_order_id}?consumer_key=${encodeURIComponent(key)}&consumer_secret=${encodeURIComponent(secret)}`,
-      );
-      if (!response.ok) continue;
-      const remote = await response.json() as Record<string, unknown>;
-      if (typeof remote.status !== "string") continue;
-      const result = await transitionOrderStatus({
-        orderId: Number(row.id),
-        status: remote.status,
-        deliveryId: `reconcile:${row.wc_order_id}:${String(remote.date_modified_gmt ?? remote.date_modified ?? "")}`,
-        modifiedAt: typeof remote.date_modified_gmt === "string" ? remote.date_modified_gmt : undefined,
-        sourceVersion: typeof remote.version === "number" || typeof remote.version === "string"
-          ? String(remote.version)
-          : undefined,
-        actor: "woocommerce-reconciliation",
-        source: "reconciliation",
-      });
-      if (!result.repeated) updated++;
-    } catch (error) {
-      logger.warn({ err: error, orderId: row.id }, "Woo order status reconciliation failed");
-    }
-  }
-  return { checked: local.rows.length, updated };
+  // Imported history is immutable evidence, not an ongoing external authority.
+  // Even configured legacy credentials must not start a sync after cutover.
+  void limit;
+  return { checked: 0, updated: 0 };
 }

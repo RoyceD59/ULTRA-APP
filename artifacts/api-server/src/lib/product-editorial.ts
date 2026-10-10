@@ -49,7 +49,9 @@ export async function ensureProductEditorialSchema() {
 export async function effectiveEditorial() {
   const result = await pool.query("SELECT code,revision,record,gallery_mapped FROM uc_product_editorial");
   const rows = new Map(result.rows.map(row => [row.code, row]));
-  const input = collectionInput(seed.products.map((p: any) => {
+  const persisted = [...seed.products, ...result.rows.filter(row =>
+    !seed.products.some((p: any) => p.code === row.code)).map(row => row.record)];
+  const input = collectionInput(persisted.map((p: any) => {
     const price = spreadsheetRetail.prices[p.parent_sku];
     const fallback = price === undefined ? p : { ...p, price_kes: price,
       ownership: { ...p.ownership, product_price_kes: price } };
@@ -69,10 +71,13 @@ export function validateEditorial(record: any, previous: any, input: any) {
   for (const field of ["code", "slug", "parent_sku", "category"]) {
     if (record[field] !== previous[field]) throw new Error(`${field} is a stable identity and cannot be changed`);
   }
-  if (JSON.stringify(record.variants?.map((v: any) => v.child_sku)) !==
-      JSON.stringify(previous.variants.map((v: any) => v.child_sku))) throw new Error("Variant SKU identities cannot be changed");
+  if (!Array.isArray(record.variants)) throw new Error("Variants must be an array");
+  if (record.variants.some((v: any) => !v || typeof v.child_sku !== "string" ||
+      !v.child_sku.trim() || typeof v.label !== "string" || !v.label.trim())) {
+    throw new Error("Every variant needs a unique SKU and label");
+  }
   const compare = (value: any, templates: any[], path: string) => {
-    if (path === "price_kes") {
+    if (path === "price_kes" || path === "ownership.product_price_kes") {
       if (value !== null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new Error("price_kes must be a nonnegative price or null");
       return;
     }
@@ -120,8 +125,11 @@ export function validateEditorial(record: any, previous: any, input: any) {
     if (claim.evidence.some((key: string) => !input.evidence[key])) throw new Error("Claim references an unknown test report");
     if (claim.status === "verified" && !claim.evidence.length) throw new Error("Verified claims need a report on record");
   }
-  const original = seed.products.find((p: any) => p.code === previous.code);
+  const original = seed.products.find((p: any) => p.code === previous.code) ?? previous;
   const filterWarning = original.opening.critical_limit.match(/Remove the filter before filling with hot or boiling liquids, juice, coffee or tea\./)?.[0];
   if (filterWarning && !record.opening.critical_limit.includes(filterWarning)) throw new Error("The approved filter-removal warning must be preserved");
-  editorialContract.createRecordCollection(collectionInput(input.products.map((p: any) => p.code === record.code ? record : p)));
+  const products = input.products.some((p: any) => p.code === record.code)
+    ? input.products.map((p: any) => p.code === record.code ? record : p)
+    : [...input.products, record];
+  editorialContract.createRecordCollection(collectionInput(products));
 }

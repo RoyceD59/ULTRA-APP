@@ -7,6 +7,7 @@ import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
 import { orderEvidence } from "./order-evidence.js";
 import { hasWCCredentials, wcFetchArray, wcCreateCheckoutOrder } from "../routes/uc.js";
 import { orderReceiptSerial } from "@workspace/api-zod/order-receipt";
+import { reserveCompanionInventory } from "./companion-catalogue.js";
 
 export interface CheckoutInput {
   lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[];
@@ -90,6 +91,7 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
        JSON.stringify({ hash, input, pricing, provider: null, accountEmail: account?.rows[0]?.email,
          paymentAttemptId: randomUUID(), paymentAttempts: [], paymentNotStarted: true }), method === "cod" ? "awaiting_collection" : null]);
     const order = inserted.rows[0];
+    await reserveCompanionInventory(client, order.id, pricing.lines);
     for (const line of pricing.lines) await client.query(`INSERT INTO uc_order_items(order_id,product_id,name,quantity,total,variation_id,child_sku,variant_label) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
       [order.id, line.productId, line.name, line.quantity, String(line.subtotal), line.variationId ?? null, line.childSku ?? null, line.variantLabel ?? null]);
     if (pricing.promotion) await consumePromotionOnClient(client, { quote: pricing.promotion, userId: customerId,
@@ -197,7 +199,7 @@ export async function confirmCheckoutOrder(orderId: number, reference: string) {
         }
       }
     }
-    if (order.checkout_state === "remote_total_mismatch") {
+    if (["remote_total_mismatch", "remote_attempted", "remote_unknown"].includes(order.checkout_state)) {
       await client.query("COMMIT"); return { order, repeated: true, reconciliationRequired: true };
     }
     const updated = await client.query(`UPDATE uc_orders SET status=$2,wc_order_id=$3,checkout_state='confirmed',

@@ -23,6 +23,8 @@ import { ensureRuntimeSchema, flushRuntimeMetrics } from "./lib/runtime-observab
 import { sampleOperationalHealth } from "./lib/runtime-health.js";
 import { ensureGlobalImpactSchema } from "./lib/global-impact-store.js";
 import { ensureProductEditorialSchema } from "./lib/product-editorial.js";
+import { ensureCompanionCatalogueSchema } from "./lib/companion-catalogue.js";
+import { ensureCompanionHistorySchema } from "./lib/companion-history-import.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -63,6 +65,8 @@ async function applyStartupMigrations(): Promise<void> {
   await ensureRuntimeSchema();
   await ensureGlobalImpactSchema();
   await ensureProductEditorialSchema();
+  await ensureCompanionCatalogueSchema();
+  await ensureCompanionHistorySchema();
   await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
   // Guide metadata is also created here for existing deployments that predate
   // migration 0045. Keep this DDL in lockstep with lib/db/migrations/0045.

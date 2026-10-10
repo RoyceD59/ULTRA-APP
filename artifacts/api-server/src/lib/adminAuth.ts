@@ -6,22 +6,17 @@
  * requireAdmin     — convenience wrapper: sends 401 and returns false when the
  *                    caller is not an admin, so route handlers can early-return.
  *
- * Accepted principals:
+ * Accepted principals in the app-owned commerce source:
  *   1. ProjectHub team sessions (`type: "team-session"`) — the admin role is
  *      RE-VERIFIED against the live team_users row on every request, never
  *      trusted from JWT claims, so demotions/deactivations take effect
  *      immediately instead of at token expiry.
- *   2. WooCommerce-issued tokens (`src: "woo"`) — the email was verified by
- *      WooCommerce at issue time (provenance claim set only by the Woo login
- *      path), so it may be checked against the UC_ADMIN_EMAILS allowlist.
- *      Dev ephemeral-login fallback tokens mint arbitrary emails with
- *      Date.now() ids in the same >= 1e9 range but never carry `src: "woo"`,
- *      so they remain rejected.
- *   3. DB-anchored uc_users accounts — the bearer token must resolve to a real
+ *   2. DB-anchored uc_users accounts — the bearer token must resolve to a live
  *      registered user row (id < 1e9); admin comes from the row's isAdmin flag
  *      or its (DB-stored) email being on the allowlist.
  *
- * Admin is NEVER derived from JWT claims alone.
+ * Admin is NEVER derived from JWT claims alone, including retired provider
+ * provenance or a legacy token's email.
  */
 import { type Request, type Response } from "express";
 import { db, ucUsersTable, teamUsersTable } from "@workspace/db";
@@ -90,13 +85,9 @@ export async function isAdminRequest(authHeader: string | undefined): Promise<bo
     }
   }
 
-  // ── 2. WooCommerce-issued token — email verified by Woo at issue time ─────
-  if (claims.src === "woo") {
-    const email = typeof claims.email === "string" ? claims.email.toLowerCase().trim() : "";
-    return email.length > 0 && adminEmailList().includes(email);
-  }
-
-  // ── 3. DB-anchored uc_users account ───────────────────────────────────────
+  // Retired provider provenance is not administrative authority. Old tokens
+  // still require the same live customer row as locally issued tokens.
+  // ── DB-anchored uc_users account ───────────────────────────────────────
   // Synthetic principals (Woo without provenance, dev fallback) land >= 1e9
   // and are rejected before any DB lookup.
   const numericId = Number(claims.id);
@@ -106,7 +97,7 @@ export async function isAdminRequest(authHeader: string | undefined): Promise<bo
     const dbUser = await db.query.ucUsersTable.findFirst({
       where: eq(ucUsersTable.id, numericId),
     });
-    if (!dbUser) return false;
+    if (!dbUser || dbUser.deletedAt) return false;
     return dbUser.isAdmin || adminEmailList().includes(dbUser.email.toLowerCase());
   } catch {
     return false; // DB unavailable → fail closed

@@ -54,7 +54,8 @@ export interface UCProduct {
   categories: { id: number; name: string }[];
   images: { src: string; alt: string }[];
   sku: string;
-  stockStatus: 'instock' | 'outofstock';
+  /** 'unknown' = awaiting staff stock review: not available, not zero. */
+  stockStatus: 'instock' | 'outofstock' | 'onbackorder' | 'unknown';
   stockQuantity: number | null;
   tags: { name: string }[];
   enquiryOnly?: boolean;
@@ -579,6 +580,7 @@ export function useApi() {
     requestContactVerification: (channel: 'email' | 'whatsapp') =>
       post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getCommerceStatus: () => get<{ authority: 'companion'; legacyHistory: 'pending_review' | 'reviewed' }>('/api/uc/commerce/status'),
     getAssignments: (signal?: AbortSignal) => get<CustomerFilterAssignment[]>('/api/uc/customer/assignments', signal, 30000),
     getCustomerTree: async () => {
       try { return await getHydrateCustomerTree({ headers: authHeaders() }); }
@@ -877,7 +879,7 @@ export function useApi() {
     ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer, feedbackToken }),
 
     // ── Admin: product detail edit ────────────────────────────────────────────
-    /** Admin-only: update product fields in WooCommerce. All fields optional. */
+    /** Admin-only: update fields on the app-owned product record. All fields optional. */
     updateProductDetails: (
       productId: number,
       data: {
@@ -886,8 +888,9 @@ export function useApi() {
         shortDescription?: string;
         regularPrice?:     string;
         salePrice?:        string;
-        stockStatus?:      'instock' | 'outofstock';
-        stockQuantity?:    number;
+        stockStatus?:      'instock' | 'outofstock' | 'onbackorder';
+        /** null = unmanaged quantity (not zero). */
+        stockQuantity?:    number | null;
       },
     ) =>
       patch<{ ok: boolean; productId: number; updated: string[]; source: string }>(

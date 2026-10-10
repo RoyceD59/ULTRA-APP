@@ -12,6 +12,12 @@ export interface ProductMedia {
   createdAt: string;
 }
 
+/** "unknown" = awaiting staff stock review; not available and not zero. */
+export type StockStatus = "instock" | "outofstock" | "onbackorder" | "unknown";
+export const STOCK_LABELS: Record<StockStatus, string> = {
+  instock: "In stock", outofstock: "Out of stock", onbackorder: "On backorder", unknown: "Stock unknown",
+};
+
 export interface Product {
   id: number;
   name: string;
@@ -24,8 +30,10 @@ export interface Product {
   categories: { id: number; name: string }[];
   images: { src: string; alt: string }[];
   sku: string;
-  stockStatus: "instock" | "outofstock" | "onbackorder";
-  stockQuantity: number;
+  stockStatus: StockStatus;
+  /** null = quantity not managed (never treat as zero). */
+  stockQuantity: number | null;
+  source?: string;
   tags: { name: string }[];
   lifespanDays: number;
   filterCapacityLitres: number;
@@ -39,8 +47,9 @@ export interface ProductUpdate {
   shortDescription?: string;
   regularPrice?: string;
   salePrice?: string;
-  stockStatus?: "instock" | "outofstock" | "onbackorder";
-  stockQuantity?: number;
+  stockStatus?: StockStatus;
+  /** null switches to unmanaged quantity. */
+  stockQuantity?: number | null;
 }
 
 export interface UploadUrlResponse {
@@ -52,7 +61,7 @@ export interface UploadUrlResponse {
 export function useProducts() {
   return useQuery({
     queryKey: ["uc-products"],
-    queryFn: () => apiFetch<Product[]>("/uc/products"),
+    queryFn: () => apiFetch<Product[]>("/uc/admin/products"),
     staleTime: 60_000,
   });
 }
@@ -60,7 +69,7 @@ export function useProducts() {
 export function useProduct(id: number | null) {
   return useQuery({
     queryKey: ["uc-product", id],
-    queryFn: () => apiFetch<Product>(`/uc/products/${id}`),
+    queryFn: () => apiFetch<Product>(`/uc/admin/products/${id}`),
     enabled: id !== null && !isNaN(id),
     staleTime: 60_000,
   });
@@ -88,8 +97,8 @@ export function useUpdateProduct() {
       if (data.stockQuantity !== undefined || data.stockStatus !== undefined) {
         trackEvent("inventory_updated", {
           productId: id,
-          stockQuantity: data.stockQuantity,
-          stockStatus: data.stockStatus,
+          stockQuantity: data.stockQuantity ?? undefined,
+          stockStatus: data.stockStatus === "unknown" ? undefined : data.stockStatus,
         });
       }
       qc.invalidateQueries({ queryKey: ["uc-product", id] });

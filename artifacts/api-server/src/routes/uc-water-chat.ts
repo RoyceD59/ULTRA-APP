@@ -19,7 +19,7 @@ import { eq, desc, gte, lte, and, ilike } from "drizzle-orm";
 import { buildInstantAssessmentAiContext, latestOwnedAssessmentSummary } from "../lib/instant-water-check-service.js";
 import { AlisonKnowledgeError, loadAlisonKnowledge } from "../lib/alison-knowledge.js";
 import { createAlisonCatalogueLoader } from "../lib/alison-catalogue.js";
-import { hasWCCredentials, wcFetchArray, fetchAllPublishedProducts } from "./uc.js";
+import { hasCompanionCatalogue, wcFetchArray, fetchAllPublishedProducts } from "./uc.js";
 import { logger } from "../lib/logger.js";
 import { SYSTEM_PROMPT, ALISON_MODEL, ALISON_MAX_TOKENS } from "../lib/alison-prompt.js";
 import { guardAlisonCommerceReply, needsCommerceGuard } from "../lib/alison-commerce-guard.js";
@@ -197,7 +197,7 @@ export const _aiClient: {
 
 /** Injectable approved-source lookup; tests never need to mock the global pool. */
 const loadLiveCatalogue = createAlisonCatalogueLoader({
-  configured: hasWCCredentials,
+  configured: hasCompanionCatalogue,
   read: (path, parameters, signal) => wcFetchArray(path, parameters, signal, 256 * 1024),
   allPublished: fetchAllPublishedProducts,
 });

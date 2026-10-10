@@ -2510,8 +2510,17 @@ export interface InventoryProduct {
   id: number;
   name: string;
   sku: string;
-  stockQuantity: number;
+  /** @nullable */
+  stockQuantity: number | null;
   stockStatus: string;
+  revision?: number;
+  manageStock?: boolean;
+  reservedQuantity?: number;
+  /** @nullable */
+  availableQuantity?: number | null;
+  recordCode?: string;
+  /** @nullable */
+  parentId?: number | null;
   /** @nullable */
   permalink?: string | null;
   syncedAt: string;
@@ -2667,8 +2676,7 @@ export type InventoryListSource = typeof InventoryListSource[keyof typeof Invent
 
 
 export const InventoryListSource = {
-  woocommerce: 'woocommerce',
-  mock: 'mock',
+  companion: 'companion',
 } as const;
 
 export interface InventoryList {
@@ -2676,15 +2684,32 @@ export interface InventoryList {
   source: InventoryListSource;
 }
 
+export type InventoryStockUpdateStockStatus = typeof InventoryStockUpdateStockStatus[keyof typeof InventoryStockUpdateStockStatus];
+
+
+export const InventoryStockUpdateStockStatus = {
+  unknown: 'unknown',
+  instock: 'instock',
+  outofstock: 'outofstock',
+  onbackorder: 'onbackorder',
+} as const;
+
 export interface InventoryStockUpdate {
-  /** @minimum 0 */
-  stockQuantity: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  stockQuantity: number | null;
+  stockStatus?: InventoryStockUpdateStockStatus;
+  /** @minimum 1 */
+  revision?: number;
 }
 
 export interface InventoryUpdateResult {
   ok: boolean;
   productId: number;
-  stockQuantity: number;
+  /** @nullable */
+  stockQuantity: number | null;
   source: string;
 }
 
@@ -4126,8 +4151,18 @@ export interface AuditEventPage {
   total: number;
 }
 
+export type CreateCompanionProductRecordBodyRecord = { [key: string]: unknown };
+
+export type CreateCompanionProductRecordBody = {
+  record: CreateCompanionProductRecordBodyRecord;
+};
+
 export type ListAdminProductEditorialRecords200 = {
   records: ProductEditorialIdentity[];
+};
+
+export type ArchiveCompanionProductRecord200 = {
+  ok: boolean;
 };
 
 export type RegisterUcContactAccountBody = {
@@ -4467,6 +4502,28 @@ export type GetUcProductParams = {
  */
 publicationSafe?: boolean;
 };
+
+export type GetCompanionCommerceStatus200Authority = typeof GetCompanionCommerceStatus200Authority[keyof typeof GetCompanionCommerceStatus200Authority];
+
+
+export const GetCompanionCommerceStatus200Authority = {
+  companion: 'companion',
+} as const;
+
+export type GetCompanionCommerceStatus200LegacyHistory = typeof GetCompanionCommerceStatus200LegacyHistory[keyof typeof GetCompanionCommerceStatus200LegacyHistory];
+
+
+export const GetCompanionCommerceStatus200LegacyHistory = {
+  pending_review: 'pending_review',
+  reviewed: 'reviewed',
+} as const;
+
+export type GetCompanionCommerceStatus200 = {
+  authority: GetCompanionCommerceStatus200Authority;
+  legacyHistory: GetCompanionCommerceStatus200LegacyHistory;
+};
+
+export type GetCompanionCommerceMigrationReview200 = { [key: string]: unknown };
 
 export type ListUcCustomersParams = {
 /**

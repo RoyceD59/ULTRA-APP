@@ -22,7 +22,7 @@
 - [Shared settings in parallel tests](shared-settings-parallel-tests.md) — unit tests must inject settings and clocks rather than rely on the singleton team_settings row or process env.
 - [API order-flow test harness](api-order-test-harness.md) — tests hitting /uc/orders must delete MPESA_*/WC_* env vars; a stub returning {id:…} is mistaken for a real WC order.
 - [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).
-- [UC admin gate provenance](uc-admin-gate.md) — single shared gate; email trusted only with src:"woo" issue-time claim; team-session admin re-verified against team_users row; never JWT claims alone.
+- [UC admin gate provenance](uc-admin-gate.md) — prepared disconnect source requires live DB administration; retired Woo provenance has no independent privilege; retained releases may differ.
 - [UC reminder channels](uc-reminder-channels.md) — opt-in email/SMS/WhatsApp filter reminders; claim-before-send at-most-once; Postgres µs vs JS ms timestamp equality trap.
 - [UC social sign-in](uc-social-auth.md) — Clerk is identity-layer only; exchange endpoint issues uc JWT; verified-email + never-relink rules; ClerkLoaded must not gate the whole app.
 - [Android signing identities](android-signing-identities.md) — dev proceeds on the debug keystore as an interim tracked identity; production Maps-key gate stays fail-closed until the Play app-signing SHA-1 exists.

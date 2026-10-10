@@ -1,4 +1,4 @@
-import { hasWCCredentials, wcFetchArray, MOCK_PRODUCTS } from "../routes/uc.js";
+import { wcFetchArray } from "../routes/uc.js";
 import type { InstantWaterCheckResult } from "./instant-water-check.js";
 
 // Exact SKUs from the maintained catalogue/product reference; family fit only,
@@ -12,9 +12,8 @@ export const WATER_RECOMMENDATION_TARGETS: Record<string, { sku: string; name: s
 };
 
 export type CatalogueLoader = (sku: string) => Promise<Array<{ id?: unknown; sku?: unknown; name?: unknown }> | null>;
-const loadCatalogue: CatalogueLoader = sku => hasWCCredentials()
-  ? wcFetchArray("/products", { sku, status: "publish", per_page: "10" }, AbortSignal.timeout(5000))
-  : Promise.resolve(MOCK_PRODUCTS);
+const loadCatalogue: CatalogueLoader = sku =>
+  wcFetchArray("/products", { sku, status: "publish", per_page: "10" }, AbortSignal.timeout(5000));
 
 export async function withWaterRecommendationTarget(rec: InstantWaterCheckResult["recommendation"], load: CatalogueLoader = loadCatalogue): Promise<InstantWaterCheckResult["recommendation"]> {
   const target = WATER_RECOMMENDATION_TARGETS[rec.name];

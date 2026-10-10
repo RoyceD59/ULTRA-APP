@@ -41,6 +41,7 @@ import type {
   AnthropicError,
   AnthropicMessage,
   AnthropicMessageInput,
+  ArchiveCompanionProductRecord200,
   AssignmentOrderLine,
   AuditEventPage,
   AuthenticatedInstantWaterAssessmentCreated,
@@ -75,6 +76,7 @@ import type {
   ContactMethodUpdate,
   ContactUpdate,
   ContactWithMethods,
+  CreateCompanionProductRecordBody,
   CreateCustomerAssignment200,
   CreateEditorialBlogArticle201,
   CreateUcAdminGuide201,
@@ -93,6 +95,8 @@ import type {
   FindAssignmentOrderLinesParams,
   GetCompanionCheckoutRecovery200,
   GetCompanionCheckoutRecoveryParams,
+  GetCompanionCommerceMigrationReview200,
+  GetCompanionCommerceStatus200,
   GetCustomerLifecycleTimelineParams,
   GetDashboardActivityParams,
   GetEditorialBlogArticle200,
@@ -442,6 +446,77 @@ export function useGetProductEditorialRecord<TData = Awaited<ReturnType<typeof g
 
 
 
+export const getCreateCompanionProductRecordUrl = () => {
+
+
+
+
+  return `/api/uc/admin/product-records`
+}
+
+/**
+ * @summary Create an app-owned draft with unknown stock
+ */
+export const createCompanionProductRecord = async (createCompanionProductRecordBody: CreateCompanionProductRecordBody, options?: RequestInit): Promise<ProductEditorialRevision> => {
+
+  return customFetch<ProductEditorialRevision>(getCreateCompanionProductRecordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCompanionProductRecordBody)
+  }
+);}
+
+
+
+
+
+export const getCreateCompanionProductRecordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCompanionProductRecord>>, TError,{data: BodyType<CreateCompanionProductRecordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCompanionProductRecord>>, TError,{data: BodyType<CreateCompanionProductRecordBody>}, TContext> => {
+
+const mutationKey = ['createCompanionProductRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCompanionProductRecord>>, {data: BodyType<CreateCompanionProductRecordBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCompanionProductRecord(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCompanionProductRecordMutationResult = NonNullable<Awaited<ReturnType<typeof createCompanionProductRecord>>>
+    export type CreateCompanionProductRecordMutationBody = BodyType<CreateCompanionProductRecordBody>
+    export type CreateCompanionProductRecordMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an app-owned draft with unknown stock
+ */
+export const useCreateCompanionProductRecord = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCompanionProductRecord>>, TError,{data: BodyType<CreateCompanionProductRecordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCompanionProductRecord>>,
+        TError,
+        {data: BodyType<CreateCompanionProductRecordBody>},
+        TContext
+      > => {
+      return useMutation(getCreateCompanionProductRecordMutationOptions(options));
+    }
+
 export const getListAdminProductEditorialRecordsUrl = () => {
 
 
@@ -512,6 +587,77 @@ export function useListAdminProductEditorialRecords<TData = Awaited<ReturnType<t
 
 
 
+
+export const getArchiveCompanionProductRecordUrl = (key: string,) => {
+
+
+
+
+  return `/api/uc/admin/product-records/${key}`
+}
+
+/**
+ * @summary Archive without deleting historical orders or filter records
+ */
+export const archiveCompanionProductRecord = async (key: string, options?: RequestInit): Promise<ArchiveCompanionProductRecord200> => {
+
+  return customFetch<ArchiveCompanionProductRecord200>(getArchiveCompanionProductRecordUrl(key),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchiveCompanionProductRecordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveCompanionProductRecord>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveCompanionProductRecord>>, TError,{key: string}, TContext> => {
+
+const mutationKey = ['archiveCompanionProductRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveCompanionProductRecord>>, {key: string}> = (props) => {
+          const {key} = props ?? {};
+
+          return  archiveCompanionProductRecord(key,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveCompanionProductRecordMutationResult = NonNullable<Awaited<ReturnType<typeof archiveCompanionProductRecord>>>
+
+    export type ArchiveCompanionProductRecordMutationError = ErrorType<void>
+
+    /**
+ * @summary Archive without deleting historical orders or filter records
+ */
+export const useArchiveCompanionProductRecord = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveCompanionProductRecord>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archiveCompanionProductRecord>>,
+        TError,
+        {key: string},
+        TContext
+      > => {
+      return useMutation(getArchiveCompanionProductRecordMutationOptions(options));
+    }
 
 export const getGetAdminProductEditorialRecordUrl = (key: string,) => {
 
@@ -4273,7 +4419,7 @@ export const getListUcInventoryUrl = () => {
 }
 
 /**
- * @summary List all UC products with live stock from WooCommerce
+ * @summary List app-owned parent and variant stock, including unknown and unmanaged states
  */
 export const listUcInventory = async ( options?: RequestInit): Promise<InventoryList> => {
 
@@ -4320,7 +4466,7 @@ export type ListUcInventoryQueryError = ErrorType<void>
 
 
 /**
- * @summary List all UC products with live stock from WooCommerce
+ * @summary List app-owned parent and variant stock, including unknown and unmanaged states
  */
 
 export function useListUcInventory<TData = Awaited<ReturnType<typeof listUcInventory>>, TError = ErrorType<void>>(
@@ -4503,6 +4649,302 @@ export function useGetUcProduct<TData = Awaited<ReturnType<typeof getUcProduct>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetUcProductQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCompanionCommerceStatusUrl = () => {
+
+
+
+
+  return `/api/uc/commerce/status`
+}
+
+/**
+ * @summary Public history completeness notice without customer data
+ */
+export const getCompanionCommerceStatus = async ( options?: RequestInit): Promise<GetCompanionCommerceStatus200> => {
+
+  return customFetch<GetCompanionCommerceStatus200>(getGetCompanionCommerceStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanionCommerceStatusQueryKey = () => {
+    return [
+    `/api/uc/commerce/status`
+    ] as const;
+    }
+
+
+export const getGetCompanionCommerceStatusQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanionCommerceStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanionCommerceStatus>>> = ({ signal }) => getCompanionCommerceStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanionCommerceStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionCommerceStatus>>>
+export type GetCompanionCommerceStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Public history completeness notice without customer data
+ */
+
+export function useGetCompanionCommerceStatus<TData = Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanionCommerceStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCompanionCommerceMigrationReviewUrl = () => {
+
+
+
+
+  return `/api/uc/admin/commerce-migration`
+}
+
+/**
+ * @summary Protected stock and historical import review counts
+ */
+export const getCompanionCommerceMigrationReview = async ( options?: RequestInit): Promise<GetCompanionCommerceMigrationReview200> => {
+
+  return customFetch<GetCompanionCommerceMigrationReview200>(getGetCompanionCommerceMigrationReviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanionCommerceMigrationReviewQueryKey = () => {
+    return [
+    `/api/uc/admin/commerce-migration`
+    ] as const;
+    }
+
+
+export const getGetCompanionCommerceMigrationReviewQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanionCommerceMigrationReviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>> = ({ signal }) => getCompanionCommerceMigrationReview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanionCommerceMigrationReviewQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>>
+export type GetCompanionCommerceMigrationReviewQueryError = ErrorType<void>
+
+
+/**
+ * @summary Protected stock and historical import review counts
+ */
+
+export function useGetCompanionCommerceMigrationReview<TData = Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceMigrationReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanionCommerceMigrationReviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListManagedCompanionProductsUrl = () => {
+
+
+
+
+  return `/api/uc/admin/products`
+}
+
+export const listManagedCompanionProducts = async ( options?: RequestInit): Promise<UcProduct[]> => {
+
+  return customFetch<UcProduct[]>(getListManagedCompanionProductsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListManagedCompanionProductsQueryKey = () => {
+    return [
+    `/api/uc/admin/products`
+    ] as const;
+    }
+
+
+export const getListManagedCompanionProductsQueryOptions = <TData = Awaited<ReturnType<typeof listManagedCompanionProducts>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listManagedCompanionProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListManagedCompanionProductsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listManagedCompanionProducts>>> = ({ signal }) => listManagedCompanionProducts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listManagedCompanionProducts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListManagedCompanionProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listManagedCompanionProducts>>>
+export type ListManagedCompanionProductsQueryError = ErrorType<void>
+
+
+
+export function useListManagedCompanionProducts<TData = Awaited<ReturnType<typeof listManagedCompanionProducts>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listManagedCompanionProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListManagedCompanionProductsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetManagedCompanionProductUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/products/${id}`
+}
+
+export const getManagedCompanionProduct = async (id: number, options?: RequestInit): Promise<UcProduct> => {
+
+  return customFetch<UcProduct>(getGetManagedCompanionProductUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetManagedCompanionProductQueryKey = (id: number,) => {
+    return [
+    `/api/uc/admin/products/${id}`
+    ] as const;
+    }
+
+
+export const getGetManagedCompanionProductQueryOptions = <TData = Awaited<ReturnType<typeof getManagedCompanionProduct>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getManagedCompanionProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetManagedCompanionProductQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getManagedCompanionProduct>>> = ({ signal }) => getManagedCompanionProduct(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getManagedCompanionProduct>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetManagedCompanionProductQueryResult = NonNullable<Awaited<ReturnType<typeof getManagedCompanionProduct>>>
+export type GetManagedCompanionProductQueryError = ErrorType<void>
+
+
+
+export function useGetManagedCompanionProduct<TData = Awaited<ReturnType<typeof getManagedCompanionProduct>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getManagedCompanionProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetManagedCompanionProductQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

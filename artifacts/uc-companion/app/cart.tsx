@@ -44,7 +44,7 @@ export default function CartScreen() {
       .then(list => {
         if (cancelled) return;
         const cartIds = new Set(idsInCart.split(',').map(Number));
-        setRecs(list.filter(p => !cartIds.has(p.id) && p.stockStatus !== 'outofstock'));
+        setRecs(list.filter(p => !cartIds.has(p.id) && ['instock', 'onbackorder'].includes(p.stockStatus)));
       })
       .catch(() => { if (!cancelled) setRecs([]); });
     return () => { cancelled = true; };

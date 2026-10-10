@@ -74,6 +74,20 @@ Metro workflow is running.
 inotify watcher budget even after leftover pnpm staging packages were removed.
 Expo's CI mode disables file watching without disabling production bundling.
 
+For a bounded local public-preview browser check, use the provisioned Chromium
+executable if workspace Playwright expects a missing cached browser. A blank
+initial Expo capture is not by itself evidence of a failed page: wait for
+actual content before diagnosing it as broken.
+
+**Why:** The workspace browser package's cache expectation can differ from the
+provisioned browser, and cold Expo startup outlasts a brief screenshot wait.
+Downloading another browser needlessly increases the workspace/image footprint.
+
+**How to apply:** Check the installed Chromium with `command -v chromium` and
+pass that executable to the existing browser library; use a bounded content
+wait. Do not substitute this anonymous check for signed-in or physical-phone
+verification.
+
 **How to apply:** Include `CI=1` in the packaging command rather than raising
 system limits or changing application source for a host resource-limit failure.
 

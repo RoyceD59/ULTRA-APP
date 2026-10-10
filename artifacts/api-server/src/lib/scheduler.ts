@@ -13,6 +13,7 @@ import { lt, lte, gt, desc, eq, and, or, inArray, isNull, isNotNull, sql } from 
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
   hasWCCredentials,
+  hasCompanionCatalogue,
   fetchAllPublishedProducts,
   normalizeProduct,
   auditProductLifespans,
@@ -35,7 +36,7 @@ import {
   processReferralSettlementAlerts,
   retryReferralSettlements,
 } from "../routes/referrals.js";
-import { processOrderNotificationOutbox, reconcileWooOrderStatuses } from "./order-status-pipeline.js";
+import { processOrderNotificationOutbox } from "./order-status-pipeline.js";
 import { queueBlogRun, resumeQueuedBlogRuns, weeklyBlogRunKey } from "./blog-editorial.js";
 import { reconcileAbandonedCheckouts } from "./abandoned-checkouts.js";
 import { deliverReviewAlert, runLocationReviewReminders } from "./location-review-reminders.js";
@@ -51,20 +52,10 @@ import { deliverReviewAlert, runLocationReviewReminders } from "./location-revie
 
 /** Default live lookup: fetch a product's WooCommerce stock_status, or null on any failure. */
 async function fetchWcStockStatus(productId: number): Promise<string | null> {
-  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-  const ck   = process.env["WC_CONSUMER_KEY"]!;
-  const cs   = process.env["WC_CONSUMER_SECRET"]!;
-
-  const url = `${base}/wp-json/wc/v3/products/${productId}?consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`;
-  const fetchRes = await fetch(url);
-  if (!fetchRes.ok) return null;
-
-  const text = await fetchRes.text();
-  const jsonStart = text.search(/[{[]/);
-  if (jsonStart === -1) return null;
-
-  const data = JSON.parse(text.slice(jsonStart)) as Record<string, unknown>;
-  return String(data["stock_status"] ?? "");
+  const { readCompanionProduct } = await import("./companion-catalogue.js");
+  const data = await readCompanionProduct(`/products/${productId}`);
+  return data && ["instock", "outofstock", "onbackorder"].includes(String(data.stock_status))
+    ? String(data.stock_status) : null;
 }
 
 export interface WishlistRestockDeps {
@@ -94,7 +85,7 @@ export interface WishlistRestockResult {
 export async function checkWishlistRestocks(
   deps: WishlistRestockDeps = {},
 ): Promise<WishlistRestockResult> {
-  const isWcConfigured  = deps.isWcConfigured  ?? hasWCCredentials;
+  const isWcConfigured  = deps.isWcConfigured  ?? hasCompanionCatalogue;
   const fetchStockStatus = deps.fetchStockStatus ?? fetchWcStockStatus;
   const sendPush        = deps.sendPush        ?? sendPushToUser;
   const sendEmail        = deps.sendEmail      ?? sendViaResend;
@@ -337,15 +328,7 @@ export function startScheduler() {
   }, { timezone: "UTC" });
   logger.info("Scheduler: order notification outbox job registered (every 2 minutes)");
 
-  cron.schedule("*/10 * * * *", async () => {
-    try {
-      const result = await reconcileWooOrderStatuses();
-      if (result.checked > 0) logger.info(result, "Scheduler: Woo order status reconciliation complete");
-    } catch (err) {
-      logger.error({ err }, "Scheduler: Woo order status reconciliation failed");
-    }
-  }, { timezone: "UTC" });
-  logger.info("Scheduler: Woo order status reconciliation registered (every 10 minutes)");
+  logger.info("Scheduler: Woo order synchronization retired; no remote job registered");
 
   cron.schedule("*/5 * * * *", async () => {
     try {
@@ -556,7 +539,7 @@ export function startScheduler() {
 export async function runLowStockAlert(
   deps: LowStockAlertDependencies = {},
 ): Promise<LowStockAlertResult> {
-  if (!(deps.isWcConfigured ?? hasWCCredentials)()) {
+  if (!(deps.isWcConfigured ?? hasCompanionCatalogue)()) {
     logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
     return { outOfStock: 0, lowStock: 0, emailed: false };
   }

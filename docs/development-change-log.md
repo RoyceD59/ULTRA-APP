@@ -1,5 +1,38 @@
 # Development change log
 
+## 2026-10-10 — App-owned commerce source prepared, not published
+
+- Implemented the approved WooCommerce-disconnection design in development:
+  persistent app-owned product/variant identities, shared authored pricing,
+  stock revision checks, unknown/unmanaged stock distinctions, and atomic
+  managed-stock reservations. Fulfillment consumes reservations once; uncertain
+  payment cancellations retain their holds for independent staff review.
+- ProjectHub now supports creating drafts, editing shared records and prices,
+  managing parent/variant inventory, publication/purchase switches and archiving
+  without deleting order history. Companion uses the same source contracts.
+- Runtime catalogue transports are local-only even with Woo credentials
+  configured. Woo authentication, order writes/status synchronization and
+  webhook ingress are retired. Verified self-service recovery can transition
+  an existing Woo-backed local account to a local password without relinking.
+- Added a bounded, reviewed offline historical-import tool. Preview is
+  read-only; unmatched/conflicting ownership and pre-existing order anchors
+  remain under review. Imports do not send mail, issue rewards, charge money
+  or treat source status/paid timestamps alone as payment or COD evidence.
+- Regenerated API contracts. Shared libraries, API, ProjectHub and Companion
+  typechecks pass. Five focused isolated-database checks pass covering runtime
+  retirement, stock admission/settlement, price persistence, import preview
+  safety, draft creation and archive identity retention.
+- Development API and ProjectHub workflows restarted and serving; public
+  development catalogue uses app IDs and explicitly unknown stock. ProjectHub
+  signed-out preview checked. A bounded real-browser wait confirmed the
+  Companion public products page renders after cold-start loading. Signed-in UI and physical-phone receipt PDF
+  evidence are not established by these checks.
+- No production import, publication, release-selector change, customer payment
+  or change to the separate WooCommerce website was performed. Verified stock
+  baselines, app-owned media mapping and reviewed historical exports remain
+  cutover prerequisites. Native iPhone/Android receipt checks remain incomplete.
+- No dependencies, ignore rules or retained publication artifacts changed.
+
 ## 2026-10-09 — Approved security package selected and main aligned
 
 - Recorded explicit exact-source selection and braces/forge backport acceptance

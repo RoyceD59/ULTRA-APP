@@ -5,8 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InventoryStockUpdateStockStatus } from './inventoryStockUpdateStockStatus';
 
 export interface InventoryStockUpdate {
-  /** @minimum 0 */
-  stockQuantity: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  stockQuantity: number | null;
+  stockStatus?: InventoryStockUpdateStockStatus;
+  /** @minimum 1 */
+  revision?: number;
 }

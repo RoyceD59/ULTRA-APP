@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Loader2, Plus, Save, Trash2, UploadCloud, AlertTriangle } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Plus, Save, Trash2, UploadCloud, AlertTriangle, Archive, CheckCircle2 } from "lucide-react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { API_ORIGIN } from "@/lib/api-base";
 import { requestUploadUrl, useAddProductMedia, type Product, type ProductMedia } from "@/hooks/use-products";
 import {
-  IMMUTABLE_KEYS, SLOT_LABELS, isConflict, useProductRecord, useSaveProductRecord,
+  IMMUTABLE_KEYS, SLOT_LABELS, isConflict, useProductRecord, useSaveProductRecord, useArchiveProductRecord,
   type RecordImage, type RecordJson,
 } from "@/hooks/use-product-records";
 
@@ -117,11 +118,54 @@ const GROUPS: { id: string; title: string; keys: string[] }[] = [
   { id: "seo", title: "SEO", keys: ["seo"] },
 ];
 
+type Variant = RecordJson["variants"][number];
+
+/** Add/remove variants. Saved child SKUs keep their identity and cannot be renamed. */
+function VariantsEditor({ variants, lockedSkus, onChange }: { variants: Variant[]; lockedSkus: Set<string>; onChange: (v: Variant[]) => void }) {
+  const proto: Variant = variants.length
+    ? Object.fromEntries(Object.entries(variants[0]).map(([k, v]) => [k, typeof v === "number" ? null : typeof v === "boolean" ? false : Array.isArray(v) ? [] : v && typeof v === "object" ? null : ""])) as Variant
+    : { child_sku: "", label: "" };
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="font-medium">Variants</h3>
+          <p className="text-xs text-muted-foreground">Saved SKUs are locked. Remove a variant to retire it; add a new one with a fresh unique SKU. New variants start with stock unknown.</p>
+        </div>
+        <Button type="button" size="sm" variant="outline" data-testid="button-add-variant" onClick={() => onChange([...variants, clone(proto)])}><Plus className="w-3 h-3 mr-1" />Add variant</Button>
+      </div>
+      {variants.length === 0 && <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">No variants. The product sells under its parent SKU.</p>}
+      {variants.map((v, i) => {
+        const locked = lockedSkus.has(v.child_sku);
+        return (
+          <div key={i} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto] items-end" data-testid={`row-variant-${i}`}>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Child SKU {locked && "(locked)"}</Label>
+              <Input value={v.child_sku} disabled={locked} className="font-mono" onChange={e => onChange(variants.map((x, n) => n === i ? { ...x, child_sku: e.target.value.trim() } : x))} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Label</Label>
+              <Input value={v.label} onChange={e => onChange(variants.map((x, n) => n === i ? { ...x, label: e.target.value } : x))} />
+            </div>
+            <Button type="button" size="icon" variant="ghost" aria-label={`Remove variant ${v.label || i + 1}`} onClick={() => {
+              if (locked && !window.confirm(`Remove saved variant ${v.child_sku}? Its history is kept, but it will no longer be offered.`)) return;
+              onChange(variants.filter((_, n) => n !== i));
+            }}><Trash2 className="w-4 h-4" /></Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ProductRecordEditor({ sku, product, media = [] }: { sku: string; product?: Product; media?: ProductMedia[] }) {
   const { toast } = useToast();
   const query = useProductRecord(sku);
   const save = useSaveProductRecord(sku);
   const addMedia = useAddProductMedia();
+  const archive = useArchiveProductRecord();
+  const [, navigate] = useLocation();
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [draft, setDraft] = useState<RecordJson | null>(null);
   const [group, setGroup] = useState("copy");
   const [error, setError] = useState<string | null>(null);
@@ -189,11 +233,14 @@ export function ProductRecordEditor({ sku, product, media = [] }: { sku: string;
   };
 
   const submit = () => {
-    setError(null); setConflict(false);
+    setError(null); setConflict(false); setSavedAt(null);
+    const skus = (draft.variants ?? []).map(v => String(v.child_sku ?? "").trim());
+    if (skus.some(x => !x)) { setError("Every variant needs a child SKU and label before saving."); return; }
+    if (new Set(skus).size !== skus.length || skus.includes(draft.parent_sku)) { setError("Child SKUs must be unique and different from the parent SKU."); return; }
     const missingAlt = images.find(i => i.approved && !i.alt?.trim());
     if (missingAlt) { setError(`Photo ${missingAlt.slot} (${SLOT_LABELS[missingAlt.slot - 1]}) needs alt text.`); return; }
     save.mutate({ revision: query.data!.revision, record: draft }, {
-      onSuccess: () => toast({ title: "Page record saved", description: "Public page copy and photos updated." }),
+      onSuccess: () => { setSavedAt(new Date().toLocaleTimeString()); toast({ title: "Product record saved", description: "Shared record updated. Publication still follows the publishable flag." }); },
       onError: (err: Error) => { if (isConflict(err)) setConflict(true); else setError(err.message); },
     });
   };
@@ -208,28 +255,68 @@ export function ProductRecordEditor({ sku, product, media = [] }: { sku: string;
       <CardHeader>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <CardTitle>Customer page record</CardTitle>
-            <CardDescription>Text and photos shown on the public product page. Revision {String(query.data.revision)}. Price and stock below are edited separately in WooCommerce.</CardDescription>
+            <CardTitle>Product record</CardTitle>
+            <CardDescription>Shared app-owned record: page copy, photos, variants and the authoritative retail price. Revision {String(query.data.revision)}.</CardDescription>
           </div>
-          <Button onClick={submit} disabled={save.isPending} className="gap-2">
-            {save.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Save page record
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" data-testid="button-archive-record" disabled={archive.isPending || save.isPending} className="gap-2" onClick={() => {
+              if (!window.confirm(`Archive ${draft.name ?? draft.code}? It will be hidden from the catalogue. Orders, filters and history stay intact.`)) return;
+              archive.mutate(draft.code, {
+                onSuccess: () => { toast({ title: "Product archived", description: `${draft.code} is archived. History is preserved.` }); navigate("/admin/products"); },
+                onError: (err: Error) => setError(`Archive failed: ${err.message}`),
+              });
+            }}>
+              {archive.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}Archive
+            </Button>
+            <Button onClick={submit} disabled={save.isPending || archive.isPending} className="gap-2" data-testid="button-save-record">
+              {save.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{save.isPending ? "Saving..." : "Save product record"}
+            </Button>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap pt-2">
           {statusBadge(draft.publishable ? "Publishable" : "Held back", !!draft.publishable)}
+          {statusBadge(draft.purchasable ? "Purchasable" : "Not purchasable", !!draft.purchasable)}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 pt-2" data-testid="panel-publication">
+          {([
+            ["publishable", "Published on Companion", "Shows the product page to customers."],
+            ["purchasable", "Available to buy", "Allows checkout. Stock must still be reviewed; unknown stock is never sold."],
+          ] as const).map(([key, label, hint]) => {
+            const on = !!draft[key];
+            return (
+              <label key={key} className="flex items-start gap-3 rounded-md border p-3 text-sm cursor-pointer">
+                <input type="checkbox" className="mt-1" data-testid={`toggle-${key}`} checked={on} disabled={save.isPending || archive.isPending}
+                  onChange={e => {
+                    const next = e.target.checked;
+                    const msg = next
+                      ? `${label}: turn on for ${draft.name ?? draft.code}? This saves the whole record now, including any unsaved edits.`
+                      : `${label}: turn off for ${draft.name ?? draft.code}? This saves the whole record now, including any unsaved edits.`;
+                    if (!window.confirm(msg)) return;
+                    const updated = { ...draft, [key]: next } as RecordJson;
+                    setDraft(updated); setError(null); setConflict(false); setSavedAt(null);
+                    save.mutate({ revision: query.data!.revision, record: updated }, {
+                      onSuccess: () => { setSavedAt(new Date().toLocaleTimeString()); toast({ title: "Saved", description: `${label} is now ${next ? "on" : "off"}.` }); },
+                      onError: (err: Error) => { setDraft(d => d ? { ...d, [key]: !next } : d); if (isConflict(err)) setConflict(true); else setError(`${label} not changed: ${err.message}`); },
+                    });
+                  }} />
+                <span><span className="font-medium">{label}</span><span className="block text-xs text-muted-foreground">{hint}</span></span>
+              </label>
+            );
+          })}
           {evidence?.claims && <Badge variant="outline">{evidence.claims.filter(c => ["verified", "manufacturer", "customer_reported"].includes(c.status)).length} of {evidence.claims.length} claims public</Badge>}
           <Badge variant="outline">Identity locked: {draft.code} / {draft.slug} / {draft.parent_sku}</Badge>
         </div>
-        {!product && <div className="rounded-md border p-3 text-sm text-muted-foreground">Operational price, stock and media are unavailable: no WooCommerce product is matched to this record. Page copy can still be edited.</div>}
+        {!product && <div className="rounded-md border p-3 text-sm text-muted-foreground">No operational product is linked to this record yet, so stock and photo uploads are unavailable here. Page copy, variants and price can still be edited. New records start unpublished with stock unknown.</div>}
         {priceMismatch && product && (
           <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>Companion price KES {draft.price_kes} differs from WooCommerce price KES {product?.price}. Companion uses the approved price seeded from Excel CATALOGUE RETAIL. WooCommerce still verifies stock and SKU identity; its price is not changed automatically.</span>
+            <span>Record price KES {draft.price_kes} differs from the operational listing price KES {product?.price}. The record price is authoritative for Companion checkout. Reload after saving to confirm both match.</span>
           </div>
         )}
         {conflict && <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive flex items-center justify-between gap-2">
           <span>Someone else saved this record. Reload to get the latest version; your unsaved edits will be replaced.</span>
           <Button size="sm" variant="outline" onClick={() => { loadedRev.current = null; setConflict(false); query.refetch(); }}>Reload</Button></div>}
+        {savedAt && !error && !conflict && <div role="status" className="flex items-center gap-2 rounded-md border border-green-300 bg-green-50 dark:bg-green-950/20 p-3 text-sm text-green-800 dark:text-green-300"><CheckCircle2 className="w-4 h-4" />Saved at {savedAt}.</div>}
         {error && <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
       </CardHeader>
       <CardContent className="space-y-6">
@@ -272,6 +359,17 @@ export function ProductRecordEditor({ sku, product, media = [] }: { sku: string;
             })}
           </div>
         </div>
+
+        <VariantsEditor
+          variants={draft.variants ?? []}
+          lockedSkus={new Set((query.data.record.variants ?? []).map(v => v.child_sku))}
+          onChange={next => setDraft(d => {
+            if (!d) return d;
+            const keep = new Set(next.map(v => v.child_sku));
+            const imgs = (d.images ?? []).map(im => im.child_sku && !keep.has(im.child_sku) ? { ...im, child_sku: undefined, pictured_colour: undefined } : im);
+            return { ...d, variants: next, images: imgs };
+          })}
+        />
 
         <div className="space-y-3">
           <div className="flex gap-2 flex-wrap" role="tablist">

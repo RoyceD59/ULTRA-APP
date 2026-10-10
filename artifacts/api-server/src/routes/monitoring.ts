@@ -50,7 +50,7 @@ router.get("/admin/monitoring", requireTeamAuth, permitted(), async (_req, res) 
       },
       services: [
         { name: "Essential database readiness", status: ready.database === "ok" ? "ok" : "down", detail: ready.database === "ok" ? "Bounded database query passed" : "Dependency unavailable; problem counts may be unknown" },
-        { name: "WooCommerce API configuration", status: "warn", detail: hasWCCredentials() ? "Credentials present; provider operation not verified" : "Not configured; demo catalogue is not live stock evidence" },
+        { name: "Companion catalogue", status: "warn", detail: "App-owned catalogue enabled; stock baselines, media mappings and historical imports require cutover review. WooCommerce is disconnected." },
         { name: "WhatsApp alerts", status: "warn", detail: getWhatsAppStatus().state === "connected" ? "Session connected; recipient delivery not verified" : "Session not connected" },
         { name: "Email alerts", status: "warn", detail: isAlertConfigured() ? "Operational recipients configured; delivery not verified" : "Operational recipients not configured" },
         { name: "AI water chat", status: envPresent("AI_INTEGRATIONS_ANTHROPIC_API_KEY") ? "warn" : "down", detail: envPresent("AI_INTEGRATIONS_ANTHROPIC_API_KEY") ? "Credentials present; provider operation not verified" : "Credentials missing" },

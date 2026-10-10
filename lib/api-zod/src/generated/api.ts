@@ -62,6 +62,22 @@ export const GetProductEditorialRecordResponse = zod.object({
 })
 
 
+/**
+ * @summary Create an app-owned draft with unknown stock
+ */
+export const CreateCompanionProductRecordBody = zod.object({
+  "record": zod.record(zod.string(), zod.unknown())
+})
+
+
+
+
+export const CreateCompanionProductRecordResponse = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
 export const ListAdminProductEditorialRecordsResponse = zod.object({
   "records": zod.array(zod.object({
   "code": zod.string(),
@@ -70,6 +86,18 @@ export const ListAdminProductEditorialRecordsResponse = zod.object({
   "parent_sku": zod.string(),
   "publishable": zod.boolean()
 }))
+})
+
+
+/**
+ * @summary Archive without deleting historical orders or filter records
+ */
+export const ArchiveCompanionProductRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const ArchiveCompanionProductRecordResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 
@@ -1888,19 +1916,25 @@ export const UpdateUcWaterTestCustomerStageResponse = zod.unknown()
 
 
 /**
- * @summary List all UC products with live stock from WooCommerce
+ * @summary List app-owned parent and variant stock, including unknown and unmanaged states
  */
 export const ListUcInventoryResponse = zod.object({
   "products": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
-  "stockQuantity": zod.number(),
+  "stockQuantity": zod.number().nullable(),
   "stockStatus": zod.string(),
+  "revision": zod.number().optional(),
+  "manageStock": zod.boolean().optional(),
+  "reservedQuantity": zod.number().optional(),
+  "availableQuantity": zod.number().nullish(),
+  "recordCode": zod.string().optional(),
+  "parentId": zod.number().nullish(),
   "permalink": zod.string().nullish(),
   "syncedAt": zod.coerce.date()
 })),
-  "source": zod.enum(['woocommerce', 'mock'])
+  "source": zod.enum(['companion'])
 })
 
 
@@ -2001,6 +2035,85 @@ export const GetUcProductResponse = zod.union([zod.object({
   "alt": zod.string()
 }))
 })])
+
+
+/**
+ * @summary Public history completeness notice without customer data
+ */
+export const GetCompanionCommerceStatusResponse = zod.object({
+  "authority": zod.enum(['companion']),
+  "legacyHistory": zod.enum(['pending_review', 'reviewed'])
+})
+
+
+/**
+ * @summary Protected stock and historical import review counts
+ */
+export const GetCompanionCommerceMigrationReviewResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const ListManagedCompanionProductsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.string(),
+  "regularPrice": zod.string().nullable(),
+  "salePrice": zod.string().nullable(),
+  "description": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "tagline": zod.string().nullable(),
+  "categories": zod.array(zod.object({
+  "name": zod.string().optional()
+})),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "sku": zod.string().nullable(),
+  "stockStatus": zod.string().nullable(),
+  "stockQuantity": zod.number().nullable(),
+  "tags": zod.array(zod.record(zod.string(), zod.unknown())),
+  "lifespanDays": zod.number(),
+  "filterCapacityLitres": zod.number(),
+  "enquiryOnly": zod.boolean(),
+  "totalSales": zod.number(),
+  "videoUrl": zod.string().nullable()
+})
+export const ListManagedCompanionProductsResponse = zod.array(ListManagedCompanionProductsResponseItem)
+
+
+
+
+
+export const GetManagedCompanionProductParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetManagedCompanionProductResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.string(),
+  "regularPrice": zod.string().nullable(),
+  "salePrice": zod.string().nullable(),
+  "description": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "tagline": zod.string().nullable(),
+  "categories": zod.array(zod.object({
+  "name": zod.string().optional()
+})),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "sku": zod.string().nullable(),
+  "stockStatus": zod.string().nullable(),
+  "stockQuantity": zod.number().nullable(),
+  "tags": zod.array(zod.record(zod.string(), zod.unknown())),
+  "lifespanDays": zod.number(),
+  "filterCapacityLitres": zod.number(),
+  "enquiryOnly": zod.boolean(),
+  "totalSales": zod.number(),
+  "videoUrl": zod.string().nullable()
+})
 
 
 /**
@@ -2173,14 +2286,17 @@ export const updateUcInventoryItemBodyStockQuantityMin = 0;
 
 
 
+
 export const UpdateUcInventoryItemBody = zod.object({
-  "stockQuantity": zod.number().min(updateUcInventoryItemBodyStockQuantityMin)
+  "stockQuantity": zod.number().min(updateUcInventoryItemBodyStockQuantityMin).nullable(),
+  "stockStatus": zod.enum(['unknown', 'instock', 'outofstock', 'onbackorder']).optional(),
+  "revision": zod.number().min(1).optional()
 })
 
 export const UpdateUcInventoryItemResponse = zod.object({
   "ok": zod.boolean(),
   "productId": zod.number(),
-  "stockQuantity": zod.number(),
+  "stockQuantity": zod.number().nullable(),
   "source": zod.string()
 })
 

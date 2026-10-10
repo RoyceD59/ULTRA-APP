@@ -5,14 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { isTeamAdmin } from "@/lib/team-auth";
-import { useProducts } from "@/hooks/use-products";
+import { useProducts, STOCK_LABELS, type StockStatus } from "@/hooks/use-products";
+import { CreateProductRecordDialog } from "@/components/create-product-record-dialog";
 import { useAuthoredRecords } from "@/hooks/use-product-records";
 import { Card, CardContent } from "@/components/ui/card";
 import { API_ORIGIN } from "@/lib/api-base";
 
 export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [stockFilter, setStockFilter] = useState<"all" | "instock" | "outofstock" | "onbackorder">("all");
+  const [stockFilter, setStockFilter] = useState<"all" | StockStatus>("all");
   const { data: products, isLoading, error } = useProducts();
   const authored = useAuthoredRecords();
   const matched = new Set((products ?? []).map(p => p.sku));
@@ -42,9 +43,10 @@ export default function AdminProductsPage() {
             <PackageSearch className="w-6 h-6" /> Product Catalogue
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Browse all products and access the full product editor.
+            App-owned products: create, edit, manage variants and archive. Archiving keeps orders and history.
           </p>
         </div>
+        {authored.data && <CreateProductRecordDialog templates={authored.data} />}
       </div>
 
       <div className="flex flex-wrap items-center gap-4 bg-card p-4 rounded-lg border">
@@ -68,6 +70,7 @@ export default function AdminProductsPage() {
           <option value="instock">In stock</option>
           <option value="outofstock">Out of stock</option>
           <option value="onbackorder">On backorder</option>
+          <option value="unknown">Stock unknown</option>
         </select>
         <div className="text-sm text-muted-foreground">
           Showing {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
@@ -75,7 +78,7 @@ export default function AdminProductsPage() {
       </div>
 
       <Card><CardContent className="p-4 space-y-3">
-        <h2 className="font-semibold text-sm">Authored page records</h2>
+        <h2 className="font-semibold text-sm">Product records</h2>
         {authored.isLoading ? <div className="text-sm text-muted-foreground flex gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading records...</div>
           : authored.isError ? <div className="text-sm text-destructive">Records unavailable: {authored.error.message} <Button size="sm" variant="outline" onClick={() => authored.refetch()}>Retry</Button></div>
           : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -85,7 +88,7 @@ export default function AdminProductsPage() {
                   <div className="text-xs font-mono text-muted-foreground">{r.parent_sku}</div>
                   <div className="flex gap-1 mt-1">
                     <Badge variant={r.publishable ? "default" : "secondary"}>{r.publishable ? "Publishable" : "Held back"}</Badge>
-                    {!matched.has(r.parent_sku) && <Badge variant="outline">No commerce match</Badge>}
+                    {!matched.has(r.parent_sku) && <Badge variant="outline">No operational link</Badge>}
                   </div></div>
                 <Button size="sm" variant="secondary" asChild><Link href={products?.filter(p => p.sku === r.parent_sku).length === 1
                   ? `/admin/products/${products.find(p => p.sku === r.parent_sku)!.id}` : `/admin/products/record/${r.slug}`}><Edit className="w-3.5 h-3.5 mr-1.5" />Page</Link></Button>
@@ -119,7 +122,7 @@ export default function AdminProductsPage() {
                 )}
                 {product.stockStatus !== "instock" && (
                   <div className="absolute top-2 right-2">
-                    <Badge variant="destructive" className="shadow-sm">Out of stock</Badge>
+                    <Badge variant={product.stockStatus === "unknown" ? "secondary" : "destructive"} className="shadow-sm">{STOCK_LABELS[product.stockStatus] ?? product.stockStatus}</Badge>
                   </div>
                 )}
               </div>
@@ -153,7 +156,7 @@ export default function AdminProductsPage() {
           {filteredProducts.length === 0 && (
             <div className="col-span-full py-12 text-center text-muted-foreground">
               <PackageSearch className="w-12 h-12 mx-auto opacity-20 mb-3" />
-              <p>No products found matching "{searchQuery}"</p>
+              <p>{(products ?? []).length === 0 ? "No operational products yet. Create a product record to begin." : "No products match these filters."}</p>
             </div>
           )}
         </div>

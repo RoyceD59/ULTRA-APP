@@ -39,6 +39,7 @@ import type {
   CustomerOfflinePurchaseList,
   GetCompanionCheckoutRecovery200,
   GetCompanionCheckoutRecoveryParams,
+  GetCompanionCommerceStatus200,
   GetPublishedCompanionBlogArticle200,
   GetPublishedUcGuide200,
   GetUcActivationPurchases200,
@@ -1635,6 +1636,82 @@ export function useGetUcProduct<TData = Awaited<ReturnType<typeof getUcProduct>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetUcProductQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetCompanionCommerceStatusUrl = () => {
+
+
+
+
+  return `/api/uc/commerce/status`
+}
+
+/**
+ * @summary Public history completeness notice without customer data
+ */
+export const getCompanionCommerceStatus = async ( options?: RequestInit): Promise<GetCompanionCommerceStatus200> => {
+
+  return customFetch<GetCompanionCommerceStatus200>(getGetCompanionCommerceStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanionCommerceStatusQueryKey = () => {
+    return [
+    `/api/uc/commerce/status`
+    ] as const;
+    }
+
+
+export const getGetCompanionCommerceStatusQueryOptions = <TData = Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanionCommerceStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanionCommerceStatus>>> = ({ signal }) => getCompanionCommerceStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanionCommerceStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanionCommerceStatus>>>
+export type GetCompanionCommerceStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Public history completeness notice without customer data
+ */
+
+export function useGetCompanionCommerceStatus<TData = Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanionCommerceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanionCommerceStatusQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

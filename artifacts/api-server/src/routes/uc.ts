@@ -15,6 +15,8 @@ import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
 import { effectiveEditorial } from "../lib/product-editorial.js";
+import { readCompanionCollection, readCompanionProduct, companionCatalogue,
+  updateCompanionInventory } from "../lib/companion-catalogue.js";
 import { getCustomerStatistics } from "../lib/customer-statistics.js";
 import { validateCodShipping } from "../lib/order-validation.js";
 import { paymentMocksAllowed, paymentProviderConfigured } from "../lib/payment-configuration.js";
@@ -107,6 +109,9 @@ class CheckoutKeyOwnershipConflict extends Error {
 }
 
 const router = Router();
+router.all("/uc/webhooks/woocommerce", (_req, res) => {
+  res.status(410).json({ error: "WooCommerce synchronization has been retired. Companion records are app-owned." });
+});
 router.use(enquiriesAdminRouter);
 router.use(ordersAdminRouter);
 
@@ -483,7 +488,7 @@ export async function serverPricedLines(lineItems: { productId: number; quantity
       (item.variationId !== undefined && (!Number.isSafeInteger(item.variationId) || item.variationId <= 0)) ||
       (item.childSku !== undefined && (typeof item.childSku !== "string" || !item.childSku.trim())) ||
       (!!item.variationId !== !!item.childSku))) return null;
-  const catalogue = hasWCCredentials()
+  const catalogue = hasCompanionCatalogue()
     ? await wcFetchArray("/products", { include: [...new Set(lineItems.map(i => i.productId))].join(","), per_page: "100" })
     : MOCK_PRODUCTS;
   // A live product must never be priced using an unrelated demo ID.
@@ -493,13 +498,13 @@ export async function serverPricedLines(lineItems: { productId: number; quantity
     const productId = Number(item.productId), quantity = Number(item.quantity);
     const product = catalogue.find((candidate) => candidate["id"] === productId);
     if (!product || !Number.isInteger(quantity) || quantity <= 0) return null;
-    if (hasWCCredentials() && product["status"] !== "publish") return null;
+    if (product["status"] !== "publish") return null;
     const record = collection.products.find((p: any) => p.parentSku === product["sku"]);
     if (record && !record.purchasable) return null;
     let selected = product;
     let variantLabel: string | undefined;
     if (item.variationId) {
-      if (!hasWCCredentials() || !record) return null;
+      if (!record) return null;
       const variant = record.variants.find((v: any) => v.childSku === item.childSku);
       if (!variant) return null;
       const live = await wcFetchOne(`/products/${productId}/variations/${item.variationId}`);
@@ -518,7 +523,7 @@ export async function serverPricedLines(lineItems: { productId: number; quantity
         selected["purchasable"] === false ||
         (selected["manage_stock"] === true && typeof selected["stock_quantity"] === "number" &&
           selected["stock_quantity"] < quantity && selected["backorders_allowed"] !== true) ||
-        (hasWCCredentials() && !["instock", "onbackorder"].includes(String(selected["stock_status"])))) return null;
+        !["instock", "onbackorder"].includes(String(selected["stock_status"]))) return null;
     return { productId, name: `${String(product["name"])}${variantLabel ? ` — ${variantLabel} (${item.childSku})` : ''}`,
       sku: String(selected["sku"] || product["sku"] || ""), size: String(record?.specs?.Capacity || ""),
       quantity, subtotal: price * quantity,
@@ -658,26 +663,23 @@ const waterTestStoreFallback: Record<string, unknown>[] = [];
 
 // ─── WooCommerce helpers ──────────────────────────────────────────────────────
 export function hasWCCredentials(): boolean {
-  return !!(process.env["WC_CONSUMER_KEY"] && process.env["WC_CONSUMER_SECRET"]);
+  // Retained temporarily for old recovery branches/test seams. Credentials
+  // must never turn a retired external authority back on.
+  return false;
+}
+
+export function hasCompanionCatalogue(): boolean {
+  return true;
 }
 
 function wcUrl(path: string, extra: Record<string, string> = {}): string {
-  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-  const url = new URL(`${base}/wp-json/wc/v3${path}`);
-  url.searchParams.set("consumer_key", process.env["WC_CONSUMER_KEY"]!);
-  url.searchParams.set("consumer_secret", process.env["WC_CONSUMER_SECRET"]!);
-  Object.entries(extra).forEach(([k, v]) => url.searchParams.set(k, v));
-  return url.toString();
+  void path; void extra;
+  throw new Error("WooCommerce transport is retired; reconcile legacy attempts through the reviewed import.");
 }
 
 export async function wcCreateCheckoutOrder(payload: unknown): Promise<Record<string, unknown> | null> {
-  try {
-    const response = await fetch(wcUrl("/orders"), { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload), signal: AbortSignal.timeout(20000) });
-    if (!response.ok) return null;
-    const parsed = parseWcJson(await response.text()) as Record<string, unknown>;
-    return parsed?.id ? parsed : null;
-  } catch { return null; }
+  void payload;
+  return null;
 }
 
 /**
@@ -698,32 +700,9 @@ export async function wcFetchArray(
   maxResponseBytes?: number,
 ): Promise<Record<string, unknown>[] | null> {
   try {
-    const res = await fetch(wcUrl(path, extra), { signal });
-    if (!res.ok) return null;
-    let text: string;
-    if (maxResponseBytes !== undefined) {
-      if (!res.body) return null;
-      const reader = res.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let bytes = 0;
-      try {
-        while (true) {
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          bytes += chunk.value.byteLength;
-          if (bytes > maxResponseBytes) {
-            await reader.cancel();
-            return null;
-          }
-          chunks.push(chunk.value);
-        }
-        text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
-      } finally { reader.releaseLock(); }
-    } else {
-      text = await res.text();
-    }
-    const data: unknown = parseWcJson(text);
-    return Array.isArray(data) ? (data as Record<string, unknown>[]) : null;
+    const data = await readCompanionCollection(path, extra, signal);
+    if (maxResponseBytes !== undefined && Buffer.byteLength(JSON.stringify(data)) > maxResponseBytes) return null;
+    return data;
   } catch {
     return null;
   }
@@ -763,12 +742,8 @@ export async function wcFetchOne(
   extra: Record<string, string> = {}
 ): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(wcUrl(path, extra));
-    const text = await res.text();
-    const data: unknown = parseWcJson(text);
-    return data && typeof data === "object" && !Array.isArray(data)
-      ? (data as Record<string, unknown>)
-      : null;
+    void extra;
+    return await readCompanionProduct(path);
   } catch {
     return null;
   }
@@ -815,7 +790,9 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
       : [],
     sku: p["sku"],
     stockStatus: p["stock_status"] ?? p["stockStatus"],
-    stockQuantity: p["stock_quantity"] ?? p["stockQuantity"],
+    stockQuantity: p["stock_quantity"] === null ? null : p["stock_quantity"] ?? p["stockQuantity"],
+    manageStock: p["manage_stock"] ?? false,
+    revision: p["revision"],
     tags: Array.isArray(p["tags"]) ? p["tags"] : [],
     lifespanDays,
     filterCapacityLitres,
@@ -924,7 +901,7 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
   const publicationSafe = req.query["publicationSafe"] === "true";
   if (publicationSafe) {
     res.setHeader("Cache-Control", "no-store");
-    if (!hasWCCredentials()) {
+    if (!hasCompanionCatalogue()) {
       res.status(503).json({ error: "Published product catalogue provider is not configured" });
       return;
     }
@@ -932,7 +909,7 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
   try {
     let payload: Record<string, unknown>[] | null = null;
     let publishedSource = false;
-    if (hasWCCredentials()) {
+    if (hasCompanionCatalogue()) {
       const requestedCategory = typeof req.query["category"] === "string"
         ? req.query["category"].trim()
         : "";
@@ -993,8 +970,8 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
       return;
     }
     const mediaMap = await fetchProductMediaMap(payload.map((p) => Number(p["id"])));
-    if (publicationSafe) res.setHeader("X-UC-Catalogue-Provenance", "woocommerce-published");
-    res.setHeader("X-UC-Product-Source", publishedSource ? "woocommerce-published" : "unverified");
+    if (publicationSafe) res.setHeader("X-UC-Catalogue-Provenance", "companion-published");
+    res.setHeader("X-UC-Product-Source", publishedSource ? "companion-published" : "unverified");
     res.json(payload.map((p) => applyProductMedia(p, mediaMap.get(Number(p["id"])))));
   } catch (error) {
     req.log?.warn({ err: error }, "Product catalogue refresh failed");
@@ -1206,7 +1183,7 @@ export async function getProductLifespanMap(): Promise<Map<number, number> | nul
   _lifespanRefresh = (async () => {
     try {
       let normalized: Record<string, unknown>[] | null = null;
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const products = await fetchAllPublishedProducts();
         if (products) normalized = products.map(normalizeProduct);
       } else {
@@ -1231,7 +1208,7 @@ export async function getProductLifespanMap(): Promise<Map<number, number> | nul
 
 export async function getProductCapacityMap(): Promise<Map<number, number> | null> {
   let normalized: Record<string, unknown>[] | null = null;
-  if (hasWCCredentials()) {
+  if (hasCompanionCatalogue()) {
     const products = await fetchAllPublishedProducts();
     if (products) normalized = products.map(normalizeProduct);
   } else {
@@ -1266,13 +1243,13 @@ router.get(
       return;
     }
     try {
-      let source = "mock";
+      let source = "companion";
       let normalized: Record<string, unknown>[] | null = null;
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const products = await fetchAllPublishedProducts();
         if (products) {
           normalized = products.map(normalizeProduct);
-          source = "woocommerce";
+          source = "companion";
         } else {
           // Store unreachable — say so loudly instead of silently auditing
           // the mock catalogue and reporting a false all-clear.
@@ -1402,7 +1379,7 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
     }
 
     // WooCommerce cross-sell enrichment (best-effort; silently skipped when absent).
-    if (hasWCCredentials() && skus.length > 0) {
+    if (hasCompanionCatalogue() && skus.length > 0) {
       for (const sku of skus) {
         // Look up the WC product by SKU to get its cross_sell_ids.
         const wcProducts = await wcFetchArray("/products", { sku, per_page: "1" });
@@ -1422,7 +1399,7 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
     if (collected.size > 0) {
       const ids = [...collected.keys()];
 
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const include = ids.join(",");
         const wcProducts = await wcFetchArray("/products", { include, per_page: "50" });
         if (wcProducts && wcProducts.length > 0) {
@@ -1439,28 +1416,13 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
         }
       }
 
-      // Fall back to MOCK_PRODUCTS for any IDs not resolved from WooCommerce.
-      const resolvedIds = new Set(results.map((p) => Number(p["id"])));
-      for (const id of ids) {
-        if (!resolvedIds.has(id)) {
-          const mock = MOCK_PRODUCTS.find((p) => p["id"] === id);
-          if (mock) {
-            results.push({
-              ...mock,
-              compatibilityReason: resolveCompatibilityReason(
-                mock,
-                collected.get(id) ?? "Compatible Accessory"
-              ),
-            });
-          }
-        }
-      }
+      // Unresolved legacy IDs are not products in the app-owned catalogue.
     }
 
     // Best-seller fallback — return first 4 products when nothing was matched.
     if (results.length === 0) {
       let fallback: Record<string, unknown>[] = [];
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const wc = await wcFetchArray("/products", { orderby: "popularity", per_page: "4" });
         if (wc && wc.length > 0) {
           fallback = wc.map(normalizeProduct);
@@ -1506,7 +1468,7 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
   const publicationSafe = req.query["publicationSafe"] === "true";
   if (publicationSafe) {
     res.setHeader("Cache-Control", "no-store");
-    if (!hasWCCredentials()) {
+    if (!hasCompanionCatalogue()) {
       res.status(503).json({ error: "Live product provider is not configured" });
       return;
     }
@@ -1514,9 +1476,12 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
   try {
     let payload: Record<string, unknown> | null = null;
     let publishedSource = false;
-    if (hasWCCredentials()) {
+    if (hasCompanionCatalogue()) {
       const product = await wcFetchOne(`/products/${id}`);
       if (product) {
+        if (product["status"] !== "publish") {
+          res.status(404).json({ error: "Published product not found" }); return;
+        }
         payload = normalizeProduct(product);
         publishedSource = product["status"] === "publish";
       }
@@ -1526,22 +1491,18 @@ router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void
         res.status(503).json({ error: "Live product could not be verified" });
         return;
       }
-      const product = MOCK_PRODUCTS.find((p) => p["id"] === id);
-      if (!product) {
-        res.status(404).json({ error: "Not found" });
-        return;
-      }
-      payload = product;
+      res.status(404).json({ error: "Product not found in the app catalogue. Refresh your basket or use its permanent product address." });
+      return;
     }
     if (publicationSafe && !publishedSource) {
       res.status(404).json({ error: "Published product not found" });
       return;
     }
     const mediaMap = await fetchProductMediaMap([id]);
-    res.setHeader("X-UC-Product-Source", publishedSource ? "woocommerce-published" : "unverified");
+    res.setHeader("X-UC-Product-Source", publishedSource ? "companion-published" : "unverified");
     if (publicationSafe) {
       const photos = (mediaMap.get(id) || []).filter(m => m.type === "photo");
-      res.setHeader("X-UC-Catalogue-Provenance", "woocommerce-live");
+      res.setHeader("X-UC-Catalogue-Provenance", "companion-published");
       res.json({
         id: payload["id"], sku: payload["sku"], stockStatus: payload["stockStatus"],
         price: payload["price"], salePrice: payload["salePrice"], regularPrice: payload["regularPrice"],
@@ -1948,7 +1909,7 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
       return;
     }
     const dbUser = dbUsers[0];
-    if (dbUser && dbUser.authProvider !== "woocommerce") {
+    if (dbUser && dbUser.authProvider === "password") {
       const match = await bcryptjs.compare(password, dbUser.passwordHash);
       if (!match) {
         res.status(401).json({ error: "Invalid credentials" });
@@ -1981,147 +1942,13 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
       void reconcileAssignmentsForAccount(dbUser.id);
       return;
     }
-  } catch {
-    // Keep WooCommerce login available when the Companion database is
-    // temporarily unavailable; provisioning below remains fail-closed.
-  }
-
-  try {
-    const wcBase = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-    if (!normalizedEmail) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-    const jwtRes = await fetch(`${wcBase}/wp-json/jwt-auth/v1/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: normalizedEmail, password }),
-    });
-    const jwtData: unknown = await jwtRes.json();
-    if (
-      !jwtRes.ok
-      || !jwtData
-      || typeof jwtData !== "object"
-      || !("token" in jwtData)
-      || typeof (jwtData as Record<string, unknown>)["token"] !== "string"
-      || !((jwtData as Record<string, unknown>)["token"] as string).trim()
-    ) {
-      // Preserve the development-only demo-session path when Woo explicitly
-      // rejects credentials or is unavailable. Production still fails closed
-      // after the catch below.
-      throw new Error("WooCommerce credentials were not verified");
-    }
-    if (
-      typeof (jwtData as Record<string, unknown>)["user_email"] !== "string"
-      || !((jwtData as Record<string, unknown>)["user_email"] as string).trim()
-    ) {
-      // A successful token response must bind the asserted account to a
-      // provider-owned email; never downgrade an incomplete success to demo.
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-    const providerEmail = normalizeEmail((jwtData as Record<string, unknown>)["user_email"] as string);
-    if (!providerEmail || providerEmail !== normalizedEmail) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-    if (
-      jwtData &&
-      typeof jwtData === "object" &&
-      "token" in jwtData &&
-      typeof (jwtData as Record<string, unknown>)["token"] === "string"
-    ) {
-      const d = jwtData as Record<string, unknown>;
-      const displayName = (d["user_display_name"] as string | undefined) ?? "";
-      const wcEmail = providerEmail;
-      const firstName = displayName.split(" ")[0] || "Customer";
-      const lastName = displayName.split(" ").slice(1).join(" ");
-
-      const wooClient = await pool.connect();
-      let provisioned: any = null;
-      try {
-        await wooClient.query("BEGIN");
-        const classification = await resolveCustomerIdentity({ email: wcEmail }, wooClient);
-        if (classification.kind === "one_active_candidate") {
-          const existing = await wooClient.query<any>(
-            "SELECT * FROM uc_users WHERE id=$1", [classification.customerId],
-          );
-          // Woo credentials were verified above. Existing Companion/password
-          // accounts still require their Companion password and are never
-          // claimed or modified by this fallback.
-          if (existing.rows[0]?.auth_provider === "woocommerce") {
-            const row = existing.rows[0];
-            provisioned = {
-              id: row.id, email: row.email, phone: row.phone,
-              firstName: row.first_name, lastName: row.last_name,
-              address: row.address, credentialVersion: row.credential_version,
-              emailVerified: row.email_verified, phoneVerified: row.phone_verified,
-            };
-          }
-        } else if (classification.kind === "create_allowed") {
-          const passwordHash = await bcryptjs.hash(randomUUID(), 10);
-          const inserted = await wooClient.query<any>(
-            `INSERT INTO uc_users(email,password_hash,first_name,last_name,auth_provider,email_verified)
-             VALUES($1,$2,$3,$4,'woocommerce',true) RETURNING *`,
-            [wcEmail, passwordHash, firstName, lastName],
-          );
-          const row = inserted.rows[0];
-          if (row) {
-            provisioned = {
-              id: row.id, email: row.email, phone: row.phone,
-              firstName: row.first_name, lastName: row.last_name,
-              address: row.address, credentialVersion: row.credential_version,
-              emailVerified: row.email_verified, phoneVerified: row.phone_verified,
-            };
-          }
-        }
-        await wooClient.query("COMMIT");
-      } catch (error) {
-        await wooClient.query("ROLLBACK").catch(() => undefined);
-        throw error;
-      } finally {
-        wooClient.release();
-      }
-
-      if (!provisioned) {
-        res.status(409).json({
-          error: "A Companion account already uses this email. Sign in with its Companion password.",
-        });
-        return;
-      }
-
-      const user = {
-        id: provisioned.id,
-        email: provisioned.email,
-        phone: provisioned.phone,
-        firstName: provisioned.firstName,
-        lastName: provisioned.lastName,
-        address: provisioned.address ?? "",
-        credentialVersion: provisioned.credentialVersion,
-        emailVerified: provisioned.emailVerified,
-        phoneVerified: provisioned.phoneVerified,
-      };
-      void reconcileAssignmentsForAccount(provisioned.id);
-      res.json({ token: issueToken({ ...user, src: "woo" }), user });
-      return;
-    }
-  } catch { /* fall through to development-only demo session */ }
-
-  // No database or WooCommerce account. Development only: allow an ephemeral
-  // demo session so the app can be tried before external credentials exist.
-  if (process.env["NODE_ENV"] !== "production" && password.length >= 6) {
-    const name = loginIdentifier.split("@")[0] ?? "customer";
-    const mockUser = {
-      id:        Date.now(),
-      email: loginIdentifier,
-      phone:     "",
-      firstName: name.charAt(0).toUpperCase() + name.slice(1),
-      lastName:  "Customer",
-    };
-    res.json({ token: issueToken(mockUser), user: mockUser });
+  } catch (err) {
+    logger.error({ err, event: "companion_login_unavailable" }, "Companion login unavailable");
+    res.status(503).json({ error: "Sign-in is temporarily unavailable. Please try again." });
     return;
   }
-  res.status(401).json({ error: "Invalid credentials" });
+  res.status(401).json({ error: "Use your Companion password, or choose Forgot password to set one securely." });
+  return;
 });
 
 router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response): Promise<void> => {
@@ -2791,7 +2618,7 @@ router.post(["/uc/auth/reset-request", "/uc/auth/forgot-password"], authLimiter,
     });
     // The response and event deliberately do not distinguish missing accounts,
     // unavailable channels, or delivery configuration.
-    const selectedChannel = user && user.authProvider === "password"
+    const selectedChannel = user && ["password", "woocommerce"].includes(user.authProvider)
       ? preferredRecoveryChannel(user, channel)
       : null;
     if (user && selectedChannel) await issueCompanionReset(user, selectedChannel, { type: "self" });
@@ -2839,7 +2666,7 @@ router.post("/uc/admin/users/:id/reset-password", async (req: Request, res: Resp
     res.status(202).json({ ok: true });
     return;
   }
-  const channel = target.authProvider === "password"
+  const channel = ["password", "woocommerce"].includes(target.authProvider)
     ? preferredRecoveryChannel(target, requestedChannel)
     : null;
   if (!channel) {
@@ -3148,10 +2975,11 @@ router.post(["/uc/auth/reset-confirm", "/uc/auth/reset-password"], authLimiter, 
     const updated = await client.query(
       `UPDATE uc_users
           SET password_hash = $1,
+              auth_provider = 'password',
               credential_version = credential_version + 1,
               must_change_password = false,
               temporary_password_expires_at = NULL
-        WHERE id = $2 AND auth_provider = 'password' AND deleted_at IS NULL`,
+        WHERE id = $2 AND auth_provider IN ('password','woocommerce') AND deleted_at IS NULL`,
       [passwordHash, userId],
     );
     if ((updated.rowCount ?? 0) !== 1) {
@@ -5021,7 +4849,7 @@ router.get("/uc/admin/orders/reminder-gaps", async (req: Request, res: Response)
     // unreachable store must fail loudly, never report a false all-clear.
     let source = "mock";
     let normalized: Record<string, unknown>[] | null = null;
-    if (hasWCCredentials()) {
+    if (hasCompanionCatalogue()) {
       const products = await fetchAllPublishedProducts();
       if (products) {
         normalized = products.map(normalizeProduct);

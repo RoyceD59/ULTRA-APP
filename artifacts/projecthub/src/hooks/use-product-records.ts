@@ -8,7 +8,8 @@ export interface RecordImage {
 export type RecordJson = Record<string, unknown> & {
   code: string; slug: string; parent_sku: string; publishable?: boolean; name?: string;
   price_kes: number | null; images: RecordImage[];
-  variants: { child_sku: string; label: string }[];
+  variants: ({ child_sku: string; label: string } & Record<string, unknown>)[];
+  purchasable?: boolean;
 };
 export interface AdminRecord { revision: string | number; record: RecordJson }
 
@@ -40,6 +41,10 @@ export function useSaveProductRecord(sku: string | undefined) {
     onSuccess: (saved) => {
       if (saved?.record) qc.setQueryData(["uc-product-record", sku], saved);
       else qc.invalidateQueries({ queryKey: ["uc-product-record", sku] });
+      qc.invalidateQueries({ queryKey: ["uc-products"] });
+      qc.invalidateQueries({ queryKey: ["uc-product"] });
+      qc.invalidateQueries({ queryKey: ["uc-inventory"] });
+      qc.invalidateQueries({ queryKey: ["uc-product-records-admin"] });
     },
   });
 }
@@ -55,5 +60,36 @@ export function useAuthoredRecords() {
     },
     retry: false,
     staleTime: 60_000,
+  });
+}
+
+export interface CreatedRecord { code: string; revision: string | number; record: RecordJson }
+
+/** Creates a new app-owned record. Server initializes unpublished state and unknown stock. */
+export function useCreateProductRecord() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (record: RecordJson) =>
+      apiFetch<CreatedRecord>("/uc/admin/product-records", { method: "POST", body: JSON.stringify({ record }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["uc-product-records-admin"] });
+      qc.invalidateQueries({ queryKey: ["uc-products"] });
+      qc.invalidateQueries({ queryKey: ["uc-inventory"] });
+    },
+  });
+}
+
+/** Archives a record. History (orders, filters, snapshots) is preserved server-side. */
+export function useArchiveProductRecord() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) =>
+      apiFetch<{ ok: true }>(`/uc/admin/product-records/${encodeURIComponent(key)}`, { method: "DELETE" }),
+    onSuccess: (_r, key) => {
+      qc.removeQueries({ queryKey: ["uc-product-record", key] });
+      qc.invalidateQueries({ queryKey: ["uc-product-records-admin"] });
+      qc.invalidateQueries({ queryKey: ["uc-products"] });
+      qc.invalidateQueries({ queryKey: ["uc-inventory"] });
+    },
   });
 }

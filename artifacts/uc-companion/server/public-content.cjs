@@ -44,8 +44,8 @@ function createPublicData(apiOrigin, fetchImpl = fetch) {
         variants: p.variants.map(v => v.childSku) })) };
     },
     editorialProduct: async key => read(`product-records/${encodeURIComponent(key)}`),
-    products: async () => array(await read('products?publicationSafe=true', 'woocommerce-published')),
-    productOperation: async id => read(`products/${id}?publicationSafe=true`, 'woocommerce-live'),
+    products: async () => array(await read('products?publicationSafe=true', 'companion-published')),
+    productOperation: async id => read(`products/${id}?publicationSafe=true`, 'companion-published'),
     guides: async () => array((await read('guides')).guides),
     guide: async slug => {
       const value = (await read(`guides/${encodeURIComponent(slug)}`)).guide;

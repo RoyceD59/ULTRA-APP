@@ -836,7 +836,7 @@ router.post(
 
     try {
       const appBase =
-        returnUrl ?? process.env["WC_BASE_URL"] ?? "https://www.ucfilters.com";
+        returnUrl ?? guestPayOrigin();
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         payment_method_types: ["card"],
@@ -900,9 +900,7 @@ router.post(
 
     // Use the deep-link redirect the client sent (e.g. uc-companion://paystack/callback)
     // so expo-web-browser can auto-close after Paystack redirects back.
-    const resolvedCallback =
-      callbackUrl ??
-      `${process.env["WC_BASE_URL"] ?? "https://www.ucfilters.com"}/paystack/callback`;
+    const resolvedCallback = callbackUrl ?? `${guestPayOrigin()}/paystack/callback`;
 
     const secretKey = process.env["PAYSTACK_SECRET_KEY"];
     if (!secretKey) {

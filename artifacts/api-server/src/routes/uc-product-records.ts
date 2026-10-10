@@ -3,12 +3,13 @@ import { pool, db, ucProductMediaTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { isAdminRequest } from "../lib/adminAuth.js";
 import { effectiveEditorial, validateEditorial } from "../lib/product-editorial.js";
-import { hasWCCredentials, wcFetchAllPages, wcFetchOne, normalizeProduct } from "./uc.js";
+import { editorialContract } from "../lib/product-editorial.js";
+import { wcFetchAllPages, wcFetchOne, normalizeProduct, invalidateCatalogueCache } from "./uc.js";
+import { companionCatalogue, synchronizeCatalogueIdentities } from "../lib/companion-catalogue.js";
 
 const router = Router();
 async function inventory() {
-  if (!hasWCCredentials()) throw new Error("Live WooCommerce provider is not configured");
-  const products = await wcFetchAllPages("/products", { status: "publish", per_page: "100" });
+  const products = (await companionCatalogue(true)).filter(p => p.type !== "variation");
   if (!products) throw new Error("Published commerce identities could not be verified");
   return products;
 }
@@ -19,7 +20,7 @@ async function operation(record: any, catalogue: any[]) {
     variants: record.variants.map((v: any) => ({ ...v, variationId: null, price: null, stockStatus: null, diagnostic })) });
   if (parents.length !== 1) return unavailable(parents.length ? "commerce-identity-ambiguous" : "commerce-identity-unmatched");
   const parent = await wcFetchOne(`/products/${parents[0].id}`);
-  if (!parent || parent.sku !== record.parentSku || parent.status !== "publish" ||
+  if (!parent || parent.sku !== record.parentSku ||
     !Number.isSafeInteger(Number(parent.id)) || Number(parent.id) <= 0 ||
     Number(parent.id) !== Number(parents[0].id)) return unavailable("live-identity-mismatch");
   const normalized = normalizeProduct(parent);
@@ -49,7 +50,7 @@ async function operation(record: any, catalogue: any[]) {
   let children: any[] = [];
   if (record.variants.length) {
     const result = await wcFetchAllPages(`/products/${parent.id}/variations`, { per_page: "100" });
-    if (!result) diagnostics.push("live-variations-unavailable");
+    if (!result) diagnostics.push("inventory-variants-unavailable");
     else children = result;
   }
   const variants = record.variants.map((v: any) => {
@@ -138,8 +139,10 @@ router.get("/uc/admin/product-records", async (req, res): Promise<void> => {
   if (!(await isAdminRequest(req.headers.authorization))) { res.status(403).json({ error: "Admin access required" }); return; }
   res.setHeader("Cache-Control", "no-store");
   const { input } = await effectiveEditorial();
+  const states = await pool.query("SELECT code,archived FROM uc_catalogue_inventory WHERE parent_sku IS NULL");
   res.json({ records: input.products.map((p: any) => ({ code: p.code, slug: p.slug,
-    name: p.name, parent_sku: p.parent_sku, publishable: p.publishable })) });
+    name: p.name, parent_sku: p.parent_sku, publishable: p.publishable,
+    purchasable: p.purchasable, archived: states.rows.find(r => r.code === p.code)?.archived ?? false })) });
 });
 router.put("/uc/admin/product-records/:key", async (req, res): Promise<void> => {
   if (!(await isAdminRequest(req.headers.authorization))) { res.status(403).json({ error: "Admin access required" }); return; }
@@ -160,10 +163,74 @@ router.put("/uc/admin/product-records/:key", async (req, res): Promise<void> => 
       if (changedImages.some((i: any) => !urls.has(i.file))) throw new Error("Choose an existing product photo or attach it through the secure upload flow first");
     }
   } catch (error) { res.status(400).json({ error: (error as Error).message }); return; }
-  const result = await pool.query(`UPDATE uc_product_editorial SET record=$3,gallery_mapped=(gallery_mapped OR $4),revision=revision+1,updated_at=now()
-    WHERE code=$1 AND revision=$2 RETURNING revision,record`, [previous.code,revision,JSON.stringify(record),
-      JSON.stringify(previous.images) !== JSON.stringify(record.images)]);
-  if (!result.rows[0]) { res.status(409).json({ error: "Another editor saved this product. Reload the latest record before saving." }); return; }
-  res.json(result.rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(871,1)");
+    const result = await client.query(`UPDATE uc_product_editorial SET record=$3,gallery_mapped=(gallery_mapped OR $4),revision=revision+1,updated_at=now()
+      WHERE code=$1 AND revision=$2 RETURNING revision,record`, [previous.code,revision,JSON.stringify(record),
+        JSON.stringify(previous.images) !== JSON.stringify(record.images)]);
+    if (!result.rows[0]) { await client.query("ROLLBACK"); res.status(409).json({ error: "Record changed by another editor. Reload before saving." }); return; }
+    await synchronizeCatalogueIdentities(client, input.products.map((p: any) => p.code === record.code ? record : p), [record.code]);
+    if (record.publishable) await client.query(`UPDATE uc_catalogue_inventory SET archived=false,
+      metadata=metadata-'staff_archived' WHERE code=$1 AND sku=ANY($2::text[])`,
+      [record.code, [record.parent_sku, ...record.variants.map((v: any) => v.child_sku)]]);
+    await client.query("COMMIT");
+    invalidateCatalogueCache();
+    res.json(result.rows[0]);
+  } catch {
+    await client.query("ROLLBACK");
+    res.status(409).json({ error: "Catalogue identity conflict. Refresh and choose a unique SKU." });
+  } finally { client.release(); }
+});
+router.post("/uc/admin/product-records", async (req, res) => {
+  if (!await isAdminRequest(req.headers.authorization)) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { input } = await effectiveEditorial();
+  const record = req.body?.record;
+  try {
+    if (!record || Object.keys(req.body).some(k => k !== "record") ||
+        !/^[A-Z0-9_-]{2,32}$/.test(record.code) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(record.slug) ||
+        typeof record.parent_sku !== "string" || !record.parent_sku.trim()) throw new Error("Provide a fresh code, permanent slug, SKU and full record.");
+    if (input.products.some((p: any) => p.code === record.code || p.slug === record.slug || p.parent_sku === record.parent_sku)) {
+      res.status(409).json({ error: "Product identity already exists." }); return;
+    }
+    if (record.publishable || record.purchasable) throw new Error("Create a draft first, review it, then publish.");
+    record.price_kes = null;
+    record.ownership = { ...record.ownership, product_price_kes: null };
+    validateEditorial(record, record, input);
+    const products = [...input.products, record];
+    editorialContract.createRecordCollection({ ...input, products });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(871,1)");
+      await client.query("INSERT INTO uc_product_editorial(code,record) VALUES($1,$2)", [record.code, JSON.stringify(record)]);
+      await synchronizeCatalogueIdentities(client, products, [record.code]);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+    finally { client.release(); }
+    invalidateCatalogueCache();
+    res.status(201).json({ code: record.code, revision: 1, record });
+  } catch (error) {
+    if ((error as any).code) { res.status(409).json({ error: "Catalogue identity already exists or conflicted. Reload before creating." }); return; }
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+router.delete("/uc/admin/product-records/:key", async (req, res) => {
+  if (!await isAdminRequest(req.headers.authorization)) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { input } = await effectiveEditorial();
+  const record = input.products.find((p: any) => [p.code, p.slug, p.parent_sku].includes(req.params.key));
+  if (!record) { res.status(404).json({ error: "Product record not found" }); return; }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("UPDATE uc_product_editorial SET record=jsonb_set(jsonb_set(record,'{publishable}','false'),'{purchasable}','false'),revision=revision+1,updated_at=now() WHERE code=$1", [record.code]);
+    await client.query("UPDATE uc_catalogue_inventory SET archived=true,metadata=metadata||'{\"staff_archived\":true}'::jsonb,revision=revision+1 WHERE code=$1", [record.code]);
+    await client.query("COMMIT");
+    invalidateCatalogueCache();
+    res.json({ ok: true });
+  } catch {
+    await client.query("ROLLBACK"); res.status(500).json({ error: "Product could not be archived." });
+  } finally { client.release(); }
 });
 export default router;
