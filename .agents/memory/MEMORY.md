@@ -99,3 +99,4 @@
 - [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
 - [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.
+- [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked 64-hex dirs in .consistency-build fail publish; scratch stages must have node_modules stripped or the image push fails.
