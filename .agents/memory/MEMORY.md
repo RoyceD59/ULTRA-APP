@@ -73,7 +73,7 @@
 - [Filter gauge policy](filter-gauge-policy.md) — display-only status; recorded refills are not sensor measurements; require exact customer/purchase/cycle linkage.
 - [Frozen release verification](frozen-release-verification.md) — a successful publish can still serve an older approved package; verify the actual live feature before operational recovery.
 - [Phone validation optimization](phone-validation-optimization.md) — reduce unused code, not country metadata; preserve canonical identity versus legacy form defaults.
-- [Catalogue performance boundaries](catalogue-performance-policy.md) — caches are not checkout authority; Companion prices start from Excel, while Woo verifies identity and stock.
+- [Catalogue authority and performance](catalogue-performance-policy.md) — owner requests WooCommerce disconnection and one Companion/ProjectHub product schema; Excel remains the initial price authority.
 - [Promotions and fulfillment policy](promotions-fulfillment-policy.md) — managed code benefits only; reserve before payment and keep pending outcomes bound to their checkout.
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
 - [Shared TypeScript bundler resolution](shared-typescript-bundler-resolution.md) — Metro may reject .js-to-.ts imports that TypeScript and server tests accept.
