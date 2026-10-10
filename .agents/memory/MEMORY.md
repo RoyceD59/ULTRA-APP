@@ -93,6 +93,7 @@
 - [Checkout intent durability](checkout-intent-durability.md) — retain original retries across reload; clear confirmed intents and isolate private drafts and late responses by account.
 - [Page loader presentation](page-loader-presentation.md) — user chose a single blue droplet with visible loading text; future artwork restyles must retain the text.
 - [Runtime observability policy](runtime-observability-policy.md) — public diagnostics are untrusted operational evidence; ambiguous alert delivery must not be silently replayed.
+- [Public impact monitor approval](public-impact-monitor-policy.md) — independent checks every five minutes; three matching failures to warn, two healthy checks to recover.
 - [Node component mock interop](node-component-mock-interop.md) — use explicit plain-ESM fixtures when synchronous TSX loading misreads data URLs or star reexports.
 - [Impact consistency scope](impact-consistency-scope.md) — common releases/global totals only; preserve personal data and never treat missing historical evidence as zero.
 - [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
