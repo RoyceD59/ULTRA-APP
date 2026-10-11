@@ -213,8 +213,8 @@ function tarChecksum(header) {
     .padStart(6, '0') + '\0 ', 148, 8);
 }
 
-function paxLinkpath(target) {
-  const record = ` linkpath=${target}\n`;
+function paxLinkpath(target, key = 'linkpath') {
+  const record = ` ${key}=${target}\n`;
   let length = Buffer.byteLength(record) + 1;
   while (length !== Buffer.byteLength(record) + String(length).length) {
     length = Buffer.byteLength(record) + String(length).length;
@@ -294,6 +294,57 @@ async function writeLinkArchive(fixture, type, target, encoding = 'ustar') {
   }).split('\n').find(line => line.includes(` ${member} `));
   assert.ok(verbose?.startsWith(type === '2' ? 'l' : 'h'), 'tar recognizes the link type');
   assert.ok(verbose.endsWith(target), 'tar resolves the effective external link target');
+}
+
+async function writeLongNameArchive(fixture, effectiveName, encoding) {
+  // Keep the approved member's literal ustar name and payload, and let only a
+  // PAX `path` or GNU `L` extension header supply the unsafe effective name.
+  // A checker that reads the literal header name alone would see an approved path.
+  assert.ok(['pax', 'gnu'].includes(encoding), 'supported long-name fixture encoding');
+  assert.ok(Buffer.byteLength(effectiveName) > 100, 'extended name cannot fit in the literal ustar name');
+  const archive = resolve(fixture.tools, archivePath);
+  const names = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).split('\n').filter(Boolean);
+  const original = gunzipSync(await readFile(archive));
+  const member = 'artifacts/uc-companion/app.json';
+  const chunks = [];
+  let replaced = 0;
+  for (let offset = 0; offset < original.length;) {
+    const header = original.subarray(offset, offset + 512);
+    if (header.every(byte => byte === 0)) {
+      chunks.push(original.subarray(offset));
+      break;
+    }
+    const text = (start, end) => header.subarray(start, end).toString().split('\0')[0];
+    const name = [text(345, 500), text(0, 100)].filter(Boolean).join('/');
+    const size = parseInt(text(124, 136).trim(), 8);
+    assert.ok(Number.isSafeInteger(size) && size >= 0, 'ordinary octal ustar size');
+    const end = offset + 512 + Math.ceil(size / 512) * 512;
+    assert.ok(end <= original.length, 'complete tar member');
+    if (name === member) {
+      assert.equal(text(156, 157), '0', 'override a regular file, not an extension header');
+      const payload = encoding === 'pax' ? paxLinkpath(effectiveName, 'path') : Buffer.from(effectiveName + '\0');
+      const extension = Buffer.from(header);
+      extension.fill(0, 0, 100);
+      extension.write(encoding === 'pax' ? 'PaxHeaders/name' : '././@LongLink', 0, 100);
+      extension.fill(0, 345, 500);
+      extension.write(payload.length.toString(8).padStart(11, '0') + '\0', 124, 12);
+      extension.write(encoding === 'pax' ? 'x' : 'L', 156, 1);
+      extension.fill(0, 157, 257);
+      tarChecksum(extension);
+      const padded = Buffer.alloc(Math.ceil(payload.length / 512) * 512);
+      payload.copy(padded);
+      chunks.push(extension, padded, original.subarray(offset, end));
+      replaced++;
+    } else chunks.push(original.subarray(offset, end));
+    offset = end;
+  }
+  assert.equal(replaced, 1, 'exactly one approved member receives the unsafe effective name');
+  await writeFile(archive, gzipSync(Buffer.concat(chunks)));
+  const listed = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    .split('\n').filter(Boolean);
+  assert.deepEqual(listed, names.map(name => name === member ? effectiveName : name),
+    'tar lists the effective unsafe name in the approved member position');
+  assert.ok(!listed.includes(member), 'the harmless literal name is no longer the effective name');
 }
 
 async function repinFixtureScope(fixture) {
@@ -417,6 +468,39 @@ test('corrupted release inputs fail closed in isolated copies', async t => {
           { noExtraction: true });
         assert.deepEqual(await readdir(fixture.root), rootEntries, 'no aliased extraction output');
       }));
+    }
+    for (const encoding of ['pax', 'gnu']) {
+      for (const absolute of [true, false]) {
+        await t.test(`${encoding} long member name with ${absolute ? 'absolute' : 'parent-traversal'} path is rejected before extraction`,
+        () => withFixture(async fixture => {
+          const filename = `${'extended-path-target-'.repeat(6)}.txt`;
+          const sentinel = resolve(absolute ? fixture.root : fixture.temporary, filename);
+          const effectiveName = absolute ? sentinel : `../../${filename}`;
+          const extractionRoot = resolve(fixture.temporary, 'auth-upload-scope-fixture', 'after');
+          assert.equal(resolve(extractionRoot, effectiveName), sentinel,
+            'effective member destination is fixture-owned and outside the extraction root');
+          assert.ok(!sentinel.startsWith(extractionRoot + '/'));
+          await writeLongNameArchive(fixture, effectiveName, encoding);
+          await rejectsBeforeBuild(fixture, mismatch, { noExtraction: true });
+          await repinFixtureEnvelope(fixture);
+          await writeFile(sentinel, 'external-member-target-must-not-change\n');
+          const rootEntries = await readdir(fixture.root);
+          // Require the path preflight error, not tar's extraction behavior. All
+          // extraction is blocked by the probe if this gate regresses.
+          await rejectsBeforeBuild(fixture, /^Error: Unsafe archive paths$/m, {
+            noExtraction: true,
+            temporaryEntries: absolute ? [] : [filename],
+          });
+          assert.equal(await readFile(sentinel, 'utf8'), 'external-member-target-must-not-change\n');
+          assert.deepEqual(await readdir(fixture.root), rootEntries,
+            'verifier rejects the name without creating extraction or build output');
+          for (const dir of ['api-server', 'projecthub']) {
+            const output = resolve(fixture.root, 'artifacts', dir, 'dist');
+            assert.deepEqual(await readdir(output), ['retained.txt']);
+            assert.equal(await readFile(resolve(output, 'retained.txt'), 'utf8'), 'retained-output');
+          }
+        }));
+      }
     }
     for (const [kind, type, parentTraversal] of [
       ['symbolic', '2', '../../../../'],

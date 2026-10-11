@@ -1,5 +1,20 @@
 # Development change log
 
+## 2026-10-11 — Extended archive filename checks; failed publish diagnosed
+
+- Added four disposable cases to `release-integrity-negative.test.mjs`: PAX `path`
+  and GNU `L` long-name metadata give one approved member an absolute or
+  parent-traversal effective name, while its literal ustar name stays approved.
+  Each case checks unchanged outer pins reject first, then fixture-only envelope
+  re-pinning must reach the `Unsafe archive paths` error (not tar behavior), with
+  extraction-blocking probes, sentinels and retained outputs unchanged.
+  Full file: 45 of 45 pass. No verifier, real archive, pin, rollback asset or
+  publication configuration changed; no ignore rules changed.
+- Failed publish build `f3f6e35d` stopped at the live API snapshot check: a
+  15-second timeout against `api.ucfilters.com` after an earlier check in the
+  same build passed. Both hosts answer in under a second afterwards, so it looks
+  transient. Nothing was published; the gate is unchanged.
+
 ## 2026-10-11 — Companion sign-in guidance for old website accounts (development only)
 
 - Investigated "all sign-in fails". Production holds 15 password accounts (all
