@@ -18,6 +18,13 @@ export const productRecordsDir = resolve(location, "../records");
 export const spreadsheetRetail = require(resolve(productRecordsDir, "retail-prices_v7.json")) as {
   revision: number; prices: Record<string, number>;
 };
+/** One-time v2.6 content upgrade for rows that already exist in the database. */
+const contentMigration = require(resolve(productRecordsDir, "product-migration_v2.6.json")) as Record<string, {
+  additive: Record<string, unknown>;
+  suitability?: { from: unknown; to: any };
+  evidence?: { from: unknown; to: unknown };
+}>;
+const CONTENT_REVISION = 26;
 function collectionInput(products: any[]) {
   return { ...seed, products, topic_pages: seed.topic_pages.map((t: any) => ({
     ...t, products: products.filter(p => p.publishable && (p.seo.topics || []).includes(t.topic)).map(p => p.code),
@@ -30,6 +37,7 @@ export async function ensureProductEditorialSchema() {
     record jsonb NOT NULL, gallery_mapped boolean NOT NULL DEFAULT false, updated_at timestamptz NOT NULL DEFAULT now())`);
   await pool.query("ALTER TABLE uc_product_editorial ADD COLUMN IF NOT EXISTS gallery_mapped boolean NOT NULL DEFAULT false");
   await pool.query("ALTER TABLE uc_product_editorial ADD COLUMN IF NOT EXISTS price_import_revision integer NOT NULL DEFAULT 0");
+  await pool.query("ALTER TABLE uc_product_editorial ADD COLUMN IF NOT EXISTS content_import_revision integer NOT NULL DEFAULT 0");
   await pool.query(`ALTER TABLE uc_order_items ADD COLUMN IF NOT EXISTS variation_id integer;
     ALTER TABLE uc_order_items ADD COLUMN IF NOT EXISTS child_sku text;
     ALTER TABLE uc_order_items ADD COLUMN IF NOT EXISTS variant_label text`);
@@ -45,6 +53,43 @@ export async function ensureProductEditorialSchema() {
     FROM jsonb_to_recordset($1::jsonb) AS v(sku text,price numeric)
     WHERE p.record->>'parent_sku'=v.sku AND p.price_import_revision<$2`,
     [JSON.stringify(Object.entries(spreadsheetRetail.prices).map(([sku,price]) => ({sku,price}))), spreadsheetRetail.revision]);
+  await importContentRevision();
+}
+
+/** Additive only: staff edits are never overwritten. Wording is replaced only
+ * where the stored section still equals the previous authored text, and the
+ * new fields are added only where missing. Runs once per row. */
+async function importContentRevision() {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(871,2)");
+    for (const [code, change] of Object.entries(contentMigration)) {
+      const pending = await client.query("SELECT 1 FROM uc_product_editorial WHERE code=$1 AND content_import_revision<$2 FOR UPDATE", [code, CONTENT_REVISION]);
+      if (!pending.rowCount) continue;
+      await client.query(`UPDATE uc_product_editorial SET
+        record=($2::jsonb - ARRAY(SELECT jsonb_object_keys(record))) || record WHERE code=$1`,
+        [code, JSON.stringify(change.additive)]);
+      for (const section of ["suitability", "evidence"] as const) {
+        const edit = change[section];
+        if (!edit) continue;
+        await client.query(`UPDATE uc_product_editorial SET record=jsonb_set(record,$2::text[],$4::jsonb)
+          WHERE code=$1 AND record->$5::text=$3::jsonb`, [code, [section], JSON.stringify(edit.from), JSON.stringify(edit.to), section]);
+      }
+      const fit = change.suitability?.to?.fit_photos;
+      if (fit) {
+        await client.query(`UPDATE uc_product_editorial SET record=jsonb_set(record,'{suitability,fit_photos}',$2::jsonb)
+          WHERE code=$1 AND NOT (record->'suitability' ? 'fit_photos')`, [code, JSON.stringify(fit)]);
+      }
+      await client.query("UPDATE uc_product_editorial SET content_import_revision=$2,revision=revision+1,updated_at=now() WHERE code=$1", [code, CONTENT_REVISION]);
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function effectiveEditorial() {
@@ -65,7 +110,7 @@ export async function effectiveEditorial() {
 }
 
 /** The supplied schema deliberately leaves many nested objects open. Tighten
- * their public shapes against v2.4; reject wrong scalar/array types and secret
+ * their public shapes against v2.6; reject wrong scalar/array types and secret
  * additions before storing, rather than discovering them during rendering. */
 export function validateEditorial(record: any, previous: any, input: any) {
   if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("Record must be an object");

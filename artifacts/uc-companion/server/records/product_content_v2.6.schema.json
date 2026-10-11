@@ -113,7 +113,8 @@
       "type": "string",
       "enum": [
        "publish",
-       "limited"
+       "limited",
+       "draft"
       ]
      },
      "publishable": {
@@ -129,7 +130,8 @@
        "In stock",
        "Pre-order",
        "Out of stock",
-       "By enquiry"
+       "By enquiry",
+       "Coming soon"
       ]
      },
      "price_kes": {
@@ -378,6 +380,43 @@
         }
        }
       }
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "product",
+       "replacement"
+      ]
+     },
+     "nav_group": {
+      "type": "string"
+     },
+     "compare_group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "compare": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "additionalProperties": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "fits": {
+      "type": [
+       "array",
+       "null"
+      ],
+      "items": {
+       "type": "string"
+      }
      }
     }
    }
@@ -398,6 +437,38 @@
   },
   "topic_pages_note": {
    "type": "string"
+  },
+  "compare_groups": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "label",
+     "products",
+     "replacements"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
+     },
+     "products": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "replacements": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
   }
  }
 }

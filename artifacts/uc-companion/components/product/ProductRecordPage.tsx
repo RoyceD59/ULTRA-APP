@@ -168,6 +168,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
       <Text {...headingProps(1)} style={s.h1}>{record.seo?.h1 ?? record.name}</Text>
       {record.seo?.subline ? <Text style={s.sub}>{record.seo.subline}</Text> : null}
       {record.opening?.outcome ? <Text style={s.body}>{record.opening.outcome}</Text> : null}
+      {record.fits?.length ? <View style={{ gap: 6 }}><Text style={s.label}>Fits</Text>
+        <View style={s.chips}>{record.fits.map(f => <View key={f} style={s.chip}><Text style={s.chipT}>{f}</Text></View>)}</View></View> : null}
       {reviews && reviews.count > 0 ? <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}><StarRating rating={reviews.average} size={13} />
         <Text style={s.note}>{reviews.average.toFixed(1)} ({reviews.count})</Text></View> : null}
       {price !== null ? <Text style={s.price}>{kes(price)}</Text> : <Text style={s.price}>Price on enquiry</Text>}
@@ -196,9 +198,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <TouchableOpacity onPress={() => router.push(`/enquiry?productId=${pid ?? ''}&productName=${encodeURIComponent(record.name)}` as never)} style={s.primary}>
           <Text style={s.primaryT}>Enquire about this product</Text>
         </TouchableOpacity>)}
-      {state.kind === 'buy' ? <TouchableOpacity onPress={() => setCompare(c => !c)} style={s.ghost}><Text style={s.ghostT}>{compare ? 'Hide comparison' : 'Compare bottles'}</Text></TouchableOpacity> : null}
-      {record.category && /bottle/i.test(record.category) && state.kind !== 'buy'
-        ? <TouchableOpacity onPress={() => setCompare(c => !c)} style={s.ghost}><Text style={s.ghostT}>{compare ? 'Hide comparison' : 'Compare bottles'}</Text></TouchableOpacity> : null}
+      {record.compareGroup ? <TouchableOpacity onPress={() => setCompare(c => !c)} accessibilityRole="button" style={s.ghost}><Text style={s.ghostT}>{compare ? 'Hide comparison' : 'Compare with similar products'}</Text></TouchableOpacity> : null}
       <View style={s.share}>
         <Text style={s.label}>Share this product link</Text>
         {!shareBase() ? <Text style={s.note}>Sharing is unavailable: no public share address is configured.</Text> : null}
@@ -241,7 +241,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
           <Section title="Specifications">
             {Object.entries(sp).map(([k, v]) => <View key={k} style={s.spec}><Text style={s.specK}>{k}</Text><Text style={s.specV}>{String(v)}</Text></View>)}
           </Section>) : null}
-        {fullSuit?.length || suit.exclusions?.length ? (
+        {fullSuit?.length || suit.exclusions?.length || record.fitPhotos ? (
           <Section title={suit.heading || 'Will it work with your water?'}>
             <Txt v={suit.intended_use} />
             {fullSuit?.length ? <><Text style={s.label}>Your water source</Text>
@@ -249,6 +249,16 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
                 style={[s.chip, suitWater === w && s.chipOn]}><Text style={[s.chipT, suitWater === w && { color: '#fff' }]}>{w}</Text></TouchableOpacity>)}</View></> : null}
             {suitWater ? <View style={s.benefit}><Text style={s.bF}>{suitWater}</Text><Text style={s.body}>Listed as a suitable water source for this product.</Text><Bullets items={suit.setup} /></View> : null}
             {suit.exclusions?.length ? <><Text style={s.label}>Not suitable</Text><Bullets items={suit.exclusions} /></> : null}
+            {record.fitPhotos ? <View style={{ gap: 8 }}>
+              <Text style={s.label}>{record.fitPhotos.heading}</Text>
+              <View style={s.fitGrid}>
+                {record.fitPhotos.items.map((f, i) => (
+                  <View key={f.src + i} style={s.fitCard}>
+                    <Image source={{ uri: resizedImageUrl(f.src, 320) }} accessibilityLabel={f.alt} contentFit="contain" style={s.fitImg} />
+                    <Text style={s.note}>{f.caption}</Text>
+                  </View>))}
+              </View>
+            </View> : null}
             <View style={s.chips}>
               <TouchableOpacity onPress={() => router.push('/water-test')} style={s.chip}><Text style={s.chipT}>Water assessment</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/care')} style={s.chip}><Text style={s.chipT}>Setup help</Text></TouchableOpacity>
@@ -355,6 +365,9 @@ const s = StyleSheet.create({
   card: { backgroundColor: P.ground, borderRadius: 16, borderWidth: 1, borderColor: P.line, padding: 14 },
   accHead: { flexDirection: 'row', justifyContent: 'flex-end', gap: 6, alignItems: 'center', minHeight: 32 },
   accTitle: { color: P.navy, fontSize: 18, fontWeight: '700', flex: 1 },
+  fitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  fitCard: { flexGrow: 1, flexBasis: 240, minWidth: 0, backgroundColor: P.aqua, borderRadius: 12, padding: 8, gap: 6 },
+  fitImg: { width: '100%', height: 180 },
   benefit: { backgroundColor: P.aqua, borderRadius: 12, padding: 12, gap: 4 },
   bF: { color: P.navy, fontWeight: '700', fontSize: 15 },
   spec: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, borderBottomWidth: 1, borderColor: P.line, paddingVertical: 6 },

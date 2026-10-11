@@ -90,7 +90,7 @@ function StructuredGroup({ value, onApply }: { value: Record<string, any>; onApp
   useEffect(() => { setText(serialized); setError(""); }, [serialized]);
   return <details className="rounded-md border p-3">
     <summary className="cursor-pointer text-sm">Structured fields (advanced)</summary>
-    <p className="text-xs text-muted-foreground my-2">Use JSON for nullable objects or empty lists. Apply to the form, then Save page record. The server validates the complete v2.4 record.</p>
+    <p className="text-xs text-muted-foreground my-2">Use JSON for nullable objects or empty lists. Apply to the form, then Save page record. The server validates the complete v2.6 record.</p>
     <Textarea aria-label="Structured group JSON" rows={10} value={text} onChange={e => setText(e.target.value)} className="font-mono text-xs" />
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => {

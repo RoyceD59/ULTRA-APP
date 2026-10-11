@@ -7,7 +7,7 @@ const { createRecordCollection, records } = require('../../server/product-record
 const { createPublicRenderer, renderHead } = require('../../server/public-rendering.cjs');
 const { resolveIdentity, uploadedPhotos } = require('../../server/record-operations.cjs');
 const { PublicDataError, createPublicData } = require('../../server/public-content.cjs');
-const source = require('../../server/records/products_v2.4.json');
+const source = require('../../server/records/products_v2.6.json');
 const inventory = records.products.map((p, i) => ({ id: i + 101, sku: p.parentSku,
   name: 'Wrong Woo name', description: 'PRIVATE commerce description', price: String(p.price || 0),
   stockStatus: 'instock', images: [{ src: 'https://media.example/product.jpg', alt: 'Approved product photo' }] }));
@@ -19,16 +19,25 @@ const renderer = overrides => createPublicRenderer({ canonicalOrigin: 'https://p
 const graph = page => page.schemas[0]?.['@graph'] || [];
 const productNode = page => graph(page).find(n => n['@type'] === 'Product');
 
-test('supplied files are imported verbatim and every record is validated and allowlisted', () => {
-  for (const [file, attachment] of [
-    ['products_v2.4.json', '1_products_v2.4_1791349056443.json'],
-    ['product_content_v2.4.schema.json', '0_product_content_v2.4.schema_1791349056441.json'],
-  ]) assert.deepEqual(readFileSync(new URL(`../../server/records/${file}`, import.meta.url)),
-    readFileSync(new URL(`../../../../attached_assets/${attachment}`, import.meta.url)));
+test('v2.6 records are validated and allowlisted; the eleven new pages stay unpublished drafts', () => {
+  assert.equal(source.schema_version, '2.6');
+  assert.equal(source.products.length, 32);
+  const drafts = source.products.filter(p => p.status === 'draft');
+  assert.equal(drafts.length, 11);
+  assert.ok(drafts.every(p => !p.publishable && !p.purchasable && p.images.every(i => !i.approved)));
+  assert.deepEqual(drafts.map(p => p.code).sort(), ['BRZ', 'FLX', 'RBC', 'RDF', 'RDX', 'ROT', 'RRO', 'RSC', 'RSF', 'RSH', 'TMB'].sort());
+  assert.ok(!records.products.some(p => drafts.some(d => d.code === p.code)));
+  assert.equal(records.groups.length, 5);
+  assert.ok(records.groups.every(g => g.products.length && g.replacements.length === 0));
+  for (const code of ['FCT', 'SHJ', 'SHC', 'SHD', 'SHP']) {
+    const p = records.products.find(r => r.code === code);
+    assert.ok(p.fitPhotos.items.length >= 2, code);
+    assert.ok(p.fitPhotos.items.every(i => i.alt && i.src.startsWith('/api/uc/product-images/')), code);
+  }
   assert.equal(records.products.length, 21);
   assert.equal(records.topics.length, 9);
   const publicJson = JSON.stringify(records.products);
-  for (const word of ['"internal":', 'missing_launch_inputs', 'manufacturer_model', '"confirm":', 'images/', 'held_back']) {
+  for (const word of ['"internal":', 'missing_launch_inputs', 'manufacturer_model', '"confirm":', '"images/', 'held_back']) {
     assert.ok(!publicJson.includes(word), word);
   }
   const clone = () => structuredClone(source);
@@ -43,6 +52,9 @@ test('supplied files are imported verbatim and every record is validated and all
     value => { value.topic_pages[0].products.push('ATM'); },
     value => { value.products[0].seo.topics.push('nonexistent'); },
     value => { value.products[0].publishable = false; },
+    value => { value.products[0].availability = 'Someday'; },
+    value => { value.products[0].kind = 'accessory'; },
+    value => { value.products[0].compare = { type: 7 }; },
   ]) {
     const value = clone(); corrupt(value);
     assert.throws(() => createRecordCollection(value));

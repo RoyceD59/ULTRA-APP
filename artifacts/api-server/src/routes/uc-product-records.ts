@@ -75,7 +75,7 @@ async function operation(record: any, catalogue: any[]) {
 router.get("/uc/product-records", async (_req, res): Promise<void> => {
   res.setHeader("Cache-Control", "no-store");
   const { collection } = await effectiveEditorial();
-  res.json({ products: collection.products.map(({ imageMappings: _, ...p }: any) => p), topics: collection.topics });
+  res.json({ products: collection.products.map(({ imageMappings: _, ...p }: any) => p), topics: collection.topics, groups: collection.groups });
 });
 router.get("/uc/product-records/:key", async (req, res): Promise<void> => {
   res.setHeader("Cache-Control", "no-store");
@@ -107,7 +107,7 @@ router.get("/uc/admin/product-records/:key", async (req, res): Promise<void> => 
   res.setHeader("Cache-Control", "no-store");
   const { input, rows } = await effectiveEditorial();
   let record = input.products.find((p: any) => [p.slug,p.code,p.parent_sku].includes(String(req.params.key)));
-  if (!record) { res.status(404).json({ error: "Full v2.4 product record not found" }); return; }
+  if (!record) { res.status(404).json({ error: "Full v2.6 product record not found" }); return; }
   let revision = rows.get(record.code)?.revision ?? 1;
   // One-time non-destructive metadata migration. Existing storage objects and
   // WooCommerce images are not changed. A concurrent editor always wins.
@@ -148,7 +148,7 @@ router.put("/uc/admin/product-records/:key", async (req, res): Promise<void> => 
   if (!(await isAdminRequest(req.headers.authorization))) { res.status(403).json({ error: "Admin access required" }); return; }
   const { input } = await effectiveEditorial();
   const previous = input.products.find((p: any) => [p.slug,p.code,p.parent_sku].includes(String(req.params.key)));
-  if (!previous) { res.status(404).json({ error: "Full v2.4 product record not found" }); return; }
+  if (!previous) { res.status(404).json({ error: "Full v2.6 product record not found" }); return; }
   const { revision, record } = req.body ?? {};
   try {
     if (!Number.isInteger(revision) || revision < 1 || Object.keys(req.body).some(k => !["revision","record"].includes(k))) throw new Error("Expected revision and record");

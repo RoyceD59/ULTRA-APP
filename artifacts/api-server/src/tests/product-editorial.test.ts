@@ -74,7 +74,7 @@ const adminPath = `/uc/admin/product-records/${seed.slug}`;
 test("fresh seed, live admin authorization, revocation, all-record listing and media migration", async () => {
   assert.equal((await request(adminPath, "GET", undefined, null)).status, 403);
   assert.equal((await request(adminPath, "PUT", { revision: 1, record: seed }, null)).status, 403);
-  assert.equal((await request("/uc/admin/product-records")).body.records.length, 21);
+  assert.equal((await request("/uc/admin/product-records")).body.records.length, 32);
   const a = await request(adminPath);
   assert.equal(a.status, 200);
   assert.equal(a.body.record.price_kes, 4199, "the uploaded Excel retail value wins over the earlier brief");

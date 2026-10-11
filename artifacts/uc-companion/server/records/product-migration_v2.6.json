@@ -1,0 +1,1261 @@
+{
+ "HDF": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "750 ml Insulated Water Filter Bottle",
+    "capacity": "750 ml",
+    "body": "Double-wall 304 stainless steel",
+    "hot_liquids": "Yes, with the filter removed",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
+  }
+ },
+ "TRG": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "750 ml Water Filter Bottle",
+    "capacity": "750 ml",
+    "body": "BPA-free Tritan",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
+  }
+ },
+ "VDR": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "500 ml Water Filter Bottle",
+    "capacity": "500 ml",
+    "body": "BPA-free Tritan",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
+  }
+ },
+ "GMB": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "1.2 L Gym Water Bottle with Filter",
+    "capacity": "1,200 ml",
+    "body": "BPA-free Tritan",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
+  }
+ },
+ "SVS": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "outdoor",
+   "compare_group": "outdoor",
+   "compare": {
+    "type": "Portable Water Filter Straw",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": "300 L",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Straw shell (no filter), KES 409.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Water-contact materials passed US FDA food-contact tests.",
+      "status": "verified",
+      "evidence": [
+       "E5"
+      ],
+      "conditions": ""
+     },
+     {
+      "text": "Filters clear fresh water for cleaner drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Bacteria-removal figure for the straw.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No bacteria or virus percentage is published for the straw: no test report on file covers it.",
+     "It does not replace proper water treatment in a long emergency."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Water-contact materials passed US FDA food-contact tests.",
+      "status": "verified",
+      "evidence": [
+       "E5"
+      ],
+      "conditions": ""
+     },
+     {
+      "text": "Filters clear fresh water for cleaner drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No bacteria or virus percentage is published for the straw: no test report on file covers it.",
+     "It does not replace proper water treatment in a long emergency."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "ECO": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "outdoor",
+   "compare_group": "outdoor",
+   "compare": {
+    "type": "Solar-Powered, Wireless Portable Water Filter",
+    "capacity": null,
+    "body": "Food-grade ABS",
+    "hot_liquids": null,
+    "filter_life": "1,000 L (manufacturer rating)",
+    "flow_output": null,
+    "power": "Battery (5,200 mAh), charged by USB or built-in solar panel",
+    "installation": "None",
+    "replacement": "Replacement filter",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters outdoor fresh water for clean drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Bacteria and microorganism removal figure.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     },
+     {
+      "text": "Rated filter life 1,000 L.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product.",
+     "Filter life is limited to 1,000 L."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters outdoor fresh water for clean drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Rated filter life 1,000 L.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product.",
+     "Filter life is limited to 1,000 L."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "FCT": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Tap Water Filter for Kitchen Taps",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": "1,500 L (3-4 months)",
+    "flow_output": "1.5 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Sweet Home replacement cartridge, KES 1,489.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "At least 99.999% removal of total coliform bacteria through 1,500 L (SGS NBF20-009993-01)"
+   },
+   "fits": null
+  },
+  "suitability": {
+   "from": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Drinking and cooking water for a household.",
+    "water": [
+     "Treated municipal tap water"
+    ],
+    "setup": [
+     "Tap with M22 male or M24 female thread",
+     "Adapters included",
+     "No tools, plumber or electricity"
+    ],
+    "exclusions": [
+     "Pull-out or pull-down sprayer taps",
+     "Proprietary quick-connect taps",
+     "Hot water",
+     "Borehole or untreated water unless a water test confirms suitability"
+    ],
+    "action": "Check my setup"
+   },
+   "to": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Drinking and cooking water for a household.",
+    "water": [
+     "Treated municipal tap water"
+    ],
+    "setup": [
+     "Tap with M22 male or M24 female thread",
+     "Adapters included",
+     "No tools, plumber or electricity"
+    ],
+    "exclusions": [
+     "Pull-out or pull-down sprayer taps",
+     "Sensor (touch-free), waterfall and square-spout taps",
+     "Proprietary quick-connect taps",
+     "Hot water",
+     "Borehole or untreated water unless a water test confirms suitability"
+    ],
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Compatible faucet fittings",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-tap-compatibility-chart.jpg",
+       "alt": "Chart of tap styles: most standard kitchen and basin taps fit; pull-out sprayer, sensor, waterfall and square-spout taps do not",
+       "caption": "Fits most standard kitchen and basin taps (top). It cannot be fitted to pull-out or pull-down sprayers, sensor taps, waterfall or square-spout taps (bottom).",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-tap-adapter-kit.jpg",
+       "alt": "Adapter diagram for 22 mm and 24 mm tap threads, with male and female adapters",
+       "caption": "Adapters in the box fit 22 mm and 24 mm tap threads (M22 and M24). Unscrew your tap aerator to see which thread you have.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-tap-brass-bib.jpg",
+       "alt": "Brass bib tap with a T handle",
+       "caption": "Common bib taps like this fit only if the spout end is threaded for a 22 or 24 mm aerator. Send us a photo of your tap and we will confirm.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-tap-wall-bib.jpg",
+       "alt": "Chrome wall-mounted bib tap above a sink",
+       "caption": "Wall-mounted taps: same check. If the spout has a 22 or 24 mm thread, it fits.",
+       "approved": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ "DSP": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Rechargeable Water Dispenser Pump with Filter",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": "400 L",
+    "flow_output": null,
+    "power": "USB rechargeable",
+    "installation": null,
+    "replacement": "Dispenser Filter, KES 1,889.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine taste and odour and captures sediment.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     },
+     {
+      "text": "Bacteria and virus removal figures.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No bacteria or virus percentage is published: no test report on file covers this cartridge."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine taste and odour and captures sediment.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No bacteria or virus percentage is published: no test report on file covers this cartridge."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "ROH": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Reverse Osmosis Water Filter for Home",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": "100 GPD (about 380 L a day)",
+    "power": "Mains (110-220 V)",
+    "installation": "Quoted after a site assessment.",
+    "replacement": "RO replacement filters",
+    "warranty": "12-month warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this product.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "PHR": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Tankless Reverse Osmosis Water Purifier",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": "800 GPD (manufacturer)",
+    "power": "Mains",
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "12-month warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this product.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "UPR": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Stainless-Steel Kitchen Filter Tap",
+    "capacity": null,
+    "body": "SS304",
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this product.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "UP2": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Kitchen Filter Tap with Double Inline Filter",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this product.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "AQD": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "3-Stage Under-Sink Water Filter",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this product.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "PSH": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Wireless Electric Water Filter Pitcher",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": "Rechargeable",
+    "installation": null,
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this product.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters tap water for clean, better-tasting drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this product."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "SHJ": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Stainless Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "Stainless",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Shower filter replacement cartridge, KES 1,759.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "More than 95% of free chlorine removed through 15,000 L (SGS NBF20-009993-02)"
+   },
+   "fits": null
+  },
+  "suitability": {
+   "from": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup"
+   },
+   "to": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ "SHC": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Ceramic Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "White / Ceramic",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Shower filter replacement cartridge, KES 1,759.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "More than 95% of free chlorine removed through 15,000 L (SGS NBF20-009993-02)"
+   },
+   "fits": null
+  },
+  "suitability": {
+   "from": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup"
+   },
+   "to": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ "SHD": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "White / Tritan",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Shower filter replacement cartridge, KES 1,759.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "More than 95% of free chlorine removed through 15,000 L (SGS NBF20-009993-02)"
+   },
+   "fits": null
+  },
+  "suitability": {
+   "from": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup"
+   },
+   "to": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ "SHP": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Starter Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "White",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "No replacement cartridge",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "suitability": {
+   "from": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup"
+   },
+   "to": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Daily showers at home.",
+    "water": [
+     "Chlorinated municipal water"
+    ],
+    "setup": [
+     "Standard G1/2 inch shower thread",
+     "Fits between the shower arm and the shower head",
+     "No tools or plumber"
+    ],
+    "exclusions": [
+     "Proprietary quick-connect showers may need an adapter",
+     "Not for drinking water"
+    ],
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
+   }
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine for cleaner shower water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Chlorine-removal percentage for this sealed model.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     },
+     {
+      "text": "RoHS compliant.",
+      "status": "verified",
+      "evidence": [
+       "E7"
+      ],
+      "conditions": ""
+     },
+     {
+      "text": "Customers report softer, better-moisturised and brighter-looking skin.",
+      "status": "customer_reported",
+      "evidence": [],
+      "conditions": "Cosmetic effect of less chlorine; not a medical treatment."
+     }
+    ],
+    "limits": [
+     "No bacteria-removal claim: the test on file is for chlorine.",
+     "It does not treat or cure any skin or hair condition.",
+     "Chlorine removal falls as the filter ages: 85% at 22,500 L in testing."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine for cleaner shower water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "RoHS compliant.",
+      "status": "verified",
+      "evidence": [
+       "E7"
+      ],
+      "conditions": ""
+     },
+     {
+      "text": "Customers report softer, better-moisturised and brighter-looking skin.",
+      "status": "customer_reported",
+      "evidence": [],
+      "conditions": "Cosmetic effect of less chlorine; not a medical treatment."
+     }
+    ],
+    "limits": [
+     "No bacteria-removal claim: the test on file is for chlorine.",
+     "It does not treat or cure any skin or hair condition.",
+     "Chlorine removal falls as the filter ages: 85% at 22,500 L in testing."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "DFX": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Handheld Shower Filter for Face and Body Care",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": "None",
+    "installation": "None. Wrench and tape are in the box.",
+    "replacement": "Derma Flux replacement filter, KES 1,889.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine for cleaner shower water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Chlorine-removal percentage for this model.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No tested percentage is published for this model.",
+     "It does not treat or cure any skin condition."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine for cleaner shower water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     }
+    ],
+    "limits": [
+     "No tested percentage is published for this model.",
+     "It does not treat or cure any skin condition."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "ROC": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "business",
+   "compare_group": "business",
+   "compare": {
+    "type": "Commercial Reverse Osmosis System, 1,200 GPD",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": "1,200 GPD (190 L an hour)",
+    "power": "Mains",
+    "installation": "Quoted after a site assessment.",
+    "replacement": "Pre-filters, membranes and post-carbon filter",
+    "warranty": "12-month warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  "evidence": {
+   "from": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reverse osmosis filtration for clean drinking and kitchen water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Performance figures for this system.",
+      "status": "confirm",
+      "evidence": [],
+      "conditions": ""
+     },
+     {
+      "text": "Output 1,200 GPD, 190 L/h.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this system.",
+     "Filters and membranes must be replaced on schedule."
+    ],
+    "action": "View test details"
+   },
+   "to": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reverse osmosis filtration for clean drinking and kitchen water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": "Test certification to be supplied."
+     },
+     {
+      "text": "Output 1,200 GPD, 190 L/h.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independently tested percentage is published for this system.",
+     "Filters and membranes must be replaced on schedule."
+    ],
+    "action": "View test details"
+   }
+  }
+ },
+ "ATM": {
+  "additive": {
+   "kind": "product",
+   "nav_group": "business",
+   "compare_group": "business",
+   "compare": {
+    "type": "Water ATM",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Included in the partnership agreement.",
+    "replacement": null,
+    "warranty": "2-year warranty.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  }
+ }
+}

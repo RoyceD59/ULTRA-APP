@@ -1,6 +1,6 @@
 {
- "schema_version": "2.4",
- "generated": "2026-10-07",
+ "schema_version": "2.6",
+ "generated": "2026-10-11",
  "brand": {
   "company": "Ultra Clear Filtration Technologies Ltd.",
   "tagline": "Engineering Wellness, Drop by Drop",
@@ -328,7 +328,7 @@
     ],
     "manufacturer_model": "BG-B01"
    },
-   "profile_version": "2.2",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Hydra Flux 750 ml Insulated Water Filter Bottle | Ultra Clear",
@@ -344,7 +344,24 @@
      "clean water",
      "safe water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "750 ml Insulated Water Filter Bottle",
+    "capacity": "750 ml",
+    "body": "Double-wall 304 stainless steel",
+    "hot_liquids": "Yes, with the filter removed",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
   },
   {
    "code": "TRG",
@@ -595,7 +612,7 @@
     ],
     "manufacturer_model": "BG-B02"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Truva Go 750 ml Water Filter Bottle | Ultra Clear",
@@ -611,7 +628,24 @@
      "clean water",
      "safe water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "750 ml Water Filter Bottle",
+    "capacity": "750 ml",
+    "body": "BPA-free Tritan",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
   },
   {
    "code": "VDR",
@@ -858,7 +892,7 @@
     ],
     "manufacturer_model": "BG-B06"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Viva Drop 500 ml Water Filter Bottle | Ultra Clear",
@@ -874,7 +908,24 @@
      "clean water",
      "safe water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "500 ml Water Filter Bottle",
+    "capacity": "500 ml",
+    "body": "BPA-free Tritan",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
   },
   {
    "code": "GMB",
@@ -1123,7 +1174,7 @@
     ],
     "manufacturer_model": "BG-B09"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Gym Buddy 1.2 L Gym Water Bottle with Filter | Ultra Clear",
@@ -1139,7 +1190,24 @@
      "clean water",
      "safe water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "1.2 L Gym Water Bottle with Filter",
+    "capacity": "1,200 ml",
+    "body": "BPA-free Tritan",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge, KES 1,079.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "99.999% removal of total coliform bacteria through 150 L (SGS XMF22-000744-02)"
+   },
+   "fits": null
   },
   {
    "code": "SVS",
@@ -1224,12 +1292,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Bacteria-removal figure for the straw.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -1365,7 +1427,7 @@
     ],
     "manufacturer_model": "BG-B12"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Survivor Straw Portable Water Filter Straw | Ultra Clear",
@@ -1376,7 +1438,24 @@
     "topics": [
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "outdoor",
+   "compare_group": "outdoor",
+   "compare": {
+    "type": "Portable Water Filter Straw",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": "300 L",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Straw shell (no filter), KES 409.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "ECO",
@@ -1447,12 +1526,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Bacteria and microorganism removal figure.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      },
      {
       "text": "Rated filter life 1,000 L.",
@@ -1597,7 +1670,7 @@
     ],
     "manufacturer_model": "E01"
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "EcoSmart Solar-Powered Wireless Water Filter | Ultra Clear",
@@ -1609,7 +1682,24 @@
      "clean water",
      "sustainability"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "outdoor",
+   "compare_group": "outdoor",
+   "compare": {
+    "type": "Solar-Powered, Wireless Portable Water Filter",
+    "capacity": null,
+    "body": "Food-grade ABS",
+    "hot_liquids": null,
+    "filter_life": "1,000 L (manufacturer rating)",
+    "flow_output": null,
+    "power": "Battery (5,200 mAh), charged by USB or built-in solar panel",
+    "installation": "None",
+    "replacement": "Replacement filter",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "FCT",
@@ -1653,11 +1743,41 @@
     ],
     "exclusions": [
      "Pull-out or pull-down sprayer taps",
+     "Sensor (touch-free), waterfall and square-spout taps",
      "Proprietary quick-connect taps",
      "Hot water",
      "Borehole or untreated water unless a water test confirms suitability"
     ],
-    "action": "Check my setup"
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Compatible faucet fittings",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-tap-compatibility-chart.jpg",
+       "alt": "Chart of tap styles: most standard kitchen and basin taps fit; pull-out sprayer, sensor, waterfall and square-spout taps do not",
+       "caption": "Fits most standard kitchen and basin taps (top). It cannot be fitted to pull-out or pull-down sprayers, sensor taps, waterfall or square-spout taps (bottom).",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-tap-adapter-kit.jpg",
+       "alt": "Adapter diagram for 22 mm and 24 mm tap threads, with male and female adapters",
+       "caption": "Adapters in the box fit 22 mm and 24 mm tap threads (M22 and M24). Unscrew your tap aerator to see which thread you have.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-tap-brass-bib.jpg",
+       "alt": "Brass bib tap with a T handle",
+       "caption": "Common bib taps like this fit only if the spout end is threaded for a 22 or 24 mm aerator. Send us a photo of your tap and we will confirm.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-tap-wall-bib.jpg",
+       "alt": "Chrome wall-mounted bib tap above a sink",
+       "caption": "Wall-mounted taps: same check. If the spout has a 22 or 24 mm thread, it fits.",
+       "approved": true
+      }
+     ]
+    }
    },
    "benefits": {
     "heading": "What changes in your daily routine",
@@ -1842,7 +1962,7 @@
     ],
     "manufacturer_model": "BG-T01U"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Sweet Home Tap Water Filter for Kitchen Taps | Ultra Clear",
@@ -1854,7 +1974,24 @@
      "safe water",
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Tap Water Filter for Kitchen Taps",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": "1,500 L (3-4 months)",
+    "flow_output": "1.5 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Sweet Home replacement cartridge, KES 1,489.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "At least 99.999% removal of total coliform bacteria through 1,500 L (SGS NBF20-009993-01)"
+   },
+   "fits": null
   },
   {
    "code": "DSP",
@@ -1924,12 +2061,6 @@
      {
       "text": "Reduces chlorine taste and odour and captures sediment.",
       "status": "manufacturer",
-      "evidence": [],
-      "conditions": ""
-     },
-     {
-      "text": "Bacteria and virus removal figures.",
-      "status": "confirm",
       "evidence": [],
       "conditions": ""
      }
@@ -2067,7 +2198,7 @@
     ],
     "manufacturer_model": "BG-F04A"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Wireless Water Dispenser Pump with Filter | Ultra Clear",
@@ -2079,7 +2210,24 @@
      "refill water",
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Rechargeable Water Dispenser Pump with Filter",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": "400 L",
+    "flow_output": null,
+    "power": "USB rechargeable",
+    "installation": null,
+    "replacement": "Dispenser Filter, KES 1,889.99",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "ROH",
@@ -2149,12 +2297,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this product.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -2280,7 +2422,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Pure Blue Reverse Osmosis Water Filter for Home | Ultra Clear",
@@ -2293,7 +2435,24 @@
      "purified water",
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Reverse Osmosis Water Filter for Home",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": "100 GPD (about 380 L a day)",
+    "power": "Mains (110-220 V)",
+    "installation": "Quoted after a site assessment.",
+    "replacement": "RO replacement filters",
+    "warranty": "12-month warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "PHR",
@@ -2363,12 +2522,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this product.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -2484,7 +2637,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Pure Home Tankless RO Water Purifier | Ultra Clear",
@@ -2497,7 +2650,24 @@
      "purified water",
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Tankless Reverse Osmosis Water Purifier",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": "800 GPD (manufacturer)",
+    "power": "Mains",
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "12-month warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "UPR",
@@ -2567,12 +2737,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this product.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -2691,7 +2855,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Ultra Pure Stainless-Steel Filter Tap | Ultra Clear",
@@ -2702,7 +2866,24 @@
     "topics": [
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Stainless-Steel Kitchen Filter Tap",
+    "capacity": null,
+    "body": "SS304",
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "UP2",
@@ -2772,12 +2953,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this product.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -2895,7 +3070,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Ultra Pure 2 Filter Tap with Double Inline Filter | Ultra Clear",
@@ -2906,7 +3081,24 @@
     "topics": [
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Kitchen Filter Tap with Double Inline Filter",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "AQD",
@@ -2976,12 +3168,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this product.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -3096,7 +3282,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Aqua Drop 3-Stage Under-Sink Water Filter | Ultra Clear",
@@ -3107,7 +3293,24 @@
     "topics": [
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "3-Stage Under-Sink Water Filter",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Quoted after a site assessment.",
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "PSH",
@@ -3177,12 +3380,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this product.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -3298,7 +3495,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Pure Shield Wireless Electric Water Filter Pitcher | Ultra Clear",
@@ -3309,7 +3506,24 @@
     "topics": [
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "home",
+   "compare_group": "home",
+   "compare": {
+    "type": "Wireless Electric Water Filter Pitcher",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": "Rechargeable",
+    "installation": null,
+    "replacement": null,
+    "warranty": "Warranty period to be confirmed.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "SHJ",
@@ -3355,7 +3569,24 @@
      "Proprietary quick-connect showers may need an adapter",
      "Not for drinking water"
     ],
-    "action": "Check my setup"
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
    },
    "benefits": {
     "heading": "What changes in your daily routine",
@@ -3543,7 +3774,7 @@
     ],
     "manufacturer_model": "BG-S06"
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "J'adore Stainless Shower Filter for Skincare | Ultra Clear",
@@ -3554,7 +3785,24 @@
     "topics": [
      "skincare"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Stainless Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "Stainless",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Shower filter replacement cartridge, KES 1,759.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "More than 95% of free chlorine removed through 15,000 L (SGS NBF20-009993-02)"
+   },
+   "fits": null
   },
   {
    "code": "SHC",
@@ -3600,7 +3848,24 @@
      "Proprietary quick-connect showers may need an adapter",
      "Not for drinking water"
     ],
-    "action": "Check my setup"
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
    },
    "benefits": {
     "heading": "What changes in your daily routine",
@@ -3789,7 +4054,7 @@
     ],
     "manufacturer_model": "BG-S02"
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Channelle Ceramic Shower Filter for Skincare | Ultra Clear",
@@ -3800,7 +4065,24 @@
     "topics": [
      "skincare"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Ceramic Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "White / Ceramic",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Shower filter replacement cartridge, KES 1,759.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "More than 95% of free chlorine removed through 15,000 L (SGS NBF20-009993-02)"
+   },
+   "fits": null
   },
   {
    "code": "SHD",
@@ -3846,7 +4128,24 @@
      "Proprietary quick-connect showers may need an adapter",
      "Not for drinking water"
     ],
-    "action": "Check my setup"
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
    },
    "benefits": {
     "heading": "What changes in your daily routine",
@@ -4033,7 +4332,7 @@
     ],
     "manufacturer_model": "BG-S01"
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Derma Care Shower Filter for Skincare | Ultra Clear",
@@ -4044,7 +4343,24 @@
     "topics": [
      "skincare"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "White / Tritan",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "Shower filter replacement cartridge, KES 1,759.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "More than 95% of free chlorine removed through 15,000 L (SGS NBF20-009993-02)"
+   },
+   "fits": null
   },
   {
    "code": "SHP",
@@ -4090,7 +4406,24 @@
      "Proprietary quick-connect showers may need an adapter",
      "Not for drinking water"
     ],
-    "action": "Check my setup"
+    "action": "Check my setup",
+    "fit_photos": {
+     "heading": "Where it fits your shower",
+     "items": [
+      {
+       "file": "/api/uc/product-images/fit-shower-three-numbered.jpg",
+       "alt": "Stainless shower filter fitted in three places: below a handheld shower mixer, above a fixed shower head and above a rain shower head",
+       "caption": "Three places to fit it: under the mixer for a handheld shower (1), above a fixed shower head (2) or above a rain shower head (3). Any standard G1/2 inch thread.",
+       "approved": true
+      },
+      {
+       "file": "/api/uc/product-images/fit-shower-three-labelled.jpg",
+       "alt": "Handheld, fixed and rain shower fittings, with the filter body and its replacement cartridge",
+       "caption": "Handheld, fixed or rain shower. Photos show the stainless model; the fitting is the same for every inline shower filter in the range.",
+       "approved": true
+      }
+     ]
+    }
    },
    "benefits": {
     "heading": "What changes in your daily routine",
@@ -4117,12 +4450,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Chlorine-removal percentage for this sealed model.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      },
      {
       "text": "RoHS compliant.",
@@ -4280,7 +4607,7 @@
     ],
     "manufacturer_model": "BG-S04"
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Pure Drop Starter Shower Filter for Skincare | Ultra Clear",
@@ -4291,7 +4618,24 @@
     "topics": [
      "skincare"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Starter Shower Filter for Skin and Hair Care",
+    "capacity": null,
+    "body": "White",
+    "hot_liquids": null,
+    "filter_life": "20,000 L",
+    "flow_output": "8 L/min",
+    "power": "None",
+    "installation": "None. Screws on by hand.",
+    "replacement": "No replacement cartridge",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "DFX",
@@ -4361,12 +4705,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Chlorine-removal percentage for this model.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      }
     ],
     "limits": [
@@ -4492,7 +4830,7 @@
     ],
     "manufacturer_model": "SF-N1"
    },
-   "profile_version": "2.4",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Derma Flux Handheld Shower Filter for Skincare | Ultra Clear",
@@ -4503,7 +4841,24 @@
     "topics": [
      "skincare"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "shower",
+   "compare_group": "shower",
+   "compare": {
+    "type": "Handheld Shower Filter for Face and Body Care",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": "None",
+    "installation": "None. Wrench and tape are in the box.",
+    "replacement": "Derma Flux replacement filter, KES 1,889.99",
+    "warranty": "30-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "ROC",
@@ -4576,12 +4931,6 @@
       "status": "manufacturer",
       "evidence": [],
       "conditions": "Test certification to be supplied."
-     },
-     {
-      "text": "Performance figures for this system.",
-      "status": "confirm",
-      "evidence": [],
-      "conditions": ""
      },
      {
       "text": "Output 1,200 GPD, 190 L/h.",
@@ -4729,7 +5078,7 @@
     ],
     "manufacturer_model": "Aqua Stream 1200D"
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "RO Corporate System: 1,200 GPD Reverse Osmosis | Ultra Clear",
@@ -4742,7 +5091,24 @@
      "purified water",
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "business",
+   "compare_group": "business",
+   "compare": {
+    "type": "Commercial Reverse Osmosis System, 1,200 GPD",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": "1,200 GPD (190 L an hour)",
+    "power": "Mains",
+    "installation": "Quoted after a site assessment.",
+    "replacement": "Pre-filters, membranes and post-carbon filter",
+    "warranty": "12-month warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
   },
   {
    "code": "ATM",
@@ -4911,7 +5277,7 @@
     ],
     "manufacturer_model": ""
    },
-   "profile_version": "2.3",
+   "profile_version": "2.6",
    "last_reviewed": "2026-10-07",
    "seo": {
     "title": "Water ATM for Communities and Properties | Ultra Clear",
@@ -4925,7 +5291,2171 @@
      "sustainability",
      "clean water"
     ]
-   }
+   },
+   "kind": "product",
+   "nav_group": "business",
+   "compare_group": "business",
+   "compare": {
+    "type": "Water ATM",
+    "capacity": null,
+    "body": null,
+    "hot_liquids": null,
+    "filter_life": null,
+    "flow_output": null,
+    "power": null,
+    "installation": "Included in the partnership agreement.",
+    "replacement": null,
+    "warranty": "2-year warranty.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  {
+   "code": "TMB",
+   "slug": "timbo",
+   "name": "Timbo",
+   "parent_sku": "UC-BOG-FLB-012",
+   "category": "Bottles & On-the-Go",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 1599,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-BOG-FLB-012-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A 350 ml filter bottle that folds down when it's empty.",
+    "intro": "Meet Timbo. Designed for travellers, hikers and anyone short on bag space.",
+    "suits": "Daily drinking water from treated taps, refill stations and trusted springs.",
+    "critical_limit": "For cold or room-temperature water only. The bottle is plastic and not for hot liquids. Not for seawater or chemical contamination.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "7-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check suitability"
+   },
+   "suitability": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Personal drinking water on the move.",
+    "water": [
+     "Treated tap water",
+     "Refill stations you trust",
+     "Trusted springs"
+    ],
+    "setup": [
+     "No installation. Flush the new filter for 30-60 seconds before first use."
+    ],
+    "exclusions": [
+     "Not for seawater or chemically contaminated water",
+     "Not for hot or boiling liquids (plastic bottle)",
+     "The filter is for water only"
+    ],
+    "action": "Check my setup"
+   },
+   "benefits": {
+    "heading": "What changes in your daily routine",
+    "items": [
+     {
+      "feature": "Collapsible body",
+      "consequence": "Fold it flat in your bag when it's empty."
+     },
+     {
+      "feature": "Filter in the bottle",
+      "consequence": "Refill from treated taps and refill points on the go."
+     },
+     {
+      "feature": "Replaceable filter",
+      "consequence": "Change the filter, keep the bottle."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Water-contact materials passed US FDA food-contact tests.",
+      "status": "verified",
+      "evidence": [
+       "E5"
+      ],
+      "conditions": "Bureau Veritas test on filter bottle models B01-B04, which include this bottle (B04)."
+     },
+     {
+      "text": "RoHS compliant.",
+      "status": "verified",
+      "evidence": [
+       "E6"
+      ],
+      "conditions": "TÜV SÜD test on bottle filter models B01-B05."
+     },
+     {
+      "text": "Reduces chlorine taste and odour.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No bacteria-removal result is on file for this bottle's filter. The SGS bacteria test covers the straw-bottle filter, not this model.",
+     "Filter life: Ultra Clear states 150 L for all bottles; the factory sheet for this model (B04) states 100 L. Confirm before launch."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Bottle",
+     "Filter cartridge (installed)",
+     "User manual"
+    ],
+    "sold_separately": [
+     "Replacement filter cartridges"
+    ],
+    "dimensions": "70 x 260 mm (open)",
+    "setup_steps": [
+     "Rinse the bottle and flush the new filter for 30-60 seconds.",
+     "Fill from a treated tap or refill point.",
+     "Drink through the filter."
+    ],
+    "setup_video": null,
+    "action": "View setup guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1599,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "Replacement bottle filter cartridge",
+     "sku": "UC-BOG-FCA-015",
+     "price_kes": 1079.99,
+     "guidance": "Confirm which cartridge fits this bottle before ordering a replacement."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 7,
+     "text": "7-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How long does the filter last?",
+     "a": "About 150 litres, which is 2-3 months for most people depending on water quality."
+    },
+    {
+     "q": "Can I put hot drinks in it?",
+     "a": "No. This bottle is plastic and is for cold or room-temperature water only. For hot drinks, choose Hydra Flux and remove its filter first."
+    },
+    {
+     "q": "Which water can I use?",
+     "a": "Treated tap water, refill stations and springs you trust. Not seawater or chemically contaminated water."
+    },
+    {
+     "q": "What is the warranty?",
+     "a": "7 days against manufacturing defects. Unused, sealed items can be returned within 3 business days."
+    }
+   ],
+   "specs": {
+    "Capacity": "350 ml",
+    "Body": "Food-grade TPU, collapsible",
+    "Filter media": "Ahlstrom",
+    "Filter life": "150 L (factory sheet: 100 L)",
+    "Size": "70 x 260 mm"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-timbo.jpg",
+     "alt": "Timbo collapsible filter bottle in blue with the Ultra Clear logo",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "SKU master price gate: this item is still held back",
+     "Demo price 1079.99 differs from the v7 price sheet price 1599; the price sheet applies"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Timbo 350 ml Collapsible Water Filter Bottle | Ultra Clear",
+    "h1": "Timbo",
+    "h1_sub": "350 ml Collapsible Water Filter Bottle",
+    "description": "Timbo is a 350 ml collapsible water filter bottle that folds flat for hiking, travel and the gym. Replaceable filter, 150 L. For cold water only.",
+    "status": "proposed",
+    "topics": [
+     "plastic waste",
+     "sustainability",
+     "refill water",
+     "refill water stations",
+     "clean water"
+    ]
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "350 ml Collapsible Water Filter Bottle",
+    "capacity": "350 ml",
+    "body": "Food-grade TPU, collapsible",
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge (fit to be confirmed)",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  {
+   "code": "BRZ",
+   "slug": "breeze",
+   "name": "Breeze",
+   "parent_sku": "UC-BOG-SQB-013",
+   "category": "Bottles & On-the-Go",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "Coming soon",
+   "price_kes": 1499,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-BOG-SQB-013-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A 600 ml squeeze bottle that filters as you drink.",
+    "intro": "Meet Breeze. Designed for cycling, running and gym sessions where you drink on the move.",
+    "suits": "Daily drinking water from treated taps, refill stations and trusted springs.",
+    "critical_limit": "For cold or room-temperature water only. The bottle is plastic and not for hot liquids. Not for seawater or chemical contamination.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "7-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check suitability"
+   },
+   "suitability": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Personal drinking water on the move.",
+    "water": [
+     "Treated tap water",
+     "Refill stations you trust",
+     "Trusted springs"
+    ],
+    "setup": [
+     "No installation. Flush the new filter for 30-60 seconds before first use."
+    ],
+    "exclusions": [
+     "Not for seawater or chemically contaminated water",
+     "Not for hot or boiling liquids (plastic bottle)",
+     "The filter is for water only"
+    ],
+    "action": "Check my setup"
+   },
+   "benefits": {
+    "heading": "What changes in your daily routine",
+    "items": [
+     {
+      "feature": "Squeeze to drink",
+      "consequence": "Quick sips without unscrewing a cap."
+     },
+     {
+      "feature": "Filter in the bottle",
+      "consequence": "Refill from treated taps and refill points."
+     },
+     {
+      "feature": "600 ml size",
+      "consequence": "Light enough for a bike cage or gym bag."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine taste and odour.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No bacteria-removal result is on file for this bottle's filter. The SGS bacteria test covers the straw-bottle filter, not this model.",
+     "Capacity: the SKU master names it 600 ml; one factory description says 500 ml. Confirm."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Bottle",
+     "Filter cartridge (installed)",
+     "User manual"
+    ],
+    "sold_separately": [
+     "Replacement filter cartridges"
+    ],
+    "dimensions": null,
+    "setup_steps": [
+     "Rinse the bottle and flush the new filter for 30-60 seconds.",
+     "Fill from a treated tap or refill point.",
+     "Drink through the filter."
+    ],
+    "setup_video": null,
+    "action": "View setup guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1499,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "Replacement bottle filter cartridge",
+     "sku": "UC-BOG-FCA-015",
+     "price_kes": 1079.99,
+     "guidance": "Confirm which cartridge fits this bottle before ordering a replacement."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 7,
+     "text": "7-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How long does the filter last?",
+     "a": "About 150 litres, which is 2-3 months for most people depending on water quality."
+    },
+    {
+     "q": "Can I put hot drinks in it?",
+     "a": "No. This bottle is plastic and is for cold or room-temperature water only. For hot drinks, choose Hydra Flux and remove its filter first."
+    },
+    {
+     "q": "Which water can I use?",
+     "a": "Treated tap water, refill stations and springs you trust. Not seawater or chemically contaminated water."
+    },
+    {
+     "q": "What is the warranty?",
+     "a": "7 days against manufacturing defects. Unused, sealed items can be returned within 3 business days."
+    }
+   ],
+   "specs": {
+    "Capacity": "600 ml",
+    "Type": "Squeeze bottle",
+    "Filter life": "150 L"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-breeze.jpg",
+     "alt": "Breeze squeeze filter bottle in dark blue",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "SKU master price gate: this item is still held back",
+     "Demo price 1299.99 differs from the v7 price sheet price 1499; the price sheet applies"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Breeze 600 ml Squeeze Water Filter Bottle | Ultra Clear",
+    "h1": "Breeze",
+    "h1_sub": "600 ml Squeeze Water Filter Bottle",
+    "description": "Breeze is a 600 ml squeeze water filter bottle for cycling, running and the gym. Replaceable 150 L filter. For cold water. Coming soon: join the wishlist.",
+    "status": "proposed",
+    "topics": [
+     "plastic waste",
+     "sustainability",
+     "refill water",
+     "refill water stations",
+     "clean water"
+    ]
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "600 ml Squeeze Water Filter Bottle",
+    "capacity": "600 ml",
+    "body": null,
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge (fit to be confirmed)",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  {
+   "code": "FLX",
+   "slug": "flex",
+   "name": "Flex",
+   "parent_sku": "UC-BOG-SQB-014",
+   "category": "Bottles & On-the-Go",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 2199,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-BOG-SQB-014-PK",
+     "label": "Pink"
+    },
+    {
+     "child_sku": "UC-BOG-SQB-014-GY",
+     "label": "Grey"
+    }
+   ],
+   "opening": {
+    "outcome": "A 1 litre squeeze bottle for long days out.",
+    "intro": "Meet Flex. Designed for hikes, long work days and training sessions when 500 ml isn't enough.",
+    "suits": "Daily drinking water from treated taps, refill stations and trusted springs.",
+    "critical_limit": "For cold or room-temperature water only. The bottle is plastic and not for hot liquids. Not for seawater or chemical contamination.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "7-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check suitability"
+   },
+   "suitability": {
+    "heading": "Will it work with your water?",
+    "intended_use": "Personal drinking water on the move.",
+    "water": [
+     "Treated tap water",
+     "Refill stations you trust",
+     "Trusted springs"
+    ],
+    "setup": [
+     "No installation. Flush the new filter for 30-60 seconds before first use."
+    ],
+    "exclusions": [
+     "Not for seawater or chemically contaminated water",
+     "Not for hot or boiling liquids (plastic bottle)",
+     "The filter is for water only"
+    ],
+    "action": "Check my setup"
+   },
+   "benefits": {
+    "heading": "What changes in your daily routine",
+    "items": [
+     {
+      "feature": "1 litre capacity",
+      "consequence": "Fewer refills on a long day."
+     },
+     {
+      "feature": "Squeeze to drink",
+      "consequence": "Quick sips on the move."
+     },
+     {
+      "feature": "Replaceable 150 L filter",
+      "consequence": "Change the filter, keep the bottle."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine taste and odour.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No bacteria-removal result is on file for this bottle's filter. The SGS bacteria test covers the straw-bottle filter, not this model."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Bottle",
+     "Filter cartridge (installed)",
+     "User manual"
+    ],
+    "sold_separately": [
+     "Replacement filter cartridges"
+    ],
+    "dimensions": null,
+    "setup_steps": [
+     "Rinse the bottle and flush the new filter for 30-60 seconds.",
+     "Fill from a treated tap or refill point.",
+     "Drink through the filter."
+    ],
+    "setup_video": null,
+    "action": "View setup guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 2199,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "Replacement bottle filter cartridge",
+     "sku": "UC-BOG-FCA-015",
+     "price_kes": 1079.99,
+     "guidance": "Confirm which cartridge fits this bottle before ordering a replacement."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 7,
+     "text": "7-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How long does the filter last?",
+     "a": "About 150 litres, which is 2-3 months for most people depending on water quality."
+    },
+    {
+     "q": "Can I put hot drinks in it?",
+     "a": "No. This bottle is plastic and is for cold or room-temperature water only. For hot drinks, choose Hydra Flux and remove its filter first."
+    },
+    {
+     "q": "Which water can I use?",
+     "a": "Treated tap water, refill stations and springs you trust. Not seawater or chemically contaminated water."
+    },
+    {
+     "q": "What is the warranty?",
+     "a": "7 days against manufacturing defects. Unused, sealed items can be returned within 3 business days."
+    }
+   ],
+   "specs": {
+    "Capacity": "1,000 ml",
+    "Type": "Squeeze bottle",
+    "Filter media": "Ahlstrom with activated carbon fibre",
+    "Filter life": "150 L",
+    "Colours": "Pink, Grey"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-flex.jpg",
+     "alt": "Flex 1 litre squeeze filter bottle",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "SKU master price gate: this item is still held back",
+     "Demo price 1509.99 differs from the v7 price sheet price 2199; the price sheet applies"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Flex 1 L Squeeze Water Filter Bottle | Ultra Clear",
+    "h1": "Flex",
+    "h1_sub": "1 L Squeeze Water Filter Bottle",
+    "description": "Flex is a 1 litre squeeze water filter bottle for hiking, long days and workouts. Replaceable 150 L filter. Pink or grey. For cold water only.",
+    "status": "proposed",
+    "topics": [
+     "plastic waste",
+     "sustainability",
+     "refill water",
+     "refill water stations",
+     "clean water"
+    ]
+   },
+   "kind": "product",
+   "nav_group": "bottles",
+   "compare_group": "bottles",
+   "compare": {
+    "type": "1 L Squeeze Water Filter Bottle",
+    "capacity": "1,000 ml",
+    "body": null,
+    "hot_liquids": "No (plastic bottle)",
+    "filter_life": "150 L (2-3 months)",
+    "flow_output": null,
+    "power": "None",
+    "installation": "None",
+    "replacement": "Replacement bottle filter cartridge (fit to be confirmed)",
+    "warranty": "7-day warranty against manufacturing defects.",
+    "tested_performance": "No test report on file"
+   },
+   "fits": null
+  },
+  {
+   "code": "RBC",
+   "slug": "bottle-filter-cartridge",
+   "name": "Bottle Filter Cartridge",
+   "parent_sku": "UC-BOG-FCA-015",
+   "category": "Bottles & On-the-Go",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 1079.99,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-BOG-FCA-015-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A fresh 150 L filter for your Ultra Clear bottle.",
+    "intro": "Fits: Hydra Flux, Truva Go, Viva Drop, Gym Buddy.",
+    "suits": "For owners of Hydra Flux and Truva Go and others listed.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Hydra Flux, Truva Go, Viva Drop, Gym Buddy.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Unscrew the cap and pull out the old filter.",
+     "Push the new filter in until it seats.",
+     "Flush with water for 30-60 seconds before drinking."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: 150 L",
+      "consequence": "About 2-3 months for most people."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "99.999% removal of total coliform bacteria through 150 L.",
+      "status": "verified",
+      "evidence": [
+       "E1"
+      ],
+      "conditions": "Laboratory test on a Tritan and stainless-steel bottle with this filter type."
+     },
+     {
+      "text": "RoHS compliant.",
+      "status": "verified",
+      "evidence": [
+       "E6"
+      ],
+      "conditions": "TÜV SÜD test on bottle filter models B01-B05."
+     }
+    ],
+    "limits": [
+     "Bacteria test only; no virus, cyst or heavy-metal result."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Bottle Filter Cartridge"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Unscrew the cap and pull out the old filter.",
+     "Push the new filter in until it seats.",
+     "Flush with water for 30-60 seconds before drinking."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1079.99,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-BOG-FCA-015",
+     "price_kes": 1079.99,
+     "guidance": "About 2-3 months for most people."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Hydra Flux, Truva Go, Viva Drop, Gym Buddy. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "150 L. About 2-3 months for most people."
+    }
+   ],
+   "specs": {
+    "Rated life": "150 L (2-3 months)",
+    "Media": "Ahlstrom with activated carbon fibre",
+    "Fits": "Hydra Flux, Truva Go, Viva Drop, Gym Buddy"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-bottle-cartridge-2.jpg",
+     "alt": "Bottle filter cartridge beside its box",
+     "approved": false
+    },
+    {
+     "slot": 3,
+     "label": "Parts",
+     "file": "/api/uc/product-images/web-bottle-cartridge-1.jpg",
+     "alt": "Bottle filter cartridge",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Bottle Filter Replacement Cartridge, 150 L | Ultra Clear",
+    "h1": "Bottle Filter Cartridge",
+    "h1_sub": "Replacement Filter for Ultra Clear Bottles, 150 L",
+    "description": "Replacement 150 L filter cartridge for Hydra Flux, Truva Go, Viva Drop and Gym Buddy water filter bottles. Replace every 2-3 months.",
+    "status": "proposed",
+    "topics": [
+     "clean water",
+     "refill water"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "bottles",
+   "compare_group": null,
+   "compare": {
+    "type": "Replacement Filter for Ultra Clear Bottles, 150 L",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Hydra Flux",
+    "Truva Go",
+    "Viva Drop",
+    "Gym Buddy"
+   ]
+  },
+  {
+   "code": "RSF",
+   "slug": "survivor-straw-replacement-filter",
+   "name": "Survivor Straw Replacement Filter",
+   "parent_sku": "UC-BOG-FCS-017",
+   "category": "Bottles & On-the-Go",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "Coming soon",
+   "price_kes": 470,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-BOG-FCS-017-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A new filter for your Survivor Straw.",
+    "intro": "Fits: Survivor Straw.",
+    "suits": "For owners of Survivor Straw.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Survivor Straw.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Unscrew the straw body.",
+     "Swap the old filter for the new one.",
+     "Flush with clear fresh water before drinking."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: 300 L",
+      "consequence": "Replace at the end of the rated life, or sooner if taste or flow changes."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Filters clear fresh water for cleaner drinking water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independent test report on file for the straw filter."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Survivor Straw Replacement Filter"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Unscrew the straw body.",
+     "Swap the old filter for the new one.",
+     "Flush with clear fresh water before drinking."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 470,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-BOG-FCS-017",
+     "price_kes": 439.99,
+     "guidance": "Replace at the end of its rated life."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Survivor Straw. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "300 L. "
+    }
+   ],
+   "specs": {
+    "Rated life": "300 L (factory sheet: 500 L)",
+    "Fits": "Survivor Straw"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-survivor-cartridge-1.jpg",
+     "alt": "Survivor Straw replacement filter",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "SKU master price gate: this item is still held back",
+     "Demo price 439.99 differs from the v7 price sheet price 470; the price sheet applies"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Survivor Straw Replacement Filter | Ultra Clear",
+    "h1": "Survivor Straw Replacement Filter",
+    "h1_sub": "Replacement Filter for Survivor Straw",
+    "description": "Replacement filter for the Survivor Straw portable water filter straw, for hiking, camping and emergency kits. Rated 300 L. Coming soon: join the wishlist.",
+    "status": "proposed",
+    "topics": [
+     "clean water"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "outdoor",
+   "compare_group": null,
+   "compare": {
+    "type": "Replacement Filter for Survivor Straw",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Survivor Straw"
+   ]
+  },
+  {
+   "code": "RSH",
+   "slug": "sweet-home-replacement-cartridge",
+   "name": "Sweet Home Replacement Cartridge",
+   "parent_sku": "UC-HOU-TAPF-006",
+   "category": "Home & Kitchen",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 1489.99,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-HOU-TAPF-006-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A fresh 1,500 L cartridge for your Sweet Home tap filter.",
+    "intro": "Fits: Sweet Home tap filter.",
+    "suits": "For owners of Sweet Home tap filter.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Sweet Home tap filter.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Turn off the tap and unscrew the filter cover.",
+     "Swap the old cartridge for the new one.",
+     "Run water through it for 60-90 seconds before drinking."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: 1,500 L",
+      "consequence": "About 3-4 months for most households."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "At least 99.999% removal of total coliform bacteria through 1,500 L.",
+      "status": "verified",
+      "evidence": [
+       "E2"
+      ],
+      "conditions": "Laboratory test at 1.5 L/min on a faucet filter of this ultrafiltration type."
+     },
+     {
+      "text": "RoHS compliant.",
+      "status": "verified",
+      "evidence": [
+       "E7"
+      ],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No virus or heavy-metal figure is published: no test report covers them."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Sweet Home Replacement Cartridge"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Turn off the tap and unscrew the filter cover.",
+     "Swap the old cartridge for the new one.",
+     "Run water through it for 60-90 seconds before drinking."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1489.99,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-HOU-TAPF-006",
+     "price_kes": 1489.99,
+     "guidance": "About 3-4 months for most households."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Sweet Home tap filter. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "1,500 L. About 3-4 months for most households."
+    }
+   ],
+   "specs": {
+    "Rated life": "1,500 L (3-4 months)",
+    "Stages": "Non-woven fabric, carbon fibre, granular carbon, ultrafiltration membrane",
+    "Fits": "Sweet Home"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-faucet-cartridge-2.jpg",
+     "alt": "Sweet Home faucet filter cartridge box",
+     "approved": false
+    },
+    {
+     "slot": 3,
+     "label": "Parts",
+     "file": "/api/uc/product-images/web-faucet-cartridge-1.jpg",
+     "alt": "Opened box showing the faucet filter cartridge",
+     "approved": false
+    },
+    {
+     "slot": 5,
+     "label": "Detail",
+     "file": "/api/uc/product-images/web-faucet-cartridge-4.jpg",
+     "alt": "Faucet filter cartridge box, side view",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "Variant SKUs not in the v7 SKU master: UC-HOU-TAPF-006-XX"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Sweet Home Replacement Cartridge, 1,500 L | Ultra Clear",
+    "h1": "Sweet Home Replacement Cartridge",
+    "h1_sub": "Tap Water Filter Cartridge, 1,500 L",
+    "description": "Replacement 1,500 L ultrafiltration cartridge for the Sweet Home tap water filter. SGS-tested bacteria removal through 1,500 L. Replace every 3-4 months.",
+    "status": "proposed",
+    "topics": [
+     "safe water",
+     "clean water"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "home",
+   "compare_group": null,
+   "compare": {
+    "type": "Tap Water Filter Cartridge, 1,500 L",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Sweet Home tap filter"
+   ]
+  },
+  {
+   "code": "RDF",
+   "slug": "dispenser-filter",
+   "name": "Dispenser Filter",
+   "parent_sku": "UC-HOU-DF-007",
+   "category": "Home & Kitchen",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 1889.99,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-HOU-DF-007-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A new taste filter for your wireless water dispenser.",
+    "intro": "Fits: Wireless Dispenser Filter Set.",
+    "suits": "For owners of Wireless Dispenser Filter Set.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Wireless Dispenser Filter Set.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Lift the dispenser off the bottle.",
+     "Pull out the old filter and push in the new one.",
+     "Pump a little water through before drinking."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: 400 L",
+      "consequence": "Replace at the end of the rated life, or sooner if taste or flow changes."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine taste and odour and captures sediment.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "For water that is already safe to drink. It improves taste; it does not disinfect. No independent test report on file."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Dispenser Filter"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Lift the dispenser off the bottle.",
+     "Pull out the old filter and push in the new one.",
+     "Pump a little water through before drinking."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1889.99,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-HOU-DF-007",
+     "price_kes": 1889.99,
+     "guidance": "Replace at the end of its rated life."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Wireless Dispenser Filter Set. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "400 L. "
+    }
+   ],
+   "specs": {
+    "Rated life": "400 L",
+    "Fits": "Wireless Dispenser Filter Set (18.9-20 L bottles)"
+   },
+   "images": [],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Dispenser Replacement Filter, 400 L | Ultra Clear",
+    "h1": "Dispenser Filter",
+    "h1_sub": "Replacement Filter for the Wireless Water Dispenser",
+    "description": "Replacement 400 L taste filter for the Ultra Clear wireless water dispenser on 18.9-20 L bottles. Improves the taste of water that is already safe to drink.",
+    "status": "proposed",
+    "topics": [
+     "refill water",
+     "clean water"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "home",
+   "compare_group": null,
+   "compare": {
+    "type": "Replacement Filter for the Wireless Water Dispenser",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Wireless Dispenser Filter Set"
+   ]
+  },
+  {
+   "code": "RRO",
+   "slug": "ro-replacement-filters",
+   "name": "RO Replacement Filters",
+   "parent_sku": "UC-HOU-ROP-SET",
+   "category": "Home & Kitchen",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "Pre-order",
+   "price_kes": null,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-HOU-ROP-PP",
+     "label": "Stage 1: PP sediment 10 inch",
+     "price_kes": 99.99
+    },
+    {
+     "child_sku": "UC-HOU-ROP-UDF",
+     "label": "Stage 2: UDF granular carbon 10 inch",
+     "price_kes": 809.99
+    },
+    {
+     "child_sku": "UC-HOU-ROP-CTO",
+     "label": "Stage 3: CTO carbon block 10 inch",
+     "price_kes": 809.99
+    },
+    {
+     "child_sku": "UC-HOU-ROM-100g",
+     "label": "Stage 4: RO membrane 100 GPD",
+     "price_kes": 1219.99
+    },
+    {
+     "child_sku": "UC-HOU-RO-CBT33",
+     "label": "Stage 5: post-carbon T33",
+     "price_kes": 539.99
+    },
+    {
+     "child_sku": "UC-HOU-RO-YMT33",
+     "label": "Stage 6: mineral T33",
+     "price_kes": 329.99
+    }
+   ],
+   "opening": {
+    "outcome": "Each of the six filters in your reverse osmosis system, sold separately.",
+    "intro": "Fits: Pure Blue RO Home System.",
+    "suits": "For owners of Pure Blue RO Home System.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Pure Blue RO Home System.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Turn off the water supply and power.",
+     "Unscrew the housing for the stage you are replacing and change the filter.",
+     "Flush the system as the manual describes before drinking."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: Varies by stage",
+      "consequence": "Interval varies by stage; confirm with the manual or ask us."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reverse osmosis replacement filters for 6-stage home systems.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "Replacement intervals per stage are not yet confirmed. No independent test report on file."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "RO Replacement Filters"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Turn off the water supply and power.",
+     "Unscrew the housing for the stage you are replacing and change the filter.",
+     "Flush the system as the manual describes before drinking."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": null,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-HOU-ROP-SET",
+     "price_kes": 99.99,
+     "guidance": "Interval varies by stage; confirm with the manual or ask us."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Pure Blue RO Home System. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "Varies by stage. Interval varies by stage; confirm with the manual or ask us."
+    }
+   ],
+   "specs": {
+    "Stages": "PP, UDF, CTO, RO membrane 100 GPD, post-carbon T33, mineral T33",
+    "Size": "10 inch housings; T33 inline",
+    "Fits": "Pure Blue (6-stage, 100 GPD)"
+   },
+   "images": [],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "No retail price in the v7 price sheet for this SKU"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "RO Replacement Filters for Reverse Osmosis Systems | Ultra Clear",
+    "h1": "RO Replacement Filters",
+    "h1_sub": "Six-Stage Reverse Osmosis Replacement Filters",
+    "description": "Replacement filters for the Pure Blue reverse osmosis system: PP, UDF, CTO, 100 GPD RO membrane, post-carbon and mineral T33. Pre-order in Kenya.",
+    "status": "proposed",
+    "topics": [
+     "pure water",
+     "purified water"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "home",
+   "compare_group": null,
+   "compare": {
+    "type": "Six-Stage Reverse Osmosis Replacement Filters",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Pure Blue RO Home System"
+   ]
+  },
+  {
+   "code": "ROT",
+   "slug": "ro-mini-tank",
+   "name": "RO Mini Tank",
+   "parent_sku": "UC-HOU-ROT-029",
+   "category": "Home & Kitchen",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "Coming soon",
+   "price_kes": null,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-HOU-ROT-029-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A 0.5 gallon pressure tank for a reverse osmosis system.",
+    "intro": "Fits: Reverse osmosis systems (ask us which).",
+    "suits": "For owners of Reverse osmosis systems (ask us which).",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "Warranty period to be confirmed. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Reverse osmosis systems (ask us which).",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Ask us to confirm it suits your system before fitting."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: Not a filter",
+      "consequence": "Replace at the end of the rated life, or sooner if taste or flow changes."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [],
+    "limits": [
+     "A storage tank, not a filter: it does not change water quality."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "RO Mini Tank"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Ask us to confirm it suits your system before fitting."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": null,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-HOU-ROT-029",
+     "price_kes": null,
+     "guidance": "Replace at the end of its rated life."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": null,
+     "text": "Warranty period to be confirmed."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Reverse osmosis systems (ask us which). Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "Not a filter. "
+    }
+   ],
+   "specs": {
+    "Capacity": "0.5 gallon (about 1.9 L)",
+    "Type": "Pressure and storage tank",
+    "Model": "MT-0.5"
+   },
+   "images": [],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published",
+     "SKU master price gate: this item is still held back",
+     "No retail price in the v7 price sheet for this SKU"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "RO Mini Tank, 0.5 Gallon Pressure Tank | Ultra Clear",
+    "h1": "RO Mini Tank",
+    "h1_sub": "0.5 Gallon Pressure Tank for RO Systems",
+    "description": "A 0.5 gallon pressure and storage tank for reverse osmosis water systems. Coming soon: join the wishlist and we'll tell you when it arrives.",
+    "status": "proposed",
+    "topics": [
+     "pure water"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "home",
+   "compare_group": null,
+   "compare": {
+    "type": "0.5 Gallon Pressure Tank for RO Systems",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Reverse osmosis systems (ask us which)"
+   ]
+  },
+  {
+   "code": "RSC",
+   "slug": "shower-filter-cartridge",
+   "name": "Shower Filter Cartridge",
+   "parent_sku": "UC-SKW-SHC-023",
+   "category": "Skincare & Wellness",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 1759.99,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-SKW-SHC-023-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A fresh 20,000 L cartridge for your shower filter.",
+    "intro": "Fits: J'adore, Channelle, Derma Care.",
+    "suits": "For owners of J'adore and Channelle and others listed.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for J'adore, Channelle, Derma Care.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Unscrew the shower filter body.",
+     "Swap the old cartridge for the new one.",
+     "Run the shower briefly before use."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: 20,000 L",
+      "consequence": "Replace at the end of the rated life, or sooner if taste or flow changes."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "More than 95% of free chlorine removed through 15,000 L.",
+      "status": "verified",
+      "evidence": [
+       "E3"
+      ],
+      "conditions": "Laboratory test on a shower filter element with tap water at about 0.3 mg/L chlorine. Removal was 85% at 22,500 L."
+     },
+     {
+      "text": "RoHS compliant.",
+      "status": "verified",
+      "evidence": [
+       "E7"
+      ],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "Chlorine removal falls as the filter ages: 85% at 22,500 L in testing. It does not treat any skin or hair condition."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Shower Filter Cartridge"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Unscrew the shower filter body.",
+     "Swap the old cartridge for the new one.",
+     "Run the shower briefly before use."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1759.99,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-SKW-SHC-023",
+     "price_kes": 1759.99,
+     "guidance": "Replace at the end of its rated life."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: J'adore, Channelle, Derma Care. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "20,000 L. "
+    }
+   ],
+   "specs": {
+    "Rated life": "20,000 L",
+    "Media": "PP, activated carbon fibre, carbon, KDF, vitamin C",
+    "Fits": "J'adore, Channelle, Derma Care (not Pure Drop: sealed unit)"
+   },
+   "images": [
+    {
+     "slot": 1,
+     "label": "Product",
+     "file": "/api/uc/product-images/web-shower-cartridge-1.jpg",
+     "alt": "Shower filter cartridge beside its box",
+     "approved": false
+    },
+    {
+     "slot": 3,
+     "label": "Parts",
+     "file": "/api/uc/product-images/web-shower-cartridge-2.jpg",
+     "alt": "Shower filter cartridge",
+     "approved": false
+    },
+    {
+     "slot": 5,
+     "label": "Detail",
+     "file": "/api/uc/product-images/web-shower-cartridge-3.jpg",
+     "alt": "Shower filter cartridge held by its pull ring",
+     "approved": false
+    }
+   ],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Shower Filter Replacement Cartridge, 20,000 L | Ultra Clear",
+    "h1": "Shower Filter Cartridge",
+    "h1_sub": "Replacement Cartridge for J'adore, Channelle and Derma Care",
+    "description": "Replacement 20,000 L shower filter cartridge for J'adore, Channelle and Derma Care. SGS-tested: over 95% of free chlorine removed through 15,000 L.",
+    "status": "proposed",
+    "topics": [
+     "skincare"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "shower",
+   "compare_group": null,
+   "compare": {
+    "type": "Replacement Cartridge for J'adore, Channelle and Derma Care",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "J'adore",
+    "Channelle",
+    "Derma Care"
+   ]
+  },
+  {
+   "code": "RDX",
+   "slug": "derma-flux-replacement-filter",
+   "name": "Derma Flux Replacement Filter",
+   "parent_sku": "UC-SKW-DFO-027",
+   "category": "Skincare & Wellness",
+   "status": "draft",
+   "publishable": false,
+   "purchasable": false,
+   "availability": "In stock",
+   "price_kes": 1889.99,
+   "currency": "KES",
+   "variants": [
+    {
+     "child_sku": "UC-SKW-DFO-027-XX",
+     "label": "Standard"
+    }
+   ],
+   "opening": {
+    "outcome": "A new filter for your Derma Flux handheld shower.",
+    "intro": "Fits: Derma Flux.",
+    "suits": "For owners of Derma Flux.",
+    "critical_limit": "Check that it matches your product before you order.",
+    "installation": null,
+    "delivery": "Choose our delivery or self-paid delivery at checkout.",
+    "service_summary": "3-day warranty against manufacturing defects. Unused, sealed items can be returned within 3 business days.",
+    "primary_action": "Buy now",
+    "secondary_action": "Check it fits"
+   },
+   "suitability": {
+    "heading": "Will it fit your product?",
+    "intended_use": "Replacement for Derma Flux.",
+    "water": [
+     "Same water as your product"
+    ],
+    "setup": [
+     "Unscrew the filter section of the handheld head.",
+     "Swap in the new filter.",
+     "Run the shower briefly before use."
+    ],
+    "exclusions": [
+     "Only for the products listed"
+    ],
+    "action": "Check it fits"
+   },
+   "benefits": {
+    "heading": "Why replace on time",
+    "items": [
+     {
+      "feature": "Rated life: To be confirmed",
+      "consequence": "Replace at the end of the rated life, or sooner if taste or flow changes."
+     },
+     {
+      "feature": "Same filter as new",
+      "consequence": "Your product works as it did on day one."
+     },
+     {
+      "feature": "Track it in the app",
+      "consequence": "Sign up at app.ucfilters.com for a reminder when it's due."
+     }
+    ]
+   },
+   "evidence": {
+    "heading": "What this filter does—and its limits",
+    "claims": [
+     {
+      "text": "Reduces chlorine for cleaner shower water.",
+      "status": "manufacturer",
+      "evidence": [],
+      "conditions": ""
+     }
+    ],
+    "limits": [
+     "No independent test report on file for this filter. Replacement interval to be confirmed."
+    ],
+    "action": "View test details"
+   },
+   "package": {
+    "heading": "Here’s what arrives",
+    "included": [
+     "Derma Flux Replacement Filter"
+    ],
+    "sold_separately": [],
+    "dimensions": null,
+    "setup_steps": [
+     "Unscrew the filter section of the handheld head.",
+     "Swap in the new filter.",
+     "Run the shower briefly before use."
+    ],
+    "setup_video": null,
+    "action": "View guide"
+   },
+   "ownership": {
+    "heading": "Your cost today and over time",
+    "product_price_kes": 1889.99,
+    "delivery": "Shown at checkout for your location.",
+    "installation": null,
+    "replacement": {
+     "name": "This is the replacement",
+     "sku": "UC-SKW-DFO-027",
+     "price_kes": 1889.99,
+     "guidance": "Replace at the end of its rated life."
+    },
+    "action": "Check delivery cost"
+   },
+   "reviews": {
+    "items": [],
+    "note": "No approved reviews on file. The app must omit this section until genuine reviews exist."
+   },
+   "service": {
+    "heading": "Help with setup and care",
+    "delivery": "Delivery takes 1-7 business days in Kenya and Tanzania. The delivery charge is shown at checkout for your location.",
+    "support": "WhatsApp +254 717 774 049 or info@ucfilters.com",
+    "warranty": {
+     "days": 3,
+     "text": "3-day warranty against manufacturing defects."
+    },
+    "returns": "Unused, sealed items in original packaging can be returned within 3 business days of delivery. Refunds are processed within 14 business days after inspection.",
+    "exclusions": [
+     "Warranty covers manufacturing defects only.",
+     "Opened or used items cannot be returned under the 3-day return rule.",
+     "Replacement cartridges carry a 3-day warranty."
+    ]
+   },
+   "summary": {
+    "heading": "Review your selection"
+   },
+   "faq": [
+    {
+     "q": "How do I know it fits?",
+     "a": "It fits: Derma Flux. Not sure? Send a photo on WhatsApp +254 717 774 049."
+    },
+    {
+     "q": "How long does it last?",
+     "a": "To be confirmed. "
+    }
+   ],
+   "specs": {
+    "Media": "200 g KDF and 60 g calcium sulphite",
+    "Fits": "Derma Flux"
+   },
+   "images": [],
+   "internal": {
+    "missing_launch_inputs": [
+     "Owner review of this v2.6 draft before it is published"
+    ],
+    "manufacturer_model": null
+   },
+   "profile_version": "2.6",
+   "last_reviewed": "2026-10-11",
+   "seo": {
+    "title": "Derma Flux Replacement Filter | Ultra Clear",
+    "h1": "Derma Flux Replacement Filter",
+    "h1_sub": "KDF and Calcium Sulphite Shower Filter",
+    "description": "Replacement filter for the Derma Flux handheld shower: 200 g KDF and 60 g calcium sulphite media to reduce chlorine in shower water.",
+    "status": "proposed",
+    "topics": [
+     "skincare"
+    ]
+   },
+   "kind": "replacement",
+   "nav_group": "shower",
+   "compare_group": null,
+   "compare": {
+    "type": "KDF and Calcium Sulphite Shower Filter",
+    "tested_performance": "See product page"
+   },
+   "fits": [
+    "Derma Flux"
+   ]
   }
  ],
  "accessories": [
@@ -5058,7 +7588,7 @@
    "reason": "Blocked by the price gate in the SKU master; not shown to customers"
   }
  ],
- "change_note": "v2.4: skincare wording on all five shower filters; EcoSmart solar-powered and wireless; Pure Shield wireless; seo.topics and topic_pages added. Includes all v2.2 and v2.3 changes.",
+ "change_note": "v2.6: comparison groups and replacement-filter pages; fit photos for Sweet Home and the shower filters; confirm-only claims removed; 11 new pages added as unpublished drafts (Timbo, Breeze, Flex and 8 replacement filters). Includes all v2.2 to v2.4 changes. Price authority remains the v7 price sheet, not the demo prices.",
  "topic_pages": [
   {
    "topic": "plastic waste",
@@ -5168,5 +7698,78 @@
    ]
   }
  ],
- "topic_pages_note": "Each topic is an article page that links to the listed products, and each product page links back to its topics. \"safe water\" lists only products with a verified bacteria test. Topic page text is not yet written."
+ "topic_pages_note": "Each topic is an article page that links to the listed products, and each product page links back to its topics. \"safe water\" lists only products with a verified bacteria test. Topic page text is not yet written.",
+ "compare_groups": [
+  {
+   "id": "bottles",
+   "label": "Water filter bottles",
+   "products": [
+    "HDF",
+    "TRG",
+    "VDR",
+    "GMB",
+    "TMB",
+    "BRZ",
+    "FLX"
+   ],
+   "replacements": [
+    "RBC"
+   ]
+  },
+  {
+   "id": "outdoor",
+   "label": "Outdoor and travel filters",
+   "products": [
+    "SVS",
+    "ECO"
+   ],
+   "replacements": [
+    "RSF"
+   ]
+  },
+  {
+   "id": "home",
+   "label": "Home drinking water",
+   "products": [
+    "FCT",
+    "PSH",
+    "DSP",
+    "AQD",
+    "UPR",
+    "UP2",
+    "ROH",
+    "PHR"
+   ],
+   "replacements": [
+    "RSH",
+    "RDF",
+    "RRO",
+    "ROT"
+   ]
+  },
+  {
+   "id": "shower",
+   "label": "Shower filters",
+   "products": [
+    "SHJ",
+    "SHC",
+    "SHD",
+    "SHP",
+    "DFX"
+   ],
+   "replacements": [
+    "RSC",
+    "RDX"
+   ]
+  },
+  {
+   "id": "business",
+   "label": "Business and community",
+   "products": [
+    "ROC",
+    "ATM"
+   ],
+   "replacements": []
+  }
+ ]
 }

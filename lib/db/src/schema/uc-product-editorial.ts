@@ -8,6 +8,7 @@ export const ucProductEditorialTable = pgTable("uc_product_editorial", {
   record: jsonb("record").notNull().$type<Record<string, unknown>>(),
   galleryMapped: boolean("gallery_mapped").notNull().default(false),
   priceImportRevision: integer("price_import_revision").notNull().default(0),
+  contentImportRevision: integer("content_import_revision").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const insertUcProductEditorialSchema = createInsertSchema(ucProductEditorialTable);

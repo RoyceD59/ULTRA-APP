@@ -1,16 +1,16 @@
 // Server-only authored source. Never import the source JSON into a client bundle.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const source = require('./records/products_v2.4.json');
+const source = require('./records/products_v2.6.json');
 const retail = require('./records/retail-prices_v7.json');
 const validate = require('./records/validate-products.cjs');
-const schemaHash = crypto.createHash('sha256').update(fs.readFileSync(require.resolve('./records/product_content_v2.4.schema.json'))).digest('hex');
+const schemaHash = crypto.createHash('sha256').update(fs.readFileSync(require.resolve('./records/product_content_v2.6.schema.json'))).digest('hex');
 if (validate.schemaHash !== schemaHash) throw new Error('Product validator is stale');
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const allowedClaims = new Set(['verified', 'manufacturer', 'customer_reported']);
 
 function createRecordCollection(input = source) {
-  // Keep the uploaded v2.4 file verbatim, but apply the owner's superseding
+  // Keep the uploaded v2.6 file verbatim, but apply the owner's superseding
   // Excel prices to default/offline authored rendering. Explicit DB input
   // is already authoritative and must retain subsequent staff edits.
   if (input === source) input = { ...source, products: source.products.map(p => {
@@ -18,8 +18,8 @@ function createRecordCollection(input = source) {
     return price === undefined ? p : { ...p, price_kes: price,
       ownership: { ...p.ownership, product_price_kes: price } };
   }) };
-  if (!validate(input) || input.schema_version !== '2.4') {
-    throw new Error(`Invalid v2.4 product records: ${JSON.stringify(validate.errors)}`);
+  if (!validate(input) || input.schema_version !== '2.6') {
+    throw new Error(`Invalid v2.6 product records: ${JSON.stringify(validate.errors)}`);
   }
   const unique = (values, label) => {
     if (values.some(value => typeof value !== 'string' || !value.trim()) || new Set(values).size !== values.length) {
@@ -64,6 +64,10 @@ function createRecordCollection(input = source) {
   const products = eligible.map(p => ({
     code: p.code, slug: p.slug, name: p.name, parentSku: p.parent_sku,
     category: p.category,
+    kind: p.kind || 'product', navGroup: p.nav_group || null,
+    compareGroup: p.compare_group || null, compare: p.compare ? { ...p.compare } : null,
+    fits: Array.isArray(p.fits) ? p.fits.slice() : null,
+    fitPhotos: projectFitPhotos(p.suitability.fit_photos),
     variants: p.variants.map(v => ({ childSku: v.child_sku, label: v.label })),
     specs: { ...p.specs },
     suitability: projectSection(p.suitability, ['heading', 'intended_use', 'water', 'setup', 'exclusions', 'action']),
@@ -78,7 +82,7 @@ function createRecordCollection(input = source) {
     imageMappings: p.images.filter(i => i.approved && i.alt && !i.file.startsWith('images/')).map(i => ({
       slot: i.slot, src: i.file, alt: i.alt, picturedColour: i.pictured_colour || null, childSku: i.child_sku || null,
     })),
-    purchasable: p.purchasable && p.price_kes !== null && p.availability !== 'By enquiry',
+    purchasable: p.purchasable && p.price_kes !== null && !['By enquiry', 'Coming soon'].includes(p.availability),
     price: p.price_kes, currency: 'KES',
     seo: { title: p.seo.title, h1: p.seo.h1, subline: p.seo.h1_sub || '',
       description: p.seo.description, status: p.seo.status },
@@ -101,6 +105,10 @@ function createRecordCollection(input = source) {
         const p = products.find(p => p.code === code);
         return { code: p.code, name: p.seo.h1, slug: p.slug };
       }) })),
+    groups: (input.compare_groups || []).map(g => ({ id: g.id, label: g.label,
+      products: g.products.filter(code => products.some(p => p.code === code)),
+      replacements: g.replacements.filter(code => products.some(p => p.code === code)) }))
+      .filter(g => g.products.length || g.replacements.length),
     // Private identity lookup; not serialized.
     identities: eligible.map(p => ({ code: p.code, parentSku: p.parent_sku,
       variants: p.variants.map(v => v.child_sku) })),
@@ -108,6 +116,12 @@ function createRecordCollection(input = source) {
 }
 
 const records = createRecordCollection();
+// Only reviewed photos with alt text and an app-served address reach customers.
+function projectFitPhotos(value) {
+  const items = ((value && value.items) || []).filter(i => i.approved && i.alt && i.file && !i.file.startsWith('images/'))
+    .map(i => ({ src: i.file, alt: i.alt, caption: i.caption || '' }));
+  return items.length ? { heading: value.heading || 'Will it fit your tap?', items } : null;
+}
 function projectSection(value, keys) {
   return Object.fromEntries(keys.filter(k => value[k] !== undefined).map(k => [k, value[k]]));
 }

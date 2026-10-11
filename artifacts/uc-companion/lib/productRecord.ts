@@ -15,12 +15,24 @@ export type ProductRecord = {
   ownership?: Loose; service?: Loose; summary?: Loose; faq?: { q: string; a: string }[];
   claims?: RecordClaim[]; seo?: Loose; opening?: Loose; topics?: { name: string; slug: string }[];
   evidenceLimits?: string[];
+  kind?: 'product' | 'replacement'; navGroup?: string | null; compareGroup?: string | null;
+  compare?: Record<string, string | null> | null; fits?: string[] | null;
+  fitPhotos?: { heading: string; items: { src: string; alt: string; caption: string }[] } | null;
   operation: {
     commerceId: number | null; availability: string | null; livePrice: number | null; priceAuthority?: 'companion'; images: RecordImage[];
     videoUrl: string | null; diagnostics: string[]; variants: RecordVariant[];
   };
 };
-export type RecordCollection = { products: (Partial<ProductRecord> & { slug: string; name: string })[]; topics: unknown[] };
+export type RecordGroup = { id: string; label: string; products: string[]; replacements: string[] };
+export type RecordCollection = { products: (Partial<ProductRecord> & { code: string; slug: string; name: string })[]; topics: unknown[]; groups?: RecordGroup[] };
+
+/** Comparison rows authored per product, in display order. */
+export const COMPARE_ROWS: [key: string, label: string][] = [
+  ['type', 'Type'], ['capacity', 'Capacity'], ['body', 'Body'], ['hot_liquids', 'Hot liquids'],
+  ['filter_life', 'Filter life'], ['flow_output', 'Flow / output'], ['power', 'Power'],
+  ['installation', 'Installation'], ['replacement', 'Replacement'], ['warranty', 'Warranty'],
+  ['tested_performance', 'Tested performance'],
+];
 
 export const SLOT_LABELS = ['Product', 'In use', 'Parts', 'Included', 'Colours', 'Size'];
 

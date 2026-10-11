@@ -1183,6 +1183,15 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Ignore changes:** None.
 - **Status:** Clients are live; the rollout task is not complete.
 
+### 2026-10-11 — Product records v2.6 (grouping, comparison, replacement filters, fit photos)
+
+- **Scope/approval:** User supplied the v2.6 product-page demo and chose "Everything, new pages unpublished".
+- **Changes:** Records and schema moved to v2.6 (21 existing products updated, 11 new products as unpublished, non-purchasable drafts, 5 comparison groups). One-time guarded database import (`content_import_revision`) adds new fields and replaces suitability/evidence text only where a row still equals the old seed; staff edits are kept. API `/uc/product-records` now returns `groups`. Companion shows fit photos and "Fits" tags, and compares within a group. Public HTML renders fit photos. 17 new images added under `artifacts/api-server/public/products/`. Prices and SKUs still come from the v7 workbook; demo price differences (Timbo, Breeze, Flex, Survivor replacement) were not applied.
+- **Verification:** record tests, new migration test, type checks, and a live check of `/api/uc/product-records`. Existing failures in `product-editorial.test.ts` (6) and one record-products adapter test were failing before this change.
+- **Ignore changes:** None.
+- **Status:** Source only; not published.
+- **Remaining:** Staff review of the 11 drafts; prices for RRO and ROT; child SKU `UC-HOU-TAPF-006-XX` missing from the SKU master.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

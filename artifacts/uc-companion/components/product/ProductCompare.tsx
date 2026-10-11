@@ -7,21 +7,13 @@ import { resizedImageUrl } from '@/hooks/useApi';
 import { useCart } from '@/context/CartContext';
 import type { CartItem } from '@/context/CartContext';
 import { trackProductEvent } from '@/lib/productAnalytics';
-import { fetchCollection, fetchRecord, kes, purchaseState, specValue, type ProductRecord, type RecordVariant } from '@/lib/productRecord';
+import { COMPARE_ROWS, fetchCollection, fetchRecord, kes, purchaseState, type ProductRecord, type RecordVariant } from '@/lib/productRecord';
 import { P } from './theme';
 
 type Row = { label: string; get: (r: ProductRecord, v: RecordVariant | null) => string | null };
 const ROWS: Row[] = [
   { label: 'Price', get: r => (r.price === null ? null : kes(r.price)) },
-  { label: 'Capacity', get: r => specValue(r, 'capacity') },
-  { label: 'Material', get: r => specValue(r, 'body', 'material') },
-  { label: 'Insulation', get: r => specValue(r, 'insulat') },
-  { label: 'Filter life', get: r => specValue(r, 'filter life') },
-  { label: 'Replacement', get: r => { const p = r.ownership?.replacement?.price_kes; return typeof p === 'number' ? kes(p) : null; } },
-  { label: 'Evidence', get: r => {
-    const reports = [...new Set((r.claims || []).flatMap(c => c.reports.map(e => `${e.lab} (${e.report})`)))];
-    return reports.length ? reports.join('; ') : 'None on record';
-  } },
+  ...COMPARE_ROWS.map(([key, label]): Row => ({ label, get: r => r.compare?.[key]?.trim() || null })),
   { label: 'Colours', get: r => (r.operation.variants.length ? r.operation.variants.map(v => v.label).join(', ') : null) },
   { label: 'Live stock', get: (r, v) => {
     const s = r.operation.variants.length ? v?.stockStatus : r.operation.availability;
@@ -63,16 +55,26 @@ function Column({ rec, variant, onVariant }: { rec: ProductRecord; variant: Reco
 }
 
 export default function ProductCompare({ current, initialVariant }: { current: ProductRecord; initialVariant: RecordVariant | null }) {
+  const router = useRouter();
   const collection = useQuery({ queryKey: ['record-collection'], queryFn: ({ signal }) => fetchCollection(signal) });
-  const bottles = useMemo(() => (collection.data?.products ?? []).filter(p =>
-    /bottle/i.test(p.category ?? '') && !!p.specs?.Capacity && p.slug !== current.slug), [collection.data, current.slug]);
+  const group = useMemo(() => (collection.data?.groups ?? []).find(g => g.id === current.compareGroup) ?? null, [collection.data, current.compareGroup]);
+  // Peers are published products in the same comparison group, in group order.
+  const peers = useMemo(() => {
+    const byCode = new Map((collection.data?.products ?? []).map(p => [p.code, p]));
+    return (group?.products ?? []).map(code => byCode.get(code)).filter((p): p is NonNullable<typeof p> => !!p && p.slug !== current.slug);
+  }, [collection.data, group, current.slug]);
+  const replacements = useMemo(() => {
+    const byCode = new Map((collection.data?.products ?? []).map(p => [p.code, p]));
+    return (group?.replacements ?? []).map(code => byCode.get(code)).filter((p): p is NonNullable<typeof p> => !!p);
+  }, [collection.data, group]);
   const [otherSlug, setOtherSlug] = useState<string | null>(null);
   useEffect(() => {
-    if (otherSlug || !bottles.length) return;
-    const ordered = (collection.data?.products || []).filter(p => /bottle/i.test(p.category ?? '') && !!p.specs?.Capacity);
-    const index = ordered.findIndex(p => p.slug === current.slug);
-    setOtherSlug((ordered[(index + 1) % ordered.length] ?? bottles[0]).slug);
-  }, [bottles, otherSlug, current.slug, collection.data]);
+    if (otherSlug || !group || !peers.length) return;
+    const order = group.products;
+    const index = order.indexOf(current.code);
+    const next = peers.find(p => order.indexOf(p.code) > index) ?? peers[0];
+    setOtherSlug(next.slug);
+  }, [peers, otherSlug, group, current.code]);
   useEffect(() => { trackProductEvent('compare_opened', { productId: current.operation.commerceId ?? undefined, sku: current.parentSku }); }, [current.slug]);
   const other = useQuery({ queryKey: ['product-record', otherSlug], queryFn: ({ signal }) => fetchRecord(otherSlug!, signal), enabled: !!otherSlug });
   const [va, setVa] = useState<RecordVariant | null>(initialVariant);
@@ -81,19 +83,20 @@ export default function ProductCompare({ current, initialVariant }: { current: P
 
   if (collection.isError) return <Text style={s.note}>Comparison is unavailable right now.</Text>;
   const b = other.data;
-  const rows = b ? ROWS.map(r => ({ label: r.label, a: r.get(current, va), b: r.get(b, vb) })).filter(r => r.a && r.b) : [];
+  const rows = b ? ROWS.map(r => ({ label: r.label, a: r.get(current, va), b: r.get(b, vb) })).filter(r => r.a || r.b) : [];
+  const title = group ? `Compare ${group.label.toLowerCase()}` : 'Compare';
   return (
     <View style={s.wrap}>
-      <Text style={s.h}>Compare bottles</Text>
+      <Text style={s.h}>{title}</Text>
       <View style={s.chips}>
-        {bottles.map(p => (
-          <TouchableOpacity key={p.slug} onPress={() => setOtherSlug(p.slug)} style={[s.chip, otherSlug === p.slug && s.chipOn]}>
+        {peers.map(p => (
+          <TouchableOpacity key={p.slug} onPress={() => setOtherSlug(p.slug)} accessibilityRole="button" style={[s.chip, otherSlug === p.slug && s.chipOn]}>
             <Text style={[s.chipT, otherSlug === p.slug && { color: '#fff' }]}>{p.name}</Text>
           </TouchableOpacity>))}
       </View>
       {collection.isLoading || other.isLoading ? <ActivityIndicator color={P.teal} />
-        : other.isError ? <TouchableOpacity onPress={() => other.refetch()}><Text style={s.note}>Could not load that bottle. Tap to retry.</Text></TouchableOpacity>
-        : !b ? <Text style={s.note}>No other bottle is available to compare.</Text> : (
+        : other.isError ? <TouchableOpacity onPress={() => other.refetch()}><Text style={s.note}>Could not load that product. Tap to retry.</Text></TouchableOpacity>
+        : !b ? <Text style={s.note}>No other product is available to compare.</Text> : (
         <>
           <View style={s.cols}>
             <Column rec={current} variant={va} onVariant={setVa} />
@@ -102,9 +105,17 @@ export default function ProductCompare({ current, initialVariant }: { current: P
           {rows.map(r => (
             <View key={r.label} style={s.row}>
               <Text style={s.rl}>{r.label}</Text>
-              <View style={s.cols}><Text style={s.cell}>{r.a}</Text><Text style={s.cell}>{r.b}</Text></View>
+              <View style={s.cols}><Text style={s.cell}>{r.a ?? 'Not stated'}</Text><Text style={s.cell}>{r.b ?? 'Not stated'}</Text></View>
             </View>))}
         </>)}
+      {replacements.length ? (
+        <View style={{ gap: 6 }}>
+          <Text style={s.h}>Replacement filters</Text>
+          {replacements.map(r => (
+            <TouchableOpacity key={r.slug} onPress={() => router.push(`/product/${r.slug}` as never)} accessibilityRole="link" style={s.view}>
+              <Text style={s.viewT}>{r.name}{r.fits?.length ? ` - fits ${r.fits.join(', ')}` : ''}</Text>
+            </TouchableOpacity>))}
+        </View>) : null}
     </View>
   );
 }
