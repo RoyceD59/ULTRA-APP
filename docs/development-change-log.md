@@ -1156,6 +1156,15 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Source/assets only; not published.
 - **Remaining:** Publish again. Each publish changes the served build, so the next one needs this retention repeated for the build then being served.
 
+### 2026-10-11 — Served-client verification after the paired client publication
+
+- **Scope/approval:** Read-only verification for the consistency rollout; no change to hosting, DNS, auth, OTA, native distribution, API or database.
+- **Observed (about 17:00Z):** `app.ucfilters.com` and `team-horizon--jerryaroyce.replit.app` both serve build `1791737829836-806` (revision `consistency-d7ee99bd…`, built 2026-10-11T16:58Z, API origin `https://api.ucfilters.com`). The iOS and Android launch manifests on both hosts show the same IDs and launch keys `bundle-1791737829836-806` with launch URLs on `app.ucfilters.com`. Web, iOS and Android bundles hash identically on both hosts (SHA-256 prefixes 072196dd, 58ec2c96, 7432ae98). The web bundle references only `api.ucfilters.com`.
+- **Not yet verified:** Home/About/ProjectHub snapshot comparison signed out, as the configured admin, and as the two approved customers (needs the second customer's identifier and secure access); physical-phone checks (separate usability task); fresh API snapshot agreement was not re-taken in this entry.
+- **Retention note:** the now-served build `1791737829836-806` is not in `rollback-static/`; capture it before the next client publish.
+- **Ignore changes:** None.
+- **Status:** Clients are live; the rollout task is not complete.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
