@@ -14,8 +14,8 @@
   not reveal whether an account exists. No server, schema, password or account
   data was changed; no passwords were reset.
 - Not published. The currently served API predates Woo retirement; the
-  rollback-static capture for build `1791737829836-806` is still required
-  before the next publish. Publishing also forces the one-time sign-in from the
+  rollback-static capture for build `1791737829836-806` was completed
+  later on 2026-10-11 (see that entry). Publishing also forces the one-time sign-in from the
   eight-hour session policy.
 
 ## 2026-10-10 — App-owned commerce source prepared, not published
@@ -1191,6 +1191,15 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Ignore changes:** None.
 - **Status:** Source only; not published.
 - **Remaining:** Staff review of the 11 drafts; prices for RRO and ROT; child SKU `UC-HOU-TAPF-006-XX` missing from the SKU master.
+
+### 2026-10-11 — Rollback retention captured for served build 1791737829836-806
+
+- **Scope/approval:** User approved capturing the currently served Companion build so the next publish passes the rollback-retention gate. No source change; nothing published.
+- **Changes:** Downloaded the served build from `https://app.ucfilters.com` (confirmed via `version.json` as `1791737829836-806` immediately before and during capture) into `infra/cloudflare/forest/rollback-static/1791737829836-806/` (web, iOS and Android bundles, both versioned native manifests, 56 referenced assets, 60 files, 0 failures) plus `1791737829836-806-capture.json` with sizes and SHA-256 hashes. Older retained builds untouched; the rollback gate was not weakened.
+- **Verification:** `retainRollback` accepts the new directory in a scratch destination (245 files).
+- **Ignore changes:** None.
+- **Status:** Assets only; not published.
+- **Remaining:** Each publish changes the served build, so the build then being served must be captured before the following publish.
 
 ### YYYY-MM-DD — Change title
 
