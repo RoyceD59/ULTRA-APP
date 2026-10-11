@@ -1,5 +1,23 @@
 # Development change log
 
+## 2026-10-11 — Companion sign-in guidance for old website accounts (development only)
+
+- Investigated "all sign-in fails". Production holds 15 password accounts (all
+  with valid bcrypt hashes and E.164 phones) and one social account; none is a
+  Woo-provisioned identity. Published API traffic shows 401s taking ~0.8-25 s
+  (an outbound website-login attempt) while a local-password sign-in took
+  0.15 s and succeeded, so the failures are website-era customers with no
+  Companion password. The current source has retired Woo authentication, so
+  those customers can only get in through verified recovery or registration.
+- Changed the Companion's neutral sign-in failure text to point to Forgot
+  password / create account. It stays identical for every failure, so it does
+  not reveal whether an account exists. No server, schema, password or account
+  data was changed; no passwords were reset.
+- Not published. The currently served API predates Woo retirement; the
+  rollback-static capture for build `1791737829836-806` is still required
+  before the next publish. Publishing also forces the one-time sign-in from the
+  eight-hour session policy.
+
 ## 2026-10-10 — App-owned commerce source prepared, not published
 
 - Implemented the approved WooCommerce-disconnection design in development:
