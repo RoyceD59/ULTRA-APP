@@ -1137,6 +1137,15 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Source and development data only. Not published.
 - **Remaining:** Production stock application needs separate approval (`--approved-production-import`). Publishing runs the price revision automatically. Workbook stock provenance is unconfirmed.
 
+### 2026-10-11 — Reproducible security patch installation gate
+
+- **Scope/approval:** Task assignment to resolve the blocked, unselected Security Center dependency review (`a982fb10…`). No selection, publication, schema or client change.
+- **Changes:** `security-patch-installation.mjs` (installed-backport verification and a reproduction harness), its unit tests, and gates in `build-approved-consistency.mjs` before the prepared marker and on every cache reuse; builder tool lists in the handoff and integrity tests include the new module. Retained `installation-root-cause.md` and `installation-verification.json` in the review folder and updated its README and validation record. The sealed archive, candidate, scope and patch files are unchanged.
+- **Verification:** Two independent cold installs (one with `NODE_ENV=production`) and two warm repeats pass 7/7 backport fixtures; negative inactive-patch checks reject; typechecks, api/hub builds, runtime consumers, worker fast-copy 4.1.0, lock checks, integrity (41) and handoff (9) suites pass. Audits: 3 high all-scope, 2 high production-only, none suppressed. Root cause partly established: plain frozen installs trust an existing hash-qualified directory; how the original unpatched directory arose was not reproduced.
+- **Ignore changes:** None. Disposable stages and stores lived under `/tmp` and were removed.
+- **Status:** Source and retained evidence only; ready for owner review. Not selected, not published.
+- **Remaining:** Owner source selection, acceptance of retained high-version advisories, separate API publication approval.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.

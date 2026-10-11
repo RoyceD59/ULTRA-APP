@@ -107,3 +107,11 @@ The general `node_modules` exclusion remains in force elsewhere.
   customer records in tracked history.
 - Do not delete retained release assets merely because they are ignored.
 - A compiled or selected package is not a publication. Record those separately.
+
+### Security patch installation verification
+
+No ignore pattern changed. `security-patch-installation.mjs`, its test and the
+review report/evidence files are tracked. The reproduction harness writes
+isolated stages and stores only under a caller-supplied or temporary directory
+outside the repository; they hold dependency trees and must not be committed.
+

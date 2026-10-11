@@ -125,7 +125,7 @@ test('production serving works with all external fetches unavailable, while clie
     await mkdir(serverDir, { recursive: true });
     await mkdir(resolve(tools, 'security-center-cache-review'));
     await symlink(resolve(here, '../../../node_modules'), resolve(fixture, 'node_modules'), 'dir');
-    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'security-center-selection.mjs', 'prepare-security-center-cache-review.py', 'prepare-security-center-review.py', 'prepare-security-dependency-review.py', 'verify-security-center-lock.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
+    for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'security-center-selection.mjs', 'security-patch-installation.mjs', 'prepare-security-center-cache-review.py', 'prepare-security-center-review.py', 'prepare-security-dependency-review.py', 'verify-security-center-lock.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
       await cp(resolve(here, name), resolve(tools, name));
     }
     for (const name of ['candidate.json', 'release-sources.tar.gz']) {

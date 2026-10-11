@@ -1,6 +1,6 @@
-# Security Center dependency review — blocked, unselected, unpublished
+# Security Center dependency review — ready for owner review, unselected, unpublished
 
-This is a separately retained review package, not a release-ready selection.
+This is a separately retained review package, not a selected release.
 Main still selects its parent `1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0`.
 Both client selectors, production schemas and publication state are unchanged.
 
@@ -38,18 +38,14 @@ rebased guard with either its original or a distinct patch hash did not produce
 a passing installed consumer. That upgrade path was stopped, not shipped.
 The final review source retains the original 4.2.0 patch unchanged.
 
-**Blocking installation discrepancy:** a frozen installation resolves the
-hash-qualified cache package, but the isolated installed file lacks the guard
-and fails the private/max-stale regression. Restoring the parent version in
-that isolated installation also failed. The unchanged current main and retained
-parent consumers still contain the guard. The underlying installation/cache
-cause has not been established. Do not claim all backports work in this review
-stage, waive the failure, or manually edit node_modules to bypass it.
-
-No new source was selected, no outputs were copied to deployment locations, and
-no publication or production initialization occurred. The review package must
-remain blocked until a clean, reproducible install applies every declared patch
-and all real-consumer security regressions pass.
+**Installation discrepancy (resolved as a verification gap):** the sealed
+archive installs correctly. Two fresh isolated cold installs and two warm repeats
+pass every fixture. A plain frozen install trusts an existing hash-qualified
+directory, so an inactive copy can persist; the release builder now inspects the
+installed bytes and fixtures before marking a stage or reusing it. The origin of
+the original unpatched directory was not reproduced. See
+`installation-root-cause.md` and `installation-verification.json`. This is ready
+for owner review only; nothing is selected or published.
 
 ## Test locations and steps
 
@@ -61,7 +57,8 @@ The isolated stage is `.consistency-build/security-center-draft`, already ignore
 PYTHONDONTWRITEBYTECODE=1 python3 infra/cloudflare/forest/prepare-security-center-review.py --verify
 node --test infra/cloudflare/forest/security-center-lock.test.mjs
 
-# Actual consumers; the cache guard/regression is currently BLOCKED
+# Actual consumers and installation gate (requires an installed stage)
+node infra/cloudflare/forest/security-patch-installation.mjs verify --stage .consistency-build/security-center-draft
 SECURITY_CENTER_STAGE=.consistency-build/security-center-draft \
   node --test infra/cloudflare/forest/security-center-runtime.test.mjs
 cd .consistency-build/security-center-draft
@@ -69,14 +66,14 @@ GOMAXPROCS=2 pnpm run test:dependency-security
 GOMAXPROCS=2 pnpm audit --json
 ```
 
-After fixing installation reproducibility, run those checks against a fresh
+Run those checks against a fresh
 stage extracted from the exact sealed archive. Then rebuild/typecheck all
 relevant consumers, verify baked worker paths, and retain evidence. Do not adopt
 a populated stage or add a prepared marker without full source/mode verification.
 
 ## Separate release gates
 
-1. Resolve the cold-install security-patch discrepancy; do not relax fixtures.
+1. Installation gate: satisfied for review (see report); keep fixtures strict.
 2. Obtain exact-source selection approval and explicit acceptance of any
    remaining high-version advisories. The prior newly accepted exceptions cover
    braces/node-forge, not an implicit additional cache risk waiver.

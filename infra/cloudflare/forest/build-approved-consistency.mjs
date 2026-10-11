@@ -10,6 +10,7 @@ import { here } from './consistency-handoff.mjs';
 import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE } from './auth-upload-security.mjs';
 import { SECURITY_DEPENDENCY_CANDIDATE } from './security-dependency-selection.mjs';
 import { verifyMainSecurityCenterRuntimePins } from './security-center-selection.mjs';
+import { verifyInstalledBackports } from './security-patch-installation.mjs';
 
 const [mode, ...flags] = process.argv.slice(2);
 const packages = { api: '@workspace/api-server', hub: '@workspace/projecthub', companion: '@workspace/uc-companion' };
@@ -105,6 +106,8 @@ if (mode === 'serve-companion') {
       // masquerade as a patched installation. Consumer tests below still gate it.
       await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts', '--force', '--prod=false'], stage, { ...inheritedEnv, CI: '1' });
       await run('pnpm', ['run', 'typecheck:libs']);
+      // Inspect installed bytes before this stage can be marked prepared.
+      verifyInstalledBackports(stage);
       await writeFile(marker, `${APPROVED_CANDIDATE}\n`);
     }
   } finally {
@@ -113,7 +116,9 @@ if (mode === 'serve-companion') {
     await rmdir(lock);
   }
   // A patch hash or cached installation is not proof the backport is active.
-  // Exercise the actual frozen consumers before any deployment output is copied.
+  // A reused (already marked) stage is inspected again, then the actual frozen
+  // consumers run before any deployment output is copied.
+  verifyInstalledBackports(stage, { runFixtures: false });
   await run('node', ['--test', 'scripts/tests/dependency-security.test.mjs']);
   await run('node', ['--test', resolve(here, 'consistency-security-runtime.test.mjs')]);
   // These exact merged fixtures never query/mutate a database or reach storage.

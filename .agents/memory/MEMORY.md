@@ -102,3 +102,4 @@
 - [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.
 - [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked/non-stage folders are scratch (deps stripped); wrong markers and symlinks still fail publish; image summary warns over 7 GiB.
 - [Master workbook SKU register](master-workbook-sku-register.md) — v7 workbook is price/SKU authority; stock snapshot applied only by explicit script to unknown rows; no cost data in repo.
+- [Patched install trust](patch-install-trust.md) — plain frozen installs keep inactive hash-qualified patch dirs; verify bytes, --force heals; cold reproductions hit disk quota.

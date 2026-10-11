@@ -1,6 +1,6 @@
 {
-  "observedAt": "2026-10-09T12:05:54.260Z",
-  "status": "BLOCKED: isolated installation omits declared cache guard; not release-ready",
+  "observedAt": "2026-10-11T00:00:00.000Z",
+  "status": "Installation discrepancy resolved as a verification gap; ready for owner review. NOT SELECTED; NOT PUBLISHED",
   "candidate": {
     "parentSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
     "candidateSha256": "a982fb107d05be012dc560e06823ecee97c4f0a5a307f98e00cc3880d319a387",
@@ -71,11 +71,16 @@
     "compiledPinoWorkerIncludesFastCopy410": true,
     "apiAndHubBuildsDuringTrial": "passed",
     "sharedLibrariesApiHubCompanionTypechecksDuringTrial": "passed; cache safety failure takes precedence",
-    "finalCacheConsumerRegression": "FAILED: private response reused with max-stale",
-    "finalIsolatedCacheGuardMarkerPresent": false,
+    "finalCacheConsumerRegression": "passed in all four installs",
+    "finalIsolatedCacheGuardMarkerPresent": true,
     "mainCacheGuardMarkerPresent": true,
     "selectedParentCacheGuardMarkerPresent": true,
-    "underlyingInstallCauseEstablished": false
+    "underlyingInstallCauseEstablished": "partly: plain frozen installs trust an existing hash-qualified directory; origin of the original unpatched directory not reproduced",
+    "freshExactArchiveColdInstalls": "2 independent isolated stores (second with NODE_ENV=production) pass 7/7 fixtures",
+    "warmRepeats": "fresh stage on warm store and in-place repeat pass 7/7",
+    "negativeInactivePatchChecks": "rejected after tamper; plain frozen reinstall still rejected; forced reinstall restores",
+    "typechecksAndBuildsOnFreshStage": "passed: libs, api-server, projecthub, uc-companion; api and hub builds",
+    "details": "installation-root-cause.md; installation-verification.json"
   },
   "candidateAudit": {
     "command": "pnpm audit --json (no production-only filter)",
@@ -118,7 +123,22 @@
     "apiPublished": false,
     "clientsPublished": false,
     "productionSchemasApplied": false,
-    "rootCauseStillBlocksPublication": true
+    "rootCauseStillBlocksPublication": false
   },
-  "nextRequiredStep": "Resolve the isolated patch-application discrepancy, verify a fresh exact-archive install with actual consumer fixtures, then obtain selection/risk approval and separate API publication approval. Verify matching live API and recheck both fresh agreeing snapshots before any client advance."
+  "nextRequiredStep": "Owner review: exact-source selection, explicit acceptance of the retained high-version advisories, then separate API publication approval. Verify matching live API and recheck both fresh agreeing snapshots before any client advance.",
+  "productionOnlyAudit": {
+    "command": "pnpm audit --prod --json",
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 2,
+      "critical": 0
+    },
+    "totalDependencies": 857,
+    "findings": [
+      "node-forge GHSA-86w9-cpqp-85rv",
+      "braces GHSA-vfj7-8cjw-p6xm"
+    ]
+  }
 }

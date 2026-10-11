@@ -61,6 +61,12 @@ pnpm --filter @workspace/uc-companion exec expo-doctor
 The security tests resolve dependencies through their actual consuming packages,
 not through an arbitrary retained copy in pnpm's virtual store.
 
+A plain `pnpm install --frozen-lockfile` trusts an existing hash-qualified
+directory (`Already up to date`), so a patch directory name or a successful
+install is not proof a patch is active. `node infra/cloudflare/forest/security-patch-installation.mjs verify --stage DIR`
+checks the installed bytes and fixtures; `pnpm install --force` replaces an
+inactive copy. Never hand-edit `node_modules`.
+
 A version-only dependency scan still reports the three locally patched
 packages above: their upstream versions have intentionally not been falsified,
 and no advisories have been ignored or suppressed. The other 26 findings are

@@ -24,7 +24,7 @@ const retainedInputs = [
 const tools = [
   'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'consistency-handoff.mjs',
   'consistency-security.mjs', 'build-approved-consistency.mjs',
-  'security-center-selection.mjs', 'prepare-security-center-cache-review.py',
+  'security-center-selection.mjs', 'security-patch-installation.mjs', 'prepare-security-center-cache-review.py',
   'prepare-security-center-review.py', 'prepare-security-dependency-review.py',
   'verify-security-center-lock.mjs',
 ];
