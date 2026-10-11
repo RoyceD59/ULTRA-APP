@@ -1146,6 +1146,16 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Source and retained evidence only; ready for owner review. Not selected, not published.
 - **Remaining:** Owner source selection, acceptance of retained high-version advisories, separate API publication approval.
 
+### 2026-10-11 — Publish build failure: served Companion build not retained for rollback
+
+- **Scope/approval:** User asked to debug a failed publish build. No source, dependency, schema or client-behaviour change; nothing published.
+- **Cause:** The Companion build step failed in `retainRollback` with ENOENT for `rollback-static/1791639585757-806/build-info.json`. Every earlier check in that build passed (backport gate and fixtures, API tests, typechecks, Hub build). The builder fetches `https://app.ucfilters.com/version.json` and requires the currently served build to be retained first. The previous publish (2026-10-10) made `1791639585757-806` the served build, but only `1791627160418-469` and `1791182522315-296` were retained. The gate worked as designed.
+- **Changes:** Captured the served build from the public origin into `infra/cloudflare/forest/rollback-static/1791639585757-806/` (browser/iOS/Android bundles, both native manifests, 56 referenced assets, 60 files, 0 failures) with `1791639585757-806-capture.json`. Older retained builds untouched.
+- **Verification:** `retainRollback` accepts the new directory in a scratch destination (184 files); consistency handoff tests 9/9. The full publish build was not rerun locally.
+- **Ignore changes:** None; the existing rollback-static node_modules exception covers the files.
+- **Status:** Source/assets only; not published.
+- **Remaining:** Publish again. Each publish changes the served build, so the next one needs this retention repeated for the build then being served.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
