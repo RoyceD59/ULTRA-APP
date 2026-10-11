@@ -23,7 +23,9 @@ describe('initial page loading lifecycle', () => {
     assert.doesNotMatch(source, /Inter_|useFonts|FontDisplay|fontBudget|startupReady|setTimeout|if \(!ready\)/);
     assert.match(source, /if \(Platform.OS !== 'web'\) void SplashScreen.preventAutoHideAsync\(\)/);
     assert.match(source, /useEffect\(\(\) => \{\s*if \(Platform.OS !== 'web'\) \{\s*void SplashScreen.hideAsync\(\).catch\(\(\) => \{\}\);\s*\}\s*\}, \[\]\)/);
-    assert.match(source, /<AuthProvider>\s*<CartProvider>/);
+    // The receipt provider reads the signed-in session, so it must sit inside
+    // AuthProvider; the cart then mounts inside it.
+    assert.match(source, /<AuthProvider>\s*<CheckoutReceiptProvider>\s*<CartProvider>/);
     assert.match(source, /<Ionicons name="chevron-back"/);
     assert.match(source, /accessibilityLabel="Back to previous screen or shop"/);
   });
