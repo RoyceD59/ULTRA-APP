@@ -67,6 +67,9 @@ host, checkout identity and transaction-time price/stock checks remain unchanged
 
 On 2026-10-12, the owner approved the 21 exact SKU matches and 20 numeric
 prices in this report and chose to supply approved photos and slot assignments.
+The owner will upload those photos through ProjectHub; no files were supplied
+in chat. Use those uploads for the subsequent audit rather than substituting
+authored filenames or historical WooCommerce images.
 This does not approve a price for ATM, photo substitutions, activation or
 publication. Photo remediation and subsequent anonymous image/crawler
 verification remain blocked on the supplied assets.
