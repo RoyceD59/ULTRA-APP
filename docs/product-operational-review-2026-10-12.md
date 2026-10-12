@@ -79,3 +79,15 @@ remediation scope using supplied, approved images. ATM's absent price requires
 an explicit decision before any priced sale. After scoped remediation, rerun
 the anonymous audit, check actual image decoding and crawler access, and obtain
 separate activation/publication approval. This report does not supply that approval.
+
+## ProjectHub upload check (2026-10-12, read-only)
+
+The published database holds 8 team photo rows (latest 13:06 UTC), all attached
+to the legacy WooCommerce-era product 10170 "Faucet Filter Cartridge" (no SKU)
+with position 0, so no slot 1–6 is assigned. Seven are anonymously retrievable
+(HTTP 200) through the published API; one is the earlier fit chart. None is
+linked to any of the 21 approved SKUs, and the app-owned catalogue uses new
+product IDs. Visible content is tap-filter marketing and cartridge diagrams, so
+it does not establish which record or slot each photo belongs to. No mapping was
+inferred; the development database has no uploads. Still required: the intended
+product and slot for each photo, then uploads for the remaining products.
