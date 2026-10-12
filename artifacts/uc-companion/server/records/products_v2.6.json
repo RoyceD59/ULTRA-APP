@@ -83,7 +83,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "In stock",
-   "price_kes": 4199.0,
+   "price_kes": 4199,
    "currency": "KES",
    "variants": [
     {
@@ -213,7 +213,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 4199.0,
+    "product_price_kes": 4199,
     "delivery": "Shown at checkout for your location.",
     "installation": null,
     "replacement": {
@@ -373,7 +373,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "In stock",
-   "price_kes": 3199.0,
+   "price_kes": 3199,
    "currency": "KES",
    "variants": [
     {
@@ -499,7 +499,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 3199.0,
+    "product_price_kes": 3199,
     "delivery": "Shown at checkout for your location.",
     "installation": null,
     "replacement": {
@@ -845,37 +845,37 @@
     {
      "slot": 1,
      "label": "Product",
-     "file": "images/UC-BOG-TRB-010_01.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/c1b4f348-fda8-4ea7-9009-28959409b88e",
+     "alt": "Viva Drop green bottle clipped to a belt loop while riding a bicycle",
+     "approved": true
     },
     {
      "slot": 2,
      "label": "In use",
-     "file": "images/UC-BOG-TRB-010_02.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/ee52bd3c-2d6f-4606-86cc-81455106d113",
+     "alt": "Drinking from a Viva Drop bottle beside a mossy rock",
+     "approved": true
     },
     {
      "slot": 3,
      "label": "Parts",
-     "file": "images/UC-BOG-TRB-010_03.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/aa91e68b-7590-49ad-97e7-cb8984b9774f",
+     "alt": "Viva Drop dark bottle held by a person crouching on a carpeted floor",
+     "approved": true
     },
     {
      "slot": 4,
      "label": "Included",
-     "file": "images/UC-BOG-TRB-010_04.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/c222a44d-5d68-4115-a5c0-253c12373e4c",
+     "alt": "Viva Drop dark bottle lying on a beach",
+     "approved": true
     },
     {
      "slot": 5,
      "label": "Colours",
-     "file": "images/UC-BOG-TRB-010_05.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/9142570a-1f21-476b-ab2d-8e74af2502ab",
+     "alt": "Rider on a bicycle on a city street",
+     "approved": true
     },
     {
      "slot": 6,
@@ -937,7 +937,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "In stock",
-   "price_kes": 3599.0,
+   "price_kes": 3599,
    "currency": "KES",
    "variants": [
     {
@@ -1059,7 +1059,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 3599.0,
+    "product_price_kes": 3599,
     "delivery": "Shown at checkout for your location.",
     "installation": null,
     "replacement": {
@@ -1125,44 +1125,44 @@
     {
      "slot": 1,
      "label": "Product",
-     "file": "images/UC-BOG-TRB-011_01.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/9c5f188f-d00c-4ef8-a5c6-b4a7ed279538",
+     "alt": "Gym Buddy teal bottle with a blue strap beside a lake",
+     "approved": true
     },
     {
      "slot": 2,
      "label": "In use",
-     "file": "images/UC-BOG-TRB-011_02.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/add9459d-1e54-43f1-81e1-10759e9be24d",
+     "alt": "Person resting on a park bench with a Gym Buddy bottle",
+     "approved": true
     },
     {
      "slot": 3,
      "label": "Parts",
-     "file": "images/UC-BOG-TRB-011_03.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/4a1e651c-3499-451f-86db-f6b0dd6fca47",
+     "alt": "Gym Buddy lid, nozzle, handle and straw cartridge parts diagram",
+     "approved": true
     },
     {
      "slot": 4,
      "label": "Included",
-     "file": "images/UC-BOG-TRB-011_04.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/4c31fd1f-2ac4-41bb-a47b-4cd610561716",
+     "alt": "Gym Buddy teal bottle hanging by its strap in woodland",
+     "approved": true
     },
     {
      "slot": 5,
      "label": "Colours",
-     "file": "images/UC-BOG-TRB-011_05.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/b0da39ab-e248-4185-8cae-e6f93fe1bfd0",
+     "alt": "Gym Buddy bottle carried by its strap at sunset",
+     "approved": true
     },
     {
      "slot": 6,
      "label": "Size",
-     "file": "images/UC-BOG-TRB-011_06.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/271a23dc-1d9b-4f58-b54e-bce321b4f424",
+     "alt": "Filter element filtration principle diagram",
+     "approved": true
     }
    ],
    "internal": {
@@ -1467,7 +1467,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 11990.0,
+   "price_kes": 11990,
    "currency": "KES",
    "variants": [
     {
@@ -1563,7 +1563,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 11990.0,
+    "product_price_kes": 11990,
     "delivery": "Shown at checkout for your location.",
     "installation": null,
     "replacement": {
@@ -1711,7 +1711,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 3299.0,
+   "price_kes": 3299,
    "currency": "KES",
    "variants": [
     {
@@ -1850,7 +1850,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 3299.0,
+    "product_price_kes": 3299,
     "delivery": "Shown at checkout for your location.",
     "installation": "None. Screws on by hand.",
     "replacement": {
@@ -1913,23 +1913,23 @@
     {
      "slot": 1,
      "label": "Product",
-     "file": "images/UC-HOU-TAP-005_01.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/73f9c34b-a073-4100-9927-8672be2310f9",
+     "alt": "Sweet Home faucet filter fitted to a kitchen tap",
+     "approved": true
     },
     {
      "slot": 2,
      "label": "In use",
-     "file": "images/UC-HOU-TAP-005_02.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/8c12e02e-82f5-4b1a-b576-5be6e9e264c5",
+     "alt": "Sweet Home faucet filter in use at a kitchen sink while rinsing fruit",
+     "approved": true
     },
     {
      "slot": 3,
      "label": "Parts",
-     "file": "images/UC-HOU-TAP-005_03.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/8e8d71d8-d404-4124-876b-a03c13215640",
+     "alt": "Sweet Home faucet filter taken apart: filter cartridge, housing and tap connector",
+     "approved": true
     },
     {
      "slot": 4,
@@ -1941,9 +1941,9 @@
     {
      "slot": 5,
      "label": "Detail",
-     "file": "images/UC-HOU-TAP-005_05.jpg",
-     "alt": null,
-     "approved": false
+     "file": "/api/storage/objects/uploads/d7423e7c-8048-4a06-be63-bdabb130dc5d",
+     "alt": "Sweet Home filter cartridge with water filtration diagram",
+     "approved": true
     },
     {
      "slot": 6,
@@ -2003,7 +2003,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "In stock",
-   "price_kes": 3299.0,
+   "price_kes": 3299,
    "currency": "KES",
    "variants": [
     {
@@ -2093,7 +2093,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 3299.0,
+    "product_price_kes": 3299,
     "delivery": "Shown at checkout for your location.",
     "installation": null,
     "replacement": {
@@ -2239,7 +2239,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 27990.0,
+   "price_kes": 27990,
    "currency": "KES",
    "variants": [
     {
@@ -2321,7 +2321,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 27990.0,
+    "product_price_kes": 27990,
     "delivery": "Shown at checkout for your location.",
     "installation": "Quoted after a site assessment.",
     "replacement": {
@@ -2464,7 +2464,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 37990.0,
+   "price_kes": 37990,
    "currency": "KES",
    "variants": [
     {
@@ -2543,7 +2543,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 37990.0,
+    "product_price_kes": 37990,
     "delivery": "Shown at checkout for your location.",
     "installation": "Quoted after a site assessment.",
     "replacement": null,
@@ -2679,7 +2679,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 16990.0,
+   "price_kes": 16990,
    "currency": "KES",
    "variants": [
     {
@@ -2761,7 +2761,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 16990.0,
+    "product_price_kes": 16990,
     "delivery": "Shown at checkout for your location.",
     "installation": "Quoted after a site assessment.",
     "replacement": null,
@@ -2895,7 +2895,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 17990.0,
+   "price_kes": 17990,
    "currency": "KES",
    "variants": [
     {
@@ -2977,7 +2977,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 17990.0,
+    "product_price_kes": 17990,
     "delivery": "Shown at checkout for your location.",
     "installation": "Quoted after a site assessment.",
     "replacement": null,
@@ -3110,7 +3110,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 13990.0,
+   "price_kes": 13990,
    "currency": "KES",
    "variants": [
     {
@@ -3189,7 +3189,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 13990.0,
+    "product_price_kes": 13990,
     "delivery": "Shown at checkout for your location.",
     "installation": "Quoted after a site assessment.",
     "replacement": null,
@@ -3322,7 +3322,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 14990.0,
+   "price_kes": 14990,
    "currency": "KES",
    "variants": [
     {
@@ -3402,7 +3402,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 14990.0,
+    "product_price_kes": 14990,
     "delivery": "Shown at checkout for your location.",
     "installation": null,
     "replacement": null,
@@ -3535,7 +3535,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "In stock",
-   "price_kes": 4099.0,
+   "price_kes": 4099,
    "currency": "KES",
    "variants": [
     {
@@ -3659,7 +3659,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 4099.0,
+    "product_price_kes": 4099,
     "delivery": "Shown at checkout for your location.",
     "installation": "None. Screws on by hand.",
     "replacement": {
@@ -3814,7 +3814,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "In stock",
-   "price_kes": 3299.0,
+   "price_kes": 3299,
    "currency": "KES",
    "variants": [
     {
@@ -3938,7 +3938,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 3299.0,
+    "product_price_kes": 3299,
     "delivery": "Shown at checkout for your location.",
     "installation": "None. Screws on by hand.",
     "replacement": {
@@ -4870,7 +4870,7 @@
    "publishable": true,
    "purchasable": true,
    "availability": "Pre-order",
-   "price_kes": 49990.0,
+   "price_kes": 49990,
    "currency": "KES",
    "variants": [
     {
@@ -4969,7 +4969,7 @@
    },
    "ownership": {
     "heading": "Your cost today and over time",
-    "product_price_kes": 49990.0,
+    "product_price_kes": 49990,
     "delivery": "Shown at checkout for your location.",
     "installation": "Quoted after a site assessment.",
     "replacement": {

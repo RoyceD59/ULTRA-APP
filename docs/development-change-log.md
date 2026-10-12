@@ -1,5 +1,29 @@
 # Development change log
 
+## 2026-10-12 — Failed publish: rollback retention captured for served build 1791747237127-812
+
+- **Cause:** Build `c2ee52f9` failed in `retainRollback` with ENOENT for `rollback-static/1791747237127-812/build-info.json`. Every earlier check in that build (API, Hub and Companion typechecks, Hub build, security tests, live API snapshot) passed. The previous publish made `1791747237127-812` the served build, but it had not been retained. The gate worked as designed.
+- **Changes:** Captured the served build from `https://app.ucfilters.com` (`version.json` confirmed `1791747237127-812` before and after) into `infra/cloudflare/forest/rollback-static/1791747237127-812/` (web, iOS and Android bundles, both native manifests, 56 referenced assets, 60 files, 0 failures) plus `1791747237127-812-capture.json`. Older retained builds untouched; the rollback gate was not weakened.
+- **Verification:** `retainRollback` accepts the new directory in a scratch destination (306 files).
+- **Ignore changes:** None.
+- **Status:** Assets only; not published.
+- **Remaining:** The build served after the next publish must be captured before the following publish.
+
+## 2026-10-12 — ProjectHub photos mapped to product records (development only, not published)
+
+- Owner instructed: use the pictures uploaded in ProjectHub. Uploads sit on the
+  old website product IDs. They are mapped by record code into the approved
+  gallery slots of the v2.6 records: Sweet Home (exact SKU UC-HOU-TAP-005) 4
+  photos in slots 1, 2, 3, 5; Viva Drop (exact SKU UC-BOG-TRB-010) 5 photos in
+  slots 1-5; Gym Buddy 6 photos in slots 1-6. Gym Buddy's old listing has a
+  different SKU (UC-EA-BOT-GYM-BK-1200ML-25), so that link rests on the owner's
+  upload, not SKU equality.
+- Existing databases receive the mapping through a once-per-row startup import
+  that never overwrites a slot staff already approved.
+- Held back: the Flex photo (draft record stays without approved images), the
+  Viva Drop video, and the 8 photos on "Faucet Filter Cartridge" (no SKU).
+- Still no photos for 17 of the 21 published-eligible records.
+
 ## 2026-10-12 — Product page reduced to structured fields; categories aligned (development only)
 
 - Product pages (Companion screen and server-rendered HTML) no longer show the

@@ -53,7 +53,41 @@ export async function ensureProductEditorialSchema() {
     FROM jsonb_to_recordset($1::jsonb) AS v(sku text,price numeric)
     WHERE p.record->>'parent_sku'=v.sku AND p.price_import_revision<$2`,
     [JSON.stringify(Object.entries(spreadsheetRetail.prices).map(([sku,price]) => ({sku,price}))), spreadsheetRetail.revision]);
+  await pool.query("ALTER TABLE uc_product_editorial ADD COLUMN IF NOT EXISTS photo_import_revision integer NOT NULL DEFAULT 0");
   await importContentRevision();
+  await importApprovedPhotos();
+}
+
+const PHOTO_REVISION = 1;
+/** Owner-approved ProjectHub uploads, mapped by exact record code. Once per
+ * row; a slot already approved by staff is never overwritten and no other
+ * field of the stored record changes. */
+async function importApprovedPhotos() {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(871,3)");
+    for (const source of seed.products) {
+      const approved = (source.images ?? []).filter((i: any) => i.approved && i.alt && !String(i.file).startsWith("images/"));
+      if (!approved.length) continue;
+      const row = await client.query("SELECT record FROM uc_product_editorial WHERE code=$1 AND photo_import_revision<$2 FOR UPDATE", [source.code, PHOTO_REVISION]);
+      if (!row.rowCount) continue;
+      const record = row.rows[0].record;
+      const images = Array.isArray(record.images) ? record.images.map((i: any) => ({ ...i })) : [];
+      for (const photo of approved) {
+        const target = images.find((i: any) => i.slot === photo.slot);
+        if (target && !target.approved) Object.assign(target, { file: photo.file, alt: photo.alt, approved: true });
+      }
+      await client.query(`UPDATE uc_product_editorial SET record=jsonb_set(record,'{images}',$2::jsonb),
+        photo_import_revision=$3,revision=revision+1,updated_at=now() WHERE code=$1`, [source.code, JSON.stringify(images), PHOTO_REVISION]);
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /** Additive only: staff edits are never overwritten. Wording is replaced only

@@ -104,3 +104,11 @@ unmet for all 21 records.
 
 Page structure (same day): product pages now show only structured fields, and
 the category tabs match the four record categories. See the change log.
+
+### Photo mapping applied (owner instruction, not published)
+
+The owner told the agent to use the ProjectHub pictures. Mapped by exact record
+code, with alt text describing only what is visible: FCT slots 1, 2, 3, 5; VDR
+slots 1-5; GMB slots 1-6. Not mapped: Flex (draft), Viva Drop video, and the
+cartridge listing (no SKU). 17 records still have no approved photo. After
+publishing, anonymously fetch each mapped URL and review it visually.

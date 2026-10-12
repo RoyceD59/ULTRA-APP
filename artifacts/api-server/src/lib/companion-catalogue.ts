@@ -73,12 +73,12 @@ export async function companionCatalogue(includeDrafts = false): Promise<Record<
     const row = bySku.get(source.parent_sku) as any;
     const record = approved.get(source.code) as any;
     if (!row || (!includeDrafts && (!record || row.archived))) continue;
-    const images = media.rows.filter((m: any) => m.product_id === row.id)
+    const images: { src: any; alt: any; slot?: number }[] = media.rows.filter((m: any) => m.product_id === row.id)
       .map((m: any) => ({ src: m.url, alt: m.alt }));
     // Existing approved mappings are useful only when already app-owned.
     for (const mapping of record?.imageMappings ?? []) {
       if (/^\/api\/(?:storage|objects|uc\/media)\//.test(mapping.src) &&
-          !images.some((m: any) => m.src === mapping.src)) images.push({ src: mapping.src, alt: mapping.alt });
+          !images.some((m: any) => m.src === mapping.src)) images.push({ src: mapping.src, alt: mapping.alt, slot: mapping.slot });
     }
     const quantity = row.manage_stock ? Math.max(0, Number(row.stock_quantity ?? 0) - row.held) : null;
     const meta = row.metadata ?? {};

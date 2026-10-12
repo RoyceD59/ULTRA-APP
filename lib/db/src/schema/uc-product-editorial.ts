@@ -9,6 +9,7 @@ export const ucProductEditorialTable = pgTable("uc_product_editorial", {
   galleryMapped: boolean("gallery_mapped").notNull().default(false),
   priceImportRevision: integer("price_import_revision").notNull().default(0),
   contentImportRevision: integer("content_import_revision").notNull().default(0),
+  photoImportRevision: integer("photo_import_revision").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const insertUcProductEditorialSchema = createInsertSchema(ucProductEditorialTable);

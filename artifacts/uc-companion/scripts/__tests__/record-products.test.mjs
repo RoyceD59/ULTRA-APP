@@ -195,3 +195,20 @@ test('operational data adapter requires live provenance, query-safe requests and
     else await assert.rejects(() => adapter.productOperation(101), PublicDataError);
   }
 });
+
+test('owner-approved ProjectHub uploads map by exact record code to distinct storage objects and slots', () => {
+  const expected = { FCT: [1, 2, 3, 5], VDR: [1, 2, 3, 4, 5], GMB: [1, 2, 3, 4, 5, 6] };
+  const seen = new Set();
+  for (const p of source.products) {
+    const approved = p.images.filter(i => i.approved);
+    assert.deepEqual(approved.map(i => i.slot), expected[p.code] ?? [], p.code);
+    for (const i of approved) {
+      assert.match(i.file, /^\/api\/storage\/objects\/uploads\/[0-9a-f-]{36}$/);
+      assert.ok(i.alt.trim().length > 10 && !/\.(jpe?g|png)$/i.test(i.alt));
+      assert.ok(!seen.has(i.file), `${p.code}: duplicate upload`);
+      seen.add(i.file);
+    }
+  }
+  const projected = records.products.find(p => p.code === 'FCT').imageMappings;
+  assert.deepEqual(projected.map(m => m.slot), expected.FCT);
+});
