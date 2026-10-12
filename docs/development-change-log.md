@@ -1,5 +1,23 @@
 # Development change log
 
+## 2026-10-12 — Product page reduced to structured fields; categories aligned (development only)
+
+- Product pages (Companion screen and server-rendered HTML) no longer show the
+  authored outcome/intro/suitability prose, benefits, evidence claims, FAQs,
+  replacement/delivery/returns text, or FAQ and description schema. They keep
+  photos, name, type line, category link, SKU, price, options, stock, buy
+  actions, specifications, included-items list, compatible-fitting images (no
+  captions) and the hot-liquid safety warning. List entries show names only.
+- Store category tabs were still the old website labels, so none of the 21
+  app-owned products matched any tab. Tabs are now Bottles & On-the-Go, Home &
+  Kitchen, Skincare & Wellness and Business & Community; old labels remain as
+  aliases. A test asserts every authored record maps to a tab.
+- Production database (read-only) now has 12 team photo rows for legacy products
+  8042 and 10170, all at position 0. None attach to the new product IDs, so no
+  record has an accepted gallery yet. Nothing was written to production.
+- Not published. Existing unrelated failures remain in checkout, public-schema
+  and browser tests.
+
 ## 2026-10-12 — Read-only public product prerequisite review
 
 - Re-ran the anonymous operational audit against development: 21 exact SKU

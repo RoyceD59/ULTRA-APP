@@ -84,7 +84,7 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
         const entries = [];
         body += `<h2>Products</h2><ul>${products.map(product => {
           entries.push({ name: product.seo.h1, path: `/product/${product.slug}` });
-          return `<li>${link(`/product/${product.slug}`, product.seo.h1)}${paragraph(product.opening.intro)}</li>`;
+          return `<li>${link(`/product/${product.slug}`, product.seo.h1)}</li>`;
         }).join('')}</ul>`;
         schemas.push(itemList(entries, origin.href));
       } else if (route === '/blog') {
@@ -130,46 +130,35 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
         const slots = ['Product', 'In use', 'Parts', 'Included', 'Colours', 'Size'];
         body = (product.seo.subline ? `<p class="uc-subline">${escapeHtml(product.seo.subline)}</p>` : '')
           + `<p class="uc-price">${product.price !== null ? `KES ${product.price.toLocaleString('en-KE')}` : 'Pricing on request'}</p>`
-          + paragraph(product.opening.outcome) + paragraph(product.opening.intro) + paragraph(product.opening.suits)
-          + `<p class="uc-warning">${escapeHtml(product.opening.warning)}</p>`
-          + paragraph(product.opening.delivery)
+          + (product.category ? paragraph(product.category) : '')
+          + (product.opening.warning ? `<p class="uc-warning">${escapeHtml(product.opening.warning)}</p>` : '')
           + paragraph(operation.availability ? { InStock: 'In stock', OutOfStock: 'Out of stock', BackOrder: 'Available on back-order' }[operation.availability] : 'Live stock unavailable — please enquire before ordering.')
           + `<div class="uc-gallery">${operation.images.map(photo => `<figure data-slot="${photo.slot}">${image(photo.src, photo.alt)}<figcaption>${escapeHtml(slots[photo.slot - 1])}</figcaption></figure>`).join('')}</div>`
           + (!operation.images.length ? paragraph('Product photo unavailable.') : '')
           + paragraph(`SKU: ${product.parentSku}`)
-          + (product.claims.length ? `<section><h2>Product evidence</h2>${product.claims.map(c => paragraph(c.text)
-            + paragraph(c.conditions) + c.reports.map(e => paragraph(`Tested by ${e.lab} (${e.report})`)).join('')).join('')}</section>` : '')
-          + (product.faq.length ? `<section><h2>Frequently asked questions</h2>${product.faq.map(f => `<details><summary>${escapeHtml(f.q)}</summary>${paragraph(f.a)}</details>`).join('')}</section>` : '')
           + `<section><h2>Related topics</h2><ul>${product.topics.map(t => `<li>${link(`/topic/${t.slug}`, t.name)}</li>`).join('')}</ul></section>`
           + link(operation.commerceId ? `/enquiry?productId=${operation.commerceId}` : '/enquiry', 'Enquire about this product')
           + ' · ' + link('/cart', 'Cart');
         const list = values => Array.isArray(values) && values.length ? `<ul>${values.map(v => `<li>${escapeHtml(v)}</li>`).join('')}</ul>` : '';
-        const fitPhotos = fit => fit?.items?.length ? `<section><h3>${escapeHtml(fit.heading)}</h3><div class="uc-fit-photos">${fit.items.map(item => {
+        const fitPhotos = fit => fit?.items?.length ? `<div class="uc-fit-photos">${fit.items.map(item => {
           const url = safeUrl(new URL(item.src, data.mediaOrigin || origin.href).href);
-          return url ? `<figure><img src="${escapeHtml(url)}" alt="${escapeHtml(item.alt)}" width="400" loading="lazy" style="max-width:100%;height:auto"><figcaption>${escapeHtml(item.caption)}</figcaption></figure>` : '';
-        }).join('')}</div></section>` : '';
+          return url ? `<figure><img src="${escapeHtml(url)}" alt="${escapeHtml(item.alt)}" width="400" loading="lazy" style="max-width:100%;height:auto"></figure>` : '';
+        }).join('')}</div>` : '';
         const accordion = (heading, content) => content ? `<details><summary>${escapeHtml(heading)}</summary>${content}</details>` : '';
-        const pkg = product.package || {}, service = product.service || {}, suitability = product.suitability || {};
+        const pkg = product.package || {};
         body = `<section class="uc-choose" aria-label="Choose">${body}</section>`
-          + `<section class="uc-understand" aria-label="Understand"><h2>${escapeHtml(product.benefits?.heading || 'Made for your routine')}</h2>`
-          + (product.benefits?.items || []).map(b => `<article class="uc-product-card"><h3>${escapeHtml(b.feature)}</h3>${paragraph(b.consequence)}</article>`).join('')
+          + '<section class="uc-understand" aria-label="Details">'
           + accordion('Specifications', `<dl>${Object.entries(product.specs || {}).map(([k,v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`)
-          + accordion(suitability.heading || 'Will it suit your water?', paragraph(suitability.intended_use) + list(suitability.water) + list(suitability.setup) + list(suitability.exclusions) + fitPhotos(product.fitPhotos) + link('/water-test', 'Check my setup'))
-          + list(product.evidenceLimits)
-          + accordion(pkg.heading || 'What is included', list(pkg.included) + list(pkg.sold_separately) + paragraph(pkg.dimensions) + list(pkg.setup_steps) + link('/support', 'View setup guides'))
-          + '</section><section class="uc-decide" aria-label="Decide"><h2>Know before you buy</h2>'
-          + accordion('Replacement and care', paragraph(product.specs?.Care) + paragraph(product.ownership?.replacement?.name)
-            + (product.ownership?.replacement?.price_kes != null ? paragraph(`Replacement: KES ${product.ownership.replacement.price_kes.toLocaleString('en-KE')}`) : '')
-            + paragraph(product.ownership?.replacement?.guidance))
-          + accordion('Delivery, service and returns', paragraph('Choose our delivery or self-paid delivery at checkout.')
-            + paragraph(service.support) + paragraph(service.warranty?.text) + paragraph(service.returns) + list(service.exclusions))
+          + accordion(pkg.heading || 'What is included', list(pkg.included) + paragraph(pkg.dimensions))
+          + accordion(product.fitPhotos?.heading || 'Compatible fittings', fitPhotos(product.fitPhotos))
+          + '</section><section class="uc-decide" aria-label="Decide">'
           + `<article class="uc-product-card"><h2>${escapeHtml(product.summary?.heading || 'Review your selection')}</h2>`
-          + paragraph(product.name) + paragraph(product.seo.subline)
+          + paragraph(product.name)
           + paragraph(product.price !== null ? `KES ${product.price.toLocaleString('en-KE')}` : 'Pricing on request')
           + link('/cart', 'Open cart') + '</article></section>';
         meta = { ...metadata(canonicalRoute, page.title, page.description, 'product', safeUrl(operation.images[0]?.src)),
           title: product.seo.title, description: product.seo.description };
-        schemas = [model.schema, ...(model.faq ? [model.faq] : [])];
+        schemas = [model.schema];
         crumbs.push({ name: 'Products', path: '/products' });
       } else if (/^\/topic\/[^/]+$/.test(route)) {
         const topic = activeRecords.topics.find(t => t.slug === route.split('/')[2]);

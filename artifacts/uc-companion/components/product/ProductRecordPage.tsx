@@ -22,6 +22,7 @@ import {
   SLOT_LABELS, kes, productShareUrl, shareBase, purchaseState, shareText, whatsappUrl,
   type ProductRecord, type RecordVariant,
 } from '@/lib/productRecord';
+import { visibleStoreCategory } from '@/lib/storeCategories';
 import ProductCompare from './ProductCompare';
 import { P } from './theme';
 
@@ -41,7 +42,6 @@ function Section({ title, children, open: initial = false }: { title: string; ch
 }
 const Bullets = ({ items }: { items?: unknown }) => Array.isArray(items) && items.length
   ? <View style={{ gap: 4 }}>{items.filter(i => typeof i === 'string').map((i, n) => <Text key={n} style={s.body}>{`\u2022 ${i}`}</Text>)}</View> : null;
-const Txt = ({ v }: { v?: unknown }) => (typeof v === 'string' && v ? <Text style={s.body}>{v}</Text> : null);
 
 type Gal = { src: string; alt: string; label: string; childSku?: string; picturedColour?: string };
 
@@ -59,7 +59,6 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const [idx, setIdx] = useState(0);
   const [compare, setCompare] = useState(false);
   const [viewer, setViewer] = useState<UCReviewMedia | null>(null);
-  const [suitWater, setSuitWater] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [wish, setWish] = useState<boolean | null>(null);
   const viewed = useRef(false);
@@ -135,9 +134,6 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const wide = width >= 900;
   const reviewParams = { productId: String(pid ?? ''), productName: record.name };
   const sp = record.specs ?? {};
-  const suit = record.suitability ?? {};
-  const own = record.ownership ?? {};
-  const svc = record.service ?? {};
   const pk = record.package ?? {};
   const price = state.kind === 'buy' ? state.price : record.price;
 
@@ -167,7 +163,11 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
     <View style={[{ gap: 10 }, wide && { flex: 1 }]}>
       <Text {...headingProps(1)} style={s.h1}>{record.seo?.h1 ?? record.name}</Text>
       {record.seo?.subline ? <Text style={s.sub}>{record.seo.subline}</Text> : null}
-      {record.opening?.outcome ? <Text style={s.body}>{record.opening.outcome}</Text> : null}
+      {record.category ? <View style={s.chips}>
+        <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/products', params: { category: visibleStoreCategory(record.category!) ?? 'All' } } as never)}
+          accessibilityRole="link" accessibilityLabel={`Category: ${record.category}`} style={s.chip}><Text style={s.chipT}>{record.category}</Text></TouchableOpacity>
+      </View> : null}
+      <Text style={s.note}>{`SKU: ${variant?.childSku ?? record.parentSku}`}</Text>
       {record.fits?.length ? <View style={{ gap: 6 }}><Text style={s.label}>Fits</Text>
         <View style={s.chips}>{record.fits.map(f => <View key={f} style={s.chip}><Text style={s.chipT}>{f}</Text></View>)}</View></View> : null}
       {reviews && reviews.count > 0 ? <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}><StarRating rating={reviews.average} size={13} />
@@ -212,7 +212,6 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
     </View>
   );
 
-  const fullSuit = suit.water as string[] | undefined;
   return (
     <View style={s.page}>
       <View style={s.wrap}>
@@ -231,75 +230,27 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: 20 }}>{gallery}{buyBox}</View>
         {compare ? <ProductCompare current={record} initialVariant={variant} /> : null}
 
-        <Text style={s.step}>2  Understand</Text>
-        {record.benefits?.items?.length ? (
-          <Section title={record.benefits.heading || 'What changes in your routine'} open>
-            {(record.benefits.items as { feature: string; consequence: string }[]).map((b, i) => (
-              <View key={i} style={s.benefit}><Text style={s.bF}>{b.feature}</Text><Text style={s.body}>{b.consequence}</Text></View>))}
-          </Section>) : null}
+        <Text style={s.step}>2  Details</Text>
         {Object.keys(sp).length ? (
-          <Section title="Specifications">
+          <Section title="Specifications" open>
             {Object.entries(sp).map(([k, v]) => <View key={k} style={s.spec}><Text style={s.specK}>{k}</Text><Text style={s.specV}>{String(v)}</Text></View>)}
-          </Section>) : null}
-        {fullSuit?.length || suit.exclusions?.length || record.fitPhotos ? (
-          <Section title={suit.heading || 'Will it work with your water?'}>
-            <Txt v={suit.intended_use} />
-            {fullSuit?.length ? <><Text style={s.label}>Your water source</Text>
-              <View style={s.chips}>{fullSuit.map(w => <TouchableOpacity key={w} onPress={() => setSuitWater(x => (x === w ? null : w))} accessibilityRole="button"
-                style={[s.chip, suitWater === w && s.chipOn]}><Text style={[s.chipT, suitWater === w && { color: '#fff' }]}>{w}</Text></TouchableOpacity>)}</View></> : null}
-            {suitWater ? <View style={s.benefit}><Text style={s.bF}>{suitWater}</Text><Text style={s.body}>Listed as a suitable water source for this product.</Text><Bullets items={suit.setup} /></View> : null}
-            {suit.exclusions?.length ? <><Text style={s.label}>Not suitable</Text><Bullets items={suit.exclusions} /></> : null}
-            {record.fitPhotos ? <View style={{ gap: 8 }}>
-              <Text style={s.label}>{record.fitPhotos.heading}</Text>
-              <View style={s.fitGrid}>
-                {record.fitPhotos.items.map((f, i) => (
-                  <View key={f.src + i} style={s.fitCard}>
-                    <Image source={{ uri: resizedImageUrl(f.src, 320) }} accessibilityLabel={f.alt} contentFit="contain" style={s.fitImg} />
-                    <Text style={s.note}>{f.caption}</Text>
-                  </View>))}
-              </View>
-            </View> : null}
-            <View style={s.chips}>
-              <TouchableOpacity onPress={() => router.push('/water-test')} style={s.chip}><Text style={s.chipT}>Water assessment</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/care')} style={s.chip}><Text style={s.chipT}>Setup help</Text></TouchableOpacity>
-            </View>
-          </Section>) : null}
-        {record.opening?.critical_limit || op_.warning ? <View style={s.warn}><Text style={s.warnT}>{op_.warning ?? op_.critical_limit}</Text></View> : null}
-        {record.claims?.length ? (
-          <Section title="Evidence">
-            {record.claims.map((c, i) => (
-              <View key={i} style={s.benefit}>
-                <Text style={s.bF}>{c.text}</Text>
-                <Text style={s.note}>{c.status.replace('_', ' ')}{c.conditions ? ` - ${c.conditions}` : ''}</Text>
-                {c.reports.map((r, n) => <Text key={n} style={s.note}>{`Tested by ${r.lab} (${r.report})`}</Text>)}
-              </View>))}
-            <Bullets items={record.evidenceLimits} />
           </Section>) : null}
         {pk.included?.length ? (
           <Section title={pk.heading || 'What is included'}>
             <Bullets items={pk.included} />
-            {pk.sold_separately?.length ? <><Text style={s.label}>Sold separately</Text><Bullets items={pk.sold_separately} /></> : null}
             {pk.dimensions ? <Text style={s.note}>{`Dimensions: ${pk.dimensions}`}</Text> : null}
-            <Bullets items={pk.setup_steps} />
           </Section>) : null}
-        {record.faq?.length ? (
-          <Section title="Questions">
-            {record.faq.map((f, i) => <View key={i} style={s.benefit}><Text style={s.bF}>{f.q}</Text><Text style={s.body}>{f.a}</Text></View>)}
+        {record.fitPhotos?.items?.length ? (
+          <Section title={record.fitPhotos.heading}>
+            <View style={s.fitGrid}>
+              {record.fitPhotos.items.map((f, i) => (
+                <View key={f.src + i} style={s.fitCard}>
+                  <Image source={{ uri: resizedImageUrl(f.src, 320) }} accessibilityLabel={f.alt} contentFit="contain" style={s.fitImg} />
+                </View>))}
+            </View>
           </Section>) : null}
+        {op_.warning ? <View style={s.warn}><Text style={s.warnT}>{op_.warning}</Text></View> : null}
 
-        <Text style={s.step}>3  Decide</Text>
-        <Section title={own.heading || 'Replacement and care'} open>
-          {own.replacement ? <View style={s.benefit}><Text style={s.bF}>{own.replacement.name}</Text>
-            {typeof own.replacement.price_kes === 'number' ? <Text style={s.body}>{kes(own.replacement.price_kes)}</Text> : null}
-            <Txt v={own.replacement.guidance} /></View> : null}
-          <Txt v={own.delivery} />
-        </Section>
-        <Section title={svc.heading || 'Delivery, service and returns'}>
-          <Txt v={op_.delivery || svc.delivery} />
-          {svc.warranty?.text ? <Txt v={svc.warranty.text} /> : null}
-          <Txt v={svc.returns} /><Txt v={svc.support} />
-          <Bullets items={svc.exclusions} />
-        </Section>
         <View style={[s.card, { backgroundColor: P.aqua }]}>
           <Text {...headingProps(2)} style={s.accTitle}>{record.summary?.heading || 'Review your selection'}</Text>
           <Text style={s.body}>{record.name}{variant ? ` - ${variant.label}` : ''}</Text>

@@ -9,10 +9,19 @@ describe('store category route state', () => {
     }
   });
 
-  it('maps live WooCommerce-style category labels back to a visible tab', () => {
-    assert.equal(visibleStoreCategory('Portable Filters'), 'Bottles & Portable');
-    assert.equal(visibleStoreCategory('Household Filters'), 'Home Filters');
-    assert.equal(visibleStoreCategory('Shower Filters'), 'Shower & Skin');
-    assert.equal(visibleStoreCategory('Water Treatment Solutions'), 'Solutions');
+  it('maps legacy storefront labels back to a visible tab', () => {
+    assert.equal(visibleStoreCategory('Portable Filters'), 'Bottles & On-the-Go');
+    assert.equal(visibleStoreCategory('Household Filters'), 'Home & Kitchen');
+    assert.equal(visibleStoreCategory('Shower Filters'), 'Skincare & Wellness');
+    assert.equal(visibleStoreCategory('Water Treatment Solutions'), 'Business & Community');
+  });
+
+  it('places every authored product record under a visible tab', async () => {
+    const { createRequire } = await import('node:module');
+    const { records } = createRequire(import.meta.url)('../../server/product-records.cjs');
+    for (const product of records.products) {
+      assert.notEqual(visibleStoreCategory(product.category), null, `${product.code}: ${product.category}`);
+      assert.notEqual(visibleStoreCategory(product.category), 'All');
+    }
   });
 });

@@ -82,17 +82,15 @@ function articleModel(article, route, site = SITE) {
 
 function recordProductModel(record, operation, route, site = SITE) {
   const schema = { '@type': 'Product', '@id': `${canonical(route, site)}#product`,
-    name: record.seo.h1, sku: record.parentSku, url: canonical(route, site),
-    description: record.seo.description };
+    name: record.seo.h1, sku: record.parentSku, url: canonical(route, site) };
+  if (record.category) schema.category = record.category;
   if (operation.images.length) schema.image = operation.images.map(p => p.src);
   if (record.purchasable && record.price !== null) {
     schema.offers = { '@type': 'Offer', url: canonical(route, site),
       price: String(record.price), priceCurrency: 'KES' };
     if (operation.availability && !operation.diagnostics?.includes('record-commerce-price-disagreement')) schema.offers.availability = `https://schema.org/${operation.availability}`;
   }
-  const faq = record.faq.length ? { '@type': 'FAQPage', '@id': `${canonical(route, site)}#faq`,
-    mainEntity: record.faq.map(f => ({ '@type': 'Question', name: f.q,
-      acceptedAnswer: { '@type': 'Answer', text: f.a } })) } : null;
+  const faq = null;
   return { schema, faq };
 }
 

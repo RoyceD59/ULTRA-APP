@@ -91,3 +91,16 @@ product IDs. Visible content is tap-filter marketing and cartridge diagrams, so
 it does not establish which record or slot each photo belongs to. No mapping was
 inferred; the development database has no uploads. Still required: the intended
 product and slot for each photo, then uploads for the remaining products.
+
+### Update after owner finished uploading
+
+A later read-only check found 12 team photo rows: 8 on legacy 10170 and 4 on
+legacy 8042 (the old Sweet Home / FCT record), all at position 0 and all
+anonymously retrievable. The other 20 records still have no uploads. Because the
+new catalogue uses new product IDs (FCT is 1000020 in development), these rows
+will not appear on the new pages until they are re-uploaded to the new records or
+a scoped mapping is explicitly approved. Six-slot evidence is therefore still
+unmet for all 21 records.
+
+Page structure (same day): product pages now show only structured fields, and
+the category tabs match the four record categories. See the change log.

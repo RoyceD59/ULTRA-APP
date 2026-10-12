@@ -61,7 +61,7 @@ test('v2.6 records are validated and allowlisted; the eleven new pages stay unpu
   }
 });
 
-test('every authored product has visible fields, exact SEO, FAQ parity, safe public payload and one canonical', async () => {
+test('every authored product has visible fields, exact SEO, no descriptive prose, safe public payload and one canonical', async () => {
   for (const p of records.products) {
     const page = await renderer().render(`/product/${p.slug}?sku=private&utm_source=test`);
     assert.equal(page.status, 200, p.code);
@@ -79,12 +79,14 @@ test('every authored product has visible fields, exact SEO, FAQ parity, safe pub
       assert.equal(product.offers.priceCurrency, 'KES');
       assert.equal(product.offers.availability, 'https://schema.org/InStock');
     } else assert.equal(product.offers, undefined);
-    const faq = graph(page).find(n => n['@type'] === 'FAQPage');
-    assert.deepEqual(faq?.mainEntity.map(q => ({ q: q.name, a: q.acceptedAnswer.text })), p.faq.length ? p.faq : undefined);
-    for (const f of p.faq) {
-      const escape = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-      assert.ok(page.body.includes(escape(f.q)));
-      assert.ok(page.body.includes(escape(f.a)));
+    // Product pages are structured data only: no FAQ markup or authored prose.
+    assert.equal(graph(page).find(n => n['@type'] === 'FAQPage'), undefined);
+    assert.equal(product.description, undefined);
+    assert.equal(product.category, p.category);
+    assert.ok(page.body.includes(p.category.replace('&', '&amp;')), p.code);
+    assert.doesNotMatch(page.body, /<summary>[^<]*(?:Frequently|Questions)|Product evidence|Know before you buy|Made for your routine/);
+    for (const text of [p.opening.outcome, p.opening.intro, p.opening.suits, ...p.faq.map(f => f.a)].filter(Boolean)) {
+      assert.ok(!page.body.includes(text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))), `${p.code}: descriptive text rendered`);
     }
     assert.doesNotMatch(JSON.stringify(page), /Wrong Woo name|PRIVATE commerce description|manufacturer_model|missing_launch_inputs/);
     for (const forbidden of source.products.find(r => r.code === p.code).evidence.claims.filter(c => c.status === 'confirm')) {
