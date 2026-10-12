@@ -65,6 +65,12 @@ host, checkout identity and transaction-time price/stock checks remain unchanged
 
 ## Required owner review
 
+On 2026-10-12, the owner approved the 21 exact SKU matches and 20 numeric
+prices in this report and chose to supply approved photos and slot assignments.
+This does not approve a price for ATM, photo substitutions, activation or
+publication. Photo remediation and subsequent anonymous image/crawler
+verification remain blocked on the supplied assets.
+
 Review the exact mappings and numeric prices above; explicitly choose a photo
 remediation scope using supplied, approved images. ATM's absent price requires
 an explicit decision before any priced sale. After scoped remediation, rerun
