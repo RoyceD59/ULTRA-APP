@@ -110,5 +110,79 @@ the category tabs match the four record categories. See the change log.
 The owner told the agent to use the ProjectHub pictures. Mapped by exact record
 code, with alt text describing only what is visible: FCT slots 1, 2, 3, 5; VDR
 slots 1-5; GMB slots 1-6. Not mapped: Flex (draft), Viva Drop video, and the
-cartridge listing (no SKU). 17 records still have no approved photo. After
+cartridge listing (no SKU). 18 records still have no approved photo. After
 publishing, anonymously fetch each mapped URL and review it visually.
+
+## Owner activation approval and final prerequisite checks — 2026-10-13
+
+The owner explicitly selected **“All three, including Gym Buddy”** after being
+shown the four/five/six-photo coverage and the different legacy Gym Buddy SKU.
+This approves only the ProjectHub-upload mappings and photo-backed pages for
+FCT (Sweet Home), VDR (Viva Drop), and GMB (Gym Buddy). It confirms that the
+legacy Gym Buddy uploads belong to the current Gym Buddy record; it does not
+establish SKU equality between the legacy listing and the new record.
+
+Approval is not activation evidence. No release selector, production database,
+checkout, host, prices, stock or payment logic was changed by these final checks.
+Publication remains a user action after the release-readiness gates pass.
+Other products, historical website photos, Flex, the Viva Drop video and the
+unidentified cartridge-listing photos remain outside this approval.
+
+### Anonymous photo and development-record evidence
+
+- All 15 approved upload URLs were fetched anonymously through the live API
+  using `facebookexternalhit/1.1` and `?w=640`. Every response was HTTP 200 with
+  image content and successfully decoded through the existing Sharp dependency.
+  A contact sheet was visually inspected; these are real uploaded product/use
+  photos and diagrams, not generated filename placeholders. The requests required
+  no session, cookies or authorization header. Photo approval does not validate
+  filtration claims printed within the supplied diagrams.
+- The anonymous development product-record API returned 21 exact parent-SKU
+  identities; all 20 numeric authored prices matched its observed live prices.
+  ATM still has no approved numeric price.
+- A 402×874 development browser screenshot of `/product/sweet-home` showed
+  the real uploaded main photo, all four thumbnails and product details without
+  a runtime error. This verifies the preview, not the published page or native
+  device behavior.
+- Direct record responses preserve the intended slots:
+
+| Approved record | Approved gallery slots | Coverage still absent |
+| --- | --- | --- |
+| FCT / Sweet Home | 1, 2, 3, 5 | 4 and 6 |
+| VDR / Viva Drop | 1, 2, 3, 4, 5 | 6 |
+| GMB / Gym Buddy | 1, 2, 3, 4, 5, 6 | None |
+
+- The other **18**, not 17, eligible records have no approved photos. The eleven
+  unpublished drafts remain outside the reviewed set.
+- The existing anonymous audit was rerun against both development HTTPS and
+  the live API. Its legacy catalogue-photo adapter renumbers FCT slot 5 as 4;
+  therefore its inferred slot list is not exact-slot evidence. The direct
+  `/api/uc/product-records/:slug` responses above are authoritative for the
+  new pages. Neither local filenames nor inferred image order was accepted.
+
+### Live publication blockers and handoff
+
+- The latest observed served Companion build is `1791820215559-828`, with the
+  unchanged frozen consistency source revision. A successful publish did not
+  include the newer product-record API/mapping source.
+- `https://api.ucfilters.com/api/uc/product-records` and its Sweet Home detail
+  route return HTTP 404. The anonymous audit rejects the live legacy catalogue
+  as incompatible publication-safe evidence; this does not mean that the
+  separate legacy `/api/uc/products` endpoint has no products.
+- Legacy catalogue images precede the ProjectHub uploads. Sweet Home has 15
+  images, Viva Drop 17 and Gym Buddy 11; their approved uploads number 4, 5 and
+  6 respectively. A first-six gallery can hide the appended uploads. Samples
+  of both legacy leading images and upload derivatives returned HTTP 200.
+- Crawler requests to `/product/sweet-home`, `/product/viva-drop` and
+  `/product/gym-buddy` return HTTP 200 but only a generic 1,733-byte app shell
+  titled `Ultra-Clear Companion`, not verified product-specific HTML.
+  `/robots.txt` still returns HTTP 404.
+- Before activation, the publication-readiness work must include the approved
+  mappings and compatible API/public rendering in a scoped release package,
+  restrict activation to these three photo-backed pages, and verify actual
+  served images/slots/crawler HTML after publication. Do not bypass the frozen
+  release by publishing the whole working tree or substitute old website photos.
+- Source preparation, owner approval and image availability are verified.
+  Live page activation, compatible live identity/pricing and crawler rendering
+  remain unverified and blocked on the scoped release. Retain transaction-time
+  commerce authority and existing checkout identities through that release.

@@ -1,5 +1,32 @@
 # Development change log
 
+## 2026-10-13 — Three-product photo approval and anonymous prerequisite checks
+
+- **Approval:** Owner approved photo activation for Sweet Home, Viva Drop and
+  Gym Buddy only, including the different-SKU legacy Gym Buddy upload match.
+  Use ProjectHub uploads only; no approval for other product pages or old
+  website-image substitutions.
+- **Verification:** All 15 approved upload derivatives returned HTTP 200 to
+  an anonymous crawler user agent, decoded successfully, and were visually
+  reviewed. Direct development product-record responses confirmed Sweet Home
+  slots 1/2/3/5, Viva Drop 1–5 and Gym Buddy 1–6, the 21 exact parent-SKU
+  identities and 20 matching numeric prices. Eighteen eligible records still
+  have no approved photos. Sweet Home lacks slots 4/6; Viva Drop lacks slot 6.
+- **Release limits:** The live product-record API still returns 404, while
+  crawler product URLs serve a generic app shell and robots.txt returns 404.
+  The selected frozen release omits the newer product-record implementation;
+  repeated publishing alone cannot include it. The old catalogue appends the
+  uploads after legacy images, so a first-six gallery can hide them.
+- **Audit limit:** The legacy audit adapter renumbers Sweet Home's last image
+  as slot 4; direct record responses establish the correct approved slot 5.
+  See `docs/product-operational-review-2026-10-12.md` for the release handoff.
+- **Preview:** Sweet Home's 402×874 browser preview showed the uploaded main
+  photo and four thumbnails without a runtime error; this is not live evidence.
+- **Changes:** Approval, evidence and unresolved gates documented; no
+  application code, release selection, production database or checkout changes.
+- **Ignore changes:** None; temporary image/audit outputs stayed in `/tmp`.
+- **Status:** Prerequisites reviewed; live activation/publication not performed.
+
 ## 2026-10-12 — Failed publish: rollback retention captured for served build 1791747237127-812
 
 - **Cause:** Build `c2ee52f9` failed in `retainRollback` with ENOENT for `rollback-static/1791747237127-812/build-info.json`. Every earlier check in that build (API, Hub and Companion typechecks, Hub build, security tests, live API snapshot) passed. The previous publish made `1791747237127-812` the served build, but it had not been retained. The gate worked as designed.
@@ -22,7 +49,7 @@
   that never overwrites a slot staff already approved.
 - Held back: the Flex photo (draft record stays without approved images), the
   Viva Drop video, and the 8 photos on "Faucet Filter Cartridge" (no SKU).
-- Still no photos for 17 of the 21 published-eligible records.
+- Still no photos for 18 of the 21 published-eligible records.
 
 ## 2026-10-12 — Product page reduced to structured fields; categories aligned (development only)
 

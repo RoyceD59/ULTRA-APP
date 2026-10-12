@@ -103,3 +103,4 @@
 - [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked/non-stage folders are scratch (deps stripped); wrong markers and symlinks still fail publish; image summary warns over 7 GiB.
 - [Master workbook SKU register](master-workbook-sku-register.md) — v7 workbook is price/SKU authority; stock snapshot applied only by explicit script to unknown rows; no cost data in repo.
 - [Patched install trust](patch-install-trust.md) — plain frozen installs keep inactive hash-qualified patch dirs; verify bytes, --force heals; cold reproductions hit disk quota.
+- [Product photo activation approval](product-photo-activation-approval.md) — ProjectHub photos only for Sweet Home, Viva Drop and Gym Buddy; owner confirmed the Gym Buddy legacy-SKU exception.
