@@ -149,6 +149,12 @@ not acquire pages, schema, topic links or sitemap entries.
 
 ### Operational diagnostics and media limits
 
+**Current review:** See [2026-10-12 operational review](product-operational-review-2026-10-12.md).
+The app-owned development catalogue now matches all 21 eligible records and
+all 20 numeric prices agree. All 21 still lack accepted commerce gallery photo
+evidence. The historical WooCommerce findings below are not current remediation
+instructions; do not write to WooCommerce or reuse its identities implicitly.
+
 The development read on 2026-10-07 found **11 exact parent-SKU matches and 10
 unmatched records**. All 11 matched products reported live InStock and a price
 disagreement. These are observations at that time, not promised future stock.

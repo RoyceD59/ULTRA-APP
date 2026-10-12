@@ -1,5 +1,19 @@
 # Development change log
 
+## 2026-10-12 — Read-only public product prerequisite review
+
+- Re-ran the anonymous operational audit against development: 21 exact SKU
+  matches, 20 agreeing numeric prices, ATM price absent, no accepted gallery
+  slots for any of the 21 records. Recorded the per-product review in
+  `docs/product-operational-review-2026-10-12.md`.
+- Published crawler probe finds robots.txt unavailable and Hydra Flux raw HTML
+  still a generic app shell. No image URLs were available through the commerce
+  interface to verify; six-slot image approval remains unresolved.
+- Updated the runbook to distinguish historical WooCommerce discrepancies from
+  current app-owned evidence. Owner review and scoped photo remediation remain
+  prerequisites. No writes to commerce, uploads, activation, publication,
+  checkout, dependencies or ignore rules.
+
 ## 2026-10-11 — Extended archive filename checks; failed publish diagnosed
 
 - Added four disposable cases to `release-integrity-negative.test.mjs`: PAX `path`
