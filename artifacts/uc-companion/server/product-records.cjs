@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const source = require('./records/products_v2.6.json');
+const referenceEstimates = require('./records/product-page-estimates.json');
 const retail = require('./records/retail-prices_v7.json');
 const validate = require('./records/validate-products.cjs');
 const schemaHash = crypto.createHash('sha256').update(fs.readFileSync(require.resolve('./records/product_content_v2.6.schema.json'))).digest('hex');
@@ -64,6 +65,7 @@ function createRecordCollection(input = source) {
   const products = eligible.map(p => ({
     code: p.code, slug: p.slug, name: p.name, parentSku: p.parent_sku,
     category: p.category,
+    savings: referenceEstimates.products[p.code] || null,
     kind: p.kind || 'product', navGroup: p.nav_group || null,
     compareGroup: p.compare_group || null, compare: p.compare ? { ...p.compare } : null,
     fits: Array.isArray(p.fits) ? p.fits.slice() : null,

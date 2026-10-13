@@ -26,6 +26,10 @@ function writeBuildInfo(projectRoot, buildId, env = process.env, outputRoot = pr
   const expoGoLaunchUrl = domain ? `exps://${domain.replace(/^https:\/\//, '').replace(/\/$/, '')}${env.EXPO_PUBLIC_BASE_PATH || ''}` : null;
   const info = { buildId, revision, apiOrigin, production: env.NODE_ENV === 'production', expoGoLaunchUrl, supported: { web: buildId, expoGo: buildId, native },
     builtAt: new Date().toISOString(), tabs: COMPANION_TABS.map(tab => tab.name) };
+  const structurePath = path.join(projectRoot, 'data/product-page-structure.json');
+  if (fs.existsSync(structurePath)) {
+    info.productPageStructure = JSON.parse(fs.readFileSync(structurePath, 'utf8'));
+  }
   fs.writeFileSync(path.join(outputRoot, 'static-build', buildId, 'build-info.json'), JSON.stringify(info, null, 2));
   return info;
 }

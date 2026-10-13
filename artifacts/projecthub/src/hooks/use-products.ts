@@ -9,6 +9,7 @@ export interface ProductMedia {
   url: string;
   alt: string;
   position: number;
+  videoSlot?: number;
   createdAt: string;
 }
 
@@ -111,10 +112,10 @@ export function useUpdateProduct() {
 export function useAddProductMedia() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, url, type, alt }: { id: number; url: string; type: "photo" | "video"; alt?: string }) =>
+    mutationFn: ({ id, url, type, alt, position }: { id: number; url: string; type: "photo" | "video"; alt?: string; position?: number }) =>
       apiFetch<ProductMedia>(`/uc/admin/products/${id}/media`, {
         method: "POST",
-        body: JSON.stringify({ url, type, alt }),
+        body: JSON.stringify({ url, type, alt, position }),
       }),
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ["uc-product-media", id] });

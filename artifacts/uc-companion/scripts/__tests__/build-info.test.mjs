@@ -42,9 +42,18 @@ test('release metadata records the build revision and fails if a tab is missing'
     assert.equal(info.tabs.length, 6);
     assert.equal(info.supported.web, 'test-build');
     assert.equal(info.supported.expoGo, 'test-build');
+    mkdirSync(join(root, 'data'), { recursive: true });
+    const structure = require('../../data/product-page-structure.json');
+    writeFileSync(join(root, 'data/product-page-structure.json'), JSON.stringify(structure));
+    const layered = writeBuildInfo(root, 'test-build', { SOURCE_REVISION: 'layered-test' });
+    assert.deepEqual(layered.productPageStructure, structure);
+    assert.equal(layered.productPageStructure.layers.length, 9);
+    assert.equal(layered.productPageStructure.navigationGroups.length, 5);
+    assert.equal(JSON.parse(readFileSync(join(root, 'static-build/test-build/build-info.json'), 'utf8'))
+      .productPageStructure.referenceSha256, structure.referenceSha256);
     assert.throws(() => writeBuildInfo(root, 'test-build', { NODE_ENV: 'production' }), /Missing production API/);
     assert.throws(() => writeBuildInfo(root, 'test-build', { NODE_ENV: 'production', EXPO_PUBLIC_API_DOMAIN: 'http://localhost:8080' }), /Invalid production API/);
     assert.throws(() => writeBuildInfo(root, 'test-build', { NODE_ENV: 'production', EXPO_PUBLIC_API_DOMAIN: 'preview.replit.dev' }), /Invalid production API/);
-    assert.deepEqual(JSON.parse(readFileSync(join(root, 'static-build', 'test-build', 'build-info.json'), 'utf8')), info);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, 'static-build', 'test-build', 'build-info.json'), 'utf8')), layered);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -1,14 +1,19 @@
 {
-  "candidateSha256": "a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7",
-  "scopeSha256": "3740c893fe3278467b8af2da80a73e780c127e5eeec9c4e54492815591b36fb3",
+  "candidateSha256": "34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8",
+  "scopeSha256": "acbe7899ccdd783a1ccbef12d6844e30573b94da3dbb1ea19720c6bf0695f9ff",
   "selectionApproved": true,
   "requiredCatalogueCartPrerequisitesApproved": true,
-  "approvedPhotoCodes": ["FCT", "VDR", "GMB"],
+  "approvedPhotoCodes": [
+    "FCT",
+    "VDR",
+    "GMB"
+  ],
   "publicationRequested": true,
   "productionStockInitializationApproved": false,
   "notes": [
     "Owner requested implementation and publication of the product pages.",
     "Publication is a separate Replit action; this file is not evidence of deployment.",
-    "Live stock initialization and payment-provider verification remain separate."
+    "Live stock initialization and payment-provider verification remain separate.",
+    "Owner requested the supplied HTML page layers and grouped categorization to manifest in publication."
   ]
 }

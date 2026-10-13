@@ -1,5 +1,38 @@
 # Product-page publication handoff
 
+## Latest selected restoration — 13 October 2026
+
+The selected candidate is now
+`34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8`,
+restoring the supplied HTML's layered presentation to the shared web/native
+page. The previous sections below describe the preceding preparation history.
+
+This candidate passed frozen API/Hub/Companion builds, shared and consumer
+typechecks, web/Android/iOS exports and exact source/scope verification.
+Build `1791912473158-25878` is a local verification build, **not publication
+evidence**. The manifest includes `productPageStructure.version` =
+`layered-product-pages-1`, the reference SHA, layers, groups, categories and
+the unchanged three-product photo scope. The production preparer rejects a
+client whose compiled structure manifest differs from the selected source.
+
+The manifest also declares `videoSlotsPerProduct: 2`. In ProjectHub, open
+**Products → a product → Product images & installation video** and use
+**Upload video 1** or **Upload video 2**. Each MP4 can be up to 60 MB;
+H.264/AAC is recommended. Remove only the selected clip before replacing it.
+Both clips are shown alongside the images in the web and Expo galleries.
+Backend slot claims are serialized; concurrent requests cannot overwrite a
+slot or attach a third clip. Legacy attachments are mapped without rewriting
+or deleting their rows. Real-clip upload and physical-phone playback remain
+unverified; no clips were uploaded to customer products by this preparation.
+
+After the owner publishes, verify the actual served `version.json` revision
+and structure marker, the 21 public records, gallery loading and category
+filtering, and the corresponding Expo Go release. Do not infer publication
+from these local exports. Standalone installed binaries need their own
+release; physical-phone and payment-provider checks are still unconfirmed.
+The 11 editorial drafts, including replacement pages, stay private pending
+staff review. Replacement navigation only exposes public records.
+
 ## Current decision: product-page release selected and prepared; not published
 
 The main-workspace build selector now uses this candidate for the API,

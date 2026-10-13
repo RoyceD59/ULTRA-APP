@@ -65,6 +65,7 @@ import {
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
+import { productVideoSlots } from "../lib/product-video-slots.js";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import { ACCOUNT_DATA_DIR, recordAccountRegistration } from "../lib/account-records";
@@ -882,8 +883,8 @@ function applyProductMedia(
   const photos = media
     .filter((m) => m.type === "photo")
     .map((m) => ({ src: m.url, alt: m.alt || (product["name"] as string) }));
-  const video = media.find((m) => m.type === "video");
-  return { ...product, images: [...baseImages, ...photos], videoUrl: video?.url ?? null };
+  const videos = productVideoSlots(media).flatMap((item, index) => item ? [{ slot: index + 1, url: item.url }] : []);
+  return { ...product, images: [...baseImages, ...photos], videoUrl: videos[0]?.url ?? null, videos };
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
@@ -1783,7 +1784,8 @@ router.get("/uc/admin/products/:id/media", async (req: Request, res: Response): 
       .from(ucProductMediaTable)
       .where(eq(ucProductMediaTable.productId, productId))
       .orderBy(asc(ucProductMediaTable.position), asc(ucProductMediaTable.id));
-    res.json(rows);
+    const slots = productVideoSlots(rows);
+    res.json(rows.map(row => ({ ...row, ...(row.type === "video" && slots.includes(row) ? { videoSlot: slots.indexOf(row) + 1 } : {}) })));
   } catch (err) {
     logger.error({ err, productId }, "Failed to load product media");
     res.status(500).json({ error: "Failed to load product media" });
@@ -1815,17 +1817,31 @@ router.post("/uc/admin/products/:id/media", async (req: Request, res: Response):
     return;
   }
   try {
-    const [row] = await db
-      .insert(ucProductMediaTable)
+    const result = await db.transaction(async tx => {
+      let targetPosition = Number.isInteger(Number(position)) ? Number(position) : 0;
+      if (mediaType === "video") {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`product-videos:${productId}`}))`);
+        const existing = await tx.select().from(ucProductMediaTable)
+          .where(and(eq(ucProductMediaTable.productId, productId), eq(ucProductMediaTable.type, "video")))
+          .orderBy(asc(ucProductMediaTable.position), asc(ucProductMediaTable.id));
+        const slots = productVideoSlots(existing);
+        if (position !== undefined && position !== 1 && position !== 2) return { ok: false as const, error: "Video slot must be 1 or 2", status: 400 };
+        targetPosition = position === undefined ? slots.indexOf(null) + 1 : Number(position);
+        if (targetPosition < 1 || slots[targetPosition - 1]) return { ok: false as const, error: "Video slot is occupied. Remove that clip before replacing it.", status: 409 };
+      }
+      const [row] = await tx.insert(ucProductMediaTable)
       .values({
         productId,
         type: mediaType,
         url: normalized,
         alt: typeof alt === "string" ? alt : "",
-        position: Number.isInteger(Number(position)) ? Number(position) : 0,
+        position: targetPosition,
       })
       .returning();
-    res.status(201).json(row);
+      return { ok: true as const, row };
+    });
+    if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+    res.status(201).json({ ...result.row, ...(mediaType === "video" ? { videoSlot: result.row.position } : {}) });
   } catch (err) {
     logger.error({ err, productId }, "Failed to add product media");
     res.status(500).json({ error: "Failed to add product media" });

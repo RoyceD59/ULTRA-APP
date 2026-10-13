@@ -15,12 +15,13 @@ export type ProductRecord = {
   ownership?: Loose; service?: Loose; summary?: Loose; faq?: { q: string; a: string }[];
   claims?: RecordClaim[]; seo?: Loose; opening?: Loose; topics?: { name: string; slug: string }[];
   evidenceLimits?: string[];
+  savings?: { headline: string; detail: string[]; assumption: string } | null;
   kind?: 'product' | 'replacement'; navGroup?: string | null; compareGroup?: string | null;
   compare?: Record<string, string | null> | null; fits?: string[] | null;
   fitPhotos?: { heading: string; items: { src: string; alt: string; caption: string }[] } | null;
   operation: {
     commerceId: number | null; availability: string | null; livePrice: number | null; priceAuthority?: 'companion'; images: RecordImage[];
-    videoUrl: string | null; diagnostics: string[]; variants: RecordVariant[];
+    videoUrl: string | null; videos?: { slot: number; url: string }[]; diagnostics: string[]; variants: RecordVariant[];
   };
 };
 export type RecordGroup = { id: string; label: string; products: string[]; replacements: string[] };
@@ -43,7 +44,7 @@ export function normalizeStock(v: unknown): string | null {
 }
 /** Flat public endpoint -> nested consumption type. */
 export function normalizeRecord(raw: any): ProductRecord {
-  const { commerceId, availability, livePrice, priceAuthority, images, videoUrl, diagnostics, variants, ...rest } = raw;
+  const { commerceId, availability, livePrice, priceAuthority, images, videoUrl, videos, diagnostics, variants, ...rest } = raw;
   return {
     ...rest,
     operation: {
@@ -53,6 +54,7 @@ export function normalizeRecord(raw: any): ProductRecord {
       priceAuthority: priceAuthority === 'companion' ? 'companion' : undefined,
       images: Array.isArray(images) ? images : [],
       videoUrl: typeof videoUrl === 'string' ? videoUrl : null,
+      videos: Array.isArray(videos) ? videos.filter(v => (v.slot === 1 || v.slot === 2) && typeof v.url === 'string').slice(0, 2) : undefined,
       diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((d: unknown) => typeof d === 'string') : [],
       variants: (Array.isArray(variants) ? variants : []).map((v: any) => ({ ...v, stockStatus: normalizeStock(v.stockStatus) })),
     },

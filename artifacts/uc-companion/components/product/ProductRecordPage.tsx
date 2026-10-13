@@ -25,23 +25,7 @@ import {
 import { visibleStoreCategory } from '@/lib/storeCategories';
 import ProductCompare from './ProductCompare';
 import { P } from './theme';
-
-function Section({ title, children, open: initial = false }: { title: string; children: React.ReactNode; open?: boolean }) {
-  const [open, setOpen] = useState(initial);
-  return (
-    <View style={s.card}>
-      <Text {...headingProps(3)} style={s.accTitle}>{title}</Text>
-      <TouchableOpacity onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={title}
-        {...(Platform.OS === 'web' ? ({ 'aria-expanded': open } as object) : { accessibilityState: { expanded: open } })} style={s.accHead}>
-        <Text style={s.note}>{open ? 'Hide' : 'Show'}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={P.teal} />
-      </TouchableOpacity>
-      {open ? <View style={{ gap: 8, marginTop: 8 }}>{children}</View> : null}
-    </View>
-  );
-}
-const Bullets = ({ items }: { items?: unknown }) => Array.isArray(items) && items.length
-  ? <View style={{ gap: 4 }}>{items.filter(i => typeof i === 'string').map((i, n) => <Text key={n} style={s.body}>{`\u2022 ${i}`}</Text>)}</View> : null;
+import { Accordion, GroupNav, H2, ProductLayers, SearchListing, serviceSummary } from './ProductLayers';
 
 type Gal = { src: string; alt: string; label: string; childSku?: string; picturedColour?: string };
 
@@ -82,15 +66,16 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
     const n = photos.findIndex(p => p.childSku === variant.childSku);
     if (n >= 0) setIdx(n);
   }, [variant, photos]);
-  const hasVideo = !!op.videoUrl;
-  const total = photos.length + (hasVideo ? 1 : 0);
+  const videos = useMemo(() => op.videos?.length ? op.videos : op.videoUrl ? [{ slot: 1, url: op.videoUrl }] : [], [op.videos, op.videoUrl]);
+  const activeVideo = videos[idx - photos.length];
+  const total = photos.length + videos.length;
   const cur = photos[idx];
   const known = [...new Set(photos.map(p => p.picturedColour).filter((c): c is string => !!c))];
   const colourNote = variant && known.length && !photos.some(p => p.childSku === variant.childSku) && !known.some(c => c.toLowerCase() === variant.label.toLowerCase())
     ? `Photos show ${known.join(', ')}. Your selected colour, ${variant.label}, is not pictured.` : null;
 
   const player = useVideoPlayer(null as unknown as string, p => { p.loop = true; p.muted = true; });
-  useEffect(() => { if (op.videoUrl && idx === photos.length) { player.replace({ uri: resolveMediaUrl(op.videoUrl) }); player.play(); } }, [idx, op.videoUrl, photos.length, player]);
+  useEffect(() => { if (activeVideo?.url) { player.replace({ uri: resolveMediaUrl(activeVideo.url) }); player.play(); } else { player.pause(); } }, [activeVideo?.url, player]);
 
   const state = purchaseState(record, variant);
   const pid = op.commerceId;
@@ -103,8 +88,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
     if (pid === null) return;
     const next = !saved; setWish(next);
     try {
-      if (next) { await api.addToWishlist(pid, record.name); trackEvent('wishlist_item_added', { productId: pid }); trackProductEvent('add_to_wishlist', { productId: pid, sku: variant?.childSku ?? record.parentSku }); }
-      else { await api.removeFromWishlist(pid); trackEvent('wishlist_item_removed', { productId: pid }); }
+      if (next) { await api.addToWishlist(pid, record.name); trackProductEvent('add_to_wishlist', { productId: pid, sku: variant?.childSku ?? record.parentSku }); }
+      else { await api.removeFromWishlist(pid); }
       await qc.invalidateQueries({ queryKey: customerQueryKeys.wishlist(user.id) });
     } catch { /* fall through to server truth */ } finally { setWish(null); }
   }, [token, user, pid, saved, api, qc, record, variant, router]);
@@ -134,13 +119,13 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const wide = width >= 900;
   const reviewParams = { productId: String(pid ?? ''), productName: record.name };
   const sp = record.specs ?? {};
-  const pk = record.package ?? {};
+  const life = photos.find(p => p.label === SLOT_LABELS[1]) ;
   const price = state.kind === 'buy' ? state.price : record.price;
 
   const gallery = (
     <View style={{ flex: wide ? 1 : undefined, gap: 8 }}>
       <View style={s.stage}>
-        {idx === photos.length && hasVideo
+        {activeVideo
           ? <VideoView player={player} style={{ width: '100%', height: '100%' }} contentFit="contain" nativeControls />
           : cur ? <Image source={{ uri: resizedImageUrl(cur.src, 520) }} accessibilityLabel={cur.alt} contentFit="contain" style={{ width: '100%', height: '100%' }} />
             : <Ionicons name="water-outline" size={64} color={P.teal} />}
@@ -153,8 +138,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
               <Image source={{ uri: resizedImageUrl(p.src, 64) }} contentFit="contain" style={{ width: 52, height: 52 }} />
               <Text style={s.thumbL} numberOfLines={1}>{p.label}</Text>
             </TouchableOpacity>))}
-          {hasVideo ? <TouchableOpacity onPress={() => setIdx(photos.length)} accessibilityRole="button" accessibilityLabel="Product video" style={[s.thumb, idx === photos.length && s.thumbOn]}>
-            <Ionicons name="play-circle-outline" size={30} color={P.teal} /><Text style={s.thumbL}>Video</Text></TouchableOpacity> : null}
+          {videos.map((video, i) => <TouchableOpacity key={video.slot} onPress={() => setIdx(photos.length + i)} accessibilityRole="button" accessibilityLabel={`Product video ${video.slot}`} style={[s.thumb, idx === photos.length + i && s.thumbOn]}>
+            <Ionicons name="play-circle-outline" size={30} color={P.teal} /><Text style={s.thumbL}>Video {video.slot}</Text></TouchableOpacity>)}
         </ScrollView>) : null}
     </View>
   );
@@ -163,6 +148,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
     <View style={[{ gap: 10 }, wide && { flex: 1 }]}>
       <Text {...headingProps(1)} style={s.h1}>{record.seo?.h1 ?? record.name}</Text>
       {record.seo?.subline ? <Text style={s.sub}>{record.seo.subline}</Text> : null}
+      {op_.outcome || op_.intro ? <Text style={s.body}>{[op_.outcome, op_.intro].filter(Boolean).join(' ')}</Text> : null}
       {record.category ? <View style={s.chips}>
         <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/products', params: { category: visibleStoreCategory(record.category!) ?? 'All' } } as never)}
           accessibilityRole="link" accessibilityLabel={`Category: ${record.category}`} style={s.chip}><Text style={s.chipT}>{record.category}</Text></TouchableOpacity>
@@ -184,6 +170,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
             })}
           </View>
         </View>) : null}
+      {op_.delivery ? <Text style={s.note}>{op_.delivery}</Text> : null}
+      {op_.suits || op_.warning ? <View style={s.limit}><Text style={s.body}><Text style={{ fontWeight: '700' }}>Before you buy: </Text>{[op_.suits, op_.warning].filter(Boolean).join(' ')}</Text></View> : null}
       {state.kind === 'blocked' ? <View style={s.warn}><Text style={s.warnT}>{state.reason}</Text></View> : null}
       {state.kind === 'buy' ? (
         <><TouchableOpacity onPress={() => buyNow()} style={s.primary} accessibilityRole="button"><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
@@ -199,6 +187,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
           <Text style={s.primaryT}>Enquire about this product</Text>
         </TouchableOpacity>)}
       {record.compareGroup ? <TouchableOpacity onPress={() => setCompare(c => !c)} accessibilityRole="button" style={s.ghost}><Text style={s.ghostT}>{compare ? 'Hide comparison' : 'Compare with similar products'}</Text></TouchableOpacity> : null}
+      {serviceSummary(record) ? <Text style={[s.note, { textAlign: 'center' }]}>{serviceSummary(record)}</Text> : null}
       <View style={s.share}>
         <Text style={s.label}>Share this product link</Text>
         {!shareBase() ? <Text style={s.note}>Sharing is unavailable: no public share address is configured.</Text> : null}
@@ -226,38 +215,37 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
           </TouchableOpacity>
         </View>
 
-        <Text style={s.step}>1  Choose</Text>
+        <GroupNav record={record} />
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: 20 }}>{gallery}{buyBox}</View>
+
+        <ProductLayers record={record} price={price} lifeSrc={life?.src} lifeAlt={life?.alt} />
+
+        <H2>{record.summary?.heading || 'Review your selection'}</H2>
+        <View style={[s.card, { backgroundColor: P.aqua, gap: 8 }]}>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            {photos[0] ? <Image source={{ uri: resizedImageUrl(photos[0].src, 160) }} accessibilityLabel={photos[0].alt} contentFit="cover" style={s.sumPic} /> : null}
+            <View style={{ flex: 1 }}><Text style={s.bF}>{record.name}</Text>
+              <Text style={s.note}>{`${variant ? `${variant.label} - ` : ''}${variant?.childSku ?? record.parentSku}`}</Text></View>
+          </View>
+          <View style={s.spec}><Text style={s.specK}>Price</Text><Text style={s.specV}>{price !== null ? kes(price) : 'On request'}</Text></View>
+          <View style={s.spec}><Text style={s.specK}>Delivery</Text><Text style={s.specV}>Our delivery or self-paid, chosen at checkout</Text></View>
+          {record.service?.warranty?.text ? <View style={s.spec}><Text style={s.specK}>Warranty</Text><Text style={s.specV}>{record.service.warranty.text}</Text></View> : null}
+          {state.kind === 'buy' ? <><TouchableOpacity onPress={() => buyNow()} style={s.primary} accessibilityRole="button"><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => buyNow(true)} style={s.ghost} accessibilityRole="button"><Text style={s.ghostT}>Ask someone to pay</Text></TouchableOpacity></>
+            : state.kind === 'blocked' ? <Text style={s.warnT}>{state.reason}</Text>
+            : state.kind === 'enquiry' ? <TouchableOpacity onPress={() => router.push(`/enquiry?productId=${pid ?? ''}&productName=${encodeURIComponent(record.name)}` as never)} style={s.primary}><Text style={s.primaryT}>Enquire about this product</Text></TouchableOpacity> : null}
+        </View>
+
         {compare ? <ProductCompare current={record} initialVariant={variant} /> : null}
 
-        <Text style={s.step}>2  Details</Text>
-        {Object.keys(sp).length ? (
-          <Section title="Specifications" open>
-            {Object.entries(sp).map(([k, v]) => <View key={k} style={s.spec}><Text style={s.specK}>{k}</Text><Text style={s.specV}>{String(v)}</Text></View>)}
-          </Section>) : null}
-        {pk.included?.length ? (
-          <Section title={pk.heading || 'What is included'}>
-            <Bullets items={pk.included} />
-            {pk.dimensions ? <Text style={s.note}>{`Dimensions: ${pk.dimensions}`}</Text> : null}
-          </Section>) : null}
-        {record.fitPhotos?.items?.length ? (
-          <Section title={record.fitPhotos.heading}>
-            <View style={s.fitGrid}>
-              {record.fitPhotos.items.map((f, i) => (
-                <View key={f.src + i} style={s.fitCard}>
-                  <Image source={{ uri: resizedImageUrl(f.src, 320) }} accessibilityLabel={f.alt} contentFit="contain" style={s.fitImg} />
-                </View>))}
-            </View>
-          </Section>) : null}
-        {op_.warning ? <View style={s.warn}><Text style={s.warnT}>{op_.warning}</Text></View> : null}
-
-        <View style={[s.card, { backgroundColor: P.aqua }]}>
-          <Text {...headingProps(2)} style={s.accTitle}>{record.summary?.heading || 'Review your selection'}</Text>
-          <Text style={s.body}>{record.name}{variant ? ` - ${variant.label}` : ''}</Text>
-          <Text style={s.price}>{price !== null ? kes(price) : 'Price on enquiry'}</Text>
-          {state.kind === 'buy' ? <TouchableOpacity onPress={() => buyNow()} style={s.primary}><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
-            : state.kind === 'blocked' ? <Text style={s.warnT}>{state.reason}</Text> : null}
-        </View>
+        {record.faq?.length ? <Accordion title="Questions" icon="help-circle-outline">
+          {record.faq.map((f, i) => <View key={i} style={{ gap: 2 }}><Text style={s.bF}>{f.q}</Text><Text style={s.body}>{f.a}</Text></View>)}
+        </Accordion> : null}
+        <Accordion title="Full specifications" icon="list-outline">
+          {Object.entries(sp).map(([k, v]) => <View key={k} style={s.spec}><Text style={s.specK}>{k}</Text><Text style={s.specV}>{String(v)}</Text></View>)}
+          <View style={s.spec}><Text style={s.specK}>SKU</Text><Text style={s.specV}>{record.parentSku}</Text></View>
+        </Accordion>
+        <SearchListing record={record} />
 
         {op.diagnostics?.length && profile?.isAdmin ? <View style={s.warn}>{op.diagnostics.map((d, i) => <Text key={i} style={s.warnT}>{d}</Text>)}</View> : null}
 
@@ -314,12 +302,8 @@ const s = StyleSheet.create({
   warnT: { color: P.warn, fontSize: 14, lineHeight: 20 },
   share: { backgroundColor: P.aqua, borderRadius: 12, borderWidth: 1, borderColor: P.line, padding: 12, gap: 8 },
   card: { backgroundColor: P.ground, borderRadius: 16, borderWidth: 1, borderColor: P.line, padding: 14 },
-  accHead: { flexDirection: 'row', justifyContent: 'flex-end', gap: 6, alignItems: 'center', minHeight: 32 },
-  accTitle: { color: P.navy, fontSize: 18, fontWeight: '700', flex: 1 },
-  fitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  fitCard: { flexGrow: 1, flexBasis: 240, minWidth: 0, backgroundColor: P.aqua, borderRadius: 12, padding: 8, gap: 6 },
-  fitImg: { width: '100%', height: 180 },
-  benefit: { backgroundColor: P.aqua, borderRadius: 12, padding: 12, gap: 4 },
+  limit: { backgroundColor: P.aqua, borderLeftWidth: 4, borderColor: P.teal, borderRadius: 10, padding: 12 },
+  sumPic: { width: 64, height: 64, borderRadius: 12, backgroundColor: P.ground },
   bF: { color: P.navy, fontWeight: '700', fontSize: 15 },
   spec: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, borderBottomWidth: 1, borderColor: P.line, paddingVertical: 6 },
   specK: { color: P.muted, fontSize: 14, flexShrink: 0 },

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool, db, ucProductMediaTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { productVideoSlots } from "../lib/product-video-slots.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
 import { effectiveEditorial, validateEditorial } from "../lib/product-editorial.js";
 import { editorialContract } from "../lib/product-editorial.js";
@@ -69,7 +70,8 @@ async function operation(record: any, catalogue: any[]) {
   if (!availability) diagnostics.push("live-stock-unknown");
   return { ...record, imageMappings: undefined, commerceId: Number(parent.id), availability, livePrice: Number.isFinite(livePrice) ? livePrice : null,
     images: [...photos.values()].sort((a,b) => a.slot - b.slot), variants,
-    videoUrl: media.find(m => m.type === "video")?.url ?? null, diagnostics };
+    videoUrl: productVideoSlots(media).find(m => m)?.url ?? null,
+    videos: productVideoSlots(media).flatMap((item, index) => item ? [{ slot: index + 1, url: item.url }] : []), diagnostics };
 }
 
 router.get("/uc/product-records", async (_req, res): Promise<void> => {

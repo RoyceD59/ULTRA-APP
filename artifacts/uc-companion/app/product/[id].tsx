@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
   useWindowDimensions,
@@ -40,7 +40,7 @@ function formatKES(price: string) {
 
 type Slide =
   | { kind: 'photo'; src: string; alt: string }
-  | { kind: 'video'; src: string };
+  | { kind: 'video'; src: string; slot: number };
 
 export default function ProductDetailScreen() {
   const { id, sku } = useLocalSearchParams<{ id: string; sku?: string }>();
@@ -191,18 +191,23 @@ function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }
     }
   }, [token, user, product, isWishlisted, pid, api, queryClient]);
 
-  // Strike video player — muted, looping, auto-plays.
+  const videos = useMemo(() => {
+    const attached = (product as (UCProduct & { videos?: { slot: number; url: string }[] }) | undefined)?.videos;
+    return attached?.length ? attached.slice(0, 2) : product?.videoUrl ? [{ slot: 1, url: product.videoUrl }] : [];
+  }, [product]);
+  const activeVideo = videos[slideIndex - Math.min(product?.images.length ?? 0, MAX_PHOTOS)];
+  // Only the selected video's player is mounted.
   const player = useVideoPlayer(null as unknown as string, (p) => {
     p.loop = true;
     p.muted = true;
   });
   useEffect(() => {
-    if (product?.videoUrl) {
-      player.replace({ uri: resolveMediaUrl(product.videoUrl) });
+    if (activeVideo?.url) {
+      player.replace({ uri: resolveMediaUrl(activeVideo.url) });
       player.play();
-    }
+    } else player.pause();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.videoUrl]);
+  }, [activeVideo?.url]);
 
   if (isLoading && !product) return (
     <View style={[styles.loading, { backgroundColor: colors.background }]}>
@@ -226,14 +231,14 @@ function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }
   const isOnSale = !isEnquiryOnly && !!product.salePrice && parseFloat(product.salePrice) < parseFloat(product.regularPrice);
   const inStock = product.stockStatus === 'instock';
 
-  // Up to 6 photos, then exactly one strike-video slot.
+  // Up to 6 photos, followed by the two independently managed video slots.
   const slides: Slide[] = [
     ...product.images.slice(0, MAX_PHOTOS).map((img) => ({
       kind: 'photo' as const,
       src: resolveMediaUrl(img.src),
       alt: img.alt,
     })),
-    ...(product.videoUrl ? [{ kind: 'video' as const, src: resolveMediaUrl(product.videoUrl) }] : []),
+    ...videos.map(video => ({ kind: 'video' as const, src: resolveMediaUrl(video.url), slot: video.slot })),
   ];
 
   function goToSlide(i: number) {
@@ -396,20 +401,16 @@ function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }
                       />
                     ) : (
                       <View style={{ width: galleryContainerWidth, height: GALLERY_H }}>
-                        <VideoView
+                        {i === slideIndex ? <VideoView
                           player={player}
                           style={{ width: '100%', height: '100%' }}
                           contentFit="contain"
-                          nativeControls={false}
-                        />
+                          nativeControls
+                        /> : <Ionicons name="play-circle-outline" size={52} color={colors.primary} />}
                         {/* Strike badge */}
                         <View style={styles.strikeBadge}>
                           <Ionicons name="flash" size={12} color="#fff" />
-                          <Text style={styles.strikeBadgeTxt}>Quick Look</Text>
-                        </View>
-                        {/* Duration hint */}
-                        <View style={styles.durationHint}>
-                          <Text style={styles.durationHintTxt}>3 – 5 s</Text>
+                          <Text style={styles.strikeBadgeTxt}>Video {slide.slot}</Text>
                         </View>
                       </View>
                     )}
@@ -472,7 +473,7 @@ function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }
                     key={i}
                     onPress={() => goToSlide(i)}
                     accessibilityRole="button"
-                    accessibilityLabel={slide.kind === 'photo' ? `View image ${i + 1}: ${slide.alt}` : 'View product video'}
+                    accessibilityLabel={slide.kind === 'photo' ? `View image ${i + 1}: ${slide.alt}` : `View product video ${slide.slot}`}
                     activeOpacity={0.75}
                     style={[
                       styles.thumbCell,
@@ -491,7 +492,7 @@ function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }
                           color={active ? '#fff' : 'rgba(255,255,255,0.55)'}
                         />
                         <Text style={[styles.thumbVideoTxt, { opacity: active ? 1 : 0.55 }]}>
-                          Quick{'\n'}Look
+                          Video {slide.slot}
                         </Text>
                       </View>
                     )}

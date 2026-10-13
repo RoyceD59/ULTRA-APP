@@ -10,7 +10,7 @@ import { here } from './consistency-handoff.mjs';
 import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE } from './auth-upload-security.mjs';
 import { SECURITY_DEPENDENCY_CANDIDATE } from './security-dependency-selection.mjs';
 import { SECURITY_CENTER_CANDIDATE, verifyMainSecurityCenterRuntimePins } from './security-center-selection.mjs';
-import { verifyProductPageStage } from './product-page-selection.mjs';
+import { verifyProductPageStage, PRODUCT_PAGE_PREDECESSOR } from './product-page-selection.mjs';
 import { captureLiveClient } from './capture-live-client.mjs';
 import { verifyInstalledBackports } from './security-patch-installation.mjs';
 
@@ -45,7 +45,7 @@ if (!localOnly && mode !== 'serve-companion') {
   if (![frozen.liveBaseRevision, frozen.integrationRevision,
     frozen.previousIntegrationRevision, `consistency-${DEPENDENCY_CANDIDATE}`,
     `consistency-${AUTH_UPLOAD_CANDIDATE}`, `consistency-${SECURITY_DEPENDENCY_CANDIDATE}`,
-    `consistency-${SECURITY_CENTER_CANDIDATE}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
+    `consistency-${SECURITY_CENTER_CANDIDATE}`, `consistency-${PRODUCT_PAGE_PREDECESSOR}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
     throw new Error('Live source baseline changed; reconcile before preparing deployment outputs');
   }
 }
@@ -174,6 +174,11 @@ if (mode === 'serve-companion') {
     const info = JSON.parse(await readFile(resolve(companion, 'static-build', buildId, 'build-info.json'), 'utf8'));
     if (info.revision !== SOURCE_IDENTITY || info.apiOrigin !== 'https://api.ucfilters.com') {
       throw new Error('Compiled client identity or API origin mismatch');
+    }
+    const structure = JSON.parse(await readFile(resolve(companion, 'data/product-page-structure.json'), 'utf8'));
+    if (structure.version !== 'layered-product-pages-1'
+        || JSON.stringify(info.productPageStructure) !== JSON.stringify(structure)) {
+      throw new Error('Compiled client is missing the approved layered product-page structure manifest');
     }
     await writeFile(resolve(stage, 'companion-build.json'), JSON.stringify({
       sourceSha256: APPROVED_CANDIDATE, buildId, localOnly,

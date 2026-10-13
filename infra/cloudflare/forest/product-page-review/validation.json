@@ -1,6 +1,6 @@
 {
-  "candidateSha256": "a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7",
-  "decision": "product-page-release-prepared; physical-phone checks pending",
+  "candidateSha256": "34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8",
+  "decision": "layered product pages and two independent video slots selected and compiled; NOT PUBLISHED",
   "selected": true,
   "published": false,
   "sharedLibraryTypecheck": "passed",
@@ -9,10 +9,10 @@
   "serverSyntaxCheck": "passed",
   "apiBuildScriptSyntaxCheck": "passed",
   "platformExports": "passed-web-android-ios",
-  "buildId": "1791899675763-16861",
-  "compiledSourceRevision": "consistency-a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7",
+  "buildId": "1791912473158-25878",
+  "compiledSourceRevision": "consistency-34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8",
   "apiBuild": "passed",
-  "authoredApiDataPackaging": "passed",
+  "authoredApiDataPackaging": "passed-including-reference-estimates",
   "isolatedProductVariantCartTests": "4 passed",
   "installedBackportFixtures": "7 passed",
   "approvedPhotoHttpChecks": "15 passed",
@@ -23,7 +23,7 @@
   "schemaDiff": "no changes",
   "coordinatedActivation": "selected-and-deployment-prepared; not-published",
   "rollbackRetention": "passed; exact served client retained, repeated capture reports content-addressed without replacing client bytes",
-  "browserJourneyVerification": "Sweet Home mobile and Gym Buddy desktop render verified; Viva Drop capture showed initial loading, API record and five images verified separately",
+  "browserJourneyVerification": "Sweet Home public preview: authored layers rendered; gallery loaded; no horizontal overflow at 390, 820 and 1280px",
   "physicalDeviceVerification": "not-provided",
   "providerRequests": "none",
   "productionWrites": "none",
@@ -36,5 +36,13 @@
     "Stock remains unconfirmed unless separately initialized; product enquiries do not imply payment.",
     "The packaged server serves all three approved public HTML pages and the matching native manifest.",
     "See docs/product-page-publication-handoff.md for publication and post-publication checks."
-  ]
+  ],
+  "projectHubBuild": "passed",
+  "structureManifest": "layered-product-pages-1; matched compiled build-info",
+  "paymentSandboxVerification": "not-completed",
+  "scopeSha256": "acbe7899ccdd783a1ccbef12d6844e30573b94da3dbb1ea19720c6bf0695f9ff",
+  "projectHubTypecheck": "passed",
+  "videoSlotsPerProduct": 2,
+  "videoSlotMappingTests": "4 passed",
+  "realVideoUploadVerification": "not-performed"
 }

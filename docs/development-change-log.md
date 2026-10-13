@@ -1,3 +1,34 @@
+# 13 October 2026 — Layered product-page structure restored
+
+- **Owner request:** Use the supplied Ultra Clear Product Pages HTML as the
+  structure reference. Restore the layers in web and Expo publication, not
+  only the development page.
+- **Cause:** The selected frozen client retained the abbreviated buying/specs
+  page and old category labels. The approved gallery URLs were reachable;
+  missing authored sections were a client/release-content gap.
+- **Prepared:** Shared responsive layers, five authored navigation groups,
+  replacement navigation when public records exist, four canonical catalogue
+  categories, complete package/care/service/FAQ/search information and
+  source-authored savings examples with assumptions and an estimate disclaimer.
+  No new photo activation, stock initialization or draft publication.
+- **Product videos:** ProjectHub has independent upload/removal controls for
+  video slots 1 and 2, MP4 previews and a 60 MB per-clip preflight limit.
+  Server attachment checks serialize simultaneous uploads per product and
+  reject occupied slots. Both full-record and legacy web/Expo galleries read
+  the two slots; the first-video field remains compatible with older clients.
+  Existing clips are not automatically deleted. Four slot-mapping tests pass.
+- **Selected source:** `34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8`.
+  Its exact review scope and predecessor archive are verified. The previous
+  published candidate remains an explicitly accepted rollout baseline.
+- **Checks:** Frozen shared/API/Companion/ProjectHub typechecks and builds;
+  web/Android/iOS exports; release structure manifest; existing patch/media
+  fixtures; deployment-cleanup tests. Sweet Home preview gallery and authored
+  headings verified; no horizontal overflow at 390/820/1280px.
+- **Not completed:** Actual publication, physical-phone verification and the
+  separate payment sandbox checks. Eleven draft records remain unpublished.
+- **Ignore changes:** None; screenshots remain in the previously ignored
+  `generated-artifacts/product-page-release/` directory.
+
 # 13 October 2026 — Companion startup after deployment cleanup
 
 - The latest publish passed compilation, rollback retention and image upload,

@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { SECURITY_CENTER_CANDIDATE, securityCenterArchive } from './security-center-selection.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const PRODUCT_PAGE_CANDIDATE = 'a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7';
-export const PRODUCT_PAGE_SCOPE = '3740c893fe3278467b8af2da80a73e780c127e5eeec9c4e54492815591b36fb3';
+export const PRODUCT_PAGE_CANDIDATE = '34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8';
+export const PRODUCT_PAGE_PREDECESSOR = 'a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7';
+export const PRODUCT_PAGE_SCOPE = 'acbe7899ccdd783a1ccbef12d6844e30573b94da3dbb1ea19720c6bf0695f9ff';
 export const productPageArchive = resolve(here, 'product-page-review/release-sources.tar.gz');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -20,6 +21,8 @@ export async function verifyProductPageSelection() {
   assert.equal(meta.parentSha256, SECURITY_CENTER_CANDIDATE);
   assert.equal(meta.candidateSha256, PRODUCT_PAGE_CANDIDATE);
   assert.equal(meta.scopeSha256, PRODUCT_PAGE_SCOPE);
+  assert.equal(meta.previousCandidateSha256, PRODUCT_PAGE_PREDECESSOR);
+  assert.equal(digest(await readFile(resolve(review, 'published-predecessor-sources.tar.gz'))), PRODUCT_PAGE_PREDECESSOR);
   assert.equal(digest(await readFile(productPageArchive)), PRODUCT_PAGE_CANDIDATE);
   assert.equal(digest(JSON.stringify(scope)), PRODUCT_PAGE_SCOPE);
   assert.equal(approval.candidateSha256, PRODUCT_PAGE_CANDIDATE);
