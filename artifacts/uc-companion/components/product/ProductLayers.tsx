@@ -78,9 +78,9 @@ export function GroupNav({ record }: { record: ProductRecord }) {
   return (
     <View style={{ gap: 8 }} accessibilityRole={'navigation' as never}>
       <View style={l.row}>
-        {groups.map(g => { const on = g.id === cur?.id; return (
-          <TouchableOpacity key={g.id} onPress={() => open(g.products[0])} accessibilityRole="button" accessibilityState={{ selected: on }} style={[l.group, on && l.groupOn]}>
-            <Text style={[l.groupT, on && { color: P.navy }]}>{g.label}</Text></TouchableOpacity>); })}
+        {groups.map(g => { const on = g.id === cur?.id; const target = g.products.find(code => byCode.has(code)); return (
+          <TouchableOpacity key={g.id} onPress={() => open(target)} disabled={!target} accessibilityRole="button" accessibilityState={{ selected: on, disabled: !target }} style={[l.group, on && l.groupOn, !target && { opacity: 0.5 }]}>
+            <Text style={[l.groupT, on && { color: P.navy }]}>{g.label}{target ? '' : ' — not published yet'}</Text></TouchableOpacity>); })}
       </View>
       {cur ? <View style={l.row}>
         {cur.products.map(chip)}

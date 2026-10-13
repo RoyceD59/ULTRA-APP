@@ -1,6 +1,6 @@
 {
-  "candidateSha256": "34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8",
-  "scopeSha256": "acbe7899ccdd783a1ccbef12d6844e30573b94da3dbb1ea19720c6bf0695f9ff",
+  "candidateSha256": "4316e1db6c2d8048e05d63d2159d1fb230a6c7366ff662e0601231ef9c02a7b7",
+  "scopeSha256": "4da7eff291247bcc00f5871305d65b798703d5546d3983b433cc9f23e6c1d0f1",
   "selectionApproved": true,
   "requiredCatalogueCartPrerequisitesApproved": true,
   "approvedPhotoCodes": [
@@ -15,5 +15,6 @@
     "Publication is a separate Replit action; this file is not evidence of deployment.",
     "Live stock initialization and payment-provider verification remain separate.",
     "Owner requested the supplied HTML page layers and grouped categorization to manifest in publication."
-  ]
+  ],
+  "previousCandidateSha256": "34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8"
 }

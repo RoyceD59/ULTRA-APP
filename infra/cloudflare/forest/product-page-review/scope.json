@@ -187,12 +187,17 @@
   {
     "path": "artifacts/uc-companion/components/product/ProductLayers.tsx",
     "beforeSha256": null,
-    "afterSha256": "21f694a680277ab67f13ee95cd75a55fbdcf1d128e4cbea98dd2a7001f401c8b"
+    "afterSha256": "eadf6fe0a0b2619a80d1c9a35846bc951438bb35b60c5e5dfb017f3690130970"
+  },
+  {
+    "path": "artifacts/uc-companion/components/product/ProductPhoto.tsx",
+    "beforeSha256": null,
+    "afterSha256": "bdc33244b6b0850f5f3402134f7ab1a15262044912a888b1a194cfba00273f15"
   },
   {
     "path": "artifacts/uc-companion/components/product/ProductRecordPage.tsx",
     "beforeSha256": null,
-    "afterSha256": "76a25657c7bc493f92ebe8c524f3469bace9cc8212c77710ef5392936250cbca"
+    "afterSha256": "2637fde179f5a8594bc76a440b21f10b034a1c1a2188e25075a4d1ec0efc7f77"
   },
   {
     "path": "artifacts/uc-companion/components/product/theme.ts",

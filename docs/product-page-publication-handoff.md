@@ -3,17 +3,23 @@
 ## Latest selected restoration — 13 October 2026
 
 The selected candidate is now
-`34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8`,
+`4316e1db6c2d8048e05d63d2159d1fb230a6c7366ff662e0601231ef9c02a7b7`,
 restoring the supplied HTML's layered presentation to the shared web/native
 page. The previous sections below describe the preceding preparation history.
 
 This candidate passed frozen API/Hub/Companion builds, shared and consumer
 typechecks, web/Android/iOS exports and exact source/scope verification.
-Build `1791912473158-25878` is a local verification build, **not publication
+Build `1791916662384-28693` is a local verification build, **not publication
 evidence**. The manifest includes `productPageStructure.version` =
 `layered-product-pages-1`, the reference SHA, layers, groups, categories and
 the unchanged three-product photo scope. The production preparer rejects a
 client whose compiled structure manifest differs from the selected source.
+
+This candidate also releases the fallback layout when the interactive product
+page mounts, repairs navigation in partially published groups and adds restock
+request feedback with sign-in return routing. The gallery has explicit image
+bounds and original-byte fallback. Actual Expo device image failure is not yet
+identified; builds alone do not prove phone playback or image delivery.
 
 The manifest also declares `videoSlotsPerProduct: 2`. In ProjectHub, open
 **Products → a product → Product images & installation video** and use

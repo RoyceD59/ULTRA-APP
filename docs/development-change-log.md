@@ -1,3 +1,27 @@
+# 13 October 2026 — Product clicks, restock action and gallery recovery
+
+- **Reproduced:** Published product content looked interactive, but the server
+  document layout remained active after the React handoff; ordinary pointer
+  clicks hit HTML rather than the buttons. Removing that layout mode restored
+  enquiry navigation.
+- **Fixed:** Interactive records release the fallback layout on mount. Group
+  navigation selects a published record, not an unpublished first entry;
+  empty groups are explicitly disabled. Restock saves show progress/errors
+  rather than swallowing failures, and signed-out customers return to their
+  product after sign-in.
+- **Gallery:** Explicit absolute image bounds, loading/retry feedback and
+  original-image fallback after a failed thumbnail derivative. Existing photo
+  approvals and draft publication restrictions are unchanged.
+- **Verified:** Shared and consumer typechecks, API/Hub builds and
+  web/Android/iOS exports passed. Browser fixtures confirmed partial-group
+  navigation and signed-out Notify me routing. No production writes.
+- **Selected source:** `4316e1db6c2d8048e05d63d2159d1fb230a6c7366ff662e0601231ef9c02a7b7`;
+  local build `1791916662384-28693`. Not published. Exact native-device image
+  failure still requires the affected product and Expo platform.
+- **Retention:** The actually published predecessor was byte-reconstructed
+  and verified; the earlier published archive is also retained.
+- **Ignore changes:** None.
+
 # 13 October 2026 — Layered product-page structure restored
 
 - **Owner request:** Use the supplied Ultra Clear Product Pages HTML as the

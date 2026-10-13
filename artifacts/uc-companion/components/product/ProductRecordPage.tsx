@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import BrandLogo from '@/components/BrandLogo';
+import ProductPhoto from './ProductPhoto';
 import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
@@ -45,7 +46,16 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const [viewer, setViewer] = useState<UCReviewMedia | null>(null);
   const [copied, setCopied] = useState(false);
   const [wish, setWish] = useState<boolean | null>(null);
+  const [wishBusy, setWishBusy] = useState(false);
+  const [wishNotice, setWishNotice] = useState('');
+  const wishPending = useRef(false);
   const viewed = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    document.getElementById('uc-public-content')?.remove();
+    document.documentElement.removeAttribute('data-uc-record-mode');
+    document.getElementById('root')?.removeAttribute('hidden');
+  }, [record.code]);
 
   useEffect(() => {
     if (initialSku) setVariant(variants.find(v => v.childSku === initialSku) ?? null);
@@ -84,14 +94,23 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const { data: wishlist } = useQuery({ queryKey: customerQueryKeys.wishlist(user?.id), queryFn: () => api.getWishlist(), enabled: !!token && !!user, staleTime: 60000 });
   const saved = wish ?? (wishlist?.some(w => w.productId === pid) ?? false);
   const toggleWish = useCallback(async () => {
-    if (!token || !user) { router.push('/auth/login'); return; }
-    if (pid === null) return;
+    if (!token || !user) {
+      router.push({ pathname: '/auth/login', params: { returnTo: `/product/${record.slug}` } });
+      return;
+    }
+    if (pid === null) { setWishNotice('Restock alerts are unavailable for this product. Please enquire.'); return; }
+    if (wishPending.current) return;
+    wishPending.current = true;
+    setWishBusy(true);
+    setWishNotice('');
     const next = !saved; setWish(next);
     try {
       if (next) { await api.addToWishlist(pid, record.name); trackProductEvent('add_to_wishlist', { productId: pid, sku: variant?.childSku ?? record.parentSku }); }
       else { await api.removeFromWishlist(pid); }
+      setWishNotice(next ? 'Saved to your wishlist. Restock alerts follow your notification settings.' : 'Removed from your wishlist.');
       await qc.invalidateQueries({ queryKey: customerQueryKeys.wishlist(user.id) });
-    } catch { /* fall through to server truth */ } finally { setWish(null); }
+    } catch { setWishNotice('Could not update your wishlist. Please try again.'); }
+    finally { setWish(null); setWishBusy(false); wishPending.current = false; }
   }, [token, user, pid, saved, api, qc, record, variant, router]);
 
   const buyNow = (askToPay = false) => {
@@ -127,8 +146,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
       <View style={s.stage}>
         {activeVideo
           ? <VideoView player={player} style={{ width: '100%', height: '100%' }} contentFit="contain" nativeControls />
-          : cur ? <Image source={{ uri: resizedImageUrl(cur.src, 520) }} accessibilityLabel={cur.alt} contentFit="contain" style={{ width: '100%', height: '100%' }} />
-            : <Ionicons name="water-outline" size={64} color={P.teal} />}
+          : cur ? <ProductPhoto src={cur.src} alt={cur.alt} width={520} />
+            : <Text style={s.note}>Photos have not been published for this product yet.</Text>}
       </View>
       {colourNote ? <Text style={s.note}>{colourNote}</Text> : null}
       {total > 1 ? (
@@ -178,14 +197,15 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <TouchableOpacity onPress={() => buyNow(true)} style={s.chip} accessibilityRole="button"><Text style={s.chipT}>Ask someone to pay</Text></TouchableOpacity>
         </>
       ) : state.kind === 'out_of_stock' ? (
-        <TouchableOpacity onPress={toggleWish} style={s.ghost} accessibilityRole="button">
+        <TouchableOpacity onPress={toggleWish} disabled={wishBusy} style={s.ghost} accessibilityRole="button">
           <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={P.tealDark} />
-          <Text style={s.ghostT}>{saved ? 'Remove from wishlist' : 'Notify me when back in stock'}</Text>
+          <Text style={s.ghostT}>{wishBusy ? 'Saving…' : saved ? 'Remove from wishlist' : 'Notify me when back in stock'}</Text>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity onPress={() => router.push(`/enquiry?productId=${pid ?? ''}&productName=${encodeURIComponent(record.name)}` as never)} style={s.primary}>
           <Text style={s.primaryT}>Enquire about this product</Text>
         </TouchableOpacity>)}
+      {!!wishNotice ? <Text accessibilityLiveRegion="polite" style={s.note}>{wishNotice}</Text> : null}
       {record.compareGroup ? <TouchableOpacity onPress={() => setCompare(c => !c)} accessibilityRole="button" style={s.ghost}><Text style={s.ghostT}>{compare ? 'Hide comparison' : 'Compare with similar products'}</Text></TouchableOpacity> : null}
       {serviceSummary(record) ? <Text style={[s.note, { textAlign: 'center' }]}>{serviceSummary(record)}</Text> : null}
       <View style={s.share}>
