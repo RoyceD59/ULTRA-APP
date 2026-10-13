@@ -3,6 +3,16 @@ name: Frozen release verification
 description: Verify narrow production fixes reach the live app without publishing unrelated working-tree changes.
 ---
 
+Check cold server startup and authored-data presence after a scoped build, not
+only compiler success or downloadable bundles.
+
+**Why:** Successful exports did not catch a missing shared CommonJS package
+export. A non-awaited asynchronous API build also removed authored records
+copied too early while still exiting successfully.
+
+**How to apply:** Exercise the exact packaged Node server and inspect required
+data outputs after build completion before selecting a release.
+
 Do not replace an entire shared API hook just to include a product/checkout
 method in a frozen release. Reconcile its contracts with the frozen generated
 client and every retained consumer, or preserve unrelated methods.

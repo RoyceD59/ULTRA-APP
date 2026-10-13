@@ -1,6 +1,6 @@
 # Product-page publication handoff
 
-## Current decision: no-go pending candidate compatibility fixes
+## Current decision: compatibility fixed; no-go pending browser and coordinated-release gates
 
 The owner requested the new product pages across web and Expo. The existing
 photo approval covers Sweet Home, Viva Drop and Gym Buddy only.
@@ -59,29 +59,41 @@ A deterministic source-review archive was prepared separately from the selected
 archive. Its parent is the unchanged security-reviewed frozen package.
 
 - Candidate SHA-256:
-  `c1318f524643fe92bf2fd97ea5b6d52480bf366b2807f080bc7d44391489b85f`
+  `a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7`
 - Review directory: `infra/cloudflare/forest/product-page-review/`.
-- Source manifest: 62 changed/added paths, 1,308 total regular source files.
+- Source manifest: 68 changed/added paths, 1,310 total regular source files.
 - The dependency lockfile remained identical to the frozen parent.
 - The existing frozen-source handoff verification passed.
 - Candidate shared-library compilation passed.
-- Candidate API and Companion typechecks **failed**.
+- Candidate API and Companion typechecks now pass.
 - The candidate server and API-build JavaScript syntax checks passed.
 
-Remaining blockers include promotion-quote signatures, receipt import collisions,
+Earlier blockers included promotion-quote signatures, receipt import collisions,
 payment-verification exports/result fields, a catalogue-cache caller contract,
 fulfillment transitions, missing generated client models, cart fields and
-shared client/session/QR caller signatures. The broad shared API-hook replacement
-also pulled in unrelated client contracts; that must be narrowed or explicitly
-reconciled rather than considered successful merely because the files copy.
+shared client/session/QR caller signatures. These were reconciled. Only commerce
+methods now advance in the shared API hook; retained customer, session and
+rewards-QR methods keep their frozen contracts. Checkout quote/cancel/recovery
+routes include the route-array definition, not just single-string route calls.
 
 The latest product presentation was included in the review source; the unfinished
 Ask-to-Pay action was removed there. Native sharing uses the existing native
-Share API, avoiding a new native clipboard dependency. These candidate edits
-have not passed application validation or been activated.
+Share API, avoiding a new native clipboard dependency. Four isolated regression
+tests pass for approved galleries/identities, owned SKU/stock/price quotes,
+recovery guards and variant cart persistence. No providers are called.
 
-No API/web/Android/iOS release exports or end-to-end checks have been completed
-for this candidate. A development screenshot showed only the loading state,
+API/web/Android/iOS release builds have completed. Installed dependency backports
+passed seven attack/ordinary-behaviour fixtures. All fifteen approved image URLs
+returned HTTP 200 with image content types from the live image service.
+
+Packaging verification caught and fixed an asynchronous output-copy race:
+authored API records are copied only after the build finishes clearing `dist`.
+The cold web server now includes its shared CommonJS helper and matching route
+classifier. Local HTTP checks serve all three approved public HTML pages against
+real development API records and return the matching native manifest.
+
+Browser checkout, physical-device and coordinated rollback/activation checks
+remain unverified. A development screenshot showed only the loading state,
 which is not evidence of a rendered candidate page or working galleries.
 
 ## Production boundary
@@ -90,9 +102,10 @@ No running application source, secret, production database, release selector,
 DNS, provider setting or deployment was changed. No payment-provider requests
 were made for this preparation. There is no Publish-ready release.
 
-Do not select this review archive or create its prepared-stage marker while
-these checks fail. Preserve the previous archive and rollback releases. The
-next step is to reconcile the shared contracts while keeping unrelated and
-unfinished functionality out, then run the gates above. Live stock initialization
+Do not select this review archive or create its prepared-stage marker until the
+remaining browser and coordinated-release gates pass. Preserve the previous
+archive and rollback releases. The next step is browser checkout verification
+and the coordinated release handoff, not another compatibility rewrite.
+Live stock initialization
 requires its separately explicit, authorized stock-import procedure; preparing
 source is not an inventory write or evidence of production availability.

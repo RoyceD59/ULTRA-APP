@@ -39,8 +39,11 @@ function routeKey(statement) {
   const call = statement.expression;
   if (!ts.isPropertyAccessExpression(call.expression)
     || call.expression.expression.getText() !== 'router'
-    || !call.arguments[0] || !ts.isStringLiteral(call.arguments[0])) return null;
-  return `${call.expression.name.text} ${call.arguments[0].text}`;
+    || !call.arguments[0]) return null;
+  const paths = ts.isStringLiteral(call.arguments[0]) ? [call.arguments[0].text]
+    : ts.isArrayLiteralExpression(call.arguments[0])
+      ? call.arguments[0].elements.filter(ts.isStringLiteral).map(e => e.text) : [];
+  return paths.length ? `${call.expression.name.text} ${paths.join('|')}` : null;
 }
 function transplantModule(parent, source, selectedNames, selectedRoutes) {
   const before = parse('module.ts', parent), after = parse('module.ts', source);
@@ -77,7 +80,8 @@ function transplantModule(parent, source, selectedNames, selectedRoutes) {
     parent = parent.slice(0, change.start) + change.replacement + parent.slice(change.end);
   }
   const used = new Set([...chosen].flatMap(s => [...identifiers(s)]));
-  const imported = new Set();
+  // Imports must not shadow retained top-level declarations.
+  const imported = new Set(before.statements.flatMap(names));
   for (const statement of before.statements) if (ts.isImportDeclaration(statement)) {
     const clause = statement.importClause;
     if (clause?.name) imported.add(clause.name.text);
@@ -135,14 +139,15 @@ const originalUc = get(api + 'src/routes/uc.ts');
 const currentUc = await readFile(resolve(root, api + 'src/routes/uc.ts'), 'utf8');
 let uc = transplantModule(originalUc, currentUc,
   new Set(['hasWCCredentials', 'wcFetchArray', 'wcFetchAllPages', 'wcFetchOne', 'serverPricedLines',
-    'normalizeProduct', 'wcCreateCheckoutOrder', 'getCachedCommerceCatalogue', 'invalidateCatalogueCache']),
+    'normalizeProduct', 'wcCreateCheckoutOrder', 'getCachedCommerceCatalogue', 'invalidateCatalogueCache',
+    'resolveWcCategoryId', 'getWcCategoryMap']),
   new Set(['get /uc/products', 'get /uc/products/:id', 'get /uc/products/:id/variations']));
 // Product/cart contract integration uses the established buyer-only checkout,
 // not later guest links or callbacks.
 const buyerUc = git(buyerRevision, api + 'src/routes/uc.ts');
 const buyerRoutes = new Set(parse('buyer.ts', buyerUc).statements.map(routeKey).filter(key =>
   key && /^(?:get|post|patch|delete) \/uc\/(?:checkout(?:\/|$)|orders(?:\/|$))/.test(key)));
-uc = transplantModule(uc, buyerUc, new Set(['sendOrderConfirmationEmail']), buyerRoutes);
+uc = transplantModule(uc, buyerUc, new Set(['sendOrderConfirmationEmail', 'verifyPaymentOnServer']), buyerRoutes);
 // Outstanding legacy provider callbacks keep their original price-validation
 // contract. Only the new owned checkout uses the owned SKU/stock verifier.
 const originalPricing = parse('legacy.ts', originalUc).statements.find(s =>
@@ -168,6 +173,14 @@ await copy(api + 'src/routes/uc-product-records.ts');
 await copy(api + 'src/lib/product-editorial.ts');
 await copy(api + 'src/lib/companion-catalogue.ts');
 await copy(api + 'src/lib/checkout-pricing.ts', buyerRevision);
+const promotionsPath = api + 'src/lib/reward-promotions.ts';
+set(promotionsPath, transplantModule(get(promotionsPath), git(buyerRevision, promotionsPath),
+  new Set(['quotePromotion']), new Set()));
+// Buyer fulfillment transitions and their outbox must advance together.
+await copy(api + 'src/lib/order-status-pipeline.ts', buyerRevision);
+const smsPath = api + 'src/lib/sms.ts';
+set(smsPath, transplantModule(get(smsPath), git(buyerRevision, smsPath),
+  new Set(['orderShippedSms', 'orderReadyToCollectSms', 'OrderFulfillmentDetails', 'sendSmsAwaitable']), new Set()));
 await copy(api + 'src/lib/checkout-orders.ts', buyerRevision);
 // The owned catalogue has no Woo fulfillment path. Stock reservations must
 // match the owned buyer order rather than the old remote Woo identity.
@@ -177,6 +190,11 @@ if (/guest-pay|guestPaySessions|guestPayToken/.test(checkout)) throw new Error('
 const referralPath = api + 'src/routes/referrals.ts';
 set(referralPath, transplantModule(get(referralPath), git(buyerRevision, referralPath),
   new Set(['validateCodeForDiscount']), new Set()));
+const rewardsPath = api + 'src/routes/uc-rewards.ts';
+const buyerRewards = git(buyerRevision, rewardsPath);
+const checkoutRoutes = new Set(parse('rewards.ts', buyerRewards).statements.map(routeKey).filter(key =>
+  key && /^(?:get|post) \/uc\/checkout\//.test(key)));
+set(rewardsPath, transplantModule(get(rewardsPath), buyerRewards, new Set(), checkoutRoutes));
 // Extend receipt formatting while retaining the frozen mail transport.
 const emailImport = parse('uc.ts', buyerUc).statements.find(s => ts.isImportDeclaration(s)
   && s.importClause?.namedBindings?.getText().includes('buildOrderReceiptEmail'));
@@ -187,9 +205,9 @@ set(emailPath, transplantModule(get(emailPath), git(buyerRevision, emailPath),
 const zodPackage = 'lib/api-zod/package.json';
 const zodManifest = JSON.parse(get(zodPackage));
 const currentZod = JSON.parse(await readFile(resolve(root, zodPackage), 'utf8'));
-for (const entry of ['customer-contact', 'order-receipt']) {
+for (const entry of ['customer-contact', 'order-receipt', 'blog-inline-links-core']) {
   zodManifest.exports['./' + entry] = currentZod.exports['./' + entry];
-  await copy('lib/api-zod/src/' + entry + '.ts');
+  await copy('lib/api-zod/src/' + entry + (entry.endsWith('-core') ? '.cjs' : '.ts'));
 }
 set(zodPackage, JSON.stringify(zodManifest, null, 2) + '\n');
 
@@ -197,8 +215,61 @@ set(zodPackage, JSON.stringify(zodManifest, null, 2) + '\n');
 for (const path of ['app/product/[id].tsx', 'components/product/ProductRecordPage.tsx',
   'components/product/ProductCompare.tsx', 'components/product/theme.ts',
   'context/CartContext.tsx', 'context/cartStorage.ts', 'app/cart.tsx', 'app/checkout.tsx',
-  'hooks/useApi.ts', 'hooks/checkoutQuoteIdentity.ts', 'lib/productRecord.ts', 'lib/productAnalytics.ts']) {
+  'hooks/checkoutQuoteIdentity.ts', 'lib/productRecord.ts', 'lib/productAnalytics.ts']) {
   await copy(companion + path, frontendRevision);
+}
+// Advance only commerce methods. Retain frozen customer, session and QR APIs.
+const hookPath = companion + 'hooks/useApi.ts';
+let hook = get(hookPath);
+const newHook = git(frontendRevision, hookPath);
+const commerceMethods = new Set(['createOrder', 'quoteCheckout', 'cancelCheckout', 'getCheckoutRecovery',
+  'quoteCheckoutPromotion', 'quoteReferralDiscount', 'mpesaSTKPush', 'mpesaStatus',
+  'stripeSession', 'stripeSessionStatus', 'paystackInit', 'paystackVerify', 'verifyPayment']);
+function returnedMethods(text) {
+  const ast = parse('hook.ts', text);
+  const fn = ast.statements.find(s => ts.isFunctionDeclaration(s) && s.name?.text === 'useApi');
+  const statement = fn.body.statements.find(s => ts.isReturnStatement(s));
+  if (!statement || !ts.isObjectLiteralExpression(statement.expression)) throw new Error('Unexpected useApi return contract');
+  return { ast, object: statement.expression };
+}
+const oldMethods = returnedMethods(hook), newMethods = returnedMethods(newHook);
+const edits = [], addedMethods = [], selectedMethodNodes = [];
+for (const property of newMethods.object.properties) {
+  const name = property.name?.getText(newMethods.ast);
+  if (!commerceMethods.has(name)) continue;
+  selectedMethodNodes.push(property);
+  let replacement = property.getText(newMethods.ast);
+  if (name === 'quoteCheckout') {
+    replacement = replacement.replace('quoteCompanionCheckout(data, { headers: authHeaders() })',
+      "post<CheckoutPromotionQuote>('/api/uc/checkout/quote', data)");
+  }
+  const old = oldMethods.object.properties.find(p => p.name?.getText(oldMethods.ast) === name);
+  if (old) edits.push({ start: old.getStart(oldMethods.ast), end: old.end, replacement });
+  else addedMethods.push(replacement);
+}
+edits.push({ start: oldMethods.object.end - 1, end: oldMethods.object.end - 1,
+  replacement: addedMethods.length ? ',\n' + addedMethods.join(',\n') : '' });
+// Remove a redundant comma when the frozen object already has a trailing comma.
+if (addedMethods.length && hook.slice(0, oldMethods.object.end - 1).trimEnd().endsWith(',')) {
+  edits.at(-1).replacement = '\n' + addedMethods.join(',\n') + ',\n';
+}
+for (const edit of edits.sort((a, b) => b.start - a.start)) {
+  hook = hook.slice(0, edit.start) + edit.replacement + hook.slice(edit.end);
+}
+const hookDeclarations = new Set(['UCProduct', 'UCOrder', 'CheckoutPaymentInput', 'CheckoutPromotionQuote']);
+for (const node of selectedMethodNodes) for (const identifier of identifiers(node)) {
+  if (parse('hook.ts', newHook).statements.some(s => names(s).includes(identifier)
+    && (ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s)))) hookDeclarations.add(identifier);
+}
+set(hookPath, transplantModule(hook, newHook, hookDeclarations, new Set()));
+// Wishlist measurement must use only the analytics events supported by the
+// frozen collector. The opt-in product adapter remains separate.
+for (const path of ['app/product/[id].tsx', 'components/product/ProductRecordPage.tsx']) {
+  let text = get(companion + path);
+  text = text.replace(/trackEvent\('wishlist_item_(?:added|removed)', \{ productId: pid \}\);?/g, '');
+  text = text.replace("trackEvent(next ? 'wishlist_item_added' : 'wishlist_item_removed', { productId: pid });", '');
+  text = text.replace("getUcProduct(pid, { publicationSafe: true })", 'api.getProduct(pid)');
+  set(companion + path, text);
 }
 // Preserve the latest fit guidance, comparison groups and colour disclaimers.
 for (const path of ['components/product/ProductRecordPage.tsx', 'components/product/ProductCompare.tsx',
@@ -229,6 +300,9 @@ productPage = productPage.replace('await Clipboard.setStringAsync(text);',
 productPage = productPage.replaceAll("copied ? 'Copied' : 'Copy link'",
   "copied ? 'Copied' : (Platform.OS === 'web' ? 'Copy link' : 'Share link')");
 set(companion + 'components/product/ProductRecordPage.tsx', productPage);
+set(companion + 'components/product/ProductRecordPage.tsx',
+  get(companion + 'components/product/ProductRecordPage.tsx')
+    .replace(/trackEvent\('wishlist_item_(?:added|removed)', \{ productId: pid \}\);?/g, ''));
 // Keep current authored content and approved ProjectHub mappings, not old
 // website images or the earlier price workbook.
 for (const path of ['server/product-records.cjs', 'server/public-content.cjs',
@@ -239,6 +313,7 @@ const recordFiles = execFileSync('git', ['ls-files', '--', companion + 'server/r
   { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 for (const path of recordFiles) await copy(path);
 await copy(companion + 'server/serve.js', frontendRevision);
+await copy(companion + 'server/web-routes.cjs', frontendRevision);
 let webServer = get(companion + 'server/serve.js');
 const approvedPath = '/^\\/product\\/(?:sweet-home|viva-drop|gym-buddy)\\/?$/';
 webServer = webServer.replace("process.env.PUBLIC_WEB_RENDERING_ENABLED === 'true'",
@@ -374,6 +449,10 @@ if (!schema.includes('variationId:')) {
 
 // Add the same authored server-only record contract next to the API bundle.
 let build = get(api + 'build.mjs');
+if (!build.includes('buildAll().catch(')) throw new Error('API build completion preimage changed');
+// The asynchronous builder clears dist. Copy authored records only after that
+// promise completes, otherwise a successful build silently deletes them.
+build = build.replace('buildAll().catch(', 'await buildAll().catch(');
 build += `
 const { cpSync: copyProductFiles, mkdirSync: makeProductDirectory } = await import("node:fs");
 const { resolve: productResolve, dirname: productDirname } = await import("node:path");

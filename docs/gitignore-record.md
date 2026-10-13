@@ -1,3 +1,11 @@
+# 14 October 2026 — product-page build verification
+
+- No ignore rules changed. Review source inputs and focused verification tools
+  remain tracked; compiled outputs/dependency caches remain under the existing
+  ignored `.consistency-build/` directory.
+- Isolated database fixtures were dropped by the existing test harness. No
+  credentials, payment-provider output or production data were added to Git.
+
 # Product-page review preparation — 13 October 2026
 
 `infra/cloudflare/forest/product-page-review/` contains a small source-review

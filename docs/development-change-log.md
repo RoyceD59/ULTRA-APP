@@ -1,3 +1,16 @@
+# 14 October 2026 — product-page compatibility implementation
+
+- Reconciled catalogue, pricing, fulfillment, receipt and cart contracts in the
+  isolated release candidate; retained unrelated customer/session/QR methods.
+- Added the missing checkout route-array handlers and kept guest Ask-to-Pay out.
+- Shared/API/Companion typechecks, four isolated product/variant/cart regressions
+  and seven installed security-backport fixtures passed without provider calls.
+- Verified all fifteen approved photo URLs return image responses.
+- Fixed API authored-data output ordering and the cold web renderer's missing
+  CommonJS helper export; prepared matching API/web/Android/iOS builds.
+- No production data, running service source, release selector or publication
+  changed. Browser checkout and coordinated activation remain separate gates.
+
 # 13 October 2026 — approved product-page prerequisite review
 
 - Recorded the owner's approval to include the required catalogue, price,
