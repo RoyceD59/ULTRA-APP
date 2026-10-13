@@ -125,6 +125,11 @@
     "afterSha256": "fde25ff5effb6bf502ede84563af1959498abc4d56be8a51d88743c7c7e76fdb"
   },
   {
+    "path": "artifacts/uc-companion/app/(tabs)/map.native.tsx",
+    "beforeSha256": "1b4ea1744f49321251dc2b3869470c809950a3792876cff78839aed19d7e7b15",
+    "afterSha256": "9128bc8e72a10323ef07235b7bec02244f1cd315781822c4272a487e76df1268"
+  },
+  {
     "path": "artifacts/uc-companion/app/_layout.tsx",
     "beforeSha256": "c65a69f74511f611fff53284b5de8ecc737eeaac912bb1b6b7e5a26eb7f69363",
     "afterSha256": "b381784ada9dd025679fe873865de3cbda02322cea67ea628650d610cdcc6f3b"
@@ -142,7 +147,7 @@
   {
     "path": "artifacts/uc-companion/app/product/[id].tsx",
     "beforeSha256": "dbb5093c08c635fcac7712bebf49692fdba192dcd47894550470cb974919ac6a",
-    "afterSha256": "630c9d834b83221851edc793d52b082501b573225ce3ba9b32a990818c1b1e4c"
+    "afterSha256": "6edc2dfba743d135c423e86b174fbeeeef316ea3e062cb1bb0f71bbdf900955c"
   },
   {
     "path": "artifacts/uc-companion/assets/loading/water-still.png",
@@ -165,6 +170,11 @@
     "afterSha256": "7b809619ebdbe47cf0b6d6f8aeb65e5885badba4005a9083de9a2b5fea1e5765"
   },
   {
+    "path": "artifacts/uc-companion/components/LocationDetailModal.tsx",
+    "beforeSha256": "b7858e5a15fd706159aa1aa47880ac29b2c81ca295c84d40afe70a7ce7d990c5",
+    "afterSha256": "fa4ebdfed562568af296d84f6be4bc2269823656e36ec8e765d6efd7c0e51d6c"
+  },
+  {
     "path": "artifacts/uc-companion/components/PageDataError.tsx",
     "beforeSha256": null,
     "afterSha256": "56eb02eb4877668b174fca02b14e2b5756efeb22895210798a6ff445444040b3"
@@ -177,7 +187,12 @@
   {
     "path": "artifacts/uc-companion/components/PublicRecordDocument.tsx",
     "beforeSha256": null,
-    "afterSha256": "184f44073a3c2ed7fa428dc2f22e0a86e8d79989542a933c32651326f98416ac"
+    "afterSha256": "d251452660323929a2e65da22a846e4bb524b3d9461632ad3771c81031439a65"
+  },
+  {
+    "path": "artifacts/uc-companion/components/StarRating.tsx",
+    "beforeSha256": "e75a1ec0271b5404ec69a1572d3a6ad9b2a74b55a88a9144dfee8fb62a7dcf0c",
+    "afterSha256": "998a6270e8ab8778bcde2eb18d24887f1723e8f019a59f63fa374aff308b164b"
   },
   {
     "path": "artifacts/uc-companion/components/product/ProductCompare.tsx",
@@ -197,7 +212,7 @@
   {
     "path": "artifacts/uc-companion/components/product/ProductRecordPage.tsx",
     "beforeSha256": null,
-    "afterSha256": "2637fde179f5a8594bc76a440b21f10b034a1c1a2188e25075a4d1ec0efc7f77"
+    "afterSha256": "eeb7b04e16828d7d98204c230c485c1c659520ab376b0882fef76550ef5657ee"
   },
   {
     "path": "artifacts/uc-companion/components/product/theme.ts",
@@ -250,6 +265,16 @@
     "afterSha256": "8749ce4754d7de3a05ed88b9cf766110a55c787bb5aba5ca2fe8ba32b432568c"
   },
   {
+    "path": "artifacts/uc-companion/hooks/useNativeNotifications.ts",
+    "beforeSha256": "3da99398e7abadf3e9689aaafedad0c7609a6cf43a533c73068aa8fd62173ffc",
+    "afterSha256": "d6e77f3c9ddc1d0ff36361315da539f77e003fa6f0bfff594a5e15591f1fd1a5"
+  },
+  {
+    "path": "artifacts/uc-companion/hooks/useNotifications.ts",
+    "beforeSha256": "93ae21739a28652657c5dbb70bf471fc711110823647782900b764edddbce183",
+    "afterSha256": "6d228db6ef2e086262196ac00d8f03cbf3f1ce35344cf503b7ffc26b2290522c"
+  },
+  {
     "path": "artifacts/uc-companion/hooks/usePageMotion.ts",
     "beforeSha256": null,
     "afterSha256": "ea71b9b41195e08482abb8a0e3b06fbbc8e38741ca48cc2884c07ad0862a227c"
@@ -263,6 +288,11 @@
     "path": "artifacts/uc-companion/lib/accessibility.ts",
     "beforeSha256": null,
     "afterSha256": "30e810fb0a27e0d28b450d274a3782a4f5a41c7fdb5478b90809b118db0f92cd"
+  },
+  {
+    "path": "artifacts/uc-companion/lib/localNotifications.ts",
+    "beforeSha256": null,
+    "afterSha256": "36bb5368717bc28315dd2229e78267f0faf6d668a802ebfc644bdc75a27c3f1b"
   },
   {
     "path": "artifacts/uc-companion/lib/pageLoading.ts",
@@ -288,6 +318,11 @@
     "path": "artifacts/uc-companion/scripts/__tests__/build-info.test.mjs",
     "beforeSha256": "d7292d8f6c17f02fe46cbb016069d92277c9d38fb923b15510182ec3620337a7",
     "afterSha256": "c6c0d6de78bd4da710ca12e8e6a6cd8becef3f70a6fe240c52877436ccc701de"
+  },
+  {
+    "path": "artifacts/uc-companion/scripts/__tests__/local-notification-startup.test.mjs",
+    "beforeSha256": null,
+    "afterSha256": "3b9f3b0ed29dacebf6e476cb01da553ae1c98093a76215c46b9e457e4dcbc56e"
   },
   {
     "path": "artifacts/uc-companion/scripts/build-info.js",
@@ -368,6 +403,11 @@
     "path": "artifacts/uc-companion/server/web-routes.cjs",
     "beforeSha256": "fd94d69d1fbb614c83d8634beb6ef1f2d5d67175f6d772b19ff9c35801ce3e25",
     "afterSha256": "467e507c9037c9b845fa1cde7086e2836862287763667397413cf236dfb881e0"
+  },
+  {
+    "path": "artifacts/uc-companion/test-setup.mjs",
+    "beforeSha256": "306587996037587dc01f48c8bf8b2472a1bde1f842728161529c2a7d61da8f47",
+    "afterSha256": "57a97863c3ca374a61adf56ad25ebc83da785a52289392da09284d2845c6564f"
   },
   {
     "path": "lib/api-zod/package.json",

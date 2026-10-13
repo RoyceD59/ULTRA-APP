@@ -37,10 +37,16 @@ export default function StarRating({
     return (
       <TouchableOpacity
         key={i}
+        accessibilityRole="button"
+        accessibilityLabel={`Rate ${i} out of 5`}
+        accessibilityState={{ selected: rating === i }}
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onChange(i);
+          // Optional tactile feedback must never prevent a rating selection.
+          try {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          } catch { /* unsupported tactile feedback */ }
         }}
       >
         {icon}

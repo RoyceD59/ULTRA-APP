@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Linking, Share, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
@@ -50,7 +50,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const [wishNotice, setWishNotice] = useState('');
   const wishPending = useRef(false);
   const viewed = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (Platform.OS !== 'web') return;
     document.getElementById('uc-public-content')?.remove();
     document.documentElement.removeAttribute('data-uc-record-mode');

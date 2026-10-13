@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { usePathname } from 'expo-router';
 
@@ -60,7 +60,7 @@ export default function PublicRecordDocument({ controls, route }: {
     return () => controller.abort();
   }, [pathname, state, active]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active || !page || !container.current) return;
     document.getElementById('uc-public-content')?.remove();
     document.getElementById('root')?.removeAttribute('hidden');

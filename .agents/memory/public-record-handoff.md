@@ -8,8 +8,10 @@ ownership when the product API response arrives.
 
 **Why:** The fallback's natural-document layout remained active after React
 removed the fallback content. Buttons looked correctly positioned, but browser
-hit-testing returned the HTML element instead of the buttons. Removing the
-fallback layout mode restored real clicks; forced clicks would have hidden this.
+hit-testing returned the HTML element instead of the buttons. A Chrome-sized
+reproduction also measured a zero-height root despite populated product data.
+Removing fallback layout mode restored real clicks; forced clicks would have
+hidden this.
 
 **How to apply:** Confirm ordinary pointer clicks after loading a published
 deep link, not just screenshots or forced browser clicks. Release fallback

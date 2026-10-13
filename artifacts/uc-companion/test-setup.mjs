@@ -49,6 +49,9 @@ const STUBS = {
 
 const original = Module._resolveFilename.bind(Module);
 Module._resolveFilename = (request, parent, isMain, options) => {
+  if (request.startsWith('expo-notifications/build/')) {
+    return STUBS['expo-notifications'];
+  }
   if (Object.prototype.hasOwnProperty.call(STUBS, request)) {
     return STUBS[request];
   }

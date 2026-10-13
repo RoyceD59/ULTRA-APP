@@ -55,8 +55,7 @@ export default function ProductDetailScreen() {
     retry: (n, e) => ![404, 410].includes((e as { status?: number })?.status ?? 0) && n < 2,
   });
   if (record.data) {
-    // Shared presentation replaces the server HTML once, without duplication.
-    if (Platform.OS === 'web' && typeof document !== 'undefined') document.getElementById('uc-public-content')?.remove();
+    // The mounted page owns the document handoff; do not mutate DOM in render.
     return (
       <ScrollView style={{ flex: 1, backgroundColor: '#FBFDFE' }} contentContainerStyle={{ paddingBottom: 60 }}>
         <ProductRecordPage key={record.data.slug} record={record.data} initialSku={sku ? String(sku) : undefined} topicsRow />

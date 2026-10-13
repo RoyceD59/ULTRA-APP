@@ -175,7 +175,9 @@ export default function MapScreen() {
         showsMyLocationButton={false}
         showsCompass={false}
         onMapReady={() => setMapReady(true)}
-        onPress={() => setSelected(null)}
+        onPress={event => {
+          if (event.nativeEvent.action !== 'marker-press') setSelected(null);
+        }}
       >
         {visible.map(loc => (
           <Marker
@@ -187,7 +189,10 @@ export default function MapScreen() {
               loc.type === 'refill_station' ? REFILL_PIN :
               loc.type === 'city_tap' ? TAP_PIN : ATM_PIN
             }
-            onPress={() => handleMarkerPress(loc)}
+            onPress={event => {
+              event.stopPropagation();
+              handleMarkerPress(loc);
+            }}
           />
         ))}
       </MapView>

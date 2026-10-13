@@ -3,13 +3,13 @@
 ## Latest selected restoration — 13 October 2026
 
 The selected candidate is now
-`4316e1db6c2d8048e05d63d2159d1fb230a6c7366ff662e0601231ef9c02a7b7`,
+`c49a560276fd7114eff73fdaa44e09f47c467265e260411bcdf944a1f32ad9ad`,
 restoring the supplied HTML's layered presentation to the shared web/native
 page. The previous sections below describe the preceding preparation history.
 
 This candidate passed frozen API/Hub/Companion builds, shared and consumer
 typechecks, web/Android/iOS exports and exact source/scope verification.
-Build `1791916662384-28693` is a local verification build, **not publication
+Build `1791918978635-32131` is a local verification build, **not publication
 evidence**. The manifest includes `productPageStructure.version` =
 `layered-product-pages-1`, the reference SHA, layers, groups, categories and
 the unchanged three-product photo scope. The production preparer rejects a
@@ -20,6 +20,20 @@ page mounts, repairs navigation in partially published groups and adds restock
 request feedback with sign-in return routing. The gallery has explicit image
 bounds and original-byte fallback. Actual Expo device image failure is not yet
 identified; builds alone do not prove phone playback or image delivery.
+
+The Android screenshot identified a separate startup exception: eager remote
+push imports in Expo Go. This package uses local-only notification imports and
+loads remote registration only where supported. Local reminders remain intact.
+After publication, close the old Expo Go session and open the updated manifest;
+then check Android startup and the approved iPhone photo galleries.
+
+Chrome reproduction confirmed a zero-height product container in the published
+predecessor. This candidate completes handoff before paint and preserves
+fallback content until mounting. Native ATM/vendor rating corrections include
+boolean optional-text guards, marker event isolation and non-blocking haptics.
+Phone image delivery and actual native rating submission remain verification
+steps after activating this package; do not count browser fixtures as native
+device passes.
 
 The manifest also declares `videoSlotsPerProduct: 2`. In ProjectHub, open
 **Products → a product → Product images & installation video** and use

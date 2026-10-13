@@ -34,7 +34,7 @@ export function reconcileHydrationReminder(userId: number | null): Promise<'sche
   desiredOwner = userId;
   const work = async (): Promise<'scheduled' | 'disabled' | 'denied' | 'web'> => {
     if (Platform.OS === 'web') return 'web';
-    const Notifications = await import('expo-notifications');
+    const Notifications = await import('./localNotifications');
     const owner = desiredOwner;
     const prefs: HydrationReminderPrefs = owner ? await getHydrationReminderPrefs(owner) : { enabled: false, intervalHours: 3 };
     const scheduled = (await Notifications.getAllScheduledNotificationsAsync())

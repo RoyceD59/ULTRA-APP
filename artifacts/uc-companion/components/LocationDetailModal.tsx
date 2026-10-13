@@ -35,7 +35,7 @@ export default function LocationDetailModal({
   const { data: myRatingRes } = useQuery({
     queryKey: customerQueryKeys.locationRating(user?.id, location?.id),
     queryFn: () => api.getMyLocationRating(location!.id),
-    enabled: !!location?.id && !!token,
+    enabled: !!location?.id && !!token && !!user,
   });
 
   const myRating = myRatingRes?.rating;
@@ -123,7 +123,7 @@ export default function LocationDetailModal({
                 <Ionicons name="time-outline" size={16} color={colors.mutedForeground} />
                 <Text style={[s.metaTxt, { color: colors.text }]}>{location.hours}</Text>
               </View>
-              {location.phone && (
+              {!!location.phone && (
                 <View style={s.metaRow}>
                   <Ionicons name="call-outline" size={16} color={colors.mutedForeground} />
                   <Text style={[s.metaTxt, { color: colors.text }]}>{location.phone}</Text>
@@ -139,25 +139,25 @@ export default function LocationDetailModal({
               </View>
               {location.type === 'city_tap' && (
                 <>
-                  {location.city && location.countryIso && (
+                  {!!location.city && !!location.countryIso && (
                     <View style={s.metaRow}>
                       <Ionicons name="location-outline" size={16} color={colors.mutedForeground} />
                       <Text style={[s.metaTxt, { color: colors.text }]}>{location.city}, {location.countryIso}</Text>
                     </View>
                   )}
-                  {location.municipal && (
+                  {!!location.municipal && (
                     <View style={s.metaRow}>
                       <Ionicons name="business-outline" size={16} color={colors.mutedForeground} />
                       <Text style={[s.metaTxt, { color: colors.text }]}>Operator: {location.municipal}</Text>
                     </View>
                   )}
-                  {location.sourceAttribution && (
+                  {!!location.sourceAttribution && (
                     <View style={s.metaRow}>
                       <Ionicons name="water-outline" size={16} color={colors.mutedForeground} />
                       <Text style={[s.metaTxt, { color: colors.text }]}>Source: {location.sourceAttribution}</Text>
                     </View>
                   )}
-                  {location.accessNotes && (
+                  {!!location.accessNotes && (
                     <View style={s.metaRow}>
                       <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
                       <Text style={[s.metaTxt, { color: colors.text, flex: 1 }]}>{location.accessNotes}</Text>
@@ -206,7 +206,7 @@ export default function LocationDetailModal({
                 <Text style={[s.emptyTxt, { color: colors.mutedForeground }]}>No community ratings yet.</Text>
               )}
 
-              {token ? (
+              {token && user ? (
                 <TouchableOpacity
                   style={[s.btnOutline, { borderColor: colors.border }]}
                   onPress={() => setShowRatingForm(true)}
@@ -228,7 +228,7 @@ export default function LocationDetailModal({
                       <View key={rating.id} style={[s.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                         <View style={s.reviewHeader}>
                           <StarRating rating={ratingAvg} size={14} />
-                          {rating.createdAt && (
+                          {!!rating.createdAt && (
                             <Text style={[s.reviewDate, { color: colors.mutedForeground }]}>
                               {new Date(rating.createdAt).toLocaleDateString()}
                             </Text>
@@ -237,7 +237,7 @@ export default function LocationDetailModal({
                         {rating.comment ? (
                           <Text style={[s.reviewComment, { color: colors.text }]}>{rating.comment}</Text>
                         ) : null}
-                        {token && rating.id !== myRating?.id && (
+                        {!!token && rating.id !== myRating?.id && (
                           <TouchableOpacity
                             style={s.reportBtn}
                             onPress={() => setReportingRatingId(rating.id)}
@@ -386,7 +386,7 @@ function RatingForm({ location, existingRating, onClose }: { location: MapLocati
     }
   });
 
-  const canSubmit = Object.values(scores).every(v => v > 0);
+  const canSubmit = !!user?.id && Object.values(scores).every(v => v > 0);
 
   return (
     <KeyboardAwareScrollViewCompat style={s.content}>

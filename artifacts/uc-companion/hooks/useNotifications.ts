@@ -12,7 +12,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '@/lib/localNotifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
 import { getApiBase } from '@/lib/apiBase';

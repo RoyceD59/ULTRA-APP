@@ -23,7 +23,7 @@ export function useNativeNotificationRouting(): void {
     let active = true;
     let removeListeners: (() => void) | undefined;
 
-    void import('expo-notifications').then(Notifications => {
+    void import('@/lib/localNotifications').then(Notifications => {
       if (!active) return;
       const hasUser = !!user?.id;
       const userId = user?.id;

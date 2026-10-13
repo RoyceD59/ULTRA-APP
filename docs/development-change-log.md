@@ -15,12 +15,43 @@
 - **Verified:** Shared and consumer typechecks, API/Hub builds and
   web/Android/iOS exports passed. Browser fixtures confirmed partial-group
   navigation and signed-out Notify me routing. No production writes.
-- **Selected source:** `4316e1db6c2d8048e05d63d2159d1fb230a6c7366ff662e0601231ef9c02a7b7`;
-  local build `1791916662384-28693`. Not published. Exact native-device image
+- **Selected source:** `c49a560276fd7114eff73fdaa44e09f47c467265e260411bcdf944a1f32ad9ad`;
+  local build `1791918978635-32131`. Not published. Exact native-device image
   failure still requires the affected product and Expo platform.
 - **Retention:** The actually published predecessor was byte-reconstructed
   and verified; the earlier published archive is also retained.
 - **Ignore changes:** None.
+
+## Android Expo Go startup follow-up
+
+- Owner reports all product photos missing on iPhone Expo Go and Android
+  failing to load. Supplied Android screenshot identifies the SDK's remote-push
+  import exception, not a payment, catalogue or photograph permission error.
+- Local notification imports now exclude the remote token-registration graph.
+  Remote registration remains lazily available for supported Android builds;
+  existing local reminders and notification routing remain enabled.
+- Transitive import-graph regression passed; four existing reminder scheduling
+  tests passed. Updated web/iOS/Android exports and API/Hub builds passed.
+- Preview browser loads the Sweet Home primary photo and gallery thumbnails
+  without page exceptions. That is not an iPhone-device pass.
+- Additional ad hoc Node require smoke was inconclusive because mock resolution
+  reached Expo's native TypeScript modules. It is not counted as a phone test.
+
+## Blank Chrome page and native rating follow-up
+
+- Chrome-sized published-page reproduction: product data was present, but
+  the root container measured zero height while fallback document mode remained
+  active. Both slug and numeric product URLs exhibited this condition.
+- Removed render-time DOM deletion. The fallback's ancestor-style cleanup and
+  the interactive handoff now run before paint. Preview with injected fallback
+  mode measures a full 503-pixel root and loads the primary image.
+- Native location details coerce optional text guards to booleans, avoiding raw
+  text inside views. Marker taps no longer bubble into the map's deselection.
+  Rating selection runs before optional haptics and survives haptic failure.
+  Rating controls also require a loaded customer identity.
+- Read-only fixtures confirm no raw view text for empty ATM/vendor fields and
+  star selection under synchronous haptic failure. All frozen builds passed.
+  Actual native rating submission is still not a physical-device pass.
 
 # 13 October 2026 — Layered product-page structure restored
 

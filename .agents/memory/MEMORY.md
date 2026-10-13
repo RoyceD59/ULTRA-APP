@@ -10,6 +10,7 @@
 - [Resend connector email](resend-connector-email.md) — delivery via Replit Resend connector; from must be @contacts.ucfilters.com; 403s until user finishes DNS verification at resend.com/domains.
 - [UC upload/media security](uc-upload-security.md) — attach-time metadata verification is the enforcement point for presigned uploads; admin is DB-anchored; public serving limited to uploads/<uuid>.
 - [Expo SDK-aligned package pins](expo-sdk-version-pins.md) — expo-* versions must match the SDK line (expo-doctor gate); a mismatched one crashes Expo Go at launch while web/tests/export still pass.
+- [Android Expo Go notifications](android-expo-go-notifications.md) — guard remote-push module evaluation, not only token requests; preserve local reminders.
 - [PNPM patched dependency validation](pnpm-patched-dependency-validation.md) — pnpm retains original and patched virtual-store copies; test the hash-qualified patched instance.
 - [pnpm Nix version bootstrap](pnpm-nix-version-bootstrap.md) — automatic version management can recurse through the provisioned binary and exhaust workspace processes.
 - [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
