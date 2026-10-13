@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdir, mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
+import { readFile, readdir, mkdir, mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { cp } from 'node:fs/promises';
@@ -101,6 +102,30 @@ test('rollback retention upgrades legacy manifests without advancing selection o
     assert.equal(JSON.parse(await readFile(resolve(destination, id, 'ios/manifest.json'))).launchAsset.key, `bundle-${id}`);
     assert.equal(await readFile(resolve(destination, id, '_expo/static/js/web/bundle.js'), 'utf8'), 'web');
     await retainRollback(source, destination, id); // Idempotent.
+    // Republication changes operational timestamps, not the served client.
+    const originalReport = JSON.stringify({ buildId: id, capturedAt: '2026-10-12T00:00:00Z' });
+    await writeFile(resolve(destination, `${id}-capture.json`), originalReport);
+    await writeFile(resolve(destination, 'capture-evidence.json'), 'keep prior report');
+    await writeFile(resolve(source, 'README.md'), 'not an asset');
+    await mkdir(resolve(source, 'unrelated-release'));
+    await writeFile(resolve(source, 'unrelated-release', 'bundle.js'), 'not verified');
+    for (const capturedAt of ['2026-10-13T00:00:00Z', '2026-10-14T00:00:00Z']) {
+      const report = JSON.stringify({ buildId: id, capturedAt });
+      await writeFile(resolve(source, `${id}-capture.json`), report);
+      const aggregateReport = JSON.stringify({ releases: [id], checkedAt: capturedAt });
+      await writeFile(resolve(source, 'capture-evidence.json'), aggregateReport);
+      await retainRollback(source, destination, id);
+      await retainRollback(source, destination, id); // Same report is also idempotent.
+      const digest = createHash('sha256').update(report).digest('hex');
+      assert.equal(await readFile(resolve(destination, 'rollback-evidence', id, `${digest}.json`), 'utf8'), report);
+      const aggregateDigest = createHash('sha256').update(aggregateReport).digest('hex');
+      assert.equal(await readFile(resolve(destination, 'rollback-evidence', id, `${aggregateDigest}.json`), 'utf8'), aggregateReport);
+      assert.equal(await readFile(resolve(destination, `${id}-capture.json`), 'utf8'), originalReport);
+      assert.equal(await readFile(resolve(destination, 'capture-evidence.json'), 'utf8'), 'keep prior report');
+    }
+    assert.equal((await readdir(resolve(destination, 'rollback-evidence', id))).length, 4);
+    await assert.rejects(readFile(resolve(destination, 'README.md')), /ENOENT/);
+    await assert.rejects(readFile(resolve(destination, 'unrelated-release/bundle.js')), /ENOENT/);
     const webBundle = resolve(source, id, '_expo/static/js/web/bundle.js');
     await writeFile(webBundle, `const font="https://app.ucfilters.com/uc-companion/${id}/_expo/static/js/fonts/missing.ttf";`);
     await assert.rejects(retainRollback(source, destination, id), /ENOENT/);
@@ -108,6 +133,8 @@ test('rollback retention upgrades legacy manifests without advancing selection o
     await writeFile(resolve(destination, id, '_expo/static/js/web/bundle.js'), 'different');
     await assert.rejects(retainRollback(source, destination, id), /collision/);
     await assert.rejects(retainRollback(source, destination, '3000-1'));
+    await symlink(resolve(source, id), resolve(source, '3000-1'));
+    await assert.rejects(retainRollback(source, destination, '3000-1'), /symlink/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 

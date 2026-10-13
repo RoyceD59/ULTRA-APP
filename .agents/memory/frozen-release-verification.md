@@ -14,6 +14,18 @@ and every referenced asset with checksums. Accept the same-host canonical root
 redirect only for native manifest requests. Never invent replacement bytes,
 advance pointers during capture or weaken the existing rollback verifier.
 
+Keep operational capture reports separate from immutable client assets when
+reusing publishing stages. Repeated observations may have different timestamps
+even when the served release and every client byte are unchanged.
+
+**Why:** Republication legitimately refreshed capture evidence, but a reused
+static tree already contained an older report at the same path. Treating that
+report as a client asset made repeated builds fail despite unchanged bundles.
+
+**How to apply:** Retain the exact verified release tree, preserve every client
+byte collision check, and add observations at content-addressed evidence paths.
+Do not repair this by deleting prior assets or permitting client overwrites.
+
 Check cold server startup and authored-data presence after a scoped build, not
 only compiler success or downloadable bundles.
 

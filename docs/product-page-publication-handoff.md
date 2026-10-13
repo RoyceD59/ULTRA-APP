@@ -9,6 +9,12 @@ referenced asset URLs and checksum evidence for 60 captured files. No rollback
 gate was removed. A missing current rollback is captured from the live host
 during build rather than replaced with an unrelated historical build.
 
+Republication does not copy mutable reports into fixed client-asset paths.
+Only the verified release tree is retained; capture observations are stored
+additively by content hash. Repeated timestamps cannot collide, while missing
+assets or different client bytes still block publication. This was checked
+against an existing output and by rerunning the production-preparation build.
+
 The development API routing helper now keeps Replit previews on the development
 API. Sweet Home's mobile gallery and Gym Buddy's desktop gallery/specifications
 rendered in screenshots. Viva Drop's screenshot captured initial loading; its

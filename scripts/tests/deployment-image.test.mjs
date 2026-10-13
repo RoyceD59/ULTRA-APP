@@ -189,7 +189,7 @@ test('stage or workspace symlinks fail closed; dependency symlinks are unlinked 
   await assert.rejects(cleanupBuildDependencies(path), /Symlinked workspace package/);
 });
 
-test('deployment hook runs cleanup after compilation and retains store pruning and API-first selection', async () => {
+test('deployment hook runs cleanup after compilation and retains coordinated source selection', async () => {
   const config = await readFile(resolve(root, '.replit'), 'utf8');
   assert.match(config, /\[deployment\.postBuild\]\s*args = \["node", "scripts\/prepare-deployment-image\.mjs", "--post-build"\]/);
   const ignores = await readFile(resolve(root, '.replitignore'), 'utf8');
@@ -198,9 +198,12 @@ test('deployment hook runs cleanup after compilation and retains store pruning a
   assert.doesNotMatch(ignores, /^\.hydrate-release(?:\/|\s*$)/m);
   const api = await readFile(resolve(root, 'artifacts/api-server/.replit-artifact/artifact.toml'), 'utf8');
   const client = await readFile(resolve(root, 'artifacts/uc-companion/.replit-artifact/artifact.toml'), 'utf8');
+  const hub = await readFile(resolve(root, 'artifacts/projecthub/.replit-artifact/artifact.toml'), 'utf8');
   assert.match(api, /build-approved-consistency\.mjs", "api", "--copy-output"/);
-  assert.match(client, /release-build\.mjs", "companion"/);
-  assert.doesNotMatch(client, /build-approved-consistency\.mjs/);
+  assert.match(client, /build-approved-consistency\.mjs", "companion", "--retain-static=/);
+  assert.match(client, /build-approved-consistency\.mjs", "serve-companion"/);
+  assert.match(hub, /build-approved-consistency\.mjs", "hub", "--copy-output"/);
+  assert.doesNotMatch(client, /release-build\.mjs/);
 });
 
 test('actual frozen Companion core-Node server still serves browser and native metadata after cleanup', async t => {

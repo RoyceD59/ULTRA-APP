@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, lstat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -95,6 +95,12 @@ export async function retainRollback(source, destination, buildId) {
   if (!/^\d+-\d+$/.test(buildId) || resolve(source) === resolve(destination)) {
     throw new Error('Provide a separate verified rollback static directory and exact served build ID');
   }
+  for (const directory of [source, resolve(source, buildId)]) {
+    const info = await lstat(directory);
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new Error('Rollback release directory must be an ordinary directory, not a symlink');
+    }
+  }
   const info = JSON.parse(await readFile(resolve(source, buildId, 'build-info.json'), 'utf8'));
   if (info.buildId !== buildId) throw new Error('Rollback build metadata mismatch');
   const manifests = {};
@@ -150,7 +156,21 @@ export async function retainRollback(source, destination, buildId) {
       } else throw new Error('Unexpected rollback directory entry');
     }
   }
-  await walk(source);
+  // Retain only the verified release. Shared documentation, selection pointers
+  // and reports for other releases are not immutable client assets.
+  await walk(resolve(source, buildId), buildId);
+  for (const name of [`${buildId}-capture.json`, 'capture-evidence.json']) {
+    const bytes = await readFile(resolve(source, name)).catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+      return null;
+    });
+    if (bytes) {
+      // Each observation is immutable at its own content-addressed path.
+      // Revalidation timestamps may change without replacing previous evidence.
+      const digest = createHash('sha256').update(bytes).digest('hex');
+      files.push([`rollback-evidence/${buildId}/${digest}.json`, bytes]);
+    }
+  }
   for (const [platform, bytes] of Object.entries(manifests)) {
     const path = `${buildId}/${platform}/manifest.json`;
     if (!files.some(([name]) => name === path)) files.push([path, bytes]);

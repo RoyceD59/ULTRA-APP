@@ -1,3 +1,23 @@
+# 13 October 2026 — recurring republication rollback failure
+
+- Compared failed publishing logs: the earlier failure lacked the currently
+  served rollback metadata; automatic live capture now handles that case.
+- The latest failure was not compilation: fresh capture timestamps conflicted
+  with an old report inside a reused static output.
+- Rollback retention now copies only the verified release's client tree.
+  Operational capture reports are additive, content-addressed observations;
+  existing reports, pointers and client bytes are never replaced.
+- Regression coverage repeats retention with changing individual/aggregate
+  reports, preserves prior evidence, ignores unrelated releases, and still
+  rejects missing files, changed client bytes and release-directory symlinks.
+- The production-preparation Companion command completed successfully with
+  a fresh live capture. Product-page source and payment configuration unchanged.
+- All 12 image-cleanup/runtime regressions pass. Updated the obsolete API-first
+  assertion to enforce the actual coordinated API/Hub/Companion build commands.
+- Current cached stage markers were checked: approved/scratch only, no invalid
+  marker classification. No development dependency trees were removed.
+- Publishing itself remains a user action.
+
 # 13 October 2026 — product-page release handoff and preview verification
 
 - Connected the approved archive to the main API/ProjectHub/Companion selector.
