@@ -1,5 +1,32 @@
 # Product-page publication handoff
 
+## Current preparation — photo names, native image path and rating feedback
+
+Selected source:
+`59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c`.
+Local build: `1791922548096-6587`. **NOT PUBLISHED.**
+
+ProjectHub now includes the authored record editor in the frozen package,
+including editable photo display names and whole-record gallery ordering.
+Stored filenames/URLs and accessibility descriptions are not renamed.
+The public JSON, initial HTML and shared web/native gallery expose those names.
+The existing two video slots remain available.
+
+API, Hub and all three Companion platform builds/typechecks passed, along with
+exact stage/scope verification, photo-order round-trip checks, name validation
+and projection checks, and native original-image/measured-frame unit checks.
+The attempted targeted API integration command ignored its filename argument
+and ran the full suite; it timed out with failures. It is not passing evidence.
+
+The owner confirmed that Android opens, but the previous phone preview still
+had missing photos on both platforms and failing iOS ratings. The new native
+original-image path, measured frames, bounded loading and rating failure
+feedback require phone verification. Do not call these native issues resolved
+or claim all release checks pass. The compiled package is preparation only.
+
+The actual published predecessor remains `34478f5c…`; unpublished candidates
+are not rollback publication evidence.
+
 ## Latest selected restoration — 13 October 2026
 
 The selected candidate is now

@@ -10,6 +10,8 @@ Android Expo Go no longer supports remote push from SDK 53 onward.
 notification-module import and throws before the application's existing
 remote-token guard runs. A user supplied the resulting Android startup error;
 guards around token requests alone were insufficient.
+The owner subsequently confirmed that the updated Android Expo Go preview
+opens. This confirms startup recovery, not native photo loading or rating saves.
 
 **How to apply:** Preserve local reminders and notification routing through
 local-only entry points; load remote registration only after checking runtime

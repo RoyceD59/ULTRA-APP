@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Linking, Share, useWindowDimensions } from 'react-native';
-import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
@@ -11,7 +10,7 @@ import ProductPhoto from './ProductPhoto';
 import StarRating from '@/components/StarRating';
 import ReviewCard from '@/components/ReviewCard';
 import MediaViewer from '@/components/MediaViewer';
-import { useApi, resizedImageUrl, resolveMediaUrl, type UCReviewMedia } from '@/hooks/useApi';
+import { useApi, resolveMediaUrl, type UCReviewMedia } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import type { CartItem } from '@/context/CartContext';
@@ -28,7 +27,7 @@ import ProductCompare from './ProductCompare';
 import { P } from './theme';
 import { Accordion, GroupNav, H2, ProductLayers, SearchListing, serviceSummary } from './ProductLayers';
 
-type Gal = { src: string; alt: string; label: string; childSku?: string; picturedColour?: string };
+type Gal = { src: string; alt: string; label: string; displayName?: string; childSku?: string; picturedColour?: string };
 
 export default function ProductRecordPage({ record, initialSku, topicsRow }: { record: ProductRecord; initialSku?: string; topicsRow?: boolean }) {
   const router = useRouter();
@@ -69,7 +68,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   }, [op.commerceId, record.parentSku]);
 
   const photos: Gal[] = useMemo(() => op.images.slice().sort((a, b) => a.slot - b.slot).map(i => ({
-    src: i.src, alt: i.alt, label: SLOT_LABELS[i.slot - 1] ?? `Photo ${i.slot}`, childSku: i.childSku, picturedColour: i.picturedColour })), [op.images]);
+    src: i.src, alt: i.alt, displayName: i.displayName, label: SLOT_LABELS[i.slot - 1] ?? `Photo ${i.slot}`, childSku: i.childSku, picturedColour: i.picturedColour })), [op.images]);
   // Selecting a colour jumps to its matching photo, when one exists.
   useEffect(() => {
     if (!variant) return;
@@ -143,7 +142,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
 
   const gallery = (
     <View style={{ flex: wide ? 1 : undefined, gap: 8 }}>
-      <View style={s.stage}>
+      <View style={[s.stage, { height: Math.min(460, Math.max(64, wide ? (Math.min(width, 1040) - 52) / 2 : Math.min(width, 1040) - 32)) }]}>
         {activeVideo
           ? <VideoView player={player} style={{ width: '100%', height: '100%' }} contentFit="contain" nativeControls />
           : cur ? <ProductPhoto src={cur.src} alt={cur.alt} width={520} />
@@ -153,9 +152,9 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
       {total > 1 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {photos.map((p, i) => (
-            <TouchableOpacity key={p.src + i} onPress={() => setIdx(i)} accessibilityRole="button" accessibilityLabel={`${p.label}: ${p.alt}`} style={[s.thumb, i === idx && s.thumbOn]}>
-              <Image source={{ uri: resizedImageUrl(p.src, 64) }} contentFit="contain" style={{ width: 52, height: 52 }} />
-              <Text style={s.thumbL} numberOfLines={1}>{p.label}</Text>
+            <TouchableOpacity key={p.src + i} onPress={() => setIdx(i)} accessibilityRole="button" accessibilityLabel={`${p.displayName || p.label}: ${p.alt}`} style={[s.thumb, i === idx && s.thumbOn]}>
+              <View style={{ width: 52, height: 52 }}><ProductPhoto src={p.src} alt={p.alt} width={64} compact /></View>
+              <Text style={s.thumbL} numberOfLines={1}>{p.displayName || p.label}</Text>
             </TouchableOpacity>))}
           {videos.map((video, i) => <TouchableOpacity key={video.slot} onPress={() => setIdx(photos.length + i)} accessibilityRole="button" accessibilityLabel={`Product video ${video.slot}`} style={[s.thumb, idx === photos.length + i && s.thumbOn]}>
             <Ionicons name="play-circle-outline" size={30} color={P.teal} /><Text style={s.thumbL}>Video {video.slot}</Text></TouchableOpacity>)}
@@ -243,7 +242,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <H2>{record.summary?.heading || 'Review your selection'}</H2>
         <View style={[s.card, { backgroundColor: P.aqua, gap: 8 }]}>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            {photos[0] ? <Image source={{ uri: resizedImageUrl(photos[0].src, 160) }} accessibilityLabel={photos[0].alt} contentFit="cover" style={s.sumPic} /> : null}
+            {photos[0] ? <View style={s.sumPic}><ProductPhoto src={photos[0].src} alt={photos[0].alt} width={160} compact /></View> : null}
             <View style={{ flex: 1 }}><Text style={s.bF}>{record.name}</Text>
               <Text style={s.note}>{`${variant ? `${variant.label} - ` : ''}${variant?.childSku ?? record.parentSku}`}</Text></View>
           </View>

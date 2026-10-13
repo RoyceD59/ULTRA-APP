@@ -93,6 +93,7 @@ test("editing survives reseed and reaches initial HTML, client JSON and SEO with
   const edited = structuredClone(current);
   edited.record.seo.h1_sub = "Round-trip approved editorial subline";
   edited.record.seo.description = "Round-trip authored SEO description.";
+  edited.record.images[0].display_name = "Kitchen photo";
   edited.record.internal.missing_launch_inputs.push("PRIVATE_EDITORIAL_SENTINEL");
   const saved = await request(adminPath, "PUT", edited);
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
@@ -100,6 +101,7 @@ test("editing survives reseed and reaches initial HTML, client JSON and SEO with
   assert.equal((await request(adminPath, "PUT", edited)).status, 409);
   await ensureProductEditorialSchema();
   assert.equal((await request(adminPath)).body.record.seo.h1_sub, edited.record.seo.h1_sub);
+  assert.equal((await request(adminPath)).body.record.images[0].display_name, "Kitchen photo");
   const { body: publicRecord } = await request(`/uc/product-records/${seed.slug}`);
   assert.equal(publicRecord.seo.subline, edited.record.seo.h1_sub);
   assert.equal(publicRecord.seo.description, edited.record.seo.description);
@@ -121,6 +123,7 @@ test("editing survives reseed and reaches initial HTML, client JSON and SEO with
 test("contract and identity rejection includes unsafe media, evidence, safety and extra fields", async () => {
   const { body: current } = await request(adminPath);
   for (const alter of [
+    (r: any) => { r.record.images[0].display_name = "x".repeat(81); },
     (r: any) => { r.record.price_kes = "not-a-price"; },
     (r: any) => { r.record.parent_sku = "different-parent"; },
     (r: any) => { r.record.variants[0].child_sku = "different-child"; },

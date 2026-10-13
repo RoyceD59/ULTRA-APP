@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { API_ORIGIN } from "@/lib/api-base";
+import { moveRecordPhoto } from "@/lib/product-photo-order";
 import { requestUploadUrl, useAddProductMedia, type Product, type ProductMedia } from "@/hooks/use-products";
 import {
   IMMUTABLE_KEYS, SLOT_LABELS, isConflict, useProductRecord, useSaveProductRecord, useArchiveProductRecord,
@@ -209,7 +210,7 @@ export function ProductRecordEditor({ sku, product, media = [] }: { sku: string;
   const move = (slot: number, d: number) => {
     const to = slot + d;
     if (to < 1 || to > 6) return;
-    setImages(images.map(im => (im.slot === slot ? { ...im, slot: to } : im.slot === to ? { ...im, slot } : im)));
+    setImages(moveRecordPhoto(images, slot, d));
   };
   const colours = (draft.variants ?? []).map(v => v.label);
   const mapped = !!product;
@@ -331,13 +332,16 @@ export function ProductRecordEditor({ sku, product, media = [] }: { sku: string;
                 <div key={label} className="rounded-md border p-3 space-y-2">
                   <div className="flex items-center justify-between"><Badge variant="outline">{i + 1}. {label}</Badge>
                     {im && <div className="flex gap-1">
-                      <Button type="button" size="icon" variant="ghost" aria-label="Move up" disabled={slot === 1} onClick={() => move(slot, -1)}><ArrowUp className="w-4 h-4" /></Button>
-                      <Button type="button" size="icon" variant="ghost" aria-label="Move down" disabled={slot === 6} onClick={() => move(slot, 1)}><ArrowDown className="w-4 h-4" /></Button>
-                      <Button type="button" size="icon" variant="ghost" aria-label="Remove photo" onClick={() => patchSlot(slot, { file: `images/${draft.parent_sku}_${String(slot).padStart(2,'0')}.jpg`, alt: null, approved: false, child_sku: undefined, pictured_colour: undefined })}><Trash2 className="w-4 h-4" /></Button>
+                      <Button type="button" size="icon" variant="ghost" aria-label={`Move photo ${slot} earlier`} title="Move earlier in gallery" disabled={slot === 1} onClick={() => move(slot, -1)}><ArrowUp className="w-4 h-4" /></Button>
+                      <Button type="button" size="icon" variant="ghost" aria-label={`Move photo ${slot} later`} title="Move later in gallery" disabled={slot === 6} onClick={() => move(slot, 1)}><ArrowDown className="w-4 h-4" /></Button>
+                      <Button type="button" size="icon" variant="ghost" aria-label="Remove photo" onClick={() => patchSlot(slot, { file: `images/${draft.parent_sku}_${String(slot).padStart(2,'0')}.jpg`, alt: null, approved: false, display_name: undefined, child_sku: undefined, pictured_colour: undefined })}><Trash2 className="w-4 h-4" /></Button>
                     </div>}
                   </div>
                   {im ? (
                     <>
+                      <Label htmlFor={`photo-name-${slot}`}>Photo display name</Label>
+                      <Input id={`photo-name-${slot}`} value={im.display_name ?? ""} maxLength={80} placeholder={label} onChange={e => patchSlot(slot, { display_name: e.target.value })} />
+                      <p className="text-xs text-muted-foreground">Use the arrows to reorder. Names stay with their photos; slot 1 is the main photo. Save the record to apply changes.</p>
                       <div className="aspect-[4/3] bg-muted rounded border flex items-center justify-center">{!im.file.startsWith("images/") ? <img src={imgSrc(im.file)} alt={im.alt ?? ""} className="max-h-full max-w-full object-contain" /> : <span className="text-xs text-muted-foreground">No photo uploaded</span>}</div>
                       <Input aria-label={`Alt text ${label}`} placeholder="Alt text" value={im.alt ?? ""} onChange={e => patchSlot(slot, { alt: e.target.value })} />
                       <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={im.pictured_colour ?? ""}

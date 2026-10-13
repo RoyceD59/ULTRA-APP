@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
-import { useApi, MapLocation, LocationRatingAggregate, LocationRating } from '@/hooks/useApi';
+import { useApi, ApiError, MapLocation, LocationRatingAggregate, LocationRating } from '@/hooks/useApi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { useRouter } from 'expo-router';
 import StarRating from '@/components/StarRating';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
@@ -21,6 +22,7 @@ export default function LocationDetailModal({
   onDirections: (location: MapLocation) => void;
 }) {
   const colors = useColors();
+  const router = useRouter();
   const api = useApi();
   const { token, user } = useAuth();
   const [showRatingForm, setShowRatingForm] = useState(false);
@@ -254,7 +256,8 @@ export default function LocationDetailModal({
             </View>
           </ScrollView>
         ) : showRatingForm ? (
-          <RatingForm
+                <RatingForm
+                  onSignIn={() => { onClose(); router.push('/auth/login'); }}
             key={`${user?.id ?? 'guest'}:${location.id}`}
             location={location}
             existingRating={myRating}
@@ -362,11 +365,13 @@ function ReportForm({ locationId, ratingId, onClose }: { locationId: string, rat
   );
 }
 
-function RatingForm({ location, existingRating, onClose }: { location: MapLocation, existingRating?: LocationRating | null, onClose: () => void }) {
+function RatingForm({ location, existingRating, onClose, onSignIn }: { location: MapLocation, existingRating?: LocationRating | null, onClose: () => void, onSignIn: () => void }) {
   const { user } = useAuth();
   const colors = useColors();
   const api = useApi();
   const queryClient = useQueryClient();
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const [scores, setScores] = useState({
     waterQuality: existingRating?.waterQuality || 0,
@@ -382,16 +387,24 @@ function RatingForm({ location, existingRating, onClose }: { location: MapLocati
     onSuccess: (_data, { customerId }) => {
       queryClient.invalidateQueries({ queryKey: ['locationRatings', location.id] });
       queryClient.invalidateQueries({ queryKey: customerQueryKeys.locationRating(customerId, location.id) });
-      onClose();
+      if (mounted.current) onClose();
     }
   });
 
   const canSubmit = !!user?.id && Object.values(scores).every(v => v > 0);
+  const errorStatus = mutation.error instanceof ApiError ? mutation.error.status : null;
+  const errorMessage = errorStatus === 401 || errorStatus === 403
+    ? 'Your sign-in could not be verified. Sign in again before submitting.'
+    : errorStatus === 429 ? 'Too many attempts. Please wait before trying again.'
+    : errorStatus === 404 ? 'This location is no longer available for ratings.'
+    : errorStatus === 400 ? 'Choose a score from 1 to 5 for every category and keep the comment under 1,000 characters.'
+    : 'The rating could not be confirmed. Check your connection and refresh the location before trying again.';
 
   return (
-    <KeyboardAwareScrollViewCompat style={s.content}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
       <Text style={[s.sectionTitle, { color: colors.text, marginBottom: 16 }]}>Your Rating</Text>
       <Text style={[s.advisoryTxt, { color: colors.mutedForeground }]}>Observations help the community. Keep them accurate and helpful.</Text>
+      {!canSubmit ? <Text style={[s.advisoryTxt, { color: colors.mutedForeground }]}>Select a score for all five categories to enable Submit.</Text> : null}
 
       <View style={s.ratingInputList}>
         {(Object.keys(scores) as Array<keyof typeof scores>).map(key => {
@@ -429,19 +442,23 @@ function RatingForm({ location, existingRating, onClose }: { location: MapLocati
         />
       </View>
 
+      {mutation.isError ? <Text accessibilityRole="alert" style={[s.directionsError, { color: colors.destructive, marginBottom: 16 }]}>{errorMessage}</Text> : null}
+      {errorStatus === 401 || errorStatus === 403 ? <TouchableOpacity accessibilityRole="button" onPress={onSignIn}>
+        <Text style={[s.btnOutlineTxt, { color: colors.primary }]}>Sign in again</Text>
+      </TouchableOpacity> : null}
       <View style={s.formActions}>
         <TouchableOpacity style={[s.btnOutline, { flex: 1, borderColor: colors.border }]} onPress={onClose}>
           <Text style={[s.btnOutlineTxt, { color: colors.text }]}>Cancel</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.btnPrimary, { flex: 1, backgroundColor: canSubmit ? colors.primary : colors.border }]}
-          disabled={!canSubmit || !user || mutation.isPending}
+          disabled={!canSubmit || !user || mutation.isPending || errorStatus === 429}
           onPress={() => user && mutation.mutate({ customerId: user.id })}
         >
           {mutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryTxt}>Submit</Text>}
         </TouchableOpacity>
       </View>
-    </KeyboardAwareScrollViewCompat>
+    </ScrollView>
   );
 }
 

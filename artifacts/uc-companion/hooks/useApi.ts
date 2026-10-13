@@ -542,16 +542,21 @@ export function useApi() {
     return res.json() as Promise<T>;
   }, [authHeaders, throwResponseError]);
 
-  const put = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(`${getApiBase()}${path}`, {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      return throwResponseError(res);
+  const put = useCallback(async <T>(path: string, body?: unknown, deadlineMs?: number): Promise<T> => {
+    const controller = deadlineMs ? new AbortController() : undefined;
+    const timer = controller ? setTimeout(() => controller.abort(), deadlineMs) : undefined;
+    try {
+      const res = await fetch(`${getApiBase()}${path}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller?.signal,
+      });
+      if (!res.ok) return await throwResponseError(res);
+      return await res.json() as T;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return res.json() as Promise<T>;
   }, [authHeaders, throwResponseError]);
 
   const patch = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
@@ -636,7 +641,7 @@ export function useApi() {
     getMyLocationRating: (id: string) =>
       get<{ rating: LocationRating | null }>(`/api/uc/me/locations/${id}/rating`),
     upsertLocationRating: (id: string, data: LocationRating) =>
-      put<{ rating: LocationRating }>(`/api/uc/locations/${id}/rating`, data),
+      put<{ rating: LocationRating }>(`/api/uc/locations/${id}/rating`, data, 20000),
     reportLocationRating: (locationId: string, ratingId: string, data: { reason: 'spam' | 'unsafe' | 'inaccurate' | 'offensive' | 'other'; detail?: string }) =>
       post<{ report: any }>(`/api/uc/locations/${locationId}/ratings/${ratingId}/reports`, data),
     getTickets: () => get<MaintenanceTicket[]>('/api/uc/tickets'),

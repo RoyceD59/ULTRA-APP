@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/team-auth";
 
 export interface RecordImage {
   slot: number; label: string; file: string; alt: string | null; approved: boolean;
+  display_name?: string;
   pictured_colour?: string; child_sku?: string;
 }
 export type RecordJson = Record<string, unknown> & {

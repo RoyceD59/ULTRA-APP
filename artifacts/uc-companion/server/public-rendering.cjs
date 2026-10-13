@@ -133,7 +133,7 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
           + (product.category ? paragraph(product.category) : '')
           + (product.opening.warning ? `<p class="uc-warning">${escapeHtml(product.opening.warning)}</p>` : '')
           + paragraph(operation.availability ? { InStock: 'In stock', OutOfStock: 'Out of stock', BackOrder: 'Available on back-order' }[operation.availability] : 'Live stock unavailable — please enquire before ordering.')
-          + `<div class="uc-gallery">${operation.images.map(photo => `<figure data-slot="${photo.slot}">${image(photo.src, photo.alt)}<figcaption>${escapeHtml(slots[photo.slot - 1])}</figcaption></figure>`).join('')}</div>`
+          + `<div class="uc-gallery">${operation.images.map(photo => `<figure data-slot="${photo.slot}">${image(photo.src, photo.alt)}<figcaption>${escapeHtml(photo.displayName || slots[photo.slot - 1])}</figcaption></figure>`).join('')}</div>`
           + (!operation.images.length ? paragraph('Product photo unavailable.') : '')
           + paragraph(`SKU: ${product.parentSku}`)
           + `<section><h2>Related topics</h2><ul>${product.topics.map(t => `<li>${link(`/topic/${t.slug}`, t.name)}</li>`).join('')}</ul></section>`

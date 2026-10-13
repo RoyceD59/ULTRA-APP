@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Image } from 'expo-image';
+import ProductPhoto from './ProductPhoto';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { resizedImageUrl } from '@/hooks/useApi';
 import { headingProps } from '@/lib/accessibility';
 import { fetchCollection, kes, type ProductRecord, type RecordCollection } from '@/lib/productRecord';
 import { P } from './theme';
@@ -109,7 +108,7 @@ export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: Pro
       {items.length ? <View style={{ gap: 10 }}>
         <H2>{b.heading || 'Benefits'}</H2>
         <View style={l.grid}>
-          {lifeSrc ? <View style={[l.life, l.cell]}><Image source={{ uri: resizedImageUrl(lifeSrc, 520) }} accessibilityLabel={lifeAlt} contentFit="cover" style={{ width: '100%', height: '100%' }} /></View> : null}
+          {lifeSrc ? <View style={[l.life, l.cell]}><ProductPhoto src={lifeSrc} alt={lifeAlt ?? 'Product in use'} width={520} fit="cover" /></View> : null}
           <View style={[l.cell, { gap: 10 }]}>
             {items.map((i: any, n: number) => <View key={n} style={l.benefit}>
               <Ionicons name={(['water-outline', 'shield-checkmark-outline', 'refresh-outline'] as const)[n % 3]} size={22} color={P.teal} />
@@ -126,7 +125,7 @@ export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: Pro
         {record.fitPhotos?.items?.length ? <View style={{ gap: 8, marginTop: 8 }}>
           <Text {...headingProps(3)} style={l.h3}>{record.fitPhotos.heading}</Text>
           <View style={l.grid}>{record.fitPhotos.items.map((f, i) => <View key={f.src + i} style={l.fitCard}>
-            <Image source={{ uri: resizedImageUrl(f.src, 320) }} accessibilityLabel={f.alt} contentFit="contain" style={{ width: '100%', height: 180 }} />
+            <View style={{ width: '100%', height: 180 }}><ProductPhoto src={f.src} alt={f.alt} width={320} /></View>
             {str(f.caption) ? <Text style={l.note}>{f.caption}</Text> : null}</View>)}</View>
         </View> : null}
       </View> : null}

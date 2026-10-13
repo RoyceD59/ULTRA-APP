@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { getApiBase } from '@/lib/apiBase';
 
-export type RecordImage = { slot: number; src: string; alt: string; picturedColour?: string; childSku?: string };
+export type RecordImage = { slot: number; src: string; alt: string; displayName?: string; picturedColour?: string; childSku?: string };
 export type RecordVariant = {
   childSku: string; label: string; variationId: number | null; price: number | null;
   stockStatus: string | null; diagnostic?: string;

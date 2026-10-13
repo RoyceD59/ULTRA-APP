@@ -1,5 +1,28 @@
 # 13 October 2026 — Product clicks, restock action and gallery recovery
 
+## Latest preparation: photo display names and phone diagnostics
+
+- Added ProjectHub photo display names (maximum 80 characters) without changing
+  stored image URLs. Moving a photo preserves its name, alt text, approval and
+  colour/SKU metadata. Names reach public JSON, initial HTML and web/native
+  gallery captions.
+- Included the newer authored record editor in the frozen Hub package; it had
+  been absent from the retained publication source.
+- Native product photos now use original images through React Native Image with
+  measured frames, explicit gallery height and bounded loading/retry feedback.
+  Web keeps its optimized image path.
+- Rating forms use a regular scroll view with handled keyboard taps, a bounded
+  save request and safe error feedback; failed sign-in offers recovery navigation.
+- Current selected source `59f5a238…`, local build `1791922548096-6587`:
+  API/Hub builds, platform exports, typechecks, scope checks and focused name/
+  order/native-image unit checks passed. The full API suite attempt timed out
+  with failures and is not recorded as passing.
+- **Not published; not complete:** previous physical checks confirmed Android
+  startup but failed photos on both phones and iOS ratings. New phone verification
+  and the remaining payment evidence are still required.
+
+## Preceding preparation
+
 - **Reproduced:** Published product content looked interactive, but the server
   document layout remained active after the React handoff; ordinary pointer
   clicks hit HTML rather than the buttons. Removing that layout mode restored

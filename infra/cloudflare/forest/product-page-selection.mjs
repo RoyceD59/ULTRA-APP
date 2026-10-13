@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { SECURITY_CENTER_CANDIDATE, securityCenterArchive } from './security-center-selection.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const PRODUCT_PAGE_CANDIDATE = 'c49a560276fd7114eff73fdaa44e09f47c467265e260411bcdf944a1f32ad9ad';
+export const PRODUCT_PAGE_CANDIDATE = '59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c';
 export const PRODUCT_PAGE_PREDECESSOR = '34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8';
-export const PRODUCT_PAGE_SCOPE = '78cb1881d0951614a723b87244f4af41998de2f34eaeea70c26731111cde8859';
+export const PRODUCT_PAGE_SCOPE = '8a8defd49d3133f2245fac2f4b30e3687202afe06914fe1847da80e642318991';
 export const productPageArchive = resolve(here, 'product-page-review/release-sources.tar.gz');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 

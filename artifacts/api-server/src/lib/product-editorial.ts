@@ -178,6 +178,7 @@ export function validateEditorial(record: any, previous: any, input: any) {
       for (const [key, v] of Object.entries(value)) {
         const authored = compatible.filter(t => key in t).map(t => t[key]);
         if (!authored.length) {
+          if (path === "images" && key === "display_name" && typeof v === "string" && v.length <= 80 && !/[\u0000-\u001f]/.test(v)) continue;
           if (path === "images" && ["pictured_colour", "child_sku"].includes(key) && (v === null || typeof v === "string")) continue;
           if (path === "specs" && typeof v === "string") continue;
           throw new Error(`${path}.${key} is not an authored field`);

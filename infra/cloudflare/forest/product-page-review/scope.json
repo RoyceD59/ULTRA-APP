@@ -57,7 +57,7 @@
   {
     "path": "artifacts/api-server/src/lib/product-editorial.ts",
     "beforeSha256": null,
-    "afterSha256": "6300a466cf5931e7a5a5b106d2a577e3bc7790320c337b1d577d528f1d2f2072"
+    "afterSha256": "7564a3d7c59ba7374a74a7adcb2e470d7a348c6d88a171a4f1d43eaec2fb6f19"
   },
   {
     "path": "artifacts/api-server/src/lib/product-video-slots.test.ts",
@@ -115,14 +115,34 @@
     "afterSha256": "a98be3856c0f6bb6757c30d488631c199f300d29f4b7f3162ea5cf5175fdfbe8"
   },
   {
+    "path": "artifacts/projecthub/scripts/photo-order.test.mjs",
+    "beforeSha256": null,
+    "afterSha256": "1d5d22890abaabc31211c30584258fb5addc24d527bbf3def9eb3f6622572a12"
+  },
+  {
+    "path": "artifacts/projecthub/src/components/product-record-editor.tsx",
+    "beforeSha256": null,
+    "afterSha256": "cb61eb67951b34b21a7190b1689178ec88b72876f7b61418b4be5423f61cfc1f"
+  },
+  {
+    "path": "artifacts/projecthub/src/hooks/use-product-records.ts",
+    "beforeSha256": null,
+    "afterSha256": "bc65c24dbd435054e37b73b09abf6de7a4b249b0cded138f001a1da15613ea70"
+  },
+  {
     "path": "artifacts/projecthub/src/hooks/use-products.ts",
     "beforeSha256": "f830fceb3f5fb2155712a923a4f914bb55f8231d3a23f4b576a7f5b2cb08c209",
     "afterSha256": "45973b1d09d0a1676872f5686a7480857e17314b8500ad96459411776d75ad61"
   },
   {
+    "path": "artifacts/projecthub/src/lib/product-photo-order.ts",
+    "beforeSha256": null,
+    "afterSha256": "d72aef8cf2310438d469d51fc5f06c45ff1ea2caa7801fab1eb7596a55ead508"
+  },
+  {
     "path": "artifacts/projecthub/src/pages/admin/products/editor.tsx",
     "beforeSha256": "04f6649b3ce3d88a2a4840088ee8585d3c52b5c4e12413562fce4563e43a7b75",
-    "afterSha256": "fde25ff5effb6bf502ede84563af1959498abc4d56be8a51d88743c7c7e76fdb"
+    "afterSha256": "e8e2c86c3b8036080ffd3b17d5fd9d8023732d92824a0b32135abe4411fcdfb7"
   },
   {
     "path": "artifacts/uc-companion/app/(tabs)/map.native.tsx",
@@ -172,7 +192,7 @@
   {
     "path": "artifacts/uc-companion/components/LocationDetailModal.tsx",
     "beforeSha256": "b7858e5a15fd706159aa1aa47880ac29b2c81ca295c84d40afe70a7ce7d990c5",
-    "afterSha256": "fa4ebdfed562568af296d84f6be4bc2269823656e36ec8e765d6efd7c0e51d6c"
+    "afterSha256": "730114d6ac17fd1ec1399efd375c8cf1526e339bb5e315e47092b660304246d6"
   },
   {
     "path": "artifacts/uc-companion/components/PageDataError.tsx",
@@ -202,17 +222,17 @@
   {
     "path": "artifacts/uc-companion/components/product/ProductLayers.tsx",
     "beforeSha256": null,
-    "afterSha256": "eadf6fe0a0b2619a80d1c9a35846bc951438bb35b60c5e5dfb017f3690130970"
+    "afterSha256": "3cc232232e9377d2fce9c8135a77dddfce420ad449e99d65c4dd2c8b9066aa10"
   },
   {
     "path": "artifacts/uc-companion/components/product/ProductPhoto.tsx",
     "beforeSha256": null,
-    "afterSha256": "bdc33244b6b0850f5f3402134f7ab1a15262044912a888b1a194cfba00273f15"
+    "afterSha256": "0aa78beeaf9bfa9043e876fb360a01c1c4f8f665aae3cd321de3bb3a62fce2c9"
   },
   {
     "path": "artifacts/uc-companion/components/product/ProductRecordPage.tsx",
     "beforeSha256": null,
-    "afterSha256": "eeb7b04e16828d7d98204c230c485c1c659520ab376b0882fef76550ef5657ee"
+    "afterSha256": "f58b30b68cd06a8339c8b635c1701713ceb254664f559fa9e86d1e70bc1898d4"
   },
   {
     "path": "artifacts/uc-companion/components/product/theme.ts",
@@ -262,7 +282,7 @@
   {
     "path": "artifacts/uc-companion/hooks/useApi.ts",
     "beforeSha256": "d5b10160ebf801b15c76541e32afc2f2165397683e3070d72bf01cf0ab51bda8",
-    "afterSha256": "8749ce4754d7de3a05ed88b9cf766110a55c787bb5aba5ca2fe8ba32b432568c"
+    "afterSha256": "f7c636322f0a7d987710ce350f45fc01cfcded5c7e9bf00779914d1a55b9a6f8"
   },
   {
     "path": "artifacts/uc-companion/hooks/useNativeNotifications.ts",
@@ -307,7 +327,7 @@
   {
     "path": "artifacts/uc-companion/lib/productRecord.ts",
     "beforeSha256": null,
-    "afterSha256": "7128db06c7c91905dc2759065ef32f338a1b53a95f0832a2ab227337cee1c253"
+    "afterSha256": "8e5c96491c6628fed1c5e76cbdd7828f64f4d442d430d148a2bdd3ec20590125"
   },
   {
     "path": "artifacts/uc-companion/lib/storeCategories.ts",
@@ -325,6 +345,11 @@
     "afterSha256": "3b9f3b0ed29dacebf6e476cb01da553ae1c98093a76215c46b9e457e4dcbc56e"
   },
   {
+    "path": "artifacts/uc-companion/scripts/__tests__/native-product-photo.test.mjs",
+    "beforeSha256": null,
+    "afterSha256": "e9674ec88faa6377ae6b660f6bf7d04c0aba3d4f038f36e51c42fb41b9032ea6"
+  },
+  {
     "path": "artifacts/uc-companion/scripts/build-info.js",
     "beforeSha256": "ff415d108c054195c1ddfdf9a4b9bd4342d2eb7546f9c67f5f3e08487e3f697d",
     "afterSha256": "542bbb5a5c8bc120ad4eeeb3ef5902ccff71855acca2378fa9ac77921da571c6"
@@ -332,7 +357,7 @@
   {
     "path": "artifacts/uc-companion/server/product-records.cjs",
     "beforeSha256": null,
-    "afterSha256": "81c28d41473cc14b92f9bd0c52b036bdaa271a14ccefd19636e94ee1fb54db65"
+    "afterSha256": "4aba0deee09076b481eb7ce8d0410ac681d45c63de4ba292407fca79a2a02fd3"
   },
   {
     "path": "artifacts/uc-companion/server/public-content.cjs",
@@ -342,7 +367,7 @@
   {
     "path": "artifacts/uc-companion/server/public-rendering.cjs",
     "beforeSha256": null,
-    "afterSha256": "7187cc2b6f8a99ee27e9efe9836a0b6662b9ad165d7aa326939043a757abd187"
+    "afterSha256": "5a52a10be46f9bba4eea31b391137c339014bc65c330b1d40974ae02d1078435"
   },
   {
     "path": "artifacts/uc-companion/server/public-schema.cjs",

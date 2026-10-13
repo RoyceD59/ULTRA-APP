@@ -82,7 +82,8 @@ function createRecordCollection(input = source) {
       warranty: p.service.warranty ? projectSection(p.service.warranty, ['days', 'text']) : null },
     summary: projectSection(p.summary || {}, ['heading']),
     imageMappings: p.images.filter(i => i.approved && i.alt && !i.file.startsWith('images/')).map(i => ({
-      slot: i.slot, src: i.file, alt: i.alt, picturedColour: i.pictured_colour || null, childSku: i.child_sku || null,
+      slot: i.slot, src: i.file, alt: i.alt, displayName: typeof i.display_name === 'string' ? i.display_name.trim().slice(0, 80) : '',
+      picturedColour: i.pictured_colour || null, childSku: i.child_sku || null,
     })),
     purchasable: p.purchasable && p.price_kes !== null && !['By enquiry', 'Coming soon'].includes(p.availability),
     price: p.price_kes, currency: 'KES',
