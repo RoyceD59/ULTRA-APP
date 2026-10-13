@@ -32,3 +32,17 @@ isolation. Fail closed on missing provider setup; make unrelated integrations
 explicitly unavailable in the fixture only. Label local headers, mocked
 callbacks, actual sandbox transactions and external ingress/delivery evidence
 separately rather than presenting one category as proof of another.
+
+## Saved M-Pesa test-credential approval
+
+For isolated payment verification, the owner instructed “for mpesa use what is
+already saved” and confirmed “those are test”.
+
+**Why:** The owner explicitly approved this credential source; requesting
+duplicate M-Pesa test credentials is unnecessary.
+
+**How to apply:** Reuse the saved M-Pesa credentials only in sandbox-pinned
+verification with selective credential allowlisting. Do not replace the saved
+values, inherit unrelated credentials, or treat this as approval to reuse
+Paystack credentials or initiate live payments. Public test routing and
+notification recipients remain separate approval boundaries.

@@ -1,5 +1,26 @@
 # Development change log
 
+## 2026-10-13 — Owner-approved saved M-Pesa test credentials
+
+- **Approval:** Owner requested use of saved M-Pesa credentials and confirmed
+  they are test credentials. This does not authorize reuse of Paystack keys,
+  production payments, publication or DNS changes.
+- **Check:** Presence-only configuration inspection, followed by one isolated
+  Daraja sandbox OAuth GET. HTTP 200 authentication succeeded; shortcode syntax
+  was valid and passkey/callback-secret presence confirmed. Those latter values
+  have not yet been verified in a transaction.
+- **Isolation:** Only five approved M-Pesa secret names and minimal runtime
+  configuration entered the authentication child. Fixed sandbox endpoint,
+  redirects rejected, bounded timeout; no other credentials, database, app
+  imports, STK push, callbacks or notification requests.
+- **Evidence:** Sanitized result at
+  `generated-artifacts/guest-payment-fixture/mpesa-authentication.json`, covered
+  by the existing ignore rules. No secrets or access token logged or persisted.
+- **Changes:** Documentation/provenance only; no saved values, runtime payment
+  code, order data, publication, production URLs or collectors changed.
+- **Remaining:** Approved temporary HTTPS test routing before payment/callback
+  checks; Paystack test key and notification test recipients remain outstanding.
+
 ## 2026-10-13 — Isolated guest-payment preparation fixture
 
 - **Approval:** Owner approved the written isolated-fixture design and build.

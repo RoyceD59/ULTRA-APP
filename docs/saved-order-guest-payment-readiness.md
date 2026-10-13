@@ -277,7 +277,32 @@ signed/delayed/duplicate callbacks, permanently voided sessions, buyer receipt
 email/push, notification failure records, physical phone and external ingress
 privacy remain unverified. Stripe remains disabled; no collector was activated.
 
-Dedicated `GUEST_PAY_TEST_…` credentials are not configured. Any later real
-provider phase must use newly approved test credentials rather than reusing the
-existing payment secrets, and must first establish approved reachable callback
-routing and notification test targets. The assigned verification is not complete.
+Dedicated `GUEST_PAY_TEST_…` credentials are not configured. The owner subsequently
+approved reuse of the saved M-Pesa credentials and confirmed they are test
+credentials. This is a M-Pesa-only exception, not permission to reuse other
+provider credentials or enable production transactions. Paystack test-key
+approval/configuration, approved reachable callback routing and notification
+test targets remain outstanding. The assigned verification is not complete.
+
+## Saved M-Pesa sandbox authentication — 2026-10-13
+
+The owner instructed: “for mpesa use what is already saved” and confirmed:
+“those are test”. Secret-existence checks confirmed all five saved M-Pesa
+credentials are present; the configured environment is `sandbox`.
+
+A separate isolated authentication process received only the approved M-Pesa
+secret names and minimal runtime configuration. It sent a single GET to the
+fixed Daraja sandbox OAuth endpoint, without redirect following, using a bounded
+timeout. Authentication returned **HTTP 200 with an access token**. Neither the
+credentials, response body nor token were logged or persisted. The shortcode
+syntax was valid; passkey and callback-secret presence was confirmed, not their
+transaction behavior.
+
+Sanitized evidence is in the ignored
+`generated-artifacts/guest-payment-fixture/mpesa-authentication.json`. This is
+**actual sandbox authentication evidence only**, separate from the earlier
+local preparation run, which sent no provider requests. No STK push, payment,
+callback, receipt email or push notification was initiated. Existing secrets,
+settings and order data were unchanged. The local preparation fixture remains
+credential-free; introducing the approved M-Pesa credentials to a payment
+worker requires the separately approved HTTPS test-routing phase.
