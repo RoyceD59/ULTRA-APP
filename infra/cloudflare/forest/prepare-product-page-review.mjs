@@ -8,7 +8,8 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname, posix } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { verifyHandoff, archive as parentArchive, APPROVED_CANDIDATE } from './consistency-handoff.mjs';
+import { verifyHandoff } from './consistency-handoff.mjs';
+import { securityCenterArchive as parentArchive, SECURITY_CENTER_CANDIDATE as APPROVED_CANDIDATE } from './security-center-selection.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../../..');

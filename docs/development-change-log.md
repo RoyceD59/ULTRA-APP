@@ -1,4 +1,19 @@
-# 14 October 2026 — product-page compatibility implementation
+# 13 October 2026 — product-page release handoff and preview verification
+
+- Connected the approved archive to the main API/ProjectHub/Companion selector.
+- Added checksum-bound source/stage verification and guarded local adoption;
+  unreviewed executable sources are rejected.
+- Kept development previews on their development API; Sweet Home mobile and
+  Gym Buddy desktop render with approved photos. Viva Drop's API record and
+  five images pass; its initial-loading screenshot is not a completed UI check.
+- ProjectHub typecheck/build and four selection safety tests pass. The actual
+  production-preparation Companion build passes with live rollback retention.
+- Captured the current live rollback from public responses with checksum
+  evidence, including all referenced assets. No old bytes or pointers replaced.
+- Schema comparison reports no changes. No publication or provider requests.
+- Physical-phone and separate payment sandbox verification remain outstanding.
+
+# 13 October 2026 — product-page compatibility implementation
 
 - Reconciled catalogue, pricing, fulfillment, receipt and cart contracts in the
   isolated release candidate; retained unrelated customer/session/QR methods.

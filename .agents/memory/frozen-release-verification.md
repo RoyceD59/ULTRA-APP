@@ -3,6 +3,17 @@ name: Frozen release verification
 description: Verify narrow production fixes reach the live app without publishing unrelated working-tree changes.
 ---
 
+Keep the current served client as rollback when advancing a selected source;
+historical captured clients alone are not enough.
+
+**Why:** A successful source selection still could not prepare publication
+because the actually served build was absent from the retained folder.
+
+**How to apply:** Capture public version metadata, native manifests, bundles
+and every referenced asset with checksums. Accept the same-host canonical root
+redirect only for native manifest requests. Never invent replacement bytes,
+advance pointers during capture or weaken the existing rollback verifier.
+
 Check cold server startup and authored-data presence after a scoped build, not
 only compiler success or downloadable bundles.
 

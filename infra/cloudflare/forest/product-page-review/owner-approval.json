@@ -1,0 +1,14 @@
+{
+  "candidateSha256": "a1fe3ebfc306ba0bff912d2620be0065965d25b89e38cd2f50f1a08a87c3fbc7",
+  "scopeSha256": "3740c893fe3278467b8af2da80a73e780c127e5eeec9c4e54492815591b36fb3",
+  "selectionApproved": true,
+  "requiredCatalogueCartPrerequisitesApproved": true,
+  "approvedPhotoCodes": ["FCT", "VDR", "GMB"],
+  "publicationRequested": true,
+  "productionStockInitializationApproved": false,
+  "notes": [
+    "Owner requested implementation and publication of the product pages.",
+    "Publication is a separate Replit action; this file is not evidence of deployment.",
+    "Live stock initialization and payment-provider verification remain separate."
+  ]
+}

@@ -1,6 +1,27 @@
 # Product-page publication handoff
 
-## Current decision: compatibility fixed; no-go pending browser and coordinated-release gates
+## Current decision: product-page release selected and prepared; not published
+
+The main-workspace build selector now uses this candidate for the API,
+ProjectHub and Companion. The production-preparation Companion build passed
+with the currently served client retained as rollback, including all 56
+referenced asset URLs and checksum evidence for 60 captured files. No rollback
+gate was removed. A missing current rollback is captured from the live host
+during build rather than replaced with an unrelated historical build.
+
+The development API routing helper now keeps Replit previews on the development
+API. Sweet Home's mobile gallery and Gym Buddy's desktop gallery/specifications
+rendered in screenshots. Viva Drop's screenshot captured initial loading; its
+record and five images passed separate HTTP checks. Screenshots are not tests
+of clicking options, checkout or a physical phone.
+
+Production schema comparison reports no changes. Product-page source selection,
+stage adoption and existing security/session/media fixtures pass. ProjectHub
+also typechecks and builds against the exact selected archive.
+
+Publication is still a user action. After publication, check all three pages,
+their galleries/options and API/web/Expo release identity. A real phone check
+is still needed; unrelated payment sandbox verification remains separate.
 
 The owner requested the new product pages across web and Expo. The existing
 photo approval covers Sweet Home, Viva Drop and Gym Buddy only.
@@ -98,14 +119,14 @@ which is not evidence of a rendered candidate page or working galleries.
 
 ## Production boundary
 
-No running application source, secret, production database, release selector,
-DNS, provider setting or deployment was changed. No payment-provider requests
-were made for this preparation. There is no Publish-ready release.
+The release selector and development-only preview API routing were updated.
+No secret, production database, DNS, provider setting or deployment was changed.
+No payment-provider requests were made for this preparation.
 
-Do not select this review archive or create its prepared-stage marker until the
-remaining browser and coordinated-release gates pass. Preserve the previous
-archive and rollback releases. The next step is browser checkout verification
-and the coordinated release handoff, not another compatibility rewrite.
-Live stock initialization
+The existing stage was adopted only after every archived source byte/mode and
+installed backports were verified. Extra executable source is rejected; only
+the exact standard Expo-generated declaration template is allowed.
+Preserve the previous archive and rollback releases. The next step is the
+user's Publish action and post-publication verification. Live stock initialization
 requires its separately explicit, authorized stock-import procedure; preparing
 source is not an inventory write or evidence of production availability.

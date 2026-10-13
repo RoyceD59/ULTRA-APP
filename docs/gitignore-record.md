@@ -1,4 +1,12 @@
-# 14 October 2026 — product-page build verification
+# 13 October 2026 — product-page release captures
+
+- Added `/generated-artifacts/product-page-release/` to `.gitignore` and
+  `.replitignore`. Public rollback capture bytes and checksum evidence are
+  generated build inputs, not Git/deployment snapshot assets.
+- Publishing builds recreate a missing current capture from live public
+  responses and retain its validated bytes inside the selected static output.
+
+# 13 October 2026 — product-page build verification
 
 - No ignore rules changed. Review source inputs and focused verification tools
   remain tracked; compiled outputs/dependency caches remain under the existing

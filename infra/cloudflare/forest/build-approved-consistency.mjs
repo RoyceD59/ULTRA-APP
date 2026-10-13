@@ -9,14 +9,18 @@ import { APPROVED_CANDIDATE, SOURCE_IDENTITY, archive, stage, root, verifyHandof
 import { here } from './consistency-handoff.mjs';
 import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE } from './auth-upload-security.mjs';
 import { SECURITY_DEPENDENCY_CANDIDATE } from './security-dependency-selection.mjs';
-import { verifyMainSecurityCenterRuntimePins } from './security-center-selection.mjs';
+import { SECURITY_CENTER_CANDIDATE, verifyMainSecurityCenterRuntimePins } from './security-center-selection.mjs';
+import { verifyProductPageStage } from './product-page-selection.mjs';
+import { captureLiveClient } from './capture-live-client.mjs';
 import { verifyInstalledBackports } from './security-patch-installation.mjs';
 
 const [mode, ...flags] = process.argv.slice(2);
 const packages = { api: '@workspace/api-server', hub: '@workspace/projecthub', companion: '@workspace/uc-companion' };
 if (!packages[mode] && mode !== 'serve-companion') throw new Error('Expected api, hub, companion or serve-companion');
-if (flags.some(flag => !['--local-only', '--copy-output'].includes(flag) && !flag.startsWith('--retain-static='))) throw new Error('Unknown build flag');
+if (flags.some(flag => !['--local-only', '--copy-output', '--adopt-stage'].includes(flag) && !flag.startsWith('--retain-static='))) throw new Error('Unknown build flag');
 const localOnly = flags.includes('--local-only');
+const adoptStage = flags.includes('--adopt-stage');
+if (adoptStage && !localOnly) throw new Error('Stage adoption requires local verification, not publication');
 const copyOutput = flags.includes('--copy-output');
 const retentionFlags = flags.filter(flag => flag.startsWith('--retain-static='));
 if (retentionFlags.length > 1 || (retentionFlags.length && mode !== 'companion')) throw new Error('Retention input is only for one Companion build');
@@ -41,7 +45,7 @@ if (!localOnly && mode !== 'serve-companion') {
   if (![frozen.liveBaseRevision, frozen.integrationRevision,
     frozen.previousIntegrationRevision, `consistency-${DEPENDENCY_CANDIDATE}`,
     `consistency-${AUTH_UPLOAD_CANDIDATE}`, `consistency-${SECURITY_DEPENDENCY_CANDIDATE}`,
-    SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
+    `consistency-${SECURITY_CENTER_CANDIDATE}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
     throw new Error('Live source baseline changed; reconcile before preparing deployment outputs');
   }
 }
@@ -100,11 +104,16 @@ if (mode === 'serve-companion') {
     });
     if (prepared.trim() !== APPROVED_CANDIDATE) {
       // Refuse to overwrite an incomplete prior extraction.
-      if ((await readdir(stage)).length) throw new Error('Stage is nonempty without a valid marker; investigate before rebuilding');
-      await run('tar', ['-xzf', archive, '-C', stage], root);
+      const populated = (await readdir(stage)).length > 0;
+      if (populated && !adoptStage) throw new Error('Stage is nonempty without a valid marker; investigate before rebuilding');
+      if (populated) {
+        console.log('Verified existing reviewed stage:', JSON.stringify(verifyProductPageStage(stage)));
+      } else {
+        await run('tar', ['-xzf', archive, '-C', stage], root);
       // Reimport dependencies: an inactive cached side-effect entry can otherwise
       // masquerade as a patched installation. Consumer tests below still gate it.
-      await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts', '--force', '--prod=false'], stage, { ...inheritedEnv, CI: '1' });
+        await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts', '--force', '--prod=false'], stage, { ...inheritedEnv, CI: '1' });
+      }
       await run('pnpm', ['run', 'typecheck:libs']);
       // Inspect installed bytes before this stage can be marked prepared.
       verifyInstalledBackports(stage);
@@ -143,8 +152,16 @@ if (mode === 'serve-companion') {
       });
       if (!response.ok) throw new Error('Cannot verify the actually served rollback build');
       const current = await response.json();
+      let rollbackSource = resolve(root, retainedStatic);
+      const currentInfo = await readFile(resolve(rollbackSource, current.buildId, 'build-info.json'))
+        .catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+      if (!currentInfo) {
+        rollbackSource = resolve(root, 'generated-artifacts/product-page-release/rollback-static');
+        console.log('Captured actually served rollback assets:', JSON.stringify(
+          await captureLiveClient(rollbackSource, current.buildId)));
+      }
       console.log('Retained rollback:', JSON.stringify(await retainRollback(
-        resolve(root, retainedStatic), resolve(companion, 'static-build'), current.buildId,
+        rollbackSource, resolve(companion, 'static-build'), current.buildId,
       )));
     }
   }

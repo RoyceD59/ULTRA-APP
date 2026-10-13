@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { ORIGINAL_CANDIDATE, securityLock } from './consistency-security.mjs';
 import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE, SCOPE_SHA256, authUploadArchive, dependencyArchive, verifyAuthUploadRevision } from './auth-upload-security.mjs';
 import { SECURITY_CENTER_CANDIDATE, securityCenterArchive, verifySecurityCenterSelection } from './security-center-selection.mjs';
+import { PRODUCT_PAGE_CANDIDATE, productPageArchive, verifyProductPageSelection } from './product-page-selection.mjs';
 
-export const APPROVED_CANDIDATE = SECURITY_CENTER_CANDIDATE;
+export const APPROVED_CANDIDATE = PRODUCT_PAGE_CANDIDATE;
 export const PREDECESSOR = 'bdc71175d7f653c99d9d431770200915acd2e8333220c59b8b66a3d48e03d3b2';
 export const API_ORIGINS = [
   'https://api.ucfilters.com',
@@ -18,7 +19,7 @@ export const SOURCE_IDENTITY = `consistency-${APPROVED_CANDIDATE}`;
 export const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../../..');
 export const originalArchive = resolve(here, 'approved-consistency/release-sources.tar.gz');
-export const archive = securityCenterArchive;
+export const archive = productPageArchive;
 export const stage = resolve(root, '.consistency-build', APPROVED_CANDIDATE);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -48,7 +49,8 @@ export async function verifyHandoff() {
       || lock(dependencyArchive) !== lock(authUploadArchive)) {
     throw new Error('Security candidate includes an unapproved dependency delta');
   }
-  return { ...info, ...await verifySecurityCenterSelection() };
+  await verifySecurityCenterSelection();
+  return { ...info, ...await verifyProductPageSelection() };
 }
 
 export function validateSnapshot(value, now = Date.now()) {
