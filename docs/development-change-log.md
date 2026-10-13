@@ -1,5 +1,22 @@
 # Development change log
 
+## 2026-10-13 — Guest-payment sandbox verification blocked by test-origin DNS
+
+- **Approval:** Owner authorized test-only transactions and receipt
+  notifications in an isolated setup, and is available for a real signed-out
+  phone check. Both supplied origins were `https://www.app.ucfilters.com`.
+- **Verification:** Read-only resolver and HTTPS checks failed to resolve that
+  hostname; an independent public DNS lookup confirmed NXDOMAIN. No request
+  reached a guest-payment endpoint. M-Pesa's environment flag is sandbox;
+  credential existence alone does not establish approved sandbox identity.
+  Stripe remains disabled.
+- **Changes:** Evidence categories and blocked prerequisites recorded in
+  `docs/saved-order-guest-payment-readiness.md`; no application/configuration
+  changes or provider transactions.
+- **Ignore changes:** None.
+- **Status:** Awaiting reachable isolated test origins. No publication,
+  DNS changes, real funds, production writes or collector activation.
+
 ## 2026-10-13 — Three-product photo approval and anonymous prerequisite checks
 
 - **Approval:** Owner approved photo activation for Sweet Home, Viva Drop and

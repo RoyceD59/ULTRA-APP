@@ -192,3 +192,37 @@ Before requesting a separate controlled release:
    delete pending orders/reservations or reset unknown attempts as “not started”.
    Use a compatible previous client only with an API capable of reconciling
    already-issued guest attempts. Database additions are additive, not dropped.
+
+## Controlled sandbox verification prerequisites — 2026-10-13
+
+The owner authorized test-only transactions and receipt notifications in an
+isolated non-production setup, with no real funds or production data, and
+confirmed availability for a signed-out physical-phone check. The supplied
+browser and API origin was `https://www.app.ucfilters.com`.
+
+Read-only checks found that this hostname does not resolve. The container
+resolver returned no address, HTTPS probes for `/`, `/version.json`,
+`/api/healthz` and `/pay` failed before reaching a server, and a separate public
+DNS lookup returned status 3 (NXDOMAIN). This is not an application/provider
+failure response, nor evidence that the guest-payment handler ran.
+
+The configured M-Pesa environment is `sandbox`; Paystack and M-Pesa credential
+existence was checked without reading or displaying their values. Their
+approved isolated merchant/database/callback binding is not yet established.
+Stripe is disabled and remains disabled; no Stripe webhook secret is configured.
+The existing production hostname must not be substituted for the supplied test
+origin without establishing a separate, approved non-production fixture.
+
+| Evidence category | Status |
+| --- | --- |
+| Source and isolated mocked tests | Prior evidence only; not rerun or relabeled as provider evidence |
+| Actual Paystack/M-Pesa sandbox recovery and callbacks | Not run; reachable isolated test setup and credential provenance required |
+| Stripe sandbox | Disabled; not enabled or tested |
+| Signed-out physical phone | Owner available; no device execution evidence yet |
+| Buyer receipt email/push and delivery-failure record | Not run; approved test recipients and fixture required |
+| Actual ingress cache/referrer/noindex/log redaction | Not verified; supplied hostname has no DNS address |
+| Google collector ingestion | Outside this verification; no collector activated |
+
+No transaction, notification, production database write, DNS change,
+publication, credential replacement or collector activation was performed.
+Obtain reachable approved non-production browser/API origins before continuing.
