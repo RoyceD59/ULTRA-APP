@@ -1,3 +1,16 @@
+# 13 October 2026 — owner configuration confirmation and read-only Daraja access
+
+- Owner confirmed saved shortcode/passkey match sandbox Test Data and Express
+  Sandbox is enabled; do not present the common-example difference as a fault.
+- Actual sandbox OAuth HTTP 200 and status-endpoint HTTP 400 / `400.002.02` were
+  observed. The read-only query omitted CheckoutRequestID intentionally; no
+  invented reference, payment initialization, callback or customer write occurred.
+- This is basic access evidence, not payment confirmation, credential-pair
+  validation or recovery of the original missing response.
+- Original pending context stays paused/retained; saved secrets unchanged.
+  Sanitized read-only evidence is already ignored. No source/runtime change,
+  publication, DNS change, new native app or additional test runner was required.
+
 # 13 October 2026 — bounded provider diagnostics, without another payment
 
 - The original fixture silenced provider-error logging. Added fixture-only

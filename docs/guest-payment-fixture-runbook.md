@@ -182,6 +182,24 @@ database and encrypted context were verified retained; the public test namespace
 now returns 503 rather than exposing a replacement fixture or normal checkout.
 The prepared diagnostic change was not used to replay the original request.
 
+### Owner confirmation and read-only provider access
+
+The owner confirmed the saved shortcode/passkey match actual sandbox Test Data
+and M-Pesa Express Sandbox is enabled. The common-shortcode difference must not
+be treated as evidence of misconfiguration.
+
+A separately labelled read-only access probe obtained OAuth HTTP 200 and
+queried only the sandbox STK-status endpoint. It intentionally omitted
+CheckoutRequestID rather than inventing a transaction identifier. Daraja returned
+HTTP 400, code `400.002.02`, categorized as invalid request, as expected for a
+missing required reference. No payment initiation, simulation, callback, order
+mutation or secret change occurred; outbound blocks were zero.
+
+This establishes reachability/basic access only, not merchant-password validity,
+the original request's outcome, successful status verification or payment.
+Sanitized evidence is `read-only-access-probe.json` in the ignored result folder.
+The original fixture remains paused/retained; a new probe is not a retry.
+
 Sanitized evidence is ignored under `generated-artifacts/guest-payment-fixture/`:
 `https-verification.json`, `mpesa-attempt.json`, `mpesa-pending-guard.json`.
 Saved-credential OAuth evidence remains separate. Actual Paystack, controlled

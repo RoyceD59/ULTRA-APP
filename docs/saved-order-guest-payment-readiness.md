@@ -17,6 +17,19 @@ The original supervisor is paused with unresolved database/encrypted context
 retained. Its public test namespace returns 503. No new order, initialization or
 change to saved credentials was used to activate the prepared logging change.
 
+### Read-only access after owner setup confirmation
+
+The owner confirmed actual Daraja sandbox Test Data matches the saved
+shortcode/passkey and M-Pesa Express Sandbox is enabled. The common-example
+shortcode difference is not a confirmed configuration fault.
+
+An actual sandbox read-only probe obtained OAuth HTTP 200, then status-endpoint
+HTTP 400 / `400.002.02` with CheckoutRequestID deliberately omitted. No fictitious
+transaction reference or payment initialization was submitted. This confirms
+basic endpoint access, not the original payment outcome or merchant validity.
+No application/customer data or secret values were changed. Original unresolved
+context remains retained, and end-to-end verification remains incomplete.
+
 # Temporary development HTTPS and unresolved M-Pesa evidence — 13 October 2026
 
 - Owner approved temporary HTTPS development tests, separate from publishing or

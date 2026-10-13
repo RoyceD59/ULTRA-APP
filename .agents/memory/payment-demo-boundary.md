@@ -73,3 +73,15 @@ owner for a nonexistent notification did not resolve it.
 from client errors. A shortcode differing from a common example is a setup
 hypothesis, not proof of rejection. Compare actual simulator Test Data without
 displaying or silently replacing saved credentials, and retain unknown attempts.
+
+## Owner-confirmed Daraja Test Data comparison
+
+On 13 October 2026 the owner confirmed “Setup matches”: the saved shortcode and
+passkey match Daraja sandbox Test Data and M-Pesa Express Sandbox is enabled.
+
+**Why:** This direct confirmation supersedes suspicion based only on a shortcode
+different from the common example.
+
+**How to apply:** Do not silently substitute default merchant values or repeat
+the same setup question without evidence of a change. Configuration confirmation
+is not proof that an STK request was accepted or a pending payment resolved.
