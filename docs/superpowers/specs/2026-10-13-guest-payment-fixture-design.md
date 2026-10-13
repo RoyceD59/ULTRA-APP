@@ -1,5 +1,41 @@
 # Isolated guest-payment verification fixture
 
+## Owner-approved credential-source update
+
+After approving the local fixture, the owner requested reuse of the existing
+M-Pesa secrets and confirmed they are test credentials. An isolated OAuth-only
+probe authenticated successfully against Daraja sandbox without financial
+transactions or secret output. This overrides the request for duplicate
+M-Pesa test credentials, not the exclusions for unrelated live credentials.
+The original local preparation mode remains credential-free.
+
+## Proposed HTTPS development-test phase — approval required
+
+- Expose a bounded temporary test namespace through the existing development
+  API, forwarding only to the isolated fixture worker, not normal checkout
+  handlers. Production must reject the namespace; no publication, production
+  domain changes or DNS work.
+- Use an active HTTPS development URL only for these temporary sandbox tests.
+  Verify external reachability before provider initialization. Do not describe
+  development URLs as permanent or production webhook infrastructure.
+- Keep the worker's separate test database and synthetic buyer/order. Selectively
+  allow only the five owner-approved saved M-Pesa secrets; pin all M-Pesa egress
+  to Daraja sandbox. Stripe, Paystack, unrelated AI and notifications stay
+  unavailable unless independently approved/configured.
+- Serve only the private test payment document, narrow payment proxy and
+  authenticated callback paths. Keep minimal payer summary, private/no-store,
+  no-referrer and noindex headers, same-origin checks and token-safe logs.
+  Verify these through actual HTTPS ingress before an STK request.
+- Callback routing must never fall back to a normal development or production
+  order when the fixture is unavailable. Stop disables the temporary route.
+- Continue the original-buyer/order recovery, delayed/duplicate callback and
+  permanent-void checks only after routing is verified. Do not claim receipt
+  delivery without approved test recipients, or physical-phone evidence
+  without an actual signed-out phone check.
+
+This phase is proposed, not activated. The owner's approval must precede
+implementation of public fixture access.
+
 ## Approved scope
 
 Prepare a development fixture for the saved-order guest-payment verification.
