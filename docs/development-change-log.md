@@ -1,3 +1,15 @@
+# 13 October 2026 — product-page publication compatibility investigation
+
+- Confirmed the live browser still selects `1791820215559-828`; the new public
+  product-record endpoints return 404 on the production origins checked.
+- Compared the original product-page feature with the selected frozen archive.
+  The cart changes match some predecessor contexts, but API, startup, checkout
+  and client input contracts need a scoped compatibility integration.
+- Did not select the whole working tree, alter production data, change payment
+  providers, replace secrets, advance releases or publish.
+- Added `docs/product-page-publication-handoff.md` with the required prerequisite
+  scope and verification gates. No ignore-rule changes.
+
 # 13 October 2026 — saved Paystack key rejected by test-only gate
 
 - Owner conditionally approved saved-key reuse only in test-mode.
