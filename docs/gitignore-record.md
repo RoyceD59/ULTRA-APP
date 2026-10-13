@@ -1,3 +1,13 @@
+# Product-page review preparation — 13 October 2026
+
+`infra/cloudflare/forest/product-page-review/` contains a small source-review
+archive, its source manifest and provenance metadata. These review inputs are
+intentionally retained like the existing frozen-source handoffs, but are not
+selected or approved for activation. Installed stages and generated compiler
+outputs remain under the already ignored `.consistency-build/` directory.
+No ignore-rule changes were needed. There are no new runtime data or credentials
+in the review inputs.
+
 # Git ignore record
 
 ## WhatsApp session backup retry — 2026-10-10

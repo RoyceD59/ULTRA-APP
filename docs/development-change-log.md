@@ -1,3 +1,16 @@
+# 13 October 2026 — approved product-page prerequisite review
+
+- Recorded the owner's approval to include the required catalogue, price,
+  stock/SKU and variant-cart prerequisites; no repeated scope approval needed.
+- Prepared a separate, unselected review archive and isolated dependency stages,
+  preserving the selected frozen package and its unchanged lockfile.
+- Shared libraries compile, but the candidate API and Companion typechecks fail
+  on cross-version shared contracts. No coordinated platform exports were made.
+- Recorded the exact failed-candidate fingerprint and remaining gates in
+  `docs/product-page-publication-handoff.md`; the candidate is **not publish-ready**.
+- No running app, production data, credentials, provider settings, canonical
+  hosts or release selection changed. No payment-provider calls were made.
+
 # 13 October 2026 — product-page publication compatibility investigation
 
 - Confirmed the live browser still selects `1791820215559-828`; the new public

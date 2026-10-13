@@ -1,0 +1,22 @@
+{
+  "candidateSha256": "c1318f524643fe92bf2fd97ea5b6d52480bf366b2807f080bc7d44391489b85f",
+  "decision": "no-go",
+  "selected": false,
+  "published": false,
+  "sharedLibraryTypecheck": "passed",
+  "apiTypecheck": "failed",
+  "companionTypecheck": "failed",
+  "serverSyntaxCheck": "passed",
+  "apiBuildScriptSyntaxCheck": "passed",
+  "platformExports": "not-run",
+  "browserJourneyVerification": "not-run",
+  "physicalDeviceVerification": "not-provided",
+  "providerRequests": "none",
+  "productionWrites": "none",
+  "notes": [
+    "Approval includes required catalogue, pricing, stock/SKU and variant-cart prerequisites.",
+    "Compilation failures prevent selection, activation and a Publish-ready handoff.",
+    "The development screenshot showed only loading; it does not establish candidate rendering.",
+    "See docs/product-page-publication-handoff.md for compatibility blockers and remaining gates."
+  ]
+}

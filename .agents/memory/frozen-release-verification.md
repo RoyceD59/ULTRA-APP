@@ -3,6 +3,19 @@ name: Frozen release verification
 description: Verify narrow production fixes reach the live app without publishing unrelated working-tree changes.
 ---
 
+Do not replace an entire shared API hook just to include a product/checkout
+method in a frozen release. Reconcile its contracts with the frozen generated
+client and every retained consumer, or preserve unrelated methods.
+
+**Why:** A product-page source splice imported unrelated generated customer/
+hydration models and changed the QR/session caller signatures. The editable
+tree's successful checks did not establish that the hybrid archive compiled.
+
+**How to apply:** Validate the exact hybrid source after each coherent assembly.
+Inspect shared-hook and import/export changes as compatibility boundaries; keep
+an incompatible review archive unselected instead of treating source copying as
+release completion.
+
 Treat a successful publish as confirmation that the selected package built and started, not proof that the newest working-tree fix was included.
 
 Repeat dependency risk checks against the exact frozen archive before a later
