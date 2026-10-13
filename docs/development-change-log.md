@@ -1,3 +1,20 @@
+# 13 October 2026 — Companion startup after deployment cleanup
+
+- The latest publish passed compilation, rollback retention and image upload,
+  then the selected Companion server crashed because image cleanup removed
+  its `@workspace/api-zod/blog-inline-links-core` resolution link.
+- Approved stages now retain validated relative workspace links into their own
+  retained libraries/artifacts. Installed third-party/build dependencies still
+  get removed. Escaping or absolute workspace links fail before any deletion.
+- Corrected the startup regression to load the selected product-page server,
+  not the older legacy server. It checks the shared import after cleanup,
+  browser/native HTTP responses and repeat-cleanup idempotency.
+- All 13 deployment-image regressions pass, including escaping-link rejection
+  before deletion. Read-only workspace preflight verified 49 frozen links;
+  development installations were not pruned.
+- No source archive, payment settings, schema or production data changed.
+  This prepares a publication retry; it does not publish the project.
+
 # 13 October 2026 — recurring republication rollback failure
 
 - Compared failed publishing logs: the earlier failure lacked the currently

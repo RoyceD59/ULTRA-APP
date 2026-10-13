@@ -30,3 +30,14 @@ dependencies, including workspace-specific dependency links. Do not recursively
 delete every directory named node_modules: public font/image assets can have
 that name in their URL layout. Verify the frozen server and logging workers
 without build-stage installations before asking for a publishing retry.
+
+Approved stage-local workspace resolution links are runtime inputs too; retain
+validated relative links into the same frozen stage when pruning installations.
+
+**Why:** The product-page server added a shared CommonJS import. Compilation and
+image upload succeeded, but deleting all stage-local module links caused startup
+to crash. The old startup fixture loaded a legacy server and missed this change.
+
+**How to apply:** Exercise the selected release's actual server and shared modules
+after cleanup, not an older retained release. Reject links outside that stage
+before pruning; do not keep the large installed dependency graph as a workaround.

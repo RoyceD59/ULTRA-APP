@@ -206,21 +206,33 @@ test('deployment hook runs cleanup after compilation and retains coordinated sou
   assert.doesNotMatch(client, /release-build\.mjs/);
 });
 
-test('actual frozen Companion core-Node server still serves browser and native metadata after cleanup', async t => {
+test('selected frozen Companion server resolves workspace imports and serves browser/native metadata after cleanup', async t => {
   const path = await fixture(t);
   const stage = '.hydrate-release';
   const app = resolve(path, stage, 'artifacts/uc-companion');
   await put(path, `${stage}/.prepared`, sha);
   // Use exact archived server bytes, not a mock or current working-tree server.
-  await cp(resolve(root, '.hydrate-release/artifacts/uc-companion/server'), resolve(app, 'server'), { recursive: true });
-  await cp(resolve(root, '.hydrate-release/artifacts/uc-companion/scripts'), resolve(app, 'scripts'), { recursive: true });
-  await cp(resolve(root, '.hydrate-release/artifacts/uc-companion/app.json'), resolve(app, 'app.json'));
+  await cp(resolve(actualCandidateStage, 'artifacts/uc-companion/server'), resolve(app, 'server'), { recursive: true });
+  await cp(resolve(actualCandidateStage, 'artifacts/uc-companion/scripts'), resolve(app, 'scripts'), { recursive: true });
+  await cp(resolve(actualCandidateStage, 'artifacts/uc-companion/data'), resolve(app, 'data'), { recursive: true });
+  await cp(resolve(actualCandidateStage, 'artifacts/uc-companion/app.json'), resolve(app, 'app.json'));
+  await put(path, `${stage}/lib/api-zod/package.json`,
+    await readFile(resolve(actualCandidateStage, 'lib/api-zod/package.json'), 'utf8'));
+  await put(path, `${stage}/lib/api-zod/src/blog-inline-links-core.cjs`,
+    await readFile(resolve(actualCandidateStage, 'lib/api-zod/src/blog-inline-links-core.cjs'), 'utf8'));
+  await mkdir(resolve(app, 'node_modules/@workspace'), { recursive: true });
+  await symlink('../../../../lib/api-zod', resolve(app, 'node_modules/@workspace/api-zod'));
+  await put(path, `${stage}/artifacts/uc-companion/node_modules/build-only/index.js`, 'build-only');
   await put(path, `${stage}/node_modules/build-only/index.js`);
   await put(path, `${stage}/artifacts/uc-companion/static-build/ios/manifest.json`,
     JSON.stringify({ launchAsset: { key: 'bundle-test', url: 'https://example.invalid/bundle.js' } }));
   await put(path, `${stage}/artifacts/uc-companion/static-build/test/_expo/static/js/web/bundle.js`, 'console.log("test");');
   await put(path, `${stage}/artifacts/uc-companion/static-build/test/build-info.json`, '{"buildId":"test"}');
   await cleanupBuildDependencies(path);
+  assert.equal(await readFile(resolve(app, 'node_modules/@workspace/api-zod/src/blog-inline-links-core.cjs'), 'utf8'),
+    await readFile(resolve(actualCandidateStage, 'lib/api-zod/src/blog-inline-links-core.cjs'), 'utf8'));
+  await assert.rejects(readFile(resolve(app, 'node_modules/build-only/index.js')), { code: 'ENOENT' });
+  assert.deepEqual((await cleanupBuildDependencies(path)).removed, []);
   const reservation = createServer();
   await new Promise(done => reservation.listen(0, '127.0.0.1', done));
   const reservedPort = reservation.address().port;
@@ -247,6 +259,23 @@ test('actual frozen Companion core-Node server still serves browser and native m
   const manifest = await fetch(`${base}/`, { headers: { 'expo-platform': 'ios' } });
   assert.equal(manifest.status, 200);
   assert.equal((await manifest.json()).launchAsset.key, 'bundle-test');
+});
+
+test('workspace links outside an approved stage fail before any cleanup', async t => {
+  const path = await fixture(t);
+  const outside = await fixture(t);
+  await put(path, '.hydrate-release/.prepared', sha);
+  await put(path, '.hydrate-release/node_modules/build-only/index.js', 'keep until validated');
+  await mkdir(resolve(path, '.hydrate-release/node_modules/@workspace'), { recursive: true });
+  await symlink(outside, resolve(path, '.hydrate-release/node_modules/@workspace/api-zod'));
+  await assert.rejects(cleanupBuildDependencies(path), /Expected relative frozen workspace link/);
+  assert.equal(await readFile(resolve(path, '.hydrate-release/node_modules/build-only/index.js'), 'utf8'),
+    'keep until validated');
+  await rm(resolve(path, '.hydrate-release/node_modules/@workspace/api-zod'));
+  await symlink('../../../', resolve(path, '.hydrate-release/node_modules/@workspace/api-zod'));
+  await assert.rejects(cleanupBuildDependencies(path), /Workspace link escapes frozen stage/);
+  assert.equal(await readFile(resolve(path, '.hydrate-release/node_modules/build-only/index.js'), 'utf8'),
+    'keep until validated');
 });
 
 test('frozen API logging workers retain their compiled paths and use preserved root runtime dependencies', async t => {

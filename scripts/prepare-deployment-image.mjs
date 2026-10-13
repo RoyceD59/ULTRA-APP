@@ -11,7 +11,7 @@
  * - invalid-marker: a marker that exists but is wrong (or a legacy stage with
  *   no marker). This fails closed before anything is removed.
  */
-import { lstat, readdir, readFile, rm } from 'node:fs/promises';
+import { lstat, readdir, readFile, realpath, readlink, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,10 +98,43 @@ export async function cleanupBuildDependencies(root) {
   const invalid = folders.find(folder => folder.status === 'invalid-marker');
   if (invalid) throw new Error(invalid.error);
   const targets = [];
-  for (const folder of folders) targets.push(...await dependencyTargets(folder.path));
+  for (const folder of folders) {
+    for (const path of await dependencyTargets(folder.path)) {
+      let keepWorkspace = false;
+      const info = await inspect(path);
+      if (folder.status === 'approved' && info?.isDirectory() && !info.isSymbolicLink()) {
+        const workspace = resolve(path, '@workspace');
+        if (await directory(workspace)) {
+          const names = await readdir(workspace);
+          for (const name of names) {
+            const link = resolve(workspace, name);
+            const entry = await inspect(link);
+            if (!entry?.isSymbolicLink() || (await readlink(link)).startsWith('/')) {
+              throw new Error(`Expected relative frozen workspace link: ${link}`);
+            }
+            const destination = await realpath(link);
+            if (!['lib', 'artifacts'].some(group =>
+              destination.startsWith(resolve(folder.path, group) + '/'))) {
+              throw new Error(`Workspace link escapes frozen stage: ${link}`);
+            }
+          }
+          keepWorkspace = names.length > 0;
+        }
+      }
+      targets.push({ path, keepWorkspace });
+    }
+  }
   const removed = [];
-  for (const target of targets) {
+  for (const { path: target, keepWorkspace } of targets) {
     if (!await inspect(target)) continue;
+    if (keepWorkspace) {
+      // Runtime CJS imports resolve through these tiny links into retained
+      // frozen source. Remove installations, not the runtime workspace graph.
+      const entries = (await readdir(target)).filter(name => name !== '@workspace');
+      for (const name of entries) await rm(resolve(target, name), { recursive: true, force: true });
+      if (entries.length) removed.push(target.slice(root.length + 1));
+      continue;
+    }
     // rm unlinks a node_modules symlink without following its external target.
     // No recursive search: bundled static assets can contain node_modules paths.
     await rm(target, { recursive: true, force: true });
@@ -111,7 +144,7 @@ export async function cleanupBuildDependencies(root) {
     removed,
     approved: folders.filter(folder => folder.status === 'approved').map(folder => folder.name),
     scratch: folders.filter(folder => folder.status === 'scratch').map(folder => folder.name),
-    preserved: ['root node_modules', 'compiled outputs', 'static assets', 'source archives', 'rollback assets'],
+    preserved: ['root node_modules', 'validated frozen workspace links', 'compiled outputs', 'static assets', 'source archives', 'rollback assets'],
   };
 }
 
