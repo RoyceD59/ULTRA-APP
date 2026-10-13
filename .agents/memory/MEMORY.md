@@ -78,7 +78,7 @@
 - [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
 - [Shared TypeScript bundler resolution](shared-typescript-bundler-resolution.md) — Metro may reject .js-to-.ts imports that TypeScript and server tests accept.
 - [Browser fixture recovery](browser-fixture-recovery.md) — browser worker resets can erase test credentials without removing shared-development DB fixtures.
-- [Persistent browser fixtures](browser-fixture-server-lifetime.md) — foreground fixture servers can die before browser actions; use a tracked background process.
+- [Persistent browser fixtures](browser-fixture-server-lifetime.md) — use tracked servers and explicit graceful shutdown; tool force-stop may skip cleanup.
 - [Expo guide printing](expo-guide-printing.md) — web printing ignores supplied HTML; article exports must print an isolated complete document, not the collapsed screen.
 - [Swahili guide audience](swahili-guide-audience.md) — Nairobi customers need offline Swahili installation help; guide localization is not a whole-app migration.
 - [Schedule-update deduplication](schedule-update-deduplication.md) — dedupe against the applied activation, not a history of lifespan values; returning to an old value is a new correction.

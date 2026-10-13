@@ -236,3 +236,48 @@ supplied test hostname is incorrect and the two actual published origins must
 not be treated as an isolated merchant/database fixture. A separate test setup
 has not yet been identified. Existing provider secrets, publication settings
 and DNS remain untouched.
+
+## Local fixture preparation verified — 2026-10-13
+
+The owner approved the written isolated-fixture design and implementation.
+The preparation tool is documented in `docs/guest-payment-fixture-runbook.md`.
+It creates a separate temporary database, checks that database's identity before
+loading payment code, and seeds one synthetic buyer and original saved order.
+Only the real payment router and private document/proxy are exercised; unrelated
+AI integration calls fail explicitly in a fixture-scoped dependency substitute.
+No live payment, notification or AI credentials are inherited.
+
+The completed local verification established:
+
+- Six configuration/transport/stop-control safety tests passed; API TypeScript check passed.
+- Private document returned 200 with private/no-store, no-referrer and
+  noindex/nofollow/noarchive headers and a self-only connection policy.
+- Summary returned the minimal payer contract without the synthetic buyer's
+  email, phone or full address.
+- All payment methods were unavailable. Initialization returned 503 rather than
+  demo success; the original pending order and buyer were retained.
+- Ordinary payment routes and foreign browser origins were rejected.
+- Fixture logs did not contain the bearer or submitted payer email; application
+  logging was silent. Private temporary files had restrictive permissions.
+- No actual provider requests occurred, and cleanup removed only the owned
+  fixture database. Its removal was checked through a read-only catalogue query.
+- Retained-process health and explicit graceful stop passed, including removal
+  of its exact database, private files and listener. A background-tool force-stop
+  did not run signal cleanup; that owned synthetic orphan was safely recovered.
+  The runbook now uses a validated private control file and explicit stop
+  command rather than relying on a force-stop's lifecycle behavior.
+- Sanitized evidence is in the ignored
+  `generated-artifacts/guest-payment-fixture/local-verification.json`.
+
+The listener is loopback-only and is not registered with the public preview
+proxy. The verification run stopped and discarded its database afterward; the
+fixture remains reproducible through the runbook command, not publicly hosted.
+This is **local preparation evidence only**. Actual provider recovery,
+signed/delayed/duplicate callbacks, permanently voided sessions, buyer receipt
+email/push, notification failure records, physical phone and external ingress
+privacy remain unverified. Stripe remains disabled; no collector was activated.
+
+Dedicated `GUEST_PAY_TEST_…` credentials are not configured. Any later real
+provider phase must use newly approved test credentials rather than reusing the
+existing payment secrets, and must first establish approved reachable callback
+routing and notification test targets. The assigned verification is not complete.

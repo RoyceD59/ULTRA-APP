@@ -1,5 +1,36 @@
 # Development change log
 
+## 2026-10-13 — Isolated guest-payment preparation fixture
+
+- **Approval:** Owner approved the written isolated-fixture design and build.
+  This does not approve public exposure, live credentials, DNS or publication.
+- **Changes:** Added a supervised loopback-only fixture with its own temporary
+  PostgreSQL database, synthetic buyer/original saved order, real payment router
+  and private document/proxy. Added restricted child configuration, outbound
+  transport guards, bounded credential-free request events and owned-database
+  cleanup. Unrelated eager AI dependency is fixture-scoped and explicitly
+  unavailable; normal application behavior is unchanged.
+- **Validation:** Six safety tests passed; API typecheck passed; local
+  verification passed private headers, minimal summary, unavailable-not-demo
+  initialization, original-order retention, denied routes/foreign origins,
+  private files/logs and database removal. No full-suite or Expo validation claim.
+- **Lifecycle:** Retained fixture health and explicit graceful stop passed.
+  Background-tool force-stop skipped cleanup in the first retained check; its
+  owned synthetic orphan was recovered without touching other databases.
+  Added restricted control metadata and an identity-checked stop/recovery
+  command; private files and listener removal were independently confirmed.
+- **Evidence:** Sanitized local-only result under
+  `generated-artifacts/guest-payment-fixture/local-verification.json`; runbook at
+  `docs/guest-payment-fixture-runbook.md`. Bearer state was confined to a private
+  temporary directory and removed after verification.
+- **Ignore changes:** Added `/generated-artifacts/guest-payment-fixture/` to
+  `.gitignore` and `.replitignore`; no existing ignore rules removed.
+- **Publication:** None. No live tables, existing secrets, DNS, provider funds,
+  real recipients, Stripe activation or collector settings changed.
+- **Still blocked:** Actual provider transactions/callbacks, permanent voiding,
+  buyer notifications, physical phone and actual ingress privacy. Dedicated
+  test credentials, approved callback routing and test recipients are required.
+
 ## 2026-10-13 — Guest-payment sandbox verification blocked by test-origin DNS
 
 - **Approval:** Owner authorized test-only transactions and receipt

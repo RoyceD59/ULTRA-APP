@@ -15,3 +15,20 @@ Development/test demos were retained to avoid adding or replacing checkout flows
 **How to apply:** Apply the same boundary to order verification, payment
 initialization, status checks and method availability. Keep COD unaffected.
 Never infer demo permission from credential absence or a failed provider call.
+
+## Controlled-provider verification
+
+Provider-evidence runs must affirm that simulation is disabled before preparing
+orders or making requests. Do not borrow unrelated live credentials merely to
+satisfy import-time configuration.
+
+**Why:** Development/test mode permits credential-free demonstrations, which
+can otherwise be mistaken for real provider evidence. Payment helpers also
+transitively load an eager review-AI client even when a payment does not use AI;
+inheriting the whole live environment to satisfy it defeats fixture isolation.
+
+**How to apply:** Separate simulation control from database/credential
+isolation. Fail closed on missing provider setup; make unrelated integrations
+explicitly unavailable in the fixture only. Label local headers, mocked
+callbacks, actual sandbox transactions and external ingress/delivery evidence
+separately rather than presenting one category as proof of another.

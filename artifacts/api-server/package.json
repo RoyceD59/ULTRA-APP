@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/db/seed.ts",
     "test": "node --import tsx/esm src/tests/run.ts",
+    "fixture:guest-pay": "node scripts/guest-pay-fixture.cjs",
+    "test:guest-pay-fixture": "node --test scripts/__tests__/guest-pay-fixture.test.cjs",
     "eval:alison-commerce": "node --import tsx/esm src/evals/alison-commerce.ts",
     "eval:alison-commerce:replay": "node --import tsx/esm src/evals/alison-commerce-replay.ts"
   },
