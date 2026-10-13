@@ -226,3 +226,13 @@ origin without establishing a separate, approved non-production fixture.
 No transaction, notification, production database write, DNS change,
 publication, credential replacement or collector activation was performed.
 Obtain reachable approved non-production browser/API origins before continuing.
+
+The owner subsequently clarified that the submitted addresses were copied
+from real application/API configuration, rather than a separate test host.
+The selected publication builder explicitly injects `app.ucfilters.com` for
+the Companion origin and `api.ucfilters.com` for its API origin; it does not use
+`www.app.ucfilters.com` for both. The real store therefore exists, but the
+supplied test hostname is incorrect and the two actual published origins must
+not be treated as an isolated merchant/database fixture. A separate test setup
+has not yet been identified. Existing provider secrets, publication settings
+and DNS remain untouched.

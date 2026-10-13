@@ -16,6 +16,10 @@
 - **Ignore changes:** None.
 - **Status:** Awaiting reachable isolated test origins. No publication,
   DNS changes, real funds, production writes or collector activation.
+- **Clarification:** Owner supplied real configuration addresses, not a separate
+  test host. The selected build injects `app.ucfilters.com` and
+  `api.ucfilters.com`; the unreachable `www.app.ucfilters.com` is neither.
+  No isolated test fixture has been verified.
 
 ## 2026-10-13 — Three-product photo approval and anonymous prerequisite checks
 
