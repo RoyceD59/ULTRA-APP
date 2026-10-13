@@ -36,7 +36,8 @@ separately rather than presenting one category as proof of another.
 ## Saved M-Pesa test-credential approval
 
 For isolated payment verification, the owner instructed “for mpesa use what is
-already saved” and confirmed “those are test”.
+already saved” and confirmed that all saved M-Pesa secrets, including the
+passkey, are test credentials.
 
 **Why:** The owner explicitly approved this credential source; requesting
 duplicate M-Pesa test credentials is unnecessary.
@@ -85,3 +86,16 @@ different from the common example.
 **How to apply:** Do not silently substitute default merchant values or repeat
 the same setup question without evidence of a change. Configuration confirmation
 is not proof that an STK request was accepted or a pending payment resolved.
+
+## Conditional saved Paystack approval
+
+For isolated Paystack verification, the owner approved “Use saved key only if
+test-mode”.
+
+**Why:** The permission is conditional; an existing key is not blanket permission
+to use live funds or alter the live payment configuration.
+
+**How to apply:** Validate the selected key privately before any provider call.
+Live-mode or unrecognized keys must stop verification with zero provider requests.
+Never replace the existing key silently; a separate test key belongs in the
+dedicated isolated-fixture secret, not the live application credential.

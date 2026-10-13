@@ -1,3 +1,12 @@
+# 13 October 2026 — saved Paystack key rejected by test-only gate
+
+- Owner conditionally approved saved-key reuse only in test-mode.
+- A private, non-network format check classified the current key as live-mode.
+  Stopped with zero provider requests; no payment, secret update, source/runtime
+  change, publication or DNS change.
+- A separate test-only key is needed; do not overwrite the live application
+  credential. The existing unresolved M-Pesa context remains independently held.
+
 # 13 October 2026 — owner configuration confirmation and read-only Daraja access
 
 - Owner confirmed saved shortcode/passkey match sandbox Test Data and Express

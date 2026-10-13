@@ -30,6 +30,14 @@ basic endpoint access, not the original payment outcome or merchant validity.
 No application/customer data or secret values were changed. Original unresolved
 context remains retained, and end-to-end verification remains incomplete.
 
+### Paystack test-source gate
+
+The owner's permission to reuse the saved Paystack key was conditional on
+test-mode. The current saved key classified as live-mode, so verification stopped
+before any Paystack API call. No payment, application credential replacement or
+production change occurred. A separate securely provided test-mode key is required
+to unblock this provider. End-to-end verification remains incomplete.
+
 # Temporary development HTTPS and unresolved M-Pesa evidence — 13 October 2026
 
 - Owner approved temporary HTTPS development tests, separate from publishing or

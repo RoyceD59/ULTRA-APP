@@ -200,6 +200,19 @@ the original request's outcome, successful status verification or payment.
 Sanitized evidence is `read-only-access-probe.json` in the ignored result folder.
 The original fixture remains paused/retained; a new probe is not a retry.
 
+### Conditional Paystack approval and credential gate
+
+The owner approved reuse of the saved Paystack key only if test-mode. A private
+non-network format check classified the current saved key as live-mode. The gate
+stopped with zero Paystack/provider requests, no transaction and no secret change.
+This classification is a dated check, not an assumption about future rotations.
+
+Continue only with a validated test-mode source. A separate test key can be
+provided securely as `GUEST_PAY_TEST_PAYSTACK_SECRET_KEY`, without overwriting
+the existing application credential. Never accept a live key or treat a prefix
+check as successful provider authentication/payment evidence. The M-Pesa unknown
+attempt remains separately paused and retained.
+
 Sanitized evidence is ignored under `generated-artifacts/guest-payment-fixture/`:
 `https-verification.json`, `mpesa-attempt.json`, `mpesa-pending-guard.json`.
 Saved-credential OAuth evidence remains separate. Actual Paystack, controlled
