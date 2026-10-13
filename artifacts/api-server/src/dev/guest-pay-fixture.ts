@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const safety = require("../../scripts/lib/guest-pay-fixture-safety.cjs");
+const { encodeState } = require("../../scripts/lib/guest-pay-fixture-state.cjs");
 
 function event(name: string, details: Record<string, unknown> = {}) {
   // This fixture deliberately emits no URL, body, credential, contact or raw error.
@@ -40,7 +41,12 @@ try {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid fixture port");
   const directory = process.env.GUEST_PAY_FIXTURE_DIRECTORY!;
   const origin = `http://127.0.0.1:${port}`;
-  const guard = safety.installNetworkGuard(process.env.DATABASE_URL, port);
+  const mpesa = process.env.GUEST_PAY_FIXTURE === "mpesa-sandbox";
+  const publicOrigin = process.env.GUEST_PAY_FIXTURE_PUBLIC_ORIGIN;
+  const basePath = process.env.GUEST_PAY_FIXTURE_BASE_PATH || "";
+  let paymentsEnabled = false;
+  const guard = safety.installNetworkGuard(process.env.DATABASE_URL, port, { mpesa,
+    onProviderDiagnostic: (details: Record<string, unknown>) => event("fixture_provider_diagnostic", details) });
   // Payment helpers transitively import review classification's eager AI client.
   // Disable that unrelated integration rather than borrowing its live credentials.
   const disabledAi = new URL("../../scripts/lib/guest-pay-disabled-ai.mjs", import.meta.url).href;
@@ -62,7 +68,8 @@ try {
   } finally { await probe.end(); }
   const configuration = await import("../lib/payment-configuration.js");
   if (configuration.paymentMocksAllowed() ||
-      ["paystack", "mpesa", "stripe"].some(configuration.paymentProviderConfigured)) {
+      ["paystack", "stripe"].some(configuration.paymentProviderConfigured) ||
+      configuration.paymentProviderConfigured("mpesa") !== mpesa) {
     throw new Error("Provider or simulation unexpectedly enabled");
   }
   const database = await import("@workspace/db");
@@ -112,12 +119,12 @@ try {
     lineItems: [{ productId: Number(product.id), quantity: 1,
       ...(variant ? { variationId: Number(variant.id), childSku: variant.sku } : {}) }],
     fulfillment: "collection", shippingAddress: address, idempotencyKey: randomUUID(),
-  }, String(buyerId), "paystack");
+  }, String(buyerId), mpesa ? "mpesa" : "paystack");
   await pool.query(GUEST_PAY_DDL);
   phase = "issue_link";
   const link = await issuePayLink(order);
   const { createGuestPayDelivery } = require("../../../uc-companion/server/guest-pay-delivery.cjs");
-  const delivery = createGuestPayDelivery({ apiOrigin: origin });
+  const delivery = createGuestPayDelivery({ apiOrigin: origin, basePath });
   const allowedApi = new Set([
     "/api/guest-pay/summary", "/api/guest-pay/initialize", "/api/guest-pay/reconcile",
   ]);
@@ -127,6 +134,7 @@ try {
     const family = pathname === "/_fixture/health" ? "health" :
       pathname.startsWith("/pay") ? "private_document" :
       pathname.startsWith("/guest-pay/") ? "private_proxy" :
+      pathname === "/api/payments/mpesa/callback" ? "mpesa_callback" :
       allowedApi.has(pathname) ? "guest_api" : "blocked";
     res.on("finish", () => event("fixture_request", { requestId, family, status: res.statusCode }));
     const deny = (status: number) => {
@@ -135,7 +143,7 @@ try {
     };
     // Deny DNS rebinding, foreign browser origins and any non-fixture API surface.
     if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host || "") ||
-        (req.headers.origin && ![origin, `http://localhost:${port}`].includes(req.headers.origin))) {
+        (req.headers.origin && ![origin, `http://localhost:${port}`, publicOrigin].includes(req.headers.origin))) {
       deny(403); return;
     }
     try {
@@ -148,15 +156,30 @@ try {
         const row = stored.rows[0];
         res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
         res.end(JSON.stringify({ isolated: check.rows[0].database === process.env.GUEST_PAY_FIXTURE_DATABASE,
-          localOnly: true, syntheticData: true, providersEnabled: false, simulationsEnabled: false,
+          localOnly: !publicOrigin, syntheticData: true, providersEnabled: mpesa, simulationsEnabled: false,
+          instance: process.env.GUEST_PAY_FIXTURE_INSTANCE, mode: process.env.GUEST_PAY_FIXTURE,
+          publicOrigin, basePath, paymentsEnabled,
           notificationsEnabled: false, analyticsEnabled: false, blockedOutbound: guard.blocked(),
           orders: check.rows[0].orders, buyers: check.rows[0].buyers,
           originalBuyerRetained: row?.user_id === String(buyerId),
           orderState: row?.checkout_state, paymentStarted: !!row?.payment_reference || !!row?.payment_confirmed_at }));
         return;
       }
+      // This control path is not exposed by the public proxy. Activation follows
+      // actual HTTPS privacy/reachability checks and remains bound to this run.
+      if (pathname === "/_fixture/activate-mpesa" && req.method === "POST" && mpesa &&
+          !req.headers.origin && req.headers["x-fixture-instance"] === process.env.GUEST_PAY_FIXTURE_INSTANCE) {
+        paymentsEnabled = true;
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end('{"paymentsEnabled":true,"sandboxOnly":true}');
+        return;
+      }
+      if (mpesa && !paymentsEnabled && ["/guest-pay/initialize", "/api/guest-pay/initialize"].includes(pathname)) {
+        deny(503); return;
+      }
       if (await delivery(req, res, pathname)) return;
-      if (!allowedApi.has(pathname) || req.method !== "POST") { deny(403); return; }
+      if ((!allowedApi.has(pathname) && !(mpesa && pathname === "/api/payments/mpesa/callback")) ||
+          req.method !== "POST") { deny(403); return; }
       app(req, res);
     } catch {
       event("fixture_request_failed", { requestId, family });
@@ -170,10 +193,13 @@ try {
   });
   // Bearer material stays in a private temporary directory, never logs/evidence/Git.
   const statePath = path.join(directory, "state.json");
-  await writeFile(statePath, JSON.stringify({ origin, token: link.token, url: `${origin}/pay/${link.token}` }),
+  await writeFile(statePath, JSON.stringify(encodeState({ origin, token: link.token, url: `${origin}/pay/${link.token}`,
+    ...(publicOrigin ? { publicUrl: `${publicOrigin}${basePath}/pay/${link.token}` } : {}),
+    ...(mpesa ? { sessionSecret: process.env.SESSION_SECRET, orderId: order.id, buyerId } : {}),
+  }, mpesa ? process.env.MPESA_WEBHOOK_SECRET : undefined)),
     { mode: 0o600, flag: "wx" });
   await chmod(statePath, 0o600);
-  event("fixture_ready", { localOnly: true, providersEnabled: false, simulationsEnabled: false });
+  event("fixture_ready", { localOnly: !publicOrigin, providersEnabled: mpesa, simulationsEnabled: false });
 } catch (error: any) {
   event("fixture_start_failed", {
     phase,

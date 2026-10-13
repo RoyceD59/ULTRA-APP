@@ -1,6 +1,7 @@
 // Only the isolated fixture's module hook may substitute this dependency.
 // Never return a synthetic AI answer or forward a request to a real integration.
-if (process.env.GUEST_PAY_FIXTURE !== "local-only" || process.env.NODE_ENV !== "guestpay-fixture") {
+if (!["local-only", "https-preparation", "mpesa-sandbox"].includes(process.env.GUEST_PAY_FIXTURE) ||
+    process.env.NODE_ENV !== "guestpay-fixture") {
   throw new Error("Disabled integration module is fixture-only");
 }
 function disabled() {

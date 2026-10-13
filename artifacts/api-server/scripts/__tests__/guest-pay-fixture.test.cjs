@@ -11,6 +11,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const safety = require('../lib/guest-pay-fixture-safety.cjs');
+const { encodeState, decodeState } = require('../lib/guest-pay-fixture-state.cjs');
 const name = 'guestpay_fixture_1791847258000_123';
 const db = `postgresql://fixture:unused@127.0.0.1:53999/${name}`;
 const make = parent => safety.fixtureEnvironment(parent, db, name, 39761, '/tmp/disposable-fixture');
@@ -91,4 +92,51 @@ test('all HTTP transports and raw sockets reject remote providers, notifications
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
   }
+});
+test('public sandbox mode copies only approved M-Pesa keys and rejects production origins or modes', () => {
+  const parent = Object.fromEntries(safety.MPESA_KEYS.map(key => [key, 'not-real']));
+  parent.PAYSTACK_SECRET_KEY = 'not-inherited';
+  parent.AI_INTEGRATIONS_ANTHROPIC_API_KEY = 'not-inherited';
+  const options = { publicOrigin: 'https://fixture-test.replit.dev',
+    instance: '00000000-0000-4000-8000-000000000001', mpesa: true };
+  const env = safety.fixtureEnvironment(parent, db, name, 39761, '/tmp/disposable-fixture', options);
+  safety.assertChildEnvironment(env);
+  assert.equal(env.PAYSTACK_SECRET_KEY, undefined);
+  assert.equal(env.AI_INTEGRATIONS_ANTHROPIC_API_KEY, undefined);
+  assert.equal(env.API_BASE_URL, options.publicOrigin + safety.PUBLIC_PREFIX);
+  assert.throws(() => safety.assertChildEnvironment({ ...env, MPESA_ENV: 'production' }));
+  assert.throws(() => safety.assertChildEnvironment({ ...env, API_BASE_URL: 'https://api.ucfilters.com' }));
+  assert.throws(() => safety.fixtureEnvironment(parent, db, name, 39761, '/tmp/disposable-fixture',
+    { ...options, publicOrigin: 'https://app.ucfilters.com' }));
+  const preparation = safety.fixtureEnvironment(parent, db, name, 39761, '/tmp/disposable-fixture',
+    { ...options, mpesa: false });
+  assert.equal(preparation.MPESA_CONSUMER_KEY, undefined);
+  safety.assertChildEnvironment(preparation);
+});
+test('M-Pesa fixture state encrypts capabilities/signing key and rejects the wrong key or tampering', () => {
+  const input = { token: 'test-only-capability', sessionSecret: 'test-only-session-key', orderId: 'test-order' };
+  const box = encodeState(input, 'not-real-test-key');
+  assert.equal(JSON.stringify(box).includes(input.token), false);
+  assert.equal(JSON.stringify(box).includes(input.sessionSecret), false);
+  assert.deepEqual(decodeState(box, 'not-real-test-key'), input);
+  assert.throws(() => decodeState(box, 'wrong-test-key'));
+  assert.throws(() => decodeState({ ...box, tag: Buffer.alloc(16).toString('base64') }, 'not-real-test-key'));
+});
+test('sandbox egress permits only the fixed Daraja paths and rejects live M-Pesa, other providers and redirects', async () => {
+  const realFetch = globalThis.fetch;
+  let options;
+  globalThis.fetch = async (_url, init) => { options = init; return new Response('{}'); };
+  const guard = safety.installNetworkGuard(db, 39761, { mpesa: true });
+  try {
+    await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials');
+    assert.equal(options.redirect, 'error');
+    await fetch('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', { method: 'POST' });
+    await fetch('https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query', { method: 'POST' });
+    for (const url of ['https://api.safaricom.co.ke/oauth/v1/generate',
+      'https://sandbox.safaricom.co.ke/unapproved', 'http://sandbox.safaricom.co.ke/oauth/v1/generate',
+      'https://sandbox.safaricom.co.ke:8443/oauth/v1/generate',
+      'https://api.paystack.co/transaction/initialize', 'https://api.resend.com/emails']) {
+      await assert.rejects(fetch(url), { code: 'FIXTURE_EGRESS_BLOCKED' });
+    }
+  } finally { guard.restore(); globalThis.fetch = realFetch; }
 });

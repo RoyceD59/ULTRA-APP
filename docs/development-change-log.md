@@ -1,3 +1,48 @@
+# 13 October 2026 — bounded provider diagnostics, without another payment
+
+- The original fixture silenced provider-error logging. Added fixture-only
+  bounded response diagnostics so a future safe run records HTTP status,
+  allowlisted public code, fixed issue category and reference-presence only.
+  No raw provider messages, references, contacts, URLs or credentials are emitted.
+- Response inspection is capped at 8 KiB/one second, leaves the payment response
+  consumable, and neither retries a request nor lets a failing diagnostic sink
+  alter the payment response. Nineteen focused tests and API TypeScript passed.
+- Non-charging configuration checks show a shortcode different from the usual
+  sandbox PayBill example; this is a hypothesis requiring actual simulator
+  Test Data comparison, not a confirmed error cause. Saved values remain unchanged.
+- No new provider request, production write, publication or DNS change. The
+  original unknown attempt remains retained. The prepared logging enhancement
+  does not recover its missing historical response or establish payment success.
+- Gracefully paused the original supervisor, confirmed its unresolved context was
+  retained, and confirmed public namespace 503 without normal-checkout fallback.
+- Ignore rules unchanged; configuration-check evidence stays in the existing
+  ignored result directory. End-to-end sandbox verification remains incomplete.
+
+# 13 October 2026 — temporary HTTPS payment fixture and unresolved sandbox attempt
+
+- **Scope/approval:** Owner approved development HTTPS test exposure and the
+  saved M-Pesa test credential source only. No publication, DNS, production
+  routing, live funds, Paystack credential reuse or notification activation.
+- **Changes/purpose:** Added a development-only attested namespace in the existing
+  API. Its fixed loopback destination and narrow route/origin/body guards prevent
+  fallback into customer checkout. Added initial HTTPS privacy preflight,
+  encrypted M-Pesa capability/signing context and unresolved-attempt retention.
+- **Verification:** Fourteen focused tests and API TypeScript passed. Actual HTTPS
+  privacy/isolation checks passed; ingress/fixture application logs were token-safe.
+  The phone-sized no-link screenshot is presentation evidence only. Gateway-internal
+  logs, actual physical-phone execution and broader failing validation workflows
+  are not claimed verified.
+- **Sandbox result:** One M-Pesa attempt returned API HTTP 500 without a reference;
+  pending state and no-retry response remained bound to the original buyer/order.
+  Read-only reconciliation remained pending. No simulated success or repeat charge.
+- **Ignore changes:** None in this phase; sanitized results remain under the
+  already ignored `generated-artifacts/guest-payment-fixture/` directory.
+- **Status:** Development test preparation/partial sandbox evidence only; not
+  published and not end-to-end complete.
+- **Remaining:** Confirm authoritative Daraja outcome first. Paystack, controlled
+  recovery/callback/void evidence, approved receipt destinations and signed-out
+  real-phone checks remain blocked/incomplete.
+
 # Development change log
 
 ## 2026-10-13 — Owner-approved saved M-Pesa test credentials

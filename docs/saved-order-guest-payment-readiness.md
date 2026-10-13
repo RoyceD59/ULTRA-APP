@@ -1,3 +1,46 @@
+# Diagnostic follow-up — no new payment request
+
+Nineteen focused checks and API TypeScript passed after adding bounded fixture
+provider diagnostics. Actual provider evidence has not increased: no STK retry
+or new order was made, and the original response's missing upstream detail
+cannot be recovered from the client HTTP 500. The logging enhancement is prepared
+for future safe execution, not applied by recreating the pending original.
+
+Non-charging configuration checks found the saved shortcode differs from the
+usual sandbox PayBill example. Verify the app's actual sandbox M-Pesa Express
+subscription and paired simulator Test Data before deciding configuration
+changes; neither this difference nor successful OAuth proves STK readiness.
+Never ask the owner to retrieve a notification on their phone for the sample
+number, or assume the portal has the missing request history.
+
+The original supervisor is paused with unresolved database/encrypted context
+retained. Its public test namespace returns 503. No new order, initialization or
+change to saved credentials was used to activate the prepared logging change.
+
+# Temporary development HTTPS and unresolved M-Pesa evidence — 13 October 2026
+
+- Owner approved temporary HTTPS development tests, separate from publishing or
+  production routing. Saved M-Pesa reuse is approved for sandbox only; existing
+  Paystack credentials and notification recipients have no equivalent approval.
+- The development-only synthetic namespace passed actual HTTPS private-header,
+  collector-disabled, minimal-payer, origin/route-isolation and unauthorized
+  callback checks. Application ingress/fixture logs contained no bearer values.
+  Internal gateway logs remain unobservable. A phone-sized no-link screenshot
+  checks presentation only, not signed-out physical-phone execution.
+- Fourteen fixture guard/proxy/encryption tests and API TypeScript passed.
+  Existing broader API-test and Expo-doctor failures are separate; this does
+  not claim those workflows pass.
+- One sandbox initialization at 11:20 Africa/Nairobi returned API HTTP 500
+  without a reference. It remained pending with retry explicitly disabled.
+  Read-only reconciliation stayed pending; the original buyer/order and callback
+  binding were retained. No confirmed payment or successful callback is proven.
+- Unresolved cleanup preserves the original isolated database and encrypted
+  capability/signing context. Never replace this attempt with a new order or
+  silently retry it. Obtain authoritative sandbox outcome before proceeding.
+- End-to-end verification remains incomplete: actual Paystack, controlled loss/
+  delayed/duplicate callbacks, permanent voids, real receipt email/push and failure
+  recording, signed-out physical phone, and remaining external privacy evidence.
+
 # Saved-order guest payment — development and release readiness
 
 ## Delivered source scope

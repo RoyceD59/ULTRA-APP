@@ -16,9 +16,15 @@ import productImagesRouter from "./routes/product-images";
 import { logger } from "./lib/logger";
 import { runtimeRequestMiddleware, boundedApiRoute } from "./lib/runtime-observability.js";
 import runtimeDiagnosticsRouter from "./routes/runtime-diagnostics.js";
+import { createDevelopmentFixtureProxy } from "./dev/guest-pay-fixture-proxy.js";
 
 const app: Express = express();
 app.use(runtimeRequestMiddleware);
+// Temporary synthetic-test ingress is handled before parsers/auth/loggers.
+// Its own bounded logs never include capability paths, queries or request data.
+app.use("/api/guest-pay-fixture", createDevelopmentFixtureProxy({
+  record: fields => logger.info({ event: "guest_pay_fixture_proxy", ...fields }, "Synthetic test fixture request"),
+}));
 
 // ─── Raw-body capture for routes that need HMAC verification ─────────────────
 // express.json() replaces the readable stream, so we must buffer the raw bytes

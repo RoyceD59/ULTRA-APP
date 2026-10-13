@@ -46,3 +46,30 @@ verification with selective credential allowlisting. Do not replace the saved
 values, inherit unrelated credentials, or treat this as approval to reuse
 Paystack credentials or initiate live payments. Public test routing and
 notification recipients remain separate approval boundaries.
+
+## Temporary HTTPS test approval and unknown outcomes
+
+The owner approved temporary HTTPS development tests for the isolated payment
+fixture, not publishing, production routing, live funds or notification targets.
+
+**Why:** Explicit operational scope is narrower than normal app activation.
+
+**How to apply:** Keep exposure in the development-only namespace, sandbox-pin
+provider access, and keep credential/recipient approvals separate. An unknown
+sandbox outcome is not a failed or successful payment: preserve its original
+buyer/order and private recovery context, and never issue a replacement charge
+merely to debug missing provider-response evidence.
+
+## Sandbox diagnostic evidence boundaries
+
+Isolation must not silently erase safe provider failure evidence. A sample-phone
+test does not create an owner-phone notification, and portal request-history
+availability must be verified rather than assumed.
+
+**Why:** Suppressed diagnostics left a sandbox attempt inconclusive; asking the
+owner for a nonexistent notification did not resolve it.
+
+**How to apply:** Preserve bounded, non-sensitive upstream diagnostics separately
+from client errors. A shortcode differing from a common example is a setup
+hypothesis, not proof of rejection. Compare actual simulator Test Data without
+displaying or silently replacing saved credentials, and retain unknown attempts.

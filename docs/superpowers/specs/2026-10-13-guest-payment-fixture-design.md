@@ -102,3 +102,22 @@ responses as actual sandbox completion.
 Preparing this fixture is one part of payment verification, not completion of
 the assigned end-to-end verification. Missing credentials, callbacks, test
 recipients or physical/ingress evidence must remain explicitly blocked.
+
+## Approved temporary HTTPS phase and observed limit
+
+The owner approved the temporary HTTPS development test phase. The existing API
+now hosts only an attested, narrow fixture namespace; production/deployment mode,
+normal checkout routes and public control paths fail closed. Saved M-Pesa secrets
+are selectively copied to sandbox-only execution, without enabling Stripe,
+Paystack, collectors or notifications.
+
+Actual HTTPS privacy/route/origin checks passed. One sandbox initialization did
+not produce a checkout reference; its API result remains pending and explicitly
+non-retryable, with the original buyer/order retained. This is not payment,
+callback or recovery success evidence. Preserve unresolved database and encrypted
+capability/signing context across automatic or explicit shutdown; block creation
+of a replacement fixture/charge until the original outcome is resolved.
+
+Application ingress logs were observed token-safe; internal gateway logs remain
+unobservable. No physical-phone result or successful actual receipt delivery is
+established, and no publication or production routing changes are approved.

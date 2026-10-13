@@ -7,17 +7,20 @@ const path = require('node:path');
 const os = require('node:os');
 const assert = require('node:assert/strict');
 const safety = require('./lib/guest-pay-fixture-safety.cjs');
+const { randomUUID } = require('node:crypto');
+const { decodeState, hasUnresolvedAttempt } = require('./lib/guest-pay-fixture-state.cjs');
 
 const mode = process.argv[2];
 if (!(mode === '--stop' && process.argv.length === 4) &&
-    !(['--verify', '--serve'].includes(mode) && process.argv.length === 3)) {
-  process.stderr.write('Usage: pnpm fixture:guest-pay --verify | --serve | --stop /tmp/guestpay-fixture-...\n');
+    !(['--verify', '--serve', '--serve-https', '--serve-mpesa'].includes(mode) && process.argv.length === 3)) {
+  process.stderr.write('Usage: pnpm fixture:guest-pay --verify | --serve | --serve-https | --serve-mpesa | --stop /tmp/guestpay-fixture-...\n');
   process.exit(1);
 }
 const root = path.resolve(__dirname, '../../..');
 const name = `guestpay_fixture_${Date.now()}_${process.pid}`;
 const port = 39761;
 let admin, worker, schemaProcess, directory, databaseCreation, created = false, cleanupPromise, stopping = false;
+let ready = false, retain = false;
 let phase = 'configuration';
 const event = (name, details = {}) => process.stdout.write(JSON.stringify({ event: name, ...details }) + '\n');
 async function cleanup() {
@@ -36,12 +39,22 @@ async function cleanup() {
   }
   if (created) {
     safety.assertDatabase(name, databaseUrl);
-    await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-    created = false;
-    event('fixture_database_removed');
+    if (mode === '--serve-mpesa' && ready) {
+      try { retain = await hasUnresolvedAttempt(databaseUrl); } catch { retain = true; }
+    }
+    if (retain) {
+      const controlPath = path.join(directory, 'control.json');
+      const control = JSON.parse(await readFile(controlPath, 'utf8'));
+      await writeFile(controlPath, JSON.stringify({ ...control, retainedForReconciliation: true }), { mode: 0o600 });
+      event('fixture_retained_for_reconciliation', { originalOrderPreserved: true });
+    } else {
+      await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+      created = false;
+      event('fixture_database_removed');
+    }
   }
   await admin?.end();
-  if (directory) await rm(directory, { recursive: true, force: true });
+  if (directory && !retain) await rm(directory, { recursive: true, force: true });
 }
 const cleanupOnce = () => cleanupPromise ||= cleanup();
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
@@ -73,7 +86,7 @@ async function stopFixture(input) {
     const cwd = await readlink(`/proc/${control.pid}/cwd`);
     const command = (await readFile(`/proc/${control.pid}/cmdline`, 'utf8')).split('\0');
     if (!command.some(arg => path.resolve(cwd, arg) === __filename) ||
-        !command.some(arg => ['--serve', '--verify'].includes(arg))) throw new Error('PID no longer belongs to fixture');
+        !command.some(arg => ['--serve', '--verify', '--serve-https', '--serve-mpesa'].includes(arg))) throw new Error('PID no longer belongs to fixture');
     process.kill(control.pid, 'SIGTERM');
     const deadline = Date.now() + 10000;
     while (alive() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
@@ -85,6 +98,18 @@ async function stopFixture(input) {
   safety.assertDatabase(control.database, url.toString());
   const parent = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
+    if (control.mode === 'mpesa-sandbox') {
+      let unresolved = true;
+      const exists = await parent.query('SELECT 1 FROM pg_database WHERE datname=$1', [control.database]);
+      if (!exists.rowCount) unresolved = false;
+      else unresolved = await hasUnresolvedAttempt(url.toString());
+      if (unresolved) {
+        await writeFile(path.join(dir, 'control.json'),
+          JSON.stringify({ ...control, retainedForReconciliation: true }), { mode: 0o600 });
+        event('fixture_retained_for_reconciliation', { originalOrderPreserved: true });
+        return;
+      }
+    }
     // Only the validated owned database, never a broad prefix sweep.
     await parent.query(`DROP DATABASE IF EXISTS "${control.database}" WITH (FORCE)`);
     const result = await parent.query('SELECT 1 FROM pg_database WHERE datname=$1', [control.database]);
@@ -118,7 +143,8 @@ async function waitForState() {
   const deadline = Date.now() + 90000;
   while (Date.now() < deadline) {
     if (worker.exitCode !== null || worker.signalCode !== null) throw new Error('Fixture exited before ready');
-    try { return JSON.parse(await readFile(path.join(directory, 'state.json'), 'utf8')); }
+    try { return decodeState(JSON.parse(await readFile(path.join(directory, 'state.json'), 'utf8')),
+      mode === '--serve-mpesa' ? process.env.MPESA_WEBHOOK_SECRET : undefined); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     await new Promise(resolve => setTimeout(resolve, 300));
   }
@@ -212,9 +238,26 @@ async function verify(state, logs) {
     directory = await mkdtemp(path.join(os.tmpdir(), 'guestpay-fixture-'));
     await chmod(directory, 0o700);
     if (stopping) throw new Error('Stopped');
-    const env = safety.fixtureEnvironment(process.env, databaseUrl, name, port, directory);
+    const publicMode = ['--serve-https', '--serve-mpesa'].includes(mode);
+    if (mode === '--serve-mpesa') {
+      for (const dir of await require('node:fs/promises').readdir(os.tmpdir())) {
+        if (!/^guestpay-fixture-[A-Za-z0-9]+$/.test(dir)) continue;
+        try {
+          const control = JSON.parse(await readFile(path.join(os.tmpdir(), dir, 'control.json'), 'utf8'));
+          if (control.retainedForReconciliation === true) throw Object.assign(new Error('Unresolved fixture exists'),
+            { code: 'UNRESOLVED_FIXTURE' });
+        } catch (error) { if (error.code === 'UNRESOLVED_FIXTURE') throw error; }
+      }
+    }
+    const options = publicMode ? {
+      publicOrigin: safety.developmentOrigin(`https://${process.env.REPLIT_DEV_DOMAIN}`),
+      instance: randomUUID(), mpesa: mode === '--serve-mpesa',
+    } : {};
+    const env = safety.fixtureEnvironment(process.env, databaseUrl, name, port, directory, options);
     await writeFile(path.join(directory, 'control.json'),
-      JSON.stringify({ pid: process.pid, database: name, port }), { mode: 0o600, flag: 'wx' });
+      JSON.stringify({ pid: process.pid, database: name, port, mode: env.GUEST_PAY_FIXTURE,
+        instance: options.instance, publicOrigin: options.publicOrigin, basePath: env.GUEST_PAY_FIXTURE_BASE_PATH }),
+      { mode: 0o600, flag: 'wx' });
     phase = 'database_create';
     admin = new Pool({ connectionString: process.env.DATABASE_URL });
     databaseCreation = admin.query(`CREATE DATABASE "${name}"`).then(() => { created = true; });
@@ -237,13 +280,14 @@ async function verify(state, logs) {
           const item = JSON.parse(line);
           if (typeof item.event === 'string' && item.event.startsWith('fixture_')) event(item.event,
             Object.fromEntries(Object.entries(item).filter(([key]) =>
-              ['family', 'status', 'code', 'column', 'phase', 'localOnly', 'providersEnabled', 'simulationsEnabled'].includes(key))));
+              ['family', 'status', 'code', 'issue', 'referenceReturned', 'column', 'phase', 'localOnly', 'providersEnabled', 'simulationsEnabled'].includes(key))));
         } catch {}
       }
     });
     worker.stderr.on('data', data => { log = (log + data.toString()).slice(-100000); });
     worker.once('error', () => event('fixture_worker_error'));
     const state = await waitForState();
+    ready = true;
     if (mode === '--verify') {
       phase = 'verification';
       const result = await verify(state, () => log);
@@ -260,7 +304,8 @@ async function verify(state, logs) {
       await writeFile(path.join(output, 'local-verification.json'), JSON.stringify(result, null, 2));
       event('fixture_verified', result);
     } else {
-      event('fixture_listening', { localOnly: true, port, providersEnabled: false, controlDirectory: directory });
+      event('fixture_listening', { localOnly: !publicMode, port,
+        providersEnabled: mode === '--serve-mpesa', controlDirectory: directory, sandboxOnly: true });
       // A tracked process is required; stop it to discard this fixture.
       const ttl = setTimeout(() => {
         stopping = true;
