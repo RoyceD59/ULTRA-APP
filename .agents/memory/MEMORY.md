@@ -107,3 +107,4 @@
 - [Product photo activation approval](product-photo-activation-approval.md) — ProjectHub photos only for Sweet Home, Viva Drop and Gym Buddy; owner confirmed the Gym Buddy legacy-SKU exception.
 - [Product-page structure](product-page-structure-policy.md) — supplied HTML is the layered reference for both web and Expo; a reduced buying/specs page is not acceptable.
 - [Public record handoff](public-record-handoff.md) — visible React buttons can fail hit-testing while the server fallback retains layout ownership.
+- [GitHub development destination](github-development-destination.md) — owner chose ULTRA-APP, not Ultra-AI-Team, for this project's development syncs.
