@@ -5,6 +5,11 @@
     "afterSha256": "88334e3fac6e76164e9d810efb8b05d7eb470819b268de795ae0bf7c4415c55c"
   },
   {
+    "path": "artifacts/api-server/src/app.ts",
+    "beforeSha256": "958efba8bbbee5044d3a4b86c83d405649bf96b2bb45b8ae3e974056003db256",
+    "afterSha256": "977251d94a88ddebe206d70f7c067cc687881e5d5a124e2777589f1c60f3d01e"
+  },
+  {
     "path": "artifacts/api-server/src/index.ts",
     "beforeSha256": "d5017b33a86a4a5e042fc225a9ebd9a7a090599b229bd5f789fa1a21826e7396",
     "afterSha256": "9b3e334df19d6d98f39418f559f6108ee2a4b9d79d2c1df808d9b50f082e7f66"
@@ -60,6 +65,11 @@
     "afterSha256": "7564a3d7c59ba7374a74a7adcb2e470d7a348c6d88a171a4f1d43eaec2fb6f19"
   },
   {
+    "path": "artifacts/api-server/src/lib/product-image-directory.ts",
+    "beforeSha256": null,
+    "afterSha256": "f33076c914d1b38731c0d36e821673f9efc4da748f722a89ba6219b31767ef23"
+  },
+  {
     "path": "artifacts/api-server/src/lib/product-video-slots.test.ts",
     "beforeSha256": null,
     "afterSha256": "be3b0fc183ccd2708ccbde863ee673549e799bc5c2f8c07cef9e141cb4ee8122"
@@ -95,6 +105,11 @@
     "afterSha256": "a03e7bcb57c595e7ca601739932407d39458a9a6b380a5f89c9761cc0585ee4a"
   },
   {
+    "path": "artifacts/api-server/src/routes/product-images.ts",
+    "beforeSha256": "f77c9e9b05beb1c9e3ce8f587869657c5537a5099577d494614fd289698c317d",
+    "afterSha256": "8978b2ac81ff4cd36e893a43d899684231d346b8fe1f43b5d48eea40754869fd"
+  },
+  {
     "path": "artifacts/api-server/src/routes/referrals.ts",
     "beforeSha256": "9d8b623ca8b2989b3b870f7577a5efd7485bc8f012ef2c766d2289471e139218",
     "afterSha256": "bccd5bd6cdbf677625237e603fd45eeaf66086b817af57e89cd3024ed7633dce"
@@ -113,6 +128,11 @@
     "path": "artifacts/api-server/src/routes/uc.ts",
     "beforeSha256": "ed4fe1e23b5e87507c10f2ab8213e84c524d5050ef7fc3489e4b2fb84c8e1047",
     "afterSha256": "a98be3856c0f6bb6757c30d488631c199f300d29f4b7f3162ea5cf5175fdfbe8"
+  },
+  {
+    "path": "artifacts/api-server/src/tests/product-image-directory.test.ts",
+    "beforeSha256": null,
+    "afterSha256": "6b96d3d5adadc41633a5df5ba8bbf8788e3a76688d6067a51988dea25ac5abf1"
   },
   {
     "path": "artifacts/projecthub/scripts/photo-order.test.mjs",

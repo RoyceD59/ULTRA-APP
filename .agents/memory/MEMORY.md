@@ -30,7 +30,7 @@
 - [Image derivative pipeline](image-derivative-pipeline.md) — sharp works on pnpm despite blocked postinstall (prebuilt @img/* deps); tmpdir derivative caches are disposable and must always fall back to original bytes.
 - [WhatsApp session storage](whatsapp-session-storage.md) — credentials stay outside the repo; preview remote-session isolation must be verified before resets; historical credentials were invalidated.
 - [Orders CSV column contract](uc-orders-csv-contract.md) — never insert a column mid-row in the admin orders CSV; append new fields after the legacy static columns, before item columns.
-- [API data-dir resolution](api-data-dir-resolution.md) — durable data folder must be probed relative to both dist bundle and src/tsx; fixed-depth paths silently wrote JSONL nowhere.
+- [API runtime paths](api-data-dir-resolution.md) — resolve source/bundle-relative paths; artifact publication may run outside the API working directory.
 - [Filter maintenance count policy](filter-maintenance-count-policy.md) — customer lifecycle changes retain cleaning history; only an explicit staff correction may reset it.
 - [Inventory webhook SSRF policy](inventory-webhook-ssrf-policy.md) — outbound n8n URLs must block private and IANA special-use IPs; request-time resolution is pinned.
 - [API test storage isolation](api-test-storage-isolation.md) — library route tests inject storage adapters; global prototype mocks race under parallel test execution.

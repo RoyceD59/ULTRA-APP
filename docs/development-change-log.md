@@ -1,5 +1,22 @@
 # 13 October 2026 — Product clicks, restock action and gallery recovery
 
+## 14 October 2026 — published catalogue image 404 investigation
+
+- Confirmed published catalogue JPEG endpoints return 404 for browser and
+  native-style requests, while the approved uploaded galleries return JPEGs.
+- Replaced working-directory-relative catalogue paths with one shared
+  source/bundle-relative resolver for static originals and resized derivatives.
+  Required missing image packaging now fails explicitly.
+- Added a no-database regression for non-API working directories, both module
+  layouts, JPEG/WebP responses and missing-image 404s. A development browser
+  capture shows the returned photograph.
+- Frozen API/Hub builds, web/iOS/Android exports and scope integrity passed.
+  Selected source `41d38f62…`, local build `1791957255767-6680`; **not published**.
+- Confirmed live source is the preceding `59f5a238…`, now retained as the
+  published predecessor. No production data or secret values were changed.
+- iOS rating failure remains unresolved; do not mark the overall task complete
+  or say all release checks pass. More precise phone failure evidence is needed.
+
 ## Latest preparation: photo display names and phone diagnostics
 
 - Added ProjectHub photo display names (maximum 80 characters) without changing

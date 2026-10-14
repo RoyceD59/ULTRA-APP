@@ -5,6 +5,7 @@ import fsp from "node:fs/promises";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { getOrCreateDerivative, snapWidth } from "../lib/image-derivatives";
+import { productImageDirectory } from "../lib/product-image-directory.js";
 
 /**
  * On-the-fly product image resizing.
@@ -23,7 +24,7 @@ import { getOrCreateDerivative, snapWidth } from "../lib/image-derivatives";
  *   a changed image ships under a new filename.
  */
 
-const SRC_DIR = path.join(process.cwd(), "public", "products");
+const SRC_DIR = productImageDirectory;
 const CACHE_DIR = path.join(os.tmpdir(), "uc-product-image-cache");
 const REMOTE_CACHE_DIR = path.join(os.tmpdir(), "uc-remote-image-cache");
 

@@ -1,5 +1,34 @@
 # Product-page publication handoff
 
+## Current preparation — catalogue image directory fix
+
+Selected source:
+`41d38f627258152d7cc7132b275f7c495e44e1ca1503391a165efed316e5212a`.
+Local build: `1791957255767-6680`. **NOT PUBLISHED.**
+
+The published API returned 404 for catalogue JPEGs with both browser and
+native-style user agents. These files exist in the approved archive. Original
+serving and derivative generation both used `process.cwd()/public/products`.
+They now share a source/bundle-relative directory resolver. A missing packaged
+directory fails explicitly at startup instead of silently publishing broken
+image routes. No database schema, identity or payment behaviour changed.
+
+The focused regression verifies JPEG originals, WebP derivatives and genuine
+missing-file 404s while the process is outside the API directory. API/Hub builds,
+all three Companion platform exports and exact stage verification passed.
+A browser screenshot confirms that the development JPEG is served and decoded.
+
+The live version endpoint now identifies the preceding source `59f5a238…`;
+that archive is the published predecessor. This new fix has not been activated.
+Uploaded gallery photos for Sweet Home, Viva Drop and Gym Buddy already return
+200 image/jpeg at the published API; those responses alone do not establish
+that the user's phone renders them.
+
+**NO-GO for declaring the whole request complete:** the owner still reports
+missing photos and failing iOS ratings. The exact photo screen and rating
+failure step are needed; no matching failed rating submission was identified
+in the available logs. Broad API tests and Expo Doctor are not green.
+
 ## Current preparation — photo names, native image path and rating feedback
 
 Selected source:

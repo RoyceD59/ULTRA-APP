@@ -1,9 +1,10 @@
 {
   "parentSha256": "d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
-  "candidateSha256": "59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c",
-  "scopeSha256": "8a8defd49d3133f2245fac2f4b30e3687202afe06914fe1847da80e642318991",
+  "candidateSha256": "41d38f627258152d7cc7132b275f7c495e44e1ca1503391a165efed316e5212a",
+  "scopeSha256": "72a9a9868009394b4a94eef015e4018ff8b3ed365c24c1855774b3a49b29a54c",
   "changedPaths": [
     "artifacts/api-server/build.mjs",
+    "artifacts/api-server/src/app.ts",
     "artifacts/api-server/src/index.ts",
     "artifacts/api-server/src/lib/catalogue-cache.ts",
     "artifacts/api-server/src/lib/checkout-cancellation.ts",
@@ -15,6 +16,7 @@
     "artifacts/api-server/src/lib/order-status-pipeline.ts",
     "artifacts/api-server/src/lib/payment-configuration.ts",
     "artifacts/api-server/src/lib/product-editorial.ts",
+    "artifacts/api-server/src/lib/product-image-directory.ts",
     "artifacts/api-server/src/lib/product-video-slots.test.ts",
     "artifacts/api-server/src/lib/product-video-slots.ts",
     "artifacts/api-server/src/lib/recovery-alert-email.ts",
@@ -22,10 +24,12 @@
     "artifacts/api-server/src/lib/sms.ts",
     "artifacts/api-server/src/routes/index.ts",
     "artifacts/api-server/src/routes/payments.ts",
+    "artifacts/api-server/src/routes/product-images.ts",
     "artifacts/api-server/src/routes/referrals.ts",
     "artifacts/api-server/src/routes/uc-product-records.ts",
     "artifacts/api-server/src/routes/uc-rewards.ts",
     "artifacts/api-server/src/routes/uc.ts",
+    "artifacts/api-server/src/tests/product-image-directory.test.ts",
     "artifacts/projecthub/scripts/photo-order.test.mjs",
     "artifacts/projecthub/src/components/product-record-editor.tsx",
     "artifacts/projecthub/src/hooks/use-product-records.ts",
@@ -96,19 +100,19 @@
     "lib/api-zod/src/order-receipt.ts",
     "lib/db/src/schema/uc-orders.ts"
   ],
-  "unchangedParentFiles": 1231,
+  "unchangedParentFiles": 1229,
   "activatedPageCodes": [
     "FCT",
     "VDR",
     "GMB"
   ],
-  "sourceFiles": 1323,
-  "status": "COMPILED LOCALLY; NOT PUBLISHED; physical-phone verification still required",
+  "sourceFiles": 1325,
+  "status": "COMPILED LOCALLY, NOT PUBLISHED; overall NO-GO pending phone failure evidence and remaining checks",
   "ownerApprovedPrerequisites": true,
   "selectionApproved": true,
   "publicationApproved": true,
   "schemaApplied": false,
   "providersExercised": false,
-  "previousCandidateSha256": "34478f5c5d1d91f49575aa902f45e30e1f79e52325f9a4fc8dcf92fe5731caf8",
+  "previousCandidateSha256": "59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c",
   "structureReferenceSha256": "305946cc540122c321fba03ca0cd5c658648af556d2db1b01e80df2dcc6f8a58"
 }

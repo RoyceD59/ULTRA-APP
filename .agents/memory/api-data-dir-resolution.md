@@ -14,3 +14,18 @@ The API server's durable folder is `artifacts/api-server/data/` (accounts.jsonl,
 **Why:** a previous fixed-depth computation silently pointed at a nonexistent workspace-root `data/`, so JSONL backups were written nowhere for weeks with no error (appends were fire-and-forget).
 
 **How to apply:** any new durable file under `data/` goes through `ACCOUNT_DATA_DIR`; keep account records sanitized via the explicit allow-list types there (never spread DB rows/request bodies — `authProvider: "password"` is a legitimate *value*, so sanitization checks must look at keys, not substrings).
+
+## Runtime static assets
+
+Resolve packaged API assets relative to the source module or production bundle,
+not `process.cwd()`. Keep the source and bundled layouts covered together.
+
+**Why:** published catalogue originals returned 404 even though the photographs
+were present in the approved archive. Both resizing and static serving used a
+working-directory-relative folder; development and artifact startup can use
+different working directories. Client image-component changes cannot fix a
+server-side 404.
+
+**How to apply:** use one shared directory resolver for original images and
+derivatives, and test both while launched outside the API directory. Missing
+required packaged assets must fail explicitly rather than silently ship 404s.

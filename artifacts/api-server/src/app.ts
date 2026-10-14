@@ -1,5 +1,4 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
-import path from "node:path";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -13,6 +12,7 @@ import { buildCorsOrigins } from "./lib/cors-origins.js";
 import router from "./routes";
 import { rejectDeletedUcAccounts } from "./lib/uc-deleted-guard.js";
 import productImagesRouter from "./routes/product-images";
+import { productImageDirectory } from "./lib/product-image-directory.js";
 import { logger } from "./lib/logger";
 import { runtimeRequestMiddleware, boundedApiRoute } from "./lib/runtime-observability.js";
 import runtimeDiagnosticsRouter from "./routes/runtime-diagnostics.js";
@@ -134,7 +134,7 @@ app.use("/api", rejectDeletedUcAccounts);
 app.use("/api/uc/product-images", productImagesRouter);
 app.use(
   "/api/uc/product-images",
-  express.static(path.join(process.cwd(), "public", "products"), {
+  express.static(productImageDirectory, {
     maxAge: "7d",
     immutable: true,
     fallthrough: false,

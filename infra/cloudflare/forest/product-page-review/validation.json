@@ -1,5 +1,5 @@
 {
-  "candidateSha256": "59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c",
+  "candidateSha256": "41d38f627258152d7cc7132b275f7c495e44e1ca1503391a165efed316e5212a",
   "decision": "Product layout handoff, image recovery, Android Expo Go startup and native ratings fixes compiled; NOT PUBLISHED",
   "selected": true,
   "published": false,
@@ -9,8 +9,8 @@
   "serverSyntaxCheck": "passed",
   "apiBuildScriptSyntaxCheck": "passed",
   "platformExports": "passed-web-android-ios",
-  "buildId": "1791922548096-6587",
-  "compiledSourceRevision": "59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c",
+  "buildId": "1791957255767-6680",
+  "compiledSourceRevision": "41d38f627258152d7cc7132b275f7c495e44e1ca1503391a165efed316e5212a",
   "apiBuild": "passed",
   "authoredApiDataPackaging": "passed-including-reference-estimates",
   "isolatedProductVariantCartTests": "4 passed",
@@ -40,7 +40,7 @@
   "projectHubBuild": "passed",
   "structureManifest": "layered-product-pages-1; matched compiled build-info",
   "paymentSandboxVerification": "not-completed",
-  "scopeSha256": "8a8defd49d3133f2245fac2f4b30e3687202afe06914fe1847da80e642318991",
+  "scopeSha256": "72a9a9868009394b4a94eef015e4018ff8b3ed365c24c1855774b3a49b29a54c",
   "projectHubTypecheck": "passed",
   "videoSlotsPerProduct": 2,
   "videoSlotMappingTests": "4 passed",
@@ -53,24 +53,25 @@
   "additionalBrowserCheck": "An optional enquiry locator check was inconclusive because that exact label was absent in the current development stock state; not counted as an action-click pass.",
   "approvedGalleryBrowserVerification": "1024×503 updated preview: Sweet Home, Viva Drop and Gym Buddy primary photos loaded, root height 503 each; normal category click navigated to /product/hydra-flux.",
   "developmentApiHealth": "200 after read-only database connection check and restart; transient startup timeout recovered without source or database changes.",
-  "status": "COMPILED LOCALLY; NOT PUBLISHED; physical-phone verification still required",
+  "status": "COMPILED LOCALLY, NOT PUBLISHED; overall NO-GO pending phone failure evidence and remaining checks",
   "latestLocalBuild": {
-    "sourceSha256": "59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c",
-    "buildId": "1791922548096-6587",
+    "sourceSha256": "41d38f627258152d7cc7132b275f7c495e44e1ca1503391a165efed316e5212a",
+    "buildId": "1791957255767-6680",
     "localOnly": true,
     "status": "compiled-not-published",
     "apiOrigin": "https://api.ucfilters.com"
   },
   "latestVerification": {
-    "mainAndFrozenTypechecks": "passed",
-    "frozenApiHubBuilds": "passed",
-    "webIosAndroidExports": "passed",
-    "exactStageScope": "passed",
-    "photoOrderRoundTrip": "passed",
-    "nameValidationAndPublicProjection": "passed",
-    "nativeImageGeometryAndOriginalSourceUnitTests": "passed for ios and android",
-    "apiIntegrationSuite": "NOT PASSED: intended file argument was ignored; full suite timed out with failures; not counted as evidence",
-    "previousPhysicalOutcome": "owner confirmed Android opens; photos missing on both platforms; iOS rating still fails",
-    "currentPhysicalOutcome": "not yet checked; new original-image/geometry path and rating feedback need owner verification"
-  }
+    "publishedCatalogueImageEndpoints": "404 with browser/native user agents",
+    "publishedApprovedUploadEndpoints": "200 image/jpeg for sampled Sweet Home, Viva Drop, Gym Buddy originals",
+    "imageDirectoryFix": "shared source/bundle-relative resolver, no cwd dependency",
+    "mainRegression": "original JPEG, derivative WebP, source/bundle resolution and missing file handling; no database access",
+    "frozenBuilds": "API/Hub and web/iOS/Android exports passed",
+    "stageScope": "verified",
+    "browserPhotoScreenshot": "development API photograph served and decoded",
+    "nativeRendering": "not established by HTTP or build evidence",
+    "iosRatings": "still reported failing; no exact step or error provided",
+    "overallTests": "not all green; broad API suite and Expo Doctor failed; no full-release approval"
+  },
+  "confirmedPublishedPredecessor": "59f5a2386f58ede1500d56de7129b8e40b6a667e536a50c72927654f4552fa7c"
 }
