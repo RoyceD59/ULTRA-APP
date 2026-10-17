@@ -1,5 +1,29 @@
 # Product-page publication handoff
 
+## 18 October 2026 — Products slideshow implemented in main source
+
+The Products header now uses locally bundled shower, household and bottles
+artwork, in the owner's specified left/middle/third mapping, cycling every
+three seconds. Poster headlines and promotional footers are excluded; product
+photography remains intact. The icon-only cart overlay, search, category chips,
+Alison welcome and Home/Blog headers are preserved.
+
+The slideshow waits for all three images before cycling, pauses when the shared
+motion/focus/visibility policy disallows animation, and returns to the first
+still frame when paused. This source work does not change product-detail pages,
+the selected frozen package, release approval, or live activation.
+
+Evidence: Companion typecheck passed. The full Companion suite completed with
+987 tests: 935 passed and 52 failed outside the banner checks. Banner/loading
+checks passed. Chromium verified all three images decode; 390/820/1440 layouts
+had no horizontal overflow; cycling, reduced-motion reset and tab navigation
+were exercised. No physical iOS/Android test was performed.
+
+**Publication remains separate:** include these source/assets in the next
+reviewed frozen candidate, preserve rollback assets, and revalidate the release
+gates. Do not claim that the current selected package or live build contains
+this banner merely because it now exists on main.
+
 ## Current preparation — catalogue image directory fix
 
 Selected source:

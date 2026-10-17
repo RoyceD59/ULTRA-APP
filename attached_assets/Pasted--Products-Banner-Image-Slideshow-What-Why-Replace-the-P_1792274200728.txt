@@ -1,0 +1,34 @@
+ Products Banner Image Slideshow
+What & Why
+Replace the Products tab's static header photo (and its logo/overlay) with an images-only banner that cycles through the three supplied Ultra Clear posters every 3 seconds: Shower Filters, Households, and Bottles for outdoor. The owner wants only pictures in the banner, no text.
+
+The supplied posters are tall (about 814×1024) and carry baked-in headline text, a WhatsApp/phone-number bar, social handles, a QR code and certification badges. "Remove the text" is applied literally: nothing readable may remain in the banner, neither app-rendered text (logo lockup) nor text inside the pictures. So the banner uses banner-shaped crops of the poster product areas, with the headline and contact footer removed, rather than the full posters squeezed into a thin strip.
+
+Done looks like
+The Products tab banner shows three product images (shower filters, household systems, outdoor bottles) that auto-advance every 3 seconds in a loop, on web, Android and iOS.
+No text appears in the banner: no "Shower Filters / Households / Bottles for outdoor" headline, no phone number, handles, URL, QR code or badges, and no logo-lockup text.
+Products are not clipped or distorted. Crops keep the white/blue poster look and fit a wide banner at phone, tablet and desktop widths.
+The cart button stays reachable and its item-count badge still works, as a small icon-only control over the banner. Search, category chips and the product list below behave as before.
+Slides are bundled locally with no external image requests. The first slide shows immediately; later slides don't flash blank when they appear.
+Users with reduced-motion settings, or when the screen is not focused, the browser tab is hidden, or the app is backgrounded, do not get continuous cycling. Reduced-motion users see a still first image.
+The slideshow does not interfere with tab swiping, the category-chip scroll, or screen readers (decorative images are hidden from assistive tech; the cart button keeps its accessible label).
+Existing Products tab checks and the Alison welcome bubble behavior still pass; the old between-rows banner is not restored.
+Out of scope
+Home and Blog headers (keep the existing PhotoHeader there).
+Making slides tappable or linking them to categories.
+Publishing or activating a release (handled by the follow-up publication task).
+Editing the product page detail layout.
+Steps
+Prepare banner images — From the three attached posters, produce compressed banner-shaped images containing only the product groupings. The headline, contact bar, handles, QR code and badges must be gone, and no product may be clipped. The Bottles poster's headline sits very close to the bottle tops, so retouch carefully by filling over the headline area with the plain background colour. Inspect each result visually. Record sources and transformations in the existing headers README, and keep each file small.
+Build the slideshow banner — Create a reusable banner component that cycles the images every 3 seconds, with preloaded slides, a still first frame, and pause on reduced motion, unfocused screen, hidden tab and backgrounded app. Mark it decorative for accessibility.
+Wire into Products tab — Replace the Products tab's PhotoHeader usage with the slideshow, removing the logo lockup, and keep the cart icon button with its badge and accessible label as an overlay. Keep the sticky search and chips layout unchanged.
+Tests and checks — Add or adjust unit/regression tests (timing interval, pause conditions, no text elements in the banner, cart control present). Update any existing checks that assumed the old shop header. Run Companion typecheck and its tests, then verify visually in the web preview at phone and desktop widths.
+Relevant files
+artifacts/uc-companion/app/(tabs)/products.tsx:415-442
+artifacts/uc-companion/components/PhotoHeader.tsx
+artifacts/uc-companion/assets/headers/README.md
+artifacts/uc-companion/assets/headers/shop-filter.jpg
+artifacts/uc-companion/lib/__tests__/pageLoading.test.mts
+attached_assets/7_1791805350641.png
+attached_assets/3_1791805350643.png
+attached_assets/5_1791805350644.png

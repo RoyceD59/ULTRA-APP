@@ -1752,6 +1752,25 @@ initialization, then client delivery and exact live snapshot comparisons.
   access or intentional inventory data change. Payment and product-page
   verification tasks remain incomplete.
 
+### 2026-10-18 — Products banner slideshow implemented in main
+
+- **Scope:** Owner explicitly requested execution of the attached specification
+  here. Use first/left artwork for shower filters, middle for household systems,
+  and third for bottles. No publication or payment-task completion.
+- **Changes:** Bundled three compressed 1200×600 images; excluded poster
+  headlines/contact/footer content and preserved photographed products. Added
+  three-second slideshow, all-image readiness gate, motion/focus/visibility
+  pauses, first-frame reset, animation cleanup and accessible cart overlay.
+  Preserved search/categories/list/Alison and Home/Blog/detail pages.
+- **Verification:** Companion typecheck passed. Full Companion tests:
+  987 total, 935 passed, 52 failed outside the banner checks. Banner/loading
+  checks passed. Chromium confirmed image decoding, 390/820/1440 layouts
+  without horizontal overflow, cycling, reduced-motion reset and tab navigation.
+  Screenshots were visually inspected at phone and desktop widths.
+- **Ignore changes:** None. Three new image files total about 122 KB.
+- **Status:** Main source only; frozen candidate and publication not changed.
+  Physical native verification and unrelated suite failures remain open.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
