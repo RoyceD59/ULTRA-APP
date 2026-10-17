@@ -208,6 +208,8 @@ import type {
   RefillFeatures,
   RefillFeaturesUpdate,
   RegisterUcContactAccountBody,
+  RegistrationRecordClearResult,
+  RegistrationRecordSelectionInput,
   RetryCustomerReviewAnalysis200,
   RetryUcOfflineClientDelivery200,
   RewardsQrCandidate,
@@ -6908,6 +6910,78 @@ export const useRecoverUnsyncedRegistration = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRecoverUnsyncedRegistrationMutationOptions(options));
+    }
+
+export const getClearSelectedRegistrationRecordsUrl = () => {
+
+
+
+
+  return `/api/admin/unsynced-registrations/clear-selected`
+}
+
+/**
+ * Removes only selected durable registration records. Customer accounts, assignments, orders, payments and customer history are not deleted. Selection keys identify exact record snapshots; stale or ambiguous selections fail without removing anything.
+ * @summary Clear explicitly selected test registration records in any recovery state
+ */
+export const clearSelectedRegistrationRecords = async (registrationRecordSelectionInput: RegistrationRecordSelectionInput, options?: RequestInit): Promise<RegistrationRecordClearResult> => {
+
+  return customFetch<RegistrationRecordClearResult>(getClearSelectedRegistrationRecordsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registrationRecordSelectionInput)
+  }
+);}
+
+
+
+
+
+export const getClearSelectedRegistrationRecordsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, TError,{data: BodyType<RegistrationRecordSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, TError,{data: BodyType<RegistrationRecordSelectionInput>}, TContext> => {
+
+const mutationKey = ['clearSelectedRegistrationRecords'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, {data: BodyType<RegistrationRecordSelectionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  clearSelectedRegistrationRecords(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearSelectedRegistrationRecordsMutationResult = NonNullable<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>>
+    export type ClearSelectedRegistrationRecordsMutationBody = BodyType<RegistrationRecordSelectionInput>
+    export type ClearSelectedRegistrationRecordsMutationError = ErrorType<void>
+
+    /**
+ * @summary Clear explicitly selected test registration records in any recovery state
+ */
+export const useClearSelectedRegistrationRecords = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, TError,{data: BodyType<RegistrationRecordSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>,
+        TError,
+        {data: BodyType<RegistrationRecordSelectionInput>},
+        TContext
+      > => {
+      return useMutation(getClearSelectedRegistrationRecordsMutationOptions(options));
     }
 
 export const getClearResolvedRegistrationsUrl = () => {

@@ -2041,6 +2041,30 @@ paths:
         "404": { description: Ledger record not found }
         "409": { description: Identity conflict }
 
+  /admin/unsynced-registrations/clear-selected:
+    post:
+      operationId: clearSelectedRegistrationRecords
+      tags: [uc-admin]
+      summary: Clear explicitly selected test registration records in any recovery state
+      description: Removes only selected durable registration records. Customer accounts, assignments, orders, payments and customer history are not deleted. Selection keys identify exact record snapshots; stale or ambiguous selections fail without removing anything.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationRecordSelectionInput" }
+      responses:
+        "200":
+          description: Selected records cleared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationRecordClearResult" }
+        "400": { description: Explicit confirmation and 1 to 100 unique selection keys required }
+        "401": { description: Authentication required }
+        "403": { description: Active administrator required }
+        "409": { description: Selected records changed or no longer exist; refresh and select again }
+        "500": { description: Records could not be cleared; no success is reported }
+
   /admin/unsynced-registrations/clear-resolved:
     post:
       operationId: clearResolvedRegistrations
@@ -6785,6 +6809,10 @@ components:
       type: object
       required: [email, phone, recordedAt, dbPersisted]
       properties:
+        recordKey:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: Opaque exact-snapshot key used for safe selected-record clearing
         id: { type: [integer, "null"] }
         firstName: { type: string }
         lastName: { type: string }
@@ -6798,6 +6826,23 @@ components:
         targetAccountId: { type: integer }
         resolvedAt: { type: string, format: date-time }
         resolvedBy: { type: string }
+
+    RegistrationRecordSelectionInput:
+      type: object
+      required: [confirm, recordKeys]
+      properties:
+        confirm: { type: boolean, enum: [true] }
+        recordKeys:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, pattern: "^[a-f0-9]{64}$" }
+    RegistrationRecordClearResult:
+      type: object
+      required: [cleared]
+      properties:
+        cleared: { type: integer, minimum: 1 }
 
     UnsyncedRegistrationRecoveryInput:
       type: object

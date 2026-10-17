@@ -1,3 +1,31 @@
+# 17 October 2026 — Selected test registration record cleanup
+
+- Added individual selection and confirmed clearing on Unsynced Registrations
+  for recovered/resolved, pending, conflicted, retryable and contacted records.
+  Administrators choose which records are tests; there is no name/email-based
+  automatic classification or newly added clear-all-unresolved operation.
+- Customer accounts, assignments, orders, payments and customer history are
+  outside the approved removal scope. The empty state no longer incorrectly
+  claims every registration synced after records have been cleared.
+- Added a live-admin-gated API accepting explicit confirmation and at most
+  100 unique opaque snapshot keys. Changed/missing/ambiguous selections fail
+  all-or-nothing. Removal shares the existing registration/recovery write
+  queue, uses atomic replacement and retains unselected/malformed lines.
+- Logs record administrator identifier/action/count, not registration contents.
+  Storage errors produce safe user messages and never report false success.
+- API contract/codegen and shared-library, ProjectHub and API typechecks passed.
+  Focused checks: **17 API + 4 ProjectHub tests passed**, no failures. Coverage
+  includes cancellation, mixed-state selection, stale selections, permissions,
+  duplicate identities, concurrent appends, write failure and retained accounts.
+- Restarted the API and ProjectHub successfully. Mocked browser checks at
+  390/768/1440 pixels confirmed selection/confirmation/removal, retained
+  unselected rows, no page overflow, fitting dialogs and no browser page errors.
+  The unsigned screenshot showed sign-in, not the authenticated screen.
+- Added `docs/projecthub-registration-record-cleanup.md`. **Development only:**
+  no publication or GitHub push; no real test/customer records cleared and no
+  unrelated payment-task completion. API tests used a disposable database and
+  temporary ledger files; browser checks intercepted API requests with fixtures.
+
 # 17 October 2026 — Alison viewer access and guarded client deletion
 
 - Added an explicit Alison viewer quick-create option with only `alison.read`.

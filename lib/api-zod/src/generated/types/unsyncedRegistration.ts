@@ -9,6 +9,11 @@ import type { UnsyncedRegistrationRecoveryReason } from './unsyncedRegistrationR
 import type { UnsyncedRegistrationRecoveryStatus } from './unsyncedRegistrationRecoveryStatus';
 
 export interface UnsyncedRegistration {
+  /**
+     * Opaque exact-snapshot key used for safe selected-record clearing
+     * @pattern ^[a-f0-9]{64}$
+     */
+  recordKey?: string;
   /** @nullable */
   id?: number | null;
   firstName?: string;

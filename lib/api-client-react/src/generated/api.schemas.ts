@@ -3279,6 +3279,11 @@ export const UnsyncedRegistrationRecoveryReason = {
 } as const;
 
 export interface UnsyncedRegistration {
+  /**
+     * Opaque exact-snapshot key used for safe selected-record clearing
+     * @pattern ^[a-f0-9]{64}$
+     */
+  recordKey?: string;
   /** @nullable */
   id?: number | null;
   firstName?: string;
@@ -3293,6 +3298,21 @@ export interface UnsyncedRegistration {
   targetAccountId?: number;
   resolvedAt?: string;
   resolvedBy?: string;
+}
+
+export interface RegistrationRecordSelectionInput {
+  confirm: true;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     * @items.pattern ^[a-f0-9]{64}$
+     */
+  recordKeys: string[];
+}
+
+export interface RegistrationRecordClearResult {
+  /** @minimum 1 */
+  cleared: number;
 }
 
 export type UnsyncedRegistrationRecoveryInputTarget = {

@@ -354,6 +354,8 @@ export * from './refillCapabilitiesVersion';
 export * from './refillFeatures';
 export * from './refillFeaturesUpdate';
 export * from './registerUcContactAccountBody';
+export * from './registrationRecordClearResult';
+export * from './registrationRecordSelectionInput';
 export * from './retryCustomerReviewAnalysis200';
 export * from './retryUcOfflineClientDelivery200';
 export * from './reviewStatus';

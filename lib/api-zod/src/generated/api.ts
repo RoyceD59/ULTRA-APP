@@ -2929,8 +2929,12 @@ export const UpdateLocationAssessmentResponse = zod.object({
 /**
  * @summary List durable registration records needing reconciliation
  */
+export const listUnsyncedRegistrationsResponseRecordsItemRecordKeyRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
 export const ListUnsyncedRegistrationsResponse = zod.object({
   "records": zod.array(zod.object({
+  "recordKey": zod.string().regex(listUnsyncedRegistrationsResponseRecordsItemRecordKeyRegExp).optional().describe('Opaque exact-snapshot key used for safe selected-record clearing'),
   "id": zod.number().nullish(),
   "firstName": zod.string().optional(),
   "lastName": zod.string().optional(),
@@ -2974,6 +2978,28 @@ export const RecoverUnsyncedRegistrationBody = zod.object({
 })
 
 export const RecoverUnsyncedRegistrationResponse = zod.unknown()
+
+
+/**
+ * Removes only selected durable registration records. Customer accounts, assignments, orders, payments and customer history are not deleted. Selection keys identify exact record snapshots; stale or ambiguous selections fail without removing anything.
+ * @summary Clear explicitly selected test registration records in any recovery state
+ */
+export const clearSelectedRegistrationRecordsBodyRecordKeysItemRegExp = new RegExp('^[a-f0-9]{64}$');
+export const clearSelectedRegistrationRecordsBodyRecordKeysMax = 100;
+
+
+
+export const ClearSelectedRegistrationRecordsBody = zod.object({
+  "confirm": zod.literal(true),
+  "recordKeys": zod.array(zod.string().regex(clearSelectedRegistrationRecordsBodyRecordKeysItemRegExp)).min(1).max(clearSelectedRegistrationRecordsBodyRecordKeysMax)
+})
+
+
+
+
+export const ClearSelectedRegistrationRecordsResponse = zod.object({
+  "cleared": zod.number().min(1)
+})
 
 
 /**

@@ -9,9 +9,13 @@
 
 import { Router, type Request, type Response } from "express";
 import { requireTeamAdmin } from "./auth.js";
+import { ClearSelectedRegistrationRecordsBody } from "@workspace/api-zod";
+import { logger } from "../lib/logger.js";
 import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
 import {
   clearResolvedRegistrations,
+  clearSelectedRegistrationRecords,
+  RegistrationSelectionChangedError,
   listUnsyncedRegistrations,
   resolveUnsyncedRegistration,
   retryUnsyncedRegistration,
@@ -150,6 +154,31 @@ router.post(
         return;
       }
       throw error;
+    }
+  },
+);
+
+router.post(
+  "/admin/unsynced-registrations/clear-selected",
+  requireTeamAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = ClearSelectedRegistrationRecordsBody.safeParse(req.body);
+    if (!parsed.success || new Set(parsed.data.recordKeys).size !== parsed.data.recordKeys.length) {
+      res.status(400).json({ code: "INVALID_SELECTION", error: "Confirm removal and select between 1 and 100 unique registration records." });
+      return;
+    }
+    const actorId = (req as Request & { teamUser?: { id: string } }).teamUser?.id;
+    try {
+      const cleared = await clearSelectedRegistrationRecords(parsed.data.recordKeys);
+      logger.info({ actorId, cleared, action: "registration-records.clear-selected" }, "Selected registration records cleared; customer accounts retained");
+      res.json({ cleared });
+    } catch (error) {
+      if (error instanceof RegistrationSelectionChangedError) {
+        res.status(409).json({ code: "SELECTION_CHANGED", error: error.message });
+        return;
+      }
+      logger.error({ actorId, action: "registration-records.clear-selected", errorType: error instanceof Error ? error.name : "UnknownError" }, "Registration record clearing failed");
+      res.status(500).json({ code: "REGISTRATION_CLEAR_FAILED", error: "Could not clear registration records. Refresh the list before retrying." });
     }
   },
 );
