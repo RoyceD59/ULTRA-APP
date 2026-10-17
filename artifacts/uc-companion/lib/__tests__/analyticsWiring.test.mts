@@ -37,7 +37,7 @@ test('review, support, and Alison events include only successful outcomes and sa
   assert.equal((chat.match(/trackEvent\('alison_message_sent'\)/g) ?? []).length, 2);
   assert.equal((chat.match(/trackEvent\('alison_reply_received'\)/g) ?? []).length, 2);
   assert.match(chat, /const replyRequest = api\.waterAiChat\([\s\S]*?trackEvent\('alison_message_sent'\)[\s\S]*?await replyRequest/);
-  assert.match(chat, /const \{ reply, suggestions \} = await replyRequest;\s*trackEvent\('alison_reply_received'\)/);
+  assert.match(chat, /const \{ reply, suggestions[^}]*\} = await replyRequest;[\s\S]*?trackEvent\('alison_reply_received'\)/);
 });
 
 test('article views are deduplicated and both link placements are tracked without destinations', () => {

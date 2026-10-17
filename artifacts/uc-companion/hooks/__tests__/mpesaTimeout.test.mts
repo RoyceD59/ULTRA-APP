@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import ts from 'typescript';
+import { checkoutHandlerScope } from './fixtures/checkoutHandlerScope.mts';
 import { cancelMpesaPoll, isCancelledAttempt } from '../mpesaPollManager.js';
 import { classifyMpesaStatus, pollSettleClearsRef } from '../mpesaStatusClassifier.js';
 
@@ -39,6 +40,7 @@ function harness() {
   // manually, including callbacks that were already queued before it cleared.
   const intervalId = 123;
   const state = {
+    ...checkoutHandlerScope(),
     processing: true, mpesaWaiting: false, showMpesaModal: true,
     paymentMethod: 'mpesa', paymentFrozen: true,
     paymentInputRef: { current: { idempotencyKey: 'checkout-key' } as { idempotencyKey: string } | null },

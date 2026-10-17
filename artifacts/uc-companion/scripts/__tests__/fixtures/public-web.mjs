@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const { PublicDataError } = createRequire(import.meta.url)('../../../server/public-content.cjs');
+import { records, editorialProduct } from './editorial-records.mjs';
 
 export const fixtures = {
   products: [{ id: 101, name: 'Commerce wording must not leak', price: '4199', stockStatus: 'instock', shortDescription: 'Commerce summary must not leak',
@@ -34,18 +35,25 @@ export const data = {
 export async function startFixture({ enabled = true, bundle = '', basePath = '/uc-companion', noBundle = false, prepareBuild = null } = {}) {
   const requests = [];
   const state = { unavailable: false, catalogueProvenance: true };
-  const api = createServer((req, res) => {
+  const api = createServer(async (req, res) => {
     requests.push({ path: req.url, headers: req.headers });
     res.setHeader('content-type', 'application/json');
     if (state.unavailable) { res.writeHead(503); res.end('{}'); return; }
     const route = new URL(req.url, 'http://fixture').pathname;
+    if (route.startsWith('/api/uc/product-records/')) {
+      const product = await editorialProduct(route.split('/').at(-1), fixtures.products);
+      res.writeHead(product ? 200 : 404);
+      res.end(JSON.stringify(product || {}));
+      return;
+    }
     if (route === '/api/uc/products' && state.catalogueProvenance) {
-      res.setHeader('X-UC-Catalogue-Provenance', 'woocommerce-published');
+      res.setHeader('X-UC-Catalogue-Provenance', 'companion-published');
     }
     if (route === '/api/uc/products/101' && state.catalogueProvenance) {
-      res.setHeader('X-UC-Catalogue-Provenance', 'woocommerce-live');
+      res.setHeader('X-UC-Catalogue-Provenance', 'companion-published');
     }
     const values = {
+      '/api/uc/product-records': records,
       '/api/uc/products': fixtures.products,
       '/api/uc/products/101': fixtures.products[0],
       '/api/uc/blog': { articles: [fixtures.article], nextCursor: null },

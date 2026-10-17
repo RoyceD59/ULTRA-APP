@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
+import { checkoutHandlerScope } from './fixtures/checkoutHandlerScope.mts';
 import { ApiError } from '../apiError.ts';
 import { classifyPaymentInitError } from '../rateLimitAlert.ts';
 
@@ -62,10 +63,12 @@ function harness(error: Error, initFails = false, sessionEndpoint?: (...args: un
   let browserOpens = 0;
   const references: string[] = [];
   const run = new Function(
+    'recoveryState',
     'api', 'WebBrowser', 'createOrder', 'setProcessing', 'checkoutPaymentInput',
     'total', 'Alert', 'changePaymentMethod', 'classifyPaymentInitError', 'ApiError',
-    `${handler}\nreturn handleStripeCheckout;`,
+    `with (recoveryState) { ${handler}\nreturn handleStripeCheckout; }`,
   )(
+    checkoutHandlerScope(),
     { stripeSession: async (...args: unknown[]) => {
       sessions++;
       if (sessionEndpoint) {
@@ -210,13 +213,15 @@ test('actual COD method-change guard retains an open unpaid Stripe checkout', as
   let cancellations = 0;
   const unexpectedMutation = () => assert.fail('Must not clear payment state or switch to COD');
   const change = new Function(
+    'recoveryState',
     'paymentMethod', 'processing', 'paymentFrozen', 'paymentInputRef',
     'orderIdentityRef', 'lastCheckoutRequestIdRef', 'api', 'Alert',
     'setPaymentFrozen', 'cancelMpesaPoll', 'attemptRef', 'pollRef',
     'setMpesaWaiting', 'setProcessing', 'setPaymentMethod',
     'paystackVerifyAttemptRef', 'paystackVerifyingRef', 'paymentMethodChangingRef',
-    `${methodHandler}\nreturn changePaymentMethod;`,
+    `with (recoveryState) { ${methodHandler}\nreturn changePaymentMethod; }`,
   )(
+    checkoutHandlerScope(),
     'stripe', false, true, input, identity, { current: null },
     { cancelCheckout: async (key: string) => {
       assert.equal(key, 'stable-checkout');

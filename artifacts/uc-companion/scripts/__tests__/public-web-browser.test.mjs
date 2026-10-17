@@ -120,10 +120,13 @@ test('actual web metadata hook hands off public HTML and removes stale public sc
       assert.equal(await page.locator('.uc-record-document').evaluate(node => getComputedStyle(node).overflow), 'visible');
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    const question = page.getByText('Can I put hot drinks in it?', { exact: true });
-    await question.focus();
+    const specifications = page.getByText('Specifications', { exact: true });
+    await specifications.focus();
     await page.keyboard.press('Enter');
-    assert.equal(await question.evaluate(node => node.parentElement.open), true);
+    assert.equal(await specifications.evaluate(node => node.parentElement.open), true);
+    assert.equal(await page.locator('details[open] dl').isVisible(), true);
+    assert.equal(await page.getByText('How long does the filter last?', { exact: true }).count(), 0,
+      'public HTML retains the current structured-fields-only policy');
     await page.screenshot({ path: '/tmp/uc-record-enhanced-phone.jpg' });
     await page.getByRole('button', { name: 'Topic', exact: true }).click();
     await page.getByRole('heading', { name: 'plastic waste', exact: true }).waitFor();

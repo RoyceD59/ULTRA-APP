@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
+import { records, editorialProduct } from './fixtures/editorial-records.mjs';
 
 const require = createRequire(import.meta.url);
 const { productModel, articleModel, guideModel, jsonLd, publicUrl } = require('../../server/public-schema.cjs');
@@ -23,12 +24,23 @@ const guide = { slug: 'installation', title: 'Install the filter', summary: 'Ins
     { heading: 'After installing', steps: ['Check for leaks'] },
   ] };
 
-async function publicPage(path, { apiOrigin = 'https://api.example.test', basePath = '', fetchImpl = async () =>
-  Response.json([], { headers: { 'x-uc-catalogue-provenance': 'woocommerce-published' } }) } = {}) {
+async function publicPage(path, { apiOrigin = 'https://api.example.test', basePath = '', editorialAvailable = true, fetchImpl = async () =>
+  Response.json([], { headers: { 'x-uc-catalogue-provenance': 'companion-published' } }) } = {}) {
   if (classifyWebRoute(path) !== 'public') return null;
   const page = await createPublicRenderer({
     canonicalOrigin: 'https://app.ucfilters.com', basePath,
-    data: createPublicData(apiOrigin, fetchImpl),
+    data: createPublicData(apiOrigin, async (url, options) => {
+      if (url.pathname === '/api/uc/product-records') {
+        return editorialAvailable ? Response.json(records) : new Response('', { status: 503 });
+      }
+      if (url.pathname.startsWith('/api/uc/product-records/')) {
+        const response = await fetchImpl(new URL('/api/uc/products?publicationSafe=true', apiOrigin), options);
+        if (!response.ok) return response;
+        const product = await editorialProduct(url.pathname.split('/').at(-1), await response.json(), apiOrigin);
+        return product ? Response.json(product) : new Response('', { status: 404 });
+      }
+      return fetchImpl(url, options);
+    }),
   }).render(path);
   return { ...page, head: renderHead(page.meta, page.schemas) };
 }
@@ -101,7 +113,7 @@ test('public HTML renders schema and the same visible data with matching real br
   ]) {
     const page = await publicPage(path, { apiOrigin, basePath: '/uc-companion', fetchImpl: async (_url, options) => {
       assert.deepEqual(options.headers, { Accept: 'application/json' });
-      return Response.json(type === 'Product' ? [payload] : payload, { headers: { 'x-uc-catalogue-provenance': 'woocommerce-published' } });
+      return Response.json(type === 'Product' ? [payload] : payload, { headers: { 'x-uc-catalogue-provenance': 'companion-published' } });
     } });
     const nodes = graph(page);
     assert.ok(nodes.some(node => node['@type'] === type));
@@ -112,7 +124,12 @@ test('public HTML renders schema and the same visible data with matching real br
     }
     assert.match(page.body, /href="\/uc-companion\//);
     assert.doesNotMatch(page.head + page.body, /PRIVATE|<script>alert/);
-    if (type === 'Product') assert.match(page.body, /KES 4,199/);
+    if (type === 'Product') {
+      assert.match(page.body, /KES 4,199/);
+      assert.match(page.body, /<summary>Specifications<\/summary>/);
+      assert.doesNotMatch(page.body, /<summary>Questions<\/summary>/);
+      assert.doesNotMatch(page.head, /FAQPage/);
+    }
     if (type === 'BlogPosting') assert.ok(page.body.includes(article.body));
     if (type === 'HowTo') assert.match(page.body, /Turn off water|<video controls/);
   }
@@ -146,4 +163,7 @@ test('unverified/demo products and unpublished/API failures fail closed', async 
   }
   assert.equal((await publicPage('/guide/draft', { fetchImpl: async () => new Response('', { status: 404 }) })).status, 404);
   assert.equal((await publicPage('/blog/article', { fetchImpl: async () => { throw new Error('offline'); } })).status, 503);
+  const unavailable = await publicPage('/', { editorialAvailable: false });
+  assert.equal(unavailable.status, 503, 'missing authoritative editorial catalogue must never fall back to bundled records');
+  assert.doesNotMatch(unavailable.head, /application\/ld\+json/);
 });

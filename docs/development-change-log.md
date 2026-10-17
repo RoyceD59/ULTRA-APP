@@ -1,3 +1,34 @@
+# 18 October 2026 — Companion regression suite repaired
+
+- Resolved the previously reported 52 Companion test failures. The final full
+  suite reports **990 passed, 0 failed, 0 skipped**. The count increased because
+  the previously failing rendered-checkout file now executes its three tests,
+  and the loader artwork has a separate static-frame assertion.
+- Repaired extracted payment-handler fixtures to supply ready account/recovery
+  state and the mounted checkout's navigation, receipt and sharing boundaries.
+  Plain ESM fixtures avoid Node/tsx treating data URLs as filesystem paths.
+  Cancellation, retry identity and server-refusal assertions remain enforced;
+  no live provider or payment credentials were used.
+- Public-rendering fixtures now expose the current editorial list/detail API
+  and Companion catalogue provenance. Retired WooCommerce/demo provenance is
+  still rejected, and unavailable editorial data still fails closed. Updated
+  canonical-product identity and keyboard accordion checks to the current
+  structured-fields-only public page; did not restore retired FAQ prose.
+- Fixed the product detail's eager root API import and moved the impact type
+  import to its public model entry point. Matched the optional water-test
+  field's accessible name to its visible label.
+- Updated stale loader-artwork, map event, analytics and hydration assertions
+  to current behavior without disabling their safety checks. The recovery
+  browser fixture now stubs native Expo constants instead of bundling native
+  module internals through React Native Web.
+- Shared-library and Companion typechecks passed; diff whitespace check passed.
+  Restarted Expo and confirmed the phone-width Products preview renders with
+  no browser page errors after Metro startup. The immediate screenshot was
+  blank during loading; a settled browser check confirmed visible content.
+- **Source/development only:** no frozen-package selection, publication,
+  GitHub push, physical-device certification or live-payment verification.
+  This does not certify the separate API suite or Expo Doctor checks.
+
 # 17 October 2026 — project-wide architecture and queue recovery review
 
 - Added `docs/companion-projecthub-development-status.md`: current development

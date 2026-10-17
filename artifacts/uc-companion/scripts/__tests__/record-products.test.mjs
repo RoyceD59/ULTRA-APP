@@ -184,14 +184,14 @@ test('six photo slots keep gaps and back-office alt text; placeholders, logos an
 });
 
 test('operational data adapter requires live provenance, query-safe requests and no visitor credentials', async () => {
-  for (const provenance of [null, 'woocommerce-published', 'woocommerce-live']) {
+  for (const provenance of [null, 'woocommerce-published', 'woocommerce-live', 'companion-published']) {
     const adapter = createPublicData('https://api.example', async (url, options) => {
       assert.equal(url.pathname, '/api/uc/products/101');
       assert.equal(url.search, '?publicationSafe=true');
       assert.deepEqual(options.headers, { Accept: 'application/json' });
       return new Response(JSON.stringify(inventory[0]), { headers: provenance ? { 'X-UC-Catalogue-Provenance': provenance } : {} });
     });
-    if (provenance === 'woocommerce-live') assert.equal((await adapter.productOperation(101)).id, 101);
+    if (provenance === 'companion-published') assert.equal((await adapter.productOperation(101)).id, 101);
     else await assert.rejects(() => adapter.productOperation(101), PublicDataError);
   }
 });

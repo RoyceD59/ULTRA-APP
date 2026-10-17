@@ -72,6 +72,7 @@ async function screenBundle() {
             });
           `,
           'expo-haptics': 'export const ImpactFeedbackStyle = {Light: "light"}; export const impactAsync = async () => {};',
+          'expo-constants': 'export default {expoConfig: {extra: {}}};',
           '@expo/vector-icons/Ionicons': 'export default function Icon() { return null; }',
           '@/components/BrandLogo': 'export default function BrandLogo() { return null; }',
           '@/components/SocialAuthButtons': 'export default function SocialAuthButtons() { return null; }',

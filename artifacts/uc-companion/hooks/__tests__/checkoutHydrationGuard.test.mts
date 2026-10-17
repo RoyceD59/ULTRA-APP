@@ -185,7 +185,7 @@ describe('checkout.tsx hydration guard (source-level tripwire)', () => {
 
     // …and must sit BEFORE the main return that renders address/payment/totals,
     // so no frame can paint $0.00 or empty line items pre-hydration.
-    const mainReturnIdx = src.indexOf('Delivery Address');
+    const mainReturnIdx = src.indexOf('Collection or delivery');
     assert.ok(mainReturnIdx > -1, 'expected the main checkout JSX to exist');
     assert.ok(guardIdx < mainReturnIdx,
       'the hydration guard must come before the main checkout JSX');

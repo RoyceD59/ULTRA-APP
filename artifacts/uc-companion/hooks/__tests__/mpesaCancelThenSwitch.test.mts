@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test, type TestContext } from 'node:test';
 import ts from 'typescript';
+import { checkoutHandlerScope } from './fixtures/checkoutHandlerScope.mts';
 import { cancelMpesaPoll, isCancelledAttempt } from '../mpesaPollManager.js';
 import { classifyMpesaStatus, pollSettleClearsRef, type MpesaStatusResponse } from '../mpesaStatusClassifier.js';
 
@@ -56,6 +57,8 @@ function harness(t: TestContext) {
   let tick!: () => Promise<void>;
   let paystackStarts = 0;
   const state = {
+    ...checkoutHandlerScope(),
+    checkoutPaymentInput() { return { idempotencyKey: 'original-checkout' }; },
     processing: true, mpesaWaiting: false, paymentMethod: 'mpesa',
     paymentFrozen: true,
     attemptRef: { current: 1 },

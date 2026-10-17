@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
+import { checkoutHandlerScope } from './fixtures/checkoutHandlerScope.mts';
 import { ApiError } from '../apiError.ts';
 import { classifyPaymentInitError } from '../rateLimitAlert.ts';
 
@@ -37,6 +38,7 @@ function harness() {
   const references: string[] = [];
   const cancellations: string[] = [];
   const state = {
+    ...checkoutHandlerScope(),
     processing: false, paymentFrozen: false, paymentMethod: 'paystack',
     paymentInputRef: { current: null as { idempotencyKey: string } | null },
     orderIdentityRef: { current: null as { idempotencyKey: string } | null },

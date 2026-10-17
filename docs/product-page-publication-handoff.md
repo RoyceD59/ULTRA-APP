@@ -1,5 +1,19 @@
 # Product-page publication handoff
 
+## 18 October 2026 — Companion test blocker cleared
+
+The earlier **935 passed / 52 failed** result below is historical. After
+repairing fixture/API-contract drift, stale assertions, two API import paths
+and the optional-field accessible name, the full Companion suite reports
+**990 passed, 0 failed, 0 skipped**. Shared-library and Companion typechecks
+also passed. Payment safeguards and publication provenance checks remain
+enforced; providers were simulated rather than contacted.
+
+The Products development preview rendered after Metro settled, with no
+browser page errors. Physical iOS/Android checks, the separate API/Expo Doctor
+gates and selected frozen-release validation remain separate. No publication
+or release-package change was made by this repair.
+
 ## 18 October 2026 — Products slideshow implemented in main source
 
 The Products header now uses locally bundled shower, household and bottles

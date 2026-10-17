@@ -1,31 +1,33 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FRAME_COUNT, renderDropletFrame } from '../generate-filter-loader.mjs';
+import { FRAME_COUNT, FRAME_DELAY_CS, renderDropletFrame, renderStillFrame } from '../generate-filter-loader.mjs';
 
 describe('single-droplet artwork generator', () => {
-  it('draws exactly one centred glossy droplet on the original transparent canvas', () => {
+  it('preserves the supplied glossy drop, transparent canvas and ripple artwork', () => {
     for (let frame = 0; frame < FRAME_COUNT; frame++) {
       const svg = renderDropletFrame(frame);
-      assert.equal((svg.match(/data-droplet="single"/g) ?? []).length, 1);
-      assert.equal((svg.match(/fill="url\(#water\)"/g) ?? []).length, 1);
-      assert.match(svg, /width="96" height="112" viewBox="0 0 96 112"/);
-      assert.match(svg, /translate\(48 56\)/);
-      assert.match(svg, /#52b6dc/);
-      assert.match(svg, /#005d8f/);
-      assert.match(svg, /stroke="white"/);
+      const drops = (svg.match(/<path d="M12 1c[^"]+" fill="url\(#cw-glass\)"/g) ?? []).length;
+      assert.equal(drops, frame / FRAME_COUNT < 0.62 ? 1 : 0, 'one falling drop, none after impact');
+      assert.match(svg, /width="96" height="112" viewBox="0 -2 24 28"/);
+      assert.match(svg, /id="cw-glass"/);
+      assert.match(svg, /id="cw-reflection"/);
+      assert.match(svg, /<ellipse cx="12" cy="21"/);
       assert.doesNotMatch(svg, /<rect|<image|https?:\/\/(?!www.w3.org)/);
     }
   });
-  it('gently pulses without travel and seamlessly repeats the first still frame', () => {
-    assert.equal(FRAME_COUNT, 24);
+  it('falls towards the water surface and loops at the approved 1.5 second duration', () => {
+    assert.equal(FRAME_COUNT * FRAME_DELAY_CS, 150);
     assert.equal(renderDropletFrame(0), renderDropletFrame(FRAME_COUNT));
-    const scales = Array.from({ length: FRAME_COUNT }, (_, frame) =>
-      Number(renderDropletFrame(frame).match(/scale\(([\d.]+)\)/)[1]));
-    assert.ok(Math.max(...scales) / Math.min(...scales) < 1.065);
-    assert.ok(new Set(scales).size > 1, 'not a static loop');
-    for (let frame = 0; frame < FRAME_COUNT; frame++) {
-      assert.ok(Math.abs(scales[frame] - scales[(frame + 1) % FRAME_COUNT]) < 0.014,
-        'small adjacent changes, including the loop boundary');
-    }
+    const positions = Array.from({ length: Math.ceil(FRAME_COUNT * 0.62) }, (_, frame) =>
+      Number(renderDropletFrame(frame).match(/translate\(12 ([\d.]+)\) scale\([\d.]+ [\d.]+\)/)[1]));
+    assert.equal(positions[0], 1);
+    assert.ok(positions.every((position, index) => index === 0 || position > positions[index - 1]));
+    assert.ok(positions.at(-1) > 10, 'drop reaches the surface, not a static pulse');
+  });
+  it('uses a separate visible static droplet for reduced motion, not an empty impact frame', () => {
+    const still = renderStillFrame();
+    assert.match(still, /width="96" height="112" viewBox="0 -2 24 28"/);
+    assert.match(still, /<path d="M12 5c[^"]+" fill="url\(#water\)"/);
+    assert.doesNotMatch(still, /<animate|<image/);
   });
 });

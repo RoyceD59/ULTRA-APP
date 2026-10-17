@@ -848,7 +848,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
       <View style={styles.formContainer}>
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Free water test code (optional)</Text>
-          <TextInput accessibilityLabel="Free water test code" autoCapitalize="characters" value={promoCode}
+          <TextInput accessibilityLabel="Free water test code (optional)" autoCapitalize="characters" value={promoCode}
             onChangeText={value => { setPromoCode(value); setPromoChecked(false); }}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]} />
           <TouchableOpacity disabled={!promoCode.trim() || submitting} onPress={async () => {

@@ -58,7 +58,7 @@ test('saved reconciliation envelopes reach the visible consumer without a fabric
   assert.match(branch, /return false/);
   assert.doesNotMatch(branch, /clearCart|router\.replace/);
   assert.ok(checkout.indexOf('await saveCheckoutRecovery(recovery)') < checkout.indexOf("await createOrder('cod', 'COD')"));
-  assert.match(checkout, /disabled=\{!checkoutRecoveryReady \|\| reviewOrderId !== null/);
+  assert.match(checkout, /disabled=\{[^}\n]*!checkoutRecoveryReady \|\| reviewOrderId !== null/);
   assert.match(checkout, /View saved order/);
   const confirmed = checkout.slice(checkout.indexOf('recoveryRef.current = null;', checkout.indexOf('async function createOrder')), checkout.indexOf('clearCart();', checkout.indexOf('async function createOrder')));
   assert.match(confirmed, /paymentInputRef.current = null/);

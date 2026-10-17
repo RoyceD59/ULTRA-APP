@@ -37,7 +37,7 @@ test('enquiry shared Field uses the persistent visible label, including multilin
 test('every assessment, booking and verification TextInput has a persistent accessible name', () => {
   const inputs = elements('app/water-test.tsx', 'TextInput');
   assert.deepEqual(inputs.map((input) => input.attribute('accessibilityLabel')), [
-    '"First name *"', '"WhatsApp *"', '"Town / area *"',
+    '"First name *"', '"WhatsApp *"', '"Town / area *"', '"Free water test code (optional)"',
     '"Service Address *"', '"Preferred Contact Time *"', '"6-digit code"',
   ]);
   for (const input of inputs) {
