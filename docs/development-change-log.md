@@ -1735,6 +1735,23 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Assets only; not published.
 - **Remaining:** Each publish changes the served build, so the build then being served must be captured before the following publish.
 
+### 2026-10-17 — Repair inventory schema reconciliation after merge
+
+- **Scope:** Repair the failed post-merge setup without deleting inventory.
+- **Root cause:** Startup SQL created `UNIQUE (sku)` under PostgreSQL's name
+  `uc_catalogue_inventory_sku_key`; the unnamed Drizzle declaration expected a
+  different constraint name and triggered a populated-table truncation prompt.
+- **Change:** Declare the existing constraint name explicitly. Keep the setup
+  script's non-interactive prompt-failure protection unchanged.
+- **Verification:** Read-only development constraint inspection confirmed the
+  existing unique SKU constraint. Full post-merge setup then succeeded in
+  28 seconds, including schema reconciliation, codegen and library typecheck.
+  API and ProjectHub workflows were restarted after reconciliation.
+- **Ignore changes:** None.
+- **Status:** Development repair only; no production publication, credential
+  access or intentional inventory data change. Payment and product-page
+  verification tasks remain incomplete.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
