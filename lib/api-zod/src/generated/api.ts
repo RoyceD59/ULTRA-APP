@@ -4485,6 +4485,17 @@ export const CreateAgentOauthClientBody = zod.object({
 export const CreateAgentOauthClientResponse = zod.void()
 
 
+/**
+ * Requires a live ProjectHub administrator. Only suspended or revoked clients without unexpired, unrevoked tokens can be deleted. Removes client credentials and tokens; preserves audit history.
+ * @summary Permanently delete an inactive, unused machine client
+ */
+export const DeleteAgentOauthClientParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteAgentOauthClientResponse = zod.void()
+
+
 export const RotateAgentOauthClientParams = zod.object({
   "id": zod.coerce.string()
 })

@@ -110,3 +110,4 @@
 - [GitHub development destination](github-development-destination.md) — owner chose ULTRA-APP, not Ultra-AI-Team, for this project's development syncs.
 - [Category banner image mapping](category-banner-image-mapping.md) — shower filters use the left image, household the middle image, bottles the third image.
 - [Companion fixture contracts](companion-fixture-contracts.md) — public editorial and operational fixtures are separate; payment handler tests need account/recovery scope, not weaker production guards.
+- [Alison client deletion](alison-client-deletion-policy.md) — owner approved explicit Alison-only setup and deletion only after suspension, with no live tokens and retained audit history.

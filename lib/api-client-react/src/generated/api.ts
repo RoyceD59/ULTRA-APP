@@ -12287,6 +12287,78 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateAgentOauthClientMutationOptions(options));
     }
 
+export const getDeleteAgentOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/api/oauth/clients/${id}`
+}
+
+/**
+ * Requires a live ProjectHub administrator. Only suspended or revoked clients without unexpired, unrevoked tokens can be deleted. Removes client credentials and tokens; preserves audit history.
+ * @summary Permanently delete an inactive, unused machine client
+ */
+export const deleteAgentOauthClient = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteAgentOauthClientUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAgentOauthClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentOauthClient>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAgentOauthClient>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteAgentOauthClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAgentOauthClient>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAgentOauthClient(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAgentOauthClientMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAgentOauthClient>>>
+
+    export type DeleteAgentOauthClientMutationError = ErrorType<void>
+
+    /**
+ * @summary Permanently delete an inactive, unused machine client
+ */
+export const useDeleteAgentOauthClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentOauthClient>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAgentOauthClient>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteAgentOauthClientMutationOptions(options));
+    }
+
 export const getRotateAgentOauthClientUrl = (id: string,) => {
 
 

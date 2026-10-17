@@ -3426,6 +3426,20 @@ paths:
         "201": { description: Client and one-time secret }
         "400": { description: Invalid scope list }
         "403": { description: Active ProjectHub administrator required }
+  /oauth/clients/{id}:
+    delete:
+      operationId: deleteAgentOauthClient
+      tags: [agent-oauth]
+      summary: Permanently delete an inactive, unused machine client
+      description: Requires a live ProjectHub administrator. Only suspended or revoked clients without unexpired, unrevoked tokens can be deleted. Removes client credentials and tokens; preserves audit history.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "204": { description: Client deleted; audit history retained }
+        "401": { description: ProjectHub authentication required }
+        "403": { description: Active ProjectHub administrator required }
+        "404": { description: Client not found }
+        "409": { description: "Suspend the client first, or revoke its active tokens before deletion" }
   /oauth/clients/{id}/rotate:
     post:
       operationId: rotateAgentOauthClient

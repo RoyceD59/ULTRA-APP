@@ -1,3 +1,30 @@
+# 17 October 2026 — Alison viewer access and guarded client deletion
+
+- Added an explicit Alison viewer quick-create option with only `alison.read`.
+  The matching client ID and one-time secret are now displayed together for
+  both creation and rotation; copying failures are reported rather than hidden.
+- Corrected pasted credential whitespace handling and distinguish missing
+  scope, rejected credentials, throttling and API/connectivity errors.
+  Unexpected success responses cannot establish a false connected state.
+- Clear anonymous conversation query caches on disconnect/expiry/unmount and
+  isolate each connection's cached pages. Credentials remain memory-only;
+  existing server-side secret hashing and team-session separation are retained.
+- Added administrator-only client deletion with permanent-removal confirmation.
+  Only suspended/revoked clients without live unrevoked tokens may be deleted.
+  Token cleanup and retained audit entries are transactional. Token issuance
+  rechecks locked client state to serialize with rotation/suspension/deletion.
+- Regenerated the API contract. Shared-library, ProjectHub and API typechecks
+  passed. Focused tests: **23 ProjectHub + 12 API passed**, no failures.
+  API checks used a disposable database and fixture credentials, not saved keys.
+- Restarted the API and ProjectHub successfully. Checked both updated screens
+  and the deletion dialog at 390, 768 and 1440 pixels with mocked browser
+  fixtures: no horizontal overflow or browser page errors. The unsigned
+  screenshot correctly displayed sign-in; it did not validate authenticated UI.
+- Added `docs/alison-client-access.md` with setup, recovery and removal steps.
+  **Development only:** no publication, GitHub push, production credential
+  changes or unrelated payment-task completion. Existing live credentials
+  were not inspected or verified.
+
 # 18 October 2026 — Companion regression suite repaired
 
 - Resolved the previously reported 52 Companion test failures. The final full
