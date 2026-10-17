@@ -1,3 +1,20 @@
+# 17 October 2026 — project-wide architecture and queue recovery review
+
+- Added `docs/companion-projecthub-development-status.md`: current development
+  status, full-system dependency map, 18 failure/common-dependency risks,
+  architecture requirements, evidence gaps and ordered ownership/actions.
+- Rechecked all 54 accepted unfinished tasks and stale input holds. Capacity
+  still blocks 31 tasks. Google collector verification returned to an input
+  hold during this review; no capacity or main-assignment change was made.
+- Existing workflow evidence: typechecks and startup-font checks finished;
+  API suite failed; Expo Doctor reports 11 SDK patch mismatches (19/20 checks).
+  Running API logs also warn of missing trackable-product lifespan metadata.
+- Preserved product/publication and web-foundation dependency chains and the
+  incomplete payment verification. No tasks falsely completed, no new tasks
+  created, no production changes and no fresh device verification.
+- Documentation is not a release approval or a new GitHub sync. Main priority
+  selection and worker capacity management require the task-board controls.
+
 # 13 October 2026 — Product clicks, restock action and gallery recovery
 
 ## 14 October 2026 — published catalogue image 404 investigation
