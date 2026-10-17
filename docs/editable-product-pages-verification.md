@@ -116,7 +116,15 @@ Allowed payloads contain product/SKU/quantity and bounded commerce values, not
 contacts, addresses, URLs, tokens or arbitrary metadata. Purchase events require
 verified paid status and a deduplicated transaction ID. Saved order creation is
 not purchase evidence. Pay-link events are not fabricated for interim sharing.
-No external Google ingestion was asserted.
+The original implementation did not assert external Google ingestion.
+For the subsequently owner-approved `G-K224XGM5KB` development check, see
+[Google product-event debug verification](google-product-events-debug-verification.md).
+Six isolated adapter debug events received collector HTTP 204 responses;
+the owner confirmed all six subsequently appeared in the approved property's
+DebugView, with no purchase or pay-link events. The supplied screenshot predates
+that appearance and is not positive visual evidence. Positive external
+paid-purchase ingestion remains untested; its verified-payment and deduplication
+guards passed the local tests. No app activation was performed.
 
 Native product sharing requires an explicitly configured validated
 `EXPO_PUBLIC_SHARE_ORIGIN`; missing configuration fails clearly instead of
@@ -136,7 +144,7 @@ never treat removing a photo slot as deleting secure storage.
 
 No production deployment, hosting/Cloudflare changes, activation flags, tariffs
 or payment/provider configuration changes were made. Physical iOS/Android,
-public Rich Results, real WhatsApp previews/messages, external Google ingestion,
+public Rich Results, real WhatsApp previews/messages, production Google collection,
 actual child mappings/media approval and real payment execution remain
 **unverified**. Saved buyer-order anonymous payment remains the separately
 planned dependent feature, not an implemented capability of these product links.

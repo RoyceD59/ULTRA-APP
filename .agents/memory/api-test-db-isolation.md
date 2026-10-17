@@ -39,3 +39,15 @@ Subprocess results consumed by tests must use a machine-readable output channel.
 **Why:** Console inspection can include ANSI formatting; parsing it can fail even when the underlying operation succeeds.
 
 **How to apply:** Emit plain strings or JSON directly to stdout instead of parsing human-oriented console inspection.
+
+Register reusable fixture cleanup at file/module or suite scope, not from inside
+an asynchronous setup hook.
+
+**Why:** Node's test hooks are owned by the active test context. Cleanup
+registered inside a `before()` callback can run as that callback finishes,
+deleting otherwise valid fixtures before any test uses them.
+
+**How to apply:** Register the cleanup hook during test-file evaluation and
+collect owned fixture identifiers for it to remove after the suite. Per-run
+database isolation does not eliminate the need to clean up mutable catalogue
+fixtures that can otherwise affect another file's global listing assertions.

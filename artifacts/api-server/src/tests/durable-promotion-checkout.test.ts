@@ -6,8 +6,10 @@ import app from "../app.js";
 import { db, pool, ucUsersTable, ucOrdersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { issueToken } from "../lib/jwt.js";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 
 let server: http.Server, base: string, promotionId: number, a: any, b: any;
+let productId: number;
 const ids: number[] = [];
 const shipping = { firstName: "Amina", lastName: "Otieno", address1: "1 Test Rd", city: "Nairobi", country: "KE", phone: "0712345678" };
 async function request(path: string, body: unknown, token?: string) {
@@ -17,12 +19,13 @@ async function request(path: string, body: unknown, token?: string) {
   try { parsed = JSON.parse(text); } catch { /* Express 404 HTML is expected for removed routes. */ }
   return { status: r.status, body: parsed };
 }
-const checkout = (key: string, code = "DURABLE_TEST") => ({ lineItems: [{ productId: 22, quantity: 1 }], paymentMethod: "cod", shippingAddress: shipping, promoCode: code, idempotencyKey: key });
+const checkout = (key: string, code = "DURABLE_TEST") => ({ fulfillment: "collection", lineItems: [{ productId, quantity: 1 }], paymentMethod: "cod", shippingAddress: shipping, promoCode: code, idempotencyKey: `durable-checkout-${key}` });
 
 describe("durable promoted local checkout idempotency", () => {
   before(async () => {
     delete process.env.WC_CONSUMER_KEY; delete process.env.WC_CONSUMER_SECRET;
     process.env.SESSION_SECRET ??= "durable-checkout-test";
+    productId = (await appCatalogueFixture(1099)).id;
     const hash = await bcrypt.hash("Test1234!", 4), stamp = Date.now();
     for (const suffix of ["a", "b"]) {
       const [u] = await db.insert(ucUsersTable).values({ email: `durable-${suffix}-${stamp}@test.invalid`, passwordHash: hash, firstName: "Amina", lastName: "Test", phone: "+254712345678", address: "Test building, Nairobi" }).returning();

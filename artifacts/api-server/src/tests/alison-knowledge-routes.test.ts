@@ -149,34 +149,22 @@ test("chat passes live store facts to AI, and an outage keeps guidance without o
   assert.equal((await send()).status, 200);
 });
 
-test("live adapter reuses complete paging, PHP-notice parsing and rejects HTTP or oversized responses", async () => {
+test("catalogue adapter keeps complete paging and rejects oversized app records without Woo requests", async () => {
   const originalFetch = globalThis.fetch;
-  let mode: "success" | "http_error" | "oversized" | "later_page_error" = "success";
+  let failedPage: number | null = null;
   const pages: number[] = [];
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    assert.equal(init?.method ?? "GET", "GET", "enrichment cannot mutate WooCommerce");
-    assert.ok(init?.signal);
-    const url = new URL(String(input));
-    if (mode === "http_error") return new Response("[]", { status: 503 });
-    if (mode === "oversized") return new Response("x".repeat(256 * 1024 + 1));
-    if (url.pathname.endsWith("/settings/general")) {
-      return new Response(JSON.stringify([{ id: "woocommerce_currency", value: "KES" }]));
-    }
-    assert.equal(url.pathname.endsWith("/products"), true);
-    assert.equal(url.searchParams.get("status"), "publish");
-    const page = Number(url.searchParams.get("page"));
-    pages.push(page);
-    if (page === 2 && mode === "later_page_error") return new Response("[]", { status: 502 });
-    const rows = page === 1
-      ? Array.from({ length: 100 }, (_, i) => ({
-        id: i + 1, name: `Filter ${i}`, status: "publish", price: "123", stock_status: "instock",
-      }))
-      : [{ id: 1001, name: "Aquazeta", status: "publish", price: "4321", stock_status: "outofstock" }];
-    return new Response("<br /><b>Notice</b>: store notice\n" + JSON.stringify(rows));
-  }) as typeof fetch;
+  let remoteCalls = 0;
+  globalThis.fetch = async () => { remoteCalls++; throw new Error("No retired Woo requests"); };
   const freshLoader = () => createAlisonCatalogueLoader({
-    configured: () => true, allPublished: fetchAllPublishedProducts,
-    read: (path, parameters, signal) => wcFetchArray(path, parameters, signal, 256 * 1024),
+    configured: () => true,
+    allPublished: () => fetchAllPublishedProducts(async page => {
+      pages.push(page);
+      if (page === failedPage) return null;
+      return page === 1
+        ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1, name: `Filter ${i}`, status: "publish", price: "123" }))
+        : [{ id: 1001, name: "Aquazeta", status: "publish", price: "4321" }];
+    }),
+    read: async () => [{ id: "woocommerce_currency", value: "KES" }],
   });
   try {
     const result = await freshLoader()();
@@ -186,10 +174,12 @@ test("live adapter reuses complete paging, PHP-notice parsing and rejects HTTP o
       assert.equal(result.products.at(-1)?.id, 1001);
     }
     assert.deepEqual(pages, [1, 2]);
-    for (const failure of ["http_error", "oversized", "later_page_error"] as const) {
-      mode = failure;
+    for (const failure of [1, 2]) {
+      failedPage = failure;
       assert.deepEqual(await freshLoader()(), { state: "unavailable", reason: "lookup_failed" });
     }
+    assert.equal(await wcFetchArray("/products", {}, undefined, 1), null);
+    assert.equal(remoteCalls, 0);
   } finally { globalThis.fetch = originalFetch; }
 });
 

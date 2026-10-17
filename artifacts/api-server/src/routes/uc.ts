@@ -6197,7 +6197,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       const { paymentMethod, paymentReference = "", ...input } = req.body;
       const order = await prepareCheckoutOrder(input, orderUserId, paymentMethod);
       const verification = await verifyPaymentOnServer(paymentMethod, paymentReference);
-      if (!verification.ok) { res.status(verification.retryable ? 503 : 402).json({ error: verification.reason ?? "Payment not confirmed" }); return; }
+      if (!verification.ok) {
+        res.status(verification.retryable ? 503 : 402).json({
+          error: verification.reason ?? "Payment not confirmed",
+          retryable: verification.retryable === true,
+        });
+        return;
+      }
       if (verification.amount !== undefined && (!Number.isFinite(verification.amount) ||
           Math.abs(verification.amount - Number(order.total)) > 0.01 || verification.currency?.toUpperCase() !== "KES")) {
         res.status(402).json({ error: "Verified payment does not match this checkout total or currency" }); return;

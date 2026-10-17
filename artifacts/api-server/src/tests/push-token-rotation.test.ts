@@ -17,6 +17,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import bcryptjs from "bcryptjs";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 import { issueToken } from "../lib/jwt.js";
 import { db, ucPushTokensTable, ucOrdersTable, ucOrderItemsTable, ucUsersTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
@@ -79,6 +80,7 @@ after(async () => {
 
 describe("Background order-confirmation push stale-token cleanup", () => {
   it("removes DeviceNotRegistered after the order response, and the next manual push sees no token", async () => {
+    const product = await appCatalogueFixture();
     assert.equal(await registerToken(STALE_TOKEN), 200);
     assert.equal(await storedToken(), STALE_TOKEN);
 
@@ -111,7 +113,8 @@ describe("Background order-confirmation push stale-token cleanup", () => {
           Authorization: bearerFor(USER_ID, USER_EMAIL),
         },
         body: JSON.stringify({
-          lineItems: [{ productId: 1, quantity: 1 }],
+          fulfillment: "collection", idempotencyKey: `push-rotation-${Date.now()}`,
+          lineItems: [{ productId: product.id, quantity: 1 }],
           paymentMethod: "cod",
           shippingAddress: {
             firstName: "Jane", lastName: "Buyer", address1: "1 Test Street",

@@ -1512,6 +1512,69 @@ initialization, then client delivery and exact live snapshot comparisons.
   sandbox/physical-device/notification/collector/ingress release gates
   before any later approved activation.
 
+
+### 2026-10-16 — Approved Google product-event debug transport check
+
+- **Scope/approval:** Owner supplied `G-K224XGM5KB`, Google Analytics collection,
+  and debug markers for a bounded development check, not permanent activation.
+- **Changes:** Recorded approved destination, sanitized per-event network
+  evidence and its limits in
+  [Google product-event debug verification](google-product-events-debug-verification.md);
+  linked it from the original product-page verification record. No runtime
+  source, app flags, payment configuration, hosting or dependencies changed.
+- **Verification:** Six existing focused product-selection tests passed.
+  Six synthetic non-purchase debug events left an isolated browser once each;
+  two Google collector requests returned HTTP 204. No real payment or external
+  purchase event. The owner separately confirmed all six in DebugView and
+  clarified that they appeared after the supplied empty-state screenshot.
+  Final report visibility is owner-attested, not agent-observed.
+- **Ignore changes:** None. Disposable diagnostic stayed under already-ignored
+  `.cache/`; no raw browser/session identifiers or customer data retained.
+- **Status:** Approved development ingestion check complete; not activated or
+  published. No additional events sent after owner confirmation. Task completion
+  is blocked by configured project-wide validation: `cd artifacts/uc-companion
+  && npx expo-doctor` reported 11 SDK patch mismatches, and `cd artifacts/api-server
+  && pnpm test` failed across existing API flows. All typechecks, startup-fonts
+  and completion code review passed. Checks were not bypassed.
+- **Remaining:** Any positive external purchase check requires separate
+  verified-paid setup/authorization. The downloaded tag omitted item context
+  for share/compare and attempted extra collection during preliminary blocked
+  checks; permanent-loader privacy and report completeness need separate work,
+  and no broad rollout is approved.
+
+
+### 2026-10-17 — Owner-approved Expo and API validation repairs
+
+- Aligned eleven Expo SDK patch versions and the lockfile. Expo Doctor now
+  passes 20/20; no version/age gates or activation settings were disabled.
+- Replaced demo-product assumptions with isolated app-catalogue fixtures in
+  supported checkout tests. Preserved local identity, administration checks,
+  payment recovery, guest-payment safety, promotions and repeat-confirmation
+  assertions without enabling WooCommerce.
+- Fixed missing per-field checkout errors and explicit payment-verification
+  retryability. No payment approval rules, collector flags or production data
+  changed.
+- The repaired focused batch passes 235/235, with no skips/cancellations.
+  Shared-library, API and Companion typechecks pass. API health and signed-out
+  Companion rendering were confirmed after workflow restarts.
+- Existing dependency backport regressions pass 7/7. Upstream-version audit
+  still flags two high advisories; those warnings are not described as a clean
+  audit.
+- The owner additionally approved replacing retired Woo success-path tests
+  while preserving app-owned coverage. Consolidated explicit disconnection
+  checks and retained local payment/receipt/ownership/export/inventory and
+  editorial assertions; see the [coverage transfer](api-retirement-validation.md).
+  No dormant integration was enabled and no new test was skipped.
+- Startup-fonts passes with the aligned packages. Project-wide validation
+  remains the final completion gate; focused runs and the earlier review are
+  not substitutes for that gate.
+- The full repair check exposed three remaining test-isolation failures:
+  shared-seed price pollution and a customer-count plan under concurrent
+  fixture writes. Added cleanup/serial execution rather than relaxing prices
+  or the index-only assertion.
+- No publication, payment execution, additional Google debug events or ignore
+  changes. Details: [verification and repair record](google-product-events-debug-verification.md).
+
 ### 2026-10-10 — Fail-safe publish scratch folders
 
 - **Scope/approval:** Task: stop leftover build folders from failing a publish after every build step passed. No publication, API or client behavior, or database change.

@@ -10,6 +10,8 @@ import { recoverSnapshotCheckout, setStripeForGuestPayTests } from "../routes/pa
 import { prepareCheckoutOrder } from "../lib/checkout-orders.js";
 import Stripe from "stripe";
 import { createRequire } from "node:module";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
+import { invalidateCatalogueCache } from "../routes/uc.js";
 
 const { createGuestPayDelivery } = createRequire(import.meta.url)("../../../uc-companion/server/guest-pay-delivery.cjs");
 
@@ -18,13 +20,14 @@ describe("saved-order scoped guest payment capability", () => {
   let server: http.Server, base: string, buyer: number, other: number, auth: string, otherAuth: string;
   let price = 300, stock = true, calls = 0, timeOut = false, window = 0;
   let latestAmount = 0, remoteCalls = 0;
+  let bottle: Awaited<ReturnType<typeof appCatalogueFixture>>, variable: Awaited<ReturnType<typeof appCatalogueFixture>>;
   let mpesaCalls = 0, mpesaCallback = "", mpesaTimeout = false;
   const prefix = `guest-pay-${randomUUID()}`;
   const address = { firstName: "Amina", lastName: "PrivateSurname", country: "KE",
     phone: "+254712345678", address1: "PrivateFlat77", city: "Nairobi" };
   const input = (key = randomUUID(), variant = false) => ({
-    lineItems: variant ? [{ productId: 10001, variationId: 7101, childSku: "UC-BOG-SSB-008-BL", quantity: 1 }]
-      : [{ productId: 10002, quantity: 1 }],
+    lineItems: variant ? [{ productId: variable.id, variationId: variable.childId, childSku: variable.childSku, quantity: 1 }]
+      : [{ productId: bottle.id, quantity: 1 }],
     fulfillment: "delivery", shippingAddress: address, idempotencyKey: key,
   });
   async function api(path: string, body: unknown, token?: string, headers = {}) {
@@ -41,6 +44,8 @@ describe("saved-order scoped guest payment capability", () => {
     return { ...response.body, checkout };
   }
   before(async () => {
+    bottle = await appCatalogueFixture(300);
+    variable = await appCatalogueFixture(4399, true);
     app.set("trust proxy", "loopback");
     for (const key of ["MPESA_CONSUMER_KEY", "MPESA_CONSUMER_SECRET", "MPESA_PASSKEY", "MPESA_SHORTCODE", "STRIPE_SECRET_KEY"]) delete process.env[key];
     process.env.SESSION_SECRET ??= "guest-fixture-only";
@@ -98,7 +103,14 @@ describe("saved-order scoped guest payment capability", () => {
     server = http.createServer(app); await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api`;
   });
-  beforeEach(() => { window++; price = 300; stock = true; calls = 0; timeOut = false; });
+  beforeEach(async () => {
+    window++; price = 300; stock = true; calls = 0; timeOut = false;
+    await pool.query(`UPDATE uc_product_editorial SET record=jsonb_set(
+      jsonb_set(record,'{price_kes}','300'::jsonb),'{ownership,product_price_kes}','300'::jsonb)
+      WHERE code=$1`, [bottle.code]);
+    await pool.query("UPDATE uc_catalogue_inventory SET stock_status='instock' WHERE id=$1", [variable.childId]);
+    invalidateCatalogueCache();
+  });
   after(async () => {
     setStripeForGuestPayTests(null);
     globalThis.fetch = realFetch;
@@ -167,8 +179,8 @@ describe("saved-order scoped guest payment capability", () => {
     const saved = await save(input(randomUUID(), true));
     const opened = await api("/guest-pay/summary", { token: saved.token });
     assert.equal(opened.status, 200); assert.equal(opened.body.buyerFirstName, "Amina");
-    assert.equal(opened.body.items[0].sku, "UC-BOG-SSB-008-BL");
-    assert.equal(opened.body.items[0].variant, "Blue");
+    assert.equal(opened.body.items[0].sku, variable.childSku);
+    assert.equal(opened.body.items[0].variant, variable.record.variants[0].label);
     assert.equal(opened.body.items[0].size, "750 ml");
     assert.deepEqual(Object.keys(opened.body).sort(), ["analyticsEvents","buyerFirstName","currency","deliveryArea","fulfillment","items","methods","state","total"].sort());
     for (const privateValue of ["PrivateSurname", "PrivateFlat77", "+254712345678", prefix, "shippingAddress", "user_id", "token"]) {
@@ -202,10 +214,16 @@ describe("saved-order scoped guest payment capability", () => {
   });
   it("current price and exact variation stock changes demand buyer refresh before any provider request", async () => {
     const saved = await save(); price = 500;
+    await pool.query(`UPDATE uc_product_editorial SET record=jsonb_set(
+      jsonb_set(record,'{price_kes}','500'::jsonb),'{ownership,product_price_kes}','500'::jsonb)
+      WHERE code=$1`, [bottle.code]);
+    invalidateCatalogueCache();
     const stale = await api("/guest-pay/initialize", { token: saved.token, method: "paystack", email: "payer@test.invalid", amount: 1000 });
     assert.equal(stale.status, 409); assert.equal(stale.body.state, "refresh_required"); assert.equal(calls, 0);
     assert.equal((await api("/guest-pay/summary", { token: saved.token })).body.state, "refresh_required");
     price = 300; const variation = await save(input(randomUUID(), true)); stock = false;
+    await pool.query("UPDATE uc_catalogue_inventory SET stock_status='outofstock' WHERE id=$1", [variable.childId]);
+    invalidateCatalogueCache();
     assert.equal((await api("/guest-pay/initialize", { token: variation.token, method: "paystack", email: "payer@test.invalid" })).status, 409);
     assert.equal(calls, 0);
   });
@@ -274,7 +292,7 @@ describe("saved-order scoped guest payment capability", () => {
     assert.equal((await api("/payments/paystack/webhook", event, undefined, { "x-paystack-signature": "bad" })).status, 401);
     const beforeRemote = remoteCalls;
     for (let repeat = 0; repeat < 2; repeat++) assert.equal((await api("/payments/paystack/webhook", event, undefined, { "x-paystack-signature": signature })).status, 200);
-    assert.equal(remoteCalls, beforeRemote + 1);
+    assert.equal(remoteCalls, beforeRemote, "retired Woo order creation must not run");
     assert.equal((await api("/guest-pay/summary", { token: saved.token })).body.state, "paid");
   });
   it("reserved benefits survive code expiry, but missing reservation evidence fails closed", async () => {
@@ -309,9 +327,9 @@ describe("saved-order scoped guest payment capability", () => {
     const beforeRemote = remoteCalls; latestAmount = 80000;
     assert.equal((await api(callback.pathname.replace(/^\/api/, "") + callback.search, event)).status, 200);
     assert.equal((await api("/guest-pay/summary", { token: saved.token })).body.state, "paid");
-    assert.equal(remoteCalls, beforeRemote + 1);
+    assert.equal(remoteCalls, beforeRemote, "retired Woo order creation must not run");
     assert.equal((await api(callback.pathname.replace(/^\/api/, "") + callback.search, event)).status, 200);
-    assert.equal(remoteCalls, beforeRemote + 1);
+    assert.equal(remoteCalls, beforeRemote, "duplicate callbacks cannot create remote orders");
     for (const key of ["MPESA_SHORTCODE","MPESA_PASSKEY","MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","API_BASE_URL"]) delete process.env[key];
     mpesaTimeout = false;
   });

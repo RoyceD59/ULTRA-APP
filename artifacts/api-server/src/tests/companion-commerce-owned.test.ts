@@ -11,6 +11,7 @@ import { ensureCompanionHistorySchema, importCompanionHistory, reviewedImportPay
 import { issueToken } from "../lib/jwt.js";
 
 let server: http.Server, base: string, token: string, parent: any, child: any;
+let originalEditorial: any, originalInventory: any[], teamId: string;
 const realFetch = globalThis.fetch;
 let outbound = 0;
 before(async () => {
@@ -23,7 +24,10 @@ before(async () => {
   const catalogue = await companionCatalogue(true);
   parent = catalogue.find(p => !p.parent_id && p.code === "HDF") ?? catalogue.find(p => !p.parent_id);
   child = catalogue.find(p => p.parent_id === parent.id);
+  originalEditorial = (await pool.query("SELECT * FROM uc_product_editorial WHERE code=$1", [parent.code])).rows[0];
+  originalInventory = (await pool.query("SELECT * FROM uc_catalogue_inventory WHERE code=$1", [parent.code])).rows;
   const id = randomUUID();
+  teamId = id;
   await pool.query(`INSERT INTO team_users(id,email,name,password_hash,role,is_active)
     VALUES($1,'owned-catalogue-fixture@example.invalid','Test operator','unused','admin',true)`, [id]);
   token = issueToken({ id, type: "team-session", role: "admin" });
@@ -44,6 +48,17 @@ before(async () => {
 after(async () => {
   globalThis.fetch = realFetch;
   if (server) await new Promise<void>(r => server.close(() => r()));
+  await pool.query("DELETE FROM uc_inventory_reservations WHERE order_id=ANY($1::int[])", [[9123001, 9123002]]);
+  await pool.query("UPDATE uc_product_editorial SET record=$2,revision=$3,gallery_mapped=$4 WHERE code=$1",
+    [parent.code, originalEditorial.record, originalEditorial.revision, originalEditorial.gallery_mapped]);
+  for (const row of originalInventory) await pool.query(`UPDATE uc_catalogue_inventory
+    SET stock_status=$2,stock_quantity=$3,manage_stock=$4,archived=$5,revision=$6,metadata=$7 WHERE id=$1`,
+    [row.id,row.stock_status,row.stock_quantity,row.manage_stock,row.archived,row.revision,row.metadata]);
+  await pool.query("DELETE FROM uc_inventory_reservations WHERE inventory_id IN (SELECT id FROM uc_catalogue_inventory WHERE code='FIXTURE')");
+  await pool.query("DELETE FROM uc_catalogue_inventory WHERE code='FIXTURE'");
+  await pool.query("DELETE FROM uc_product_editorial WHERE code='FIXTURE'");
+  await pool.query("DELETE FROM team_users WHERE id=$1", [teamId]);
+  await pool.query("DELETE FROM uc_legacy_order_imports WHERE woo_order_id=981234");
   await pool.end();
 });
 function request(path: string, method = "GET", body?: any, admin = false) {

@@ -109,9 +109,9 @@ describe("Unconfigured payment providers fail closed", () => {
       const result = await request("/uc/orders", {
         ...checkout, paymentMethod: method, paymentReference: reference,
       });
-      assert.equal(result.status, 503, JSON.stringify(result.body));
-      assert.equal(result.body.error, "Payment not verified");
-      assert.equal(result.body.retryable, true);
+      assert.equal(result.status, 409, JSON.stringify(result.body));
+      assert.equal(result.body.code, "APP_CHECKOUT_REFRESH_REQUIRED");
+      assert.equal(result.body.retryable, false);
       const rows = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
         .where(eq(ucOrdersTable.paymentReference, reference));
       assert.equal(rows.length, 0);

@@ -19,7 +19,8 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { db, teamUsersTable } from "@workspace/db";
+import { db, teamUsersTable, ucUsersTable } from "@workspace/db";
+import bcryptjs from "bcryptjs";
 import { inArray } from "drizzle-orm";
 import { issueToken } from "../lib/jwt.js";
 
@@ -41,6 +42,11 @@ before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-uc-admin-gate";
   savedAdminEmails = process.env["UC_ADMIN_EMAILS"];
   process.env["UC_ADMIN_EMAILS"] = ` ${WOO_ADMIN.toUpperCase()}, ${DEV_EMAIL} `;
+  const passwordHash = await bcryptjs.hash("gate-test-password",4);
+  await db.insert(ucUsersTable).values([
+    { email:WOO_ADMIN,passwordHash,firstName:"Gate",lastName:"Admin",isAdmin:true,authProvider:"password" },
+    { email:WOO_NONADMIN,passwordHash,firstName:"Gate",lastName:"Customer",isAdmin:false,authProvider:"password" },
+  ]);
 
   // Woo stub: issues a token for anyone EXCEPT the dev-fallback email, which
   // it rejects so the login route falls through to the ephemeral dev session.
@@ -92,6 +98,7 @@ after(async () => {
   if (savedAdminEmails !== undefined) process.env["UC_ADMIN_EMAILS"] = savedAdminEmails;
   else delete process.env["UC_ADMIN_EMAILS"];
   try { await db.delete(teamUsersTable).where(inArray(teamUsersTable.id, TEAM_IDS)); } catch { /* per-run DB */ }
+  await db.delete(ucUsersTable).where(inArray(ucUsersTable.email,[WOO_ADMIN,WOO_NONADMIN]));
   await new Promise<void>((resolve, reject) => server.close(e => (e ? reject(e) : resolve())));
   await new Promise<void>((resolve, reject) => wooStub.close(e => (e ? reject(e) : resolve())));
 });
@@ -141,22 +148,26 @@ async function probeUnsyncedRecovery(token: string): Promise<number> {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe("UC admin gate — WooCommerce provenance", () => {
-  it("admits a Woo-authenticated user whose email is on UC_ADMIN_EMAILS", async () => {
+describe("UC admin gate — live customer administration, not Woo provenance", () => {
+  it("admits a password customer with a live database admin role", async () => {
     const token = await login(WOO_ADMIN);
     assert.equal(await probeAdmin(token), 200, "Woo admin must reach admin endpoints");
   });
 
-  it("rejects a Woo-authenticated user NOT on the allowlist", async () => {
+  it("rejects an ordinary password customer", async () => {
     const token = await login(WOO_NONADMIN);
     assert.equal(await probeAdmin(token), 401);
   });
 
-  it("rejects a dev ephemeral token even when its email IS on the allowlist", async () => {
-    // Woo stub refuses this email → login falls back to the dev ephemeral
-    // session (no src:"woo" provenance). The gate must not trust its email.
-    const token = await login(DEV_EMAIL);
-    assert.equal(await probeAdmin(token), 401, "dev-fallback tokens must never reach admin");
+  it("does not issue a fallback session to an allowlisted email without a database account", async () => {
+    const result = await apiFetch("/api/uc/auth/login",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({email:DEV_EMAIL,password:"gate-test-password"}),
+    });
+    assert.equal(result.status,401);
+    assert.equal((result.body as {token?:string}).token,undefined);
+    const token = issueToken({ id:987654321,email:DEV_EMAIL,firstName:"Legacy",lastName:"Customer",src:"woo" });
+    assert.equal(await probeAdmin(token),401,"retired provenance and allowlisted email are not database administration");
   });
 });
 
