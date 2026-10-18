@@ -6,6 +6,8 @@ description: Owner's intended layered product-page presentation and publication 
 The user wants the explicitly layered product-page structure to be visible in
 publication on both web and Expo. The supplied Ultra Clear Product Pages HTML
 is the content/layout reference, not a request for a simplified redesign.
+Preserve each category's authored schema across browsers and Expo; a generic
+reduced product layout is not a substitute.
 
 **Why:** The user reported that published pages lacked information and
 categorization despite the product-page design already having those layers.
