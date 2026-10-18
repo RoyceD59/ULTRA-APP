@@ -31,10 +31,11 @@ because the source implementation or local tests pass.
 “Notify me” must collect name, phone and location for unregistered visitors and
 store the prospect with the requested product details in Companion for stock
 management. Registered customers' requests must be reported to ProjectHub as
-pending.
+pending restock requests linked to the customer and product, not unpaid orders.
 
 **Why:** The owner explicitly requested guest prospect collection and a staff
-follow-up path for registered customers, rather than sign-in-only wishlisting.
+follow-up path for registered customers, rather than sign-in-only wishlisting,
+and selected pending restock requests rather than actual unpaid orders.
 
 **How to apply:** Retain the exact product/variant identity with the request.
 Do not treat a restock-interest submission as payment, collected revenue or

@@ -100,7 +100,7 @@
 - [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
 - [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
-- [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.
+- [Product-page future flows](product-page-future-flows.md) — sharing is not payment authority; record-only comparisons and guest/customer restock requests retain separate safeguards.
 - [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked/non-stage folders are scratch (deps stripped); wrong markers and symlinks still fail publish; image summary warns over 7 GiB.
 - [Master workbook SKU register](master-workbook-sku-register.md) — v7 workbook is price/SKU authority; stock snapshot applied only by explicit script to unknown rows; no cost data in repo.
 - [Patched install trust](patch-install-trust.md) — plain frozen installs keep inactive hash-qualified patch dirs; verify bytes, --force heals; cold reproductions hit disk quota.
