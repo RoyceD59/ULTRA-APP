@@ -112,3 +112,4 @@
 - [Companion fixture contracts](companion-fixture-contracts.md) — public editorial and operational fixtures are separate; payment handler tests need account/recovery scope, not weaker production guards.
 - [Alison client deletion](alison-client-deletion-policy.md) — owner approved explicit Alison-only setup and deletion only after suspension, with no live tokens and retained audit history.
 - [Test registration cleanup](test-registration-cleanup-policy.md) — owner chose selected recovery records only, resolved or unresolved; never imply customer-account deletion or successful syncing.
+- [Database pool ownership](database-pool-ownership.md) — resolve independent pool reads before reserving transaction connections; test at pool capacity with bounded deadlines.

@@ -251,6 +251,7 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
         display: flex;
         flex: 1;
         min-height: 0;
+        height: 100vh;
         height: 100dvh;
         overflow: hidden;
       }
@@ -280,6 +281,8 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
       #uc-public-content .uc-price { font-size: 1.7rem; font-weight: 700; }
       .uc-record-document a { color: #005d8f; }
       .uc-record-document :focus-visible, #uc-public-content :focus-visible { outline: 3px solid #005d8f; outline-offset: 3px; }
+      .uc-public-menu summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+      .uc-public-menu nav a { display: inline-flex; align-items: center; min-height: 44px; margin-inline-end: 16px; }
     </style>
   </head>
   <body>
@@ -298,6 +301,10 @@ function serveWebApp(res, webBundlePath, pathname = '/', page = null) {
         if (${recordDocument ? "root.querySelector('[data-uc-record-ready]')" : "root.textContent.trim() || root.querySelector('input, img, button, [role=\"button\"]')"}) {
           fallback?.remove();
           root.removeAttribute('hidden');
+          if (Array.from(root.querySelectorAll('[data-uc-interactive-record-ready]')).some(
+            node => node.getAttribute('data-uc-interactive-record-ready') === ${JSON.stringify(pathname).replace(/</g, '\\u003c')})) {
+            document.documentElement.removeAttribute('data-uc-record-mode');
+          }
           observer.disconnect();
         }
       };

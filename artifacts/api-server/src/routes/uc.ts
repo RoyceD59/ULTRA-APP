@@ -3450,6 +3450,9 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
           version: r.analysis.version,
         },
       })),
+      restockRequests: (await pool.query(`SELECT product_code,product_name,parent_sku,variant_sku,
+        variant_label,name,phone,location,status,created_at,updated_at,resolved_at
+        FROM uc_restock_requests WHERE customer_id=$1 ORDER BY created_at DESC`, [user.id])).rows,
       notificationPreferences: notifPrefRows.map(p => ({
         optOutOrderUpdates: p.optOutOrders,
         updatedAt:          p.updatedAt,

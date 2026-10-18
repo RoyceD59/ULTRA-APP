@@ -1,3 +1,39 @@
+# 17 October 2026 — Product browser navigation and restock follow-up
+
+- Repaired public-document/interactive-page layout ownership. A parent effect
+  cannot restore zero-height record layout after the current route is ready;
+  client-side loading/error screens without a fallback keep their viewport.
+- Added an accessible menu on stack and tab screens, including product loading
+  and error states, Escape/focus return on web, and scrolling on short screens.
+  Fixed Expo Router's wrapped-child style-array rendering error.
+- Kept category-specific authored layers in both interactive and initial HTML
+  product pages; activated safe related-product, topic, enquiry and explicit
+  authored links. Public pages retain two installation-video slots.
+- Added guest/customer restock requests with name, international phone, typed
+  location and exact product/variant identity. Requests are prospects/pending
+  restock demand, never accounts, unpaid orders, reservations or payments.
+- Added ProjectHub stock follow-up filters, demand counts and status updates,
+  with live-admin checks, bounded pagination, private/no-store responses and
+  no contact or credential logging.
+- Added transactional duplicate protection, stale/deleted-account rejection,
+  customer export/erasure support and 180-day resolved-guest contact retention.
+  Erased contacts cannot be reopened into active demand.
+- Completion review found and corrected nested-pool acquisition starvation:
+  editorial reads now precede transaction-client reservation. A bounded test
+  exceeds pool capacity; the related customer-count test no longer depends on
+  concurrent fixture visibility-map/planner costs. Production count SQL is unchanged.
+- Product photos use bounded derivative widths, cached web images, original
+  fallback and deferred thumbnails. Prepared an explicit Cloudflare cache for
+  public image files only; private requests, HTML and errors remain uncached.
+- Prepared a bounded release archive over the previously selected product
+  release, preserving its security/dependency and catalogue/cart prerequisites.
+  The new preparer fails on ambiguous backports. No stock initialization,
+  payment activation, DNS change or production publication is implied.
+- Ignore rules were not changed. Dependency and build outputs continue to use
+  the existing ignored staging directories; small reviewed release-source
+  archives follow the existing release convention.
+- Verification and activation details: `docs/product-browser-restock-release.md`.
+
 # 17 October 2026 — Selected test registration record cleanup
 
 - Added individual selection and confirmed clearing on Unsynced Registrations

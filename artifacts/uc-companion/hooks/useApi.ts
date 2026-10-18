@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBase } from '@/lib/apiBase';
+import { optimizedProductImageUrl } from '@/lib/productImageUrl';
 import { getHydrateCustomerTree, quoteCompanionCheckout, quotePhysicalTestPromotion } from '@workspace/api-client-react/companion/customer';
 import type { HydrateCustomerTree } from '@workspace/api-client-react/companion/models/hydrateCustomerTree';
 import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
@@ -38,7 +39,7 @@ export const resizedImageUrl = (src: string | null | undefined, displayWidth: nu
   if (!isCatalogue && !isUpload) return url;
   const w = Math.min(768, Math.max(64, Math.round(PixelRatio.get() * displayWidth)));
   // Catalogue route needs the explicit fmt flag; upload thumbnails are always WebP.
-  return `${url}?w=${w}${isCatalogue ? '&fmt=webp' : ''}`;
+  return optimizedProductImageUrl(url, w);
 };
 
 export interface UCProduct {

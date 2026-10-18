@@ -2260,6 +2260,103 @@ export const RequestUcUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary Save a guest prospect or customer restock request, never a checkout order
+ */
+export const submitUcRestockRequestBodyProductKeyMax = 160;
+
+export const submitUcRestockRequestBodyVariantSkuMax = 100;
+
+export const submitUcRestockRequestBodyIdempotencyKeyMin = 16;
+export const submitUcRestockRequestBodyIdempotencyKeyMax = 100;
+
+export const submitUcRestockRequestBodyContactNameMin = 2;
+export const submitUcRestockRequestBodyContactNameMax = 120;
+
+export const submitUcRestockRequestBodyContactPhoneMin = 7;
+export const submitUcRestockRequestBodyContactPhoneMax = 30;
+
+export const submitUcRestockRequestBodyContactLocationMin = 2;
+export const submitUcRestockRequestBodyContactLocationMax = 240;
+
+
+
+export const SubmitUcRestockRequestBody = zod.object({
+  "productKey": zod.string().min(1).max(submitUcRestockRequestBodyProductKeyMax),
+  "variantSku": zod.string().min(1).max(submitUcRestockRequestBodyVariantSkuMax).optional(),
+  "idempotencyKey": zod.string().min(submitUcRestockRequestBodyIdempotencyKeyMin).max(submitUcRestockRequestBodyIdempotencyKeyMax),
+  "contact": zod.object({
+  "name": zod.string().min(submitUcRestockRequestBodyContactNameMin).max(submitUcRestockRequestBodyContactNameMax),
+  "phone": zod.string().min(submitUcRestockRequestBodyContactPhoneMin).max(submitUcRestockRequestBodyContactPhoneMax),
+  "location": zod.string().min(submitUcRestockRequestBodyContactLocationMin).max(submitUcRestockRequestBodyContactLocationMax)
+})
+})
+
+export const SubmitUcRestockRequestResponse = zod.object({
+  "saved": zod.boolean(),
+  "status": zod.enum(['pending', 'contacted', 'resolved'])
+})
+
+
+export const listUcRestockRequestsQueryStatusDefault = `pending`;
+export const listUcRestockRequestsQueryPageDefault = 1;
+
+
+
+export const ListUcRestockRequestsQueryParams = zod.object({
+  "status": zod.enum(['pending', 'contacted', 'resolved', 'all']).default(listUcRestockRequestsQueryStatusDefault),
+  "page": zod.coerce.number().min(1).default(listUcRestockRequestsQueryPageDefault)
+})
+
+export const ListUcRestockRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.string().nullable(),
+  "kind": zod.enum(['guest', 'customer']),
+  "name": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "location": zod.string().nullable(),
+  "productCode": zod.string(),
+  "productName": zod.string(),
+  "productSlug": zod.string(),
+  "parentSku": zod.string(),
+  "variantSku": zod.string().nullable(),
+  "variantLabel": zod.string().nullable(),
+  "status": zod.enum(['pending', 'contacted', 'resolved']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "demand": zod.array(zod.object({
+  "productCode": zod.string(),
+  "productName": zod.string(),
+  "variantSku": zod.string().nullable(),
+  "waitingCount": zod.number(),
+  "guestCount": zod.number(),
+  "customerCount": zod.number()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number()
+})
+
+
+
+
+
+export const UpdateUcRestockRequestParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const UpdateUcRestockRequestBody = zod.object({
+  "status": zod.enum(['pending', 'contacted', 'resolved'])
+})
+
+export const UpdateUcRestockRequestResponse = zod.object({
+  "saved": zod.boolean(),
+  "status": zod.enum(['pending', 'contacted', 'resolved'])
+})
+
+
+/**
  * @summary List product demand from active restock wishlist entries
  */
 export const ListUcInventoryWishlistDemandResponseItem = zod.object({

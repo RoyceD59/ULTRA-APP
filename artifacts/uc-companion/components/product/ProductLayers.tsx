@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform } from 'react-native';
 import ProductPhoto from './ProductPhoto';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { Link } from 'expo-router';
+import LinkedText from './LinkedText';
+import { productHref } from '@/lib/productLinks';
 import { useQuery } from '@tanstack/react-query';
 import { headingProps } from '@/lib/accessibility';
 import { fetchCollection, kes, type ProductRecord, type RecordCollection } from '@/lib/productRecord';
@@ -34,7 +36,7 @@ export function Accordion({ title, icon, open: initial = false, children }: { ti
 
 export const Bullets = ({ items, ordered }: { items?: unknown; ordered?: boolean }) => {
   const xs = list(items);
-  return xs.length ? <View style={{ gap: 4 }}>{xs.map((i, n) => <Text key={n} style={l.body}>{`${ordered ? `${n + 1}.` : '\u2022'} ${i}`}</Text>)}</View> : null;
+  return xs.length ? <View style={{ gap: 4 }}>{xs.map((i, n) => <LinkedText key={n} style={l.body}>{`${ordered ? `${n + 1}.` : '\u2022'} ${i}`}</LinkedText>)}</View> : null;
 };
 
 export const H2 = ({ children }: { children: string }) => <Text {...headingProps(2)} style={l.h2}>{children}</Text>;
@@ -60,26 +62,31 @@ export function SearchListing({ record }: { record: ProductRecord }) {
 
 /** Group tabs, then product tabs and a separate replacement-filter row, from the live collection. */
 export function GroupNav({ record }: { record: ProductRecord }) {
-  const router = useRouter();
   const { data } = useRecordCollection();
   const groups = data?.groups ?? [];
   if (!groups.length || !data) return null;
   const cur = groups.find(g => g.products.includes(record.code) || g.replacements.includes(record.code))
     ?? groups.find(g => g.id === record.navGroup);
   const byCode = new Map(data.products.map(p => [p.code, p]));
-  const open = (code?: string) => { const p = code ? byCode.get(code) : undefined; if (p && p.code !== record.code) router.push(`/product/${p.slug}` as never); };
+  const hrefFor = (code?: string) => { const p = code ? byCode.get(code) : undefined; return p ? productHref(p.slug) : null; };
   const chip = (code: string) => {
     const p = byCode.get(code); if (!p) return null;
     const on = code === record.code;
-    return <TouchableOpacity key={code} onPress={() => open(code)} accessibilityRole="button" accessibilityState={{ selected: on }} style={[l.tab, on && l.tabOn]}>
-      <Text style={[l.tabT, on && { color: P.ground }]}>{p.name}</Text></TouchableOpacity>;
+    const href = hrefFor(code);
+    const label = <Text style={[l.tabT, on && { color: P.ground }]}>{p.name}</Text>;
+    return on || !href
+      ? <View key={code} accessibilityState={{ selected: on }} aria-current={on ? 'page' : undefined} style={[l.tab, on && l.tabOn]}>{label}</View>
+      : <Link key={code} href={href as never} asChild><Pressable accessibilityRole="link" style={l.tab}>{label}</Pressable></Link>;
   };
   return (
     <View style={{ gap: 8 }} accessibilityRole={'navigation' as never}>
       <View style={l.row}>
         {groups.map(g => { const on = g.id === cur?.id; const target = g.products.find(code => byCode.has(code)); return (
-          <TouchableOpacity key={g.id} onPress={() => open(target)} disabled={!target} accessibilityRole="button" accessibilityState={{ selected: on, disabled: !target }} style={[l.group, on && l.groupOn, !target && { opacity: 0.5 }]}>
-            <Text style={[l.groupT, on && { color: P.navy }]}>{g.label}{target ? '' : ' — not published yet'}</Text></TouchableOpacity>); })}
+          (() => { const href = target && target !== record.code ? hrefFor(target) : null;
+            const label = <Text style={[l.groupT, on && { color: P.navy }]}>{g.label}{target ? '' : ' — not published yet'}</Text>;
+            return href
+              ? <Link key={g.id} href={href as never} asChild><Pressable accessibilityRole="link" accessibilityState={{ selected: on }} style={StyleSheet.flatten([l.group, on && l.groupOn])}>{label}</Pressable></Link>
+              : <View key={g.id} accessibilityState={{ selected: on, disabled: !target }} style={[l.group, on && l.groupOn, !target && { opacity: 0.5 }]}>{label}</View>; })()); })}
       </View>
       {cur ? <View style={l.row}>
         {cur.products.map(chip)}
@@ -91,14 +98,12 @@ export function GroupNav({ record }: { record: ProductRecord }) {
 
 /** Layers between the buy panel and the selection summary, in the approved order. */
 export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: ProductRecord; lifeSrc?: string; lifeAlt?: string; price: number | null }) {
-  const router = useRouter();
   const { data } = useRecordCollection();
   const b = record.benefits ?? {}; const s = record.suitability ?? {}; const k = record.package ?? {};
   const w = record.ownership ?? {}; const r = w.replacement ?? {}; const sv = record.service ?? {}; const o = record.opening ?? {};
   const items = Array.isArray(b.items) ? b.items.filter((i: any) => str(i?.feature)) : [];
   const products = data?.products ?? [];
   const rp = products.find(x => x.kind === 'replacement' && x.parentSku === r.sku && x.code !== record.code);
-  const go = (slug: string) => router.push(`/product/${slug}` as never);
   const claims = record.claims ?? [];
   const limits = list(record.evidenceLimits);
   const suitRows: [string, string[]][] = [['Water', list(s.water)], ['Your setup', list(s.setup)], ['Not suitable', list(s.exclusions)]];
@@ -112,7 +117,7 @@ export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: Pro
           <View style={[l.cell, { gap: 10 }]}>
             {items.map((i: any, n: number) => <View key={n} style={l.benefit}>
               <Ionicons name={(['water-outline', 'shield-checkmark-outline', 'refresh-outline'] as const)[n % 3]} size={22} color={P.teal} />
-              <View style={{ flex: 1, gap: 2 }}><Text {...headingProps(3)} style={l.bF}>{i.feature}</Text>{str(i.consequence) ? <Text style={l.body}>{i.consequence}</Text> : null}</View>
+              <View style={{ flex: 1, gap: 2 }}><Text {...headingProps(3)} style={l.bF}>{i.feature}</Text>{str(i.consequence) ? <LinkedText style={l.body}>{i.consequence}</LinkedText> : null}</View>
             </View>)}
           </View>
         </View>
@@ -120,7 +125,7 @@ export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: Pro
 
       {str(s.heading) ? <View style={l.check} nativeID="suit">
         <Text {...headingProps(3)} style={l.h3}>{s.heading}</Text>
-        {str(s.intended_use) ? <Text style={l.note}>{s.intended_use}</Text> : null}
+        {str(s.intended_use) ? <LinkedText style={l.note}>{s.intended_use}</LinkedText> : null}
         {suitRows.filter(([, v]) => v.length).map(([t, v]) => <View key={t} style={l.spec}><Text style={l.specK}>{t}</Text><Text style={l.specV}>{v.join('; ')}</Text></View>)}
         {record.fitPhotos?.items?.length ? <View style={{ gap: 8, marginTop: 8 }}>
           <Text {...headingProps(3)} style={l.h3}>{record.fitPhotos.heading}</Text>
@@ -154,13 +159,13 @@ export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: Pro
             {record.kind === 'replacement' ? <>
               <Text {...headingProps(3)} style={l.bF}>Fits</Text>
               <View style={l.row}>{(record.fits ?? []).map(n => { const t = products.find(x => x.name === n); return t
-                ? <TouchableOpacity key={n} onPress={() => go(t.slug)} accessibilityRole="button"><Text style={l.link}>{n}</Text></TouchableOpacity>
+                ? <Link key={n} href={(productHref(t.slug) ?? '/products') as never} accessibilityRole="link" style={l.link}>{n}</Link>
                 : <Text key={n} style={l.body}>{n}</Text>; })}</View>
-              {str(r.guidance) ? <Text style={l.body}>{r.guidance}</Text> : null}
+              {str(r.guidance) ? <LinkedText style={l.body}>{r.guidance}</LinkedText> : null}
             </> : <>
               <Text {...headingProps(3)} style={l.bF}>Replacement and care</Text>
               <Text style={l.body}>{[str(r.name) ? r.name + (typeof r.price_kes === 'number' ? `: ${kes(r.price_kes)}.` : '.') : '', str(r.guidance) ? r.guidance : ''].filter(Boolean).join(' ') || 'No replacement part is listed for this product.'}</Text>
-              {rp ? <TouchableOpacity onPress={() => go(rp.slug)} accessibilityRole="button"><Text style={l.link}>View replacement</Text></TouchableOpacity> : null}
+              {rp && productHref(rp.slug) ? <Link href={productHref(rp.slug) as never} accessibilityRole="link" style={l.link}>View replacement</Link> : null}
             </>}
           </View>
         </View>
@@ -172,7 +177,7 @@ export function ProductLayers({ record, lifeSrc, lifeAlt, price }: { record: Pro
         <View style={[l.benefit, l.cell]}>
           <Ionicons name="headset-outline" size={22} color={P.teal} />
           <View style={{ flex: 1, gap: 4 }}><Text {...headingProps(3)} style={l.bF}>Support and returns</Text>
-            <Text style={l.body}>{[str(sv.support) ? `${sv.support}.` : '', sv.warranty?.text, firstSentence(sv.returns)].filter(str).join(' ')}</Text>
+            <LinkedText style={l.body}>{[str(sv.support) ? `${sv.support}.` : '', sv.warranty?.text, firstSentence(sv.returns)].filter(str).join(' ')}</LinkedText>
             <Bullets items={sv.exclusions} /></View>
         </View>
       </View>

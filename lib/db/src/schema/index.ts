@@ -71,6 +71,7 @@ export * from "./uc-rewards-ledger";
 export * from "./uc-referrals";
 export * from "./uc-referral-settlements";
 export * from "./uc-wishlist";
+export * from "./uc-restock-requests";
 export * from "./uc-restock-demand-alerts";
 export * from "./uc-registered-filters";
 export * from "./uc-water-impact";

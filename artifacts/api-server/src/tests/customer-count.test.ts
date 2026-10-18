@@ -432,12 +432,14 @@ describe("GET /uc/admin/customers/count — query performance", () => {
     );
 
     // A small test database may rationally prefer a sequential scan. Disabling
-    // sequential scans lets EXPLAIN verify that this query shape is eligible for
-    // the partial index without depending on test data volume or planner costs.
+    // sequential/bitmap scans lets EXPLAIN verify index-only eligibility,
+    // independently of concurrent fixtures changing the visibility map or
+    // planner costs. This is not a claim of zero physical heap visibility reads.
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL enable_seqscan = off");
+      await client.query("SET LOCAL enable_bitmapscan = off");
       const plan = await client.query<{ "QUERY PLAN": string }>(`
         EXPLAIN (COSTS OFF)
         SELECT
@@ -450,10 +452,10 @@ describe("GET /uc/admin/customers/count — query performance", () => {
       assert.match(
         plan.rows.map(row => row["QUERY PLAN"]).join("\n"),
         /Index Only Scan using uc_users_active_count_covering_idx/,
-        "customer count query should use the covering partial index without heap reads"
+        "customer count query must be eligible for the covering index-only plan"
       );
-      await client.query("ROLLBACK");
     } finally {
+      await client.query("ROLLBACK");
       client.release();
     }
   });

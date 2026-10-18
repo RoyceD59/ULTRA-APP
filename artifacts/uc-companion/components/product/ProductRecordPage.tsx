@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Linking, Share, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform, Share, useWindowDimensions } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import LinkedText from './LinkedText';
+import { categoryHref, enquiryHref, topicHref } from '@/lib/productLinks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import BrandLogo from '@/components/BrandLogo';
@@ -24,6 +26,7 @@ import {
 } from '@/lib/productRecord';
 import { visibleStoreCategory } from '@/lib/storeCategories';
 import ProductCompare from './ProductCompare';
+import RestockRequestForm from './RestockRequestForm';
 import { P } from './theme';
 import { Accordion, GroupNav, H2, ProductLayers, SearchListing, serviceSummary } from './ProductLayers';
 
@@ -49,6 +52,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const [wishNotice, setWishNotice] = useState('');
   const wishPending = useRef(false);
   const viewed = useRef(false);
+  const [thumbsReady, setThumbsReady] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setThumbsReady(true), 400); return () => clearTimeout(t); }, []);
   useLayoutEffect(() => {
     if (Platform.OS !== 'web') return;
     document.getElementById('uc-public-content')?.remove();
@@ -124,7 +129,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
   const waUrl = productShareUrl(record.slug, variant?.childSku, 'whatsapp');
   const copyUrl = productShareUrl(record.slug, variant?.childSku, 'copy');
   const canShare = state.kind === 'buy' && !!waUrl && !!copyUrl;
-  const shareWa = () => { if (!waUrl) return; const text = shareText(record.name, waUrl); trackProductEvent('share', { productId: pid ?? undefined, sku: variant?.childSku ?? record.parentSku, method: 'whatsapp' }); Linking.openURL(whatsappUrl(text)); };
+  const trackWa = () => { trackProductEvent('share', { productId: pid ?? undefined, sku: variant?.childSku ?? record.parentSku, method: 'whatsapp' }); };
   const shareCopy = async () => {
     if (!copyUrl) return;
     const text = shareText(record.name, copyUrl);
@@ -145,7 +150,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
       <View style={[s.stage, { height: Math.min(460, Math.max(64, wide ? (Math.min(width, 1040) - 52) / 2 : Math.min(width, 1040) - 32)) }]}>
         {activeVideo
           ? <VideoView player={player} style={{ width: '100%', height: '100%' }} contentFit="contain" nativeControls />
-          : cur ? <ProductPhoto src={cur.src} alt={cur.alt} width={520} />
+          : cur ? <ProductPhoto src={cur.src} alt={cur.alt} width={520} priority={idx === 0 ? 'high' : 'normal'} />
             : <Text style={s.note}>Photos have not been published for this product yet.</Text>}
       </View>
       {colourNote ? <Text style={s.note}>{colourNote}</Text> : null}
@@ -153,7 +158,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {photos.map((p, i) => (
             <TouchableOpacity key={p.src + i} onPress={() => setIdx(i)} accessibilityRole="button" accessibilityLabel={`${p.displayName || p.label}: ${p.alt}`} style={[s.thumb, i === idx && s.thumbOn]}>
-              <View style={{ width: 52, height: 52 }}><ProductPhoto src={p.src} alt={p.alt} width={64} compact /></View>
+              <View style={{ width: 52, height: 52 }}>{thumbsReady || i === 0 ? <ProductPhoto src={p.src} alt={p.alt} width={64} compact priority="low" /> : null}</View>
               <Text style={s.thumbL} numberOfLines={1}>{p.displayName || p.label}</Text>
             </TouchableOpacity>))}
           {videos.map((video, i) => <TouchableOpacity key={video.slot} onPress={() => setIdx(photos.length + i)} accessibilityRole="button" accessibilityLabel={`Product video ${video.slot}`} style={[s.thumb, idx === photos.length + i && s.thumbOn]}>
@@ -168,8 +173,8 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
       {record.seo?.subline ? <Text style={s.sub}>{record.seo.subline}</Text> : null}
       {op_.outcome || op_.intro ? <Text style={s.body}>{[op_.outcome, op_.intro].filter(Boolean).join(' ')}</Text> : null}
       {record.category ? <View style={s.chips}>
-        <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/products', params: { category: visibleStoreCategory(record.category!) ?? 'All' } } as never)}
-          accessibilityRole="link" accessibilityLabel={`Category: ${record.category}`} style={s.chip}><Text style={s.chipT}>{record.category}</Text></TouchableOpacity>
+        <Link href={categoryHref(visibleStoreCategory(record.category) ?? 'All') as never} asChild>
+          <Pressable accessibilityRole="link" accessibilityLabel={`Category: ${record.category}`} style={s.chip}><Text style={s.chipT}>{record.category}</Text></Pressable></Link>
       </View> : null}
       <Text style={s.note}>{`SKU: ${variant?.childSku ?? record.parentSku}`}</Text>
       {record.fits?.length ? <View style={{ gap: 6 }}><Text style={s.label}>Fits</Text>
@@ -196,14 +201,18 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <TouchableOpacity onPress={() => buyNow(true)} style={s.chip} accessibilityRole="button"><Text style={s.chipT}>Ask someone to pay</Text></TouchableOpacity>
         </>
       ) : state.kind === 'out_of_stock' ? (
-        <TouchableOpacity onPress={toggleWish} disabled={wishBusy} style={s.ghost} accessibilityRole="button">
-          <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={P.tealDark} />
-          <Text style={s.ghostT}>{wishBusy ? 'Saving…' : saved ? 'Remove from wishlist' : 'Notify me when back in stock'}</Text>
-        </TouchableOpacity>
+        <View style={{ gap: 8 }}>
+          <RestockRequestForm key={`${user?.id ?? 'guest'}:${record.code}`} productKey={record.slug || record.code} variants={variants}
+            variant={variant} onVariant={setVariant} token={token ?? null} profile={profile} />
+          {token && user ? <TouchableOpacity onPress={toggleWish} disabled={wishBusy} style={s.ghost} accessibilityRole="button">
+            <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={P.tealDark} />
+            <Text style={s.ghostT}>{wishBusy ? 'Saving…' : saved ? 'Remove from wishlist' : 'Also save to my wishlist'}</Text>
+          </TouchableOpacity> : null}
+        </View>
       ) : (
-        <TouchableOpacity onPress={() => router.push(`/enquiry?productId=${pid ?? ''}&productName=${encodeURIComponent(record.name)}` as never)} style={s.primary}>
+        <Link href={enquiryHref(pid, record.name) as never} asChild><Pressable accessibilityRole="link" style={s.primary}>
           <Text style={s.primaryT}>Enquire about this product</Text>
-        </TouchableOpacity>)}
+        </Pressable></Link>)}
       {!!wishNotice ? <Text accessibilityLiveRegion="polite" style={s.note}>{wishNotice}</Text> : null}
       {record.compareGroup ? <TouchableOpacity onPress={() => setCompare(c => !c)} accessibilityRole="button" style={s.ghost}><Text style={s.ghostT}>{compare ? 'Hide comparison' : 'Compare with similar products'}</Text></TouchableOpacity> : null}
       {serviceSummary(record) ? <Text style={[s.note, { textAlign: 'center' }]}>{serviceSummary(record)}</Text> : null}
@@ -212,7 +221,9 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         {!shareBase() ? <Text style={s.note}>Sharing is unavailable: no public share address is configured.</Text> : null}
         <Text style={s.note}>This is a product link for the selected option. It is not a payment link and cannot pay for anyone's order.</Text>
         <View style={s.chips}>
-          <TouchableOpacity disabled={!canShare} onPress={shareWa} style={[s.chip, !canShare && { opacity: 0.4 }]}><Text style={s.chipT}>WhatsApp</Text></TouchableOpacity>
+          {canShare && waUrl ? <Link href={whatsappUrl(shareText(record.name, waUrl)) as never} target="_blank" rel="noopener noreferrer" asChild>
+            <Pressable accessibilityRole="link" onPress={trackWa} style={s.chip}><Text style={s.chipT}>WhatsApp</Text></Pressable></Link>
+            : <View style={[s.chip, { opacity: 0.4 }]} accessibilityState={{ disabled: true }}><Text style={s.chipT}>WhatsApp</Text></View>}
           <TouchableOpacity disabled={!canShare} onPress={shareCopy} style={[s.chip, !canShare && { opacity: 0.4 }]}><Text style={s.chipT}>{copied ? 'Copied' : 'Copy link'}</Text></TouchableOpacity>
           {Platform.OS !== 'web' ? <TouchableOpacity disabled={!canShare} onPress={shareNative} style={[s.chip, !canShare && { opacity: 0.4 }]}><Text style={s.chipT}>More</Text></TouchableOpacity> : null}
         </View>
@@ -228,10 +239,12 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
             <Ionicons name="chevron-back" size={20} color={P.navy} />
           </TouchableOpacity>
           <BrandLogo width={72} variant="deep" />
-          <TouchableOpacity onPress={() => router.push('/cart')} accessibilityRole="button" accessibilityLabel="Cart" style={s.iconBtn}>
-            <Ionicons name="cart-outline" size={22} color={P.navy} />
-            {cartHydrated && totalItems > 0 ? <View style={s.badge}><Text style={s.badgeT}>{totalItems}</Text></View> : null}
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <TouchableOpacity onPress={() => router.push('/cart')} accessibilityRole="button" accessibilityLabel="Cart" style={s.iconBtn}>
+              <Ionicons name="cart-outline" size={22} color={P.navy} />
+              {cartHydrated && totalItems > 0 ? <View style={s.badge}><Text style={s.badgeT}>{totalItems}</Text></View> : null}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <GroupNav record={record} />
@@ -242,7 +255,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
         <H2>{record.summary?.heading || 'Review your selection'}</H2>
         <View style={[s.card, { backgroundColor: P.aqua, gap: 8 }]}>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            {photos[0] ? <View style={s.sumPic}><ProductPhoto src={photos[0].src} alt={photos[0].alt} width={160} compact /></View> : null}
+            {photos[0] ? <View style={s.sumPic}><ProductPhoto src={photos[0].src} alt={photos[0].alt} width={160} compact priority="low" /></View> : null}
             <View style={{ flex: 1 }}><Text style={s.bF}>{record.name}</Text>
               <Text style={s.note}>{`${variant ? `${variant.label} - ` : ''}${variant?.childSku ?? record.parentSku}`}</Text></View>
           </View>
@@ -252,13 +265,13 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
           {state.kind === 'buy' ? <><TouchableOpacity onPress={() => buyNow()} style={s.primary} accessibilityRole="button"><Text style={s.primaryT}>Buy now</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => buyNow(true)} style={s.ghost} accessibilityRole="button"><Text style={s.ghostT}>Ask someone to pay</Text></TouchableOpacity></>
             : state.kind === 'blocked' ? <Text style={s.warnT}>{state.reason}</Text>
-            : state.kind === 'enquiry' ? <TouchableOpacity onPress={() => router.push(`/enquiry?productId=${pid ?? ''}&productName=${encodeURIComponent(record.name)}` as never)} style={s.primary}><Text style={s.primaryT}>Enquire about this product</Text></TouchableOpacity> : null}
+            : state.kind === 'enquiry' ? <Link href={enquiryHref(pid, record.name) as never} asChild><Pressable accessibilityRole="link" style={s.primary}><Text style={s.primaryT}>Enquire about this product</Text></Pressable></Link> : null}
         </View>
 
         {compare ? <ProductCompare current={record} initialVariant={variant} /> : null}
 
         {record.faq?.length ? <Accordion title="Questions" icon="help-circle-outline">
-          {record.faq.map((f, i) => <View key={i} style={{ gap: 2 }}><Text style={s.bF}>{f.q}</Text><Text style={s.body}>{f.a}</Text></View>)}
+          {record.faq.map((f, i) => <View key={i} style={{ gap: 2 }}><Text style={s.bF}>{f.q}</Text><LinkedText style={s.body}>{String(f.a ?? '')}</LinkedText></View>)}
         </Accordion> : null}
         <Accordion title="Full specifications" icon="list-outline">
           {Object.entries(sp).map(([k, v]) => <View key={k} style={s.spec}><Text style={s.specK}>{k}</Text><Text style={s.specV}>{String(v)}</Text></View>)}
@@ -284,7 +297,7 @@ export default function ProductRecordPage({ record, initialSku, topicsRow }: { r
             <TouchableOpacity onPress={() => router.push({ pathname: '/admin/product-edit', params: reviewParams })} style={s.chip}><Text style={s.chipT}>Edit product details</Text></TouchableOpacity>
           </View>) : null}
         {topicsRow && record.topics?.length ? (
-          <View style={s.chips}>{record.topics.map(t => <TouchableOpacity key={t.slug} onPress={() => router.push(`/topic/${t.slug}` as never)} style={s.chip}><Text style={s.chipT}>{t.name}</Text></TouchableOpacity>)}</View>) : null}
+          <View style={s.chips}>{record.topics.map(t => { const href = topicHref(t.slug); return href ? <Link key={t.slug} href={href as never} asChild><Pressable accessibilityRole="link" style={s.chip}><Text style={s.chipT}>{t.name}</Text></Pressable></Link> : <View key={t.slug} style={s.chip}><Text style={s.chipT}>{t.name}</Text></View>; })}</View>) : null}
       </View>
       <MediaViewer item={viewer} onClose={() => setViewer(null)} />
     </View>

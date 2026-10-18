@@ -1485,6 +1485,89 @@ paths:
         "403": { description: Assessment owner required }
         "500": { description: Failed to generate upload URL }
 
+  /uc/restock-requests:
+    post:
+      operationId: submitUcRestockRequest
+      tags: [uc]
+      summary: Save a guest prospect or customer restock request, never a checkout order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestockSubmissionInput"
+      responses:
+        "202":
+          description: Request durably accepted, including safe duplicate submissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockSubmissionReceipt"
+        "400": { description: "Invalid product, variant or contact details" }
+        "401": { description: Supplied customer session is invalid }
+        "404": { description: Published product not found }
+        "429": { description: Too many requests }
+        "503": { description: Request could not be saved; retry explicitly }
+
+  /uc/admin/restock-requests:
+    get:
+      operationId: listUcRestockRequests
+      tags: [uc-admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, contacted, resolved, all]
+            default: pending
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        "200":
+          description: Authorized staff request list and active product demand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockStaffPage"
+        "400": { description: Invalid filter or page }
+        "401": { description: Staff authentication required }
+        "403": { description: Staff administration required }
+        "503": { description: Requests temporarily unavailable }
+
+  /uc/admin/restock-requests/{id}:
+    patch:
+      operationId: updateUcRestockRequest
+      tags: [uc-admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestockStatusInput"
+      responses:
+        "200":
+          description: Updated follow-up status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockSubmissionReceipt"
+        "400": { description: Invalid request or status }
+        "401": { description: Staff authentication required }
+        "403": { description: Staff administration required }
+        "404": { description: Request not found }
+        "409": { description: A newer pending request exists for this customer and product }
+        "503": { description: Request could not be updated }
+
   /uc/admin/inventory/wishlist-demand:
     get:
       operationId: listUcInventoryWishlistDemand
@@ -4295,6 +4378,73 @@ components:
       bearerFormat: opaque
 
   schemas:
+    RestockSubmissionInput:
+      type: object
+      required: [productKey, contact, idempotencyKey]
+      properties:
+        productKey: { type: string, minLength: 1, maxLength: 160 }
+        variantSku: { type: string, minLength: 1, maxLength: 100 }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+        contact:
+          type: object
+          required: [name, phone, location]
+          properties:
+            name: { type: string, minLength: 2, maxLength: 120 }
+            phone: { type: string, minLength: 7, maxLength: 30 }
+            location: { type: string, minLength: 2, maxLength: 240 }
+    RestockSubmissionReceipt:
+      type: object
+      required: [saved, status]
+      properties:
+        saved: { type: boolean }
+        status: { type: string, enum: [pending, contacted, resolved] }
+    RestockStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, contacted, resolved] }
+    RestockStaffRequest:
+      type: object
+      required: [id, customerId, kind, name, phone, location, productCode, productName, productSlug, parentSku, variantSku, variantLabel, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: [string, "null"] }
+        kind: { type: string, enum: [guest, customer] }
+        name: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        location: { type: [string, "null"] }
+        productCode: { type: string }
+        productName: { type: string }
+        productSlug: { type: string }
+        parentSku: { type: string }
+        variantSku: { type: [string, "null"] }
+        variantLabel: { type: [string, "null"] }
+        status: { type: string, enum: [pending, contacted, resolved] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    RestockDemandCount:
+      type: object
+      required: [productCode, productName, variantSku, waitingCount, guestCount, customerCount]
+      properties:
+        productCode: { type: string }
+        productName: { type: string }
+        variantSku: { type: [string, "null"] }
+        waitingCount: { type: integer }
+        guestCount: { type: integer }
+        customerCount: { type: integer }
+    RestockStaffPage:
+      type: object
+      required: [requests, demand, total, page, pageSize]
+      properties:
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/RestockStaffRequest" }
+        demand:
+          type: array
+          items: { $ref: "#/components/schemas/RestockDemandCount" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
     ProductEditorialIdentity:
       type: object
       required: [code, slug, name, parent_sku, publishable]

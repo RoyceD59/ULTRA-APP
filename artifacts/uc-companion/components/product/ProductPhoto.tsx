@@ -5,8 +5,8 @@ import { resizedImageUrl, resolveMediaUrl } from '@/hooks/useApi';
 import { P } from './theme';
 
 /** A failed derivative must not leave a blank gallery on a native device. */
-export default function ProductPhoto({ src, alt, width, compact = false, fit = 'contain' }: {
-  src: string; alt: string; width: number; compact?: boolean; fit?: 'contain' | 'cover';
+export default function ProductPhoto({ src, alt, width, compact = false, fit = 'contain', priority = 'normal' }: {
+  src: string; alt: string; width: number; compact?: boolean; fit?: 'contain' | 'cover'; priority?: 'low' | 'normal' | 'high';
 }) {
   const [original, setOriginal] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -25,7 +25,7 @@ export default function ProductPhoto({ src, alt, width, compact = false, fit = '
   const native = Platform.OS !== 'web';
   const onLoad = () => { setLoading(false); setFailure(''); };
   const onError = (message?: string) => {
-    if (!native && !original && optimized !== full) { setOriginal(true); return; }
+    if (!original && optimized !== full) { setOriginal(true); return; }
     setLoading(false); setFailed(true);
     setFailure(/decode|format/i.test(message ?? '') ? 'Image format error'
       : /404/.test(message ?? '') ? 'Photo not found'
@@ -36,10 +36,10 @@ export default function ProductPhoto({ src, alt, width, compact = false, fit = '
     setSize(previous => previous.width === width && previous.height === height ? previous : { width, height });
   }}>
     {!failed ? native ? (size.width > 0 && size.height > 0 ? <NativeImage
-      key={`${src}:${attempt}`} source={{ uri: full }} accessibilityLabel={alt} resizeMode={fit}
+      key={`${src}:${original}:${attempt}`} source={{ uri: original ? full : optimized }} accessibilityLabel={alt} resizeMode={fit}
       style={{ width: size.width, height: size.height }} onLoad={onLoad}
       onError={event => onError(event.nativeEvent.error)} /> : null) : <Image key={`${src}:${original}:${attempt}`} source={{ uri: original ? full : optimized }}
-      accessibilityLabel={alt} contentFit={fit} style={styles.fill}
+      accessibilityLabel={alt} contentFit={fit} style={styles.fill} priority={priority} cachePolicy="memory-disk"
       onLoad={onLoad} onError={event => onError(event.error)} /> : <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Retry photo: ${alt}`}
       onPress={() => { setFailed(false); setLoading(true); setOriginal(true); setAttempt(n => n + 1); }}
       style={styles.feedback}>

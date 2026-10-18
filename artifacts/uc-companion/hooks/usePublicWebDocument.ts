@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { usePathname } from 'expo-router';
+import { syncPublicRecordLayout } from '@/lib/publicRecordLayout';
 
 type PublicMetadata = {
   title: string;
@@ -20,12 +21,7 @@ export function usePublicWebDocument() {
     const endpoint = document.querySelector<HTMLMetaElement>('meta[name="uc-public-meta-endpoint"]')?.content;
     if (!endpoint) return;
     // Remove the readable initial document only after the interactive tree mounts.
-    const recordRoute = /^\/(?:product|topic)\/[^/]+$/.test(pathname);
-    document.documentElement.toggleAttribute('data-uc-record-mode', recordRoute);
-    if (!recordRoute) {
-      document.getElementById('uc-public-content')?.remove();
-      document.getElementById('root')?.removeAttribute('hidden');
-    }
+    syncPublicRecordLayout(pathname, document);
     const initial = document.querySelector<HTMLMetaElement>('meta[name="uc-public-document-path"]');
     if (initial?.content === pathname) {
       initial.remove();
