@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, pool, teamUsersTable } from "@workspace/db";
 import { isAdminRequest } from "../lib/adminAuth.js";
@@ -15,6 +15,18 @@ import {
 
 const router = Router();
 const MAX_PAGE_SIZE = 20;
+
+function sendPublished(res: Response, body: unknown): void {
+  // Match the existing guide snapshot validator semantics. The client polls
+  // every 30s; a 30s HTTP TTL keeps the combined
+  // visible-page freshness budget within 60s without stale-while-revalidate.
+  res.setHeader("Cache-Control", "public, max-age=30, must-revalidate");
+  const json = JSON.stringify(body);
+  const etag = `"${createHash("sha256").update(json).digest("hex")}"`;
+  res.setHeader("ETag", etag);
+  if (res.req.headers["if-none-match"] === etag) { res.status(304).end(); return; }
+  res.type("json").send(json);
+}
 
 async function liveTeamActor(req: Request): Promise<string | null> {
   const claims = verifyToken(req.headers.authorization);
@@ -82,8 +94,7 @@ router.get("/uc/blog", async (req, res): Promise<void> => {
     values,
   );
   const page = result.rows.slice(0, limit);
-  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-  res.json({
+  sendPublished(res, {
     articles: page.map((row) => publicArticleSummary(row.snapshot as Record<string, unknown>, row.id)),
     nextCursor: result.rows.length > limit && page.length
       ? Buffer.from(JSON.stringify({ publishedAt: new Date(page.at(-1)!.publishedAt).toISOString(), id: page.at(-1)!.id })).toString("base64url")
@@ -99,8 +110,7 @@ router.get("/uc/blog/:slug", async (req, res): Promise<void> => {
      ORDER BY published_at DESC,id DESC LIMIT 1`, [slug],
   );
   if (!result.rows[0]) { fail(res, 404, "Published article not found"); return; }
-  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-  res.json({ article: publicArticle(result.rows[0].snapshot as Record<string, unknown>, result.rows[0].id) });
+  sendPublished(res, { article: publicArticle(result.rows[0].snapshot as Record<string, unknown>, result.rows[0].id) });
 });
 
 router.get("/uc/editor/blog", async (req, res): Promise<void> => {

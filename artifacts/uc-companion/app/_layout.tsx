@@ -1,57 +1,72 @@
 import React, { useEffect, useRef } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { installConfiguredGoogleProductAnalytics } from '@/lib/productAnalytics';
+import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from '@expo-google-fonts/inter';
-import { Stack, useRouter } from 'expo-router';
-import { TouchableOpacity, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Stack, useRouter, usePathname } from 'expo-router';
+import { TouchableOpacity, Text, AppState, Platform } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as SplashScreen from 'expo-splash-screen';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useNativeNotificationRouting, usePushTokenSync } from '@/hooks/useNativeNotifications';
 import { useWaterTestHandoffCapture } from '@/hooks/useWaterTestHandoff';
 import { CartProvider } from '@/context/CartContext';
 import { getApiBase } from '@/lib/apiBase';
+import { webAnalyticsLoader } from '@/lib/umamiWeb';
+import { initializeCompanionFieldVitals } from '@/lib/companionFieldVitals';
 import { shouldRedirectToLogin } from '@/lib/authSessionRedirect';
+import { retrySessionRequest } from '@/hooks/deletedAccountResponse';
 import { cartBackDestination } from '@/lib/customerScreenState';
+import { sharedDataRefreshInterval } from '@/lib/queryFreshness';
+import { usePublicWebDocument } from '@/hooks/usePublicWebDocument';
+import { installQueryConnectivity } from '@/lib/queryConnectivity';
+import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
+import { installCompanionDiagnostics, setDiagnosticRoute } from '@/lib/runtimeDiagnostics';
 
 // Set API base URL before any component renders
+import ConnectionStatusFrame from '@/components/ConnectionStatusFrame';
+import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react/config';
+import { CheckoutReceiptProvider } from '@/context/CheckoutReceiptContext';
 const apiBase = getApiBase();
 if (apiBase) {
   setBaseUrl(apiBase);
 }
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+// Screens and navigation use system typography, so no text fonts need loading.
+// Keep the static native splash until the root mounts; icons load independently.
+if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync();
 
 // Clerk (social sign-in). Env vars are injected by the dev script in
 // development and by scripts/build.js in production builds.
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
+const isolatedPreview = process.env.EXPO_PUBLIC_PREVIEW_SAFE_MODE === '1';
+const recoveryDefaults = nativeRecoveryDefaults(Platform.OS);
 const queryClient = new QueryClient({
   defaultOptions: {
+    ...recoveryDefaults,
     queries: {
+      ...recoveryDefaults.queries,
       staleTime: 2 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
-      retry: 1,
-      refetchOnWindowFocus: false,
+      retry: retrySessionRequest,
+      refetchOnWindowFocus: 'always',
+      refetchOnReconnect: 'always',
+      refetchInterval: query => sharedDataRefreshInterval(query.queryKey),
+      refetchIntervalInBackground: false,
     },
   },
 });
 
 function RootLayoutNav() {
+  const pathname = usePathname();
+  useEffect(() => setDiagnosticRoute(pathname), [pathname]);
+  usePublicWebDocument();
   const router = useRouter();
   const { token, mustChangePassword } = useAuth();
   const client = useQueryClient();
@@ -63,6 +78,18 @@ function RootLayoutNav() {
 
   useWaterTestHandoffCapture();
 
+  useEffect(() => installQueryConnectivity(), []);
+
+  useEffect(() => {
+    // React Query already handles browser visibility; native needs AppState.
+    if (Platform.OS === 'web') return;
+    focusManager.setFocused(AppState.currentState === 'active');
+    const subscription = AppState.addEventListener('change', state => {
+      focusManager.setFocused(state === 'active');
+    });
+    return () => { subscription.remove(); focusManager.setFocused(undefined); };
+  }, []);
+
   useEffect(() => {
     const tokenBeforeUpdate = previousToken.current;
     previousToken.current = token;
@@ -70,8 +97,13 @@ function RootLayoutNav() {
     // Update API client auth token for this session
     setAuthTokenGetter(token ? () => Promise.resolve(token) : null);
 
-    if (shouldRedirectToLogin(tokenBeforeUpdate, token)) {
+    if (tokenBeforeUpdate !== token) {
+      // A replacement session (including same-account re-login) must not keep
+      // a prior session's validated QR, balances, or in-flight personalized reads.
+      void client.cancelQueries();
       client.clear();
+    }
+    if (shouldRedirectToLogin(tokenBeforeUpdate, token)) {
       router.replace('/auth/login' as never);
     }
   }, [client, router, token]);
@@ -96,6 +128,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerTintColor: '#0054A6' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="about" options={{ title: 'About Us', headerBackTitle: 'Back' }} />
       <Stack.Screen name="blog/[slug]" options={{ headerShown: false }} />
       <Stack.Screen name="product/[id]" options={{ title: 'Product Details', headerBackTitle: 'Back' }} />
       <Stack.Screen name="cart" options={{
@@ -118,6 +151,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/product-edit" options={{ title: 'Edit Product' }} />
       <Stack.Screen name="water-test" options={{ title: 'Water Test Request' }} />
       <Stack.Screen name="rewards" options={{ title: 'My Rewards' }} />
+      <Stack.Screen name="care" options={{ title: 'Your water care' }} />
       <Stack.Screen name="auth/login" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/register" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/forgot-password" options={{ title: '', headerTransparent: true }} />
@@ -127,44 +161,50 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
-
+  useEffect(() => installCompanionDiagnostics(), []);
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+    if (installConfiguredGoogleProductAnalytics() === 'invalid') console.warn('Product analytics configuration is invalid; Google events remain disabled.');
+  }, []);
+  useEffect(() => {
+    if (Platform.OS === 'web') webAnalyticsLoader.initialize();
+    if (Platform.OS === 'web') initializeCompanionFieldVitals();
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      void SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  const app = (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <CheckoutReceiptProvider>
+        <CartProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <KeyboardProvider>
+              <ConnectionStatusFrame>
+                <RootLayoutNav />
+              </ConnectionStatusFrame>
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </CartProvider>
+        </CheckoutReceiptProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
 
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
       <ErrorBoundary>
-        {/* ClerkProvider loads in the background; the app itself never waits
-            on Clerk. Social sign-in buttons gate themselves on ClerkLoaded, so
-            a Clerk outage or offline start can't block password users. */}
-        <ClerkProvider
-          publishableKey={clerkPublishableKey}
-          tokenCache={tokenCache}
-          proxyUrl={clerkProxyUrl}
-        >
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <CartProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <KeyboardProvider>
-                    <RootLayoutNav />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </CartProvider>
-            </AuthProvider>
-          </QueryClientProvider>
-        </ClerkProvider>
+        {isolatedPreview ? app : (
+          <ClerkProvider
+            publishableKey={clerkPublishableKey}
+            tokenCache={tokenCache}
+            proxyUrl={clerkProxyUrl}
+          >
+            {app}
+          </ClerkProvider>
+        )}
       </ErrorBoundary>
     </SafeAreaProvider>
   );

@@ -15,7 +15,7 @@ import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Platform, ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useApi, ApiError } from '@/hooks/useApi';
@@ -25,6 +25,9 @@ import MediaPicker, { MediaItem } from '@/components/MediaPicker';
 import { uploadMediaItems } from '@/lib/uploadMedia';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { saveDraft, loadDraft, clearDraft, persistMediaForDraft, validateMediaItems, enqueueDraftSave, drainDraftSaveQueue } from '@/lib/formDrafts';
+import { trackEvent } from '@/lib/analytics';
+import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
+import ContactCompletion from '@/components/ContactCompletion';
 
 const CONTACT_TIMES = ['Morning (8am–12pm)', 'Afternoon (12pm–5pm)', 'Evening (5pm–8pm)', 'Any time'];
 
@@ -78,6 +81,9 @@ export default function NewTicketScreen() {
   const [ticketRef,          setTicketRef]          = useState('');
   const [whatsAppSummary,    setWhatsAppSummary]    = useState('');
   const [error,              setError]              = useState('');
+  const [contactPhone, setContactPhone] = useState(user?.phone ?? '');
+  const [contactAddress, setContactAddress] = useState(user?.address ?? '');
+  useEffect(() => { setContactPhone(user?.phone ?? ''); setContactAddress(user?.address ?? ''); }, [user?.id, user?.phone, user?.address]);
   const [droppedAttachments, setDroppedAttachments] = useState(0);
 
   // ── Draft persistence ──────────────────────────────────────────────────────
@@ -158,6 +164,12 @@ export default function NewTicketScreen() {
       await goToAuth('login');
       return;
     }
+    if (!validateCustomerContact(user ?? {}).ok) {
+      setError('Complete your phone number and contact address before submitting. Your service draft is saved.');
+      return;
+    }
+    const serviceContact = validateCustomerContact({ phone: contactPhone, address: contactAddress });
+    if (!serviceContact.ok) { setError(Object.values(serviceContact.fields).join(' ')); return; }
     setError('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSubmitting(true);
@@ -167,8 +179,13 @@ export default function NewTicketScreen() {
         productModel,
         issueDescription: issue,
         preferredContactTime: contactTime,
+        contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
         photos: uploaded.filter(m => m.type === 'photo').map(m => m.url),
         videos: uploaded.filter(m => m.type === 'video').map(m => m.url),
+      });
+      trackEvent('support_ticket_submitted', {
+        photoCount: uploaded.filter(item => item.type === 'photo').length,
+        videoCount: uploaded.filter(item => item.type === 'video').length,
       });
       const summary = [
         'ULTRA CLEAR — SERVICE REQUEST',
@@ -242,6 +259,7 @@ export default function NewTicketScreen() {
       contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 34 : 40 }}
       keyboardShouldPersistTaps="handled"
     >
+      <ContactCompletion />
       {/* Guest gate — service requests require an account */}
       {!token && (
         <View style={[styles.gateBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
@@ -304,6 +322,13 @@ export default function NewTicketScreen() {
             <Text style={[styles.accountHint, { color: colors.mutedForeground }]}>
               From your account — the team will use these details to contact you.
             </Text>
+            <TextInput accessibilityLabel="Service contact phone" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad"
+              placeholder="Phone number" style={[styles.accountText, { color: colors.text }]} />
+            <TextInput accessibilityLabel="Service contact address" value={contactAddress} onChangeText={setContactAddress}
+              placeholder="Service address" maxLength={500} style={[styles.accountText, { color: colors.text }]} />
+            <TouchableOpacity onPress={() => router.push('/(tabs)/account?editProfile=1&returnTo=%2Fticket%2Fnew' as never)}>
+              <Text style={{ color: colors.primary }}>Edit or complete contact details</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}

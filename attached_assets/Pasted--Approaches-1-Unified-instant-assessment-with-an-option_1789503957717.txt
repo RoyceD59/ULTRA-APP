@@ -1,0 +1,67 @@
+### Approaches
+
+1. **Unified instant assessment with an optional physical-test stage — recommended**
+   - Every completed quick check creates one server-calculated assessment and one ProjectHub water-test ticket.
+   - The ticket starts as **Instant result ready** and changes to **Physical test requested** when the customer books.
+   - The same summary appears on the lead/customer profile, ticket, Companion history, and Alison context.
+   - Best audit trail and least duplication.
+
+2. **Extend the existing physical-test request**
+   - Add quick-result fields directly to the current booking record.
+   - Faster initially, but every lead looks like a technician booking and status handling becomes confusing.
+
+3. **Keep quick leads and physical tests separate**
+   - Store the public result as a lead, then copy it into a water-test ticket when booked.
+   - Clear separation, but duplicate records can drift and staff must reconcile them.
+
+### Recommended design
+
+#### Customer experience
+
+- Add a public, shareable **Water Check** page and use the same flow in Companion.
+- Adapt the attached six-question prototype into app components; do not embed its standalone script.
+- Require first name, WhatsApp number, and explicit follow-up consent before showing results.
+- Calculate the result on the server so customers cannot submit fabricated bands.
+- Show an indicative profile for:
+  - Hardness and scale
+  - Taste and odour
+  - Sediment and clarity
+  - Microbial concern
+- Include the location-based fluoride warning and clear language that this is not a laboratory or health assessment.
+- Finish with:
+  - **Book a physical water test**
+  - **Send result on WhatsApp**
+  - **Verify and save to my account**
+- Public results attach to an existing customer only after WhatsApp/SMS verification. Before verification they remain a safely isolated lead.
+- Signed-in Companion users attach automatically.
+
+#### ProjectHub and data flow
+
+- Every quick check creates a ProjectHub water-test ticket with the result summary, source answers, country/area, attribution, consent, lead status, and physical-test status.
+- Physical booking updates the same ticket rather than creating a duplicate.
+- Customer detail shows the latest quick result plus a compact history.
+- Verified public results are linked to the customer account; staff can still resolve unmatched leads.
+- Notification failure never loses the assessment or ticket.
+- Repeated submissions and booking taps are idempotent and public endpoints are rate-limited.
+
+#### Alison
+
+- Update Alison’s approved water-quality guidance with the four result dimensions, recommendation rules, regional warnings, and safety disclaimers.
+- Keep that general interpretation knowledge separate from customer data.
+- When an authenticated customer chats, the server supplies only that customer’s latest verified water-result summary and linked ticket state.
+- Do not put names, phones, addresses, or private results into the shared ProjectHub document library.
+- Alison can answer questions such as “What did my quick check indicate?” and “Has my physical test been booked?” without asking the customer to repeat details.
+
+#### Impact Card
+
+- Replace the full-time card with a compact accessible header showing the title, headline litres, and expand/collapse chevron.
+- Default to **collapsed** to reduce Account-page height.
+- Expanding reveals the existing input, metrics, milestone, savings, details, and history without changing their calculations.
+
+#### Verification
+
+- Exact scoring tests based on the attached prototype.
+- Public lead validation, consent, rate-limit, OTP, ownership, and duplicate-submission tests.
+- Ticket creation and physical-booking transition tests.
+- Customer-account summary and Alison cross-account privacy tests.
+- ProjectHub and Companion UI/type checks plus mobile/web preview checks.

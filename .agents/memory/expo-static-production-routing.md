@@ -1,0 +1,149 @@
+---
+name: Expo static production routing
+description: Non-obvious SDK 57 static-web and custom-host proxy requirements for the Companion production build.
+---
+
+For isolated root-hosted SDK 57 web exports, leave the export base URL unset
+rather than explicitly setting it to `/`.
+
+**Why:** The explicit slash can produce `//assets/...` font URLs, which browsers
+interpret as an external `http://assets` host instead of a local asset path.
+
+**How to apply:** Override an inherited export base path to an empty value for
+root-hosted benchmarks. Keep production's actual prefixed routing unchanged,
+and fail isolated checks if a font attempts to leave the loopback server.
+
+When Expo preview API calls appear to fail CORS, verify the configured development API hostname before changing the CORS allowlist.
+
+**Why:** A stale development-only API-domain override pointed to a retired preview hostname returning 404 without CORS headers; the current workspace API already allowed the Expo origin.
+
+**How to apply:** Compare the bundle's configured API origin with the current workspace health endpoint. Correct only the stale development override and restart Metro; do not widen production CORS or change production routing.
+
+SDK 57 Metro bundles can emit direct `/assets/?unstable_path=...` module exports in addition to `httpServerLocation` metadata. A static deployment must rewrite both forms to copied build assets.
+
+**Why:** Rewriting only asset metadata leaves fonts and images requesting Metro-only `/assets` URLs, which return 404 after publication.
+
+**How to apply:** After any Expo/Metro upgrade, inspect a production web bundle for remaining `unstable_path` URLs and verify at least one font and image URL against the static server.
+
+The generated Expo web document must make `html`, `body`, and `#root` full height, and `#root` must be a flex container.
+
+**Why:** React Native Web's flex chain otherwise collapses scroll views to zero height while their controls remain present in the accessibility tree, producing a blank white page.
+
+**How to apply:** Validate production-equivalent deep routes in a real browser and inspect the root/provider/scroll-view dimensions when the DOM exists but nothing paints.
+
+When Cloudflare Workers route custom hostnames to a shared Replit deployment, the normal forwarded-host header can be replaced by Replit's outer proxy. Carry only allowlisted public hostnames in a dedicated header for Clerk's proxy-host calculation.
+
+**Why:** Clerk rejects production requests when the browser origin is the custom hostname but the proxy identifies itself with the generated Replit hostname.
+
+**How to apply:** Keep the edge and API allowlists identical, never accept arbitrary values, and verify Clerk environment/client calls from the custom production origin.
+
+Public Expo domains and the Clerk proxy path must be declared in the artifact's production build environment, and an explicit public domain must take precedence over Replit's injected internal hostname. Run production Metro with a cleared transform cache.
+
+**Why:** Publish builds do not inherit development-only variables. Metro can also reuse a transform where an `EXPO_PUBLIC_*` value was previously absent, leaving that compiled constant `undefined` even after the build environment supplies it.
+
+**How to apply:** Keep public build variables in the validated artifact configuration, use Metro's cache-clear option for production builds, and inspect the compiled root-layout constant—not just build logs—when changing Clerk proxy settings.
+
+Replit's static screenshot helper can capture an all-white Expo web page before a large development Metro bundle finishes painting, even when React later mounts without errors.
+
+**Why:** The Companion's direct deep route repeatedly looked blank in static captures while a real browser, after the bundle was warm, showed a populated non-zero root and the complete screen.
+
+**How to apply:** Before treating a blank Expo screenshot as an app failure, confirm the generated entry-bundle URL returns JavaScript, check for the `Running application "main"` log, and use a real browser test to inspect the DOM and computed root dimensions.
+
+When manually rebuilding the committed static bundle, use the production artifact's entire build environment, including its route prefix, rather than a development-domain substitute.
+
+**Why:** A build can succeed and remove stale UI strings while embedding development API/asset origins or missing the production path prefix, leaving its checked-in output unusable after publishing.
+
+**How to apply:** Read the validated artifact production build settings before a manual regeneration, then confirm generated web/native bundles use the intended API origin and prefixed asset URLs.
+
+An assigned task's checkout can lag the published Companion implementation. Verify both the deployed build and its canonical browser origin before diagnosing a live failure from local source.
+
+**Why:** A live browser audit exposed blog screens absent from the task checkout; the deployment alias also produced cross-origin errors against APIs configured for the custom app domain.
+
+**How to apply:** Obtain deployment metadata, compare public build identifiers and available merged source, and distinguish canonical-domain failures from alias-only failures. Do not infer that a CMS feature is missing merely because it is absent from an older task checkout.
+
+The supported published Companion browser origin is the custom app domain. Browser entry from the shared deployment alias should lead there, rather than widening production API CORS to accommodate the alias.
+
+**Why:** Public API and asset delivery are configured for the custom domain, while the deployment alias shares its root with ProjectHub. Allowing the alias alone does not resolve root-route collisions or cross-origin assets.
+
+**How to apply:** Preserve browser routes and query parameters when directing visitors to the custom app domain; keep native manifests, assets and development previews out of browser-only redirects. Do not hijack ProjectHub's shared-root routes.
+
+Run manual noninteractive production packaging with `CI=1` while the development
+Metro workflow is running.
+
+**Why:** A second watch-mode Metro instance exhausted the shared container's
+inotify watcher budget even after leftover pnpm staging packages were removed.
+Expo's CI mode disables file watching without disabling production bundling.
+
+For a bounded local public-preview browser check, use the provisioned Chromium
+executable if workspace Playwright expects a missing cached browser. A blank
+initial Expo capture is not by itself evidence of a failed page: wait for
+actual content before diagnosing it as broken.
+
+**Why:** The workspace browser package's cache expectation can differ from the
+provisioned browser, and cold Expo startup outlasts a brief screenshot wait.
+Downloading another browser needlessly increases the workspace/image footprint.
+
+**How to apply:** Check the installed Chromium with `command -v chromium` and
+pass that executable to the existing browser library; use a bounded content
+wait. Do not substitute this anonymous check for signed-in or physical-phone
+verification.
+
+**How to apply:** Include `CI=1` in the packaging command rather than raising
+system limits or changing application source for a host resource-limit failure.
+
+Use the Expo preview's own routed origin for development API calls when the
+generic Replit development host fails in the browser; do not widen production CORS.
+
+**Why:** Browser cross-origin preflight to the generic development hostname returned
+404 with no CORS headers while shell requests to that host succeeded. The same-origin
+Expo API route reached Express normally. Curl alone cannot rule out this preview-edge
+failure.
+
+**How to apply:** Compare browser and shell preflight results and a same-origin
+request before changing backend permissions. Keep native and physical-device
+verification separate from the browser result.
+
+Expo's web export base URL also controls router pathname normalization; version
+prefixes for resources must not become the router's logical base path.
+
+**Why:** The browser navigates stable deep links while dynamically imported
+chunks must remain pinned to the build that produced the document. Treating the
+build ID as a route prefix would make these two URL contracts disagree.
+
+**How to apply:** Keep stable route prefixes and versioned resource prefixes
+separate when adapting Expo exports to custom static hosting. Verify actual
+browser deep links and deferred navigation, not just whether chunk files exist.
+
+Include shared/runtime/layout chunks when reporting the initial JavaScript
+payload of an Expo split export, not just the file named entry.
+
+**Why:** Expo can emit a large shared chunk required on the first screen even
+when individual route modules load asynchronously. Entry-file size alone
+overstates the initial delivery improvement.
+
+**How to apply:** Use the browser's initial script requests to identify the
+complete initial set; distinguish local encoded sizes from deployed transfer
+and unused-code measurements.
+
+Prefer measured, public package entrypoint reductions before enabling Metro's
+experimental graph optimizers for Companion.
+
+**Why:** Route splitting alone still places dependencies shared by optional
+screens in the first-load common chunk. Targeted barrel-import reductions can
+remove unused modules without adding navigation waits or changing provider
+readiness; experimental tree shaking changes the entire graph.
+
+**How to apply:** Profile actual initial script requests with source maps,
+distinguish source inventory from delivered bytes, and verify native exports
+when changing shared imports. Do not treat a smaller entry file as sufficient.
+
+For root-mounted local profiling exports, leave the Expo web base URL unset;
+do not explicitly set it to `/`. Keep the real artifact prefix for packaging.
+
+**Why:** With SDK 57 an explicit `/` base produced `//assets/...` font URLs,
+which browsers interpreted as an `assets` hostname. That made a synthetic
+benchmark fail despite the prefixed production export remaining valid.
+
+**How to apply:** Record profiling failures rather than ignoring them, and use
+an unset base URL for the root-mounted fixture server. Do not change published
+hostnames or artifact routing to repair a local benchmark configuration.

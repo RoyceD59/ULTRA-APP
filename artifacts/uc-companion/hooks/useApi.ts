@@ -1,10 +1,12 @@
+import { reportRuntimeReadFailure } from '@workspace/api-client-react/config';
 import { useCallback } from 'react';
 import { PixelRatio } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBase } from '@/lib/apiBase';
+import { getHydrateCustomerTree, quoteCompanionCheckout, quotePhysicalTestPromotion } from '@workspace/api-client-react/companion/customer';
+import type { HydrateCustomerTree } from '@workspace/api-client-react/companion/models/hydrateCustomerTree';
+import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
 
-// ApiError lives in its own dependency-free module so the rate-limit tests can
-// exercise it under node:test; re-exported here so app imports keep working.
 import { ApiError } from './apiError';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
 export { ApiError };
@@ -52,7 +54,8 @@ export interface UCProduct {
   categories: { id: number; name: string }[];
   images: { src: string; alt: string }[];
   sku: string;
-  stockStatus: 'instock' | 'outofstock';
+  /** 'unknown' = awaiting staff stock review: not available, not zero. */
+  stockStatus: 'instock' | 'outofstock' | 'onbackorder' | 'unknown';
   stockQuantity: number | null;
   tags: { name: string }[];
   enquiryOnly?: boolean;
@@ -126,16 +129,25 @@ export interface UCOrderStatusEvent {
 }
 
 export interface UCOrder {
+  reconciliationRequired?: boolean;
+  checkoutState?: string | null;
+  synchronizationStatus?: string;
+  discountAmount?: number;
+  promoCode?: string;
   id: number;
   orderNumber?: number | string;
   status: string;
   /** Separate payment and fulfilment values stay current after order sync. */
   paymentStatus?: string;
+  paymentConfirmedAt?: string | null;
+  paymentReference?: string;
+  receiptSerial?: string;
+  codCollectionStatus?: string | null;
   fulfillmentStatus?: string;
   dateCreated: string;
   total: string;
   currency: string;
-  lineItems: { productId?: number; name: string; quantity: number; total: string }[];
+  lineItems: { productId?: number; name: string; quantity: number; total: string; variationId?: number | null; childSku?: string | null; variantLabel?: string | null }[];
   paymentMethod: string;
   shippingAddress: UCAddress;
   delivery?: { method: string; trackingNumber: string | null };
@@ -145,6 +157,8 @@ export interface UCOrder {
 }
 
 export interface UCAddress {
+  fulfillment?: 'collection' | 'delivery';
+  shippingAmount?: string;
   firstName: string;
   lastName: string;
   address1: string;
@@ -343,11 +357,30 @@ export interface UCBlogPage {
 }
 
 export interface RegisterPurchaseItem {
+  /** App/store purchase item. Offline sale units use OfflinePurchaseItem. */
   productId:    number;
   name:         string;
   quantity:     number;
   lifespanDays: number; // 0 = not trackable (no catalogue lifespan — never guessed)
   capacityLitres?: number;
+}
+export interface OfflinePurchaseItem {
+  lineId: string;
+  productId: number | null;
+  name: string;
+  quantity: number;
+  lifespanDays: number;
+  capacityLitres: number;
+  unavailableReason: string | null;
+  availableUnitIds: string[];
+  registeredUnits: { registeredFilterId?: number; unitId: string; installationDate: string; active: boolean }[];
+}
+export interface OfflinePurchase {
+  source: 'offline';
+  saleId: number;
+  saleDate: string;
+  label: string;
+  items: OfflinePurchaseItem[];
 }
 
 export interface RegisterPurchaseResult {
@@ -361,6 +394,9 @@ export interface RegisterPurchaseResult {
 
 export interface RegisteredImpactFilter {
   id: number;
+  userId?: number;
+  verificationStatus?: string;
+  capacityUsageValid?: boolean;
   productId: number;
   productName: string;
   ratedCapacityLitres: number;
@@ -393,7 +429,7 @@ export interface CustomerRewards {
   /** Single server snapshot used by balance, tier/status labels, and QR badge. */
   snapshot?: { balance: number; tier: 'starter' | 'silver' | 'gold'; status: 'active' | 'ready'; qrBadge: 'ready' | 'refresh_required' };
   ledger: Array<{ id: number; points: number; reason: string; eventType: string; createdAt: string }>;
-  /** Returned only when the API has just assigned/reassigned the opaque token. */
+  /** Read-only current server token where recoverable; display still requires validation. */
   qrToken: string | null;
   impact: PersonalImpact;
 }
@@ -407,8 +443,12 @@ export interface CodeValidationResult {
 
 /** A checkout amount returned by the promotion service. Amounts are server-calculated. */
 export interface CheckoutPromotionQuote {
+  code?: string;
+  referralBenefitId?: number | null;
+  lines?: { productId: number; name: string; quantity: number; subtotal: number; variationId?: number; childSku?: string; variantLabel?: string }[];
   promotion: {
     code: string;
+    type?: string;
     title?: string;
     label?: string;
   };
@@ -416,6 +456,26 @@ export interface CheckoutPromotionQuote {
   delivery: number;
   discountAmount: number;
   total: number;
+  fulfillment?: 'collection' | 'delivery';
+}
+
+export interface CheckoutPaymentInput {
+  quotedTotal?: number;
+  lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[];
+  fulfillment: 'collection' | 'delivery';
+  promoCode?: string;
+  applyReferralDiscount?: boolean;
+  shippingAddress: UCAddress;
+  idempotencyKey: string;
+}
+export interface SavedPayLink {
+  url: string;
+  expiresAt: string;
+  orderId: number;
+  summary: {
+    state: string; total: number; currency: string;
+    items: { name: string; size?: string; variant: string; sku: string; quantity: number; total: number }[];
+  };
 }
 /** Server-side notification preferences, including the opt-in flags for
  *  filter-reminder delivery via external channels (email / SMS / WhatsApp). */
@@ -437,7 +497,7 @@ export function useApi() {
 
   const throwResponseError = useCallback(async (res: Response): Promise<never> => {
     const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-    await handleRejectedSessionResponse(res.status, token);
+    await handleRejectedSessionResponse(res.status, token, body);
     throw new ApiError(String(body['error'] ?? res.status), res.status, body);
   }, [token]);
 
@@ -449,10 +509,20 @@ export function useApi() {
       else signal.addEventListener('abort', abort, { once: true });
     }
     const timer = controller ? setTimeout(abort, deadlineMs) : null;
+    let correlationId: string | undefined;
     try {
       const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders(), signal: controller?.signal ?? signal });
-      if (!res.ok) return throwResponseError(res);
-      return res.json() as Promise<T>;
+      correlationId = res.headers.get('X-Correlation-ID') || undefined;
+      if (res.status >= 500) reportRuntimeReadFailure('api_read_failed', correlationId);
+      if (!res.ok) return await throwResponseError(res);
+      // Keep the deadline armed while the response body is arriving too.
+      return await res.json() as T;
+    } catch (error) {
+      // User cancellation and expected auth/validation are not operational failures.
+      if (!signal?.aborted && !(error instanceof ApiError)) {
+        reportRuntimeReadFailure(controller?.signal.aborted ? 'api_read_timeout' : 'api_read_failed', correlationId);
+      }
+      throw error;
     } finally {
       if (timer) clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -472,16 +542,21 @@ export function useApi() {
     return res.json() as Promise<T>;
   }, [authHeaders, throwResponseError]);
 
-  const put = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(`${getApiBase()}${path}`, {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      return throwResponseError(res);
+  const put = useCallback(async <T>(path: string, body?: unknown, deadlineMs?: number): Promise<T> => {
+    const controller = deadlineMs ? new AbortController() : undefined;
+    const timer = controller ? setTimeout(() => controller.abort(), deadlineMs) : undefined;
+    try {
+      const res = await fetch(`${getApiBase()}${path}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller?.signal,
+      });
+      if (!res.ok) return await throwResponseError(res);
+      return await res.json() as T;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return res.json() as Promise<T>;
   }, [authHeaders, throwResponseError]);
 
   const patch = useCallback(async <T>(path: string, body?: unknown): Promise<T> => {
@@ -510,13 +585,23 @@ export function useApi() {
     requestContactVerification: (channel: 'email' | 'whatsapp') =>
       post<{ ok: boolean }>('/api/uc/customer/contact-verification/request', { channel }),
     getOrders: () => get<UCOrder[]>('/api/uc/orders'),
+    getCommerceStatus: () => get<{ authority: 'companion'; legacyHistory: 'pending_review' | 'reviewed' }>('/api/uc/commerce/status'),
+    getAssignments: (signal?: AbortSignal) => get<CustomerFilterAssignment[]>('/api/uc/customer/assignments', signal, 30000),
+    getCustomerTree: async () => {
+      try { return await getHydrateCustomerTree({ headers: authHeaders() }); }
+      catch (error) {
+        const status = (error as { status?: number })?.status;
+        if (status) await handleRejectedSessionResponse(status, token, (error as { data?: unknown })?.data);
+        throw error;
+      }
+    },
     getOrder: (orderId: number) => get<UCOrder>(`/api/uc/orders/${orderId}`),
     getReturnRequest: (orderId: number) =>
       get<{ request: { id: number; reason: string; details: string; status: string; createdAt: string } | null }>(`/api/uc/orders/${orderId}/return-request`),
     requestReturn: (orderId: number, data: { reason: string; details?: string }) =>
       post<{ ok: boolean; requestId: number; message: string }>(`/api/uc/orders/${orderId}/return-request`, data),
     createOrder: (data: {
-      lineItems: { productId: number; quantity: number }[];
+      lineItems: CheckoutPaymentInput['lineItems'];
       paymentMethod: string;
       paymentReference: string;
       shippingAddress: UCAddress;
@@ -524,18 +609,31 @@ export function useApi() {
       /** Applies the caller's own available referral reward; identity comes from auth. */
       applyReferralDiscount?: boolean;
       idempotencyKey: string;
-    }) => post<UCOrder>('/api/uc/orders', data),
+      fulfillment?: 'collection' | 'delivery';
+    }) => post<UCOrder & { reconciliationRequired?: boolean }>('/api/uc/orders', data),
     /** Validates a checkout code and returns its server-calculated quote. */
-    quoteCheckoutPromotion: (data: { code: string; lineItems: { productId: number; quantity: number }[] }) =>
+    quoteCheckout: (data: { code?: string; applyReferralDiscount?: boolean; fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
+      quoteCompanionCheckout(data, { headers: authHeaders() }),
+    quoteWaterTestPromotion: (code: string) => quotePhysicalTestPromotion({ code }, { headers: authHeaders() }),
+    cancelCheckout: (idempotencyKey: string) => post<{cancelled: boolean}>('/api/uc/checkout/cancel',{idempotencyKey}),
+    savePayLink: (checkout: CheckoutPaymentInput, method: 'paystack' | 'mpesa' | 'stripe') =>
+      post<SavedPayLink>('/api/uc/orders/pay-link', { checkout, method }),
+    revokePayLink: (idempotencyKey: string) => post<{revoked: boolean}>('/api/uc/orders/pay-link/revoke', { idempotencyKey }),
+    getCheckoutRecovery: (idempotencyKey: string) => get<{resolution: 'editable' | 'completed' | 'unresolved'; orderId: number | null}>(`/api/uc/checkout/recovery?idempotencyKey=${encodeURIComponent(idempotencyKey)}`),
+    quoteCheckoutPromotion: (data: { code: string; fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/promotions/checkout/quote', data),
     /** Quote the authenticated customer's available one-time referral reward. */
-    quoteReferralDiscount: (data: { lineItems: { productId: number; quantity: number }[] }) =>
+    quoteReferralDiscount: (data: { fulfillment: 'collection' | 'delivery'; lineItems: CheckoutPaymentInput['lineItems'] }) =>
       post<CheckoutPromotionQuote>('/api/uc/customer/referrals/discount/quote', data),
     /**
      * Look up a purchase by receipt/order number + the checkout phone number
      * so the buyer can register their filter from the purchase record.
      */
-    registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string }) =>
+    getOfflinePurchases: (signal?: AbortSignal) => get<{ purchases: OfflinePurchase[] }>('/api/uc/purchases/offline', signal),
+    registerOfflinePurchase: (saleId: number, unitId: string, installationDate: string) =>
+      post<{ registration: RegisteredImpactFilter & { lifespanDays: number; offlineUnitId: string; maintenanceCount: number } }>(
+        '/api/uc/filters/register-offline-purchase', { saleId, unitId, installationDate }),
+    registerFilterPurchase: (receipt: string, phone: string, registration?: { productId: number; activatedAt: string; unitId?: string; source?: 'app' | 'store' }) =>
       post<RegisterPurchaseResult>('/api/uc/filters/register-purchase', { receipt, phone, ...registration }),
     getLocations: () => get<MapLocation[]>('/api/uc/locations'),
     getLocationRatingAggregate: (id: string) =>
@@ -543,11 +641,12 @@ export function useApi() {
     getMyLocationRating: (id: string) =>
       get<{ rating: LocationRating | null }>(`/api/uc/me/locations/${id}/rating`),
     upsertLocationRating: (id: string, data: LocationRating) =>
-      put<{ rating: LocationRating }>(`/api/uc/locations/${id}/rating`, data),
+      put<{ rating: LocationRating }>(`/api/uc/locations/${id}/rating`, data, 20000),
     reportLocationRating: (locationId: string, ratingId: string, data: { reason: 'spam' | 'unsafe' | 'inaccurate' | 'offensive' | 'other'; detail?: string }) =>
       post<{ report: any }>(`/api/uc/locations/${locationId}/ratings/${ratingId}/reports`, data),
     getTickets: () => get<MaintenanceTicket[]>('/api/uc/tickets'),
     createTicket: (data: {
+      contactDetails?: { phone: string; address: string };
       productModel: string;
       issueDescription: string;
       preferredContactTime: string;
@@ -567,18 +666,18 @@ export function useApi() {
     /** Server-driven payment method availability (e.g. Stripe deactivated). */
     getPaymentsConfig: () =>
       get<PaymentsConfig>('/api/payments/config'),
-    mpesaSTKPush: (phone: string, amount: number, orderId: string) =>
-      post<MpesaResponse>('/api/payments/mpesa', { phone, amount, orderId }),
+    mpesaSTKPush: (phone: string, amount: number, orderId: string, checkout?: CheckoutPaymentInput) =>
+      post<MpesaResponse>('/api/payments/mpesa', { phone, amount, orderId, checkout }),
     mpesaStatus: (checkoutRequestId: string) =>
       get<MpesaStatusResult>(`/api/payments/mpesa/status/${checkoutRequestId}`),
-    stripeSession: (amount: number, orderId: string) =>
-      post<StripeSessionResponse>('/api/payments/stripe/session', { amount, currency: 'kes', orderId }),
+    stripeSession: (amount: number, orderId: string, checkout?: CheckoutPaymentInput) =>
+      post<StripeSessionResponse>('/api/payments/stripe/session', { amount, currency: 'kes', orderId, checkout }),
     stripeSessionStatus: (sessionId: string) =>
       get<StripeSessionStatus>(`/api/payments/stripe/session/${sessionId}`),
     paystackVerify: (reference: string) =>
       get<{ success: boolean; status: string }>(`/api/payments/paystack/verify/${encodeURIComponent(reference)}`),
-    paystackInit: (email: string, amount: number) =>
-      post<PaystackInitResponse>('/api/payments/paystack/init', { email, amount }),
+    paystackInit: (email: string, amount: number, checkout?: CheckoutPaymentInput) =>
+      post<PaystackInitResponse>('/api/payments/paystack/init', { email, amount, checkout }),
     verifyPayment: (reference: string, method: string) =>
       post<PaymentVerifyResult>('/api/payments/verify', { reference, method }),
     getMyReferral: () => get<UCReferralInfo>('/api/uc/referrals/my-code'),
@@ -721,13 +820,17 @@ export function useApi() {
       },
       isRetry?: boolean,
       signal?: AbortSignal,
-    ) => post<{ reply: string; suggestions: string[] }>('/api/uc/ai/water-chat', {
+    ) => post<{ reply: string; suggestions: string[]; feedbackToken: string }>('/api/uc/ai/water-chat', {
       messages, conversationId, turnId, filterContext, isRetry,
     }, signal),
 
     /** Fetch the live UC environmental impact stats. */
     getImpact: () =>
       get<{
+        snapshotId: string;
+        calculatedAt: string;
+        adjustmentRevision: number;
+        maxAgeSeconds: number;
         totalUsers:      number;
         litresFiltered:  number;
         plasticsAvoided: number;
@@ -745,9 +848,20 @@ export function useApi() {
     ) => post<{ ok: boolean }>('/api/uc/impact/override', { litresOffset, usersOffset, updatedBy }),
 
     /** Fetch the current user's loyalty-points balance and recent ledger. */
-    getRewards: () => get<CustomerRewards>('/api/uc/customer/rewards'),
-    /** Explicit recovery action; normally the issued token is reused from SecureStore. */
-    rotateRewardsQr: () => post<{ qrToken: string }>('/api/uc/customer/rewards/qr/rotate'),
+    getRewards: (signal?: AbortSignal) => get<CustomerRewards>('/api/uc/customer/rewards', signal, 12000),
+    getRefillCapabilities: () => get<unknown>('/api/uc/refill/capabilities'),
+    /** These read-only POSTs keep opaque candidates out of URLs and access logs. */
+    validateRewardsQr: (qrToken: string | null, signal?: AbortSignal) =>
+      post<import('@workspace/api-client-react/companion/models/rewardsQrInspection').RewardsQrInspection>(
+        '/api/uc/customer/rewards/qr/validate', { qrToken }, signal),
+    /** Deliberate recovery only; never scheduled by reconnect or foreground. */
+    rotateRewardsQr: (expectedVersion: string | null) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      return post<import('@workspace/api-client-react/companion/models/rewardsQrInspection').RewardsQrInspection>(
+        '/api/uc/customer/rewards/qr/rotate', { expectedVersion }, controller.signal)
+        .finally(() => clearTimeout(timer));
+    },
     /** Acknowledge the push lifecycle for this account; no device token is sent. */
     acknowledgeRewardsQrRequest: (requestId: number, event: 'delivered' | 'opened') =>
       post<{ ok: boolean }>('/api/uc/customer/rewards/qr/request-events', { requestId, event }),
@@ -766,10 +880,11 @@ export function useApi() {
       rating:   'up' | 'down',
       question: string,
       answer:   string,
-    ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer }),
+      feedbackToken: string,
+    ) => post<{ ok: boolean }>('/api/uc/ai/chat-feedback', { rating, question, answer, feedbackToken }),
 
     // ── Admin: product detail edit ────────────────────────────────────────────
-    /** Admin-only: update product fields in WooCommerce. All fields optional. */
+    /** Admin-only: update fields on the app-owned product record. All fields optional. */
     updateProductDetails: (
       productId: number,
       data: {
@@ -778,8 +893,9 @@ export function useApi() {
         shortDescription?: string;
         regularPrice?:     string;
         salePrice?:        string;
-        stockStatus?:      'instock' | 'outofstock';
-        stockQuantity?:    number;
+        stockStatus?:      'instock' | 'outofstock' | 'onbackorder';
+        /** null = unmanaged quantity (not zero). */
+        stockQuantity?:    number | null;
       },
     ) =>
       patch<{ ok: boolean; productId: number; updated: string[]; source: string }>(
@@ -825,3 +941,5 @@ export interface RewardsRedemptionResult {
   redemptionValue?: number;
   conversionMode?: 'fixed' | 'percentage';
 }
+
+export type CustomerTree = HydrateCustomerTree;

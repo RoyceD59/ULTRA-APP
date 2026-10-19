@@ -3,6 +3,13 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
+const { writeBuildInfo } = require('./build-info');
+
+const { exportWeb, precompressAssets } = require('./web-export');
+const { preserveLegacyManifests } = require('./build-retention');
+const { publishWebIcon } = require('./publish-web-icon.cjs');
+const { prepareStaticBuild } = require('./prepare-static-build.cjs');
+const { activateStaticBuild, stagePlatformManifest } = require('./active-static-build.cjs');
 const {
   parseConfiguredMetroPort,
   reserveAvailablePort,
@@ -14,6 +21,8 @@ let metroPort = null;
 
 const projectRoot = path.resolve(__dirname, '..');
 
+const buildRoot = process.env.UC_PREPARED_OUTPUT_DIR
+  ? path.resolve(process.env.UC_PREPARED_OUTPUT_DIR) : projectRoot;
 function findWorkspaceRoot(startDir) {
   let dir = startDir;
   while (dir !== path.dirname(dir)) {
@@ -94,23 +103,8 @@ function getApiDomain() {
 
 function prepareDirectories(timestamp) {
   console.log('Preparing build directories...');
-
-  const staticBuild = path.join(projectRoot, 'static-build');
-  if (fs.existsSync(staticBuild)) {
-    fs.rmSync(staticBuild, { recursive: true });
-  }
-
-  const dirs = [
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'ios'),
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'android'),
-    path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'web'),
-    path.join(staticBuild, 'ios'),
-    path.join(staticBuild, 'android'),
-  ];
-
-  for (const dir of dirs) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  preserveLegacyManifests(path.join(buildRoot, 'static-build'));
+  prepareStaticBuild(buildRoot, timestamp);
 
   console.log('Build:', timestamp);
 }
@@ -282,6 +276,7 @@ async function downloadBundle(platform, timestamp) {
   url.searchParams.set('minify', 'true');
 
   const output = path.join(
+    buildRoot,
     'static-build',
     timestamp,
     '_expo',
@@ -335,7 +330,6 @@ async function downloadBundlesAndManifests(timestamp) {
     // without stalling. Manifests are cheap and run in parallel after.
     await downloadBundle('ios', timestamp);
     await downloadBundle('android', timestamp);
-    await downloadBundle('web', timestamp);
 
     const [iosManifest, androidManifest] = await Promise.all([
       downloadManifest('ios'),
@@ -350,7 +344,7 @@ async function downloadBundlesAndManifests(timestamp) {
 }
 
 function extractAssets(timestamp) {
-  const staticBuild = path.join(projectRoot, 'static-build');
+  const staticBuild = path.join(buildRoot, 'static-build');
   const bundles = {
     ios: fs.readFileSync(
       path.join(
@@ -372,18 +366,6 @@ function extractAssets(timestamp) {
         'static',
         'js',
         'android',
-        'bundle.js',
-      ),
-      'utf-8',
-    ),
-    web: fs.readFileSync(
-      path.join(
-        staticBuild,
-        timestamp,
-        '_expo',
-        'static',
-        'js',
-        'web',
         'bundle.js',
       ),
       'utf-8',
@@ -427,7 +409,6 @@ function extractAssets(timestamp) {
 
   extractFromBundle(bundles.ios, 'ios');
   extractFromBundle(bundles.android, 'android');
-  extractFromBundle(bundles.web, 'web');
 
   return Array.from(assetsMap.values());
 }
@@ -452,7 +433,7 @@ async function downloadAssets(assets, timestamp) {
     const decodedPath = decodeURIComponent(unstablePath);
 
     const outputDir = path.join(
-      projectRoot,
+      buildRoot,
       'static-build',
       timestamp,
       '_expo',
@@ -501,7 +482,7 @@ async function downloadAssets(assets, timestamp) {
 function updateBundleUrls(timestamp, baseUrl) {
   const updateForPlatform = (platform) => {
     const bundlePath = path.join(
-      projectRoot,
+      buildRoot,
       'static-build',
       timestamp,
       '_expo',
@@ -548,7 +529,6 @@ function updateBundleUrls(timestamp, baseUrl) {
 
   updateForPlatform('ios');
   updateForPlatform('android');
-  updateForPlatform('web');
   console.log('Updated bundle URLs');
 }
 
@@ -583,17 +563,15 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
       });
     }
 
-    fs.writeFileSync(
-      path.join(projectRoot, 'static-build', platform, 'manifest.json'),
-      JSON.stringify(manifest, null, 2),
-    );
+    // Never overwrite legacy live manifests: a failed first upgrade must leave
+    // the no-pointer server on its old native AND browser release.
+    stagePlatformManifest(buildRoot, timestamp, platform, manifest);
   };
 
   updateForPlatform('ios', manifests.ios);
   updateForPlatform('android', manifests.android);
   console.log('Manifests updated');
 }
-
 async function main() {
   console.log('Building static Expo Go deployment...');
 
@@ -604,6 +582,11 @@ async function main() {
   const expoPublicReplId = getExpoPublicReplId();
   const baseUrl = `https://${domain}`;
   const timestamp = `${Date.now()}-${process.pid}`;
+  // Reuse release-consistency identity; do not create an update channel.
+  process.env.EXPO_PUBLIC_COMPANION_BUILD_ID = timestamp;
+  process.env.EXPO_PUBLIC_BASE_PATH = basePath;
+  process.env.EXPO_PUBLIC_API_DOMAIN = apiDomain;
+  process.env.EXPO_PUBLIC_DOMAIN = domain;
 
   prepareDirectories(timestamp);
   clearMetroCache();
@@ -645,6 +628,18 @@ async function main() {
 
   console.log('Updating manifests and creating landing page...');
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
+  writeBuildInfo(projectRoot, timestamp, process.env, buildRoot);
+  publishWebIcon(projectRoot, buildRoot);
+  await exportWeb(projectRoot, timestamp, basePath, {
+    ...process.env,
+    EXPO_PUBLIC_DOMAIN: domain,
+    EXPO_PUBLIC_API_DOMAIN: apiDomain,
+    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || '',
+    EXPO_PUBLIC_CLERK_PROXY_URL: process.env.CLERK_PROXY_URL
+      ? `${baseUrl}${process.env.CLERK_PROXY_URL}` : '',
+  }, buildRoot);
+  precompressAssets(path.join(buildRoot, 'static-build', timestamp));
+  activateStaticBuild(buildRoot, timestamp);
 
   console.log('Build complete! Deploy to:', baseUrl);
 

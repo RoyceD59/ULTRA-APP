@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, Share, Platform, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import type { PersonalImpact } from '@/hooks/useApi';
 import { captureRef } from 'react-native-view-shot';

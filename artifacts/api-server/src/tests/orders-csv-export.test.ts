@@ -8,7 +8,7 @@
  *   Order B  processing  / 2 items   ← multi-item fixture (excluded by pending filter)
  *   Order C  pending     / 1 item    ← same-status fixture with items
  *
- * Covers (unfiltered export)
+ * Covers (export without a status filter, scoped to the fixture date)
  *   1. Row count equals order count when one order has no line items.
  *   2. The zero-item row has the correct number of empty item columns
  *      (padded to the max item count found in the result set, which is 2 via order B).
@@ -26,6 +26,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 import { issueToken } from "../lib/jwt.js";
 import {
   db,
@@ -121,13 +122,20 @@ function parseCsvRow(row: string): string[] {
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const TEST_EMAIL = "orders-csv-test-admin@ucfilters-test.internal";
+const TEST_RUN_ID = randomUUID();
+const TEST_EMAIL = `orders-csv-${TEST_RUN_ID}@ucfilters-test.internal`;
+// Scope the query before maxItems is computed; filtering CSV rows afterward
+// cannot stop unrelated orders from widening the header.
+const FIXTURE_DATE = "2099-07-16";
+const FIXTURE_DATE_CREATED = new Date(`${FIXTURE_DATE}T12:00:00Z`);
+const FIXTURE_CSV_URL = `/api/uc/admin/orders.csv?from=${FIXTURE_DATE}&to=${FIXTURE_DATE}`;
 
 let testUserId: number;
 // [0] = order A (pending, 0 items)
 // [1] = order B (processing, 2 items)
 // [2] = order C (pending, 1 item)
 let insertedOrderIds: number[] = [];
+let unrelatedOrderIds: number[] = [];
 
 // Number of static columns before the item columns in the CSV header/rows.
 // id, userId, status, dateCreated, total, currency, paymentMethod,
@@ -165,6 +173,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
       .values({
         userId: String(testUserId),
         status: "pending",
+        dateCreated: FIXTURE_DATE_CREATED,
         total: "0",
         currency: "KES",
         paymentMethod: "cod",
@@ -191,6 +200,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
       .values({
         userId: String(testUserId),
         status: "processing",
+        dateCreated: FIXTURE_DATE_CREATED,
         total: "4598",
         currency: "KES",
         paymentMethod: "mpesa",
@@ -218,6 +228,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
       .values({
         userId: String(testUserId),
         status: "pending",
+        dateCreated: FIXTURE_DATE_CREATED,
         total: "1999",
         currency: "KES",
         paymentMethod: "cod",
@@ -268,16 +279,46 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
         total: "1999",
       },
     ]);
+
+    // Deterministic stand-ins for another worker's orders: same statuses,
+    // more items, and dates on either side of our file-owned date.
+    const unrelatedOrders = await db.insert(ucOrdersTable).values([
+      {
+        userId: `csv-outsider-${TEST_RUN_ID}`,
+        status: "pending",
+        total: "3",
+        paymentMethod: "cod",
+        dateCreated: new Date("2099-07-15T12:00:00Z"),
+      },
+      {
+        userId: `csv-outsider-${TEST_RUN_ID}`,
+        status: "processing",
+        total: "3",
+        paymentMethod: "cod",
+        dateCreated: new Date("2099-07-17T12:00:00Z"),
+      },
+    ]).returning({ id: ucOrdersTable.id });
+    unrelatedOrderIds = unrelatedOrders.map(order => order.id);
+    await db.insert(ucOrderItemsTable).values(
+      unrelatedOrderIds.flatMap(orderId => [1, 2, 3].map(productId => ({
+        orderId,
+        productId,
+        name: "Unrelated worker item",
+        quantity: 1,
+        total: "1",
+      }))),
+    );
   });
 
   after(async () => {
-    if (insertedOrderIds.length > 0) {
+    const ownedOrderIds = [...insertedOrderIds, ...unrelatedOrderIds];
+    if (ownedOrderIds.length > 0) {
       await db
         .delete(ucOrderItemsTable)
-        .where(inArray(ucOrderItemsTable.orderId, insertedOrderIds));
+        .where(inArray(ucOrderItemsTable.orderId, ownedOrderIds));
       await db
         .delete(ucOrdersTable)
-        .where(inArray(ucOrdersTable.id, insertedOrderIds));
+        .where(inArray(ucOrdersTable.id, ownedOrderIds));
     }
     if (testUserId) {
       await db.delete(ucUsersTable).where(eq(ucUsersTable.id, testUserId));
@@ -285,10 +326,10 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
     delete process.env["UC_ADMIN_EMAILS"];
   });
 
-  // ── Unfiltered export ───────────────────────────────────────────────────────
+  // ── Export without a status filter (fixture date only) ──────────────────────
 
   it("returns 200 with CSV content-type", async () => {
-    const { status, headers } = await apiFetch("/api/uc/admin/orders.csv", {
+    const { status, headers } = await apiFetch(FIXTURE_CSV_URL, {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
     assert.equal(status, 200);
@@ -299,7 +340,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
   });
 
   it("data row count equals order count (no crash on zero-item order)", async () => {
-    const { text } = await apiFetch("/api/uc/admin/orders.csv", {
+    const { text } = await apiFetch(FIXTURE_CSV_URL, {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
 
@@ -307,24 +348,15 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
     const lines = text.split("\r\n").filter(l => l.trim());
     const dataLines = lines.slice(1); // skip header
 
-    // Filter to only our fixture orders (other tests may have left rows)
-    const ourRows = dataLines.filter(l => {
-      const cells = parseCsvRow(l);
-      return (
-        cells[0] !== undefined &&
-        insertedOrderIds.includes(Number(cells[0]))
-      );
-    });
-
-    assert.equal(
-      ourRows.length,
-      3,
-      `Expected 3 data rows for our fixture orders, got ${ourRows.length}`,
+    assert.deepEqual(
+      dataLines.map(l => Number(parseCsvRow(l)[0])).sort((a, b) => a - b),
+      [...insertedOrderIds].sort((a, b) => a - b),
+      "The date-scoped export must contain exactly our fixture orders",
     );
   });
 
   it("zero-item order row is padded to match the global max-item width", async () => {
-    const { text } = await apiFetch("/api/uc/admin/orders.csv", {
+    const { text } = await apiFetch(FIXTURE_CSV_URL, {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
 
@@ -372,7 +404,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
   });
 
   it("multi-item order row populates all item columns correctly", async () => {
-    const { text } = await apiFetch("/api/uc/admin/orders.csv", {
+    const { text } = await apiFetch(FIXTURE_CSV_URL, {
       headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) },
     });
 
@@ -423,7 +455,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
 
   it("?status=pending returns 200 with CSV content-type", async () => {
     const { status, headers } = await apiFetch(
-      "/api/uc/admin/orders.csv?status=pending",
+      `${FIXTURE_CSV_URL}&status=pending`,
       { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
     );
     assert.equal(status, 200);
@@ -438,7 +470,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
     // Header must have STATIC_COL_COUNT + 1*COLS_PER_ITEM columns, NOT the
     // 2-item width that order B (processing) would introduce.
     const { text } = await apiFetch(
-      "/api/uc/admin/orders.csv?status=pending",
+      `${FIXTURE_CSV_URL}&status=pending`,
       { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
     );
 
@@ -458,7 +490,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
 
   it("?status=pending zero-item row (order A) is padded to match the pending-filtered header", async () => {
     const { text } = await apiFetch(
-      "/api/uc/admin/orders.csv?status=pending",
+      `${FIXTURE_CSV_URL}&status=pending`,
       { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
     );
 
@@ -499,7 +531,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
 
   it("?status=pending item-bearing row (order C) contains correct item data", async () => {
     const { text } = await apiFetch(
-      "/api/uc/admin/orders.csv?status=pending",
+      `${FIXTURE_CSV_URL}&status=pending`,
       { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
     );
 
@@ -535,7 +567,7 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
 
   it("?status=pending excludes the processing order (order B) and its wider item count", async () => {
     const { text } = await apiFetch(
-      "/api/uc/admin/orders.csv?status=pending",
+      `${FIXTURE_CSV_URL}&status=pending`,
       { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
     );
 
@@ -556,15 +588,13 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
 
   it("?webhookRecovery=true contains only webhook-recovery orders", async () => {
     const { status, text } = await apiFetch(
-      "/api/uc/admin/orders.csv?webhookRecovery=true",
+      `${FIXTURE_CSV_URL}&webhookRecovery=true`,
       { headers: { Authorization: authHeader({ id: testUserId, email: TEST_EMAIL }) } },
     );
 
     assert.equal(status, 200);
     const dataRows = text.split("\r\n").filter(line => line.trim()).slice(1);
-    const fixtureRows = dataRows
-      .map(parseCsvRow)
-      .filter(cells => insertedOrderIds.includes(Number(cells[0])));
+    const fixtureRows = dataRows.map(parseCsvRow);
 
     assert.deepEqual(
       fixtureRows.map(cells => Number(cells[0])),
@@ -581,12 +611,12 @@ describe("GET /api/uc/admin/orders.csv — zero-item edge case and status-filter
 
 // ── Symmetric-count edge case ─────────────────────────────────────────────────
 
-const SYMMETRIC_EMAIL = "orders-csv-symmetric-test@ucfilters-test.internal";
+const SYMMETRIC_EMAIL = `orders-csv-symmetric-${TEST_RUN_ID}@ucfilters-test.internal`;
 
 // Unique sentinel status that will never appear in real orders, used as a
 // ?status= filter so every CSV request in this suite sees exactly our two
 // fixtures regardless of whatever else is in the shared database.
-const SYMMETRIC_STATUS = "sym-csv-test-two-items-each";
+const SYMMETRIC_STATUS = `sym-csv-test-${TEST_RUN_ID}`;
 
 let symmetricUserId: number;
 let symmetricOrderIds: number[] = [];
@@ -875,10 +905,10 @@ describe("GET /api/uc/admin/orders.csv — symmetric item count (no padding need
 
 // ── Asymmetric item-count edge case ───────────────────────────────────────────
 
-const ASYM_EMAIL = "orders-csv-asymmetric-test@ucfilters-test.internal";
+const ASYM_EMAIL = `orders-csv-asymmetric-${TEST_RUN_ID}@ucfilters-test.internal`;
 
 // Sentinel status isolates this suite's result set from the shared DB.
-const ASYM_STATUS = "asym-csv-test-one-big-order";
+const ASYM_STATUS = `asym-csv-test-${TEST_RUN_ID}`;
 
 // The five line items on the big order (order E), in insertion order.
 const BIG_ORDER_ITEMS = [
@@ -1142,9 +1172,9 @@ describe("GET /api/uc/admin/orders.csv — asymmetric item counts (one 5-item or
 // filtered CSV must be computed over only the filtered subset: 2 rows,
 // maxItems = 2 (not 3), and no spurious empty padding.
 
-const FILTERED_EMAIL = "orders-csv-filtered-test@ucfilters-test.internal";
-const FILTERED_STATUS_MATCH = "filt-csv-test-match";
-const FILTERED_STATUS_OTHER = "filt-csv-test-other";
+const FILTERED_EMAIL = `orders-csv-filtered-${TEST_RUN_ID}@ucfilters-test.internal`;
+const FILTERED_STATUS_MATCH = `filt-csv-test-match-${TEST_RUN_ID}`;
+const FILTERED_STATUS_OTHER = `filt-csv-test-other-${TEST_RUN_ID}`;
 
 let filteredUserId: number;
 let filteredOrderIds: number[] = []; // [E, F, G] — E,F match; G is the outsider
@@ -1353,8 +1383,8 @@ describe("GET /api/uc/admin/orders.csv — status filter with other active order
 //   2. status only, no date range → list IDs === CSV IDs (P, Q, and R)
 //   3. no filters at all → list IDs === CSV IDs (fixture IDs are a subset)
 
-const PARITY_EMAIL  = "orders-csv-parity-test@ucfilters-test.internal";
-const PARITY_STATUS = `parity-csv-test-${Date.now()}`;
+const PARITY_EMAIL  = `orders-csv-parity-${TEST_RUN_ID}@ucfilters-test.internal`;
+const PARITY_STATUS = `parity-csv-test-${TEST_RUN_ID}`;
 
 let parityUserId: number;
 let parityOrderIds: number[] = []; // [P, Q, R]
@@ -1609,11 +1639,12 @@ describe("GET /api/uc/admin/orders.csv — CSV rows match list API response", ()
       );
     }
 
-    // The overall ID sets must match (same rows, same order)
+    // Requests can observe different snapshots of unrelated workers' writes.
+    // Compare only our fixtures, retaining the endpoint's returned row order.
     assert.deepEqual(
-      fromCsv,
-      fromList,
-      `CSV IDs must exactly match list API IDs when no filters are applied.\n` +
+      fromCsv.filter(id => parityOrderIds.includes(id)),
+      fromList.filter(id => parityOrderIds.includes(id)),
+      `CSV fixture IDs must exactly match list API fixture IDs when no filters are applied.\n` +
         `  List (${fromList.length}): ${JSON.stringify(fromList)}\n` +
         `  CSV  (${fromCsv.length}): ${JSON.stringify(fromCsv)}`,
     );

@@ -1,0 +1,71 @@
+Build a cross-platform mobile app (iOS & Android) for an ultra‑clear water filtration brand. The app acts as a mobile companion to the existing e‑commerce website, providing self‑service tools, product support, and re‑ordering capabilities. All product data, pricing, customer accounts, and orders must stay in sync with the website via API.
+
+**App Name:** [Your Brand Name] Companion  
+**Tech Stack Preference:** React Native (Expo) with a clean, modern UI, connected to a REST or GraphQL API from the e‑commerce backend (e.g., Shopify, WooCommerce, custom). Use MapView for location features and push notifications for reminders. Backend can be a simple Node.js/Express server on Replit for proxying requests and handling custom logic (photo uploads, tickets, water test forms).
+
+### Core Features
+
+1. **User Authentication**
+   - Sign up / log in using the same credentials as the e‑commerce website (or allow social login).
+   - Sync customer profile, order history, and saved addresses.
+
+2. **Product Knowledge & Support Hub**
+   - Searchable library of **installation videos**, **maintenance guides**, and **step‑by‑step instructions** (grouped by product).
+   - Content can be fetched from a CMS or a JSON file (start with a few sample entries for key products like whole‑house filters, RO systems, UV purifiers).
+   - Each product page includes: compatible replacement filter SKUs, troubleshooting tips, and a link to “Order Replacement”.
+
+3. **Filter Replacement Reminders**
+   - Users can add products they own (e.g., “Ultra‑Clear RO‑400”).
+   - Set a **reminder interval** (e.g., every 6 months) or use a recommended lifespan from product data.
+   - Push notifications: “It’s time to replace your sediment filter” – tapping opens the correct replacement product in the app.
+   - Quick re‑order button that adds the replacement to the cart at the synced website price.
+
+4. **Live Location Map – Refill ATMs & Experience Centres**
+   - Integrated map (Google Maps or Mapbox) showing nearby **Ultra‑Clear customer experience centres** and **water refill ATMs**.
+   - **Live location** button to centre the map on the user.
+   - Locations initially hard‑coded for Nairobi and expandable to other cities. Admin can add/edit locations via a simple dashboard or JSON endpoint.
+   - Each pin shows name, address, opening hours, and distance.
+
+5. **Maintenance Ticket Request**
+   - Users can submit a maintenance request for an installed system.
+   - Form fields: product model (dropdown or scan QR code), description of issue, preferred contact time, and optional photo (up to 4 images).
+   - Ticket is stored in a database and notification sent to the admin (email/Slack), along with customer details.
+   - Status tracking: “Submitted”, “In Progress”, “Resolved” visible in the app.
+
+6. **Order Replacement Parts & New Products**
+   - Browse/ search the full product catalogue (synced with the e‑commerce website).
+   - Product detail page shows **real‑time price** (fetched from website API), description, specs, and inventory status.
+   - Add to cart, checkout flow using the existing website’s checkout (or a web‑view fallback) to ensure payment processing and inventory are centralised.
+   - Order history and tracking pulled from the main e‑commerce system.
+
+7. **Technical Support Photo Upload**
+   - Dedicated “Get Help” section.
+   - User can upload up to **4 photos** of their device, water test results, or a problem area.
+   - A short text description explains the issue.
+   - The submission is attached to the user’s account and forwarded to the technical support team (like a mini helpdesk).
+
+8. **Water Testing Request Form**
+   - Separate form for requesting a water test kit or scheduling an in‑home test.
+   - Collects: customer name, address, phone, water source (city/well), and any known concerns (smell, staining, hardness).
+   - On submission, a confirmation screen appears and the request is sent to the sales/support team.
+
+9. **Price Synchronisation Guarantee**
+   - The app must display a clear “Prices match our website” badge on product pages.
+   - All pricing is fetched directly from the e‑commerce API; no hard‑coded prices.
+   - Cart totals, taxes, and shipping are calculated by the website’s engine (via API or web‑view handoff).
+
+### Integration Requirements
+- Connect to the e‑commerce platform’s Customer, Product, Order, and Cart APIs.  
+- For Shopify: use Storefront API for customer‑facing data; Admin API proxied through a secure Replit backend for ticket creation, photo uploads, and water test forms.  
+- For WooCommerce: use the built‑in REST API with JWT auth.  
+- Use a file storage service (e.g., Amazon S3, Cloudinary, or Replit’s file store) for uploaded photos.  
+- Push notifications via Expo Push Notifications or Firebase Cloud Messaging.
+
+### Design & UX Guidelines
+- Clean, trust‑inspiring UI with blue/white tones, large readable typography for technical specs.
+- Bottom tab navigation: **Home (Dashboard)** , **Products**, **Support Hub**, **Map**, **Account**.
+- Very simple, mobile‑first forms, minimising typing (dropdowns, camera uploads).
+- Offline‑first where possible; cached product guides and previously viewed pages.
+
+### Deliverable
+A fully functional mobile app prototype, ready to be loaded on a device (via Expo Go) and connected to a test version of the e‑commerce store. Include dummy data for maps, guides, and products so the app is immediately demoable.

@@ -1,0 +1,474 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "Ultra Clear companion app product content",
+ "type": "object",
+ "required": [
+  "schema_version",
+  "brand",
+  "evidence",
+  "products",
+  "accessories"
+ ],
+ "properties": {
+  "schema_version": {
+   "type": "string"
+  },
+  "generated": {
+   "type": "string"
+  },
+  "brand": {
+   "type": "object"
+  },
+  "give_back": {
+   "type": "string"
+  },
+  "price_source": {
+   "type": "string"
+  },
+  "evidence": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "lab",
+     "report_no",
+     "date",
+     "sample",
+     "finding"
+    ]
+   }
+  },
+  "accessories": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "sku",
+     "name",
+     "price_kes",
+     "availability"
+    ]
+   }
+  },
+  "held_back": {
+   "type": "array",
+   "items": {
+    "type": "object"
+   }
+  },
+  "products": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "code",
+     "slug",
+     "name",
+     "parent_sku",
+     "category",
+     "status",
+     "publishable",
+     "purchasable",
+     "availability",
+     "price_kes",
+     "variants",
+     "opening",
+     "suitability",
+     "benefits",
+     "evidence",
+     "package",
+     "ownership",
+     "reviews",
+     "service",
+     "faq",
+     "specs",
+     "images",
+     "internal",
+     "seo"
+    ],
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "slug": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "parent_sku": {
+      "type": "string"
+     },
+     "category": {
+      "type": "string",
+      "enum": [
+       "Bottles & On-the-Go",
+       "Home & Kitchen",
+       "Skincare & Wellness",
+       "Business & Community"
+      ]
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "publish",
+       "limited",
+       "draft"
+      ]
+     },
+     "publishable": {
+      "type": "boolean"
+     },
+     "purchasable": {
+      "type": "boolean",
+      "description": "False: hide Buy now and show the opening.primary_action instead."
+     },
+     "availability": {
+      "type": "string",
+      "enum": [
+       "In stock",
+       "Pre-order",
+       "Out of stock",
+       "By enquiry",
+       "Coming soon"
+      ]
+     },
+     "price_kes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "currency": {
+      "type": "string",
+      "const": "KES"
+     },
+     "variants": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "child_sku",
+        "label"
+       ]
+      }
+     },
+     "opening": {
+      "type": "object",
+      "required": [
+       "outcome",
+       "intro",
+       "suits",
+       "critical_limit",
+       "primary_action"
+      ],
+      "properties": {
+       "outcome": {
+        "type": "string"
+       },
+       "intro": {
+        "type": "string"
+       },
+       "suits": {
+        "type": "string"
+       },
+       "critical_limit": {
+        "type": "string"
+       },
+       "installation": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "delivery": {
+        "type": "string"
+       },
+       "service_summary": {
+        "type": "string"
+       },
+       "primary_action": {
+        "type": "string"
+       },
+       "secondary_action": {
+        "type": "string"
+       }
+      }
+     },
+     "suitability": {
+      "type": "object",
+      "required": [
+       "intended_use",
+       "water",
+       "setup",
+       "exclusions"
+      ]
+     },
+     "benefits": {
+      "type": "object",
+      "properties": {
+       "items": {
+        "type": "array",
+        "maxItems": 3,
+        "items": {
+         "type": "object",
+         "required": [
+          "feature",
+          "consequence"
+         ]
+        }
+       }
+      }
+     },
+     "evidence": {
+      "type": "object",
+      "properties": {
+       "claims": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "required": [
+          "text",
+          "status",
+          "evidence"
+         ],
+         "properties": {
+          "text": {
+           "type": "string"
+          },
+          "status": {
+           "type": "string",
+           "enum": [
+            "verified",
+            "manufacturer",
+            "customer_reported",
+            "confirm"
+           ]
+          },
+          "evidence": {
+           "type": "array",
+           "items": {
+            "type": "string"
+           }
+          },
+          "conditions": {
+           "type": "string"
+          }
+         }
+        }
+       },
+       "limits": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "package": {
+      "type": "object"
+     },
+     "ownership": {
+      "type": "object"
+     },
+     "reviews": {
+      "type": "object"
+     },
+     "service": {
+      "type": "object"
+     },
+     "summary": {
+      "type": "object"
+     },
+     "faq": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "q",
+        "a"
+       ]
+      }
+     },
+     "specs": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      }
+     },
+     "images": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+       "type": "object",
+       "required": [
+        "slot",
+        "label",
+        "file",
+        "approved"
+       ],
+       "properties": {
+        "slot": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 6
+        },
+        "label": {
+         "type": "string"
+        },
+        "file": {
+         "type": "string"
+        },
+        "alt": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "approved": {
+         "type": "boolean"
+        }
+       }
+      }
+     },
+     "internal": {
+      "type": "object",
+      "description": "Never render in the customer interface."
+     },
+     "profile_version": {
+      "type": "string"
+     },
+     "last_reviewed": {
+      "type": "string"
+     },
+     "seo": {
+      "type": "object",
+      "required": [
+       "title",
+       "h1",
+       "description",
+       "status"
+      ],
+      "properties": {
+       "title": {
+        "type": "string"
+       },
+       "h1": {
+        "type": "string"
+       },
+       "h1_sub": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "description": {
+        "type": "string"
+       },
+       "status": {
+        "enum": [
+         "approved",
+         "proposed",
+         "default"
+        ]
+       },
+       "topics": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "product",
+       "replacement"
+      ]
+     },
+     "nav_group": {
+      "type": "string"
+     },
+     "compare_group": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "compare": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "additionalProperties": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "fits": {
+      "type": [
+       "array",
+       "null"
+      ],
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "change_note": {
+   "type": "string"
+  },
+  "topic_pages": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "topic",
+     "slug",
+     "products"
+    ]
+   }
+  },
+  "topic_pages_note": {
+   "type": "string"
+  },
+  "compare_groups": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "label",
+     "products",
+     "replacements"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
+     },
+     "products": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "replacements": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  }
+ }
+}

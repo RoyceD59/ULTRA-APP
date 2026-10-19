@@ -9,12 +9,14 @@ import {
   RefreshCw, ShoppingBag, BellOff, ArrowRight, Server,
 } from "lucide-react";
 import { formatRelativeDate } from "@/components/shared/badges";
+import { RuntimeDiagnosticsPanel } from "@/components/monitoring/RuntimeDiagnosticsPanel";
 
 const REFRESH_MS = 60_000;
 
 // ─── Small display helpers ─────────────────────────────────────────────────────
 
-function StatusPill({ ok, label }: { ok: boolean; label?: string }) {
+function StatusPill({ ok, label }: { ok: boolean | null; label?: string }) {
+  if (ok === null) return <span className="rounded-full bg-amber-500/10 text-amber-600 px-2.5 py-1 text-xs font-semibold">UNKNOWN / STALE</span>;
   return ok ? (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 text-xs font-semibold">
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -34,7 +36,7 @@ function ServiceIcon({ status }: { status: string }) {
   return <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />;
 }
 
-function HistoryBars({ history }: { history: Array<{ at: string; ok: boolean; responseMs?: number | null }> }) {
+function HistoryBars({ history }: { history: Array<{ at: string; ok: boolean | null; responseMs?: number | null }> }) {
   if (!history.length) return null;
   return (
     <div className="flex items-end gap-[3px]" aria-label="Recent checks, oldest to newest">
@@ -122,7 +124,7 @@ export default function MonitoringPage() {
                         <Globe className="w-5 h-5 text-muted-foreground" />
                         {check.label}
                       </CardTitle>
-                      <StatusPill ok={check.ok} />
+                       <StatusPill ok={!check.checkedAt || Date.now()-Date.parse(check.checkedAt)>120000 ? null : check.ok} />
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{check.url}</p>
                   </CardHeader>
@@ -140,12 +142,13 @@ export default function MonitoringPage() {
                       </div>
                       <div>
                         <span className="text-muted-foreground text-xs block mb-1">Last checked</span>
-                        <span className="font-semibold">{formatRelativeDate(check.checkedAt)}</span>
+                         <span className="font-semibold">{check.checkedAt ? formatRelativeDate(check.checkedAt) : "Unknown"}</span>
                       </div>
                     </div>
                     {check.error && (
                       <p className="text-xs text-destructive font-medium">{check.error}</p>
                     )}
+                     <p className="text-xs text-muted-foreground">{check.coverage}</p>
                     <div className="flex items-end justify-between gap-4 pt-1">
                       <HistoryBars history={check.history} />
                       {uptimePct != null && check.history.length > 1 && (
@@ -166,7 +169,7 @@ export default function MonitoringPage() {
               <CardHeader className="pb-3 border-b bg-muted/10">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CreditCard className="w-5 h-5 text-muted-foreground" />
-                  Payment readiness
+                   Payment configuration (not delivery verification)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
@@ -174,19 +177,19 @@ export default function MonitoringPage() {
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-sm font-medium">Paystack (cards & mobile money)</span>
                     {data.payments.paystack
-                      ? <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">Live</Badge>
+                      ? <Badge variant="secondary">Credentials present · unverified</Badge>
                       : <Badge variant="destructive">Not configured</Badge>}
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-sm font-medium">M-Pesa</span>
                     {data.payments.mpesaMode === "live"
-                      ? <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">Live</Badge>
+                      ? <Badge variant="secondary">Credentials present · unverified</Badge>
                       : <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15">Demo mode</Badge>}
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <span className="text-sm font-medium">Stripe</span>
                     {data.payments.stripe
-                      ? <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">Live</Badge>
+                      ? <Badge variant="secondary">Enabled · unverified</Badge>
                       : <Badge variant="secondary">Off</Badge>}
                   </div>
                   <div className="flex items-center justify-between py-2.5">
@@ -233,12 +236,12 @@ export default function MonitoringPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Link href="/orders">
                   <button className="w-full flex items-center gap-3 rounded-lg border p-4 text-left hover:bg-accent/50 transition-colors">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${data.problems.recoveryOrders > 0 ? "bg-amber-500/15" : "bg-emerald-500/10"}`}>
-                      <ShoppingBag className={`w-4 h-4 ${data.problems.recoveryOrders > 0 ? "text-amber-500" : "text-emerald-500"}`} />
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-muted">
+                      <ShoppingBag className="w-4 h-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold">
-                        {data.problems.recoveryOrders > 0
+                        {data.problems.recoveryOrders === null ? "Recovery order count unknown" : data.problems.recoveryOrders > 0
                           ? `${data.problems.recoveryOrders} unresolved recovery order${data.problems.recoveryOrders > 1 ? "s" : ""}`
                           : "No unresolved recovery orders"}
                       </p>
@@ -249,12 +252,12 @@ export default function MonitoringPage() {
                 </Link>
                 <Link href="/uc-notifications">
                   <button className="w-full flex items-center gap-3 rounded-lg border p-4 text-left hover:bg-accent/50 transition-colors">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${data.problems.notificationFailures7d > 0 ? "bg-amber-500/15" : "bg-emerald-500/10"}`}>
-                      <BellOff className={`w-4 h-4 ${data.problems.notificationFailures7d > 0 ? "text-amber-500" : "text-emerald-500"}`} />
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-muted">
+                      <BellOff className="w-4 h-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold">
-                        {data.problems.notificationFailures7d > 0
+                        {data.problems.notificationFailures7d === null ? "Notification failure count unknown" : data.problems.notificationFailures7d > 0
                           ? `${data.problems.notificationFailures7d} failed notification${data.problems.notificationFailures7d > 1 ? "s" : ""} (7 days)`
                           : "No failed notifications (7 days)"}
                       </p>
@@ -268,6 +271,7 @@ export default function MonitoringPage() {
           </Card>
         </>
       )}
+      <RuntimeDiagnosticsPanel />
     </div>
   );
 }

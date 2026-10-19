@@ -1,6 +1,22 @@
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
+// Match the isolated production pay document in the development preview.
+const originalEnhance = config.server?.enhanceMiddleware;
+config.server = { ...config.server, enhanceMiddleware(middleware, server) {
+  const upstream = originalEnhance ? originalEnhance(middleware, server) : middleware;
+  const basePath = (process.env.BASE_PATH || '/uc-companion').replace(/\/+$/, '');
+  const deliver = require('./server/guest-pay-delivery.cjs').createGuestPayDelivery({
+    basePath, apiOrigin: process.env.UC_GUEST_PAY_API_ORIGIN || process.env.PUBLIC_WEB_API_ORIGIN || 'http://127.0.0.1:8080',
+  });
+  return (req, res, next) => {
+    const path = new URL(req.url, 'http://local.invalid').pathname;
+    const relative = basePath && path.startsWith(basePath + '/') ? path.slice(basePath.length) : path;
+    deliver(req, res, relative).then(handled => {
+      if (!handled) upstream(req, res, next);
+    }).catch(next);
+  };
+} };
 
 // ── 1. Exclude react-native-maps from the web bundle ────────────────────────
 // The .native.tsx / .tsx platform split keeps the import out of the web entry

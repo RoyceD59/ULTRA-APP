@@ -15,6 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   AlertCircle, BellOff, Lock, LogOut, RefreshCw,
   Mail, MessageSquare, RotateCcw, CheckCircle2, Filter, Trash2,
 } from "lucide-react";
@@ -260,6 +265,7 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [channelFilter, setChannelFilter] = useState<"all" | "sms" | "email">("all");
+  const [searchText, setSearchText] = useState("");
   // Track IDs that have been successfully retried so we can dim/hide them
   const [retriedIds, setRetriedIds] = useState<Set<number>>(new Set());
 
@@ -326,9 +332,11 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
     refetchOnWindowFocus: false,
   });
 
+  const searchQuery = searchText.trim().toLowerCase();
   const filtered = logs?.filter(log => {
     if (channelFilter !== "all" && log.channel !== channelFilter) return false;
-    return true;
+    return log.recipient.toLowerCase().includes(searchQuery)
+      || log.template.toLowerCase().includes(searchQuery);
   }) ?? [];
 
   const smsCount   = logs?.filter(l => l.channel === "sms").length   ?? 0;
@@ -354,16 +362,42 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
                 ? "Checking prune eligibility…"
                 : `${(prunePreview?.eligibleTotal ?? 0).toLocaleString()} ${prunePreview?.eligibleTotal === 1 ? "entry" : "entries"} eligible for pruning`}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => pruneMutation.mutate()}
-              disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
-              title="Delete log entries past their retention window now, without waiting for the nightly job"
-            >
-              <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
-              {pruneMutation.isPending ? "Pruning…" : "Prune now"}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
+                  title="Delete log entries past their retention window now, without waiting for the nightly job"
+                >
+                  <Trash2 className={`w-4 h-4 mr-2 ${pruneMutation.isPending ? "animate-pulse" : ""}`} />
+                  {pruneMutation.isPending ? "Pruning…" : "Prune now"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Prune notification logs?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {(prunePreview?.eligibleTotal ?? 0).toLocaleString()} log {prunePreview?.eligibleTotal === 1 ? "entry is" : "entries are"} currently eligible for pruning.
+                    {" "}Confirming will permanently delete log entries past their retention window. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={pruneMutation.isPending || !prunePreview?.eligibleTotal}
+                    onClick={() => {
+                      if (!pruneMutation.isPending && prunePreview?.eligibleTotal) {
+                        pruneMutation.mutate();
+                      }
+                    }}
+                  >
+                    Confirm prune
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
@@ -393,9 +427,21 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
         </div>
       )}
 
-      {/* Channel filter */}
+      {/* Search and channel filters */}
       {logs && logs.length > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="space-y-1.5 max-w-md">
+          <Label htmlFor="notification-failures-search">Search recipient or template</Label>
+          <Input
+            id="notification-failures-search"
+            type="search"
+            placeholder="Phone, email, or template name"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+          />
+        </div>
+      )}
+      {logs && logs.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-4 h-4 text-muted-foreground" />
           {(["all", "sms", "email"] as const).map(ch => (
             <Button
@@ -454,7 +500,9 @@ function FailuresList({ token, onLogout }: { token: string; onLogout: () => void
 
       {logs && logs.length > 0 && filtered.length === 0 && (
         <div className="text-muted-foreground text-sm py-8 text-center">
-          No {channelFilter} failures found.
+          {searchQuery
+            ? "No failures match your search and channel filter."
+            : `No ${channelFilter === "all" ? "" : `${channelFilter} `}failures found.`}
         </div>
       )}
     </div>

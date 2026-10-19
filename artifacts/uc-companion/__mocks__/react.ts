@@ -29,6 +29,7 @@ interface Hook {
   queue?: unknown[];
   deps?: unknown[] | undefined;
   value?: unknown;
+  cleanup?: () => void;
 }
 
 interface Instance {
@@ -102,7 +103,11 @@ export function useEffect(effect: () => void | (() => void), deps?: unknown[]): 
   const { hook, first } = getHook('effect');
   if (first || !depsEqual(hook.deps, deps)) {
     hook.deps = deps;
-    i.pendingEffects.push(() => { effect(); });
+    i.pendingEffects.push(() => {
+      hook.cleanup?.();
+      const cleanup = effect();
+      hook.cleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    });
   }
 }
 
@@ -123,6 +128,7 @@ export function useContext<T>(ctx: Context<T>): T {
 // ── Test harness ─────────────────────────────────────────────────────────────
 
 export interface TestRoot<P, V> {
+  dispose(): void;
   /** Provider `value` prop from the most recent render. */
   readonly value: V;
   /** Apply all queued state updates + effects until stable. */
@@ -174,6 +180,9 @@ export function __testRender<P, V = any>(Component: (props: P) => any, props: P)
     },
     get renderCount() {
       return renders;
+    },
+    dispose() {
+      for (const hook of instance.hooks) hook.cleanup?.();
     },
   };
 }

@@ -1,0 +1,30 @@
+{
+  "parentSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "candidateSha256": "d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+  "changedPaths": [
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "unchangedParentFiles": 1262,
+  "dependencyPins": {
+    "fast-copy": "4.1.0",
+    "postcss-selector-parser": "7.1.6",
+    "http-cache-semantics": "4.3.0"
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "beforeSha256": "d6fbfc128fb7530e659f97a4e940480967912edb628adcfb9ee9ed26949e9c5b",
+      "afterSha256": "eeb08e0659d7a6376105f6f4e28e9c5f6ac5406df13884500c2100fd2732919c",
+      "beforeBytes": 1923,
+      "afterBytes": 2032
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "beforeSha256": "b405aed1306e3e4039b37917a491ee3c46acdaf11c932120afeb07d6cfeba8ee",
+      "afterSha256": "7832119b9b7cfb41b233fbf37a2301e94cb0ba87cb98a16e2b36ea045976d161",
+      "beforeBytes": 599822,
+      "afterBytes": 594841
+    }
+  ]
+}

@@ -50,7 +50,10 @@ function setupFetch(role: "admin" | "member", status = "draft", runs: Record<str
   return { fetchMock, article };
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete window.umami;
+});
 
 describe("Companion Blog editorial workspace", () => {
   it("loads source details and keeps publishing controls hidden for a member", async () => {
@@ -67,6 +70,8 @@ describe("Companion Blog editorial workspace", () => {
   });
 
   it("offers publish to a live admin and calls the approval endpoint", async () => {
+    const track = vi.fn();
+    window.umami = { track };
     const { fetchMock } = setupFetch("admin");
     render(<CompanionBlogPage />);
 
@@ -85,6 +90,27 @@ describe("Companion Blog editorial workspace", () => {
     const publishIndex = calls.findIndex(([url]) => String(url).endsWith("/uc/editor/blog/article-1/publish"));
     expect(saveIndex).toBeGreaterThanOrEqual(0);
     expect(saveIndex).toBeLessThan(publishIndex);
+    await waitFor(() => expect(track).toHaveBeenCalledWith("blog_published", { sourceCount: 1 }));
+    expect(track).toHaveBeenCalledWith("blog_saved", { action: "update", sourceCount: 1 });
+    expect(track.mock.calls).toHaveLength(2);
+  });
+
+  it("does not count a failed save or publish as a successful outcome", async () => {
+    const { fetchMock } = setupFetch("admin");
+    const successfulFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/uc/editor/blog/article-1") && init?.method === "PATCH") {
+        return jsonResponse({ error: "Save failed" }, 500);
+      }
+      return successfulFetch(input, init);
+    });
+    const track = vi.fn();
+    window.umami = { track };
+    render(<CompanionBlogPage />);
+    fireEvent.click(await screen.findByTestId("button-select-blog-article-1"));
+    fireEvent.click(await screen.findByTestId("button-publish-blog-article"));
+    expect(await screen.findByTestId("status-blog-error")).toHaveTextContent("Save failed");
+    expect(track).not.toHaveBeenCalled();
   });
 
   it("offers revision publishing only when a published article working copy differs from its live snapshot", async () => {

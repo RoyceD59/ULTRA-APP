@@ -207,6 +207,44 @@ describe("Admin Rewards Page", () => {
     expect(screen.getByLabelText(/Phone, email, customer code, or QR value/i)).toBeVisible();
   });
 
+  it("clears a previously resolved customer when a revoked QR lookup fails", async () => {
+    mockPageFetch();
+    renderPage();
+    const lookup = screen.getByLabelText(/Phone, email, customer code, or QR value/i);
+    fireEvent.change(lookup, { target: { value: `uc-rewards:v1:${"a".repeat(43)}` } });
+    fireEvent.click(screen.getByRole("button", { name: "Find customer" }));
+    await screen.findByText("Scanned");
+    const normalFetch = global.fetch;
+    global.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/resolve")) return new Response(JSON.stringify({ error: "Customer not found" }), { status: 404 });
+      return normalFetch(url, init);
+    }) as typeof fetch;
+    fireEvent.change(lookup, { target: { value: `uc-rewards:v1:${"b".repeat(43)}` } });
+    expect(screen.queryByText("Scanned")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Find customer" }));
+    await screen.findByText("Customer not found");
+    expect(screen.queryByText("Scanned")).not.toBeInTheDocument();
+  });
+
+  it("does not restore an older customer when the lookup changes during a slow response", async () => {
+    mockPageFetch();
+    const normalFetch = global.fetch;
+    let release!: () => void;
+    global.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/resolve")) await new Promise<void>(resolve => { release = resolve; });
+      return normalFetch(url, init);
+    }) as typeof fetch;
+    renderPage();
+    const lookup = screen.getByLabelText(/Phone, email, customer code, or QR value/i);
+    fireEvent.change(lookup, { target: { value: `uc-rewards:v1:${"a".repeat(43)}` } });
+    fireEvent.click(screen.getByRole("button", { name: "Find customer" }));
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    fireEvent.change(lookup, { target: { value: `uc-rewards:v1:${"b".repeat(43)}` } });
+    act(() => release());
+    await screen.findByText("Lookup changed. Resolve the current customer before continuing.");
+    expect(screen.queryByText("Scanned")).not.toBeInTheDocument();
+  });
+
   it("should send litre additions to /impact, not /water", async () => {
     const fetchMock = vi.fn().mockImplementation(async (url: string, options: any) => {
       if (url.includes("/conversion")) {

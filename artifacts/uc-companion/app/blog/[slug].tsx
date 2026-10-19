@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -10,6 +10,10 @@ import { useApi, type UCBlogArticle, type UCBlogSource } from '@/hooks/useApi';
 import { fetchBlogArticle } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { articleInlineLinks } from '@workspace/api-zod/blog-inline-links';
+import { trackEvent } from '@/lib/analytics';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 type ArticleBlock = { kind: 'heading' | 'paragraph' | 'list' | 'quote'; text: string; ordered?: boolean; number?: string };
 
@@ -44,16 +48,50 @@ function parseArticleBody(body: string): ArticleBlock[] {
   return blocks;
 }
 
-function renderInline(text: string, color: string): React.ReactNode[] {
+function renderEmphasis(text: string, color?: string, keyPrefix = ''): React.ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <Text key={index} style={{ fontWeight: '700', color }}>{part.slice(2, -2)}</Text>;
+      return <Text key={`${keyPrefix}${index}`} style={{ fontWeight: '700', ...(color ? { color } : {}) }}>{part.slice(2, -2)}</Text>;
     }
     if (part.startsWith('*') && part.endsWith('*')) {
-      return <Text key={index} style={{ fontStyle: 'italic' }}>{part.slice(1, -1)}</Text>;
+      return <Text key={`${keyPrefix}${index}`} style={{ fontStyle: 'italic' }}>{part.slice(1, -1)}</Text>;
     }
-    return <Text key={index}>{part}</Text>;
+    return <Text key={`${keyPrefix}${index}`}>{part}</Text>;
+  });
+}
+
+function renderInline(
+  text: string,
+  color: string,
+  linkColor: string,
+  sources: readonly UCBlogSource[],
+  onSourceError: () => void,
+  onSourceClick: () => void,
+): React.ReactNode[] {
+  return articleInlineLinks(text, sources).map((part, index) => {
+    if (part.kind === 'text') {
+      return renderEmphasis(part.text, color, `text-${index}-`);
+    }
+    const label = part.text.replace(/\*\*([^*]+)\*\*|\*([^*]+)\*/g, '$1$2');
+    const webLinkProps = Platform.OS === 'web' ? { href: part.url } as { href: string } : {};
+    return (
+      <Text
+        key={`link-${index}`}
+        {...webLinkProps}
+        accessibilityRole="link"
+        accessibilityLabel={label}
+        onPress={(event) => {
+          // The web anchor and Linking must not both navigate on the same click.
+          if (Platform.OS === 'web') event.preventDefault();
+          onSourceClick();
+          void Linking.openURL(part.url).catch(onSourceError);
+        }}
+        style={{ color: linkColor, textDecorationLine: 'underline' }}
+      >
+        {renderEmphasis(part.text, undefined, `link-${index}-`)}
+      </Text>
+    );
   });
 }
 
@@ -80,6 +118,9 @@ function ArticleContent({
   const colors = useColors();
   const blocks = parseArticleBody(article.body);
   const sources = Array.isArray(article.sources) ? article.sources : [];
+  const onBodySourceClick = () => trackEvent('article_source_clicked', {
+    articleId: article.id, placement: 'body',
+  });
 
   return (
     <>
@@ -93,24 +134,24 @@ function ArticleContent({
       <View style={styles.body}>
         {blocks.map((block, index) => {
           if (block.kind === 'heading') {
-            return <Text key={index} accessibilityRole="header" style={[styles.bodyHeading, { color: colors.text }]}>{block.text}</Text>;
+            return <Text key={index} accessibilityRole="header" style={[styles.bodyHeading, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>;
           }
           if (block.kind === 'list') {
             return (
               <View key={index} style={styles.listItem}>
                 <Text style={[styles.listMarker, { color: colors.primary }]}>{block.ordered ? `${block.number ?? '1'}.` : '•'}</Text>
-                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text)}</Text>
+                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>
               </View>
             );
           }
           if (block.kind === 'quote') {
             return (
               <View key={index} style={[styles.quote, { borderLeftColor: colors.accent, backgroundColor: colors.surface }]}>
-                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text)}</Text>
+                <Text style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>
               </View>
             );
           }
-          return <Text key={index} style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text)}</Text>;
+          return <Text key={index} style={[styles.paragraph, { color: colors.text }]}>{renderInline(block.text, colors.text, colors.primary, sources, onSourceError, onBodySourceClick)}</Text>;
         })}
       </View>
       {sources.length > 0 ? (
@@ -128,7 +169,10 @@ function ArticleContent({
                 accessibilityRole="link"
                 accessibilityLabel={`Open source: ${source.title}`}
                 testID={`blog-source-${index}`}
-                onPress={() => { void Linking.openURL(url).catch(onSourceError); }}
+                onPress={() => {
+                  trackEvent('article_source_clicked', { articleId: article.id, placement: 'sources' });
+                  void Linking.openURL(url).catch(onSourceError);
+                }}
                 style={styles.sourceLink}
               >
                 <Text style={[styles.sourceTitle, { color: colors.primary }]}>{source.title}</Text>
@@ -157,11 +201,18 @@ export default function BlogArticleScreen() {
       (requestSignal) => api.getBlogArticle(String(slug), requestSignal),
       signal,
     ),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
     enabled: Boolean(slug),
   });
   const article = query.data?.article;
+  const lastOpenedArticle = useRef<string | null>(null);
+  useEffect(() => {
+    if (query.isLoading || query.isError || !article || lastOpenedArticle.current === article.id) return;
+    lastOpenedArticle.current = article.id;
+    trackEvent('article_opened', { articleId: article.id });
+  }, [article, query.isLoading, query.isError]);
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
   return (
@@ -179,26 +230,18 @@ export default function BlogArticleScreen() {
         <Text style={[styles.topBarTitle, { color: colors.text }]} numberOfLines={1}>The UC Blog</Text>
         <View style={styles.backButton} />
       </View>
-      {query.isLoading ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading article…</Text>
-        </View>
-      ) : query.isError || !article ? (
-        <View style={styles.centerState}>
-          <Ionicons name="document-text-outline" size={30} color={colors.mutedForeground} />
-          <Text style={[styles.stateTitle, { color: colors.text }]}>Article unavailable</Text>
-          <Text style={[styles.stateText, { color: colors.mutedForeground }]}>This article couldn’t be loaded. Please check your connection and try again.</Text>
-          <TouchableOpacity accessibilityRole="button" testID="blog-article-retry"
-            onPress={() => { void query.refetch(); }} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.retryText, { color: colors.primaryForeground }]}>Try again</Text>
-          </TouchableOpacity>
-        </View>
+      {!article && query.isLoading ? (
+        <PageDataLoader label="Loading article…" />
+      ) : !article ? (
+        <PageDataError title={(query.error as { status?: number })?.status === 404 ? 'Article not found' : 'Article unavailable'}
+          error={query.error} onRetry={(query.error as { status?: number })?.status === 404 ? () => router.replace('/(tabs)/blog') : query.refetch}
+          actionLabel={(query.error as { status?: number })?.status === 404 ? 'Browse articles' : 'Retry'} testID="blog-article-retry" />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.content, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 118 : 100) }]}
         >
+          {query.isError ? <PageDataError title="Article could not refresh" message="Your saved article is still available below." onRetry={query.refetch} /> : null}
           {query.data?.fromCache ? (
             <View style={[styles.offlineNotice, { backgroundColor: colors.warningLight }]}>
               <Ionicons name="cloud-offline-outline" size={15} color={colors.warning} />

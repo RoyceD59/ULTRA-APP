@@ -40,7 +40,9 @@ export class ObjectNotFoundError extends Error {
 
 /** Upload caps shared by the presign endpoint (routes/storage.ts) and the
  *  attach-time metadata verification in routes/uc.ts. Presigned PUT URLs
- *  cannot bind size/content-type, so both ends must enforce these. */
+ *  do not bind size/content-type with the sidecar signer. Declarations and stored
+ *  metadata are untrusted: public serving must restrict inline MIME types and
+ *  attachment verification must inspect bytes regardless of stored MIME. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_VIDEO_BYTES = 60 * 1024 * 1024; // 60 MB
 

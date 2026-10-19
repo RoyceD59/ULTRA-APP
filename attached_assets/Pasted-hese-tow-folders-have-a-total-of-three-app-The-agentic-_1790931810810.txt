@@ -1,0 +1,260 @@
+hese tow folders have a total of three app.The agentic orchestration acting as he brains in managing the front end of the shop and the project hub as the dashboard and back off of both.I presently have a very sluggish loading of the companion app,the map is not displaying well on live.The pages are not loading well on computer and andorid devices.I need you to analyze and debug ,augment any developes and ready for live ship via git hub.
+
+
+
+
+
+
+
+Saturday 21:20
+
+
+
+
+
+
+I’ll inspect both folders, identify how the three apps connect, and investigate the slow loading, map display, and desktop/Android rendering issues. I’ll then make and validate fixes and prepare the changes for GitHub delivery.
+
+
+
+
+Ran command
+
+
+
+
+What are the live URLs for the companion/shop and project hub, and which GitHub repository should receive the fixes? I’ll also check the folders for this information.
+
+
+
+
+
+Ran commands
+
+
+
+The folders contain the Companion, ProjectHub, and agent orchestration apps, plus their supporting servers. The Companion uses Expo for web and Android. I also found existing local changes and many historical Git remotes, so I’m establishing the source baseline before editing.
+
+
+
+
+What are the live URLs for the companion/shop and project hub, and which GitHub repository should receive the fixes? I’ll also check the folders for this information.app.ucfilters.com and hub.ucfilters.com.You are allowed to inspect the respositories commit the changes.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Ran command
+
+
+
+
+I’ll use app.ucfilters.com and hub.ucfilters.com for live checks and commit the validated fixes. I’m tracing the Companion’s startup, web asset delivery, and map code first, then checking the connections to ProjectHub and the orchestration service.
+
+
+
+
+Used the browser, ran a command, searched the web
+
+
+
+I found a concrete map issue: the web version currently renders a location list, while the interactive map exists only in the native Android/iOS screen. That also affects Android users opening the website in a browser. I’m checking the production loading path next.
+
+
+
+
+Used GitHub integration, ran commands
+
+
+
+The source shows two more likely loading problems: the Companion’s standalone server sends JavaScript without compression or cache headers, and ProjectHub imports all its pages before showing the login screen. I’m checking which server serves the live app so the fixes target the active deployment path.
+
+
+
+
+Used the browser, ran a command
+
+
+
+
+
+
+Both live sites respond, and GitHub authentication is available. The live Companion has fewer tabs than the downloaded source, so the deployed version appears to be older. Its HTML also has a four-hour browser cache lifetime, which could leave users loading an old bundle after a release.
+
+
+
+
+
+
+
+
+
+
+
+Lets work on optimising the companion application features a fluid, mobile-first layout that automatically reflows content, repositions navigation elements, and scales components gracefully across compact, medium, and expanded window sizes. As well as the gap resulting The live Companion having fewer tabs than the downloaded source.
+
+
+
+
+
+
+
+Monday 01:35
+
+
+
+
+
+
+I’ll focus on the Companion’s responsive layout and the mismatch between its live and source tabs. I’ll first check the current code and deployment version, then implement compact, medium, and expanded layouts and validate navigation across them.
+
+
+
+
+Ran commands
+
+
+
+I found a second navigation mismatch: Blog is in the source tab bar but missing from the swipe-navigation order. I’ll make all six destinations consistent, keep bottom navigation on compact screens, use a side rail on medium screens, and show a labelled sidebar on expanded screens. I’ll also replace fixed spacing and size product grids to the content area.
+
+
+
+
+Used the browser, ran commands
+
+
+
+The browser tool blocked live-site inspection with a URL-policy error. I’ll continue with the local source and automated checks; today’s live tab state remains unverified. I also hit a package-manager mismatch: installed pnpm 11 ignores overrides used by this lockfile, so I’m checking the compatible version before installing dependencies.
+
+
+
+
+Edited files, ran commands
+
+
+
+The matching GitHub repository I can access, RoyceD59/Ultra-AI-Team, is much older than your downloaded source. Should I prepare the release branch there, or is there a newer repository used by the live Companion?
+
+
+
+
+
+The responsive navigation and content changes are in place locally. Resizing now keeps the same navigator mounted, so it should preserve the selected tab and page state. I’ve also found a likely release gap: the accessible GitHub branch is dated August 13, while the downloaded source includes later Blog work. I’m adding build identification so deployed versions can be checked explicitly.
+
+
+
+
+Edited files, ran commands
+
+
+
+The layout now has three window-size modes, shared six-tab navigation, product grids that allow for the side navigation and text scaling, wrapping map filters, and space for the checkout bar. I’m testing the breakpoint calculations and release metadata next. Native rotation and tablet support are also enabled, but those settings require a new native build.
+
+
+
+
+Edited files, ran a command
+
+
+
+The matching GitHub repository I can access, RoyceD59/Ultra-AI-Team, is much older than your downloaded source. Should I prepare the release branch there, or is there a newer repository used by the live Companion?Will this be the campanion app or with the project hub. Also check the other repository. Search the  replit file for the  repository where the updates have been stored.If none use the create a new one .
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Ran command
+
+
+
+
+This release targets the Companion, but its source shares a repository with ProjectHub and the API server. ProjectHub’s interface is outside this change. I’ll check both folders’ Replit and Git records for the current repository; if none is suitable, I’ll create a new private repository as you requested.
+
+
+
+
+Edited files, ran commands
+
+
+
+The first 26 layout and server checks passed. Both Replit folders point to older GitHub repositories: the Companion source is 456 commits ahead of Ultra-AI-Team, and its saved Team-AI-Embedded repository is unavailable. I’m checking Agents and AI-Team-2 before creating the new repository you authorized.
+
+
+
+
+Edited a file, ran commands
+
+
+
+The other repositories also lack the current downloaded commits. I’ll create a private ULTRA-APP repository containing the Companion, ProjectHub, and their shared API. I’ll import the current source without old Git history or stale generated bundles, then put the responsive changes on a separate review branch. The Companion test suite and TypeScript checks are running now.
+
+
+
+
+Ran commands
+
+
+
+The full test run stopped before executing tests because Node could not read user information in the restricted Windows account. I’ve restarted it under the normal account with one test process at a time. The earlier local layout and server checks passed; the broader regression results are still pending.
+
+
+
+
+Ran commands
+
+
+
+TypeScript passed, along with all 77 server, layout, and build-metadata tests. I’m now building the web app and finishing the broader regression suite. The new repository will retain ProjectHub and the API alongside the Companion, so their shared code remains buildable.
+
+
+
+
+Ran commands
+
+
+
+The broader checks found an undeclared build dependency: the Babel configuration requires babel-preset-expo, which a clean install could not resolve. I’m adding it explicitly. The regression suite also found two assertions tied to the old tab-bar structure and issues with older test mocks; I’m updating those while preserving the cart-hydration checks.
+
+
+
+
+Edited files, ran commands
+
+
+
+
+You've hit your usage limit. Upgrade your plan or add credits to continue, or try again later.
+
+
+
+
+
+
+
+
+
+
+
+Monday 9:11

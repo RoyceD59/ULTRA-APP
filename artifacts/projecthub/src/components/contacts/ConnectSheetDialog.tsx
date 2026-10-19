@@ -62,6 +62,7 @@ interface SheetStatus {
   sheetUrl?: string;
   sheetLabel?: string;
   lastSyncedAt?: string | null;
+  reconnectRequired?: boolean;
 }
 
 interface GoogleStatus {
@@ -172,6 +173,7 @@ export function ConnectSheetDialog({
       setOauthBusy(false);
       if (payload.success) {
         loadGoogleStatus();
+        onStatusChange();
         toast({
           title: "Google account connected",
           description: `Signed in as ${payload.googleEmail}. You can now access private sheets.`,
@@ -186,7 +188,7 @@ export function ConnectSheetDialog({
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [loadGoogleStatus, toast]);
+  }, [loadGoogleStatus, toast, onStatusChange]);
 
   // ── Google OAuth: start flow ──────────────────────────────────────────────
 
@@ -362,6 +364,7 @@ export function ConnectSheetDialog({
         description: `${result.created} created, ${result.updated} updated, ${result.skipped} skipped${result.failed > 0 ? `, ${result.failed} failed` : ""}.`,
       });
     } catch (err) {
+      onStatusChange();
       toast({
         title: "Sync failed",
         description: err instanceof Error ? err.message : "Unknown error",
@@ -388,6 +391,7 @@ export function ConnectSheetDialog({
 
   const oauthConfigured = googleStatus?.oauthConfigured ?? false;
   const googleConnected = googleStatus?.connected ?? false;
+  const reconnectRequired = syncStatus?.reconnectRequired ?? false;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onOpenChange(false)}>
@@ -398,7 +402,9 @@ export function ConnectSheetDialog({
             Connect Google Sheet
           </DialogTitle>
           <DialogDescription>
-            {googleConnected
+            {reconnectRequired
+              ? "Your Google account needs to be reconnected to resume contacts sync."
+              : googleConnected
               ? "Your Google account is connected — you can access private sheets."
               : "Connect your Google account to access private sheets, or paste a public share URL."}
           </DialogDescription>
@@ -411,7 +417,18 @@ export function ConnectSheetDialog({
               <Shield className="w-4 h-4 text-primary" />
               Google account access
             </p>
-            {googleConnected ? (
+            {reconnectRequired ? (
+              <Alert variant="destructive">
+                <AlertCircle className="w-4 h-4" />
+                <AlertDescription>
+                  <p>Your Google account needs to be reconnected. Google access was revoked or expired.</p>
+                  <Button data-testid="button-dialog-reconnect-google" onClick={handleConnectGoogle} disabled={oauthBusy} className="mt-2 gap-2">
+                    {oauthBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Reconnect Google account
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : googleConnected ? (
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />

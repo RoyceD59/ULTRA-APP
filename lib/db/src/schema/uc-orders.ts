@@ -1,5 +1,16 @@
-import { pgTable, serial, integer, text, timestamp, json, boolean, uniqueIndex, bigint } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, json, jsonb, boolean, uniqueIndex, bigint, customType } from "drizzle-orm/pg-core";
+const moneyNumber = customType<{ data: number; driverData: string }>({
+  dataType: () => "numeric(12,2)", fromDriver: Number, toDriver: String,
+});
 import { sql } from "drizzle-orm";
+
+/** Non-financial tombstones prevent delayed requests from restarting a retired intent. */
+export const ucCheckoutRetirementsTable = pgTable("uc_checkout_retirements", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [uniqueIndex("uc_checkout_retirements_owner_key").on(table.userId, table.idempotencyKey)]);
 
 /**
  * Persists orders placed through the UC Companion app.
@@ -19,6 +30,7 @@ export const ucOrdersTable = pgTable("uc_orders", {
   checkoutIdempotencyKey: text("checkout_idempotency_key").notNull().default(""),
   checkoutClaimId: text("checkout_claim_id"),
   checkoutState: text("checkout_state"),
+  checkoutSnapshot: jsonb("checkout_snapshot"),
   remoteAttemptedAt: timestamp("remote_attempted_at", { withTimezone: true }),
   /** Authoritative provider/local confirmation instant; fill once. */
   paymentConfirmedAt: timestamp("payment_confirmed_at", { withTimezone: true }),
@@ -29,8 +41,8 @@ export const ucOrdersTable = pgTable("uc_orders", {
   // overwritten after it is set.
   mpesaReceipt:     text("mpesa_receipt").notNull().default(""),
   promoCode:        text("promo_code").default(""),
-  discountPercent:  integer("discount_percent").notNull().default(0),
-  discountAmount:   integer("discount_amount").notNull().default(0),
+  discountPercent:  moneyNumber("discount_percent").notNull().default(0),
+  discountAmount:   moneyNumber("discount_amount").notNull().default(0),
   /** Immutable claimed referral discount; unique so it cannot price two orders. */
   referralBenefitId: bigint("referral_benefit_id", { mode: "number" }),
   shippingAddress:  json("shipping_address").$type<Record<string, string>>(),
@@ -44,6 +56,8 @@ export const ucOrdersTable = pgTable("uc_orders", {
   // path (customer paid but the app lost connectivity before createOrder fired).
   // Set at insert time — never derived from userId heuristics.
   webhookRecovery:  boolean("webhook_recovery").notNull().default(false),
+  /** Staff confirmed items and delivery details; recovery provenance is retained. */
+  recoveryEnrichedAt: timestamp("recovery_enriched_at", { withTimezone: true }),
   // COD collection is deliberately separate from the general order status:
   // "awaiting_collection" means no cash has been received; "collected" is
   // set only by the staff-only confirmation endpoint.
@@ -55,6 +69,9 @@ export const ucOrdersTable = pgTable("uc_orders", {
   codWcSyncAttemptedAt: timestamp("cod_wc_sync_attempted_at", { withTimezone: true }),
   codWcSyncAttemptCount: integer("cod_wc_sync_attempt_count").notNull().default(0),
   customerStage:    text("customer_stage"),
+  /** Payment classification captured before a staff fulfillment status replaces
+   * legacy payment-bearing status; never fabricates a provider confirmation time. */
+  fulfillmentPaymentStatus: text("fulfillment_payment_status"),
   customerStageUpdatedAt: timestamp("customer_stage_updated_at", { withTimezone: true }),
   /** Monotonic WooCommerce source version used to reject delayed webhooks. */
   wooStatusModifiedAt: timestamp("woo_status_modified_at", { withTimezone: true }),
@@ -75,10 +92,28 @@ export const ucOrderItemsTable = pgTable("uc_order_items", {
   id:        serial("id").primaryKey(),
   orderId:   integer("order_id").notNull().references(() => ucOrdersTable.id, { onDelete: "cascade" }),
   productId: integer("product_id").notNull(),
+  variationId: integer("variation_id"),
+  childSku: text("child_sku"),
+  variantLabel: text("variant_label"),
   name:      text("name").notNull(),
   quantity:  integer("quantity").notNull(),
   total:     text("total").notNull(),
 });
+
+export const ucGuestPayLinksTable = pgTable("uc_guest_pay_links", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => ucOrdersTable.id, { onDelete: "cascade" }),
+  generation: text("generation").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now()+interval '72 hours'`),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  paidEventAt: timestamp("paid_event_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex("uc_guest_pay_links_token_hash_unique").on(t.tokenHash),
+  uniqueIndex("uc_guest_pay_active_order").on(t.orderId).where(sql`revoked_at IS NULL`),
+]);
 
 export type UcOrder     = typeof ucOrdersTable.$inferSelect;
 export type UcOrderItem = typeof ucOrderItemsTable.$inferSelect;

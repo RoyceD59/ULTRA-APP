@@ -8,9 +8,11 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
 import * as Contacts from 'expo-contacts';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
@@ -340,7 +342,7 @@ export default function ReferralScreen() {
 
   const [showContacts, setShowContacts] = useState(false);
 
-  const { data: referral, isLoading: refLoading } = useQuery({
+  const { data: referral, isLoading: refLoading, isError: refError, error: referralError, refetch: retryReferral } = useQuery({
     queryKey: customerQueryKeys.referral(user?.id),
     queryFn: () => api.getMyReferral(),
     enabled: !!user,
@@ -398,8 +400,9 @@ export default function ReferralScreen() {
 
         <View style={styles.body}>
           {/* Referral code card */}
+          {refError ? <PageDataError title="Referral details unavailable" error={referralError} onRetry={retryReferral} /> : null}
           {refLoading ? (
-            <ActivityIndicator color={UC_DEEP} style={{ marginVertical: 24 }} />
+            <PageDataLoader label="Loading referral details…" />
           ) : referral ? (
             <View style={[styles.codeCard, { backgroundColor: colors.card, borderColor: UC_SKY }]}>
               <Text style={[styles.codeLabel, { color: colors.mutedForeground }]}>YOUR REFERRAL CODE</Text>

@@ -1,0 +1,47 @@
+## Compact UI preview
+
+```text
+┌─────────────────────────────────────┐
+│  Ultra Clear                    JR  │
+│                                     │
+│  YOUR ULTRA CLEAR IMPACT            │
+│                                     │
+│  Add litres consumed                │
+│  ┌───────────────────┐ ┌─────────┐  │
+│  │ 20 litres         │ │  Add    │  │
+│  └───────────────────┘ └─────────┘  │
+│                                     │
+│  576                                │
+│  litres filtered                    │
+│                                     │
+│  ┌────────────────┐ ┌────────────┐  │
+│  │ 1,152          │ │ ≈46 kg     │  │
+│  │ 500ml plastic  │ │ CO₂e       │  │
+│  │ bottles avoided│ │ avoided*   │  │
+│  └────────────────┘ └────────────┘  │
+│                                     │
+│  Estimated annual saving            │
+│  KSh 16,000                         │
+│  Based on KSh 150 per 20L refill    │
+│                                     │
+│  ✓ I filter with Ultra Clear        │
+│                                     │
+│  ★ 500–2,000 L Impact Level         │
+│  ━━━━━░░░░░░░░░░░░░░░░░░░  5%     │
+│  1,424 litres to the next milestone │
+│                                     │
+│  3% of Ultra Clear revenue supports │
+│  clean-water access through         │
+│  Hydrate the Future™                │
+│                                     │
+│  [ Share impact ]   [ View details ]│
+└─────────────────────────────────────┘
+```
+
+The user enters **litres consumed since the previous update**, not a replacement lifetime total. After selecting **Add**, the app recalculates litres, 500ml bottles avoided, estimated CO₂e, savings and milestone progress.
+
+The CO₂e card should open this explanation:
+
+> Estimated bottle-related emissions avoided. Calculated using a documented 500ml PET-bottle emissions factor. This is an estimate, not a carbon credit or verified offset.
+
+The interactive preview cannot be updated in this turn because the application workspace is temporarily unavailable. The layout above is the exact compact state to implement when access resumes.

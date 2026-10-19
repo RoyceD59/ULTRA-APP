@@ -145,6 +145,68 @@ describe("reviewed starter tap customer journey", () => {
     );
   });
 
+  it("hides a reviewed tap after changing its non-empty vendor name until it is reviewed again", async () => {
+    const originalVendor = "Market Water Vendor";
+    const replacementVendor = "New Market Water Vendor";
+    const setup = await supertest(app)
+      .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
+      .set("Authorization", bearer(adminToken))
+      .send({ vendorName: originalVendor });
+    assert.equal(setup.status, 200);
+    assert.equal(setup.body.location.vendorName, originalVendor);
+
+    const firstReview = await supertest(app)
+      .post(`/api/uc/admin/locations/${LOCATION_ID}/verify`)
+      .set("Authorization", bearer(adminToken));
+    assert.equal(firstReview.status, 200);
+    assert.equal(firstReview.body.location.verified, true);
+    assert.equal(firstReview.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.ok(firstReview.body.location.verifiedAt);
+    assert.equal(firstReview.body.location.vendorName, originalVendor);
+
+    const initiallyPublished = await supertest(app).get("/api/uc/locations");
+    assert.equal(initiallyPublished.status, 200);
+    assert.deepEqual(
+      initiallyPublished.body.filter((location: { id: string }) => location.id === LOCATION_ID),
+      [{ ...publishedLocation, vendorName: originalVendor }],
+    );
+
+    const edited = await supertest(app)
+      .patch(`/api/uc/admin/locations/${LOCATION_ID}`)
+      .set("Authorization", bearer(adminToken))
+      .send({ vendorName: replacementVendor });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.verificationReset, true);
+    assert.equal(edited.body.location.vendorName, replacementVendor);
+    assert.equal(edited.body.location.active, true);
+    assert.equal(edited.body.location.verified, false);
+    assert.equal(edited.body.location.verifiedBy, null);
+    assert.equal(edited.body.location.verifiedAt, null);
+
+    const hiddenFromCustomerMaps = await supertest(app).get("/api/uc/locations");
+    assert.equal(hiddenFromCustomerMaps.status, 200);
+    assert.equal(
+      hiddenFromCustomerMaps.body.some((location: { id: string }) => location.id === LOCATION_ID),
+      false,
+    );
+
+    const secondReview = await supertest(app)
+      .post(`/api/uc/admin/locations/${LOCATION_ID}/verify`)
+      .set("Authorization", bearer(adminToken));
+    assert.equal(secondReview.status, 200);
+    assert.equal(secondReview.body.location.vendorName, replacementVendor);
+    assert.equal(secondReview.body.location.verified, true);
+    assert.equal(secondReview.body.location.verifiedBy, ADMIN_EMAIL);
+    assert.ok(secondReview.body.location.verifiedAt);
+
+    const republished = await supertest(app).get("/api/uc/locations");
+    assert.equal(republished.status, 200);
+    assert.deepEqual(
+      republished.body.filter((location: { id: string }) => location.id === LOCATION_ID),
+      [{ ...publishedLocation, vendorName: replacementVendor }],
+    );
+  });
+
   const identityEdits = [
     { label: "name", patch: { name: "Reviewed Starter Tap - Updated" }, expected: { name: "Reviewed Starter Tap - Updated" } },
     { label: "address", patch: { address: "New Market Road" }, expected: { address: "New Market Road" } },

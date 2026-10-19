@@ -1,0 +1,119 @@
+{
+  "origin": "https://api.ucfilters.com",
+  "measuredAt": "2026-10-04T02:39:29.595Z",
+  "note": "Catalogue reads use fresh sequential requests, not forced origin cache eviction. Fetch decodes compression; bytes are decoded. Image sample covers first image per product, not every gallery image.",
+  "productCount": 27,
+  "reads": [
+    {
+      "run": 0,
+      "status": 200,
+      "ms": 3275.9468979999997,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 1,
+      "status": 200,
+      "ms": 1825.0199780000003,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 2,
+      "status": 200,
+      "ms": 1816.4149019999995,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 3,
+      "status": 200,
+      "ms": 1808.3633230000005,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 4,
+      "status": 200,
+      "ms": 1936.360811999999,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 5,
+      "status": 200,
+      "ms": 1725.511978999999,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 6,
+      "status": 200,
+      "ms": 1701.8257299999987,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 7,
+      "status": 200,
+      "ms": 1808.8645860000015,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 8,
+      "status": 200,
+      "ms": 2051.8885840000003,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    },
+    {
+      "run": 9,
+      "status": 200,
+      "ms": 2056.8630980000016,
+      "bytes": 82289,
+      "encoding": "br",
+      "cache": null,
+      "serverTiming": null,
+      "type": "application/json; charset=utf-8",
+      "redirected": false
+    }
+  ],
+  "images": []
+}

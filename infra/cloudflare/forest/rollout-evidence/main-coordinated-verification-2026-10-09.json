@@ -1,0 +1,144 @@
+{
+  "recordedAt": "2026-10-09T06:17:00.307Z",
+  "mainRevision": "46b8692609037893026a2bb7c074a49bfcbc3227",
+  "coordination": "Main verification of consistency release and merged security live-verification handoff; no duplicate publication or production initialization",
+  "approvedPackage": {
+    "sha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+    "retainedArchiveAndApprovalVerification": "passed",
+    "selectionApproved": true,
+    "savedPublicationApproval": false,
+    "publicationObservedSeparately": true
+  },
+  "deployment": {
+    "additionalUrls": [],
+    "deploymentType": "autoscale",
+    "hasSuccessfulBuild": true,
+    "isDeployed": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "success": true,
+    "visibility": "public"
+  },
+  "currentFullSchemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": false,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "publicationProvenance": {
+    "buildId": "c403bfdf-309c-4e49-9af7-22e0a01db0fc",
+    "status": "success",
+    "timeCreated": "2026-10-08T20:16:13.608Z",
+    "latestBuildMatchesMain": true,
+    "logsTruncated": false,
+    "selectedFrozenStageObserved": true,
+    "apiCompileObserved": true,
+    "apiDeploymentPreparationObserved": true,
+    "publicationSuccessObserved": true,
+    "securityFixturesReportedPassing": {
+      "dependencyBackports": 7,
+      "pinnedDependencyConsumers": 4,
+      "sessionAndMedia": 34
+    },
+    "databaseBackedSecurityFixturesNotProvenByTheseBuildLogs": [
+      "customer-count-auth",
+      "storage-upload-allowlist"
+    ],
+    "evidence": [
+      "> workspace@0.0.0 typecheck:libs /home/runner/workspace/.consistency-build/88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82\n> tsc --build",
+      "> @workspace/api-server@0.0.0 typecheck /home/runner/workspace/.consistency-build/88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82/artifacts/api-server\n> tsc -p tsconfig.json --noEmit",
+      "> @workspace/api-server@0.0.0 build /home/runner/workspace/.consistency-build/88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82/artifacts/api-server\n> node ./build.mjs",
+      "Approved api candidate compiled; deployment preparation; NOT PUBLISHED.",
+      "2026-10-08T20:23:22Z info: Database migration statements (11):",
+      "2026-10-08T20:26:05Z info: Deployment successful"
+    ],
+    "publicRuntimeAttestationAvailable": false
+  },
+  "priorPublicationSchema": {
+    "statementCount": 11,
+    "statements": [
+      "2026-10-08T20:23:22Z info: Database migration statement 1 of 11:\nCREATE TABLE \"uc_guest_pay_links\" (\n\t\"id\" serial PRIMARY KEY NOT NULL,\n\t\"order_id\" integer NOT NULL,\n\t\"generation\" text NOT NULL,\n\t\"token_hash\" text NOT NULL,\n\t\"expires_at\" timestamp with time zone DEFAULT (now() + '<redacted>'::interval) NOT NULL,\n\t\"revoked_at\" timestamp with time zone,\n\t\"opened_at\" timestamp with time zone,\n\t\"paid_event_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);",
+      "2026-10-08T20:23:22Z info: Database migration statement 2 of 11:\nCREATE TABLE \"uc_product_editorial\" (\n\t\"code\" text PRIMARY KEY NOT NULL,\n\t\"revision\" integer DEFAULT 1 NOT NULL,\n\t\"record\" jsonb NOT NULL,\n\t\"gallery_mapped\" boolean DEFAULT false NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"price_import_revision\" integer DEFAULT 0 NOT NULL\n);",
+      "2026-10-08T20:23:22Z info: Database migration statement 3 of 11:\nALTER TABLE \"uc_order_items\" ADD COLUMN \"variation_id\" integer;",
+      "2026-10-08T20:23:22Z info: Database migration statement 4 of 11:\nALTER TABLE \"uc_order_items\" ADD COLUMN \"child_sku\" text;",
+      "2026-10-08T20:23:22Z info: Database migration statement 5 of 11:\nALTER TABLE \"uc_order_items\" ADD COLUMN \"variant_label\" text;",
+      "2026-10-08T20:23:22Z info: Database migration statement 6 of 11:\nALTER TABLE \"uc_ai_feedback\" ADD COLUMN \"user_id\" integer;",
+      "2026-10-08T20:23:22Z info: Database migration statement 7 of 11:\nALTER TABLE \"uc_ai_feedback\" ADD COLUMN \"feedback_key\" text;",
+      "2026-10-08T20:23:22Z info: Database migration statement 8 of 11:\nALTER TABLE \"uc_guest_pay_links\" ADD CONSTRAINT \"uc_guest_pay_links_order_id_uc_orders_id_fk\" FOREIGN KEY (\"order_id\") REFERENCES \"public\".\"uc_orders\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "2026-10-08T20:23:22Z info: Database migration statement 9 of 11:\nCREATE UNIQUE INDEX \"uc_guest_pay_active_order\" ON \"uc_guest_pay_links\" USING btree (\"order_id\") WHERE (revoked_at IS NULL);",
+      "2026-10-08T20:23:22Z info: Database migration statement 10 of 11:\nCREATE UNIQUE INDEX \"uc_guest_pay_links_token_hash_unique\" ON \"uc_guest_pay_links\" USING btree (\"token_hash\");",
+      "2026-10-08T20:23:22Z info: Database migration statement 11 of 11:\nCREATE UNIQUE INDEX \"uc_ai_feedback_key_idx\" ON \"uc_ai_feedback\" USING btree (\"feedback_key\");"
+    ],
+    "assessment": "Eleven additive statements outside the narrow consistency/auth-upload source scope were logged during successful publication. Current development-production diff is now empty. This turn did not apply or authorize them.",
+    "scopeReviewRequired": true
+  },
+  "liveSnapshots": {
+    "probedAt": "2026-10-09T06:15:11.951Z",
+    "freshAndCompatibleAtProbe": true,
+    "agreeAtProbe": true,
+    "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+    "adjustmentRevision": 1,
+    "totals": {
+      "totalUsers": 6,
+      "litresFiltered": 1550,
+      "plasticsAvoided": 3100,
+      "cleanWaterDays": 0
+    },
+    "hosts": [
+      {
+        "origin": "https://api.ucfilters.com",
+        "calculatedAt": "2026-10-09T06:15:14.830Z"
+      },
+      {
+        "origin": "https://team-horizon--jerryaroyce.replit.app",
+        "calculatedAt": "2026-10-09T06:15:14.641Z"
+      }
+    ],
+    "lifespanAvailable": true,
+    "freshnessMustBeRecheckedAtAnyLaterClientPublication": true
+  },
+  "sourceEndpointProbes": [
+    {
+      "origin": "https://api.ucfilters.com",
+      "path": "/version.json",
+      "status": 404,
+      "jsonSourceProof": false
+    },
+    {
+      "origin": "https://team-horizon--jerryaroyce.replit.app",
+      "path": "/version.json",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "jsonSourceProof": false
+    }
+  ],
+  "servedCompanion": {
+    "revision": "a787b1a16fad710f8725a9e1fb7722a89661c54e",
+    "buildId": "1791490658960-487",
+    "revisionNotConsistencyCandidate": true,
+    "newBuildIdMeansRollbackEvidenceMustMatchThisBuild": true
+  },
+  "preserved": {
+    "apiSelectedPackage": true,
+    "clientPredecessorBuilders": true,
+    "postBuildCleanup": true
+  },
+  "workingTreeDifference": {
+    "path": ".replit",
+    "change": "Development port mappings only; pre-existing change left untouched"
+  },
+  "actionsPerformed": {
+    "publication": false,
+    "productionSchemaWrites": false,
+    "initialization": false,
+    "clientSelectionChange": false,
+    "productionSecurityMutationTests": false
+  },
+  "decision": "STOP: do not advance clients. Review prior publication scope, finish remaining security-live/rollback evidence, then recheck fresh agreeing snapshots before separately approved client release."
+}

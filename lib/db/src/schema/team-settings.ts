@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 
 export const teamSettingsTable = pgTable("team_settings", {
   id: text("id").primaryKey().$defaultFn(() => "singleton"),
@@ -56,6 +56,10 @@ export const teamSettingsTable = pgTable("team_settings", {
    * restock-demand alert. Defaults to 5 when null.
    */
   restockDemandThreshold: integer("restock_demand_threshold"),
+  /** Persistent, admin-controlled preview switch. Off unless deliberately enabled. */
+  careOverviewPreview: boolean("care_overview_preview").notNull().default(false),
+  /** Persistent, admin-controlled governance preview switch. Does not authorize refill operations. */
+  refillGovernancePreview: boolean("refill_governance_preview").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

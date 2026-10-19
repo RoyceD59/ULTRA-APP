@@ -18,6 +18,7 @@ import { isAdminRequest, requireImpactEditAccess } from "../lib/adminAuth.js";
 import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
 import { normalizeEmail, normalizePhone } from "../lib/customer-identity.js";
+import { reconcileOfflineProducts } from "../lib/offline-purchases.js";
 import { provisionOfflineSale, retryOfflineSaleDelivery, toPublicOfflineSale } from "../lib/offline-provisioning.js";
 
 const router: IRouter = Router();
@@ -93,7 +94,7 @@ function validateEmail(v: unknown): string | null | undefined {
 }
 
 function parseProducts(raw: unknown): OfflineProduct[] | null {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 100) return null;
 
   const out: OfflineProduct[] = [];
   for (const p of raw) {
@@ -105,7 +106,7 @@ function parseProducts(raw: unknown): OfflineProduct[] | null {
 
     // quantity — required finite positive integer
     const qty = item["quantity"];
-    if (typeof qty !== "number" || !isFinite(qty) || qty < 1 || !Number.isInteger(qty)) return null;
+    if (typeof qty !== "number" || !isFinite(qty) || qty < 1 || qty > 1000 || !Number.isInteger(qty)) return null;
 
     // productId — optional finite non-negative integer
     if (item["productId"] !== undefined && item["productId"] !== null) {
@@ -120,6 +121,7 @@ function parseProducts(raw: unknown): OfflineProduct[] | null {
     }
 
     out.push({
+      ...(typeof item["lineId"] === "string" ? { lineId: item["lineId"] as string } : {}),
       productName:   (item["productName"] as string).trim(),
       quantity:      qty as number,
       ...(item["productId"]    !== undefined && item["productId"]    !== null ? { productId:    item["productId"]    as number } : {}),
@@ -273,18 +275,23 @@ router.put("/uc/offline-clients/:id", async (req: Request, res: Response): Promi
   }
 
   try {
-    const [row] = await db
+    const row = await db.transaction(async tx => {
+    const [existing] = await tx.select().from(ucOfflineClientsTable).where(eq(ucOfflineClientsTable.id, id)).for("update");
+    if (!existing) return null;
+    const [updated] = await tx
       .update(ucOfflineClientsTable)
       .set({
         clientRef: typeof clientRef === "string" ? clientRef.trim() : "",
         phone:     parsedPhone ?? null,
         email:     parsedEmail ?? null,
-        products:  parsedProducts,
+        products:  reconcileOfflineProducts(parsedProducts, existing.products),
         saleDate:  parsedDate,
         notes:     typeof notes === "string" ? notes.trim() : "",
       })
       .where(eq(ucOfflineClientsTable.id, id))
       .returning();
+    return updated;
+    });
 
     if (!row) { res.status(404).json({ error: "Entry not found" }); return; }
     res.json({ client: toPublicOfflineSale(row) });

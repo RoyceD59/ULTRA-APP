@@ -2,6 +2,10 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { pool } from "@workspace/db";
+import { assertPreviewIsolation } from "./lib/preview-safety.js";
+import { ensureReviewAnalysisSchema } from "./lib/review-analysis-schema.js";
+import { ensureCustomerStatisticsSchema } from "./lib/customer-statistics.js";
+import { startReviewAnalysisWorker } from "./lib/review-analysis-worker.js";
 
 if (process.env.NODE_ENV === "production" &&
     !(process.env.WATER_CHECK_TOKEN_SECRET || process.env.SESSION_SECRET)) {
@@ -12,6 +16,16 @@ import { migrateAndGuardSessionDir } from "./lib/whatsapp";
 import { backfillAccountRecords, recoverUnsyncedRegistrations } from "./lib/account-records.js";
 import { processPendingReferralSettlements } from "./routes/referrals.js";
 import { PRIORITY_LOCATION_SEEDS } from "./lib/priority-locations.js";
+import { ensureHydrateTreeSchema } from "./lib/hydrate-tree-schema.js";
+import { ensureCustomerAssignmentTables } from "./lib/customer-assignment-rollout.js";
+import { ensureCheckoutBenefitsSchema } from "./lib/checkout-benefits-schema.js";
+import { ensureRuntimeSchema, flushRuntimeMetrics } from "./lib/runtime-observability.js";
+import { sampleOperationalHealth } from "./lib/runtime-health.js";
+import { ensureGlobalImpactSchema } from "./lib/global-impact-store.js";
+import { ensureProductEditorialSchema } from "./lib/product-editorial.js";
+import { ensureCompanionCatalogueSchema } from "./lib/companion-catalogue.js";
+import { ensureSkuRegister } from "./lib/sku-master.js";
+import { ensureCompanionHistorySchema } from "./lib/companion-history-import.js";
 
 // ─── Global error guards ──────────────────────────────────────────────────────
 // Prevent any unhandled rejection or uncaught exception from silently crashing
@@ -33,8 +47,10 @@ process.on("uncaughtException", (err) => {
 function shutdown(server: ReturnType<typeof app.listen>, signal: string) {
   logger.info({ signal }, "Shutdown signal received — closing server");
   server.close(() => {
-    logger.info("All connections drained — exiting cleanly");
-    process.exit(0);
+    void flushRuntimeMetrics().finally(() => {
+      logger.info("All connections drained — exiting cleanly");
+      process.exit(0);
+    });
   });
   // Hard-kill after 10 s if connections don't drain in time
   setTimeout(() => {
@@ -47,6 +63,12 @@ function shutdown(server: ReturnType<typeof app.listen>, signal: string) {
 // Add any new columns to sheet_syncs that may not exist on older deployments.
 // Uses IF NOT EXISTS so it is safe to run on every startup.
 async function applyStartupMigrations(): Promise<void> {
+  await ensureRuntimeSchema();
+  await ensureGlobalImpactSchema();
+  await ensureProductEditorialSchema();
+  await ensureCompanionCatalogueSchema();
+  await ensureSkuRegister();
+  await ensureCompanionHistorySchema();
   await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
   // Guide metadata is also created here for existing deployments that predate
   // migration 0045. Keep this DDL in lockstep with lib/db/migrations/0045.
@@ -238,6 +260,7 @@ async function applyStartupMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS webhook_recovery boolean NOT NULL DEFAULT false;
   `);
   logger.info("Startup migration: uc_orders webhook_recovery column ensured");
+  await pool.query(`ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS recovery_enriched_at timestamptz`);
 
   // Add mpesa_receipt column (M-Pesa confirmation code from the Daraja callback,
   // persisted for bookkeeping/statement reconciliation) on older deployments.
@@ -289,6 +312,13 @@ async function applyStartupMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS team_alert_email text;
   `);
   logger.info("Startup migration: team_settings.team_alert_email column ensured");
+
+  await pool.query(`
+    ALTER TABLE team_settings
+      ADD COLUMN IF NOT EXISTS care_overview_preview boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS refill_governance_preview boolean NOT NULL DEFAULT false;
+  `);
+  logger.info("Startup migration: persisted refill preview flags ensured");
 
   // Partial unique index on payment_reference — prevents duplicate orders for
   // the same Paystack (or other) reference.  Excludes empty strings so COD
@@ -373,6 +403,23 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS referral_alert_threshold_changes_latest_idx
       ON referral_alert_threshold_changes (changed_at DESC, id DESC);
+  `);
+  // Keep in sync with migration 0062; existing deployments use startup DDL.
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION reject_referral_threshold_audit_mutation()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'referral_alert_threshold_changes is append-only: % is not permitted', TG_OP
+        USING ERRCODE = '55000';
+    END;
+    $$;
+
+    DROP TRIGGER IF EXISTS referral_threshold_audit_append_only ON referral_alert_threshold_changes;
+    CREATE TRIGGER referral_threshold_audit_append_only
+      BEFORE UPDATE OR DELETE ON referral_alert_threshold_changes
+      FOR EACH STATEMENT EXECUTE FUNCTION reject_referral_threshold_audit_mutation();
   `);
   logger.info("Startup migration: referral alert threshold audit ensured");
   await pool.query(`
@@ -636,6 +683,9 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
   `);
   logger.info("Startup migration: uc_users.deleted_at column ensured");
+  // Review eligibility references deleted_at, so order this rollout after
+  // the lifecycle column exists, including on partially upgraded deployments.
+  await ensureReviewAnalysisSchema();
   await pool.query(`
     CREATE INDEX IF NOT EXISTS uc_users_active_count_covering_idx
       ON uc_users (deleted_at)
@@ -643,6 +693,8 @@ async function applyStartupMigrations(): Promise<void> {
       WHERE deleted_at IS NULL;
   `);
   logger.info("Startup migration: covering active customer count index ensured");
+  await ensureCustomerStatisticsSchema();
+  logger.info("Startup migration: transactional customer statistics ensured");
 
   // Add credential_version for post-password-reset session revocation.
   // Incrementing it on reset invalidates bearer tokens minted before the reset.
@@ -733,6 +785,16 @@ async function applyStartupMigrations(): Promise<void> {
     )
   `);
   logger.info("Startup migration: team_library_docs table ensured");
+  await pool.query(`
+    ALTER TABLE team_library_docs
+      ADD COLUMN IF NOT EXISTS knowledge_status text NOT NULL DEFAULT 'private',
+      ADD COLUMN IF NOT EXISTS knowledge_revision integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS knowledge_title text,
+      ADD COLUMN IF NOT EXISTS knowledge_text text,
+      ADD COLUMN IF NOT EXISTS knowledge_hash text,
+      ADD COLUMN IF NOT EXISTS knowledge_reviewed_by text,
+      ADD COLUMN IF NOT EXISTS knowledge_reviewed_at timestamptz
+  `);
 
   // Pending upload slots — server-issued records that bind a presigned GCS path
   // to the member who requested it.  POST /library/docs validates the uploadId
@@ -769,6 +831,11 @@ async function applyStartupMigrations(): Promise<void> {
     ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS improvement_note_at timestamptz;
   `);
   logger.info("Startup migration: uc_ai_feedback improvement note columns ensured");
+  await pool.query(`
+    ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS user_id integer;
+    ALTER TABLE uc_ai_feedback ADD COLUMN IF NOT EXISTS feedback_key text;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_ai_feedback_key_idx ON uc_ai_feedback(feedback_key);
+  `);
 
   // Once-per-product alert dedupe for the daily lifespan-audit scheduler job
   // (products missing filter_lifespan_days — see lib/scheduler.ts).
@@ -836,11 +903,13 @@ async function applyStartupMigrations(): Promise<void> {
   await pool.query(`
     ALTER TABLE uc_users
       ADD COLUMN IF NOT EXISTS rewards_qr_hash text,
+      ADD COLUMN IF NOT EXISTS rewards_qr_nonce text,
       ADD COLUMN IF NOT EXISTS rewards_qr_revoked_at timestamptz;
     CREATE UNIQUE INDEX IF NOT EXISTS uc_users_rewards_qr_hash_idx
       ON uc_users (rewards_qr_hash) WHERE rewards_qr_hash IS NOT NULL;
     ALTER TABLE uc_orders
       ADD COLUMN IF NOT EXISTS customer_stage text,
+      ADD COLUMN IF NOT EXISTS fulfillment_payment_status text,
       ADD COLUMN IF NOT EXISTS customer_stage_updated_at timestamptz,
       ADD COLUMN IF NOT EXISTS woo_status_modified_at timestamptz,
       ADD COLUMN IF NOT EXISTS woo_status_version text;
@@ -965,6 +1034,10 @@ async function applyStartupMigrations(): Promise<void> {
   logger.info("Startup migration: rewards, registered filters, impact ledger, customer-stage, and COD collection columns ensured");
   await pool.query(`
     ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'legacy';
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS offline_sale_id integer;
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS offline_unit_id text;
+    ALTER TABLE uc_registered_filters ADD COLUMN IF NOT EXISTS offline_lifespan_days integer;
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_offline_unit_unique ON uc_registered_filters(offline_unit_id);
     DROP INDEX IF EXISTS uc_registered_filters_user_order_product_idx;
     CREATE UNIQUE INDEX IF NOT EXISTS uc_registered_filters_source_order_product_idx
       ON uc_registered_filters (source, source_order_id, product_id)
@@ -1576,6 +1649,11 @@ async function applyStartupMigrations(): Promise<void> {
       OR last_field_verified_on IS NULL
       OR next_review_on >= last_field_verified_on
     );
+    CREATE TABLE IF NOT EXISTS uc_location_review_alerts (
+      location_id text PRIMARY KEY REFERENCES uc_locations(id) ON DELETE CASCADE,
+      review_key text NOT NULL,
+      notified_at timestamptz
+    );
   `);
   const legacyLocations = [
     ["loc1", "experience_centre", "UC Experience Centre Westlands", "Woodvale Groove, Westlands, Nairobi", -1.2633, 36.8072, "Mon–Sat 8am–6pm, Sun 10am–4pm", "+254 700 123456"],
@@ -1687,6 +1765,7 @@ async function applyStartupMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS uc_promotion_uses_promotion_user_idx ON uc_promotion_uses (promotion_id,user_id);
   `);
   logger.info("Startup migration: durable rewards promotions ensured");
+  await ensureCheckoutBenefitsSchema();
   await pool.query(`
     ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_idempotency_key text NOT NULL DEFAULT '';
     ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS checkout_claim_id text;
@@ -1697,6 +1776,12 @@ async function applyStartupMigrations(): Promise<void> {
       WHERE checkout_idempotency_key != '';
   `);
   logger.info("Startup migration: durable local checkout idempotency ensured");
+  await pool.query((await import("./lib/guest-pay.js")).GUEST_PAY_DDL);
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_checkout_retirements (
+    id serial PRIMARY KEY, user_id text NOT NULL, idempotency_key text NOT NULL,
+    retired_at timestamptz NOT NULL DEFAULT now());
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_checkout_retirements_owner_key
+      ON uc_checkout_retirements(user_id,idempotency_key);`);
 
   // Opt-in channel flags for filter replacement reminders (email / SMS / WhatsApp).
   // All default false — customers explicitly enable each channel.
@@ -1844,6 +1929,16 @@ async function applyStartupMigrations(): Promise<void> {
     ON CONFLICT (event_type) DO NOTHING;
   `);
   logger.info("Startup migration: uc_rewards_rules table and default rules ensured");
+  await pool.query(`CREATE TABLE IF NOT EXISTS uc_daily_hydration (
+    user_id integer NOT NULL REFERENCES uc_users(id) ON DELETE CASCADE,
+    local_date date NOT NULL, litres double precision NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, local_date),
+    CONSTRAINT uc_daily_hydration_litres_valid CHECK (litres >= 0 AND litres < 'Infinity'::double precision)
+  )`);
+  await pool.query(`ALTER TABLE uc_daily_hydration DROP CONSTRAINT IF EXISTS uc_daily_hydration_litres_valid;
+    ALTER TABLE uc_daily_hydration ADD CONSTRAINT uc_daily_hydration_litres_valid
+    CHECK (litres >= 0 AND litres < 'Infinity'::double precision)`);
 
   // UC Rewards — ledger table (auditable points credit/debit history).
   // ref_id encodes a cycle-scoped idempotency key: "<userId>:<productId>:<activatedAtMs>:<stageKey>"
@@ -2173,6 +2268,104 @@ async function applyStartupMigrations(): Promise<void> {
       ON instant_water_lead_outbox(status, next_attempt_at);
   `);
   logger.info("Startup migration: instant water assessment and ticket tables ensured");
+
+  // Additive, append-only governance records. This is mirrored by shared
+  // migration 0054 for test/schema rollout and remains safe on every startup.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uc_refill_station_actions (
+      id bigserial PRIMARY KEY,
+      station_id text NOT NULL REFERENCES uc_locations(id),
+      action text NOT NULL,
+      actor_id text NOT NULL REFERENCES team_users(id),
+      reason text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT uc_refill_station_action_valid CHECK (action IN ('enable','suspend')),
+      CONSTRAINT uc_refill_station_reason_valid CHECK (length(trim(reason)) BETWEEN 8 AND 500)
+    );
+    CREATE INDEX IF NOT EXISTS uc_refill_station_actions_latest_idx
+      ON uc_refill_station_actions(station_id,id DESC);
+    CREATE TABLE IF NOT EXISTS uc_refill_operator_actions (
+      id bigserial PRIMARY KEY,
+      station_id text NOT NULL REFERENCES uc_locations(id),
+      operator_id text NOT NULL REFERENCES team_users(id),
+      action text NOT NULL,
+      station_enable_event_id bigint REFERENCES uc_refill_station_actions(id),
+      actor_id text NOT NULL REFERENCES team_users(id),
+      reason text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT uc_refill_grant_requires_station_event
+        CHECK (action='revoke' OR station_enable_event_id IS NOT NULL),
+      CONSTRAINT uc_refill_operator_action_valid CHECK (action IN ('grant','revoke')),
+      CONSTRAINT uc_refill_operator_reason_valid CHECK (length(trim(reason)) BETWEEN 8 AND 500)
+    );
+    CREATE INDEX IF NOT EXISTS uc_refill_operator_actions_latest_idx
+      ON uc_refill_operator_actions(operator_id,station_id,id DESC);
+    CREATE TABLE IF NOT EXISTS uc_refill_campaign_versions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_key text NOT NULL,
+      version integer NOT NULL,
+      station_id text NOT NULL REFERENCES uc_locations(id),
+      pricing_version text NOT NULL,
+      eligibility_policy text NOT NULL,
+      credit_ml bigint NOT NULL,
+      max_grants integer NOT NULL,
+      sponsor_funding_minor bigint NOT NULL,
+      cash_charge_minor bigint NOT NULL DEFAULT 0,
+      costs_minor jsonb NOT NULL,
+      starts_at timestamptz NOT NULL,
+      ends_at timestamptz NOT NULL,
+      proposal_hash text NOT NULL,
+      proposed_by text NOT NULL REFERENCES team_users(id),
+      created_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT uc_refill_campaign_valid_window CHECK (ends_at > starts_at),
+      CONSTRAINT uc_refill_campaign_key_valid CHECK (campaign_key ~ '^[a-z0-9][a-z0-9_-]{2,63}$'),
+      CONSTRAINT uc_refill_campaign_version_valid CHECK (version > 0),
+      CONSTRAINT uc_refill_campaign_pricing_valid CHECK (length(trim(pricing_version)) BETWEEN 1 AND 100),
+      CONSTRAINT uc_refill_campaign_eligibility_valid CHECK (eligibility_policy='manual_review'),
+      CONSTRAINT uc_refill_campaign_quantities_valid CHECK (credit_ml > 0 AND max_grants > 0 AND sponsor_funding_minor >= 0 AND cash_charge_minor=0),
+      CONSTRAINT uc_refill_campaign_costs_valid CHECK (jsonb_typeof(costs_minor)='object'),
+      CONSTRAINT uc_refill_campaign_hash_valid CHECK (proposal_hash ~ '^[a-f0-9]{64}$')
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_refill_campaign_station_version
+      ON uc_refill_campaign_versions(campaign_key,station_id,version);
+    CREATE INDEX IF NOT EXISTS uc_refill_campaign_versions_station_idx
+      ON uc_refill_campaign_versions(station_id,created_at DESC);
+    CREATE TABLE IF NOT EXISTS uc_refill_campaign_actions (
+      id bigserial PRIMARY KEY,
+      campaign_version_id uuid NOT NULL REFERENCES uc_refill_campaign_versions(id),
+      action text NOT NULL,
+      actor_id text NOT NULL REFERENCES team_users(id),
+      reason text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT uc_refill_campaign_action_valid CHECK (action IN ('approve','suspend')),
+      CONSTRAINT uc_refill_campaign_action_reason_valid CHECK (length(trim(reason)) BETWEEN 8 AND 500)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uc_refill_campaign_action_once
+      ON uc_refill_campaign_actions(campaign_version_id,action);
+    CREATE INDEX IF NOT EXISTS uc_refill_campaign_actions_latest_idx
+      ON uc_refill_campaign_actions(campaign_version_id,id DESC);
+    CREATE OR REPLACE FUNCTION uc_refill_reject_immutable_change() RETURNS trigger AS $$
+    BEGIN
+      RAISE EXCEPTION 'Controlled refill governance records are append-only';
+    END;
+    $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS uc_refill_station_actions_immutable ON uc_refill_station_actions;
+    CREATE TRIGGER uc_refill_station_actions_immutable BEFORE UPDATE OR DELETE
+      ON uc_refill_station_actions FOR EACH ROW EXECUTE FUNCTION uc_refill_reject_immutable_change();
+    DROP TRIGGER IF EXISTS uc_refill_operator_actions_immutable ON uc_refill_operator_actions;
+    CREATE TRIGGER uc_refill_operator_actions_immutable BEFORE UPDATE OR DELETE
+      ON uc_refill_operator_actions FOR EACH ROW EXECUTE FUNCTION uc_refill_reject_immutable_change();
+    DROP TRIGGER IF EXISTS uc_refill_campaign_versions_immutable ON uc_refill_campaign_versions;
+    CREATE TRIGGER uc_refill_campaign_versions_immutable BEFORE UPDATE OR DELETE
+      ON uc_refill_campaign_versions FOR EACH ROW EXECUTE FUNCTION uc_refill_reject_immutable_change();
+    DROP TRIGGER IF EXISTS uc_refill_campaign_actions_immutable ON uc_refill_campaign_actions;
+    CREATE TRIGGER uc_refill_campaign_actions_immutable BEFORE UPDATE OR DELETE
+      ON uc_refill_campaign_actions FOR EACH ROW EXECUTE FUNCTION uc_refill_reject_immutable_change();
+  `);
+  logger.info("Startup migration: refill governance tables ensured");
+  await ensureHydrateTreeSchema(pool);
+  await ensureCustomerAssignmentTables();
+  logger.info("Startup migration: hydrate shared trees ensured");
 }
 async function checkProductionSecurityConfig(): Promise<void> {
   if (process.env["NODE_ENV"] !== "production") return;
@@ -2243,6 +2436,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+assertPreviewIsolation(process.env);
 applyStartupMigrations()
   .then(async () => {
     // Post-merge setup runs this process before drizzle-kit compares the
@@ -2253,6 +2447,23 @@ applyStartupMigrations()
       logger.info("Startup migrations completed in migration-only mode");
       process.exit(0);
     }
+    if (process.env["PREVIEW_SAFE_MODE"] === "1") {
+      const server = app.listen(port, (err?: Error) => {
+        if (err) {
+          logger.error({ err }, "Error listening on port");
+          process.exit(1);
+        }
+        logger.info({ port }, "Isolated preview server listening");
+      });
+      process.on("SIGTERM", () => shutdown(server, "SIGTERM"));
+      process.on("SIGINT", () => shutdown(server, "SIGINT"));
+      return;
+    }
+
+    // Observability is independent of business workers and is disabled in
+    // listener-only isolated preview, just like all other background work.
+    setInterval(() => { void flushRuntimeMetrics(); void sampleOperationalHealth(); }, 60_000).unref();
+    void sampleOperationalHealth();
 
     // Fire-and-forget — a failure here must not prevent the server from starting.
     checkProductionSecurityConfig().catch((err) => {
@@ -2284,6 +2495,7 @@ applyStartupMigrations()
 
       logger.info({ port }, "Server listening");
       startScheduler();
+      startReviewAnalysisWorker();
       processPendingReferralSettlements().catch((err) => logger.error({ err }, "Referral settlement startup pass failed"));
       const referralTimer = setInterval(() => {
         processPendingReferralSettlements().catch((err) => logger.error({ err }, "Referral settlement pass failed"));

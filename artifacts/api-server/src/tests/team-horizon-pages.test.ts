@@ -18,6 +18,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { createHmac } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 process.env["SESSION_SECRET"] ??= "test-secret-team-horizon-pages";
 
@@ -342,6 +343,31 @@ describe("Webhook Tester page flows", () => {
   });
 
   // ── Authenticated test-dispatch (used by the Webhook Tester UI) ─────────────
+
+  it("accepts the unchanged Webhook Tester default through both dispatch and signed ingest", async () => {
+    const source = await readFile(
+      new URL("../../../projecthub/src/pages/webhook-tester.tsx", import.meta.url),
+      "utf8",
+    );
+    const match = source.match(/taskData:\s*("(?:\\.|[^"\\])*")/);
+    assert.ok(match, "Webhook Tester must provide a default JSON payload");
+    const payload = {
+      event: "task.created",
+      sourcePlatform: "jira",
+      taskData: JSON.parse(JSON.parse(match[1]!)),
+    };
+
+    for (const { status, data } of [
+      await api("POST", "/webhook/test-dispatch", payload),
+      await postIngest(payload),
+    ]) {
+      assert.equal(status, 200, JSON.stringify(data));
+      const response = data as Record<string, unknown>;
+      assert.equal(response["accepted"], true);
+      assert.deepEqual(response["validationErrors"], []);
+      assert.equal(response["taskId"], null, "The example must not create a task without a project");
+    }
+  });
 
   it("test-dispatch: rejects a payload missing required taskData fields (400)", async () => {
     const { status, data } = await api("POST", "/webhook/test-dispatch", {

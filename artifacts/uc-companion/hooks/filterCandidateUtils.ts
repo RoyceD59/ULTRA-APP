@@ -18,6 +18,8 @@ export interface CandidateResult {
 
 /** Minimal order shape required by the candidate computation. */
 export interface CandidateOrder {
+  /** Set only by the authoritative purchase eligibility response. */
+  activationEligible?: boolean;
   id:          number;
   dateCreated: string;
   lineItems?:  { productId?: number }[];
@@ -52,7 +54,7 @@ export function computeRegisterCandidate(opts: {
 
   if (filterProducts.length === 0) return null;
   const byId = new Map(filterProducts.map(p => [p.id, p]));
-  const sorted = [...orders].sort(
+  const sorted = orders.filter(order => order.activationEligible === true).sort(
     (a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime(),
   );
 

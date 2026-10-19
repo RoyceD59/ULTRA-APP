@@ -41,3 +41,7 @@ const AsyncStorage = {
 };
 
 export default AsyncStorage;
+
+// Node 24 may load an alias through native ESM while tsx loads its caller as
+// CommonJS. Expose the same operations on both interop shapes, sharing one map.
+export const { getItem, setItem, removeItem, clear } = AsyncStorage;

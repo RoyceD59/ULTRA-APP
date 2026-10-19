@@ -4,6 +4,8 @@
  * POST   /api/library/request-upload — presigned GCS upload URL + pending slot
  * POST   /api/library/docs           — finalise doc after upload (by uploadId)
  * GET    /api/library/docs           — list all library documents
+ * GET    /api/library/docs/:id/knowledge — preview reference text (active admin)
+ * POST   /api/library/docs/:id/knowledge — approve/revoke reviewed text (active admin)
  * DELETE /api/library/docs/:id       — delete a document (admin only)
  * GET    /api/library/download/:id   — stream download (team auth)
  *
@@ -29,6 +31,7 @@ import {
 import { eq, and, gt, desc, lt } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { verifyToken } from "../lib/jwt.js";
+import { createLibraryKnowledgeRouter, requireLibraryAdmin } from "./library-knowledge.js";
 import {
   finalizeUpload,
   purgeAbandonedSlots,
@@ -57,6 +60,7 @@ export function createLibraryRouter(
   storage: LibraryStorage = new ObjectStorageService(),
 ): IRouter {
   const router: IRouter = Router();
+  router.use(createLibraryKnowledgeRouter(storage));
 
 // Presigned URLs are valid for 15 minutes; give the upload slot a generous
 // 30-minute window to account for slow connections.
@@ -259,7 +263,7 @@ router.get("/library/docs", async (req: Request, res: Response): Promise<void> =
     const docs = await db.select()
       .from(teamLibraryDocsTable)
       .orderBy(desc(teamLibraryDocsTable.createdAt));
-    res.json({ docs });
+    res.json({ docs: docs.map(({ knowledgeText, knowledgeHash, ...metadata }) => metadata) });
   } catch (err) {
     console.error("[library] DB list error:", err);
     res.status(500).json({ error: "Failed to list documents" });
@@ -271,13 +275,9 @@ router.get("/library/docs", async (req: Request, res: Response): Promise<void> =
 router.delete("/library/docs/:id", async (req: Request, res: Response): Promise<void> => {
   const member = requireMember(res, req.headers["authorization"]);
   if (!member) return;
-  if (member.role !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
-    return;
-  }
-
   const docId = String(req.params["id"]);
   try {
+    if (!await requireLibraryAdmin(req, res)) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [doc] = await db.select().from(teamLibraryDocsTable)
       .where(eq(teamLibraryDocsTable.id as any, docId));

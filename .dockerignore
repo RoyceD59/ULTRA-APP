@@ -1,0 +1,16 @@
+.git
+.github
+**/node_modules
+.npm-cache
+.corepack-cache
+**/dist
+**/static-build
+**/.expo
+**/.metro-cache
+**/.env
+**/.env.*
+**/*.log
+work
+outputs
+*.zip
+*.pdf

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { resolveMediaUrl } from '@/hooks/useApi';
 

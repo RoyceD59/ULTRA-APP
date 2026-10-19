@@ -5,6 +5,633 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ProductEditorialIdentity {
+  code: string;
+  slug: string;
+  name: string;
+  parent_sku: string;
+  publishable: boolean;
+}
+
+/**
+ * Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints
+ */
+export type ProductEditorialRevisionRecord = { [key: string]: unknown };
+
+export interface ProductEditorialRevision {
+  /** @minimum 1 */
+  revision: number;
+  /** Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints */
+  record: ProductEditorialRevisionRecord;
+}
+
+export type ProductEditorialPublicPriceAuthority = typeof ProductEditorialPublicPriceAuthority[keyof typeof ProductEditorialPublicPriceAuthority];
+
+
+export const ProductEditorialPublicPriceAuthority = {
+  companion: 'companion',
+} as const;
+
+export interface ProductEditorialVariant {
+  childSku: string;
+  label: string;
+  /** @nullable */
+  variationId?: number | null;
+  /** @nullable */
+  price?: number | null;
+  /** @nullable */
+  stockStatus?: string | null;
+  diagnostic?: string;
+}
+
+export interface ProductEditorialPublic {
+  code: string;
+  slug: string;
+  name: string;
+  priceAuthority?: ProductEditorialPublicPriceAuthority;
+  parentSku: string;
+  purchasable: boolean;
+  /** @nullable */
+  price: number | null;
+  /** @nullable */
+  commerceId?: number | null;
+  /** @nullable */
+  availability?: string | null;
+  /** @nullable */
+  livePrice?: number | null;
+  diagnostics?: string[];
+  variants: ProductEditorialVariant[];
+  [key: string]: unknown;
+ }
+
+export type ProductEditorialCollectionTopicsItem = { [key: string]: unknown };
+
+export interface ProductEditorialCollection {
+  products: ProductEditorialPublic[];
+  topics: ProductEditorialCollectionTopicsItem[];
+}
+
+export type GlobalImpactSnapshotMaxAgeSeconds = typeof GlobalImpactSnapshotMaxAgeSeconds[keyof typeof GlobalImpactSnapshotMaxAgeSeconds];
+
+
+export const GlobalImpactSnapshotMaxAgeSeconds = {
+  NUMBER_60: 60,
+} as const;
+
+export type GlobalImpactSnapshotAutoStats = {
+  totalUsers: number;
+  litresFiltered: number;
+  cleanWaterDays: number;
+};
+
+export type GlobalImpactSnapshotOfflineStats = {
+  clientCount: number;
+  litresFiltered: number;
+};
+
+export interface GlobalImpactAdjustment {
+  litresOffset: number;
+  usersOffset: number;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string;
+  revision?: number;
+}
+
+export interface GlobalImpactSnapshot {
+  /** @minimum 0 */
+  totalUsers: number;
+  /** @minimum 0 */
+  litresFiltered: number;
+  /** @minimum 0 */
+  plasticsAvoided: number;
+  /** @minimum 0 */
+  cleanWaterDays: number;
+  /** @pattern ^[a-f0-9]{64}$ */
+  snapshotId: string;
+  calculatedAt: string;
+  lastUpdated: string;
+  /** @minimum 1 */
+  adjustmentRevision: number;
+  maxAgeSeconds: GlobalImpactSnapshotMaxAgeSeconds;
+  lifespanAvailable: boolean;
+  autoStats: GlobalImpactSnapshotAutoStats;
+  offlineStats: GlobalImpactSnapshotOfflineStats;
+  override: GlobalImpactAdjustment;
+}
+
+export interface GlobalImpactAdjustmentInput {
+  litresOffset?: number;
+  usersOffset?: number;
+  /** @minimum 0 */
+  expectedRevision?: number;
+}
+
+export interface GlobalImpactAdjustmentResult {
+  ok: boolean;
+  override: GlobalImpactAdjustment;
+}
+
+export interface RewardsQrCandidate {
+  /**
+     * @nullable
+     * @pattern ^[A-Za-z0-9_-]{40,64}$
+     */
+  qrToken: string | null;
+}
+
+export interface RewardsQrRecovery {
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  expectedVersion: string | null;
+}
+
+export type RewardsQrInspectionStatus = typeof RewardsQrInspectionStatus[keyof typeof RewardsQrInspectionStatus];
+
+
+export const RewardsQrInspectionStatus = {
+  active: 'active',
+  revoked: 'revoked',
+  missing: 'missing',
+} as const;
+
+export interface RewardsQrInspection {
+  userId: number;
+  status: RewardsQrInspectionStatus;
+  /** @nullable */
+  version: string | null;
+  valid: boolean;
+  /** @nullable */
+  qrToken: string | null;
+}
+
+export interface UcEnquirySubmission {
+  id: number;
+  productId: string;
+  productName: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  createdAt: string;
+}
+
+export type LibraryKnowledgePreviewStatus = typeof LibraryKnowledgePreviewStatus[keyof typeof LibraryKnowledgePreviewStatus];
+
+
+export const LibraryKnowledgePreviewStatus = {
+  private: 'private',
+  approved: 'approved',
+  revoked: 'revoked',
+} as const;
+
+export interface LibraryKnowledgePreview {
+  /** @maxLength 16000 */
+  text: string;
+  hash: string;
+  /** @minimum 0 */
+  revision: number;
+  status: LibraryKnowledgePreviewStatus;
+  title: string;
+  /** @nullable */
+  approvedText: string | null;
+}
+
+export type LibraryKnowledgeDecisionAction = typeof LibraryKnowledgeDecisionAction[keyof typeof LibraryKnowledgeDecisionAction];
+
+
+export const LibraryKnowledgeDecisionAction = {
+  approve: 'approve',
+  revoke: 'revoke',
+} as const;
+
+export interface LibraryKnowledgeDecision {
+  action: LibraryKnowledgeDecisionAction;
+  /** @minimum 0 */
+  revision: number;
+  /** Preview hash required on approval */
+  hash?: string;
+  /**
+     * Public source title required on approval
+     * @maxLength 160
+     */
+  title?: string;
+  /** Must be true to approve; confirms no private or customer information */
+  publicReferenceConfirmed?: boolean;
+}
+
+export type LibraryKnowledgeMetadataKnowledgeStatus = typeof LibraryKnowledgeMetadataKnowledgeStatus[keyof typeof LibraryKnowledgeMetadataKnowledgeStatus];
+
+
+export const LibraryKnowledgeMetadataKnowledgeStatus = {
+  private: 'private',
+  approved: 'approved',
+  revoked: 'revoked',
+} as const;
+
+export interface LibraryKnowledgeMetadata {
+  id: string;
+  knowledgeStatus: LibraryKnowledgeMetadataKnowledgeStatus;
+  knowledgeRevision: number;
+  /** @nullable */
+  knowledgeTitle: string | null;
+  /** @nullable */
+  knowledgeReviewedAt: string | null;
+  /** @nullable */
+  knowledgeReviewedBy: string | null;
+}
+
+export interface PhysicalTestPromotionInput {
+  /**
+     * @minLength 3
+     * @maxLength 64
+     */
+  code: string;
+}
+
+export type CompanionCheckoutQuoteInputFulfillment = typeof CompanionCheckoutQuoteInputFulfillment[keyof typeof CompanionCheckoutQuoteInputFulfillment];
+
+
+export const CompanionCheckoutQuoteInputFulfillment = {
+  collection: 'collection',
+  delivery: 'delivery',
+} as const;
+
+export type CompanionCheckoutQuoteInputLineItemsItem = {
+  /** @minimum 1 */
+  productId: number;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  quantity: number;
+  /** @minimum 1 */
+  variationId?: number;
+  /** @minLength 1 */
+  childSku?: string;
+};
+
+export interface CompanionCheckoutQuoteInput {
+  fulfillment: CompanionCheckoutQuoteInputFulfillment;
+  /** @maxLength 64 */
+  code?: string;
+  applyReferralDiscount?: boolean;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lineItems: CompanionCheckoutQuoteInputLineItemsItem[];
+}
+
+export type CompanionCheckoutQuoteLinesItem = {
+  productId: number;
+  /** @minimum 1 */
+  variationId?: number;
+  childSku?: string;
+  variantLabel?: string;
+  name: string;
+  quantity: number;
+  subtotal: number;
+};
+
+export type CompanionCheckoutQuotePromotion = {
+  code: string;
+  title?: string;
+  label?: string;
+  type?: string;
+};
+
+export type CompanionCheckoutQuoteFulfillment = typeof CompanionCheckoutQuoteFulfillment[keyof typeof CompanionCheckoutQuoteFulfillment];
+
+
+export const CompanionCheckoutQuoteFulfillment = {
+  collection: 'collection',
+  delivery: 'delivery',
+} as const;
+
+export interface CompanionCheckoutQuote {
+  lines?: CompanionCheckoutQuoteLinesItem[];
+  promotion: CompanionCheckoutQuotePromotion;
+  fulfillment: CompanionCheckoutQuoteFulfillment;
+  subtotal: number;
+  delivery: number;
+  discountAmount: number;
+  total: number;
+}
+
+export interface CustomerAssignmentInput {
+  idempotencyKey: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  productId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  installationDate: string;
+  orderId: number;
+  orderItemId: number;
+  targetAccountId?: number;
+}
+
+export interface AssignmentOrderLine {
+  orderId: number;
+  orderItemId: number;
+  productId: number;
+  name: string;
+  quantity: number;
+  ownerReference: string;
+  status: string;
+  /** @nullable */
+  wooOrderId?: number | null;
+  /** @nullable */
+  cashCollectionState?: string | null;
+  /** @nullable */
+  assignmentId?: number | null;
+}
+
+export type CustomerFilterAssignmentStatus = typeof CustomerFilterAssignmentStatus[keyof typeof CustomerFilterAssignmentStatus];
+
+
+export const CustomerFilterAssignmentStatus = {
+  pending: 'pending',
+  linked: 'linked',
+  review: 'review',
+} as const;
+
+export interface CustomerFilterAssignment {
+  id: number;
+  customerName: string;
+  email: string;
+  phone: string;
+  productId: number;
+  productName: string;
+  lifespanDays: number;
+  capacityLitres: number;
+  installationDate: string;
+  orderId: number;
+  orderItemId: number;
+  orderReference: string;
+  cashCollectionState: string;
+  status: CustomerFilterAssignmentStatus;
+  /** @nullable */
+  reviewReason?: string | null;
+  /** @nullable */
+  targetAccountId?: number | null;
+  /** @nullable */
+  linkedAccountId?: number | null;
+  /** @nullable */
+  filterId?: number | null;
+  /** @nullable */
+  activatedAt?: string | null;
+  /** @nullable */
+  maintenanceCount?: number | null;
+  /** @nullable */
+  active?: boolean | null;
+  createdAt?: string;
+  /** @nullable */
+  linkedAt?: string | null;
+}
+
+export interface CustomerAssignmentPage {
+  items: CustomerFilterAssignment[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type CustomerAssignmentAuditEntryDetails = { [key: string]: unknown };
+
+export interface CustomerAssignmentAuditEntry {
+  id: number;
+  actor: string;
+  action: string;
+  createdAt: string;
+  details: CustomerAssignmentAuditEntryDetails;
+}
+
+export interface UcDailyHydrationInput {
+  /** @minimum 0 */
+  litres: number;
+}
+
+export interface UcDailyHydration {
+  localDate: string;
+  /** @nullable */
+  litres: number | null;
+}
+
+export interface HydrateAllocationConfig {
+  contributionRate: 0.03;
+  treeShare: 0.5;
+  /** @exclusiveMinimum 0 */
+  treeCostKes: number;
+}
+
+export type HydrateCustomerTreeTreeStage = typeof HydrateCustomerTreeTreeStage[keyof typeof HydrateCustomerTreeTreeStage];
+
+
+export const HydrateCustomerTreeTreeStage = {
+  seed: 'seed',
+  sapling: 'sapling',
+  growing: 'growing',
+  funded: 'funded',
+} as const;
+
+/**
+ * @nullable
+ */
+export type HydrateCustomerTreeTree = {
+  stage: HydrateCustomerTreeTreeStage;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  fundedPct: number;
+  established: boolean;
+  /** @minimum 0 */
+  yourShareKes: number;
+} | null;
+
+export interface HydrateCustomerTree {
+  /** @minimum 0 */
+  eligibleOrders: number;
+  /** @minimum 0 */
+  eligiblePurchasesKes: number;
+  /** @minimum 0 */
+  allocationKes: number;
+  /** @minimum 0 */
+  treeShareKes: number;
+  /** @minimum 0 */
+  cleanWaterKes: number;
+  /** @minimum 0 */
+  replacementPurchases: number;
+  /** @minimum 0 */
+  treesHelped: number;
+  config: HydrateAllocationConfig;
+  /** @nullable */
+  tree: HydrateCustomerTreeTree;
+}
+
+export interface HydrateForestTotals {
+  generatedAt: string;
+  /** @minimum 0 */
+  eligibleRevenueKes: number;
+  /** @minimum 0 */
+  appRevenueKes: number;
+  /** @minimum 0 */
+  baselineRevenueKes: number;
+  /** @minimum 0 */
+  contributionKes: number;
+  /** @minimum 0 */
+  treeFundKes: number;
+  /** @minimum 0 */
+  cleanWaterKes: number;
+  /** @minimum 0 */
+  sharedTreesFunded: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  growingTreePct: number | null;
+  /** @minimum 0 */
+  estimatedTreesFunded: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  treesPlanted: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  treesEstablished: number | null;
+  /** @nullable */
+  reportDate: string | null;
+  location: string;
+  config: HydrateAllocationConfig;
+}
+
+export type CustomerReviewAssessmentStatus = typeof CustomerReviewAssessmentStatus[keyof typeof CustomerReviewAssessmentStatus];
+
+
+export const CustomerReviewAssessmentStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+} as const;
+
+export type CustomerReviewAssessmentCategory = typeof CustomerReviewAssessmentCategory[keyof typeof CustomerReviewAssessmentCategory];
+
+
+export const CustomerReviewAssessmentCategory = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+  Mixed: 'Mixed',
+} as const;
+
+export interface CustomerReviewAssessment {
+  status: CustomerReviewAssessmentStatus;
+  category?: CustomerReviewAssessmentCategory;
+  /** @maxLength 460 */
+  explanation?: string;
+  /**
+     * @maxItems 3
+     * @items.maxLength 40
+     */
+  themes?: string[];
+  analyzedAt?: string;
+  error?: string;
+}
+
+export type CustomerReviewLogEntryMediaItemType = typeof CustomerReviewLogEntryMediaItemType[keyof typeof CustomerReviewLogEntryMediaItemType];
+
+
+export const CustomerReviewLogEntryMediaItemType = {
+  photo: 'photo',
+  video: 'video',
+} as const;
+
+export type CustomerReviewLogEntryMediaItem = {
+  url: string;
+  type: CustomerReviewLogEntryMediaItemType;
+};
+
+export type CustomerReviewLogEntryRatingSentiment = typeof CustomerReviewLogEntryRatingSentiment[keyof typeof CustomerReviewLogEntryRatingSentiment];
+
+
+export const CustomerReviewLogEntryRatingSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+} as const;
+
+export interface CustomerReviewLogEntry {
+  id: number;
+  productId: number;
+  productName: string;
+  authorName: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  title: string;
+  body: string;
+  media: CustomerReviewLogEntryMediaItem[];
+  createdAt: string;
+  /** @nullable */
+  editedAt: string | null;
+  ratingSentiment: CustomerReviewLogEntryRatingSentiment;
+  disagreement: boolean;
+  analysis: CustomerReviewAssessment;
+}
+
+export type CustomerReviewCountsRating = {
+  Positive: number;
+  Neutral: number;
+  Negative: number;
+};
+
+export type CustomerReviewCountsAi = {
+  Positive: number;
+  Neutral: number;
+  Negative: number;
+  Mixed: number;
+};
+
+export type CustomerReviewCountsStatus = {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  unavailable: number;
+};
+
+export interface CustomerReviewCounts {
+  rating: CustomerReviewCountsRating;
+  ai: CustomerReviewCountsAi;
+  status: CustomerReviewCountsStatus;
+  disagreements: number;
+}
+
+export type CustomerReviewLogProductsItem = {
+  id: number;
+  name: string;
+};
+
+export interface CustomerReviewLog {
+  reviews: CustomerReviewLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  counts: CustomerReviewCounts;
+  products: CustomerReviewLogProductsItem[];
+}
+
 export interface BlogSource {
   /**
      * @minLength 1
@@ -322,7 +949,24 @@ export interface AlisonTurnInput {
 
 export interface AlisonTurnResponse {
   reply: string;
+  feedbackToken: string;
   suggestions: string[];
+}
+
+export type AlisonFeedbackInputRating = typeof AlisonFeedbackInputRating[keyof typeof AlisonFeedbackInputRating];
+
+
+export const AlisonFeedbackInputRating = {
+  up: 'up',
+  down: 'down',
+} as const;
+
+export interface AlisonFeedbackInput {
+  rating: AlisonFeedbackInputRating;
+  question: string;
+  answer: string;
+  /** @maxLength 2048 */
+  feedbackToken: string;
 }
 
 export type AlisonTranscriptMessageRole = typeof AlisonTranscriptMessageRole[keyof typeof AlisonTranscriptMessageRole];
@@ -514,11 +1158,26 @@ export interface InstantWaterAssessmentAnswers {
      * @maxLength 160
      */
   area: string;
-  source: InstantWaterSource;
-  concern: InstantWaterConcern;
+  source?: InstantWaterSource;
+  concern?: InstantWaterConcern;
   symptom?: InstantWaterAssessmentAnswersSymptom;
   useContext?: InstantWaterAssessmentAnswersUseContext;
-  setting: InstantWaterSetting;
+  setting?: InstantWaterSetting;
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  sources?: InstantWaterSource[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  concerns?: InstantWaterConcern[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  settings?: InstantWaterSetting[];
 }
 
 export type PublicInstantWaterAssessmentInputSourceAttribution = {
@@ -640,6 +1299,7 @@ export type PublicInstantWaterAssessmentResultRulesVersion = typeof PublicInstan
 
 export const PublicInstantWaterAssessmentResultRulesVersion = {
   'instant-water-check-v1': 'instant-water-check-v1',
+  'instant-water-check-v2': 'instant-water-check-v2',
 } as const;
 
 export type PublicInstantWaterAssessmentResultAreaFlag = typeof PublicInstantWaterAssessmentResultAreaFlag[keyof typeof PublicInstantWaterAssessmentResultAreaFlag];
@@ -649,6 +1309,14 @@ export const PublicInstantWaterAssessmentResultAreaFlag = {
   none: 'none',
   hard_groundwater: 'hard_groundwater',
   rift_valley_fluoride: 'rift_valley_fluoride',
+} as const;
+
+export type PublicInstantWaterAssessmentResultRecommendationAction = typeof PublicInstantWaterAssessmentResultRecommendationAction[keyof typeof PublicInstantWaterAssessmentResultRecommendationAction];
+
+
+export const PublicInstantWaterAssessmentResultRecommendationAction = {
+  product: 'product',
+  enquiry: 'enquiry',
 } as const;
 
 export type PublicInstantWaterAssessmentResultProvenance = typeof PublicInstantWaterAssessmentResultProvenance[keyof typeof PublicInstantWaterAssessmentResultProvenance];
@@ -662,6 +1330,9 @@ export const PublicInstantWaterAssessmentResultProvenance = {
 export type PublicInstantWaterAssessmentResultRecommendation = {
   name: string;
   explanation: string;
+  productId?: number;
+  productName?: string;
+  action?: PublicInstantWaterAssessmentResultRecommendationAction;
 };
 
 export interface PublicInstantWaterAssessmentResult {
@@ -784,6 +1455,11 @@ export type InstantWaterPhysicalTestRequestInputMediaReferencesItem = {
 
 export interface InstantWaterPhysicalTestRequestInput {
   /**
+     * @minLength 3
+     * @maxLength 64
+     */
+  promoCode?: string;
+  /**
      * @minLength 8
      * @maxLength 200
      */
@@ -817,6 +1493,8 @@ export const InstantWaterPhysicalTestResponseServiceState = {
 } as const;
 
 export interface InstantWaterPhysicalTestResponse {
+  freeWaterTest?: boolean;
+  promoCode?: string;
   assessmentId: string;
   reference: string;
   serviceState: InstantWaterPhysicalTestResponseServiceState;
@@ -824,11 +1502,14 @@ export interface InstantWaterPhysicalTestResponse {
 }
 
 export interface InstantWaterAssessment {
+  answers?: InstantWaterAssessmentAnswers;
   assessmentId: string;
   reference: string;
   bands: InstantWaterBands;
   accountLinkState: string;
   serviceState: string;
+  freeWaterTest?: boolean;
+  promoCode?: string;
   createdAt: string;
 }
 
@@ -886,10 +1567,13 @@ export interface ProjectHubInstantWaterMediaReference {
 }
 
 export type ProjectHubInstantWaterDetail = ProjectHubInstantWaterSummary & {
+  answers?: InstantWaterAssessmentAnswers;
   phone?: string;
   consentVersion?: string;
   sourceAttribution?: ProjectHubInstantWaterDetailSourceAttribution;
   serviceAddress?: string;
+  promoCode?: string;
+  freeWaterTest?: boolean;
   preferredContactTime?: string;
   mediaReferences?: ProjectHubInstantWaterMediaReference[];
 };
@@ -911,6 +1595,121 @@ export interface ProjectHubInstantWaterUpdateInput {
   expectedUpdatedAt: string;
   /** @maxLength 2000 */
   internalNote?: string;
+}
+
+export type UcOrderFulfillmentInputStatus = typeof UcOrderFulfillmentInputStatus[keyof typeof UcOrderFulfillmentInputStatus];
+
+
+export const UcOrderFulfillmentInputStatus = {
+  shipped: 'shipped',
+  'ready-to-collect': 'ready-to-collect',
+} as const;
+
+export interface UcOrderFulfillmentInput {
+  status: UcOrderFulfillmentInputStatus;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  idempotencyKey?: string;
+  /** @maxLength 100 */
+  trackingNumber?: string;
+  /**
+     * HTTP or HTTPS tracking link without embedded credentials
+     * @maxLength 2048
+     */
+  trackingUrl?: string;
+  /**
+     * Valid calendar date in YYYY-MM-DD format
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  estimatedDelivery?: string;
+  /**
+     * Required when status is ready-to-collect
+     * @maxLength 300
+     */
+  collectionLocation?: string;
+  /**
+     * Customer-visible fulfillment note
+     * @maxLength 500
+     */
+  note?: string;
+}
+
+export type UcOrderFulfillmentResultNotificationStatus = typeof UcOrderFulfillmentResultNotificationStatus[keyof typeof UcOrderFulfillmentResultNotificationStatus];
+
+
+export const UcOrderFulfillmentResultNotificationStatus = {
+  queued: 'queued',
+  skipped: 'skipped',
+} as const;
+
+export type UcOrderFulfillmentResultNotificationChannelsItem = typeof UcOrderFulfillmentResultNotificationChannelsItem[keyof typeof UcOrderFulfillmentResultNotificationChannelsItem];
+
+
+export const UcOrderFulfillmentResultNotificationChannelsItem = {
+  sms: 'sms',
+  push: 'push',
+  email: 'email',
+} as const;
+
+export type UcOrderFulfillmentResultNotification = {
+  status: UcOrderFulfillmentResultNotificationStatus;
+  channels: UcOrderFulfillmentResultNotificationChannelsItem[];
+};
+
+export interface UcOrderFulfillmentResult {
+  ok: boolean;
+  id: number;
+  status: string;
+  customerStage: string | null;
+  repeated: boolean;
+  notification: UcOrderFulfillmentResultNotification;
+}
+
+export type UcAdminOrderUpdateStatus = typeof UcAdminOrderUpdateStatus[keyof typeof UcAdminOrderUpdateStatus];
+
+
+export const UcAdminOrderUpdateStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  paid: 'paid',
+  declined: 'declined',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  dispatched: 'dispatched',
+} as const;
+
+export type UcAdminOrderUpdateShippingAddress = {[key: string]: string};
+
+export interface UcAdminOrderLineInput {
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  productId: number;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  quantity: number;
+  /** @pattern ^\d{1,10}(\.\d{1,2})?$ */
+  total: string;
+}
+
+export interface UcAdminOrderUpdate {
+  status?: UcAdminOrderUpdateStatus;
+  shippingAddress?: UcAdminOrderUpdateShippingAddress;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lineItems?: UcAdminOrderLineInput[];
 }
 
 export type UcOrderCustomerStageInputStage = typeof UcOrderCustomerStageInputStage[keyof typeof UcOrderCustomerStageInputStage];
@@ -1181,7 +1980,10 @@ export interface AnthropicError {
 }
 
 export interface AiQueryInput {
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
   question: string;
   /** Identifier of the calling agent (e.g. "orchestrator", "analytics-agent") */
   source?: string;
@@ -1324,23 +2126,157 @@ export interface SystemStatusUpdate {
   notes?: string;
 }
 
+export type RuntimeDiagnosticEnvelopeSchema = typeof RuntimeDiagnosticEnvelopeSchema[keyof typeof RuntimeDiagnosticEnvelopeSchema];
+
+
+export const RuntimeDiagnosticEnvelopeSchema = {
+  NUMBER_1: 1,
+} as const;
+
+export type RuntimeDiagnosticEnvelopeApp = typeof RuntimeDiagnosticEnvelopeApp[keyof typeof RuntimeDiagnosticEnvelopeApp];
+
+
+export const RuntimeDiagnosticEnvelopeApp = {
+  companion: 'companion',
+  projecthub: 'projecthub',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeEnvironment = typeof RuntimeDiagnosticEnvelopeEnvironment[keyof typeof RuntimeDiagnosticEnvelopeEnvironment];
+
+
+export const RuntimeDiagnosticEnvelopeEnvironment = {
+  production: 'production',
+  development: 'development',
+  preview: 'preview',
+} as const;
+
+export type RuntimeDiagnosticEnvelopePlatform = typeof RuntimeDiagnosticEnvelopePlatform[keyof typeof RuntimeDiagnosticEnvelopePlatform];
+
+
+export const RuntimeDiagnosticEnvelopePlatform = {
+  web: 'web',
+  android: 'android',
+  ios: 'ios',
+  other: 'other',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeBrowser = typeof RuntimeDiagnosticEnvelopeBrowser[keyof typeof RuntimeDiagnosticEnvelopeBrowser];
+
+
+export const RuntimeDiagnosticEnvelopeBrowser = {
+  chrome: 'chrome',
+  safari: 'safari',
+  firefox: 'firefox',
+  edge: 'edge',
+  other: 'other',
+  native: 'native',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeRouteClass = typeof RuntimeDiagnosticEnvelopeRouteClass[keyof typeof RuntimeDiagnosticEnvelopeRouteClass];
+
+
+export const RuntimeDiagnosticEnvelopeRouteClass = {
+  home: 'home',
+  catalogue: 'catalogue',
+  product: 'product',
+  cart: 'cart',
+  checkout: 'checkout',
+  orders: 'orders',
+  account: 'account',
+  auth: 'auth',
+  care: 'care',
+  guides: 'guides',
+  impact: 'impact',
+  rewards: 'rewards',
+  support: 'support',
+  admin: 'admin',
+  monitoring: 'monitoring',
+  projects: 'projects',
+  tasks: 'tasks',
+  other: 'other',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeCategory = typeof RuntimeDiagnosticEnvelopeCategory[keyof typeof RuntimeDiagnosticEnvelopeCategory];
+
+
+export const RuntimeDiagnosticEnvelopeCategory = {
+  render: 'render',
+  unhandled_error: 'unhandled_error',
+  unhandled_rejection: 'unhandled_rejection',
+  api_read_failed: 'api_read_failed',
+  api_read_timeout: 'api_read_timeout',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeFramesItemAsset = typeof RuntimeDiagnosticEnvelopeFramesItemAsset[keyof typeof RuntimeDiagnosticEnvelopeFramesItemAsset];
+
+
+export const RuntimeDiagnosticEnvelopeFramesItemAsset = {
+  application: 'application',
+  vendor: 'vendor',
+  bundle: 'bundle',
+  unknown: 'unknown',
+} as const;
+
+export type RuntimeDiagnosticEnvelopeFramesItem = {
+  asset: RuntimeDiagnosticEnvelopeFramesItemAsset;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  line: number;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  column: number;
+};
+
+export interface RuntimeDiagnosticEnvelope {
+  schema: RuntimeDiagnosticEnvelopeSchema;
+  app: RuntimeDiagnosticEnvelopeApp;
+  environment: RuntimeDiagnosticEnvelopeEnvironment;
+  platform: RuntimeDiagnosticEnvelopePlatform;
+  browser: RuntimeDiagnosticEnvelopeBrowser;
+  /** @pattern ^(?:unknown|development|[0-9]{10,16}-[0-9]{1,10}|[a-f0-9]{40})$ */
+  release: string;
+  routeClass: RuntimeDiagnosticEnvelopeRouteClass;
+  category: RuntimeDiagnosticEnvelopeCategory;
+  /** @pattern ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ */
+  correlationId?: string;
+  /** @maxItems 5 */
+  frames: RuntimeDiagnosticEnvelopeFramesItem[];
+}
+
 export interface MonitoringHistoryPoint {
   at: string;
-  ok: boolean;
+  /** @nullable */
+  ok: boolean | null;
   /** @nullable */
   responseMs?: number | null;
 }
+
+export type MonitoringSiteCheckFreshness = typeof MonitoringSiteCheckFreshness[keyof typeof MonitoringSiteCheckFreshness];
+
+
+export const MonitoringSiteCheckFreshness = {
+  current: 'current',
+  stale: 'stale',
+} as const;
 
 export interface MonitoringSiteCheck {
   key: string;
   label: string;
   url: string;
-  ok: boolean;
+  /** @nullable */
+  ok: boolean | null;
   /** @nullable */
   httpStatus?: number | null;
   /** @nullable */
   responseMs?: number | null;
-  checkedAt: string;
+  /** @nullable */
+  checkedAt: string | null;
+  freshness?: MonitoringSiteCheckFreshness;
+  coverage?: string;
   /** @nullable */
   error?: string | null;
   history: MonitoringHistoryPoint[];
@@ -1377,8 +2313,10 @@ export type MonitoringSnapshotPayments = {
 };
 
 export type MonitoringSnapshotProblems = {
-  recoveryOrders: number;
-  notificationFailures7d: number;
+  /** @nullable */
+  recoveryOrders: number | null;
+  /** @nullable */
+  notificationFailures7d: number | null;
 };
 
 export interface MonitoringSnapshot {
@@ -1546,12 +2484,43 @@ export interface WhatsAppSendResult {
   to?: string;
 }
 
+export type UcProductOperationImagesItem = {
+  src: string;
+  alt: string;
+};
+
+export type UcProductOperationUploadedPhotosItem = {
+  slot: number;
+  src: string;
+  alt: string;
+};
+
+export interface UcProductOperation {
+  id: number;
+  sku: string;
+  stockStatus?: string;
+  price?: string;
+  salePrice?: string;
+  regularPrice?: string;
+  images: UcProductOperationImagesItem[];
+  uploadedPhotos: UcProductOperationUploadedPhotosItem[];
+}
+
 export interface InventoryProduct {
   id: number;
   name: string;
   sku: string;
-  stockQuantity: number;
+  /** @nullable */
+  stockQuantity: number | null;
   stockStatus: string;
+  revision?: number;
+  manageStock?: boolean;
+  reservedQuantity?: number;
+  /** @nullable */
+  availableQuantity?: number | null;
+  recordCode?: string;
+  /** @nullable */
+  parentId?: number | null;
   /** @nullable */
   permalink?: string | null;
   syncedAt: string;
@@ -1707,8 +2676,7 @@ export type InventoryListSource = typeof InventoryListSource[keyof typeof Invent
 
 
 export const InventoryListSource = {
-  woocommerce: 'woocommerce',
-  mock: 'mock',
+  companion: 'companion',
 } as const;
 
 export interface InventoryList {
@@ -1716,15 +2684,32 @@ export interface InventoryList {
   source: InventoryListSource;
 }
 
+export type InventoryStockUpdateStockStatus = typeof InventoryStockUpdateStockStatus[keyof typeof InventoryStockUpdateStockStatus];
+
+
+export const InventoryStockUpdateStockStatus = {
+  unknown: 'unknown',
+  instock: 'instock',
+  outofstock: 'outofstock',
+  onbackorder: 'onbackorder',
+} as const;
+
 export interface InventoryStockUpdate {
-  /** @minimum 0 */
-  stockQuantity: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  stockQuantity: number | null;
+  stockStatus?: InventoryStockUpdateStockStatus;
+  /** @minimum 1 */
+  revision?: number;
 }
 
 export interface InventoryUpdateResult {
   ok: boolean;
   productId: number;
-  stockQuantity: number;
+  /** @nullable */
+  stockQuantity: number | null;
   source: string;
 }
 
@@ -1787,12 +2772,24 @@ export interface UcCustomerList {
 }
 
 export interface UcCustomerOrderItem {
+  productId?: number;
+  /** @nullable */
+  variationId?: number | null;
+  /** @nullable */
+  childSku?: string | null;
+  /** @nullable */
+  variantLabel?: string | null;
   name: string;
   quantity: number;
   total: string;
 }
 
 export interface UcCustomerOrder {
+  checkoutState?: string | null;
+  synchronizationStatus?: string;
+  paymentStatus?: string;
+  paymentConfirmedAt?: string | null;
+  reconciliationRequired?: boolean;
   id: number;
   status: string;
   total: string;
@@ -2343,12 +3340,51 @@ export interface UcPasswordChangeResult {
 }
 
 export interface UcOfflineProduct {
+  /** Stable server-issued source line; retained on edits */
+  lineId?: string;
   productId?: number;
   productName: string;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */
   litresPerUnit?: number;
+}
+
+export type CustomerOfflinePurchaseListPurchasesItemSource = typeof CustomerOfflinePurchaseListPurchasesItemSource[keyof typeof CustomerOfflinePurchaseListPurchasesItemSource];
+
+
+export const CustomerOfflinePurchaseListPurchasesItemSource = {
+  offline: 'offline',
+} as const;
+
+export type CustomerOfflinePurchaseListPurchasesItemItemsItemRegisteredUnitsItem = {
+  unitId: string;
+  installationDate: string;
+  active: boolean;
+};
+
+export type CustomerOfflinePurchaseListPurchasesItemItemsItem = {
+  lineId: string;
+  productId: number | null;
+  name: string;
+  quantity: number;
+  lifespanDays: number;
+  capacityLitres: number;
+  unavailableReason: string | null;
+  availableUnitIds: string[];
+  registeredUnits?: CustomerOfflinePurchaseListPurchasesItemItemsItemRegisteredUnitsItem[];
+};
+
+export type CustomerOfflinePurchaseListPurchasesItem = {
+  source: CustomerOfflinePurchaseListPurchasesItemSource;
+  saleId: number;
+  saleDate: string;
+  label: string;
+  items: CustomerOfflinePurchaseListPurchasesItemItemsItem[];
+};
+
+export interface CustomerOfflinePurchaseList {
+  purchases: CustomerOfflinePurchaseListPurchasesItem[];
 }
 
 export interface UcOfflineClientInput {
@@ -2555,6 +3591,33 @@ export interface CustomerLifecycleFeatureConfig {
   legacyReviewSubmission: boolean;
   canonicalGlobalImpact: boolean;
   nearbyDistanceTiers: boolean;
+}
+
+export interface RefillFeatures {
+  careOverview: boolean;
+  refillGovernance: boolean;
+}
+
+export interface RefillFeaturesUpdate {
+  careOverview?: boolean;
+  refillGovernance?: boolean;
+}
+
+export type RefillCapabilitiesVersion = typeof RefillCapabilitiesVersion[keyof typeof RefillCapabilitiesVersion];
+
+
+export const RefillCapabilitiesVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export interface RefillCapabilities {
+  version: RefillCapabilitiesVersion;
+  careOverview: boolean;
+  promoRefill: false;
+  paidRefill: false;
+  moneyWallet: false;
+  paidCare: false;
+  automaticCollection: false;
 }
 
 export type CustomerLifecycleIdentityStatus = typeof CustomerLifecycleIdentityStatus[keyof typeof CustomerLifecycleIdentityStatus];
@@ -3088,6 +4151,324 @@ export interface AuditEventPage {
   total: number;
 }
 
+export type CreateCompanionProductRecordBodyRecord = { [key: string]: unknown };
+
+export type CreateCompanionProductRecordBody = {
+  record: CreateCompanionProductRecordBodyRecord;
+};
+
+export type ListAdminProductEditorialRecords200 = {
+  records: ProductEditorialIdentity[];
+};
+
+export type ArchiveCompanionProductRecord200 = {
+  ok: boolean;
+};
+
+export type RegisterUcContactAccountBody = {
+  /** @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$ */
+  email: string;
+  /** @minLength 6 */
+  password: string;
+  /** @minLength 1 */
+  firstName: string;
+  lastName?: string;
+  /** @minLength 1 */
+  phone: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  address: string;
+  referralCode?: string;
+};
+
+export type CompleteUcContactProfileBody = {
+  /** @minLength 1 */
+  firstName?: string;
+  lastName?: string;
+  /** @minLength 1 */
+  phone?: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  address?: string;
+};
+
+export type GetUcCheckoutDiagnosticsParams = {
+ids: string;
+};
+
+export type GetUcCheckoutDiagnostics200 = { [key: string]: unknown };
+
+/**
+ * Independent store read failure; app records remain visible without inferring mirror eligibility.
+ */
+export type GetUcActivationPurchases200SourceErrors = {
+  store?: string;
+};
+
+export type GetUcActivationPurchases200PurchasesItemSource = typeof GetUcActivationPurchases200PurchasesItemSource[keyof typeof GetUcActivationPurchases200PurchasesItemSource];
+
+
+export const GetUcActivationPurchases200PurchasesItemSource = {
+  app: 'app',
+  store: 'store',
+} as const;
+
+export type GetUcActivationPurchases200PurchasesItemItemsItem = {
+  lineId: number;
+  productId: number;
+  name: string;
+  quantity: number;
+  lifespanDays: number;
+  capacityLitres: number;
+  availableUnitIds: string[];
+  unavailableReason: string | null;
+};
+
+export type GetUcActivationPurchases200PurchasesItem = {
+  source: GetUcActivationPurchases200PurchasesItemSource;
+  orderId: number;
+  dateCreated: string;
+  phone: string;
+  status: string;
+  items: GetUcActivationPurchases200PurchasesItemItemsItem[];
+};
+
+export type GetUcActivationPurchases200 = {
+  /** Independent store read failure; app records remain visible without inferring mirror eligibility. */
+  sourceErrors?: GetUcActivationPurchases200SourceErrors;
+  purchases: GetUcActivationPurchases200PurchasesItem[];
+};
+
+export type CommitCustomerOfflineFilterBody = {
+  /** @minimum 1 */
+  saleId: number;
+  /** @maxLength 100 */
+  unitId: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  installationDate: string;
+};
+
+export type CommitCustomerOfflineFilter200Registration = {
+  id: number;
+  userId: number;
+  productId: number;
+  productName: string;
+  ratedCapacityLitres: number;
+  activatedAt: string;
+  sourceOrderId?: number | null;
+  offlineUnitId: string;
+  lifespanDays: number;
+  maintenanceCount?: number;
+};
+
+export type CommitCustomerOfflineFilter200 = {
+  registration: CommitCustomerOfflineFilter200Registration;
+};
+
+export type ListUcEnquiriesParams = {
+/**
+ * First UTC date to include (YYYY-MM-DD).
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * Last UTC date to include (YYYY-MM-DD).
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
+};
+
+export type CancelCompanionCheckoutBody = {
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+};
+
+export type CancelCompanionCheckout200 = {
+  cancelled: boolean;
+};
+
+export type GetCompanionCheckoutRecoveryParams = {
+/**
+ * @minLength 8
+ * @maxLength 200
+ */
+idempotencyKey: string;
+};
+
+export type GetCompanionCheckoutRecovery200Resolution = typeof GetCompanionCheckoutRecovery200Resolution[keyof typeof GetCompanionCheckoutRecovery200Resolution];
+
+
+export const GetCompanionCheckoutRecovery200Resolution = {
+  editable: 'editable',
+  completed: 'completed',
+  unresolved: 'unresolved',
+} as const;
+
+export type GetCompanionCheckoutRecovery200 = {
+  resolution: GetCompanionCheckoutRecovery200Resolution;
+  orderId: number | null;
+};
+
+export type QuotePhysicalTestPromotion200Promotion = {
+  code: string;
+};
+
+export type QuotePhysicalTestPromotion200 = {
+  promotion: QuotePhysicalTestPromotion200Promotion;
+};
+
+export type ListCustomerAssignmentsParams = {
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+status?: ListCustomerAssignmentsStatus;
+/**
+ * @maxLength 200
+ */
+q?: string;
+};
+
+export type ListCustomerAssignmentsStatus = typeof ListCustomerAssignmentsStatus[keyof typeof ListCustomerAssignmentsStatus];
+
+
+export const ListCustomerAssignmentsStatus = {
+  pending: 'pending',
+  linked: 'linked',
+  review: 'review',
+} as const;
+
+export type CreateCustomerAssignment200 = {
+  id: number;
+};
+
+export type ListCustomerAccountAssignmentsParams = {
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListCustomerAssignmentAuditParams = {
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListCustomerAssignmentAudit200 = {
+  items: CustomerAssignmentAuditEntry[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export type PreviewCustomerAssignment200 = {
+  productName: string;
+  lifespanDays: number;
+  capacityLitres: number;
+  cashCollectionState: string;
+};
+
+export type FindAssignmentOrderLinesParams = {
+q: string;
+};
+
+export type ConfirmCustomerAssignmentLinkBody = {
+  accountId: number;
+  confirm: boolean;
+};
+
+export type ListCustomerReviewsParams = {
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+/**
+ * @minimum 1
+ * @maximum 2147483647
+ */
+productId?: number;
+/**
+ * @minimum 1
+ * @maximum 5
+ */
+rating?: number;
+ratingSentiment?: ListCustomerReviewsRatingSentiment;
+aiSentiment?: ListCustomerReviewsAiSentiment;
+status?: ListCustomerReviewsStatus;
+disagreement?: boolean;
+/**
+ * @maxLength 200
+ */
+search?: string;
+};
+
+export type ListCustomerReviewsRatingSentiment = typeof ListCustomerReviewsRatingSentiment[keyof typeof ListCustomerReviewsRatingSentiment];
+
+
+export const ListCustomerReviewsRatingSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+} as const;
+
+export type ListCustomerReviewsAiSentiment = typeof ListCustomerReviewsAiSentiment[keyof typeof ListCustomerReviewsAiSentiment];
+
+
+export const ListCustomerReviewsAiSentiment = {
+  Positive: 'Positive',
+  Neutral: 'Neutral',
+  Negative: 'Negative',
+  Mixed: 'Mixed',
+} as const;
+
+export type ListCustomerReviewsStatus = typeof ListCustomerReviewsStatus[keyof typeof ListCustomerReviewsStatus];
+
+
+export const ListCustomerReviewsStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+} as const;
+
+export type RetryCustomerReviewAnalysis200 = {
+  ok: boolean;
+};
+
 export type ListProjectHubInstantWaterAssessmentsParams = {
 status?: string;
 /**
@@ -3107,9 +4488,42 @@ customerId?: number;
 };
 
 export type ListUcProductsParams = {
+/**
+ * Require configured WooCommerce published inventory; never substitute demo products.
+ */
+publicationSafe?: boolean;
 category?: string;
 search?: string;
 };
+
+export type GetUcProductParams = {
+/**
+ * Require a fresh published WooCommerce operational read; never return demo content.
+ */
+publicationSafe?: boolean;
+};
+
+export type GetCompanionCommerceStatus200Authority = typeof GetCompanionCommerceStatus200Authority[keyof typeof GetCompanionCommerceStatus200Authority];
+
+
+export const GetCompanionCommerceStatus200Authority = {
+  companion: 'companion',
+} as const;
+
+export type GetCompanionCommerceStatus200LegacyHistory = typeof GetCompanionCommerceStatus200LegacyHistory[keyof typeof GetCompanionCommerceStatus200LegacyHistory];
+
+
+export const GetCompanionCommerceStatus200LegacyHistory = {
+  pending_review: 'pending_review',
+  reviewed: 'reviewed',
+} as const;
+
+export type GetCompanionCommerceStatus200 = {
+  authority: GetCompanionCommerceStatus200Authority;
+  legacyHistory: GetCompanionCommerceStatus200LegacyHistory;
+};
+
+export type GetCompanionCommerceMigrationReview200 = { [key: string]: unknown };
 
 export type ListUcCustomersParams = {
 /**
@@ -3247,6 +4661,56 @@ export type GetDashboardActivityParams = {
 limit?: number;
 };
 
+export type GetRuntimeMonitoringParams = {
+app?: GetRuntimeMonitoringApp;
+environment?: GetRuntimeMonitoringEnvironment;
+/**
+ * @maxLength 40
+ */
+release?: string;
+};
+
+export type GetRuntimeMonitoringApp = typeof GetRuntimeMonitoringApp[keyof typeof GetRuntimeMonitoringApp];
+
+
+export const GetRuntimeMonitoringApp = {
+  companion: 'companion',
+  projecthub: 'projecthub',
+} as const;
+
+export type GetRuntimeMonitoringEnvironment = typeof GetRuntimeMonitoringEnvironment[keyof typeof GetRuntimeMonitoringEnvironment];
+
+
+export const GetRuntimeMonitoringEnvironment = {
+  production: 'production',
+  development: 'development',
+  preview: 'preview',
+} as const;
+
+export type GetRuntimeMonitoring200 = { [key: string]: unknown };
+
+export type ConfigureRuntimeAlertsBodyMode = typeof ConfigureRuntimeAlertsBodyMode[keyof typeof ConfigureRuntimeAlertsBodyMode];
+
+
+export const ConfigureRuntimeAlertsBodyMode = {
+  off: 'off',
+  'dry-run': 'dry-run',
+  live: 'live',
+} as const;
+
+export type ConfigureRuntimeAlertsBodyDestination = typeof ConfigureRuntimeAlertsBodyDestination[keyof typeof ConfigureRuntimeAlertsBodyDestination];
+
+
+export const ConfigureRuntimeAlertsBodyDestination = {
+  slack: 'slack',
+  email: 'email',
+} as const;
+
+export type ConfigureRuntimeAlertsBody = {
+  mode: ConfigureRuntimeAlertsBodyMode;
+  destination: ConfigureRuntimeAlertsBodyDestination;
+};
+
 export type ListNotificationLogsParams = {
 limit?: number;
 };
@@ -3282,6 +4746,10 @@ export const IssueAgentClientTokenBodyGrantType = {
 export type IssueAgentClientTokenBody = {
   grant_type: IssueAgentClientTokenBodyGrantType;
   scope?: string;
+};
+
+export type SubmitUcAlisonFeedback200 = {
+  ok: boolean;
 };
 
 export type SuspendAgentOauthClientBodyStatus = typeof SuspendAgentOauthClientBodyStatus[keyof typeof SuspendAgentOauthClientBodyStatus];

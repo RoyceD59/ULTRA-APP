@@ -348,7 +348,7 @@ describe("Rate limiter — POST /auth/reset-password (max 10 per minute)", () =>
 
 // ── M-Pesa safety note ────────────────────────────────────────────────────────
 // All M-Pesa requests use an empty body `{}` so they are rejected by the
-// handler's own `!phone || !amount` guard with HTTP 400 before any Safaricom
+// required-checkout guard with HTTP 422 before any Safaricom
 // API call, DB write, or STK push occurs.  The before() hook also deletes the
 // Daraja credentials so even a request with a valid body cannot reach the live
 // API.  The rate limiter fires before the body is inspected, so a 429 on the
@@ -356,16 +356,16 @@ describe("Rate limiter — POST /auth/reset-password (max 10 per minute)", () =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("Rate limiter — POST /payments/mpesa (max 5 per minute)", () => {
-  it("first 5 requests are not rate-limited — each returns 400, not 429", async () => {
+  it("first 5 incomplete checkouts return 422, not 429", async () => {
     const ip = uniqueIp();
-    // Empty body → 400 from the handler validator (phone/amount required).
+    // Empty body → 422 from the required-checkout validator.
     const results = await fireRequests("/payments/mpesa", {}, ip, 5);
 
     for (let i = 0; i < results.length; i++) {
       assert.equal(
         results[i]!.status,
-        400,
-        `request ${i + 1} of 5 must be rejected by the validator (400), not the limiter; got ${results[i]!.status}`,
+        422,
+        `request ${i + 1} of 5 must be rejected by the validator (422), not the limiter; got ${results[i]!.status}`,
       );
     }
   });

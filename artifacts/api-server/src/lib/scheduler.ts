@@ -13,6 +13,7 @@ import { lt, lte, gt, desc, eq, and, or, inArray, isNull, isNotNull, sql } from 
 import { runSheetSync } from "../routes/contacts-sync.js";
 import {
   hasWCCredentials,
+  hasCompanionCatalogue,
   fetchAllPublishedProducts,
   normalizeProduct,
   auditProductLifespans,
@@ -22,6 +23,7 @@ import { sendViaResend } from "./resend.js";
 import { sendSms, sendSmsAwaitable } from "./sms.js";
 import { getTeamAlertPhone } from "../routes/payments.js";
 import { getValidAccessToken } from "./google-auth.js";
+import { needsGoogleReconnect, buildSheetSyncFailureEmail } from "./google-reconnect.js";
 import { dispatchFilterReminders, creditReplacementRewardsAll } from "./reminder-dispatch.js";
 import { sendPushToUser } from "./push.js";
 import { processLeadDeliveryOutbox } from "./lead-delivery.js";
@@ -34,8 +36,10 @@ import {
   processReferralSettlementAlerts,
   retryReferralSettlements,
 } from "../routes/referrals.js";
-import { processOrderNotificationOutbox, reconcileWooOrderStatuses } from "./order-status-pipeline.js";
+import { processOrderNotificationOutbox } from "./order-status-pipeline.js";
 import { queueBlogRun, resumeQueuedBlogRuns, weeklyBlogRunKey } from "./blog-editorial.js";
+import { reconcileAbandonedCheckouts } from "./abandoned-checkouts.js";
+import { deliverReviewAlert, runLocationReviewReminders } from "./location-review-reminders.js";
 
 // ─── Wishlist restock check ───────────────────────────────────────────────────
 // Runs every 4 hours. For each distinct product in the wishlist:
@@ -48,20 +52,10 @@ import { queueBlogRun, resumeQueuedBlogRuns, weeklyBlogRunKey } from "./blog-edi
 
 /** Default live lookup: fetch a product's WooCommerce stock_status, or null on any failure. */
 async function fetchWcStockStatus(productId: number): Promise<string | null> {
-  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-  const ck   = process.env["WC_CONSUMER_KEY"]!;
-  const cs   = process.env["WC_CONSUMER_SECRET"]!;
-
-  const url = `${base}/wp-json/wc/v3/products/${productId}?consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`;
-  const fetchRes = await fetch(url);
-  if (!fetchRes.ok) return null;
-
-  const text = await fetchRes.text();
-  const jsonStart = text.search(/[{[]/);
-  if (jsonStart === -1) return null;
-
-  const data = JSON.parse(text.slice(jsonStart)) as Record<string, unknown>;
-  return String(data["stock_status"] ?? "");
+  const { readCompanionProduct } = await import("./companion-catalogue.js");
+  const data = await readCompanionProduct(`/products/${productId}`);
+  return data && ["instock", "outofstock", "onbackorder"].includes(String(data.stock_status))
+    ? String(data.stock_status) : null;
 }
 
 export interface WishlistRestockDeps {
@@ -91,7 +85,7 @@ export interface WishlistRestockResult {
 export async function checkWishlistRestocks(
   deps: WishlistRestockDeps = {},
 ): Promise<WishlistRestockResult> {
-  const isWcConfigured  = deps.isWcConfigured  ?? hasWCCredentials;
+  const isWcConfigured  = deps.isWcConfigured  ?? hasCompanionCatalogue;
   const fetchStockStatus = deps.fetchStockStatus ?? fetchWcStockStatus;
   const sendPush        = deps.sendPush        ?? sendPushToUser;
   const sendEmail        = deps.sendEmail      ?? sendViaResend;
@@ -253,6 +247,44 @@ export async function checkWishlistRestocks(
 }
 
 export function startScheduler() {
+  cron.schedule("0 9 * * *", async () => {
+    try {
+      await runLocationReviewReminders({
+        sendAlert: (alert) => deliverReviewAlert(
+          alert,
+          async (message) => sendViaResend({
+            from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
+            to: await getTeamAlertEmail(),
+            subject: message.subject,
+            text: message.text,
+            meta: { template: message.template },
+            signal: AbortSignal.timeout(30_000),
+          }),
+          async (message) => {
+            const phone = await getTeamAlertPhone();
+            return phone ? sendSmsAwaitable(phone, message.sms, { template: message.template }, AbortSignal.timeout(30_000)) : false;
+          },
+        ),
+      });
+    } catch (err) {
+      logger.error({ err }, "Scheduler: water point field-review reminder failed");
+    }
+  }, { timezone: "Africa/Nairobi" });
+  logger.info("Scheduler: daily water point field-review reminders registered (09:00 Africa/Nairobi)");
+  let checkoutCleanupRunning = false;
+  cron.schedule("17 * * * *", async () => {
+    if (checkoutCleanupRunning) return;
+    checkoutCleanupRunning = true;
+    try {
+      const result = await reconcileAbandonedCheckouts();
+      logger.info(result, "Scheduler: abandoned checkouts reconciled");
+    } catch (err) {
+      logger.error({ err }, "Scheduler: abandoned checkout reconciliation failed");
+    } finally {
+      checkoutCleanupRunning = false;
+    }
+  }, { timezone: "UTC" });
+  logger.info("Scheduler: abandoned checkout reconciliation registered (hourly; 24-hour candidate age, provider-confirmed release only)");
   void resumeQueuedBlogRuns()
     .then((resumed) => {
       if (resumed) logger.info({ resumed }, "Scheduler: resuming queued Companion editorial runs");
@@ -296,15 +328,7 @@ export function startScheduler() {
   }, { timezone: "UTC" });
   logger.info("Scheduler: order notification outbox job registered (every 2 minutes)");
 
-  cron.schedule("*/10 * * * *", async () => {
-    try {
-      const result = await reconcileWooOrderStatuses();
-      if (result.checked > 0) logger.info(result, "Scheduler: Woo order status reconciliation complete");
-    } catch (err) {
-      logger.error({ err }, "Scheduler: Woo order status reconciliation failed");
-    }
-  }, { timezone: "UTC" });
-  logger.info("Scheduler: Woo order status reconciliation registered (every 10 minutes)");
+  logger.info("Scheduler: Woo order synchronization retired; no remote job registered");
 
   cron.schedule("*/5 * * * *", async () => {
     try {
@@ -457,73 +481,7 @@ export function startScheduler() {
   // Reads the most-recently-configured sheet_syncs row and applies creates/updates
   // to the contacts table. Skips silently if no sheet is connected.
   // On failure: records the error in sheet_syncs and emails all team members.
-  cron.schedule("0 6 * * *", async () => {
-    logger.info("Scheduler: starting daily Google Sheets contacts sync");
-    try {
-      const [sync] = await db
-        .select()
-        .from(sheetSyncsTable)
-        .orderBy(desc(sheetSyncsTable.createdAt))
-        .limit(1);
-
-      if (!sync) {
-        logger.info("Scheduler: no Google Sheet connected — skipping contacts sync");
-        return;
-      }
-
-      const gidMatch = sync.sheetUrl.match(/[#&?]gid=(\d+)/);
-      const gid = gidMatch?.[1];
-
-      // Get OAuth access token for private sheets (falls back to null = public mode)
-      let accessToken: string | null = null;
-      try {
-        accessToken = await getValidAccessToken();
-        if (accessToken) {
-          logger.info("Scheduler: using Google OAuth token for private sheet access");
-        }
-      } catch (tokenErr) {
-        logger.warn({ err: tokenErr }, "Scheduler: could not get OAuth token, trying public access");
-      }
-
-      let result: Awaited<ReturnType<typeof runSheetSync>>;
-      try {
-        result = await runSheetSync(sync.sheetUrl, gid, accessToken);
-      } catch (syncErr) {
-        const errorMessage = syncErr instanceof Error ? syncErr.message : String(syncErr);
-        const errorAt = new Date();
-
-        logger.error({ err: syncErr }, "Scheduler: Google Sheets contacts sync failed");
-
-        // Record failure in the database
-        await db
-          .update(sheetSyncsTable)
-          .set({ lastError: errorMessage, lastErrorAt: errorAt })
-          .where(eq(sheetSyncsTable.id, sync.id));
-
-        // Notify all team members by email
-        await notifySyncFailure({
-          sheetLabel: sync.sheetLabel || sync.sheetUrl,
-          errorMessage,
-          errorAt,
-        });
-
-        return;
-      }
-
-      // Success — clear any previous error state and update lastSyncedAt
-      await db
-        .update(sheetSyncsTable)
-        .set({ lastSyncedAt: new Date(), lastError: null, lastErrorAt: null })
-        .where(eq(sheetSyncsTable.id, sync.id));
-
-      logger.info(
-        { created: result.created, updated: result.updated, skipped: result.skipped, failed: result.failed },
-        "Scheduler: Google Sheets contacts sync complete",
-      );
-    } catch (err) {
-      logger.error({ err }, "Scheduler: Google Sheets contacts sync job error");
-    }
-  }, { timezone: "UTC" });
+  cron.schedule("0 6 * * *", () => runDailyContactsSync(), { timezone: "UTC" });
 
   logger.info("Scheduler: daily Google Sheets contacts sync registered (06:00 UTC)");
 
@@ -579,7 +537,31 @@ export function startScheduler() {
  * @internal — exported for the scheduler cron job and inventory PATCH handler.
  */
 export async function runLowStockAlert(
-  deps: {
+  deps: LowStockAlertDependencies = {},
+): Promise<LowStockAlertResult> {
+  if (!(deps.isWcConfigured ?? hasCompanionCatalogue)()) {
+    logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
+    return { outOfStock: 0, lowStock: 0, emailed: false };
+  }
+
+  return db.transaction(async (tx) => {
+    // Transaction-owned lock: shared by every server instance, released on
+    // commit, rollback, or disconnect. Never expire a claim during delivery.
+    // Non-blocking acquisition keeps overlapping cron runs from queueing.
+    const claim = await tx.execute<{ claimed: boolean }>(sql`
+      SELECT pg_try_advisory_xact_lock(hashtextextended('uc-low-stock-digest', 0)) AS claimed
+    `);
+    if (!claim.rows[0]?.claimed) {
+      logger.info("Low-stock alert: another instance is already running — skipping");
+      return { outOfStock: 0, lowStock: 0, emailed: false };
+    }
+    return runClaimedLowStockAlert(deps, tx);
+  });
+}
+
+type LowStockAlertResult = { outOfStock: number; lowStock: number; emailed: boolean };
+
+type LowStockAlertDependencies = {
     fetchProducts?: typeof fetchAllPublishedProducts;
     sendEmail?: typeof sendViaResend;
     /** Test seam: avoid reading process-wide Woo credentials. */
@@ -594,16 +576,19 @@ export async function runLowStockAlert(
     recordAlertedProductIds?: (productIds: number[], alertedAt: Date) => Promise<void>;
     /** Test seam: deterministic 24-hour cutoff and recorded timestamp. */
     now?: Date;
-  } = {},
-): Promise<{ outOfStock: number; lowStock: number; emailed: boolean }> {
+};
+
+async function runClaimedLowStockAlert(
+  deps: LowStockAlertDependencies,
+  historyDb: Pick<typeof db, "select" | "insert">,
+): Promise<LowStockAlertResult> {
   const fetchProducts = deps.fetchProducts ?? fetchAllPublishedProducts;
   const sendEmail     = deps.sendEmail     ?? sendViaResend;
-  const isWcConfigured = deps.isWcConfigured ?? hasWCCredentials;
   const skipIfEmpty   = deps.skipIfEmpty   ?? true;
   const checkTime = deps.now ?? new Date();
   const getRecentlyAlertedProductIds = deps.getRecentlyAlertedProductIds ?? (async (productIds, cutoff) => {
     if (productIds.length === 0) return new Set<number>();
-    const rows = await db
+    const rows = await historyDb
       .select({ productId: ucLowStockAlertsTable.productId })
       .from(ucLowStockAlertsTable)
       .where(and(
@@ -614,7 +599,7 @@ export async function runLowStockAlert(
   });
   const recordAlertedProductIds = deps.recordAlertedProductIds ?? (async (productIds, alertedAt) => {
     if (productIds.length === 0) return;
-    await db
+    await historyDb
       .insert(ucLowStockAlertsTable)
       .values(productIds.map((productId) => ({ productId, alertedAt })))
       .onConflictDoUpdate({
@@ -624,11 +609,6 @@ export async function runLowStockAlert(
         },
       });
   });
-
-  if (!isWcConfigured()) {
-    logger.info("Scheduler: WooCommerce credentials absent — skipping low-stock alert");
-    return { outOfStock: 0, lowStock: 0, emailed: false };
-  }
 
   // Read threshold from DB (admin-configurable), fall back to default of 5.
   let threshold = deps.threshold ?? 5;
@@ -776,6 +756,7 @@ export async function runLowStockAlert(
     subject,
     text:    emailBody,
     meta:    { template: "low_stock_alert" },
+    signal:  AbortSignal.timeout(30_000),
   });
 
   if (emailOk) {
@@ -1273,10 +1254,11 @@ export async function runStaleRecoveryOrderDigest(
       stale.map((o) => `#${o.id}(${o.paymentMethod})`).join(", ") +
       ". Check admin panel.";
 
-    // Email to team
+    // Use the same live setting as immediate recovery-order alerts.
+    const teamEmail = await getTeamAlertEmail();
     const emailOk = await sendEmail({
       from:    "Ultra Clear App <noreply@contacts.ucfilters.com>",
-      to:      "info@ucfilters.com",
+      to:      teamEmail,
       subject: `⏰ ${stale.length} recovery order${stale.length > 1 ? "s" : ""} still unfulfilled after 24 h`,
       text:    emailBody,
       meta:    { template: "recovery_order_digest" },
@@ -1319,7 +1301,7 @@ export async function runStaleRecoveryOrderDigest(
         .values({
           channel:      "digest",
           provider:     "none",
-          recipient:    "info@ucfilters.com",
+          recipient:    teamEmail,
           template:     "recovery_order_digest",
           messageBody:  emailBody,
           status:       "failed",
@@ -1331,6 +1313,52 @@ export async function runStaleRecoveryOrderDigest(
     }
   } catch (err) {
     logger.error({ err }, "Scheduler: stale recovery order digest job failed");
+  }
+}
+
+/** Daily sync entry point; injectable providers avoid live Google/email calls in tests. */
+export async function runDailyContactsSync(deps: {
+  getToken?: typeof getValidAccessToken;
+  runSync?: typeof runSheetSync;
+  notifyFailure?: typeof notifySyncFailure;
+} = {}): Promise<void> {
+  logger.info("Scheduler: starting daily Google Sheets contacts sync");
+  try {
+    const [sync] = await db.select().from(sheetSyncsTable)
+      .orderBy(desc(sheetSyncsTable.createdAt)).limit(1);
+    if (!sync) return;
+
+    const gid = sync.sheetUrl.match(/[#&?]gid=(\d+)/)?.[1];
+    let result: Awaited<ReturnType<typeof runSheetSync>>;
+    try {
+      let accessToken: string | null = null;
+      try {
+        accessToken = await (deps.getToken ?? getValidAccessToken)();
+      } catch (tokenErr) {
+        // Do not mask revoked access with an unrelated public-sheet failure.
+        if (needsGoogleReconnect(tokenErr)) throw tokenErr;
+        logger.warn({ err: tokenErr }, "Scheduler: could not get OAuth token, trying public access");
+      }
+      result = await (deps.runSync ?? runSheetSync)(sync.sheetUrl, gid, accessToken);
+    } catch (syncErr) {
+      const errorMessage = syncErr instanceof Error ? syncErr.message : String(syncErr);
+      const errorAt = new Date();
+      logger.error({ err: syncErr }, "Scheduler: Google Sheets contacts sync failed");
+      await db.update(sheetSyncsTable)
+        .set({ lastError: errorMessage, lastErrorAt: errorAt })
+        .where(eq(sheetSyncsTable.id, sync.id));
+      await (deps.notifyFailure ?? notifySyncFailure)({
+        sheetLabel: sync.sheetLabel || sync.sheetUrl, errorMessage, errorAt,
+      });
+      return;
+    }
+
+    await db.update(sheetSyncsTable)
+      .set({ lastSyncedAt: new Date(), lastError: null, lastErrorAt: null })
+      .where(eq(sheetSyncsTable.id, sync.id));
+    logger.info(result, "Scheduler: Google Sheets contacts sync complete");
+  } catch (err) {
+    logger.error({ err }, "Scheduler: Google Sheets contacts sync job error");
   }
 }
 
@@ -1357,16 +1385,12 @@ async function notifySyncFailure(params: {
   }
 
   const from = "ProjectHub <notifications@contacts.ucfilters.com>";
-  const subject = `⚠️ Google Sheets sync failed — ${sheetLabel}`;
-  const text = [
-    `The daily Google Sheets contacts sync failed at ${errorAt.toUTCString()}.`,
-    "",
-    `Sheet: ${sheetLabel}`,
-    `Error: ${errorMessage}`,
-    "",
-    "Please check that the sheet is still published and the URL is correct.",
-    "You can re-run the sync from the ProjectHub Contacts page once the issue is resolved.",
-  ].join("\n");
+  const configured = process.env["PROJECTHUB_URL"]?.trim() || "https://app.ucfilters.com";
+  const base = /^https?:\/\//i.test(configured) ? configured : `https://${configured}`;
+  const { subject, text } = buildSheetSyncFailureEmail({
+    sheetLabel, errorMessage, errorAt,
+    contactsUrl: `${base.replace(/\/+$/, "")}/contacts`,
+  });
 
   const results = await Promise.allSettled(
     members.map((m) =>

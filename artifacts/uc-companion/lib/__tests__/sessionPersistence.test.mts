@@ -48,6 +48,33 @@ describe('Companion session persistence', () => {
     });
   });
 
+  it('persists and restores phone-only customers with no public email', async () => {
+    const phoneProfile = { ...profile, email: '', phone: '+254712345678' };
+    await persistSession({ token: 'phone-session', user: phoneProfile });
+    assert.deepEqual(await loadPersistedSession(), {
+      session: { token: 'phone-session', user: phoneProfile },
+      malformed: false,
+    });
+  });
+
+  it('migrates a phone-only legacy session without discarding it', async () => {
+    const phoneProfile = { ...profile, email: '', phone: '+254712345678' };
+    storage._storage.set(LEGACY_TOKEN_KEY, 'phone-session');
+    storage._storage.set(LEGACY_USER_KEY, JSON.stringify(phoneProfile));
+    assert.deepEqual(await loadPersistedSession(), {
+      session: { token: 'phone-session', user: phoneProfile },
+      malformed: false,
+    });
+  });
+
+  it('still rejects profiles without either an email or phone', async () => {
+    await assert.rejects(
+      persistSession({ token: 'invalid-session', user: { ...profile, email: ' ', phone: ' ' } }),
+      /invalid Companion session/,
+    );
+    assert.equal(storage._storage.size, 0);
+  });
+
   it('migrates a complete legacy pair but rejects a partial pair', async () => {
     storage._storage.set(LEGACY_TOKEN_KEY, 'legacy-token');
     storage._storage.set(LEGACY_USER_KEY, JSON.stringify(profile));

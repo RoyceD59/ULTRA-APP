@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import customerAssignmentsRouter from "./customer-assignments.js";
 import healthRouter from "./health";
 import membersRouter from "./members";
 import projectsRouter from "./projects";
@@ -8,6 +9,9 @@ import anthropicRouter from "./anthropic/conversations";
 import aiMonitorRouter from "./ai/monitor";
 import aiAgentQueryRouter from "./ai/agent-query";
 import ucRouter from "./uc";
+import companionCommerceManagementRouter from "./companion-commerce-management.js";
+import ucProductRecordsRouter from "./uc-product-records.js";
+import customerReviewsRouter from "./customer-reviews.js";
 import ucWaterChatRouter from "./uc-water-chat";
 import ucImpactRouter from "./uc-impact";
 import ucRemindersRouter from "./uc-reminders";
@@ -38,9 +42,13 @@ import orderStatusWebhookRouter from "./order-status-webhook.js";
 import agentOauthRouter from "./agent-oauth.js";
 import guidesRouter from "./guides.js";
 import blogRouter from "./blog.js";
+import refillReadinessRouter from "./refill-readiness.js";
+import refillGovernanceRouter from "./refill-governance.js";
+import refillFeaturesRouter from "./refill-features.js";
+import ucHydrateTreesRouter from "./uc-hydrate-trees.js";
+import hydrationRouter from "./uc-hydration.js";
 
 const router: IRouter = Router();
-
 // ─── ProjectHub team auth guards ─────────────────────────────────────────────
 // Path-scoped middleware: each entry runs ONLY for requests whose path starts
 // with the given prefix, so UC, webhook, and payment endpoints are unaffected.
@@ -54,8 +62,9 @@ router.use("/projects",     requireTeamAuth);
 router.use("/tasks",        requireTeamAuth);
 router.use("/dashboard",    requireTeamAuth);
 router.use("/notifications", requireTeamAuth);
-// /ai/report, /ai/push, and /ai/pushes are team-only; /ai/query is a public
-// UC webhook and /ai/echo is the HMAC-signed orchestrator status callback.
+// Project-data AI endpoints are team-only; /ai/echo remains the HMAC-signed
+// orchestrator status callback.
+router.use("/ai/query",      requireTeamAuth);
 router.use("/ai/report",     requireTeamAuth);
 router.use("/ai/push",       requireTeamAuth);
 router.use("/ai/pushes",     requireTeamAuth);
@@ -78,13 +87,21 @@ router.use(anthropicRouter);
 router.use(agentOauthRouter);
 router.use(guidesRouter);
 router.use(blogRouter);
+router.use(refillReadinessRouter);
+router.use(refillGovernanceRouter);
+router.use(refillFeaturesRouter);
 router.use(aiMonitorRouter);
 router.use(aiAgentQueryRouter);
+router.use(companionCommerceManagementRouter);
 router.use(ucRouter);
+router.use(ucProductRecordsRouter);
+router.use(hydrationRouter);
+router.use(customerReviewsRouter);
 router.use(orderStatusWebhookRouter);
 router.use(instantWaterCheckRouter);
 router.use(ucWaterChatRouter);
 router.use(ucImpactRouter);
+router.use(ucHydrateTreesRouter);
 router.use(ucRemindersRouter);
 router.use(ucSocialAuthRouter);
 router.use(ucOfflineClientsRouter);
@@ -99,6 +116,7 @@ router.use(adminNotificationSettingsRouter);
 router.use(adminIntegrationsRouter);
 router.use(adminInventorySettingsRouter);
 router.use(adminUnsyncedRegistrationsRouter);
+router.use(customerAssignmentsRouter);
 router.use(authRouter);
 router.use(contactsRouter);
 router.use(contactsSyncRouter);

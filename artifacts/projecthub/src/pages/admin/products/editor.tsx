@@ -11,12 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { 
   useProduct, useProductMedia, useUpdateProduct, 
-  useAddProductMedia, useDeleteProductMedia, requestUploadUrl, ProductUpdate
+  useAddProductMedia, useDeleteProductMedia, requestUploadUrl, ProductUpdate, STOCK_LABELS, type StockStatus
 } from "@/hooks/use-products";
 import { isTeamAdmin } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ProductRecordEditor } from "@/components/product-record-editor";
 
 export default function AdminProductEditorPage() {
   const params = useParams<{ id: string }>();
@@ -31,6 +32,8 @@ export default function AdminProductEditorPage() {
 
   const [formData, setFormData] = useState<ProductUpdate>({});
   const initializedForId = useRef<number | null>(null);
+  const [qtyText, setQtyText] = useState("");
+  const [saveState, setSaveState] = useState<{ kind: "saved" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     if (product && initializedForId.current !== productId) {
@@ -39,35 +42,72 @@ export default function AdminProductEditorPage() {
         shortDescription: product.shortDescription.replace(/<[^>]*>/g, ""),
         description: product.description.replace(/<[^>]*>/g, ""),
         regularPrice: product.regularPrice,
-        salePrice: product.salePrice,
         stockStatus: product.stockStatus,
         stockQuantity: product.stockQuantity,
       });
+      setQtyText(product.stockQuantity === null || product.stockQuantity === undefined ? "" : String(product.stockQuantity));
       initializedForId.current = productId;
     }
   }, [product, productId]);
 
   const handleSave = () => {
-    updateProduct.mutate({ id: productId, data: formData }, {
+    setSaveState(null);
+    const t = qtyText.trim();
+    if (t !== "" && !/^\d+$/.test(t)) {
+      setSaveState({ kind: "error", message: "Managed quantity must be a whole number of 0 or more, or blank for unmanaged." });
+      return;
+    }
+    const data: ProductUpdate = { ...formData, stockQuantity: t === "" ? null : Number(t) };
+    if (data.stockStatus === "unknown") delete data.stockStatus;
+    updateProduct.mutate({ id: productId, data }, {
       onSuccess: () => {
-        toast({ title: "Product saved", description: "Changes have been published to WooCommerce." });
+        setSaveState({ kind: "saved", message: `Saved at ${new Date().toLocaleTimeString()}. Companion reads these values from the shared product record.` });
+        toast({ title: "Product saved", description: "Operational fields saved to the app product record." });
       },
       onError: (err: Error) => {
+        const conflict = (err as { status?: number }).status === 409;
+        setSaveState({ kind: "error", message: conflict ? "Someone else changed this product. Reload the page to see the latest values before saving again." : err.message });
         toast({ title: "Failed to save", description: err.message, variant: "destructive" });
       }
     });
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const selectedVideoSlot = useRef(1);
+  const videoSlots = [1, 2].map(slot => media?.find(item => item.type === "video" && (item.videoSlot ?? item.position) === slot) ?? null);
+  for (const item of (media ?? []).filter(item => item.type === "video")) {
+    if (!videoSlots.includes(item)) {
+      const free = videoSlots.indexOf(null);
+      if (free >= 0) videoSlots[free] = item;
+    }
+  }
   const [uploading, setUploading] = useState(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const type = file.type.startsWith("video/") ? "video" : "photo";
+    const videoSlot = selectedVideoSlot.current;
+    if (type === "video" && videoSlots[videoSlot - 1]) {
+      toast({ title: "Video slot already occupied", description: "Remove that slot's video before uploading its replacement. The other video stays attached.", variant: "destructive" });
+      event.target.value = "";
+      return;
+    }
+    if (!(type === "photo" ? file.type.startsWith("image/") : file.type === "video/mp4")) {
+      toast({ title: "Unsupported file", description: "Use an image for photos or an MP4 installation video for web and Expo playback.", variant: "destructive" });
+      event.target.value = "";
+      return;
+    }
+    // Mirrors the existing API's MAX_VIDEO_BYTES; reject before uploading bytes.
+    if (type === "video" && (file.size === 0 || file.size > 60 * 1024 * 1024)) {
+      toast({ title: "Video size not supported", description: "Choose a non-empty MP4 video no larger than 60 MB.", variant: "destructive" });
+      event.target.value = "";
+      return;
+    }
 
     setUploading(true);
     try {
-      const type = file.type.startsWith("video/") ? "video" : "photo";
       const { uploadURL, objectPath, reference } = await requestUploadUrl({
         name: file.name,
         size: file.size,
@@ -84,12 +124,14 @@ export default function AdminProductEditorPage() {
 
       const url = reference || `/api/storage${objectPath}`;
       
-      await addMedia.mutateAsync({ id: productId, url, type, alt: file.name });
+      await addMedia.mutateAsync({ id: productId, url, type, alt: type === "video" ? `${product?.name ?? "Product"} installation video ${videoSlot}` : file.name,
+        ...(type === "video" ? { position: videoSlot } : {}) });
       toast({ title: "Media uploaded", description: "File has been added to the product." });
-      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (videoInputRef.current) videoInputRef.current.value = "";
       setUploading(false);
     }
   };
@@ -137,9 +179,15 @@ export default function AdminProductEditorPage() {
           className="gap-2"
         >
           {updateProduct.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Save Changes
+          Save product fields
         </Button>
       </div>
+      {saveState && (
+        <div role={saveState.kind === "error" ? "alert" : "status"} data-testid="status-product-save"
+          className={saveState.kind === "error" ? "rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive" : "rounded-md border border-green-300 bg-green-50 dark:bg-green-950/20 p-3 text-sm text-green-800 dark:text-green-300"}>
+          {saveState.message}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -179,36 +227,46 @@ export default function AdminProductEditorPage() {
             </CardContent>
           </Card>
 
+          <ProductRecordEditor sku={product.sku} product={product} media={media || []} />
+
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle>Team Media</CardTitle>
-                  <CardDescription>Extra photos or product video.</CardDescription>
+                  <CardTitle>Product images &amp; installation video</CardTitle>
+                  <CardDescription>Upload photos and up to two MP4 installation videos, each up to 60 MB, for this product. Use H.264 video with AAC audio for web, Android and iOS compatibility. Attached media is customer-facing; preview it before leaving this page.</CardDescription>
                 </div>
-                <div>
+                <div className="flex flex-wrap gap-2">
                   <input 
                     type="file" 
                     ref={fileInputRef} 
                     className="hidden" 
-                    accept="image/*,video/mp4,video/webm" 
+                    accept="image/*"
                     onChange={handleFileUpload} 
                   />
                   <Button 
                     variant="outline" 
                     size="sm" 
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || addMedia.isPending}
+                    disabled={uploading || addMedia.isPending || mediaLoading}
                   >
                     {uploading || addMedia.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     ) : (
                       <UploadCloud className="w-4 h-4 mr-2" />
                     )}
-                    Upload Media
+                    Upload image
                   </Button>
+                  <input type="file" ref={videoInputRef} className="hidden" accept="video/mp4,.mp4" onChange={handleFileUpload} />
+                  {[1, 2].map(slot => <Button key={slot} variant="outline" size="sm" disabled={uploading || addMedia.isPending || mediaLoading || deleteMedia.isPending || !!videoSlots[slot - 1]}
+                    onClick={() => { selectedVideoSlot.current = slot; videoInputRef.current?.click(); }}>
+                    <Video className="w-4 h-4 mr-2" /> Upload video {slot}
+                  </Button>)}
                 </div>
               </div>
+              {media?.some(item => item.type === "video") ? <p className="text-sm text-muted-foreground">
+                To replace a video, remove only that slot's clip below, then upload its replacement. The other video and product images stay attached.
+              </p> : null}
             </CardHeader>
             <CardContent>
               {mediaLoading ? (
@@ -216,24 +274,27 @@ export default function AdminProductEditorPage() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {(media || []).map((m) => (
-                    <div key={m.id} className="relative group aspect-square rounded-md border overflow-hidden bg-muted">
+                    <div key={m.id} className={`${m.type === "video" ? "col-span-full aspect-video" : "aspect-square"} relative group rounded-md border overflow-hidden bg-muted`}>
                       {m.type === "photo" ? (
                         <img src={m.url.startsWith("http") ? m.url : `${API_ORIGIN}${m.url}`} alt={m.alt} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary">
-                          <Video className="w-8 h-8" />
-                        </div>
+                        <video controls preload="metadata" playsInline aria-label={`${product.name} video ${videoSlots.indexOf(m) + 1 || "attachment"}`}
+                          src={m.url.startsWith("http") ? m.url : `${API_ORIGIN}${m.url}`} className="w-full h-full object-contain" />
                       )}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      {m.type === "video" ? <span className="absolute top-1 left-1 rounded bg-black/70 px-2 py-1 text-xs text-white">
+                        Video {videoSlots.indexOf(m) + 1 || "attachment"}
+                      </span> : null}
+                      <div className="absolute top-1 right-1">
                         <Button 
                           variant="destructive" 
                           size="icon" 
+                          aria-label={`Remove ${m.type === "video" ? `video ${videoSlots.indexOf(m) + 1 || "attachment"}` : "image"}`}
                           onClick={() => {
                             if (window.confirm("Remove this team-uploaded media from the product?")) {
                               deleteMedia.mutate({ productId, mediaId: m.id });
                             }
                           }}
-                          disabled={deleteMedia.isPending}
+                          disabled={deleteMedia.isPending || uploading}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -253,7 +314,7 @@ export default function AdminProductEditorPage() {
           <Card>
             <CardHeader>
               <CardTitle>Catalogue Images</CardTitle>
-              <CardDescription>Read-only images from WooCommerce.</CardDescription>
+              <CardDescription>Read-only images already attached to this product record.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
@@ -279,7 +340,7 @@ export default function AdminProductEditorPage() {
           <Card>
             <CardHeader>
               <CardTitle>Companion Preview</CardTitle>
-              <CardDescription>Customer-facing product summary after saving.</CardDescription>
+              <CardDescription>Customer-facing summary. Visible only once the record is publishable.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="aspect-[4/3] overflow-hidden rounded-md border bg-muted">
@@ -302,7 +363,7 @@ export default function AdminProductEditorPage() {
                 </p>
               </div>
               <p className="font-medium">
-                KES {formData.salePrice || formData.regularPrice || product.price || "—"}
+                KES {formData.regularPrice || product.price || "—"}
               </p>
             </CardContent>
           </Card>
@@ -320,15 +381,9 @@ export default function AdminProductEditorPage() {
                   onChange={e => setFormData({ ...formData, regularPrice: e.target.value })} 
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="salePrice">Sale Price (KES)</Label>
-                <Input 
-                  id="salePrice" 
-                  value={formData.salePrice ?? ""} 
-                  onChange={e => setFormData({ ...formData, salePrice: e.target.value })} 
-                  placeholder="Leave blank for none"
-                />
-              </div>
+              <p className="text-xs text-muted-foreground" data-testid="text-sale-price-note">
+                Regular price is the authoritative record price used at checkout. There is no separate sale price: discounts come from promotions, so they stay consistent and auditable.
+              </p>
             </CardContent>
           </Card>
 
@@ -346,26 +401,35 @@ export default function AdminProductEditorPage() {
                 <select
                   id="stockStatus"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formData.stockStatus ?? "instock"}
+                  value={formData.stockStatus ?? "unknown"}
                   onChange={e => setFormData({
                     ...formData,
-                    stockStatus: e.target.value as "instock" | "outofstock" | "onbackorder",
+                    stockStatus: e.target.value as StockStatus,
                   })}
                 >
+                  {formData.stockStatus === "unknown" && <option value="unknown" disabled>{STOCK_LABELS.unknown} (choose a reviewed state)</option>}
                   <option value="instock">In Stock</option>
                   <option value="outofstock">Out of Stock</option>
                   <option value="onbackorder">On Backorder</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="stockQuantity">Stock Quantity</Label>
+                <Label htmlFor="stockQuantity">Managed quantity</Label>
                 <Input 
                   id="stockQuantity" 
                   type="number"
-                  value={formData.stockQuantity ?? ""} 
-                  onChange={e => setFormData({ ...formData, stockQuantity: parseInt(e.target.value, 10) || 0 })} 
+                  min={0}
+                  placeholder="Unmanaged"
+                  value={qtyText}
+                  onChange={e => setQtyText(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">Leave blank for unmanaged quantity. Blank is not zero.</p>
               </div>
+              {formData.stockStatus === "unknown" && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-300">
+                  Stock has not been reviewed. Customers cannot buy this product until a staff member sets a reviewed status.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

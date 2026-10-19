@@ -3,13 +3,19 @@ import {
   View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity,
   Modal, TextInput, Alert, ActivityIndicator, Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
+import OrderReceiptCard from '@/components/OrderReceiptCard';
+import { useCheckoutReceipt } from '@/context/CheckoutReceiptContext';
+import { buildCustomerReceipt, receiptOrderPaymentStatus } from '@workspace/api-zod/order-receipt';
+import { saveReceiptPdf, shareReceipt, shareReceiptToWhatsApp } from '@/utils/receiptExport';
 
 /**
  * Gentle nudge shown to guests after checkout: creating a free account lets
@@ -105,6 +111,9 @@ export default function OrderDetailScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const { order: checkoutOrder } = useCheckoutReceipt();
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedReason, setSelectedReason] = useState<ReturnReason | ''>('');
   const [details, setDetails] = useState('');
@@ -119,7 +128,7 @@ export default function OrderDetailScreen() {
     enabled: !!user,
   });
 
-  const { data: singleOrder, isLoading, refetch } = useQuery({
+  const { data: singleOrder, isLoading, isError, error, refetch } = useQuery({
     queryKey: customerQueryKeys.order(user?.id, id),
     queryFn: () => api.getOrder(Number(id)),
     enabled: !!user,
@@ -128,7 +137,30 @@ export default function OrderDetailScreen() {
     }
   });
 
-  const order = singleOrder;
+  const order = singleOrder ?? (String(checkoutOrder?.id) === id ? checkoutOrder : undefined);
+  const receipt = order ? buildCustomerReceipt({
+    ...order,
+    paymentStatus: receiptOrderPaymentStatus(order),
+  }) : null;
+
+  async function exportReceipt(action: 'save' | 'share' | 'whatsapp') {
+    if (!receipt || receiptBusy) return;
+    setReceiptBusy(true);
+    setReceiptError('');
+    try {
+      if (action === 'save') await saveReceiptPdf(receipt);
+      else if (action === 'whatsapp') await shareReceiptToWhatsApp(receipt);
+      else await shareReceipt(receipt);
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        const message = error instanceof Error ? error.message : 'Please try again or take a screenshot of your receipt.';
+        setReceiptError(message);
+        if (Platform.OS !== 'web') Alert.alert('Receipt could not be shared', message);
+      }
+    } finally {
+      setReceiptBusy(false);
+    }
+  }
 
   useFocusEffect(
     React.useCallback(() => {
@@ -170,14 +202,29 @@ export default function OrderDetailScreen() {
     },
   });
 
-  if (isLoading || !order) {
+  if (user && !order) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/orders')}>
+          <Text style={{ color: colors.primary, padding: 16 }}>Back to orders</Text>
+        </TouchableOpacity>
+        {isLoading ? <PageDataLoader label="Loading your order…" /> :
+          <PageDataError title={(error as { status?: number })?.status === 404 ? 'Order not found' : 'Order unavailable'}
+            error={error} onRetry={(error as { status?: number })?.status === 404 ? () => router.replace('/orders') : refetch}
+            actionLabel={(error as { status?: number })?.status === 404 ? 'View orders' : 'Retry'} />}
+      </View>
+    );
+  }
+
+  // Preserve the guest checkout confirmation, which has no account-owned read.
+  if (!order) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
         <Ionicons name="checkmark-circle" size={60} color={colors.success} />
         <Text style={[styles.successTitle, { color: colors.text }]}>Order Confirmed!</Text>
         <Text style={[styles.successSub, { color: colors.mutedForeground }]}>Order #{id}</Text>
         <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
-          You'll receive a confirmation message shortly.
+          For a saved copy, check your confirmation email. If you used an account for this order, sign in to reopen it here.
         </Text>
         <View style={{ alignSelf: 'stretch', paddingHorizontal: 20, marginTop: 24 }}>
           <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
@@ -205,6 +252,7 @@ export default function OrderDetailScreen() {
     <ScrollView
       style={[styles.screen, { backgroundColor: colors.background }]}
       contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: Platform.OS === 'web' ? 34 : 40 }}>
+      {isError ? <PageDataError title="Order could not refresh" message="Your last loaded order is shown below." onRetry={refetch} /> : null}
 
       {/* ── Status card ─────────────────────────────────────── */}
       <View style={[styles.statusCard, { backgroundColor: statusCfg.color + '10', borderColor: statusCfg.color }]}>
@@ -212,6 +260,15 @@ export default function OrderDetailScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.statusLabel, { color: statusCfg.color }]}>{statusCfg.label}</Text>
           <Text style={[styles.statusDesc, { color: colors.text }]}>{statusCfg.desc}</Text>
+          {!!order.synchronizationStatus && <Text style={{ color: colors.mutedForeground }}>
+            Store synchronization: {order.synchronizationStatus.replaceAll('_', ' ')}
+          </Text>}
+          {!!order.paymentStatus && <Text style={{ color: colors.mutedForeground }}>
+            Payment evidence: {order.paymentStatus.replaceAll('_', ' ')}
+          </Text>}
+          {order.synchronizationStatus === 'reconciliation_required' && <Text accessibilityRole="alert" style={{ color: colors.destructive }}>
+            Your checkout is recorded but needs staff review. Do not pay again or create another order.
+          </Text>}
         </View>
       </View>
 
@@ -265,6 +322,11 @@ export default function OrderDetailScreen() {
       )}
 
       {/* ── Guest account nudge (filter reminders) ──────────── */}
+      {receipt ? <OrderReceiptCard receipt={receipt} busy={receiptBusy}
+        onSave={() => void exportReceipt('save')}
+        onShare={() => void exportReceipt('share')}
+        onWhatsApp={() => void exportReceipt('whatsapp')} /> : null}
+      {receiptError ? <Text accessibilityRole="alert" style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{receiptError}</Text> : null}
       <GuestAccountNudge dismissed={nudgeDismissed} onDismiss={() => setNudgeDismissed(true)} />
 
       {/* ── Order info ──────────────────────────────────────── */}
@@ -322,7 +384,9 @@ export default function OrderDetailScreen() {
       {/* ── Shipping ────────────────────────────────────────── */}
       {order.shippingAddress && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Delivery Address</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{order.shippingAddress.fulfillment === 'collection' ? 'Free collection' : 'Delivery address'}</Text>
+          {order.shippingAddress.shippingAmount !== undefined && <Text style={{ color: colors.text }}>Shipping: KES {Number(order.shippingAddress.shippingAmount).toLocaleString('en-KE')}</Text>}
+          {!!order.discountAmount && <Text style={{ color: colors.text }}>Discount: KES {order.discountAmount.toLocaleString('en-KE')}</Text>}
           <Text style={[styles.addressText, { color: colors.text }]}>
             {order.shippingAddress.firstName} {order.shippingAddress.lastName}
           </Text>

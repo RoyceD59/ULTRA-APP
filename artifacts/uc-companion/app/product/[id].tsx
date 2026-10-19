@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
-  ActivityIndicator, useWindowDimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useColors } from '@/hooks/useColors';
-import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia } from '@/hooks/useApi';
+import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia, type UCProduct } from '@/hooks/useApi';
+import { getUcProduct } from '@workspace/api-client-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { visibleStoreCategory } from '@/lib/storeCategories';
@@ -20,6 +21,13 @@ import MediaViewer from '@/components/MediaViewer';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import { trackEvent } from '@/lib/analytics';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
+import { headingProps } from '@/lib/accessibility';
+import PublicRecordDocument, { hasPublicRecordDelivery, type PublicRecord } from '@/components/PublicRecordDocument';
+import ProductRecordPage from '@/components/product/ProductRecordPage';
+import { fetchRecord } from '@/lib/productRecord';
 
 const GALLERY_H = 310;
 const THUMB_SIZE = 54;
@@ -32,9 +40,40 @@ function formatKES(price: string) {
 
 type Slide =
   | { kind: 'photo'; src: string; alt: string }
-  | { kind: 'video'; src: string };
+  | { kind: 'video'; src: string; slot: number };
 
 export default function ProductDetailScreen() {
+  const { id, sku } = useLocalSearchParams<{ id: string; sku?: string }>();
+  const router = useRouter();
+  const key = String(id ?? '');
+  const record = useQuery({
+    queryKey: ['product-record', key],
+    queryFn: ({ signal }) => fetchRecord(key, signal),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    enabled: !!key,
+    retry: (n, e) => ![404, 410].includes((e as { status?: number })?.status ?? 0) && n < 2,
+  });
+  if (record.data) {
+    // The mounted page owns the document handoff; do not mutate DOM in render.
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: '#FBFDFE' }} contentContainerStyle={{ paddingBottom: 60 }}>
+        <ProductRecordPage key={record.data.slug} record={record.data} initialSku={sku ? String(sku) : undefined} topicsRow />
+      </ScrollView>
+    );
+  }
+  if (hasPublicRecordDelivery() && !record.isError) return <PublicRecordDocument route={`/product/${id}`} />;
+  if (record.isLoading) return <View style={{ flex: 1 }}><PageDataLoader label="Loading product…" /></View>;
+  const status = (record.error as { status?: number } | null)?.status;
+  if (record.isError && (record.error as { legacy?: boolean }).legacy === true) return <ProductCommerceScreen />;
+  if (record.isError && status !== 404 && status !== 410) {
+    return <View style={{ flex: 1 }}><PageDataError title="Product unavailable" error={record.error} onRetry={() => record.refetch()} actionLabel="Retry" /></View>;
+  }
+  return <View style={{ flex: 1 }}><PageDataError title="Product not found" error={record.error}
+    onRetry={() => router.replace('/(tabs)/products')} actionLabel="Browse products" /></View>;
+}
+
+function ProductCommerceScreen({ publicRecord }: { publicRecord?: PublicRecord }) {
   const { id, category: returnCategory } = useLocalSearchParams<{ id: string; category?: string }>();
   const colors = useColors();
   const router = useRouter();
@@ -49,9 +88,10 @@ export default function ProductDetailScreen() {
     else router.replace('/(tabs)/products');
   };
 
-  const pid = parseInt(id ?? '');
+  const pid = publicRecord?.commerceId ?? parseInt(id ?? '');
   const queryClient = useQueryClient();
   const [slideIndex, setSlideIndex] = useState(0);
+  const viewedProducts = useRef(new Set<number>());
 
   const MAX_WIDTH = 1200;
   const isDesktop = width >= 1024;
@@ -78,11 +118,27 @@ export default function ProductDetailScreen() {
     });
   }, [slideIndex, galleryContainerWidth]);
 
-  const { data: product, isLoading, isError, refetch: retryProduct } = useQuery({
-    queryKey: ['product', id],
-    queryFn: () => api.getProduct(pid),
-    enabled: !!id,
+  const { data: product, isLoading, isError, error: productError, refetch: retryProduct } = useQuery({
+    queryKey: publicRecord ? ['public-product-operation', pid] : ['product', String(pid)],
+    queryFn: async () => {
+      if (!publicRecord) return api.getProduct(pid);
+      const operation = await getUcProduct(pid, { publicationSafe: true });
+      // Only these existing commerce inputs are used by the unchanged cart
+      // callback. No live provider description, title or FAQ is rendered.
+      return { ...operation, name: publicRecord.name, categories: [], description: '',
+        shortDescription: '', enquiryOnly: !publicRecord.purchasable,
+        price: operation.price || '', salePrice: operation.salePrice || '',
+        regularPrice: operation.regularPrice || '', stockStatus: operation.stockStatus || '',
+        tagline: '', stockQuantity: null, tags: [], videoUrl: null } as UCProduct;
+    },
+    enabled: Number.isSafeInteger(pid) && pid > 0,
   });
+
+  useEffect(() => {
+    if (!product || viewedProducts.current.has(product.id)) return;
+    viewedProducts.current.add(product.id);
+    trackEvent('product_viewed', { productId: product.id });
+  }, [product]);
 
   const { data: reviewData } = useQuery({
     queryKey: customerQueryKeys.reviews(user?.id, pid),
@@ -125,6 +181,7 @@ export default function ProductDetailScreen() {
       } else {
         await api.removeFromWishlist(pid);
       }
+      trackEvent(next ? 'wishlist_item_added' : 'wishlist_item_removed', { productId: pid });
       await queryClient.invalidateQueries({ queryKey: customerQueryKeys.wishlist(initiatingCustomerId) });
     } catch {
       if (currentCustomerId.current === initiatingCustomerId) setWishlistPending(null);
@@ -133,50 +190,54 @@ export default function ProductDetailScreen() {
     }
   }, [token, user, product, isWishlisted, pid, api, queryClient]);
 
-  // Strike video player — muted, looping, auto-plays.
+  const videos = useMemo(() => {
+    const attached = (product as (UCProduct & { videos?: { slot: number; url: string }[] }) | undefined)?.videos;
+    return attached?.length ? attached.slice(0, 2) : product?.videoUrl ? [{ slot: 1, url: product.videoUrl }] : [];
+  }, [product]);
+  const activeVideo = videos[slideIndex - Math.min(product?.images.length ?? 0, MAX_PHOTOS)];
+  // Only the selected video's player is mounted.
   const player = useVideoPlayer(null as unknown as string, (p) => {
     p.loop = true;
     p.muted = true;
   });
   useEffect(() => {
-    if (product?.videoUrl) {
-      player.replace({ uri: resolveMediaUrl(product.videoUrl) });
+    if (activeVideo?.url) {
+      player.replace({ uri: resolveMediaUrl(activeVideo.url) });
       player.play();
-    }
+    } else player.pause();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.videoUrl]);
+  }, [activeVideo?.url]);
 
-  if (isLoading) return (
+  if (isLoading && !product) return (
     <View style={[styles.loading, { backgroundColor: colors.background }]}>
-      <ActivityIndicator color={colors.primary} />
+      <PageDataLoader label="Loading product…" />
     </View>
   );
 
   if (!product) return (
     <View style={[styles.loading, { backgroundColor: colors.background }]}>
-      <Text style={{ color: colors.mutedForeground }}>{isError ? "Couldn't load this product" : 'Product not found'}</Text>
-      <TouchableOpacity onPress={isError ? () => retryProduct() : goBackToProducts} accessibilityRole="button"
-        style={{ minHeight: 44, justifyContent: 'center' }}>
-        <Text style={{ color: colors.primary }}>{isError ? 'Retry' : 'Browse products'}</Text>
-      </TouchableOpacity>
+      <PageDataError title={isError && (productError as { status?: number })?.status !== 404 ? 'Product unavailable' : 'Product not found'}
+        error={productError}
+        onRetry={isError && (productError as { status?: number })?.status !== 404 ? retryProduct : goBackToProducts}
+        actionLabel={isError && (productError as { status?: number })?.status !== 404 ? 'Retry' : 'Browse products'} />
     </View>
   );
 
-  const isEnquiryOnly = product.enquiryOnly === true;
+  const isEnquiryOnly = product.enquiryOnly === true || (!!publicRecord && !publicRecord.purchasable);
   const displayPrice = product.salePrice || product.price || product.regularPrice;
   // NB: must be a real boolean — an empty-string salePrice would otherwise make
   // this '' and render a stray text node inside the surrounding View on web.
   const isOnSale = !isEnquiryOnly && !!product.salePrice && parseFloat(product.salePrice) < parseFloat(product.regularPrice);
   const inStock = product.stockStatus === 'instock';
 
-  // Up to 6 photos, then exactly one strike-video slot.
+  // Up to 6 photos, followed by the two independently managed video slots.
   const slides: Slide[] = [
     ...product.images.slice(0, MAX_PHOTOS).map((img) => ({
       kind: 'photo' as const,
       src: resolveMediaUrl(img.src),
       alt: img.alt,
     })),
-    ...(product.videoUrl ? [{ kind: 'video' as const, src: resolveMediaUrl(product.videoUrl) }] : []),
+    ...videos.map(video => ({ kind: 'video' as const, src: resolveMediaUrl(video.url), slot: video.slot })),
   ];
 
   function goToSlide(i: number) {
@@ -188,7 +249,7 @@ export default function ProductDetailScreen() {
   const reviewParams = { productId: String(product.id), productName: product.name };
 
   const ctaContent = (
-    <View style={[styles.footer, isDesktop && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border,
+    <View style={[styles.footer, (isDesktop || !!publicRecord) && styles.footerDesktop, { backgroundColor: colors.background, borderColor: colors.border,
       paddingBottom: isDesktop ? 0 : Math.max(16, insets.bottom + 8, Platform.OS === 'web' ? 34 : 0) }]}>
       {isEnquiryOnly ? (
         <TouchableOpacity
@@ -260,6 +321,18 @@ export default function ProductDetailScreen() {
     </View>
   );
 
+  if (publicRecord) {
+    // Commerce content is not a presentation source. Use the existing cart
+    // callback with its live numeric identity/price, never the record price.
+    if (product.sku !== publicRecord.parentSku) return null;
+    if (!['instock', 'outofstock', 'onbackorder'].includes(product.stockStatus)) return <Text>Live stock unavailable — please enquire before ordering.</Text>;
+    return <View>
+      {publicRecord.price !== null && parseFloat(displayPrice) !== publicRecord.price
+        ? <Text>Current checkout price is {formatKES(displayPrice)}. The product-record price differs.</Text> : null}
+      {ctaContent}
+    </View>;
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
        <ScrollView contentContainerStyle={{ paddingBottom: isDesktop ? 40 : 140 + insets.bottom, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: paddingH }} showsVerticalScrollIndicator={false}>
@@ -319,26 +392,24 @@ export default function ProductDetailScreen() {
                     {slide.kind === 'photo' ? (
                       <Image
                         source={{ uri: resizedImageUrl(slide.src, galleryContainerWidth) }}
+                        accessible
+                        accessibilityLabel={slide.alt}
                         style={{ width: galleryContainerWidth, height: GALLERY_H }}
                         contentFit="contain"
                         transition={150}
                       />
                     ) : (
                       <View style={{ width: galleryContainerWidth, height: GALLERY_H }}>
-                        <VideoView
+                        {i === slideIndex ? <VideoView
                           player={player}
                           style={{ width: '100%', height: '100%' }}
                           contentFit="contain"
-                          nativeControls={false}
-                        />
+                          nativeControls
+                        /> : <Ionicons name="play-circle-outline" size={52} color={colors.primary} />}
                         {/* Strike badge */}
                         <View style={styles.strikeBadge}>
                           <Ionicons name="flash" size={12} color="#fff" />
-                          <Text style={styles.strikeBadgeTxt}>Quick Look</Text>
-                        </View>
-                        {/* Duration hint */}
-                        <View style={styles.durationHint}>
-                          <Text style={styles.durationHintTxt}>3 – 5 s</Text>
+                          <Text style={styles.strikeBadgeTxt}>Video {slide.slot}</Text>
                         </View>
                       </View>
                     )}
@@ -400,6 +471,8 @@ export default function ProductDetailScreen() {
                   <TouchableOpacity
                     key={i}
                     onPress={() => goToSlide(i)}
+                    accessibilityRole="button"
+                    accessibilityLabel={slide.kind === 'photo' ? `View image ${i + 1}: ${slide.alt}` : `View product video ${slide.slot}`}
                     activeOpacity={0.75}
                     style={[
                       styles.thumbCell,
@@ -408,7 +481,8 @@ export default function ProductDetailScreen() {
                     ]}
                   >
                     {slide.kind === 'photo' ? (
-                      <Image source={{ uri: resizedImageUrl(slide.src, 56) }} style={styles.thumbImg} contentFit="cover" transition={100} />
+                      <Image source={{ uri: resizedImageUrl(slide.src, 56) }} accessible={false} accessibilityElementsHidden aria-hidden
+                        style={styles.thumbImg} contentFit="cover" transition={100} />
                     ) : (
                       <View style={styles.thumbVideo}>
                         <Ionicons
@@ -417,7 +491,7 @@ export default function ProductDetailScreen() {
                           color={active ? '#fff' : 'rgba(255,255,255,0.55)'}
                         />
                         <Text style={[styles.thumbVideoTxt, { opacity: active ? 1 : 0.55 }]}>
-                          Quick{'\n'}Look
+                          Video {slide.slot}
                         </Text>
                       </View>
                     )}
@@ -468,7 +542,7 @@ export default function ProductDetailScreen() {
           )}
 
           {/* Name & Price */}
-          <Text style={[styles.name, { color: colors.text }]}>{product.name}</Text>
+          <Text {...headingProps(1)} style={[styles.name, { color: colors.text }]}>{product.name}</Text>
           <View style={styles.skuRow}>
             <Text style={[styles.sku, { color: colors.mutedForeground }]}>SKU: {product.sku}</Text>
             {reviewData && reviewData.count > 0 && (
@@ -516,7 +590,7 @@ export default function ProductDetailScreen() {
           }
 
           {/* Description */}
-          <Text style={[styles.sectionLabel, { color: colors.text }]}>Product Details</Text>
+          <Text {...headingProps(2)} style={[styles.sectionLabel, { color: colors.text }]}>Product Details</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>
             {product.description.replace(/<[^>]*>/g, '')}
           </Text>
@@ -528,12 +602,12 @@ export default function ProductDetailScreen() {
           ) : null}
 
           {/* Trust Badges */}
-          <Text style={[styles.sectionLabel, { color: colors.text }]}>Certifications & Trust</Text>
+          <Text {...headingProps(2)} style={[styles.sectionLabel, { color: colors.text }]}>Certifications & Trust</Text>
           <TrustBadges />
 
           {/* Reviews */}
           <View style={styles.reviewsHeader}>
-            <Text style={[styles.sectionLabel, { color: colors.text }]}>Reviews</Text>
+            <Text {...headingProps(2)} style={[styles.sectionLabel, { color: colors.text }]}>Reviews</Text>
             {reviewData && reviewData.count > 0 && (
               <View style={styles.ratingInline}>
                 <StarRating rating={reviewData.average} size={13} />

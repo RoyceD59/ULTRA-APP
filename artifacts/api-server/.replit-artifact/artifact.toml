@@ -15,7 +15,7 @@ run = "pnpm --filter @workspace/api-server run dev"
 [services.production]
 
 [services.production.build]
-args = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]
+args = ["node", "infra/cloudflare/forest/build-approved-consistency.mjs", "api", "--copy-output"]
 
 [services.production.build.env]
 NODE_ENV = "production"

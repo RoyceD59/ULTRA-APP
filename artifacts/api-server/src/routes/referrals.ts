@@ -220,7 +220,7 @@ export async function validateCodeForDiscount(
      WHERE lower(email)=lower($1) AND deleted_at IS NULL`,
     [email],
   );
-  if (account.rows[0]) {
+  if (account.rows[0] && upper === "EARNED_REFERRAL_REWARD") {
     const benefit = await pool.query(
       `SELECT discount_percent FROM uc_referral_benefits
        WHERE user_id=$1 AND kind='discount' AND status='available'

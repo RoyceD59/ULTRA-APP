@@ -1,0 +1,187 @@
+{
+  "date": "2026-10-08",
+  "candidateSha256": "57b70b22b6faf692cc14c17b7858da52111d208354acab84f4e5d14f24c36feb",
+  "scopeSha256": "b86f3a461b0f8b127b2d6620c63f5e423518d6a11e117dbaffbc9de4646050ed",
+  "sourceCommit": "e91771af7f56fd838152d2b66560ecacfc451b85",
+  "status": "REVIEW READY; NOT SELECTED; NOT PUBLISHED; PUBLICATION NO-GO",
+  "sourceFiles": 1908,
+  "changedFileCount": 928,
+  "protectedExactParentPaths": [
+    "artifacts/api-server/scripts/import-global-impact.ts",
+    "artifacts/api-server/src/lib/global-impact-store.ts",
+    "artifacts/api-server/src/routes/uc-impact.ts",
+    "artifacts/api-server/src/lib/jwt.ts",
+    "artifacts/api-server/src/lib/review-media-signature.ts",
+    "artifacts/api-server/src/routes/storage.ts",
+    "lib/db/src/schema/uc-global-impact.ts",
+    "lib/db/migrations/0067_uc_global_impact.sql",
+    "artifacts/uc-companion/hooks/useGlobalImpact.ts",
+    "artifacts/uc-companion/lib/globalImpact.ts",
+    "artifacts/uc-companion/lib/releasePolicy.ts",
+    "artifacts/uc-companion/scripts/active-static-build.cjs",
+    "artifacts/uc-companion/scripts/prepare-static-build.cjs"
+  ],
+  "sourceReview": {
+    "mainSnapshotCleanAtCapture": true,
+    "derivedDependencyPaths": [
+      "package.json",
+      "pnpm-lock.yaml",
+      "artifacts/api-server/package.json"
+    ],
+    "approvedParentAndAllRetainedArchivesPreserved": true,
+    "initialCommittedOnlyReviewArchiveRetained": true
+  },
+  "additionalDependencyFixes": [
+    {
+      "package": "sharp",
+      "version": "0.35.5",
+      "license": "Apache-2.0",
+      "registryVerified": true,
+      "publishedAt": "2026-09-27",
+      "runtimeRsvg": "2.63.2"
+    },
+    {
+      "package": "shell-quote",
+      "version": "1.11.0",
+      "license": "MIT",
+      "registryVerified": true,
+      "publishedAt": "2026-09-29"
+    },
+    {
+      "package": "fast-copy",
+      "version": "4.1.0",
+      "license": "MIT",
+      "registryVerified": true,
+      "publishedAt": "2026-08-31"
+    }
+  ],
+  "localValidation": {
+    "frozenInstall": "passed",
+    "sharedLibrariesTypecheck": "passed",
+    "apiTypecheck": "passed",
+    "projecthubTypecheck": "passed",
+    "companionTypecheck": "passed",
+    "apiCompilation": "passed",
+    "projecthubCompilation": "passed",
+    "companionWebIosAndroidJavaScriptExports": "passed; not standalone native binaries",
+    "expoDependencyAlignment": "passed",
+    "focusedApiTests": {
+      "passed": 130,
+      "failed": 0,
+      "scope": "14 targeted authentication, upload, AI, guest-payment, product-editorial, impact, activation and receipt files",
+      "database": "existing disposable per-run wrapper; dropped afterward"
+    },
+    "myFiltersAndChatStateTests": {
+      "passed": 19,
+      "failed": 0,
+      "setup": "declared Companion test setup and test TypeScript configuration"
+    },
+    "retainedBackportAndMailFixtures": {
+      "passed": 7,
+      "failed": 0
+    },
+    "additionalInstalledDependencyFixtures": {
+      "passed": 3,
+      "failed": 0
+    },
+    "scopeAndNonActivationFixtures": {
+      "passed": 2,
+      "failed": 0
+    },
+    "initialBaselineChecks": "All four typechecks, API compilation and seven dependency fixtures passed before dependency-overlay changes",
+    "invocationCorrections": [
+      "ProjectHub build requires declared PORT/BASE_PATH; corrected invocation, no Vite source change",
+      "Client mock tests require declared test-setup and TSX_TSCONFIG_PATH; corrected invocation, no client source change"
+    ]
+  },
+  "localExports": {
+    "buildId": "1791475147953-12055",
+    "sourceRevision": "consolidated-review-57b70b22b6faf692cc14c17b7858da52111d208354acab84f4e5d14f24c36feb",
+    "publication": false,
+    "productionClientsAdvanced": false
+  },
+  "security": {
+    "workspaceScan": [
+      {
+        "scanner": "dependency",
+        "status": "completed",
+        "severityCounts": {
+          "high": 5,
+          "moderate": 2
+        }
+      },
+      {
+        "scanner": "sast",
+        "status": "completed",
+        "severityCounts": {
+          "MEDIUM": 2
+        }
+      },
+      {
+        "scanner": "privacy",
+        "status": "completed",
+        "severityCounts": {}
+      }
+    ],
+    "finalIsolatedVersionAudit": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 3,
+      "critical": 0
+    },
+    "remainingVersionAuditFindings": [
+      {
+        "package": "node-forge",
+        "severity": "high",
+        "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements"
+      },
+      {
+        "package": "http-cache-semantics",
+        "severity": "high",
+        "title": "http-cache-semantics max-stale handling can disclose cross-user cached responses"
+      },
+      {
+        "package": "braces",
+        "severity": "high",
+        "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns"
+      },
+      {
+        "package": "postcss-selector-parser",
+        "severity": "moderate",
+        "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion"
+      }
+    ],
+    "mitigation": "Three retained high-version advisories have installed-consumer backport regression evidence; that does not make the scanner clean or constitute a new risk acceptance",
+    "moderateCssFinding": "Remaining selector-parser finding requires review; major upgrade not introduced silently",
+    "sastLimit": "Two medium findings in preview compose infrastructure outside the source archive; not silently dismissed as fixed"
+  },
+  "main": {
+    "activeSourceSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+    "rootDependencyManifestsAndLockUnchanged": true,
+    "artifactProductionSettingsUnchanged": true,
+    "developmentApiAndHubWorkflowsRestartedAndRunning": true,
+    "previewScreenshot": "ProjectHub public sign-in renders without manifestly broken layout",
+    "normalDevelopmentStartup": "Existing API startup reconciliation ran; no production initialization or production SQL writes"
+  },
+  "gates": {
+    "candidateSelectionApproval": "required",
+    "publicationApproval": "separate owner action required",
+    "fullSchemaReview": "11 additive production statements; no destructive statements found previously; none applied",
+    "externalNativeRuntime": "Apply separately approved root/runtime manifests and lock before publishing; sharp is external to API bundle",
+    "exactLiveApiSource": "still required in coordination with security-live handoff; standby metadata alone insufficient",
+    "freshPublicSnapshots": "previous compatible hosts agreed; recheck immediately before client advancement",
+    "productionAdjustment": "existing revision 1 and audit must be preserved",
+    "rollback": "recapture complete actually served current asset set before paired client selection",
+    "providerSignedInPhysicalDeviceQa": "remaining approved checks not certified by local tests",
+    "featureApprovals": "Preserve topic, product evidence, privacy, preview activation, payment and native distribution gates"
+  },
+  "actions": {
+    "published": false,
+    "productionSchemaApplied": false,
+    "productionWrites": false,
+    "clientSelectionChanged": false,
+    "rootRuntimeDependenciesChanged": false
+  },
+  "protectedExactParentPathCount": 13
+}

@@ -5,8 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PublicInstantWaterAssessmentResultRecommendationAction } from './publicInstantWaterAssessmentResultRecommendationAction';
 
 export type PublicInstantWaterAssessmentResultRecommendation = {
   name: string;
   explanation: string;
+  productId?: number;
+  productName?: string;
+  action?: PublicInstantWaterAssessmentResultRecommendationAction;
 };

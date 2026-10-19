@@ -1,0 +1,21 @@
+{
+  "buildId": "1791737829836-806",
+  "revision": "consistency-d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+  "apiOrigin": "https://api.ucfilters.com",
+  "production": true,
+  "expoGoLaunchUrl": "exps://app.ucfilters.com/uc-companion",
+  "supported": {
+    "web": "1791737829836-806",
+    "expoGo": "1791737829836-806",
+    "native": []
+  },
+  "builtAt": "2026-10-11T16:58:19.157Z",
+  "tabs": [
+    "index",
+    "products",
+    "blog",
+    "support",
+    "map",
+    "account"
+  ]
+}

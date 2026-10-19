@@ -9,6 +9,7 @@
 
 import { Router, type Request, type Response } from "express";
 import { requireTeamAdmin } from "./auth.js";
+import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
 import {
   clearResolvedRegistrations,
   listUnsyncedRegistrations,
@@ -106,6 +107,7 @@ router.post(
         });
         return;
       }
+      if (result.id) void reconcileAssignmentsForAccount(result.id);
       res.json(result);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith("No folder record found")) {

@@ -1,0 +1,269 @@
+# Operational App — Bug Fixes and Functional Updates
+
+## Objective
+
+Resolve critical issues affecting user registration, order visibility, QR-code functionality, rewards, payment synchronization, password recovery, and mobile keyboard usability across the Companion App, ProjectHub, and Back Office.
+
+## 1. Filter Registration
+
+### Current issue
+
+The **Register Filter** function is not working.
+
+### Required behavior
+
+* Users must be able to register a filter successfully.
+* The system must validate all required fields before submission.
+* A successful registration must be saved against the correct user account.
+* The registered filter must appear in the user’s account immediately.
+* The user must receive a confirmation message after registration.
+* If registration fails, the app must display a clear error message and allow the user to try again.
+
+### Acceptance criteria
+
+* A valid filter can be registered from start to finish.
+* The filter record appears in the Companion App and Back Office.
+* Duplicate filter registrations are detected and prevented.
+* Registration errors are logged for troubleshooting.
+
+## 2. Order History
+
+### Current issue
+
+Users cannot view their order history.
+
+### Required behavior
+
+Users must be able to view a complete order history showing:
+
+* Order number
+* Order date
+* Product and quantity
+* Order value
+* Payment method
+* Payment status
+* Fulfilment or delivery status
+* Delivery information, where applicable
+
+Orders should be displayed from newest to oldest. Selecting an order should open its full details.
+
+### Acceptance criteria
+
+* All orders are linked to the correct user.
+* New and historical orders are visible.
+* Order statuses update without creating duplicate records.
+* Users only see orders belonging to their accounts.
+
+## 3. User QR Code
+
+### Current issue
+
+The user QR code is not working.
+
+### Required behavior
+
+* The QR code must load correctly whenever the user opens it.
+* Each QR code must be linked to the correct user account.
+* Authorized Back Office staff must be able to scan and validate it.
+* The system must display a clear message if the QR code is invalid, expired, or cannot be loaded.
+* QR-code activity should be logged for audit and troubleshooting purposes.
+
+## 4. Back Office QR Reopen Prompt
+
+### Current issue
+
+When a QR-code request is pushed from the Back Office, the user does not receive a prompt to reopen or display the QR code.
+
+### Required behavior
+
+* A Back Office action must trigger an in-app prompt or push notification.
+* The prompt must provide a clear action such as **Open QR Code**.
+* Selecting the prompt must take the user directly to the correct QR-code screen.
+* If the user is logged out, the app should request authentication and then continue to the QR-code screen.
+* The Back Office must record whether the request was sent, delivered, opened, or failed.
+
+## 5. Mr Reward Performance and QR Badge Synchronization
+
+### Current issues
+
+* Mr Reward tabs take too long to open.
+* Reward information is not synchronized with the reward-display QR-code badge.
+
+### Required behavior
+
+* Mr Reward screens and tabs must open within an acceptable response time.
+* Reward points, tier, status, badge, and QR-code information must use the same source of truth.
+* A reward update must automatically update both the reward display and QR badge.
+* Users should not need to log out or reinstall the app to see updated rewards.
+* A loading indicator must appear when information is being retrieved.
+* A clear error message and retry option must appear if loading fails.
+
+### Acceptance criteria
+
+* Reward details remain consistent across the Companion App and Back Office.
+* The displayed QR badge matches the user’s current reward status.
+* Reward updates appear without duplicate transactions or conflicting balances.
+* Slow API calls and synchronization failures are logged.
+
+## 6. Order and Payment Synchronization with ProjectHub
+
+### Current issue
+
+Orders and payment records are not properly synchronized with ProjectHub for:
+
+* Cash on Delivery (COD)
+* M-Pesa
+* Paystack
+
+### Required behavior
+
+Every order must be created in ProjectHub with:
+
+* A unique order ID
+* Customer ID
+* Payment reference, where available
+* Payment method
+* Payment status
+* Order status
+* Order value
+* Date and time
+* Product and quantity details
+
+The system must support at least these payment states:
+
+* Pending
+* Successful
+* Failed
+* Cancelled
+* Refunded
+* Cash on Delivery awaiting collection
+* Cash on Delivery collected
+
+### Payment-specific requirements
+
+**M-Pesa and Paystack**
+
+* Payment confirmations must update the corresponding order automatically.
+* Webhook events must be validated before the order is marked as paid.
+* Repeated webhook events must not create duplicate payments or orders.
+* Failed or pending payments must remain linked to the original order and customer.
+
+**Cash on Delivery**
+
+* COD orders must be recorded as awaiting payment.
+* The order must only be marked as paid after an authorized user confirms collection.
+* The system must record who confirmed the payment and when.
+
+### Acceptance criteria
+
+* Companion App, ProjectHub, and Back Office show the same order and payment status.
+* Each payment is linked to the correct order.
+* Duplicate webhook events do not create duplicate records.
+* Failed synchronization attempts are logged and retried safely.
+* Administrators can identify unresolved synchronization failures.
+
+## 7. Keyboard and Form Responsiveness
+
+### Current issue
+
+Mobile keyboards interfere with forms and prevent users from entering information properly in the Companion App and ProjectHub.
+
+### Required behavior
+
+* The keyboard must not cover the active input field.
+* Screens must scroll automatically to keep the selected field visible.
+* Users must be able to move between fields using **Next**, **Previous**, or equivalent controls.
+* The keyboard must close when the user taps outside a field or selects **Done**.
+* Submit, Continue, Save, and Cancel buttons must remain accessible.
+* The correct keyboard type must be used for phone numbers, email addresses, numeric values, and passwords.
+* Entered information must not be lost when the keyboard opens or closes.
+* These requirements must work across supported Android devices, iPhones, tablets, and relevant mobile browsers.
+
+## 8. Password Reset by Administrator
+
+### Required behavior
+
+Authorized administrators must be able to reset a Companion App user’s password from the Back Office.
+
+The process must:
+
+* Verify that the administrator has the correct permission.
+* Generate a secure, time-limited reset link or temporary password.
+* Send the reset instructions to the user’s verified WhatsApp number or email address.
+* Require the user to create a new password.
+* Invalidate the reset link after successful use or expiration.
+* Record the action in an audit log.
+* Never display the user’s existing password to an administrator.
+
+## 9. User-Initiated Password Reset
+
+### Required behavior
+
+Users must be able to select **Forgot Password** and receive recovery instructions through:
+
+* WhatsApp
+* Email
+
+The process must:
+
+1. Ask the user to enter the registered phone number or email address.
+2. Verify that the contact information is associated with an account.
+3. Send a one-time code or secure reset link.
+4. Apply an expiration period to the code or link.
+5. Limit repeated requests and incorrect attempts.
+6. Allow the user to create and confirm a new password.
+7. Confirm when the password has been changed successfully.
+8. Invalidate previous reset codes and active reset links.
+
+For security, the response should not reveal whether an unverified email address or phone number exists in the system.
+
+## 10. Logging and Monitoring
+
+The development team must implement logging for:
+
+* Filter-registration failures
+* QR-code generation and scanning failures
+* Back Office notification delivery
+* Reward synchronization failures
+* Order synchronization failures
+* M-Pesa and Paystack webhook failures
+* Duplicate payment events
+* Password-reset requests and completions
+* Application and API response times
+
+Logs must exclude passwords, one-time codes, full payment credentials, and other sensitive authentication information.
+
+## 11. Recommended Implementation Priority
+
+### Priority 1 — Critical
+
+* Order and payment synchronization
+* User QR-code functionality
+* Filter registration
+* Password-reset functionality
+
+### Priority 2 — High
+
+* Order-history visibility
+* Back Office QR prompts
+* Mr Reward synchronization
+
+### Priority 3 — Usability and performance
+
+* Mr Reward loading performance
+* Keyboard and form responsiveness
+* Expanded logging and monitoring
+
+## Definition of Done
+
+The update will be considered complete when:
+
+* All requirements have passed functional testing.
+* M-Pesa, Paystack, and COD scenarios have been tested successfully.
+* Duplicate and delayed payment events have been tested.
+* QR-code workflows work between the Companion App and Back Office.
+* Reward information is consistent across all interfaces.
+* Password-reset links and codes expire correctly.
+* Forms have been tested on supported Android and iOS devices.
+* No critical or high-severity defects remain open.
+* Technical documentation and release notes have been updated.

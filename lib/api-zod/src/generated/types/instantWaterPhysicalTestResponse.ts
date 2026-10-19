@@ -8,6 +8,8 @@
 import type { InstantWaterPhysicalTestResponseServiceState } from './instantWaterPhysicalTestResponseServiceState';
 
 export interface InstantWaterPhysicalTestResponse {
+  freeWaterTest?: boolean;
+  promoCode?: string;
   assessmentId: string;
   reference: string;
   serviceState: InstantWaterPhysicalTestResponseServiceState;

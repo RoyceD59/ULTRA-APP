@@ -12,6 +12,16 @@
  */
 
 import { pool } from "@workspace/db";
+import { readFile } from "node:fs/promises";
+import { ensureReviewAnalysisSchema } from "../lib/review-analysis-schema.js";
+
+await ensureReviewAnalysisSchema();
+await pool.query(`CREATE TABLE IF NOT EXISTS uc_daily_hydration (
+  user_id integer NOT NULL REFERENCES uc_users(id) ON DELETE CASCADE,
+  local_date date NOT NULL, litres double precision NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(user_id, local_date),
+  CONSTRAINT uc_daily_hydration_litres_valid CHECK (litres >= 0 AND litres < 'Infinity'::double precision)
+)`);
 
 // sheet_syncs error columns
 await pool.query(`
@@ -543,5 +553,19 @@ await pool.query(`
   CREATE INDEX IF NOT EXISTS uc_order_notification_outbox_pending_idx
     ON uc_order_notification_outbox (status, next_attempt_at);
 `);
+
+await pool.query(`
+  ALTER TABLE team_settings
+    ADD COLUMN IF NOT EXISTS care_overview_preview boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS refill_governance_preview boolean NOT NULL DEFAULT false;
+`);
+for (const migrationPath of [
+  "../../../../lib/db/migrations/0054_uc_refill_governance.sql",
+  "../../../../lib/db/migrations/0055_refill_preview_flags.sql",
+  "../../../../lib/db/migrations/0065_offline_filter_registration.sql",
+]) {
+  const migration = await readFile(new URL(migrationPath, import.meta.url), "utf8");
+  await pool.query(migration);
+}
 
 console.log("[test-setup] all startup migrations applied");

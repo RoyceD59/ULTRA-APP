@@ -30,3 +30,10 @@ export const ucLocationsTable = pgTable("uc_locations", {
 ]);
 
 export type UcLocation = typeof ucLocationsTable.$inferSelect;
+
+/** One successful team reminder per field-review cycle, surviving API restarts. */
+export const ucLocationReviewAlertsTable = pgTable("uc_location_review_alerts", {
+  locationId: text("location_id").primaryKey().references(() => ucLocationsTable.id, { onDelete: "cascade" }),
+  reviewKey: text("review_key").notNull(),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+});

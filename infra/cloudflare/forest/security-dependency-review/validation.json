@@ -1,0 +1,111 @@
+{
+  "validatedAt": "2026-10-09T09:57:22.193Z",
+  "candidateSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "parentSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "scopeSha256": "4ee4d0f8c6741da1fd5e7b5c840286ec79214d6f561662ed3a85f332fc546cb6",
+  "scope": {
+    "changedPaths": [
+      "artifacts/api-server/package.json",
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "unchangedFiles": 1261,
+    "unrelatedImportersAndCodegenPeerContextsPreserved": true,
+    "frozenLockfileInstallation": "passed"
+  },
+  "registryVerification": [
+    {
+      "name": "sharp",
+      "version": "0.35.5",
+      "license": "Apache-2.0",
+      "exists": true
+    },
+    {
+      "name": "shell-quote",
+      "version": "1.11.0",
+      "license": "MIT",
+      "exists": true
+    },
+    {
+      "name": "music-metadata",
+      "version": "11.16.0",
+      "license": "MIT",
+      "exists": true
+    }
+  ],
+  "typechecks": {
+    "sharedLibraries": "passed",
+    "api": "passed",
+    "projecthub": "passed",
+    "companion": "passed"
+  },
+  "builds": {
+    "api": "passed",
+    "projecthub": "passed",
+    "companionStaticExport": "passed",
+    "companionLocalBuildId": "1791539404277-7265",
+    "companionLocalRevision": "security-dependencies-1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+    "companionApiOrigin": "https://api.ucfilters.com",
+    "iosAndroidManifestLaunchKeysVerified": true,
+    "nativeBinary": false,
+    "physicalDeviceChecks": false
+  },
+  "tests": {
+    "scope": 6,
+    "newDependencyRuntime": 6,
+    "retainedDependencyBackports": 7,
+    "retainedConsumerRuntime": 4,
+    "authUpload": 49,
+    "totalPassed": 72,
+    "totalFailed": 0,
+    "authUploadDatabase": "disposable per-run database; dropped after tests"
+  },
+  "productionDependencyAudit": {
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 2,
+        "critical": 0
+      },
+      "dependencies": 857,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 857
+    },
+    "advisories": [
+      {
+        "package": "node-forge",
+        "severity": "high",
+        "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+        "url": "https://github.com/advisories/GHSA-86w9-cpqp-85rv"
+      },
+      {
+        "package": "braces",
+        "severity": "high",
+        "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+        "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm"
+      }
+    ],
+    "versionFeedClean": false,
+    "remainingHighMitigations": "Unchanged braces and node-forge patches; installed-consumer regression tests passed. Review mitigation acceptance before selection/publication."
+  },
+  "warnings": [
+    "Vite source-map/chunk-size warnings; build succeeded",
+    "Development-only React Native DevTools missing libglib; all static bundles/manifests completed"
+  ],
+  "limits": {
+    "mainStillSelectsParent": true,
+    "mainRuntimeDependencyPinsUnchanged": true,
+    "newCandidateSelected": false,
+    "published": false,
+    "productionSchemaWrites": false,
+    "deploymentOutputsCopied": false,
+    "clientsActivated": false,
+    "apiLiveSecuritySmokeTestsPerformed": false,
+    "fullMainSecurityCenterScanPerformed": false,
+    "completeServedClientRollbackRetained": false
+  },
+  "nextGate": "Review exact scope and backport mitigations; separately approve selection and minimal main runtime alignment. API-first publication and fresh two-host snapshot checks precede client advancement."
+}

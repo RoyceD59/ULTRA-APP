@@ -1,0 +1,38 @@
+{
+  "parentSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "candidateSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "changedPaths": [
+    "artifacts/api-server/package.json",
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "unchangedParentFiles": 1261,
+  "dependencyPins": {
+    "sharp": "0.35.5",
+    "shell-quote": "1.11.0",
+    "music-metadata": "11.16.0"
+  },
+  "files": [
+    {
+      "path": "artifacts/api-server/package.json",
+      "beforeSha256": "8f5b841b567274754ea64eb841266e684076a89b5802817fa040e9bbdbe9139f",
+      "afterSha256": "e77a37076eea1caa25dfad6b9d3397b172a7e3bf2be598ecaa5eaf9dd849e371",
+      "beforeBytes": 1856,
+      "afterBytes": 1855
+    },
+    {
+      "path": "package.json",
+      "beforeSha256": "1644153a852f765bb56b5a3ec5e89ab4d41bad8ffb7ae3b6693037f4dff4777b",
+      "afterSha256": "d6fbfc128fb7530e659f97a4e940480967912edb628adcfb9ee9ed26949e9c5b",
+      "beforeBytes": 1857,
+      "afterBytes": 1923
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "beforeSha256": "508116e31c7c28c4ce8513ad28356c51ff9279e501f498a428fc826d0a189d6d",
+      "afterSha256": "b405aed1306e3e4039b37917a491ee3c46acdaf11c932120afeb07d6cfeba8ee",
+      "beforeBytes": 594062,
+      "afterBytes": 599822
+    }
+  ]
+}

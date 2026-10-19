@@ -11,6 +11,8 @@ vi.mock("@/lib/team-auth", () => ({
   getAuthHeaders: () => ({ Authorization: "Bearer test-token" }),
   clearTeamAuth: vi.fn(),
   changePassword: vi.fn(),
+  getTeamSessionRemainingMs: () => null,
+  renewTeamSession: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({

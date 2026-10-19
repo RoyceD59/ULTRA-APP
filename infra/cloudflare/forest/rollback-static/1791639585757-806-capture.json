@@ -1,0 +1,323 @@
+{
+  "buildId": "1791639585757-806",
+  "revision": "consistency-d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+  "builtAt": "2026-10-10T13:40:54.444Z",
+  "origin": "https://app.ucfilters.com",
+  "manifests": {
+    "ios": {
+      "id": "c433a67d-909e-4e37-9340-cabc86da8a5f",
+      "createdAt": "2026-10-10T13:39:45.757Z",
+      "launchKey": "bundle-1791639585757-806",
+      "launchUrl": "https://app.ucfilters.com/uc-companion/1791639585757-806/_expo/static/js/ios/bundle.js"
+    },
+    "android": {
+      "id": "995c8743-2b6e-4481-a2d8-fc1e134e80bd",
+      "createdAt": "2026-10-10T13:39:45.757Z",
+      "launchKey": "bundle-1791639585757-806",
+      "launchUrl": "https://app.ucfilters.com/uc-companion/1791639585757-806/_expo/static/js/android/bundle.js"
+    }
+  },
+  "files": [
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/100Thin_Italic/Inter_100Thin_Italic.ttf",
+      "bytes": 346824,
+      "sha256": "e9003a5eb6c4c57afdf46fcad086f578f7579e66d7e864ff6b39b2107b7e26d7"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/100Thin/Inter_100Thin.ttf",
+      "bytes": 342616,
+      "sha256": "cde345d089309c65b881b96333a136c2bc882525d611cab39b0b49830efb173e"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/200ExtraLight_Italic/Inter_200ExtraLight_Italic.ttf",
+      "bytes": 347072,
+      "sha256": "8253c6dda5eb9f183cf51a6251aeeae76b0980305f9a01d6cd7e9296181efe9b"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/200ExtraLight/Inter_200ExtraLight.ttf",
+      "bytes": 343180,
+      "sha256": "e5783a67fb77268810cd6a8474d802a0b0011409fd11dd50e218d94f19edadee"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/300Light_Italic/Inter_300Light_Italic.ttf",
+      "bytes": 346892,
+      "sha256": "2a10723dcb34bd195277a92db8589c8c0b0404e76704687bf2037a6c04f10848"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/300Light/Inter_300Light.ttf",
+      "bytes": 343320,
+      "sha256": "b5d77067f596f8869f856ce593975c870af67421c8ed3854e88a861a47f3f422"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular_Italic/Inter_400Regular_Italic.ttf",
+      "bytes": 345956,
+      "sha256": "c8c09e4bd08de7b901b4561f16ce9bb1ab3ffa420cfaef9f2a40286e14300e75"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+      "bytes": 342408,
+      "sha256": "a414b48aa577ef2c62ebb135341ddeef33ee26a4f5dc9f787f93c1aab08ebb50"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium_Italic/Inter_500Medium_Italic.ttf",
+      "bytes": 346444,
+      "sha256": "4da3a591da4809ef65d0ffc0085c50a859723c5574aa5608c1b7175d2dce33e1"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+      "bytes": 342892,
+      "sha256": "f1738576525e86db1d5cf63a6c1b56e0a7e2a2898b499ac93db95f2e7a9f9cd5"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold_Italic/Inter_600SemiBold_Italic.ttf",
+      "bytes": 347292,
+      "sha256": "70decc884a5641a35126dc6b7926235f888e7633691259e007ab45d01f09632c"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+      "bytes": 343632,
+      "sha256": "f30e9d2574c3bec5144347ff965f9841c8f06857f0b7383000f8c9489a161841"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold_Italic/Inter_700Bold_Italic.ttf",
+      "bytes": 347824,
+      "sha256": "bcc655acbd25f44eed4894f3c65f836503476db411c540d8dd5b616ef60c1825"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+      "bytes": 344072,
+      "sha256": "fbe825cbfc749317f57a1433d3905aa9d3f388732fd29b8e8a36f34845e3bc3e"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/800ExtraBold_Italic/Inter_800ExtraBold_Italic.ttf",
+      "bytes": 348700,
+      "sha256": "952cccc4badf3d0ea5aed7e1b2434238692c196b91f94510ef8a2271a2547f13"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/800ExtraBold/Inter_800ExtraBold.ttf",
+      "bytes": 344900,
+      "sha256": "1b9fab96ffc7bca31a9d4cd4d660cce80b94695908ec7613afdece2b8cf803c2"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/900Black_Italic/Inter_900Black_Italic.ttf",
+      "bytes": 348732,
+      "sha256": "9b8d51a64c80772802bfe1581893f841f748e699f2701d1ff88805c14a148448"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/900Black/Inter_900Black.ttf",
+      "bytes": 344840,
+      "sha256": "1361749967ed6df22a31a2f320153a931b4154d7e3755d05fb98ed76bd35cb8c"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo-google-fonts+material-symbols@0.4.47/node_modules/@expo-google-fonts/material-symbols/400Regular/MaterialSymbols_400Regular.ttf",
+      "bytes": 966544,
+      "sha256": "b24d7174fd42aad990c353e154aea91855da15713abb3cdd5bc4d8f462ab616f"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf",
+      "bytes": 130484,
+      "sha256": "08a9d5b513cf947e22ede81e9a843bd8d7763a63444cd21484bfde7662cc6543"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf",
+      "bytes": 66200,
+      "sha256": "16f92298587bab2b469bc13c0dfc6d5d171bca10bad0c9053ad16bc023bf717d"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.ttf",
+      "bytes": 13456,
+      "sha256": "a5caeb4d395c5e32f1d5a30acb382aebc664f1badfd149319907f2215e4e3e26"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf",
+      "bytes": 55596,
+      "sha256": "02b88ead91ade5710d7ca18edb43a6965a71d93732c06f290cc07a6dd249e987"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf",
+      "bytes": 165548,
+      "sha256": "aa58f33f239a0fb02f5c7a6c45c043d7a9ac9a093335806694ecd6d4edc0d6a8"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.ttf",
+      "bytes": 134040,
+      "sha256": "06f4d00923ea24697df5df0b92984175991d8bd25776a02d531bb401e393ec42"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf",
+      "bytes": 33736,
+      "sha256": "c651b8a67d3193206f622c3c3b0fbca4a2f2727108c4212b52c1e2a2e84c9b31"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.ttf",
+      "bytes": 202744,
+      "sha256": "3d06af1f31cd83ace7a265a014b8fb5dee15770ecac8f7a55555190e627e03c2"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Brands.ttf",
+      "bytes": 209376,
+      "sha256": "bc844b5b02d3f3adabb514de4e0c0208252d3123413bd03f6287fa446acee859"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Regular.ttf",
+      "bytes": 67976,
+      "sha256": "64f9fb623681f112261e9a2f97826782439f3925dea8f44a57d1e4db95ba6cfd"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Solid.ttf",
+      "bytes": 423676,
+      "sha256": "31f099c13f6e4ba05f1b471bf170cb5493249474222917372de3ca5cf29e6a1a"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.ttf",
+      "bytes": 313528,
+      "sha256": "94dab9f1d5b13ea0769d124a2da0d02433f3b99d6dea5a07c0446a77158100c0"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.ttf",
+      "bytes": 56976,
+      "sha256": "7e1dd03dd4ce90b658052554cd7459df16716717389a552fa4c6d56a5f8933e6"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+      "bytes": 389724,
+      "sha256": "fa2ab7d2557819b2bfe5009e46844efa7170cf177be7735d43aa2ac1295f1d54"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf",
+      "bytes": 1307660,
+      "sha256": "61e8aba5a4e981fe22cf7c8e8bcdbea00476e75c62c37f01bf7ee33361d68428"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf",
+      "bytes": 356840,
+      "sha256": "ef149f08bdd2ff09a4e2c8573476b7b0f3fbb15b623954ade59899e7175bedda"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.ttf",
+      "bytes": 69436,
+      "sha256": "9bc4d9f5e994e774bdc3ef9a9a87da749af5f50b861473ef7d1cc3d6f8229267"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.ttf",
+      "bytes": 54056,
+      "sha256": "3f501ddb05c70829bbb51cfe9ca9fff57f39e060457c257b3ccf25df767f0870"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.ttf",
+      "bytes": 25788,
+      "sha256": "dd8ee403bbcbf5e58b77dca4ac03ebafa13a284a3d87d8ea9ca490435a86fa48"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/arrow_down.png",
+      "bytes": 9456,
+      "sha256": "6deca32b56b97fa1fa87facd6996b46cc45190a553400e7febdf1d2093099b57"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/arrow_right.xml",
+      "bytes": 307,
+      "sha256": "e53f1e69f862e595f5d119c042863ff2a444fe42996d22bbab876b30073d0fba"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/checkmark.xml",
+      "bytes": 312,
+      "sha256": "fda3f183ae85e63bcbce70a74276ea220332ae841f746c370b0b2ab40355a357"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/error.png",
+      "bytes": 469,
+      "sha256": "c15ec72a74d13957211808313d5c35deb7f7606c6d22dbddceb0000d4e0547ad"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/file.png",
+      "bytes": 138,
+      "sha256": "a69a2edb5b6c60b8433d5b6d23c69f520ccd8a602f3f60e7996e489718bc175c"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/forward.png",
+      "bytes": 188,
+      "sha256": "708a79cf561b8a2a4850ce0254584d3a5231046be08fb7fadf4b6edfdb31178b"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/pkg.png",
+      "bytes": 364,
+      "sha256": "27f4d229d440925bf7212d5dfffa45d596b2c7b3bb2905c96b839b2081a1dbeb"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/react-navigation/elements/back-icon-mask.png",
+      "bytes": 653,
+      "sha256": "9adb8c5efca932e2b732b293da813bd2e31952263056bce9e2517fec0f0b6a76"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/react-navigation/elements/back-icon.png",
+      "bytes": 207,
+      "sha256": "84cf5eb3b20250f69e0e4733beb4da5f417f0682892a5ad1b5e62570753c21b1"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/react-navigation/elements/clear-icon.png",
+      "bytes": 645,
+      "sha256": "c86bb485eee687e06c500fc4234f51a6784b4530c2ae11d0c76481110bce3105"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/react-navigation/elements/close-icon.png",
+      "bytes": 332,
+      "sha256": "2325c53a73e54c438cbbc60dffdd8b513d471ba42e2f56713ef404b95e0ca1fc"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/react-navigation/elements/search-icon.png",
+      "bytes": 928,
+      "sha256": "5d075e0c287c4f4441b5b5c8fc7ea5cd27c11bb617ecea09755955bcb1889083"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/sitemap.png",
+      "bytes": 465,
+      "sha256": "acf691957a3bcce7d195856dce98a5cf14dce10bea28aa5c10b3550c078e23b5"
+    },
+    {
+      "path": "1791639585757-806/_expo/node_modules/.pnpm/expo-router@57.0.24_18ea251f1d395cd147a50a9e82145f16/node_modules/expo-router/assets/unmatched.png",
+      "bytes": 4752,
+      "sha256": "efc79da3c4c97dfb1571bff6202958ab0529c5aa31e8392600578b3e359d1447"
+    },
+    {
+      "path": "1791639585757-806/_expo/static/js/android/bundle.js",
+      "bytes": 6730070,
+      "sha256": "4830928fdc34083cba45d826225e2b59231df6e50e6d2d0fec0c57b035e96fc9"
+    },
+    {
+      "path": "1791639585757-806/_expo/static/js/assets/images/logo-lockup-deep.png",
+      "bytes": 42681,
+      "sha256": "3c21eaa1c0472c697fc7e1af6ec426984ac3954f2bf7e0e42b6cc6f1dcbc20bf"
+    },
+    {
+      "path": "1791639585757-806/_expo/static/js/assets/images/logo-lockup-white.png",
+      "bytes": 35711,
+      "sha256": "dce917510af6667eb226a852f88167320987e11ea1a373ce38ee632d7c570ca2"
+    },
+    {
+      "path": "1791639585757-806/_expo/static/js/ios/bundle.js",
+      "bytes": 6557930,
+      "sha256": "555c27792b3e6b2fbc1a9377de0ac9b60c9e0905500aecdc6a0d65824c35d919"
+    },
+    {
+      "path": "1791639585757-806/_expo/static/js/web/bundle.js",
+      "bytes": 4823117,
+      "sha256": "647043a8b54b752632f82cf8958d287f318d6eafc95bc248b7b70179463c3fc9"
+    },
+    {
+      "path": "1791639585757-806/android/manifest.json",
+      "bytes": 6960,
+      "sha256": "85cbb8cba5ee74d97677a4eefe9721aa18ead5c2822b8b720b163887ac37192d"
+    },
+    {
+      "path": "1791639585757-806/build-info.json",
+      "bytes": 503,
+      "sha256": "b0e3b5acfb3482e52558eb6dd6442ec944cb17aea5c68d53e772eb368e0bb57e"
+    },
+    {
+      "path": "1791639585757-806/ios/manifest.json",
+      "bytes": 6948,
+      "sha256": "f0e52129359310fda9414517e8aed3deb218d1b73aad1e8369fc29a064d3652b"
+    }
+  ],
+  "failures": []
+}

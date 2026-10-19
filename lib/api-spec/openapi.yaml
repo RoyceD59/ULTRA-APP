@@ -43,6 +43,789 @@ tags:
   - name: companion-blog
     description: Public Companion articles and human-reviewed editorial workflow
 paths:
+  /uc/product-records:
+    get:
+      operationId: listProductEditorialRecords
+      tags: [uc]
+      responses:
+        "200":
+          description: Allowlisted publishable v2.4 editorial collection; never private author notes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialCollection" }
+  /uc/product-records/{key}:
+    get:
+      operationId: getProductEditorialRecord
+      tags: [uc]
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Effective public record and verified live operation, with unavailable diagnostics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialPublic" }
+        "404": { description: Not publishable or no full record }
+        "503": { description: Identity or editorial store unavailable }
+  /uc/admin/product-records:
+    post:
+      operationId: createCompanionProductRecord
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      summary: Create an app-owned draft with unknown stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [record]
+              additionalProperties: false
+              properties:
+                record: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Created private draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+        "400": { description: Invalid authored record }
+        "403": { description: Admin access required }
+        "409": { description: Identity conflict }
+    get:
+      operationId: listAdminProductEditorialRecords
+      tags: [admin]
+      responses:
+        "200":
+          description: All full authored record identities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProductEditorialIdentity" }
+        "403": { description: Live verified admin required }
+  /uc/admin/product-records/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: archiveCompanionProductRecord
+      tags: [admin]
+      security: [{ bearerAuth: [] }]
+      summary: Archive without deleting historical orders or filter records
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties: { ok: { type: boolean } }
+        "403": { description: Admin access required }
+        "404": { description: Record not found }
+    get:
+      operationId: getAdminProductEditorialRecord
+      tags: [admin]
+      responses:
+        "200":
+          description: Full private v2.4 record and optimistic revision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+        "403": { description: Live verified admin required }
+        "404": { description: Full record not found }
+    put:
+      operationId: saveProductEditorialRecord
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+      responses:
+        "200":
+          description: Saved shared record and incremented revision; Companion and ProjectHub use the same price
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditorialRevision" }
+        "400": { description: "v2.4 contract, safety or media validation rejected" }
+        "403": { description: Live verified admin required }
+        "409": { description: Revision conflict; reload before saving }
+  /uc/impact:
+    get:
+      operationId: readGlobalImpact
+      tags: [customer-lifecycle]
+      summary: Read account-independent global impact from one database snapshot
+      responses:
+        "200":
+          description: Calculated snapshot; identity excludes receipt time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalImpactSnapshot"
+        "503":
+          description: Authoritative adjustments or aggregate unavailable; never fabricated totals
+  /uc/impact/override:
+    post:
+      operationId: saveGlobalImpactAdjustment
+      tags: [customer-lifecycle]
+      summary: Save shared adjustments with live impact edit authorization and optional revision precondition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalImpactAdjustmentInput"
+      responses:
+        "200":
+          description: Adjustment committed and audited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalImpactAdjustmentResult"
+        "400": { description: Invalid adjustment }
+        "401": { description: Authentication required }
+        "403": { description: Live edit permission required }
+        "409": { description: Revision conflict or incomplete initialization }
+        "503": { description: Could not save adjustment }
+  /uc/auth/register:
+    post:
+      operationId: registerUcContactAccount
+      tags: [uc-customer]
+      summary: Create an account with required normalized phone and contact address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, firstName, phone, address]
+              properties:
+                email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$' }
+                password: { type: string, minLength: 6 }
+                firstName: { type: string, minLength: 1 }
+                lastName: { type: string }
+                phone: { type: string, minLength: 1 }
+                address: { type: string, minLength: 1, maxLength: 500 }
+                referralCode: { type: string }
+      responses:
+        "200": { description: Account created }
+        "400": { description: Missing or invalid fields }
+        "409": { description: Existing or conflicting identity — sign in or contact support }
+  /uc/customer/profile:
+    patch:
+      operationId: completeUcContactProfile
+      tags: [uc-customer]
+      security: [{ bearerAuth: [] }]
+      summary: Edit contact details without creating or relinking an account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string, minLength: 1 }
+                lastName: { type: string }
+                phone: { type: string, minLength: 1 }
+                address: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200": { description: Saved existing account }
+        "400": { description: Actionable contact field errors }
+        "409": { description: Phone identity conflict }
+  /uc/admin/orders/reconciliation-report:
+    get:
+      operationId: getUcCheckoutDiagnostics
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      summary: Read-only checkout evidence for at most 100 explicit local order IDs
+      parameters:
+        - { name: ids, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: No provider calls, mutations, financial or ownership inference
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400": { description: Invalid scope }
+        "403": { description: Active administrator required }
+  /uc/filters/activation-purchases:
+    get:
+      operationId: getUcActivationPurchases
+      tags: [uc-customer]
+      security: [{ bearerAuth: [] }]
+      summary: Owned purchase units with authoritative activation eligibility
+      responses:
+        "200":
+          description: Purchases remain visible even when activation is unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchases]
+                properties:
+                  sourceErrors:
+                    type: object
+                    description: Independent store read failure; app records remain visible without inferring mirror eligibility.
+                    properties:
+                      store: { type: string }
+                  purchases:
+                    type: array
+                    items:
+                      type: object
+                      required: [source, orderId, dateCreated, phone, status, items]
+                      properties:
+                        source: { type: string, enum: [app, store] }
+                        orderId: { type: integer }
+                        dateCreated: { type: string }
+                        phone: { type: string }
+                        status: { type: string }
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            required: [lineId, productId, name, quantity, lifespanDays, capacityLitres, availableUnitIds, unavailableReason]
+                            properties:
+                              lineId: { type: integer }
+                              productId: { type: integer }
+                              name: { type: string }
+                              quantity: { type: integer }
+                              lifespanDays: { type: integer }
+                              capacityLitres: { type: integer }
+                              availableUnitIds: { type: array, items: { type: string } }
+                              unavailableReason: { type: string, nullable: true }
+        "401": { description: Authentication required }
+        "503": { description: Eligibility could not be refreshed }
+  /uc/purchases/offline:
+    get:
+      operationId: listCustomerOfflinePurchases
+      tags: [uc]
+      summary: Read only this account's durably linked offline sales
+      responses:
+        "200":
+          description: Safe source-aware purchase records, never financial orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerOfflinePurchaseList"
+        "401": { description: Authentication required }
+        "500": { description: Purchase read unavailable }
+  /uc/filters/register-offline-purchase:
+    post:
+      operationId: commitCustomerOfflineFilter
+      tags: [uc]
+      summary: Register one owned offline sale unit without a receipt or financial writes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [saleId, unitId, installationDate]
+              properties:
+                saleId: { type: integer, minimum: 1 }
+                unitId: { type: string, maxLength: 100 }
+                installationDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+      responses:
+        "200":
+          description: Durable registration including exact retries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registration]
+                properties:
+                  registration:
+                    type: object
+                    required: [id, userId, productId, productName, ratedCapacityLitres, activatedAt, offlineUnitId, lifespanDays]
+                    properties:
+                      id: { type: integer }
+                      userId: { type: integer }
+                      productId: { type: integer }
+                      productName: { type: string }
+                      ratedCapacityLitres: { type: integer }
+                      activatedAt: { type: string }
+                      sourceOrderId: { type: integer, nullable: true }
+                      offlineUnitId: { type: string }
+                      lifespanDays: { type: integer }
+                      maintenanceCount: { type: integer }
+        "400": { description: Invalid installation date or source input }
+        "401": { description: Authentication required }
+        "404": { description: Owned linked purchase not found }
+        "409": { description: Unit or quantity no longer available }
+        "422": { description: Product lacks confirmed catalogue filter metadata }
+        "503": { description: Catalogue unavailable - retry later }
+  /uc/customer/rewards/qr/validate:
+    post:
+      operationId: validateCustomerRewardsQr
+      tags: [customer]
+      summary: Read-only account-bound QR verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewardsQrCandidate"
+      responses:
+        "200":
+          description: Current account QR state, without issuing or rotating
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardsQrInspection"
+        "401":
+          description: Authentication required
+  /uc/customer/rewards/qr/rotate:
+    post:
+      operationId: recoverCustomerRewardsQr
+      tags: [customer]
+      summary: Explicit concurrency-safe QR issuance or recovery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewardsQrRecovery"
+      responses:
+        "200":
+          description: Recovered or concurrently issued QR
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardsQrInspection"
+        "409":
+          description: QR state changed; refresh before recovery
+  /uc/enquiries:
+    get:
+      operationId: listUcEnquiries
+      tags: [admin]
+      summary: List customer enquiries (admin secret required)
+      description: |
+        Returns all persisted enquiries, newest first. ADMIN_SECRET must be
+        configured on the server. Date bounds are inclusive UTC calendar days.
+      security: [{ enquiryAdminKey: [] }]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+          description: First UTC date to include (YYYY-MM-DD).
+        - name: to
+          in: query
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+          description: Last UTC date to include (YYYY-MM-DD).
+      responses:
+        "200":
+          description: Enquiries, newest first (an empty array if none match).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UcEnquirySubmission" }
+        "400":
+          description: Invalid calendar date or reversed date range.
+        "401":
+          description: Missing or invalid X-Admin-Key.
+        "503":
+          description: Admin secret is not configured or the enquiry store is unavailable.
+  /library/docs/{id}/knowledge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: previewLibraryKnowledge
+      summary: Review bounded extracted text for customer knowledge (active team admin only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Inert text preview; never returns a private object URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryKnowledgePreview"
+        "401": { description: Team authentication required }
+        "403": { description: Active administrator required }
+        "404": { description: Document not found }
+        "422": { description: "Unsupported, oversized, binary, or invalid UTF-8 document" }
+        "503": { description: Review temporarily unavailable }
+    post:
+      operationId: decideLibraryKnowledge
+      summary: Approve the reviewed text snapshot or revoke it (active team admin only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryKnowledgeDecision"
+      responses:
+        "200":
+          description: Persisted approval or revocation metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryKnowledgeMetadata"
+        "400": { description: Invalid decision or missing public-reference confirmation }
+        "401": { description: Team authentication required }
+        "403": { description: Active administrator required }
+        "404": { description: Document not found }
+        "409": { description: Review revision or content hash changed }
+        "422": { description: Unsupported or invalid reference text }
+        "503": { description: Approval temporarily unavailable }
+  /uc/checkout/cancel:
+    post:
+      operationId: cancelCompanionCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotencyKey]
+              properties:
+                idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        "200":
+          description: Uninitiated or provider-confirmed failed checkout cancelled; benefits released
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cancelled]
+                properties:
+                  cancelled: { type: boolean }
+        "409":
+          description: Payment may still complete; resume the original payment
+  /uc/checkout/recovery:
+    get:
+      operationId: getCompanionCheckoutRecovery
+      parameters:
+        - in: query
+          name: idempotencyKey
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        "200":
+          description: Read-only owned checkout state; editing still requires authorized cancellation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resolution, orderId]
+                properties:
+                  resolution: { type: string, enum: [editable, completed, unresolved] }
+                  orderId: { type: integer, nullable: true }
+        "401": { description: Invalid customer session }
+        "403": { description: Team session is not a customer checkout }
+        "503": { description: Keep the original intent while state is unavailable }
+  /uc/checkout/quote:
+    post:
+      operationId: quoteCompanionCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanionCheckoutQuoteInput" }
+      responses:
+        "200":
+          description: Server-priced cart, shipping and code benefit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanionCheckoutQuote" }
+        "422":
+          description: Products, fulfillment or benefit cannot be verified
+  /uc/customer/promotions/water_test/quote:
+    post:
+      operationId: quotePhysicalTestPromotion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhysicalTestPromotionInput" }
+      responses:
+        "200":
+          description: Eligible free physical test entitlement; not a payment or refund
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promotion]
+                properties:
+                  promotion:
+                    type: object
+                    required: [code]
+                    properties:
+                      code: { type: string }
+        "422":
+          description: Code inactive, expired, exhausted or ineligible
+  /admin/customer-assignments:
+    get:
+      operationId: listCustomerAssignments
+      tags: [uc-admin]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: status, in: query, schema: { type: string, enum: [pending, linked, review] } }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+      responses:
+        '200':
+          description: Durable assignments separate from recovery logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAssignmentPage'
+    post:
+      operationId: createCustomerAssignment
+      tags: [uc-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerAssignmentInput' }
+      responses:
+        '200':
+          description: Reservation saved; linking requires separate confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: integer }
+  /admin/customer-assignments/customer/{accountId}:
+    get:
+      operationId: listCustomerAccountAssignments
+      tags: [uc-admin]
+      summary: Team-admin read of linked assignments owned by one customer
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200':
+          description: Linked assignments for this account, without audit payloads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerAssignmentPage' }
+        '400': { description: Invalid account or pagination }
+        '401': { description: Team sign-in required }
+        '403': { description: Live team-admin permission required }
+  /admin/customer-assignments/{id}/audit:
+    get:
+      operationId: listCustomerAssignmentAudit
+      tags: [uc-admin]
+      summary: Read a page of retained audit history, newest first
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200':
+          description: Audit page with stable ID ordering
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, limit]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CustomerAssignmentAuditEntry' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400': { description: Invalid assignment or pagination }
+        '401': { description: Team sign-in required }
+        '403': { description: Live team-admin permission required }
+        '404': { description: Assignment not found }
+  /admin/customer-assignments/preview:
+    post:
+      operationId: previewCustomerAssignment
+      tags: [uc-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerAssignmentInput' }
+      responses:
+        '200':
+          description: Server-checked contact, catalogue and ownership preview
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [productName, lifespanDays, capacityLitres, cashCollectionState]
+                properties:
+                  productName: { type: string }
+                  lifespanDays: { type: integer }
+                  capacityLitres: { type: integer }
+                  cashCollectionState: { type: string }
+  /admin/customer-assignments/order-lines:
+    get:
+      operationId: findAssignmentOrderLines
+      tags: [uc-admin]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Existing durable COD order lines; source rechecked at preview and link
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssignmentOrderLine' }
+  /admin/customer-assignments/{id}/link:
+    post:
+      operationId: confirmCustomerAssignmentLink
+      tags: [uc-admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId, confirm]
+              properties:
+                accountId: { type: integer }
+                confirm: { type: boolean }
+      responses:
+        '200':
+          description: Result, including review reasons when linking is blocked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+  /admin/customer-assignments/{id}/retry:
+    post:
+      operationId: retryCustomerAssignment
+      tags: [uc-admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Retry using verified contacts, never staff authorization by implication
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+  /uc/customer/assignments:
+    get:
+      operationId: getMyCustomerAssignments
+      tags: [customer-lifecycle]
+      responses:
+        '200':
+          description: Authenticated account-owned linked filters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+  /uc/me/hydration/{localDate}:
+    get:
+      operationId: getUcDailyHydration
+      parameters:
+        - { name: localDate, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+      responses:
+        "200":
+          description: Daily filtered-water total; null means not recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcDailyHydration" }
+    put:
+      operationId: saveUcDailyHydration
+      parameters:
+        - { name: localDate, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UcDailyHydrationInput" }
+      responses:
+        "200":
+          description: Saved daily total
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcDailyHydration" }
+  /uc/customer/tree:
+    get:
+      operationId: getHydrateCustomerTree
+      tags: [customer-lifecycle]
+      summary: Own shared-tree allocation and aggregate progress
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Customer's allocation only; no co-funder identities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HydrateCustomerTree" }
+        "401": { description: Active customer session required }
+        "503": { description: Allocation or read temporarily unavailable }
+  /uc/impact/forest:
+    get:
+      operationId: getHydrateForestTotals
+      tags: [customer-lifecycle]
+      summary: Credential-free aggregate programme allocations, not verified field outcomes
+      security: []
+      responses:
+        "200":
+          description: Public aggregate totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HydrateForestTotals" }
+        "503": { description: Totals temporarily unavailable; do not assume zero }
+  /admin/customer-reviews:
+    get:
+      operationId: listCustomerReviews
+      tags: [uc-admin]
+      summary: Administrator-only Companion review log with matching-dataset counts
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: page, schema: {type: integer, minimum: 1, maximum: 100000, default: 1}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+        - {in: query, name: productId, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+        - {in: query, name: rating, schema: {type: integer, minimum: 1, maximum: 5}}
+        - {in: query, name: ratingSentiment, schema: {type: string, enum: [Positive, Neutral, Negative]}}
+        - {in: query, name: aiSentiment, schema: {type: string, enum: [Positive, Neutral, Negative, Mixed]}}
+        - {in: query, name: status, schema: {type: string, enum: [pending, processing, completed, failed, unavailable]}}
+        - {in: query, name: disagreement, schema: {type: boolean}}
+        - {in: query, name: search, schema: {type: string, maxLength: 200}}
+      responses:
+        "200":
+          description: Paginated rows and summaries across all matching reviews
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CustomerReviewLog"}
+        "400": {description: Invalid filter or pagination}
+        "401": {description: Authentication required}
+        "403": {description: Administrator access required}
+        "503": {description: Review log temporarily unavailable}
+  /admin/customer-reviews/{id}/retry:
+    post:
+      operationId: retryCustomerReviewAnalysis
+      tags: [uc-admin]
+      summary: Queue a failed eligible review for automated text analysis
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+      responses:
+        "200":
+          description: Retry queued without waiting for AI
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: {type: boolean}
+        "401": {description: Authentication required}
+        "403": {description: Administrator access required}
+        "409": {description: Current review is not eligible for retry}
+        "503": {description: Retry temporarily unavailable}
   /water-check/assessments:
     post:
       operationId: createPublicInstantWaterAssessment
@@ -352,6 +1135,58 @@ paths:
         "404": { description: Assessment not found }
         "409": { description: Stale transition }
 
+  /uc/orders/{id}/status:
+    patch:
+      operationId: updateUcOrderFulfillment
+      tags: [uc-admin]
+      summary: Mark an order shipped or ready to collect and queue SMS, push, and email
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcOrderFulfillmentInput"
+      responses:
+        "200":
+          description: Status persisted and notifications queued, or an idempotent repeat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UcOrderFulfillmentResult"
+        "400": { description: Invalid input or missing collection location }
+        "403": { description: Admin access required }
+        "404": { description: Order not found }
+        "409": { description: Order is terminal or stage cannot advance }
+
+  /uc/admin/orders/{id}:
+    patch:
+      operationId: updateUcAdminOrder
+      tags: [uc-admin]
+      summary: Update internal status, shipping details and confirmed order items
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UcAdminOrderUpdate"
+      responses:
+        "200": { description: Order updated; recovery enrichment recorded when items or shipping are saved }
+        "400": { description: Invalid input }
+        "403": { description: Admin access required }
+        "404": { description: Order not found }
+        "409": { description: Refunded order or incomplete recovery dispatch details }
   /uc/admin/orders/{id}/customer-stage:
     patch:
       operationId: updateUcOrderCustomerStage
@@ -402,7 +1237,7 @@ paths:
     get:
       operationId: listUcInventory
       tags: [uc-admin]
-      summary: List all UC products with live stock from WooCommerce
+      summary: List app-owned parent and variant stock, including unknown and unmanaged states
       security:
         - bearerAuth: []
       responses:
@@ -422,6 +1257,10 @@ paths:
       summary: List customer-facing products
       description: Public catalogue list; optional category and name/SKU search filters.
       parameters:
+        - name: publicationSafe
+          in: query
+          description: Require configured WooCommerce published inventory; never substitute demo products.
+          schema: { type: boolean, default: false }
         - name: category
           in: query
           schema: { type: string }
@@ -431,12 +1270,17 @@ paths:
       responses:
         "200":
           description: Customer-facing catalogue
+          headers:
+            X-UC-Catalogue-Provenance:
+              description: woocommerce-published when publicationSafe is true and the full published catalogue was retrieved.
+              schema: { type: string }
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/UcProduct" }
         "502": { description: WooCommerce catalogue temporarily unavailable }
+        "503": { description: Publication-safe catalogue provider is not configured }
         "500": { description: Failed to fetch products }
 
   /uc/products/{id}:
@@ -449,16 +1293,81 @@ paths:
           in: path
           required: true
           schema: { type: integer, minimum: 1 }
+        - name: publicationSafe
+          in: query
+          description: Require a fresh published WooCommerce operational read; never return demo content.
+          schema: { type: boolean }
       responses:
         "200":
           description: Customer-facing product
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/UcProduct" }
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/UcProduct" }
+                  - { $ref: "#/components/schemas/UcProductOperation" }
         "404": { description: Product not found }
         "500": { description: Failed to fetch product }
+        "503": { description: Live product could not be verified }
 
+  /uc/commerce/status:
+    get:
+      operationId: getCompanionCommerceStatus
+      tags: [uc]
+      summary: Public history completeness notice without customer data
+      responses:
+        "200":
+          description: Catalogue authority and historical review state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authority, legacyHistory]
+                properties:
+                  authority: { type: string, enum: [companion] }
+                  legacyHistory: { type: string, enum: [pending_review, reviewed] }
+
+  /uc/admin/commerce-migration:
+    get:
+      operationId: getCompanionCommerceMigrationReview
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      summary: Protected stock and historical import review counts
+      responses:
+        "200":
+          description: Review status, not production activation approval
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "403": { description: Admin access required }
+
+  /uc/admin/products:
+    get:
+      operationId: listManagedCompanionProducts
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: App-owned parents including drafts and archived records
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/UcProduct" } }
+        "403": { description: Admin access required }
   /uc/admin/products/{id}:
+    get:
+      operationId: getManagedCompanionProduct
+      tags: [uc-admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Protected app-owned product or variant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UcProduct" }
+        "403": { description: Admin access required }
+        "404": { description: Product not found }
     patch:
       operationId: updateUcProduct
       tags: [uc-admin]
@@ -476,13 +1385,13 @@ paths:
             schema: { $ref: "#/components/schemas/UcProductUpdate" }
       responses:
         "200":
-          description: Product fields accepted by WooCommerce
+          description: Shared product and inventory update persisted
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UcProductUpdateResult" }
         "400": { description: Invalid product id or update field }
         "401": { description: Unauthorized }
-        "502": { description: WooCommerce update failed or unreachable }
+        "409": { description: Revision or reservation conflict }
 
   /uc/admin/products/{id}/media:
     get:
@@ -1756,7 +2665,8 @@ paths:
     post:
       operationId: aiQuery
       tags: [ai-monitor]
-      summary: Inbound webhook — Ultra Clear AI asks a question about projects
+      summary: Active ProjectHub team member asks a question about projects
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -1770,6 +2680,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AiQueryAnswer"
+        "401": { description: Team authentication required }
+        "403": { description: Active team account required }
+        "429": { description: Team account AI query limit exceeded }
 
   /ai/report:
     get:
@@ -2023,6 +2936,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MonitoringSnapshot"
+
+  /diagnostics:
+    post:
+      operationId: collectRuntimeDiagnostic
+      tags: [system]
+      summary: Best-effort privacy-safe JavaScript diagnostic (3 KB, server rate limited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeDiagnosticEnvelope"
+      responses:
+        "202": { description: Accepted (not proof of an authenticated crash) }
+        "400": { description: Invalid or unknown metadata }
+        "403": { description: Origin not allowed }
+        "413": { description: Payload too large }
+        "429": { description: Ingestion overloaded or rate limited }
+        "503": { description: Collector unavailable; do not retry or queue }
+  /readyz:
+    get:
+      operationId: getRuntimeReadiness
+      tags: [system]
+      summary: Timeout-bounded essential database readiness; public status only
+      responses:
+        "200": { description: Essential dependency ready }
+        "503": { description: Essential dependency degraded }
+  /admin/monitoring/runtime:
+    get:
+      operationId: getRuntimeMonitoring
+      tags: [system]
+      summary: Live Monitoring permission required; recent groups and 15-minute API aggregates
+      parameters:
+        - { name: app, in: query, schema: { type: string, enum: [companion, projecthub] } }
+        - { name: environment, in: query, schema: { type: string, enum: [production, development, preview] } }
+        - name: release
+          in: query
+          schema: { type: string, maxLength: 40 }
+      responses:
+        "200":
+          description: Bounded sanitized diagnostic groups, aggregates, collector freshness and operational incident state
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { description: Team authentication required }
+        "403": { description: Live Monitoring permission required }
+        "503": { description: Unknown; storage unavailable }
+  /admin/monitoring/runtime/config:
+    put:
+      operationId: configureRuntimeAlerts
+      tags: [system]
+      summary: Live Monitoring edit permission required; defaults off, no new destinations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode, destination]
+              properties:
+                mode: { type: string, enum: [off, dry-run, live] }
+                destination: { type: string, enum: [slack, email] }
+      responses:
+        "200": { description: Saved for this API environment }
+        "403": { description: Monitoring edit permission required }
+  /admin/monitoring/runtime/test:
+    post:
+      operationId: dryRunRuntimeAlert
+      tags: [system]
+      summary: Monitoring edit permission required; preview only, never dispatches
+      responses:
+        "200": { description: Dry-run message; delivered is always false }
+        "403": { description: Monitoring edit permission required }
 
   /system/status:
     get:
@@ -2373,7 +3360,7 @@ paths:
       operationId: createUcAlisonTurn
       tags: [anthropic]
       summary: Generate and persist one anonymous Alison turn
-      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+      description: The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer. New replies use relevant curated Markdown and published guide/article snapshots, with concise default answers.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2388,8 +3375,35 @@ paths:
               schema: { $ref: "#/components/schemas/AlisonTurnResponse" }
         "400": { description: Invalid messages or anonymous identifiers }
         "401": { description: Customer authentication required }
+        "409": { description: Turn already used for a different question }
         "429": { description: Customer rate limit exceeded }
         "502": { description: Alison generation or transcript persistence unavailable }
+        "503": { description: Approved Alison reference documents temporarily unavailable }
+  /uc/ai/chat-feedback:
+    post:
+      operationId: submitUcAlisonFeedback
+      tags: [anthropic]
+      summary: Rate a server-issued Alison answer once
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlisonFeedbackInput"
+      responses:
+        "200":
+          description: Saved feedback or already-rated answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "400": { description: "Invalid rating, texts, or answer receipt" }
+        "401": { description: Customer authentication required }
+        "429": { description: Customer feedback limit exceeded }
   /oauth/clients:
     get:
       operationId: listAgentOauthClients
@@ -3154,6 +4168,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CustomerLifecycleFeatureConfig" }
 
+  /uc/admin/refill/features:
+    get:
+      operationId: getRefillFeatures
+      tags: [uc-admin]
+      summary: Read persisted refill preview activation flags
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Current feature activation settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillFeatures" }
+        "401": { description: A team session is required }
+        "403": { description: A live team administrator is required }
+    patch:
+      operationId: updateRefillFeatures
+      tags: [uc-admin]
+      summary: Update persisted refill preview activation flags
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefillFeaturesUpdate" }
+      responses:
+        "200":
+          description: Updated feature settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillFeatures" }
+        "400": { description: Invalid or empty feature update }
+        "401": { description: A team session is required }
+        "403": { description: A live team administrator is required }
+
+  /uc/refill/capabilities:
+    get:
+      operationId: getRefillCapabilities
+      tags: [uc-admin]
+      summary: Read safe refill feature capabilities
+      responses:
+        "200":
+          description: Current public care flag and permanently hard-off paid-operation capabilities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefillCapabilities" }
+
 components:
   parameters:
     MemberId:
@@ -3181,6 +4241,10 @@ components:
       schema:
         type: integer
   securitySchemes:
+    enquiryAdminKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
     clientBasic:
       type: http
       scheme: basic
@@ -3193,6 +4257,446 @@ components:
       bearerFormat: opaque
 
   schemas:
+    ProductEditorialIdentity:
+      type: object
+      required: [code, slug, name, parent_sku, publishable]
+      properties:
+        code: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        parent_sku: { type: string }
+        publishable: { type: boolean }
+    ProductEditorialRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, record]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        record:
+          type: object
+          description: Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints
+          additionalProperties: true
+    ProductEditorialPublic:
+      type: object
+      required: [code, slug, name, parentSku, purchasable, price, variants]
+      properties:
+        code: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        priceAuthority: { type: string, enum: [companion] }
+        parentSku: { type: string }
+        purchasable: { type: boolean }
+        price: { type: [number, "null"] }
+        commerceId: { type: [integer, "null"] }
+        availability: { type: [string, "null"] }
+        livePrice: { type: [number, "null"] }
+        diagnostics: { type: array, items: { type: string } }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/ProductEditorialVariant" }
+      additionalProperties: true
+    ProductEditorialVariant:
+      type: object
+      required: [childSku, label]
+      properties:
+        childSku: { type: string }
+        label: { type: string }
+        variationId: { type: [integer, "null"] }
+        price: { type: [number, "null"] }
+        stockStatus: { type: [string, "null"] }
+        diagnostic: { type: string }
+    ProductEditorialCollection:
+      type: object
+      required: [products, topics]
+      properties:
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/ProductEditorialPublic" }
+        topics:
+          type: array
+          items: { type: object, additionalProperties: true }
+    GlobalImpactSnapshot:
+      type: object
+      required: [totalUsers, litresFiltered, plasticsAvoided, cleanWaterDays, snapshotId, calculatedAt, adjustmentRevision, maxAgeSeconds, lifespanAvailable, autoStats, offlineStats, override, lastUpdated]
+      properties:
+        totalUsers: { type: number, minimum: 0 }
+        litresFiltered: { type: number, minimum: 0 }
+        plasticsAvoided: { type: number, minimum: 0 }
+        cleanWaterDays: { type: number, minimum: 0 }
+        snapshotId: { type: string, pattern: "^[a-f0-9]{64}$" }
+        calculatedAt: { type: string }
+        lastUpdated: { type: string }
+        adjustmentRevision: { type: integer, minimum: 1 }
+        maxAgeSeconds: { type: integer, enum: [60] }
+        lifespanAvailable: { type: boolean }
+        autoStats:
+          type: object
+          required: [totalUsers, litresFiltered, cleanWaterDays]
+          properties:
+            totalUsers: { type: number }
+            litresFiltered: { type: number }
+            cleanWaterDays: { type: number }
+        offlineStats:
+          type: object
+          required: [clientCount, litresFiltered]
+          properties:
+            clientCount: { type: number }
+            litresFiltered: { type: number }
+        override:
+          $ref: "#/components/schemas/GlobalImpactAdjustment"
+    GlobalImpactAdjustment:
+      type: object
+      required: [litresOffset, usersOffset, lastUpdatedBy, lastUpdatedAt]
+      properties:
+        litresOffset: { type: number }
+        usersOffset: { type: number }
+        lastUpdatedBy: { type: string }
+        lastUpdatedAt: { type: string }
+        revision: { type: integer }
+    GlobalImpactAdjustmentInput:
+      type: object
+      properties:
+        litresOffset: { type: number }
+        usersOffset: { type: number }
+        expectedRevision: { type: integer, minimum: 0 }
+    GlobalImpactAdjustmentResult:
+      type: object
+      required: [ok, override]
+      properties:
+        ok: { type: boolean }
+        override:
+          $ref: "#/components/schemas/GlobalImpactAdjustment"
+    RewardsQrCandidate:
+      type: object
+      required: [qrToken]
+      properties:
+        qrToken:
+          type: [string, "null"]
+          pattern: "^[A-Za-z0-9_-]{40,64}$"
+    RewardsQrRecovery:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: [string, "null"]
+          pattern: "^[a-f0-9]{64}$"
+    RewardsQrInspection:
+      type: object
+      required: [userId, status, version, valid, qrToken]
+      properties:
+        userId: { type: integer }
+        status: { type: string, enum: [active, revoked, missing] }
+        version: { type: [string, "null"] }
+        valid: { type: boolean }
+        qrToken: { type: [string, "null"] }
+    UcEnquirySubmission:
+      type: object
+      required: [id, productId, productName, name, email, phone, message, createdAt]
+      properties:
+        id: { type: integer }
+        productId: { type: string }
+        productName: { type: string }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+    LibraryKnowledgePreview:
+      type: object
+      required: [text, hash, revision, status, title, approvedText]
+      properties:
+        text: { type: string, maxLength: 16000 }
+        hash: { type: string }
+        revision: { type: integer, minimum: 0 }
+        status: { type: string, enum: [private, approved, revoked] }
+        title: { type: string }
+        approvedText: { type: [string, "null"] }
+    LibraryKnowledgeDecision:
+      type: object
+      required: [action, revision]
+      properties:
+        action: { type: string, enum: [approve, revoke] }
+        revision: { type: integer, minimum: 0 }
+        hash: { type: string, description: Preview hash required on approval }
+        title: { type: string, maxLength: 160, description: Public source title required on approval }
+        publicReferenceConfirmed:
+          type: boolean
+          description: Must be true to approve; confirms no private or customer information
+    LibraryKnowledgeMetadata:
+      type: object
+      required: [id, knowledgeStatus, knowledgeRevision, knowledgeTitle, knowledgeReviewedAt, knowledgeReviewedBy]
+      properties:
+        id: { type: string }
+        knowledgeStatus: { type: string, enum: [private, approved, revoked] }
+        knowledgeRevision: { type: integer }
+        knowledgeTitle: { type: [string, "null"] }
+        knowledgeReviewedAt: { type: [string, "null"], format: date-time }
+        knowledgeReviewedBy: { type: [string, "null"] }
+    PhysicalTestPromotionInput:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 3, maxLength: 64 }
+    CompanionCheckoutQuoteInput:
+      type: object
+      required: [lineItems, fulfillment]
+      properties:
+        fulfillment: { type: string, enum: [collection, delivery] }
+        code: { type: string, maxLength: 64 }
+        applyReferralDiscount: { type: boolean }
+        lineItems:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId: { type: integer, minimum: 1 }
+              quantity: { type: integer, minimum: 1, maximum: 1000 }
+              variationId: { type: integer, minimum: 1 }
+              childSku: { type: string, minLength: 1 }
+    CompanionCheckoutQuote:
+      type: object
+      required: [promotion, fulfillment, subtotal, delivery, discountAmount, total]
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            required: [productId, name, quantity, subtotal]
+            properties:
+              productId: { type: integer }
+              variationId: { type: integer, minimum: 1 }
+              childSku: { type: string }
+              variantLabel: { type: string }
+              name: { type: string }
+              quantity: { type: integer }
+              subtotal: { type: number }
+        promotion:
+          type: object
+          required: [code]
+          properties:
+            code: { type: string }
+            title: { type: string }
+            label: { type: string }
+            type: { type: string }
+        fulfillment: { type: string, enum: [collection, delivery] }
+        subtotal: { type: number }
+        delivery: { type: number }
+        discountAmount: { type: number }
+        total: { type: number }
+    CustomerAssignmentInput:
+      type: object
+      required: [idempotencyKey, customerName, email, phone, productId, installationDate, orderId, orderItemId]
+      properties:
+        idempotencyKey: { type: string }
+        customerName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        productId: { type: integer }
+        installationDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        orderId: { type: integer }
+        orderItemId: { type: integer }
+        targetAccountId: { type: integer }
+    AssignmentOrderLine:
+      type: object
+      required: [orderId, orderItemId, productId, name, quantity, ownerReference, status]
+      properties:
+        orderId: { type: integer }
+        orderItemId: { type: integer }
+        productId: { type: integer }
+        name: { type: string }
+        quantity: { type: integer }
+        ownerReference: { type: string }
+        status: { type: string }
+        wooOrderId: { type: [integer, 'null'] }
+        cashCollectionState: { type: [string, 'null'] }
+        assignmentId: { type: [integer, 'null'] }
+    CustomerFilterAssignment:
+      type: object
+      required: [id, customerName, email, phone, productId, productName, lifespanDays, capacityLitres, installationDate, orderId, orderItemId, orderReference, cashCollectionState, status]
+      properties:
+        id: { type: integer }
+        customerName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        productId: { type: integer }
+        productName: { type: string }
+        lifespanDays: { type: integer }
+        capacityLitres: { type: integer }
+        installationDate: { type: string }
+        orderId: { type: integer }
+        orderItemId: { type: integer }
+        orderReference: { type: string }
+        cashCollectionState: { type: string }
+        status: { type: string, enum: [pending, linked, review] }
+        reviewReason: { type: [string, 'null'] }
+        targetAccountId: { type: [integer, 'null'] }
+        linkedAccountId: { type: [integer, 'null'] }
+        filterId: { type: [integer, 'null'] }
+        activatedAt: { type: [string, 'null'] }
+        maintenanceCount: { type: [integer, 'null'] }
+        active: { type: [boolean, 'null'] }
+        createdAt: { type: string }
+        linkedAt: { type: [string, 'null'] }
+    CustomerAssignmentPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CustomerFilterAssignment' }
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+    CustomerAssignmentAuditEntry:
+      type: object
+      required: [id, actor, action, createdAt, details]
+      properties:
+        id: { type: integer }
+        actor: { type: string }
+        action: { type: string }
+        createdAt: { type: string }
+        details: { type: object, additionalProperties: true }
+    UcDailyHydrationInput:
+      type: object
+      additionalProperties: false
+      required: [litres]
+      properties:
+        litres: { type: number, minimum: 0 }
+    UcDailyHydration:
+      type: object
+      required: [localDate, litres]
+      properties:
+        localDate: { type: string }
+        litres: { type: [number, "null"] }
+    HydrateAllocationConfig:
+      type: object
+      required: [contributionRate, treeShare, treeCostKes]
+      properties:
+        contributionRate: { type: number, const: 0.03 }
+        treeShare: { type: number, const: 0.5 }
+        treeCostKes: { type: number, exclusiveMinimum: 0 }
+    HydrateCustomerTree:
+      type: object
+      required: [eligibleOrders, eligiblePurchasesKes, allocationKes, treeShareKes, cleanWaterKes, replacementPurchases, treesHelped, tree, config]
+      properties:
+        eligibleOrders: { type: integer, minimum: 0 }
+        eligiblePurchasesKes: { type: number, minimum: 0 }
+        allocationKes: { type: number, minimum: 0 }
+        treeShareKes: { type: number, minimum: 0 }
+        cleanWaterKes: { type: number, minimum: 0 }
+        replacementPurchases: { type: integer, minimum: 0 }
+        treesHelped: { type: integer, minimum: 0 }
+        config: { $ref: "#/components/schemas/HydrateAllocationConfig" }
+        tree:
+          type: [object, "null"]
+          required: [stage, fundedPct, established, yourShareKes]
+          properties:
+            stage: { type: string, enum: [seed, sapling, growing, funded] }
+            fundedPct: { type: integer, minimum: 0, maximum: 100 }
+            established: { type: boolean }
+            yourShareKes: { type: number, minimum: 0 }
+    HydrateForestTotals:
+      type: object
+      required: [generatedAt, eligibleRevenueKes, appRevenueKes, baselineRevenueKes, contributionKes, treeFundKes, cleanWaterKes, sharedTreesFunded, growingTreePct, estimatedTreesFunded, treesPlanted, treesEstablished, reportDate, location, config]
+      properties:
+        generatedAt: { type: string }
+        eligibleRevenueKes: { type: number, minimum: 0 }
+        appRevenueKes: { type: number, minimum: 0 }
+        baselineRevenueKes: { type: number, minimum: 0 }
+        contributionKes: { type: number, minimum: 0 }
+        treeFundKes: { type: number, minimum: 0 }
+        cleanWaterKes: { type: number, minimum: 0 }
+        sharedTreesFunded: { type: integer, minimum: 0 }
+        growingTreePct: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        estimatedTreesFunded: { type: integer, minimum: 0 }
+        treesPlanted: { type: [integer, "null"], minimum: 0 }
+        treesEstablished: { type: [integer, "null"], minimum: 0 }
+        reportDate: { type: [string, "null"] }
+        location: { type: string }
+        config: { $ref: "#/components/schemas/HydrateAllocationConfig" }
+    CustomerReviewAssessment:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [pending, processing, completed, failed, unavailable]}
+        category: {type: string, enum: [Positive, Neutral, Negative, Mixed]}
+        explanation: {type: string, maxLength: 460}
+        themes: {type: array, maxItems: 3, items: {type: string, maxLength: 40}}
+        analyzedAt: {type: string, format: date-time}
+        error: {type: string}
+    CustomerReviewLogEntry:
+      type: object
+      required: [id, productId, productName, authorName, rating, title, body, media, createdAt, editedAt, ratingSentiment, disagreement, analysis]
+      properties:
+        id: {type: integer}
+        productId: {type: integer}
+        productName: {type: string}
+        authorName: {type: string}
+        rating: {type: integer, minimum: 1, maximum: 5}
+        title: {type: string}
+        body: {type: string}
+        media:
+          type: array
+          items:
+            type: object
+            required: [url, type]
+            properties:
+              url: {type: string}
+              type: {type: string, enum: [photo, video]}
+        createdAt: {type: string, format: date-time}
+        editedAt: {type: ["string", "null"], format: date-time}
+        ratingSentiment: {type: string, enum: [Positive, Neutral, Negative]}
+        disagreement: {type: boolean}
+        analysis: {$ref: "#/components/schemas/CustomerReviewAssessment"}
+    CustomerReviewCounts:
+      type: object
+      required: [rating, ai, status, disagreements]
+      properties:
+        rating:
+          type: object
+          required: [Positive, Neutral, Negative]
+          properties:
+            Positive: {type: integer}
+            Neutral: {type: integer}
+            Negative: {type: integer}
+        ai:
+          type: object
+          required: [Positive, Neutral, Negative, Mixed]
+          properties:
+            Positive: {type: integer}
+            Neutral: {type: integer}
+            Negative: {type: integer}
+            Mixed: {type: integer}
+        status:
+          type: object
+          required: [pending, processing, completed, failed, unavailable]
+          properties:
+            pending: {type: integer}
+            processing: {type: integer}
+            completed: {type: integer}
+            failed: {type: integer}
+            unavailable: {type: integer}
+        disagreements: {type: integer}
+    CustomerReviewLog:
+      type: object
+      required: [reviews, total, page, limit, counts, products]
+      properties:
+        reviews: {type: array, items: {$ref: "#/components/schemas/CustomerReviewLogEntry"}}
+        total: {type: integer}
+        page: {type: integer}
+        limit: {type: integer}
+        counts: {$ref: "#/components/schemas/CustomerReviewCounts"}
+        products:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: integer}
+              name: {type: string}
     BlogSource:
       type: object
       required: [title, url]
@@ -3395,12 +4899,21 @@ components:
         isRetry: { type: boolean, default: false }
     AlisonTurnResponse:
       type: object
-      required: [reply, suggestions]
+      required: [reply, suggestions, feedbackToken]
       properties:
         reply: { type: string }
+        feedbackToken: { type: string }
         suggestions:
           type: array
           items: { type: string }
+    AlisonFeedbackInput:
+      type: object
+      required: [rating, question, answer, feedbackToken]
+      properties:
+        rating: { type: string, enum: [up, down] }
+        question: { type: string }
+        answer: { type: string }
+        feedbackToken: { type: string, maxLength: 2048 }
     AlisonTranscriptMessage:
       type: object
       required: [role, content, createdAt]
@@ -3492,7 +5005,7 @@ components:
     InstantWaterAssessmentAnswers:
       type: object
       additionalProperties: false
-      required: [country, area, source, concern, setting]
+      required: [country, area]
       properties:
         country: { type: string, minLength: 2, maxLength: 80 }
         area: { type: string, minLength: 1, maxLength: 160 }
@@ -3505,6 +5018,24 @@ components:
           type: string
           enum: [drinking, cooking, bathing, mixed]
         setting: { $ref: "#/components/schemas/InstantWaterSetting" }
+        sources:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InstantWaterSource" }
+        concerns:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InstantWaterConcern" }
+        settings:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InstantWaterSetting" }
 
     PublicInstantWaterAssessmentInput:
       type: object
@@ -3612,7 +5143,7 @@ components:
         [reference, rulesVersion, bands, summary, recommendation, disclaimer, provenance, serviceAvailable]
       properties:
         reference: { type: string }
-        rulesVersion: { type: string, enum: [instant-water-check-v1] }
+        rulesVersion: { type: string, enum: [instant-water-check-v1, instant-water-check-v2] }
         bands: { $ref: "#/components/schemas/InstantWaterBands" }
         summary: { type: string }
         areaFlag:
@@ -3624,6 +5155,9 @@ components:
           properties:
             name: { type: string }
             explanation: { type: string }
+            productId: { type: integer }
+            productName: { type: string }
+            action: { type: string, enum: [product, enquiry] }
         disclaimer: { type: string }
         provenance:
           type: string
@@ -3692,6 +5226,7 @@ components:
       additionalProperties: false
       required: [serviceAddress, preferredContactTime, acknowledgement, idempotencyKey]
       properties:
+        promoCode: { type: string, minLength: 3, maxLength: 64 }
         idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
         actionToken: { type: string, writeOnly: true }
         serviceAddress: { type: string, minLength: 5, maxLength: 300 }
@@ -3711,6 +5246,8 @@ components:
       type: object
       required: [assessmentId, reference, serviceState]
       properties:
+        freeWaterTest: { type: boolean }
+        promoCode: { type: string }
         assessmentId: { type: string }
         reference: { type: string }
         serviceState:
@@ -3722,11 +5259,14 @@ components:
       type: object
       required: [assessmentId, reference, bands, accountLinkState, serviceState, createdAt]
       properties:
+        answers: { $ref: "#/components/schemas/InstantWaterAssessmentAnswers" }
         assessmentId: { type: string }
         reference: { type: string }
         bands: { $ref: "#/components/schemas/InstantWaterBands" }
         accountLinkState: { type: string }
         serviceState: { type: string }
+        freeWaterTest: { type: boolean }
+        promoCode: { type: string }
         createdAt: { type: string, format: date-time }
 
     InstantWaterAssessmentHistory:
@@ -3780,10 +5320,13 @@ components:
         - $ref: "#/components/schemas/ProjectHubInstantWaterSummary"
         - type: object
           properties:
+            answers: { $ref: "#/components/schemas/InstantWaterAssessmentAnswers" }
             phone: { type: string }
             consentVersion: { type: string }
             sourceAttribution: { type: object, additionalProperties: true }
             serviceAddress: { type: string }
+            promoCode: { type: string }
+            freeWaterTest: { type: boolean }
             preferredContactTime: { type: string }
             mediaReferences:
               type: array
@@ -3817,6 +5360,63 @@ components:
         expectedUpdatedAt: { type: string, format: date-time }
         internalNote: { type: string, maxLength: 2000 }
 
+    UcOrderFulfillmentInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [shipped, ready-to-collect] }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+        trackingNumber: { type: string, maxLength: 100 }
+        trackingUrl: { type: string, maxLength: 2048, description: HTTP or HTTPS tracking link without embedded credentials }
+        estimatedDelivery: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', description: Valid calendar date in YYYY-MM-DD format }
+        collectionLocation: { type: string, maxLength: 300, description: Required when status is ready-to-collect }
+        note: { type: string, maxLength: 500, description: Customer-visible fulfillment note }
+
+    UcOrderFulfillmentResult:
+      type: object
+      required: [ok, id, status, customerStage, repeated, notification]
+      properties:
+        ok: { type: boolean }
+        id: { type: integer }
+        status: { type: string }
+        customerStage: { type: string, nullable: true }
+        repeated: { type: boolean }
+        notification:
+          type: object
+          required: [status, channels]
+          properties:
+            status: { type: string, enum: [queued, skipped] }
+            channels:
+              type: array
+              items: { type: string, enum: [sms, push, email] }
+
+    UcAdminOrderUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        status:
+          type: string
+          enum: [pending, processing, paid, declined, completed, cancelled, dispatched]
+        shippingAddress:
+          type: object
+          maxProperties: 50
+          additionalProperties: { type: string, maxLength: 1000 }
+        lineItems:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/UcAdminOrderLineInput"
+    UcAdminOrderLineInput:
+      type: object
+      additionalProperties: false
+      required: [productId, name, quantity, total]
+      properties:
+        productId: { type: integer, minimum: 1, maximum: 2147483647 }
+        name: { type: string, minLength: 1, maxLength: 300 }
+        quantity: { type: integer, minimum: 1, maximum: 1000 }
+        total: { type: string, pattern: '^\d{1,10}(\.\d{1,2})?$' }
     UcOrderCustomerStageInput:
       type: object
       required: [stage, idempotencyKey]
@@ -4135,7 +5735,7 @@ components:
       type: object
       required: [question]
       properties:
-        question: { type: string, minLength: 1 }
+        question: { type: string, minLength: 1, maxLength: 4000 }
         source:
           type: string
           description: Identifier of the calling agent (e.g. "orchestrator", "analytics-agent")
@@ -4308,13 +5908,46 @@ components:
         status: { type: string }
         notes: { type: string }
 
+    RuntimeDiagnosticEnvelope:
+      type: object
+      additionalProperties: false
+      required: [schema, app, environment, platform, browser, release, routeClass, category, frames]
+      properties:
+        schema: { type: integer, enum: [1] }
+        app: { type: string, enum: [companion, projecthub] }
+        environment: { type: string, enum: [production, development, preview] }
+        platform: { type: string, enum: [web, android, ios, other] }
+        browser: { type: string, enum: [chrome, safari, firefox, edge, other, native] }
+        release:
+          type: string
+          pattern: '^(?:unknown|development|[0-9]{10,16}-[0-9]{1,10}|[a-f0-9]{40})$'
+        routeClass:
+          type: string
+          enum: [home, catalogue, product, cart, checkout, orders, account, auth, care, guides, impact, rewards, support, admin, monitoring, projects, tasks, other]
+        category:
+          type: string
+          enum: [render, unhandled_error, unhandled_rejection, api_read_failed, api_read_timeout]
+        correlationId:
+          type: string
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        frames:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            additionalProperties: false
+            required: [asset, line, column]
+            properties:
+              asset: { type: string, enum: [application, vendor, bundle, unknown] }
+              line: { type: integer, minimum: 0, maximum: 10000000 }
+              column: { type: integer, minimum: 0, maximum: 10000000 }
     # ─── Monitoring Schemas ───────────────────────────────────────
     MonitoringHistoryPoint:
       type: object
       required: [at, ok]
       properties:
         at: { type: string }
-        ok: { type: boolean }
+        ok: { type: ["boolean", "null"] }
         responseMs: { type: ["integer", "null"] }
 
     MonitoringSiteCheck:
@@ -4324,10 +5957,12 @@ components:
         key: { type: string }
         label: { type: string }
         url: { type: string }
-        ok: { type: boolean }
+        ok: { type: ["boolean", "null"] }
         httpStatus: { type: ["integer", "null"] }
         responseMs: { type: ["integer", "null"] }
-        checkedAt: { type: string }
+        checkedAt: { type: ["string", "null"] }
+        freshness: { type: string, enum: [current, stale] }
+        coverage: { type: string }
         error: { type: ["string", "null"] }
         history:
           type: array
@@ -4367,8 +6002,8 @@ components:
           type: object
           required: [recoveryOrders, notificationFailures7d]
           properties:
-            recoveryOrders: { type: integer }
-            notificationFailures7d: { type: integer }
+            recoveryOrders: { type: ["integer", "null"] }
+            notificationFailures7d: { type: ["integer", "null"] }
 
     # ─── Notification Schemas ─────────────────────────────────────
     NotificationLog:
@@ -4544,6 +6179,34 @@ components:
         to: { type: string }
 
     # ─── UC Admin Schemas ─────────────────────────────────────────
+    UcProductOperation:
+      type: object
+      required: [id, sku, images, uploadedPhotos]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        stockStatus: { type: string }
+        price: { type: string }
+        salePrice: { type: string }
+        regularPrice: { type: string }
+        images:
+          type: array
+          items:
+            type: object
+            required: [src, alt]
+            properties:
+              src: { type: string }
+              alt: { type: string }
+        uploadedPhotos:
+          type: array
+          items:
+            type: object
+            required: [slot, src, alt]
+            properties:
+              slot: { type: integer }
+              src: { type: string }
+              alt: { type: string }
+
     InventoryProduct:
       type: object
       required: [id, name, sku, stockQuantity, stockStatus, syncedAt]
@@ -4551,8 +6214,14 @@ components:
         id:            { type: integer }
         name:          { type: string }
         sku:           { type: string }
-        stockQuantity: { type: integer }
+        stockQuantity: { type: ["integer", "null"] }
         stockStatus:   { type: string }
+        revision: { type: integer }
+        manageStock: { type: boolean }
+        reservedQuantity: { type: integer }
+        availableQuantity: { type: ["integer", "null"] }
+        recordCode: { type: string }
+        parentId: { type: ["integer", "null"] }
         permalink:     { type: ["string", "null"] }
         syncedAt:      { type: string, format: date-time }
 
@@ -4676,15 +6345,17 @@ components:
             $ref: "#/components/schemas/InventoryProduct"
         source:
           type: string
-          enum: [woocommerce, mock]
+          enum: [companion]
 
     InventoryStockUpdate:
       type: object
       required: [stockQuantity]
       properties:
         stockQuantity:
-          type: integer
+          type: ["integer", "null"]
           minimum: 0
+        stockStatus: { type: string, enum: [unknown, instock, outofstock, onbackorder] }
+        revision: { type: integer, minimum: 1 }
 
     InventoryUpdateResult:
       type: object
@@ -4692,7 +6363,7 @@ components:
       properties:
         ok:            { type: boolean }
         productId:     { type: integer }
-        stockQuantity: { type: integer }
+        stockQuantity: { type: ["integer", "null"] }
         source:        { type: string }
 
     InventoryWishlistDemand:
@@ -4791,6 +6462,10 @@ components:
       type: object
       required: [name, quantity, total]
       properties:
+        productId: { type: integer }
+        variationId: { type: [integer, "null"] }
+        childSku: { type: [string, "null"] }
+        variantLabel: { type: [string, "null"] }
         name:
           type: string
         quantity:
@@ -4802,6 +6477,11 @@ components:
       type: object
       required: [id, status, total, currency, paymentMethod, dateCreated, lineItems]
       properties:
+        checkoutState: { type: string, nullable: true }
+        synchronizationStatus: { type: string }
+        paymentStatus: { type: string }
+        paymentConfirmedAt: { type: string, nullable: true }
+        reconciliationRequired: { type: boolean }
         id:
           type: integer
         status:
@@ -5161,10 +6841,51 @@ components:
       type: object
       required: [productName, quantity]
       properties:
+        lineId: { type: string, description: Stable server-issued source line; retained on edits }
         productId: { type: integer }
         productName: { type: string }
         quantity: { type: integer, minimum: 1 }
         litresPerUnit: { type: number, minimum: 0 }
+
+    CustomerOfflinePurchaseList:
+      type: object
+      required: [purchases]
+      properties:
+        purchases:
+          type: array
+          items:
+            type: object
+            required: [source, saleId, saleDate, label, items]
+            properties:
+              source: { type: string, enum: [offline] }
+              saleId: { type: integer }
+              saleDate: { type: string }
+              label: { type: string }
+              items:
+                type: array
+                items:
+                  type: object
+                  required: [lineId, productId, name, quantity, lifespanDays, capacityLitres, unavailableReason, availableUnitIds]
+                  properties:
+                    lineId: { type: string }
+                    productId: { type: integer, nullable: true }
+                    name: { type: string }
+                    quantity: { type: integer }
+                    lifespanDays: { type: integer }
+                    capacityLitres: { type: integer }
+                    unavailableReason: { type: string, nullable: true }
+                    availableUnitIds:
+                      type: array
+                      items: { type: string }
+                    registeredUnits:
+                      type: array
+                      items:
+                        type: object
+                        required: [unitId, installationDate, active]
+                        properties:
+                          unitId: { type: string }
+                          installationDate: { type: string }
+                          active: { type: boolean }
 
     UcOfflineClientInput:
       type: object
@@ -5308,6 +7029,35 @@ components:
         legacyReviewSubmission: { type: boolean }
         canonicalGlobalImpact: { type: boolean }
         nearbyDistanceTiers: { type: boolean }
+
+    RefillFeatures:
+      type: object
+      additionalProperties: false
+      required: [careOverview, refillGovernance]
+      properties:
+        careOverview: { type: boolean }
+        refillGovernance: { type: boolean }
+
+    RefillFeaturesUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        careOverview: { type: boolean }
+        refillGovernance: { type: boolean }
+
+    RefillCapabilities:
+      type: object
+      additionalProperties: false
+      required: [version, careOverview, promoRefill, paidRefill, moneyWallet, paidCare, automaticCollection]
+      properties:
+        version: { type: integer, enum: [1] }
+        careOverview: { type: boolean }
+        promoRefill: { type: boolean, enum: [false] }
+        paidRefill: { type: boolean, enum: [false] }
+        moneyWallet: { type: boolean, enum: [false] }
+        paidCare: { type: boolean, enum: [false] }
+        automaticCollection: { type: boolean, enum: [false] }
 
     CustomerLifecycleIdentity:
       type: object

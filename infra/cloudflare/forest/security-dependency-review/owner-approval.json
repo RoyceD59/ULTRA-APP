@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-09",
+  "candidateSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "scopeSha256": "4ee4d0f8c6741da1fd5e7b5c840286ec79214d6f561662ed3a85f332fc546cb6",
+  "selectionApproved": true,
+  "testedBackportMitigationsAccepted": true,
+  "publicationApproved": false,
+  "clientAdvancementApproved": false,
+  "decision": "Approve selection and tested backport mitigations",
+  "scope": "Select the exact three-file security-only dependency revision and align main runtime pins; no publication, schema writes or client advancement",
+  "acceptedAdvisoryMitigations": [
+    "GHSA-vfj7-8cjw-p6xm: unchanged braces backport, verified installed-consumer fixtures",
+    "GHSA-86w9-cpqp-85rv: unchanged node-forge backport, verified installed-consumer fixtures"
+  ]
+}

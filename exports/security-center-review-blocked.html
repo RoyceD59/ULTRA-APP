@@ -1,0 +1,124 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security-only review — blocked</title><style>body{font:16px/1.6 system-ui;max-width:940px;margin:24px auto;padding:20px;color:#193248}h1,h2{line-height:1.2}.hold{border-left:4px solid #af6813;background:#fff3db;padding:16px}pre{font:13px/1.6 ui-monospace,monospace;background:#eff5f8;padding:15px;white-space:pre-wrap;overflow-wrap:anywhere}summary{cursor:pointer}@media(max-width:600px){body{padding:12px}}</style><h1>Security-only review: release blocked</h1><p class="hold"><strong>Not selected. Not published.</strong> Main and clients remain unchanged.</p><h2>Prepared and verified progress</h2><ul><li>Fast-copy 4.1.0 (MIT) and postcss-selector-parser 7.1.6 (MIT), verified against genuine registry releases.</li><li>Only package.json and pnpm-lock.yaml change; 1,262 other source files and modes, all 11 importers and unrelated resolutions are unchanged.</li><li>Seven narrow-lock checks passed. Upgraded copy/logging/selector behavior and API logging-worker inclusion verified.</li><li>Review builds and typechecks passed during the trial; cache safety failure still blocks release.</li><li>Candidate dependency audit: zero critical, zero moderate, three retained high advisories.</li></ul><h2>Blocking cache installation discrepancy</h2><p>Cache 4.3.0 failed the private/max-stale regression; rebased declarations did not produce a passing installed consumer. The source retains the original 4.2.0 backport unchanged. But its isolated installed consumer lacks the guard despite frozen-install success and a hash-qualified path. Current main and the selected parent retain the guard. The cause is unresolved; no tests were relaxed and installed code was not manually patched.</p><h2>Next gate</h2><p>Fix reproducible patch application in a fresh exact-archive installation, then pass actual consumer regressions. Only afterward seek exact-source/risk selection approval and separate API publication approval. Confirm matching live API and fresh agreeing snapshots on both public hosts before clients. Product-schema v2.4 remains separate.</p><pre>a982fb107d05be012dc560e06823ecee97c4f0a5a307f98e00cc3880d319a387</pre><details><summary>Complete evidence and limits</summary><pre>{
+  "observedAt": "2026-10-09T12:05:54.260Z",
+  "status": "BLOCKED: isolated installation omits declared cache guard; not release-ready",
+  "candidate": {
+    "parentSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+    "candidateSha256": "a982fb107d05be012dc560e06823ecee97c4f0a5a307f98e00cc3880d319a387",
+    "changedPaths": [
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "unchangedParentFiles": 1262,
+    "dependencyPins": {
+      "fast-copy": "4.1.0",
+      "postcss-selector-parser": "7.1.6"
+    },
+    "scopeSha256": "3a560981d4f774353707a7e80f4b74c63de59d2914d4c4079273aff80e397c48",
+    "status": "dependency-only review; NOT SELECTED; NOT PUBLISHED",
+    "selectionApproved": false,
+    "publicationApproved": false,
+    "schemaApplied": false,
+    "clientAdvancement": false
+  },
+  "registryVerification": [
+    {
+      "name": "http-cache-semantics",
+      "version": "4.3.0",
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA=="
+    },
+    {
+      "name": "fast-copy",
+      "version": "4.1.0",
+      "license": "MIT",
+      "integrity": "sha512-f5oNUvGAmBPLP85im9czQ7fVWh3RfcIIIzyXrcXKmCiWoDn+CRmfsoQN3jmE5J+UEquj4Ugc1woTaxD0oa37Gg=="
+    },
+    {
+      "name": "postcss-selector-parser",
+      "version": "7.1.6",
+      "license": "MIT",
+      "engines": {
+        "node": "&gt;=4"
+      },
+      "integrity": "sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw=="
+    }
+  ],
+  "acceptedUpgrades": {
+    "fast-copy": "4.1.0",
+    "postcss-selector-parser": "7.1.6"
+  },
+  "rejectedTrial": {
+    "package": "http-cache-semantics",
+    "version": "4.3.0",
+    "reason": "Required private-cache/max-stale regression failed. Original-hash and distinct-hash rebased declarations did not produce a protected installed consumer. Trial removed from sealed source."
+  },
+  "scope": {
+    "onlyChangedFiles": [
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "unchangedSourceFilesAndModes": 1262,
+    "unchangedWorkspaceImporters": 11,
+    "allOtherResolutionsAndPeerContextsPreserved": true,
+    "retainedCachePatchUnchanged": true,
+    "productSchemaV24Included": false
+  },
+  "verification": {
+    "sourceScopeSealedAndVerified": true,
+    "narrowLockNegativeChecksPassed": 7,
+    "frozenInstallReportedSuccess": true,
+    "upgradedLibraryCopyAndSelectorFixtures": "passed; ordinary/cyclic/deep-copy, logging formatting, selector round-trip and bounded flat parsing",
+    "compiledPinoWorkerIncludesFastCopy410": true,
+    "apiAndHubBuildsDuringTrial": "passed",
+    "sharedLibrariesApiHubCompanionTypechecksDuringTrial": "passed; cache safety failure takes precedence",
+    "finalCacheConsumerRegression": "FAILED: private response reused with max-stale",
+    "finalIsolatedCacheGuardMarkerPresent": false,
+    "mainCacheGuardMarkerPresent": true,
+    "selectedParentCacheGuardMarkerPresent": true,
+    "underlyingInstallCauseEstablished": false
+  },
+  "candidateAudit": {
+    "command": "pnpm audit --json (no production-only filter)",
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 3,
+        "critical": 0
+      },
+      "dependencies": 1465,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 1465
+    },
+    "findings": [
+      {
+        "name": "node-forge",
+        "severity": "high",
+        "id": "GHSA-86w9-cpqp-85rv"
+      },
+      {
+        "name": "http-cache-semantics",
+        "severity": "high",
+        "id": "GHSA-ch52-4w7c-c8xp"
+      },
+      {
+        "name": "braces",
+        "severity": "high",
+        "id": "GHSA-vfj7-8cjw-p6xm"
+      }
+    ]
+  },
+  "boundary": {
+    "newSourceSelected": false,
+    "mainRuntimePinsChanged": false,
+    "mainLockChanged": false,
+    "clientSelectorsChanged": false,
+    "apiPublished": false,
+    "clientsPublished": false,
+    "productionSchemasApplied": false,
+    "rootCauseStillBlocksPublication": true
+  },
+  "nextRequiredStep": "Resolve the isolated patch-application discrepancy, verify a fresh exact-archive install with actual consumer fixtures, then obtain selection/risk approval and separate API publication approval. Verify matching live API and recheck both fresh agreeing snapshots before any client advance."
+}</pre></details></html>

@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-06",
+  "verdict": "BLOCKED",
+  "phase": "API-first-prepublication",
+  "mainPreparationCommit": "64600c59ff4fad1292a57ff4303be93b20e21b70",
+  "candidateSha256": "db2ef861871dcff39cde08350d9374e9b8d1220409e2f506141cf9c4666cad59",
+  "schemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": false,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "productionReadOnly": {
+    "tables": [
+      "uc_global_impact",
+      "uc_global_impact_audit"
+    ],
+    "adjustmentRows": 0,
+    "auditEntries": 0
+  },
+  "packageTests": {
+    "passed": 18,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "apiBuild": {
+    "exitCode": 0,
+    "published": false
+  },
+  "securityPatchTests": {
+    "passed": 7,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "audit": {
+    "exitCode": 1,
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 4,
+      "critical": 1
+    },
+    "advisories": [
+      {
+        "package": "node-forge",
+        "severity": "high",
+        "url": "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+        "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+        "versions": [
+          "1.4.0"
+        ]
+      },
+      {
+        "package": "braces",
+        "severity": "high",
+        "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+        "versions": [
+          "3.0.3"
+        ]
+      },
+      {
+        "package": "source-map-js",
+        "severity": "high",
+        "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q",
+        "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+        "versions": [
+          "1.2.1"
+        ]
+      },
+      {
+        "package": "proxy-addr",
+        "severity": "critical",
+        "url": "https://github.com/advisories/GHSA-jqcg-44mw-7w3h",
+        "title": "proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet",
+        "versions": [
+          "2.0.7"
+        ]
+      },
+      {
+        "package": "compression",
+        "severity": "high",
+        "url": "https://github.com/advisories/GHSA-vc2v-76pw-4v95",
+        "title": "compression vulnerable to Denial of Service via memory leak on premature response close",
+        "versions": [
+          "1.8.1"
+        ]
+      }
+    ],
+    "existingPatchedPackages": [
+      "braces",
+      "node-forge"
+    ],
+    "unaddressedPackages": [
+      "proxy-addr",
+      "source-map-js",
+      "compression"
+    ],
+    "limitations": "Version-only scan includes patched packages. Critical proxy-addr advisory depends on an unsafe trust subnet not found in API source; two new high findings are Expo tooling. No production exploit is asserted."
+  },
+  "selection": {
+    "apiBuild": "node infra/cloudflare/forest/build-approved-consistency.mjs api --copy-output",
+    "apiRun": "unchanged",
+    "hubAndCompanion": "predecessor commands unchanged"
+  },
+  "rollback": {
+    "buildId": "1791182522315-296",
+    "uniqueFiles": 60,
+    "bytes": 29435662,
+    "retentionHelperCopiedFiles": 61,
+    "capture": "infra/cloudflare/forest/rollback-static/capture-evidence.json",
+    "limitations": "Missing public dependencies recovered only against declared platform/scale file hashes. No visual parity certification. Recapture after API-first publication."
+  },
+  "productionMutations": [],
+  "remaining": [
+    "Approve security-only revision/new checksum",
+    "Owner Publish action for API-first stage",
+    "Verify actually served compatible API",
+    "Initialize chosen zero offsets only if shared row still absent, expectedRevision 0",
+    "Compare fresh snapshots on both hosts",
+    "Recapture served predecessor and publish clients",
+    "Approved-account and device verification"
+  ]
+}

@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   TextInput, ScrollView, SectionList,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -20,9 +20,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { trackEvent } from '@/lib/analytics';
+import GuideLanguageToggle from '@/components/GuideLanguageToggle';
+import { useGuideLanguage } from '@/hooks/useGuideLanguage';
+import { localizeGuide } from '@/lib/guideLanguage';
 
 const TABS = ['Guides', 'My Tickets', 'Water Test'];
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 // ─── AI banner ────────────────────────────────────────────────────────────────
 function AiBanner({
@@ -121,11 +124,13 @@ function SupportScreenContent() {
   const [tab, setTab]       = useState(0);
   const [search, setSearch] = useState('');
   const cartBarInset = useCartBarInset();
+  const { language } = useGuideLanguage();
   const guidesQuery = useQuery({
     queryKey: ['companion', 'guides'],
     queryFn: fetchPublishedGuides,
     placeholderData: GUIDES,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     gcTime: 24 * 60 * 60 * 1000,
   });
   const cachedGuidesQuery = useQuery({
@@ -148,14 +153,15 @@ function SupportScreenContent() {
   // Build grouped sections for SectionList (or flat list when searching)
   const sections = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const localized = guides.map(guide => localizeGuide(guide, language));
     const filtered = q
-      ? guides.filter(
+      ? localized.filter(
           g =>
             g.title.toLowerCase().includes(q) ||
             g.products.toLowerCase().includes(q) ||
             g.summary.toLowerCase().includes(q),
         )
-      : guides;
+       : localized;
 
     if (q) {
       // When searching, show flat list as one section
@@ -166,7 +172,7 @@ function SupportScreenContent() {
       category: cat,
       data: filtered.filter(g => g.category === cat),
     })).filter(s => s.data.length > 0);
-  }, [search, guides]);
+  }, [search, guides, language]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -212,6 +218,9 @@ function SupportScreenContent() {
           contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}
           ListHeaderComponent={
             <>
+              <View style={{ marginHorizontal: 16, marginTop: 14 }}>
+                <GuideLanguageToggle />
+              </View>
               <AiBanner colors={colors} onPress={() => router.push('/ai-chat' as never)} />
               {/* Search */}
               <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -219,7 +228,7 @@ function SupportScreenContent() {
                 <TextInput
                   value={search}
                   onChangeText={setSearch}
-                  placeholder="Search guides…"
+                   placeholder={language === 'sw' ? 'Tafuta miongozo…' : 'Search guides…'}
                   placeholderTextColor={colors.mutedForeground}
                   style={[styles.searchInput, { color: colors.text }]}
                 />
@@ -341,7 +350,7 @@ function SupportScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  screen:           { flex: 1 },
+  screen:           { flex: 1, width: '100%', maxWidth: 1000, alignSelf: 'center' },
   customerHeader:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
   customerHeaderTitle: { color: '#fff', fontSize: 18, fontWeight: '700' as const },
   customerHeaderSub: { color: 'rgba(255,255,255,0.76)', fontSize: 12, marginTop: 2 },

@@ -1,10 +1,10 @@
+import { trackEvent } from '@/lib/analytics';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Platform,
-  ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Animated,
-  useWindowDimensions,
+   RefreshControl, ScrollView, TouchableOpacity, Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -14,13 +14,20 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import PhotoHeader from '@/components/PhotoHeader';
 import ProductCard from '@/components/ProductCard';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
+import { pageDataState } from '@/lib/pageLoading';
 import FilterChip from '@/components/FilterChip';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AlisonWelcomeBubble from '@/components/AlisonWelcomeBubble';
+import { useAlisonNudge } from '@/hooks/useAlisonNudge';
 import { STORE_CATEGORIES, visibleStoreCategory, type StoreCategory } from '@/lib/storeCategories';
 import {
   catalogueQueryKey,
@@ -94,11 +101,9 @@ export default function ProductsScreen() {
 function ProductsScreenContent() {
   const colors = useColors();
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const MAX_WIDTH = 1200;
-  const contentBound = { width: '100%' as const, maxWidth: MAX_WIDTH, alignSelf: 'center' as const };
-  const numColumns = width >= 1440 ? 5 : width >= 1024 ? 4 : width >= 768 ? 3 : 2;
-  const cardMaxWidth = `${100 / numColumns}%` as const;
+  const layout = useCompanionLayout();
+  const contentBound = { width: '100%' as const, maxWidth: 1200, alignSelf: 'center' as const };
+  const numColumns = layout.columns;
 
   const { category: categoryParam } = useLocalSearchParams<{ category?: string }>();
   const api = useApi();
@@ -135,10 +140,6 @@ function ProductsScreenContent() {
   const [alisonCollapsed, setAlisonCollapsed] = useState(true); // default collapsed until AsyncStorage resolves
   const [alisonReady, setAlisonReady] = useState(false); // true once AsyncStorage check is done
 
-  // In-grid Alison nudge — session-only dismissal
-  const nudgeDismissedRef = useRef(false);
-  const [nudgeReady, setNudgeReady] = useState(false);
-
   // True when the user has an active filter — suppress Alison surfaces
   const isFiltering = search.length > 0 || category !== 'All';
 
@@ -167,20 +168,6 @@ function ProductsScreenContent() {
     });
   }, []);
 
-  // Make the inline nudge eligible after 8 seconds of browsing. Filtering only
-  // suppresses its display; clearing the filter can reveal it unless dismissed.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!nudgeDismissedRef.current) setNudgeReady(true);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const dismissNudge = useCallback(() => {
-    nudgeDismissedRef.current = true;
-    setNudgeReady(false);
-  }, []);
-
   // Animated transition for the empty-basket view: 1 = visible, 0 = hidden.
   const emptyAnim = useRef(new Animated.Value(0)).current;
 
@@ -199,7 +186,7 @@ function ProductsScreenContent() {
   }, []);
 
   // Main products query
-  const { data: products, isLoading, isError, refetch, isRefetching } = useQuery({
+  const { data: products, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: catalogueQueryKey({
       category: category === 'All' ? undefined : category,
       search: settledSearch,
@@ -208,11 +195,11 @@ function ProductsScreenContent() {
       category: category === 'All' ? undefined : category,
       search: settledSearch,
     }), signal),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
   });
 
   // Compatibility add-ons — only fetched when basket has items
-  const { data: addons, isFetching: addonsLoading } = useQuery({
+  const { data: addons, isLoading: addonsLoading, isError: addonsError, refetch: retryAddons } = useQuery({
     queryKey: ['compatibility', basketSkus],
     queryFn: () => api.getCompatibilityProducts(basketSkus),
     enabled: hasItems && basketSkus.length > 0,
@@ -257,6 +244,7 @@ function ProductsScreenContent() {
       } else {
         await api.removeFromWishlist(pid);
       }
+      trackEvent(nextState ? 'wishlist_item_added' : 'wishlist_item_removed', { productId: pid });
       await queryClient.invalidateQueries({ queryKey: customerQueryKeys.wishlist(initiatingCustomerId) });
     } catch {
       if (currentCustomerId.current === initiatingCustomerId) {
@@ -298,12 +286,9 @@ function ProductsScreenContent() {
           </Text>
         </TouchableOpacity>
       </View>
-      {addonsLoading ? (
-        <View style={styles.addonsSkeletonRow}>
-          {[0, 1, 2].map(k => (
-            <View key={k} style={[styles.addonSkeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]} />
-          ))}
-        </View>
+      {addonsError ? <PageDataError title="Compatible add-ons unavailable" onRetry={retryAddons} /> : null}
+      {addonsLoading && addons === undefined ? (
+        <PageDataLoader label="Loading compatible add-ons…" />
       ) : (addons ?? []).length > 0 ? (
         <HorizontalCarousel
           data={addons}
@@ -418,47 +403,20 @@ function ProductsScreenContent() {
     </Animated.View>
   );
 
-  // ── In-grid Alison nudge (session-timed) ──────────────────────────────────────
-
-  const showNudge = nudgeReady && !isFiltering && (products?.length ?? 0) > numColumns;
-  const alisonNudge = showNudge ? (
-    <View
-      testID="products-alison-nudge"
-      style={[styles.alisonNudge, { backgroundColor: colors.surface, borderColor: colors.primary + '55' }]}>
-      <View style={[styles.chatAvatar, { backgroundColor: colors.primary }]}>
-        <Text style={styles.chatAvatarText}>A</Text>
-      </View>
-      <TouchableOpacity
-        testID="products-alison-nudge-open"
-        onPress={() => router.push('/ai-chat' as never)}
-        activeOpacity={0.85}
-        style={styles.alisonNudgeContent}>
-        <Text style={[styles.alisonNudgeTitle, { color: colors.text }]}>Not sure which filter fits?</Text>
-        <Text style={[styles.alisonNudgeText, { color: colors.mutedForeground }]}>
-          Ask Alison for a quick recommendation
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        testID="products-alison-nudge-dismiss"
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss filter help"
-        hitSlop={10}
-        onPress={dismissNudge}
-        style={styles.alisonNudgeDismiss}>
-        <Ionicons name="close" size={18} color={colors.mutedForeground} />
-      </TouchableOpacity>
-    </View>
-  ) : null;
+  const { visible: showNudge, dismiss: dismissNudge } = useAlisonNudge(
+    isFiltering, (products?.length ?? 0) > 0,
+  );
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
-  const headerTop = Platform.OS === 'web' ? 0 : insets.top;
+  const headerTop = 0;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
 
       {/* ── Branded header bar ── */}
-      <View style={[styles.brandHeader, { paddingTop: headerTop }]}>
+      <PhotoHeader initialView source={require('@/assets/headers/shop-filter.jpg')} photoHeight={104} position="center">
+      <View style={[styles.brandHeader, { paddingTop: headerTop + 10 }]}>
         <View style={[styles.brandHeaderInner, contentBound]}>
           <Image
             source={require('@/assets/images/logo-lockup-white.png')}
@@ -479,6 +437,7 @@ function ProductsScreenContent() {
           </TouchableOpacity>
         </View>
       </View>
+      </PhotoHeader>
 
       {/* ── Sticky search + category chips ── */}
       <View style={[styles.stickyControls, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
@@ -526,30 +485,20 @@ function ProductsScreenContent() {
 
         {/* Products catalog */}
         <View onLayout={e => { catalogOffsetY.current = e.nativeEvent.layout.y; }}>
-          {isLoading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
-          ) : isError ? (
-            <View style={styles.empty}>
-              <Ionicons name="cloud-offline-outline" size={40} color={colors.border} />
-              <Text style={[styles.emptyText, { color: colors.text }]}>Couldn&apos;t load products</Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                Check your connection and try again.
-              </Text>
-              <TouchableOpacity
-                onPress={() => refetch()}
-                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
-                accessibilityRole="button"
-              >
-                <Text style={styles.retryBtnText}>Try again</Text>
-              </TouchableOpacity>
-            </View>
+          {products !== undefined && isError && (
+            <PageDataError title="Products could not refresh" message="Your saved products are shown below." onRetry={refetch} />
+          )}
+          {pageDataState(products !== undefined, isLoading, isError) === 'loading' ? (
+            <PageDataLoader label="Loading products…" />
+          ) : !products && isError ? (
+            <PageDataError title="Products unavailable" error={error} onRetry={refetch} />
           ) : (
             <FlatList
               key={`grid-${numColumns}`}
               numColumns={numColumns}
               keyExtractor={i => String(i.id)}
-              contentContainerStyle={styles.grid}
-              columnWrapperStyle={styles.row}
+              contentContainerStyle={[styles.grid, { paddingHorizontal: layout.gutter }]}
+              columnWrapperStyle={numColumns > 1 ? [styles.row, { gap: layout.gap }] : undefined}
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
               ListHeaderComponent={
@@ -562,32 +511,6 @@ function ProductsScreenContent() {
                       {(products ?? []).length} product{(products ?? []).length === 1 ? '' : 's'}
                     </Text>
                   </View>
-                  {showNudge && (
-                    <>
-                      <View style={styles.row}>
-                        {(products ?? []).slice(0, numColumns).map(product => {
-                          const isServerWishlisted = wishlist?.some(w => w.productId === product.id) ?? false;
-                          const pendingState = wishlistPendingMap[product.id];
-                          const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
-                          return (
-                            <View key={product.id} style={[styles.cardWrap, { maxWidth: cardMaxWidth }]}>
-                              <ProductCard
-                                product={product}
-                                isWishlisted={isWishlisted}
-                                wishlistPending={pendingState !== undefined}
-                                onToggleWishlist={() => toggleWishlist(product)}
-                                onPress={() => router.push({
-                                  pathname: '/product/[id]',
-                                  params: { id: String(product.id), category },
-                                } as never)}
-                              />
-                            </View>
-                          );
-                        })}
-                      </View>
-                      {alisonNudge}
-                    </>
-                  )}
                 </View>
               }
               ListEmptyComponent={
@@ -608,7 +531,7 @@ function ProductsScreenContent() {
                 const pendingState = wishlistPendingMap[item.id];
                 const isWishlisted = pendingState !== undefined ? pendingState : isServerWishlisted;
                 return (
-                  <View style={[styles.cardWrap, { maxWidth: cardMaxWidth }]}>
+                  <View style={[styles.cardWrap, { width: layout.cardWidth, marginBottom: 8 }]}>
                     <ProductCard
                       product={item}
                       isWishlisted={isWishlisted}
@@ -622,12 +545,19 @@ function ProductsScreenContent() {
                   </View>
                 );
               }}
-              data={showNudge ? (products ?? []).slice(numColumns) : (products ?? [])}
+              data={products ?? []}
             />
           )}
         </View>
       </Animated.ScrollView>
 
+      {showNudge && (
+        <AlisonWelcomeBubble
+          bottom={Math.max(cartBarInset, layout.size === 'compact' ? 0 : insets.bottom) + 12}
+          onOpen={() => router.push('/ai-chat' as never)}
+          onDismiss={dismissNudge}
+        />
+      )}
     </View>
   );
 }
@@ -767,21 +697,6 @@ const styles = StyleSheet.create({
   },
   quickReplyText: { fontSize: 13, fontWeight: '500' as const },
 
-  // ── In-grid Alison nudge ───────────────────────────────────────────────────────
-  alisonNudge: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 8,
-  },
-  alisonNudgeContent: { flex: 1 },
-  alisonNudgeTitle: { fontSize: 14, fontWeight: '700' as const },
-  alisonNudgeText: { fontSize: 12, marginTop: 2 },
-  alisonNudgeDismiss: {
-    width: 32, height: 32,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
   // ── Products catalog ──────────────────────────────────────────────────────────
   catalogHeader: {
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
@@ -794,7 +709,7 @@ const styles = StyleSheet.create({
   catalogCount: { fontSize: 12 },
   grid: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 0 },
   row: { gap: 4, marginBottom: 8 },
-  cardWrap: { flex: 1 },
+  cardWrap: { flexGrow: 0, flexShrink: 0 },
   empty: { alignItems: 'center', marginTop: 60, gap: 12, paddingHorizontal: 28 },
   emptyText: { fontSize: 15 },
   emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },

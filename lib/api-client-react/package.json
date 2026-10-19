@@ -4,7 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./companion/auth": "./src/companion-generated/companion-auth/companion-auth.ts",
+    "./companion/customer": "./src/companion-generated/companion-customer/companion-customer.ts",
+    "./companion/hydration": "./src/companion-generated/companion-hydration/companion-hydration.ts",
+    "./companion/water-check": "./src/companion-generated/companion-water-check/companion-water-check.ts",
+    "./companion/models/*": "./src/companion-generated/models/*.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "catalog:"

@@ -12,11 +12,13 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '@/lib/localNotifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { handleRejectedSessionResponse } from './deletedAccountResponse';
 import { getApiBase } from '@/lib/apiBase';
 import { loadPersistedSession } from '@/lib/sessionPersistence';
+import { assignedPrimaryActivation } from '@/lib/assignedFilterHydration';
+import type { CustomerFilterAssignment } from '@workspace/api-client-react/companion/models/customerFilterAssignment';
 
 // ── Foreground handler ───────────────────────────────────────────────────────
 if (Platform.OS !== 'web') {
@@ -48,7 +50,9 @@ const NOTIF_PREFS_KEY            = 'uc_notif_prefs';
 // Set to 'true' when a catalogue sync detects the registered product's
 // filter_lifespan_days meta has been removed (lifespan <= 0). Cleared when
 // the catalogue restores a valid lifespan, or when the user re-registers.
-const ZERO_LIFESPAN_KEY          = 'uc_zero_lifespan_notice';
+export function zeroLifespanKey(userId: number): string {
+  return `uc_zero_lifespan_notice_${userId}`;
+}
 
 /**
  * Per-user AsyncStorage key for the filter activation record.
@@ -107,29 +111,35 @@ const DEFAULT_PREFS: NotifPrefs = { orderUpdates: true, filterReminders: true };
  * product's lifespan meta was removed (lifespanDays <= 0). The UI uses this
  * to show a non-blocking notice on the filter status card.
  */
-export async function getZeroLifespanNotice(): Promise<boolean> {
+export async function getZeroLifespanNotice(userId: number): Promise<boolean> {
   try {
-    return (await AsyncStorage.getItem(ZERO_LIFESPAN_KEY)) === 'true';
+    return (await AsyncStorage.getItem(zeroLifespanKey(userId))) === 'true';
   } catch { return false; }
 }
 
 /** Internal: write or clear the zero-lifespan notice flag. */
-async function setZeroLifespanNotice(active: boolean): Promise<void> {
+async function setZeroLifespanNotice(active: boolean, userId: number): Promise<void> {
   try {
     if (active) {
-      await AsyncStorage.setItem(ZERO_LIFESPAN_KEY, 'true');
+      await AsyncStorage.setItem(zeroLifespanKey(userId), 'true');
     } else {
-      await AsyncStorage.removeItem(ZERO_LIFESPAN_KEY);
+      await AsyncStorage.removeItem(zeroLifespanKey(userId));
     }
   } catch { /* non-critical */ }
 }
 
-export async function getNotifPrefs(): Promise<NotifPrefs> {
+export async function getNotifPrefs(strict = false): Promise<NotifPrefs> {
   try {
     const s = await AsyncStorage.getItem(NOTIF_PREFS_KEY);
     if (!s) return { ...DEFAULT_PREFS };
-    return { ...DEFAULT_PREFS, ...(JSON.parse(s) as Partial<NotifPrefs>) };
-  } catch { return { ...DEFAULT_PREFS }; }
+    const parsed = JSON.parse(s) as Partial<NotifPrefs>;
+    if (strict && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+      (parsed.orderUpdates !== undefined && typeof parsed.orderUpdates !== 'boolean') ||
+      (parsed.filterReminders !== undefined && typeof parsed.filterReminders !== 'boolean'))) {
+      throw new Error('Invalid notification preferences');
+    }
+    return { ...DEFAULT_PREFS, ...parsed };
+  } catch (error) { if (strict) throw error; return { ...DEFAULT_PREFS }; }
 }
 
 export async function saveNotifPrefs(prefs: NotifPrefs): Promise<void> {
@@ -155,7 +165,7 @@ export interface FilterActivation {
   activatedAt:    string;               // ISO date — when the filter was installed / activated
   productId:      number;
   productName:    string;
-  lifespanDays:   number;               // total rated lifespan for this product
+  lifespanDays:   number;               // persisted rated lifespan; also the durable catalogue-sync guard
   notifIds:       string[];             // IDs of all scheduled local notifications for this cycle
   // Performance tracking (all optional so old stored records still parse)
   cleanCount?:    number;               // account maintenance count; customer flows never decrease it
@@ -167,6 +177,10 @@ export interface FilterActivation {
   // came from. Used to stop the same receipt line being registered twice for
   // the same product; a NEW purchase (different order id) restarts the cycle.
   sourceOrderId?: number;
+  /** Exact capacity-ledger identity; gauge reads never change reminder state. */
+  registeredFilterId?: number;
+  /** Offline source identity is not a financial order number. */
+  offlineUnitId?: string;
   /**
    * Day-offsets (from activatedAt) for the two replacement-reminder stages,
    * computed at check-in time when a performance check-in shortens the filter's
@@ -362,7 +376,7 @@ export async function registerCurrentPushToken(
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        await handleRejectedSessionResponse(res.status, authToken);
+        await handleRejectedSessionResponse(res.status, authToken, body);
         return false;
       }
       await AsyncStorage.setItem(REGISTERED_PUSH_TOKEN_KEY, current);
@@ -396,7 +410,7 @@ export async function unregisterPushToken(authToken: string): Promise<void> {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        await handleRejectedSessionResponse(res.status, authToken);
+        await handleRejectedSessionResponse(res.status, authToken, body);
       }
     } catch { /* non-critical — silently ignore */ }
   });
@@ -500,7 +514,7 @@ export async function syncReminderToServer(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      await handleRejectedSessionResponse(res.status, token);
+      await handleRejectedSessionResponse(res.status, token, body);
     }
   } catch {
     /* non-critical — the next sync (register / clear / prefs visit) retries */
@@ -550,6 +564,29 @@ export async function getFilterActivation(userId: number): Promise<FilterActivat
 }
 
 // ── Filter lifecycle notifications ───────────────────────────────────────────
+const activationWrites = new Map<number, Promise<unknown>>();
+function withActivationWrite<T>(userId: number, fn: () => Promise<T>): Promise<T> {
+  const prior = activationWrites.get(userId) ?? Promise.resolve();
+  const next = prior.catch(() => undefined).then(fn);
+  activationWrites.set(userId, next);
+  void next.finally(() => { if (activationWrites.get(userId) === next) activationWrites.delete(userId); }).catch(() => undefined);
+  return next;
+}
+
+/** Fill-only hydration, with no registration or reminder side effects. */
+export function hydrateAssignedFilter(userId: number, assignments: CustomerFilterAssignment[], isCurrent: () => boolean): Promise<FilterActivation | null> {
+  return withActivationWrite(userId, async () => {
+    if (!isCurrent()) return null;
+    const existing = await getFilterActivation(userId);
+    if (existing) return existing;
+    const activation = assignedPrimaryActivation(null, assignments, await savedFilterCleanCount(userId));
+    if (!activation || !isCurrent()) return null;
+    await saveFilterCleanCount(userId, activation.cleanCount ?? 0);
+    await AsyncStorage.setItem(filterActivationKey(userId), JSON.stringify(activation));
+    await AsyncStorage.setItem(filterLastChangedKey(userId), String(new Date(activation.activatedAt).getTime()));
+    return activation;
+  });
+}
 //
 // 5 notifications per filter cycle:
 //   1. Day  0 (+2 h)         — Activate your filter
@@ -567,6 +604,13 @@ export async function getFilterActivation(userId: number): Promise<FilterActivat
  * Cancels any previously scheduled cycle first.
  */
 export async function scheduleAllFilterNotifications(
+  params: Omit<FilterActivation, 'notifIds'>,
+  userId: number,
+): Promise<FilterActivation> {
+  return withActivationWrite(userId, () => scheduleAllFilterNotificationsUnlocked(params, userId));
+}
+
+async function scheduleAllFilterNotificationsUnlocked(
   params: Omit<FilterActivation, 'notifIds'>,
   userId: number,
 ): Promise<FilterActivation> {
@@ -603,7 +647,7 @@ export async function scheduleAllFilterNotifications(
   // persist the activation but never schedule offers at nonsensical dates.
   // Set the notice flag so the UI can inform the user.
   if (!(normalizedParams.lifespanDays > 0)) {
-    await setZeroLifespanNotice(true);
+    await setZeroLifespanNotice(true, userId);
     const activation: FilterActivation = { ...normalizedParams, notifIds: [] };
     await AsyncStorage.setItem(activationKey, JSON.stringify(activation));
     await AsyncStorage.setItem(lastChangedKey, new Date(normalizedParams.activatedAt).getTime().toString());
@@ -611,7 +655,7 @@ export async function scheduleAllFilterNotifications(
     return activation;
   }
   // Positive lifespan — this is a trackable registration, clear any previous notice.
-  await setZeroLifespanNotice(false);
+  await setZeroLifespanNotice(false, userId);
 
   const [status, prefs] = await Promise.all([
     getNotificationPermissionStatus(),
@@ -756,6 +800,16 @@ export async function syncActivationWithCatalogue(
 ): Promise<FilterActivation | null> {
   if (catalogueProducts.length === 0) return null;
 
+  // Hold the activation-write lock across BOTH the stored-value check and the
+  // reschedule. A remount can otherwise read the old lifespan while the first
+  // sync is still saving, then reschedule and return a second toast-worthy update.
+  return withActivationWrite(userId, () => syncActivationWithCatalogueUnlocked(catalogueProducts, userId));
+}
+
+async function syncActivationWithCatalogueUnlocked(
+  catalogueProducts: Array<{ id: number; lifespanDays: number; name: string }>,
+  userId: number,
+): Promise<FilterActivation | null> {
   const existing = await getFilterActivation(userId);
   if (!existing) return null;
 
@@ -767,19 +821,23 @@ export async function syncActivationWithCatalogue(
   // lifespan and offers at nonsensical dates. Set the notice flag so the UI
   // can warn the user; the previous schedule is left intact.
   if (!(catalogueProduct.lifespanDays > 0)) {
-    await setZeroLifespanNotice(true);
+    await setZeroLifespanNotice(true, userId);
     return null;
   }
 
   // Catalogue has a valid lifespan — clear any previous zero-lifespan notice,
   // even if the lifespan hasn't changed (the store data is trustworthy again).
-  await setZeroLifespanNotice(false);
+  await setZeroLifespanNotice(false, userId);
 
+  // Read from AsyncStorage, not component props or a product-list reference:
+  // the saved lifespan survives unmounts and app restarts. Returning null also
+  // keeps FilterTrackerSection from showing the same schedule-update toast.
   if (catalogueProduct.lifespanDays === existing.lifespanDays) return null;
 
   // Lifespan has changed in the catalogue — reschedule with the corrected value,
   // preserving the original activation date so elapsed-time calculations stay correct.
-  const updated = await scheduleAllFilterNotifications({
+  // Already holding the activation-write lock; do not enqueue it again.
+  const updated = await scheduleAllFilterNotificationsUnlocked({
     activatedAt:     existing.activatedAt,
     productId:       existing.productId,
     productName:     catalogueProduct.name,
@@ -792,6 +850,8 @@ export async function syncActivationWithCatalogue(
     // Preserve the receipt linkage — losing it would let the same receipt
     // line be registered again after a catalogue lifespan correction.
     sourceOrderId:   existing.sourceOrderId,
+    registeredFilterId: existing.registeredFilterId,
+    offlineUnitId: existing.offlineUnitId,
     // Preserve check-in-derived offsets so the rescheduled local notifications
     // fire on the same dates as the server dispatch.  A degradation result
     // takes precedence over a catalogue correction for replace30/replace15.
@@ -815,7 +875,7 @@ export async function clearFilterActivation(userId: number): Promise<void> {
   await cancelAllFilterNotifications(userId);
   await AsyncStorage.removeItem(filterActivationKey(userId));
   await AsyncStorage.removeItem(filterLastChangedKey(userId));
-  await setZeroLifespanNotice(false);
+  await setZeroLifespanNotice(false, userId);
   // Stop server-side email/SMS/WhatsApp reminders for the cleared filter too.
   void syncReminderToServer(null);
 }

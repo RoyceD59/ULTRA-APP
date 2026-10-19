@@ -1,0 +1,110 @@
+- [ProjectHub auth rewrite](projecthub-auth-rewrite.md) — team-session accounts; live DB admin checks; configured break-glass admin is reconciled without replacing its password.
+- [Customer session lifetime](session-lifetime-policy.md) — eight-hour sessions; reject legacy expiry-free tokens; publication requires explaining the one-time sign-in.
+- [Credential mutation concurrency](credential-mutation-concurrency.md) — temporary issuance and self-service resets must share one per-user lock across provider delivery.
+- [Orval date fields vs Drizzle string-mode dates](orval-drizzle-date-mismatch.md) — Zod coerces `format: date` to JS Date; string-mode Drizzle date columns need manual YYYY-MM-DD conversion at the DB boundary.
+- [Orval schema naming collision with operationId](orval-schema-naming-collision.md) — rename any openapi.yaml schema whose name matches an operationId-derived response/body type before codegen.
+- [Orval output isolation](orval-output-isolation.md) — workspace barrels auto-append exports; separate filtered clients and preserve hand-maintained public indexes.
+- [Ultra Clear Brand Guidelines](uc-brand-guidelines.md) — official colours, typography, logo rules, and digital layout rules for all UCFilters / Ultra Clear designs.
+- [Expo web Metro stubs](expo-web-metro-stubs.md) — native-only modules that must be stubbed to empty on web to prevent crash at bundle load time.
+- [Release versioning](release-versioning.md) — Alpha/Beta/v1.0 ladder; all deferred "out of scope" items are v1.0 targets, tracked in that file.
+- [Resend connector email](resend-connector-email.md) — delivery via Replit Resend connector; from must be @contacts.ucfilters.com; 403s until user finishes DNS verification at resend.com/domains.
+- [UC upload/media security](uc-upload-security.md) — attach-time metadata verification is the enforcement point for presigned uploads; admin is DB-anchored; public serving limited to uploads/<uuid>.
+- [Expo SDK-aligned package pins](expo-sdk-version-pins.md) — expo-* versions must match the SDK line (expo-doctor gate); a mismatched one crashes Expo Go at launch while web/tests/export still pass.
+- [Android Expo Go notifications](android-expo-go-notifications.md) — guard remote-push module evaluation, not only token requests; preserve local reminders.
+- [PNPM patched dependency validation](pnpm-patched-dependency-validation.md) — pnpm retains original and patched virtual-store copies; test the hash-qualified patched instance.
+- [pnpm Nix version bootstrap](pnpm-nix-version-bootstrap.md) — automatic version management can recurse through the provisioned binary and exhaust workspace processes.
+- [ucfilters.com WC API quirks](ucfilters-wc-api-quirks.md) — PHP notices prepended to JSON (strip before parse); WAF 403s non-browser UAs; lifespan meta is the reminder trackability switch — never guess.
+- [WooCommerce catalogue pagination](woocommerce-catalog-pagination.md) — category resolution and local category fallback must page all WooCommerce results or fail explicitly; never serve a silently truncated catalogue.
+- [Payment gateway status](payment-gateway-status.md) — provider activation choices; Stripe stays off until WooCommerce connection; checkout method availability is server-driven.
+- [Payment demo boundary](payment-demo-boundary.md) — simulations require explicit development/test; production and unknown environments fail closed; provider outages never authorize demo success.
+- [Parallel task-merge artifacts](parallel-merge-artifacts.md) — after merge batches: duplicated schema `export *` lines drop exports; spliced handler code → restore file from last good commit + re-apply legit lines.
+- [API test-DB isolation](api-test-db-isolation.md) — tests run in a per-run database; drizzle push always diffs public of the connected DB; raw-SQL-only tables (startup migrations) must be mirrored in lib/db schema.
+- [API test resource budgets](api-test-resource-budget.md) — bound test workers and transform threads; host CPU count can exceed the container's OS-thread budget.
+- [Shared settings in parallel tests](shared-settings-parallel-tests.md) — unit tests must inject settings and clocks rather than rely on the singleton team_settings row or process env.
+- [API order-flow test harness](api-order-test-harness.md) — tests hitting /uc/orders must delete MPESA_*/WC_* env vars; a stub returning {id:…} is mistaken for a real WC order.
+- [ProjectHub page permissions](team-page-permissions.md) — page perms are client-side only; JWT has no permissions; sensitive endpoints must re-check via teamUsersTable lookup (see monitoring route).
+- [UC admin gate provenance](uc-admin-gate.md) — prepared disconnect source requires live DB administration; retired Woo provenance has no independent privilege; retained releases may differ.
+- [UC reminder channels](uc-reminder-channels.md) — opt-in email/SMS/WhatsApp filter reminders; claim-before-send at-most-once; Postgres µs vs JS ms timestamp equality trap.
+- [UC social sign-in](uc-social-auth.md) — Clerk is identity-layer only; exchange endpoint issues uc JWT; verified-email + never-relink rules; ClerkLoaded must not gate the whole app.
+- [Android signing identities](android-signing-identities.md) — dev proceeds on the debug keystore as an interim tracked identity; production Maps-key gate stays fail-closed until the Play app-signing SHA-1 exists.
+- [Image derivative pipeline](image-derivative-pipeline.md) — sharp works on pnpm despite blocked postinstall (prebuilt @img/* deps); tmpdir derivative caches are disposable and must always fall back to original bytes.
+- [WhatsApp session storage](whatsapp-session-storage.md) — credentials stay outside the repo; preview remote-session isolation must be verified before resets; historical credentials were invalidated.
+- [Orders CSV column contract](uc-orders-csv-contract.md) — never insert a column mid-row in the admin orders CSV; append new fields after the legacy static columns, before item columns.
+- [API runtime paths](api-data-dir-resolution.md) — resolve source/bundle-relative paths; artifact publication may run outside the API working directory.
+- [Filter maintenance count policy](filter-maintenance-count-policy.md) — customer lifecycle changes retain cleaning history; only an explicit staff correction may reset it.
+- [Inventory webhook SSRF policy](inventory-webhook-ssrf-policy.md) — outbound n8n URLs must block private and IANA special-use IPs; request-time resolution is pinned.
+- [API test storage isolation](api-test-storage-isolation.md) — library route tests inject storage adapters; global prototype mocks race under parallel test execution.
+- [API schema rollout paths](api-schema-rollout-paths.md) — shared SQL migrations cover tests, but deployed API startup needs matching idempotent DDL for existing databases.
+- [WooCommerce stock alert semantics](woocommerce-stock-alert-semantics.md) — null quantity means unmanaged stock, not zero; explicit out-of-stock remains actionable.
+- [UC password-reset security](uc-password-reset-security.md) — reset credentials are hashed at rest; delivery links must resolve to a public domain and never expose localhost in production.
+- [Customer identity concurrency](customer-identity-concurrency.md) — normalize and lock public account writes; never use a global unique phone index because legacy placeholders can repeat.
+- [Expo password-reset deep links](expo-password-reset-deep-links.md) — use `resetToken`, not `token`, in Companion reset-link query parameters; Expo web intercepts `token` before the screen renders.
+- [Stray text node from non-boolean JSX conditions](stray-text-node-truthy-check.md) — `{x && <JSX/>}` renders a real crash on native (web only warns) when `x` is a falsy non-boolean like `''`; coerce with `!!`.
+- [API test global-fetch stubbing](api-test-global-fetch-stub.md) — a test's own HTTP helper must call a saved `realFetch`, never bare `fetch`, once `globalThis.fetch` is stubbed for an outbound-call test.
+- [Lease-based alert rearming](lease-based-alert-rearming.md) — rearming must preserve live claims; provider calls must abort before lease expiry so an expired claim cannot still be sending.
+- [Drizzle post-merge false success](drizzle-post-merge-false-success.md) — push-force may print a non-TTY prompt error yet exit 0; detect the text and align constraint/index declarations instead of forcing truncation.
+- [Woo customer identity](woo-customer-identity.md) — successful Woo login must provision a DB-backed Companion user; non-DB principals cannot use rewards, QR, or other customer-owned data.
+- [Expo web routing and previews](expo-static-production-routing.md) — SDK 57 asset URLs need rewriting; web root must flex; verify slow Metro previews in a real browser.
+- [Canonical lifecycle program](canonical-lifecycle-program.md) — unify identity, purchases, registrations, maintenance, and impact; unmatched legacy purchases require staff review.
+- [Parallel dispatcher tests](parallel-dispatcher-tests.md) — inject providers, shared configuration, and recipient scope; a shared test DB alone does not isolate broad dispatch scans.
+- [Cross-path alert timestamps](cross-path-alert-timestamps.md) — when manual and scheduled sends share dedupe state, timestamp upserts must be monotonic and occur only after successful delivery.
+- [OpenAPI format codegen compatibility](openapi-uri-codegen.md) — URI/email constructors can break runtime imports with installed Zod; verify formatted schemas after codegen.
+- [OpenAPI integer validation](openapi-integer-validation.md) — generated numeric query coercion can accept fractions; enforce integer bounds before passing pagination to SQL.
+- [pnpm Nix version switching](pnpm-nix-version-switching.md) — disable automatic version switching here to avoid recursive self-installs; retain the external CI pin.
+- [pnpm workspace-state checks](pnpm-workspace-state-race.md) — a JSON parsing failure before the compiler runs can be transient under parallel validation; retry the exact command in isolation.
+- [Refill preview activation](refill-preview-activation.md) — persisted admin switches activate delivered previews only; unfinished financial and dispensing functions remain unavailable.
+- [Article body links](article-body-links.md) — rendered articles must use descriptive clickable linkpoints, not bare URLs or literal Markdown links.
+- [Alison answer policy](alison-answer-policy.md) — short replies backed by curated agent Markdown and local customer-facing documents.
+- [AI feedback integrity](ai-feedback-integrity.md) — signed answer receipts protect ratings without attaching customer identity to anonymous transcripts.
+- [Alison welcome policy](alison-welcome-policy.md) — user chose a floating brief-welcome bubble to replace the timed Products banner, not to appear alongside it.
+- [Review sentiment policy](review-sentiment-policy.md) — stars and text remain separate; Mixed is not disagreement; staff-only AI must not drive customer decisions.
+- [Hydrate programme policy](hydrate-programme-policy.md) — 3% split equally; refills add no funding; unavailable evidence stays pending; static forest hosting only.
+- [Customer assignment policy](customer-assignment-policy.md) — pre-signup reservations are not accounts or sales; name is not proof; ownership linking never implies COD collection.
+- [Customer contact policy](customer-contact-policy.md) — require phone/address for account creation and relevant submissions; preserve legacy reads and distinguish collection from delivery.
+- [Approved filter specifications](approved-filter-specifications.md) — Hydra Flux: 150 litres or 2–3 months depending on water quality; approved reminder default is 90 days.
+- [Expired retry key policy](expired-retry-key-policy.md) — assessment keys are reusable after 30 days; customer history and longer-lived delivery identities remain separate.
+- [Hydration reminder policy](hydration-reminder-policy.md) — every 2/3/4 hours, 5 am–8 pm local; relocating the daily summary does not authorize regrouping hydration settings.
+- [Companion SEO scope](companion-seo-scope.md) — distinguish audit targets; source and local fixtures do not establish production gains or authorize host/deployment changes.
+- [Companion build publication](companion-build-publication.md) — retained assets are not activation; test both legacy and migrated native/browser rollout boundaries.
+- [Web heading semantics](react-native-web-heading-semantics.md) — use explicit web levels; wrap accordion buttons in headings; send aria-expanded explicitly.
+- [Web external-link keyboard activation](web-external-link-keyboard.md) — link-role touchables need real web hrefs for Enter; prevent default when opening through Linking.
+- [Public SEO evidence](public-seo-evidence.md) — public access is not publication evidence; demo fallbacks cannot support sale claims or location verification.
+- [Native reconnect safety](native-reconnect-policy.md) — reconnect recovery is read-only; keep explicit offline failures and never queue or replay writes.
+- [Companion analytics provider](companion-analytics-provider.md) — user chose separate Umami collection for Companion web; preserve native behavior and current hosting.
+- [Filter gauge policy](filter-gauge-policy.md) — display-only status; recorded refills are not sensor measurements; require exact customer/purchase/cycle linkage.
+- [Frozen release verification](frozen-release-verification.md) — a successful publish can still serve an older approved package; verify the actual live feature before operational recovery.
+- [Phone validation optimization](phone-validation-optimization.md) — reduce unused code, not country metadata; preserve canonical identity versus legacy form defaults.
+- [Catalogue authority and performance](catalogue-performance-policy.md) — owner requests WooCommerce disconnection and one Companion/ProjectHub product schema; Excel remains the initial price authority.
+- [Promotions and fulfillment policy](promotions-fulfillment-policy.md) — managed code benefits only; reserve before payment and keep pending outcomes bound to their checkout.
+- [Workspace CommonJS browser imports](workspace-commonjs-browser.md) — type-safe shared wrappers can still fail in Vite; raw CommonJS needs browser-compatible optimization.
+- [Shared TypeScript bundler resolution](shared-typescript-bundler-resolution.md) — Metro may reject .js-to-.ts imports that TypeScript and server tests accept.
+- [Browser fixture recovery](browser-fixture-recovery.md) — browser worker resets can erase test credentials without removing shared-development DB fixtures.
+- [Persistent browser fixtures](browser-fixture-server-lifetime.md) — use tracked servers and explicit graceful shutdown; tool force-stop may skip cleanup.
+- [Expo guide printing](expo-guide-printing.md) — web printing ignores supplied HTML; article exports must print an isolated complete document, not the collapsed screen.
+- [Swahili guide audience](swahili-guide-audience.md) — Nairobi customers need offline Swahili installation help; guide localization is not a whole-app migration.
+- [Schedule-update deduplication](schedule-update-deduplication.md) — dedupe against the applied activation, not a history of lifespan values; returning to an old value is a new correction.
+- [Google Sheets reconnect](google-sheet-reconnect.md) — revoked grants must remain actionable failures; public-sheet fallback must not hide the reconnect reason.
+- [Recovery order enrichment](recovery-order-enrichment-policy.md) — staff dispatch preparation is not account ownership, payment confirmation or a customer delivery notification.
+- [Shared library typecheck freshness](shared-library-typecheck-freshness.md) — refresh referenced declarations before treating missing consumer exports or DB fields as source defects.
+- [Account-scoped async effects](account-scoped-async-effects.md) — callback churn must not invalidate pending account work; cancellation must release any deduplication marker.
+- [Companion session rejection](companion-session-rejection.md) — exact forced-sign-out contracts only; preserve request-token provenance and synchronous duplicate protection.
+- [Customer signup reporting](customer-signup-reporting.md) — user chose Africa/Nairobi; Monday and first-of-month midnight resets must not follow database timezone settings.
+- [Field-review reminder policy](field-review-reminder-policy.md) — warn once per review cycle; becoming overdue alone does not authorize a second reminder.
+- [Expo web feedback](expo-web-alert-feedback.md) — native alerts alone did not convey a critical saved-but-unresolved checkout result in the browser.
+- [Checkout intent durability](checkout-intent-durability.md) — retain original retries across reload; clear confirmed intents and isolate private drafts and late responses by account.
+- [Page loader presentation](page-loader-presentation.md) — user chose a single blue droplet with visible loading text; future artwork restyles must retain the text.
+- [Runtime observability policy](runtime-observability-policy.md) — public diagnostics are untrusted operational evidence; ambiguous alert delivery must not be silently replayed.
+- [Public impact monitor approval](public-impact-monitor-policy.md) — independent checks every five minutes; three matching failures to warn, two healthy checks to recover.
+- [Node component mock interop](node-component-mock-interop.md) — use explicit plain-ESM fixtures when synchronous TSX loading misreads data URLs or star reexports.
+- [Impact consistency scope](impact-consistency-scope.md) — common releases/global totals only; preserve personal data and never treat missing historical evidence as zero.
+- [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
+- [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
+- [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
+- [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.
+- [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked/non-stage folders are scratch (deps stripped); wrong markers and symlinks still fail publish; image summary warns over 7 GiB.
+- [Master workbook SKU register](master-workbook-sku-register.md) — v7 workbook is price/SKU authority; stock snapshot applied only by explicit script to unknown rows; no cost data in repo.
+- [Patched install trust](patch-install-trust.md) — plain frozen installs keep inactive hash-qualified patch dirs; verify bytes, --force heals; cold reproductions hit disk quota.
+- [Product photo activation approval](product-photo-activation-approval.md) — ProjectHub photos only for Sweet Home, Viva Drop and Gym Buddy; owner confirmed the Gym Buddy legacy-SKU exception.
+- [Product-page structure](product-page-structure-policy.md) — supplied HTML is the layered reference for both web and Expo; a reduced buying/specs page is not acceptable.
+- [Public record handoff](public-record-handoff.md) — visible React buttons can fail hit-testing while the server fallback retains layout ownership.
+- [GitHub development destination](github-development-destination.md) — owner chose ULTRA-APP, not Ultra-AI-Team, for this project's development syncs.

@@ -1,0 +1,24 @@
+Complete task #1007 here in main. The owner has approved advancing the paired clients, subject to every gate below. This is a rollout task, not new development.
+
+Already established (do not redo):
+- API for source SHA-256 db2ef861871dcff39cde08350d9374e9b8d1220409e2f506141cf9c4666cad59 (predecessor bdc71175d7f653c99d9d431770200915acd2e8333220c59b8b66a3d48e03d3b2) is live. Both hosts, https://api.ucfilters.com and https://team-horizon--jerryaroyce.replit.app, return the same fresh snapshot at adjustment revision 1.
+- The shared adjustment row and its audit entry (legacy-import by system, 2026-10-07, file hash 90d07bcb36e9ba92333937abe2e1887bb6e754dc79bb53a4bed50228d3aec3ad) exist. Do NOT initialize, import or overwrite. Never use the old file endpoint.
+- The owner accepted the eleven extra additive schema statements already applied. Do NOT re-apply them, add DDL, or run db push.
+
+Steps:
+1. Collect build evidence for the published API: approval and publish timestamps, candidate hash, build command, post-build cleanup result, final image size against its limit, startup. Mark anything without logs as unverified, not passed. No raw logs or customer identifiers in docs.
+2. Confirm the live API source. If the newer security candidate (88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82) is also in main, reconcile the lineage and report before shipping clients. Inspect the main schema diff; stop on anything unrelated or destructive.
+3. Re-check both hosts: health and snapshots must be fresh, compatible and agreeing. If not, stop; clients must not advance.
+4. Retain the complete actually served browser/iOS/Android static assets (currently build 1791526319429-504) before building the candidate client. Local .hydrate-release may be older than production.
+5. Using only the artifact validation tool (no whole-workspace builds), set:
+   hub build: node infra/cloudflare/forest/build-approved-consistency.mjs hub --copy-output
+   companion build: node infra/cloudflare/forest/build-approved-consistency.mjs companion --retain-static=<verified-static-directory>
+   companion run: node infra/cloudflare/forest/build-approved-consistency.mjs serve-companion
+   Keep hosting, DNS, auth, OTA and native distribution unchanged. Publish.
+6. Verify on BOTH public hosts: served HTML, version.json, iOS/Android launch IDs and URLs, downloaded bundle hashes and API origin (api.ucfilters.com). A successful publish is not proof; verify what is actually served.
+7. Ask me for the second customer's identifier and secure access first. Then compare exact Home, About and ProjectHub snapshot IDs and values signed out, with the configured admin, and with the two approved customers. Existing credentials only: no resets, new accounts, impersonation or paused login investigation. Keep personal impact personal.
+8. Coordinate physical-phone checks with task #822. Do not duplicate them.
+9. If anything fails, roll back the complete client selection only, with the retained assets. Keep the database-backed API, adjustment row and audit.
+10. Record every change in docs/development-change-log.md (no secrets, raw logs or customer identifiers). Do not mark #1007 complete until all of the above is done.
+
+Out of scope: the clean-water-days formula change (task #1062).

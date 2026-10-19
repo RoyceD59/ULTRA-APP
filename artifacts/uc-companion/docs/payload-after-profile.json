@@ -1,0 +1,847 @@
+{
+  "note": "Source bytes describe the graph, not minified/encoded cost. Initial script sizes come from browser requests.",
+  "initialBytes": {
+    "raw": 3813197,
+    "gzip": 897275,
+    "brotli": 776962
+  },
+  "packages": [
+    {
+      "name": "expo-router",
+      "sourceBytes": 1200022
+    },
+    {
+      "name": "workspace",
+      "sourceBytes": 1035621
+    },
+    {
+      "name": "react-native-reanimated",
+      "sourceBytes": 759246
+    },
+    {
+      "name": "react-native-web",
+      "sourceBytes": 738691
+    },
+    {
+      "name": "react-dom",
+      "sourceBytes": 545403
+    },
+    {
+      "name": "libphonenumber-js",
+      "sourceBytes": 476300
+    },
+    {
+      "name": "react-native-gesture-handler",
+      "sourceBytes": 374106
+    },
+    {
+      "name": "@clerk/shared",
+      "sourceBytes": 264545
+    },
+    {
+      "name": "@tanstack/query-core",
+      "sourceBytes": 236074
+    },
+    {
+      "name": "@clerk/react",
+      "sourceBytes": 153055
+    },
+    {
+      "name": "zod",
+      "sourceBytes": 149683
+    },
+    {
+      "name": "expo-image",
+      "sourceBytes": 126491
+    },
+    {
+      "name": "react-native-keyboard-controller",
+      "sourceBytes": 122170
+    },
+    {
+      "name": "react-native-svg",
+      "sourceBytes": 116829
+    },
+    {
+      "name": "expo-notifications",
+      "sourceBytes": 101845
+    },
+    {
+      "name": "expo-file-system",
+      "sourceBytes": 84715
+    },
+    {
+      "name": "@egjs/hammerjs",
+      "sourceBytes": 75885
+    },
+    {
+      "name": "qrcode",
+      "sourceBytes": 72625
+    },
+    {
+      "name": "@clerk/expo",
+      "sourceBytes": 67314
+    },
+    {
+      "name": "expo-auth-session",
+      "sourceBytes": 58654
+    },
+    {
+      "name": "@expo/vector-icons",
+      "sourceBytes": 55513
+    },
+    {
+      "name": "expo-modules-core",
+      "sourceBytes": 50630
+    },
+    {
+      "name": "semver",
+      "sourceBytes": 44989
+    },
+    {
+      "name": "expo-location",
+      "sourceBytes": 40254
+    },
+    {
+      "name": "expo-image-picker",
+      "sourceBytes": 36606
+    },
+    {
+      "name": "expo",
+      "sourceBytes": 32158
+    },
+    {
+      "name": "expo-web-browser",
+      "sourceBytes": 31166
+    },
+    {
+      "name": "react-native-screens",
+      "sourceBytes": 28834
+    },
+    {
+      "name": "expo-video",
+      "sourceBytes": 28660
+    },
+    {
+      "name": "expo-font",
+      "sourceBytes": 28465
+    },
+    {
+      "name": "react-native-url-polyfill",
+      "sourceBytes": 24358
+    },
+    {
+      "name": "expo-asset",
+      "sourceBytes": 24109
+    },
+    {
+      "name": "expo-crypto",
+      "sourceBytes": 23745
+    },
+    {
+      "name": "@expo/cli",
+      "sourceBytes": 23553
+    },
+    {
+      "name": "event-target-shim",
+      "sourceBytes": 23411
+    },
+    {
+      "name": "@tanstack/react-query",
+      "sourceBytes": 23100
+    },
+    {
+      "name": "color-convert",
+      "sourceBytes": 21005
+    },
+    {
+      "name": "react-native-worklets",
+      "sourceBytes": 20231
+    },
+    {
+      "name": "react",
+      "sourceBytes": 19464
+    },
+    {
+      "name": "badgin",
+      "sourceBytes": 14037
+    },
+    {
+      "name": "@react-native/normalize-colors",
+      "sourceBytes": 12860
+    },
+    {
+      "name": "postcss-value-parser",
+      "sourceBytes": 12844
+    },
+    {
+      "name": "query-string",
+      "sourceBytes": 11554
+    },
+    {
+      "name": "expo-constants",
+      "sourceBytes": 11423
+    },
+    {
+      "name": "react-native-safe-area-context",
+      "sourceBytes": 11228
+    },
+    {
+      "name": "color",
+      "sourceBytes": 11169
+    },
+    {
+      "name": "inline-style-prefixer",
+      "sourceBytes": 10863
+    },
+    {
+      "name": "expo-linking",
+      "sourceBytes": 10856
+    },
+    {
+      "name": "scheduler",
+      "sourceBytes": 10375
+    },
+    {
+      "name": "expo-haptics",
+      "sourceBytes": 9845
+    },
+    {
+      "name": "expo-application",
+      "sourceBytes": 9437
+    },
+    {
+      "name": "css-in-js-utils",
+      "sourceBytes": 7858
+    },
+    {
+      "name": "styleq",
+      "sourceBytes": 7434
+    },
+    {
+      "name": "react-is",
+      "sourceBytes": 7384
+    },
+    {
+      "name": "@radix-ui/react-slot",
+      "sourceBytes": 7240
+    },
+    {
+      "name": "expo-secure-store",
+      "sourceBytes": 6869
+    },
+    {
+      "name": "react-native-qrcode-svg",
+      "sourceBytes": 6364
+    },
+    {
+      "name": "color-string",
+      "sourceBytes": 5716
+    },
+    {
+      "name": "@expo-google-fonts/inter",
+      "sourceBytes": 5326
+    },
+    {
+      "name": "dijkstrajs",
+      "sourceBytes": 5206
+    },
+    {
+      "name": "base-64",
+      "sourceBytes": 4892
+    },
+    {
+      "name": "react-fast-compare",
+      "sourceBytes": 4823
+    },
+    {
+      "name": "@react-native-async-storage/async-storage",
+      "sourceBytes": 4805
+    },
+    {
+      "name": "@babel/runtime",
+      "sourceBytes": 4664
+    },
+    {
+      "name": "color-name",
+      "sourceBytes": 4617
+    },
+    {
+      "name": "fontfaceobserver",
+      "sourceBytes": 4455
+    },
+    {
+      "name": "merge-options",
+      "sourceBytes": 4235
+    },
+    {
+      "name": "@react-native/js-polyfills",
+      "sourceBytes": 4195
+    },
+    {
+      "name": "fbjs",
+      "sourceBytes": 4182
+    },
+    {
+      "name": "decode-uri-component",
+      "sourceBytes": 4139
+    },
+    {
+      "name": "abort-controller",
+      "sourceBytes": 3846
+    },
+    {
+      "name": "hoist-non-react-statics",
+      "sourceBytes": 2743
+    },
+    {
+      "name": "@radix-ui/react-compose-refs",
+      "sourceBytes": 2532
+    },
+    {
+      "name": "@expo/metro-runtime",
+      "sourceBytes": 2107
+    },
+    {
+      "name": "expo-glass-effect",
+      "sourceBytes": 1976
+    },
+    {
+      "name": "dequal",
+      "sourceBytes": 1928
+    },
+    {
+      "name": "invariant",
+      "sourceBytes": 1397
+    },
+    {
+      "name": "memoize-one",
+      "sourceBytes": 1358
+    },
+    {
+      "name": "expo-splash-screen",
+      "sourceBytes": 1325
+    },
+    {
+      "name": "fast-deep-equal",
+      "sourceBytes": 1177
+    },
+    {
+      "name": "shallowequal",
+      "sourceBytes": 979
+    },
+    {
+      "name": "simple-swizzle",
+      "sourceBytes": 571
+    },
+    {
+      "name": "nanoid",
+      "sourceBytes": 508
+    },
+    {
+      "name": "escape-string-regexp",
+      "sourceBytes": 461
+    },
+    {
+      "name": "split-on-first",
+      "sourceBytes": 459
+    },
+    {
+      "name": "hyphenate-style-name",
+      "sourceBytes": 452
+    },
+    {
+      "name": "nullthrows",
+      "sourceBytes": 384
+    },
+    {
+      "name": "react-native-is-edge-to-edge",
+      "sourceBytes": 350
+    },
+    {
+      "name": "filter-obj",
+      "sourceBytes": 346
+    },
+    {
+      "name": "is-arrayish",
+      "sourceBytes": 318
+    },
+    {
+      "name": "warn-once",
+      "sourceBytes": 314
+    },
+    {
+      "name": "is-plain-obj",
+      "sourceBytes": 245
+    },
+    {
+      "name": "standard-navigation",
+      "sourceBytes": 186
+    },
+    {
+      "name": "strict-uri-encode",
+      "sourceBytes": 138
+    },
+    {
+      "name": "metro-runtime",
+      "sourceBytes": 14
+    }
+  ],
+  "chunks": [
+    {
+      "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+      "raw": 3962,
+      "gzip": 1708,
+      "brotli": 1624,
+      "packages": {
+        "workspace": 342,
+        "@expo/cli": 23553,
+        "@react-native/js-polyfills": 4195
+      },
+      "modules": [
+        {
+          "source": "@expo/cli/build/metro-require/require.js",
+          "sourceBytes": 23553
+        },
+        {
+          "source": "@react-native/js-polyfills/error-guard.js",
+          "sourceBytes": 4195
+        },
+        {
+          "source": "__prelude__",
+          "sourceBytes": 248
+        },
+        {
+          "source": "\u0000polyfill:external-require",
+          "sourceBytes": 92
+        },
+        {
+          "source": "\u0000polyfill:environment-variables",
+          "sourceBytes": 2
+        }
+      ]
+    },
+    {
+      "name": "__common-5ae3df2ac5bea77944e90a88d7e55d43.js",
+      "raw": 2649437,
+      "gzip": 585066,
+      "brotli": 506463,
+      "packages": {
+        "react": 875,
+        "@expo/vector-icons": 49046,
+        "expo-router": 49640,
+        "expo-haptics": 9845,
+        "workspace": 950945,
+        "@tanstack/react-query": 23100,
+        "react-native-qrcode-svg": 6364,
+        "expo-file-system": 84715,
+        "@react-native-async-storage/async-storage": 4805,
+        "expo-crypto": 23745,
+        "react-native-svg": 116829,
+        "expo-location": 40254,
+        "expo-image": 126491,
+        "metro-runtime": 14,
+        "react-native-gesture-handler": 374106,
+        "react-native-keyboard-controller": 122170,
+        "@clerk/expo": 65341,
+        "expo-font": 28465,
+        "expo-secure-store": 6869,
+        "expo-notifications": 101845,
+        "expo-web-browser": 31166,
+        "expo-video": 28660,
+        "expo-image-picker": 36606,
+        "fontfaceobserver": 4455,
+        "expo-asset": 24109,
+        "standard-navigation": 186,
+        "merge-options": 4235,
+        "is-plain-obj": 245,
+        "expo-application": 9437,
+        "abort-controller": 3846,
+        "event-target-shim": 23411,
+        "badgin": 14037,
+        "@tanstack/query-core": 236074,
+        "@babel/runtime": 487,
+        "react-native-is-edge-to-edge": 350,
+        "react-native-reanimated": 759246,
+        "react-native-worklets": 20231,
+        "semver": 44989,
+        "@egjs/hammerjs": 75885,
+        "hoist-non-react-statics": 2743,
+        "react-is": 2750,
+        "zod": 149683,
+        "libphonenumber-js": 476300,
+        "qrcode": 72625,
+        "dijkstrajs": 5206,
+        "expo-auth-session": 58654,
+        "@clerk/react": 153055,
+        "@clerk/shared": 264545,
+        "dequal": 1928,
+        "react-native-url-polyfill": 24358,
+        "base-64": 4892,
+        "expo": 936
+      },
+      "modules": [
+        {
+          "source": "/lib/api-client-react/src/generated/api.ts",
+          "sourceBytes": 423134
+        },
+        {
+          "source": "zod/v3/types.js",
+          "sourceBytes": 131212
+        },
+        {
+          "source": "@clerk/shared/dist/react/index.js",
+          "sourceBytes": 125513
+        },
+        {
+          "source": "/lib/api-client-react/src/generated/api.schemas.ts",
+          "sourceBytes": 88309
+        },
+        {
+          "source": "libphonenumber-js/metadata.min.json.js",
+          "sourceBytes": 84166
+        },
+        {
+          "source": "@egjs/hammerjs/dist/hammer.esm.js",
+          "sourceBytes": 75885
+        },
+        {
+          "source": "@clerk/react/dist/ClerkProvider-C0CLJ2dz.cjs",
+          "sourceBytes": 63211
+        },
+        {
+          "source": "@clerk/react/dist/hooks-BTRUfAH0.cjs",
+          "sourceBytes": 60110
+        },
+        {
+          "source": "/artifacts/uc-companion/hooks/useNotifications.ts",
+          "sourceBytes": 43259
+        },
+        {
+          "source": "react-native-svg/lib/module/lib/extract/transform.js",
+          "sourceBytes": 40384
+        },
+        {
+          "source": "/artifacts/uc-companion/components/FilterTrackerSection.tsx",
+          "sourceBytes": 37964
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeFormatter.js",
+          "sourceBytes": 36616
+        },
+        {
+          "source": "@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json",
+          "sourceBytes": 36136
+        },
+        {
+          "source": "expo-image/src/Image.types.ts",
+          "sourceBytes": 32671
+        },
+        {
+          "source": "/artifacts/uc-companion/data/guides.ts",
+          "sourceBytes": 32599
+        },
+        {
+          "source": "react-native-svg/lib/module/lib/extract/transformToRn.js",
+          "sourceBytes": 30745
+        },
+        {
+          "source": "/artifacts/uc-companion/hooks/useApi.ts",
+          "sourceBytes": 30422
+        },
+        {
+          "source": "@clerk/expo/dist/provider/nativeClientSync.js",
+          "sourceBytes": 26360
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouType.js",
+          "sourceBytes": 25715
+        },
+        {
+          "source": "libphonenumber-js/es6/AsYouTypeParser.js",
+          "sourceBytes": 24617
+        }
+      ]
+    },
+    {
+      "name": "entry-cd16de2f1b0fc62481b831db34b55f34.js",
+      "raw": 1092359,
+      "gzip": 287601,
+      "brotli": 247460,
+      "packages": {
+        "expo-router": 1150382,
+        "@expo/metro-runtime": 2107,
+        "react": 18589,
+        "workspace": 6170,
+        "expo": 31222,
+        "react-native-web": 738691,
+        "@babel/runtime": 4177,
+        "@react-native/normalize-colors": 12860,
+        "inline-style-prefixer": 10863,
+        "css-in-js-utils": 7858,
+        "hyphenate-style-name": 452,
+        "styleq": 7434,
+        "postcss-value-parser": 12844,
+        "react-dom": 545403,
+        "scheduler": 10375,
+        "fbjs": 4182,
+        "nullthrows": 384,
+        "memoize-one": 1358,
+        "react-native-safe-area-context": 11228,
+        "query-string": 11554,
+        "strict-uri-encode": 138,
+        "decode-uri-component": 4139,
+        "split-on-first": 459,
+        "filter-obj": 346,
+        "nanoid": 508,
+        "escape-string-regexp": 461,
+        "react-is": 4634,
+        "fast-deep-equal": 1177,
+        "expo-modules-core": 50630,
+        "invariant": 1397,
+        "expo-linking": 10856,
+        "expo-constants": 11423,
+        "color": 11169,
+        "color-string": 5716,
+        "color-name": 4617,
+        "simple-swizzle": 571,
+        "is-arrayish": 318,
+        "color-convert": 21005,
+        "react-native-screens": 28834,
+        "warn-once": 314,
+        "expo-glass-effect": 1976,
+        "@radix-ui/react-slot": 7240,
+        "@radix-ui/react-compose-refs": 2532,
+        "react-fast-compare": 4823,
+        "shallowequal": 979
+      },
+      "modules": [
+        {
+          "source": "react-dom/cjs/react-dom-client.production.js",
+          "sourceBytes": 536016
+        },
+        {
+          "source": "react-native-web/dist/vendor/react-native/VirtualizedList/index.js",
+          "sourceBytes": 64155
+        },
+        {
+          "source": "expo-router/build/getRoutesCore.js",
+          "sourceBytes": 34838
+        },
+        {
+          "source": "react-native-web/dist/exports/Touchable/index.js",
+          "sourceBytes": 34644
+        },
+        {
+          "source": "expo-router/build/react-navigation/core/useNavigationBuilder.js",
+          "sourceBytes": 33418
+        },
+        {
+          "source": "expo-router/vendor/react-helmet-async/lib/index.js",
+          "sourceBytes": 29600
+        },
+        {
+          "source": "react-native-web/dist/modules/createDOMProps/index.js",
+          "sourceBytes": 27065
+        },
+        {
+          "source": "react-native-web/dist/exports/ScrollView/index.js",
+          "sourceBytes": 26874
+        },
+        {
+          "source": "expo-router/build/layouts/StackClient.js",
+          "sourceBytes": 23814
+        },
+        {
+          "source": "react-native-web/dist/modules/useResponderEvents/ResponderSystem.js",
+          "sourceBytes": 23531
+        },
+        {
+          "source": "expo-router/build/fork/getStateFromPath.js",
+          "sourceBytes": 22233
+        },
+        {
+          "source": "expo-router/build/react-navigation/routers/StackRouter.js",
+          "sourceBytes": 20998
+        },
+        {
+          "source": "expo-router/build/react-navigation/core/getStateFromPath.js",
+          "sourceBytes": 20853
+        },
+        {
+          "source": "react-native-web/dist/vendor/react-native/PanResponder/index.js",
+          "sourceBytes": 19796
+        },
+        {
+          "source": "expo-router/build/useScreens.js",
+          "sourceBytes": 19754
+        },
+        {
+          "source": "react-native-web/dist/modules/usePressEvents/PressResponder.js",
+          "sourceBytes": 19209
+        },
+        {
+          "source": "expo-router/build/fork/useLinking.js",
+          "sourceBytes": 18941
+        },
+        {
+          "source": "react-native-web/dist/vendor/react-native/Animated/AnimatedImplementation.js",
+          "sourceBytes": 18162
+        },
+        {
+          "source": "react-native-web/dist/vendor/react-native/Animated/NativeAnimatedHelper.js",
+          "sourceBytes": 17530
+        },
+        {
+          "source": "react-native-web/dist/vendor/react-native/FlatList/index.js",
+          "sourceBytes": 17426
+        }
+      ]
+    },
+    {
+      "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+      "raw": 8122,
+      "gzip": 3315,
+      "brotli": 3100,
+      "packages": {
+        "workspace": 9316
+      },
+      "modules": [
+        {
+          "source": "/artifacts/uc-companion/app/(tabs)/_layout.tsx",
+          "sourceBytes": 5066
+        },
+        {
+          "source": "/artifacts/uc-companion/components/CompanionNavigation.tsx",
+          "sourceBytes": 4250
+        }
+      ]
+    },
+    {
+      "name": "_layout-a7878578ce859dc35bca482e23b90a3b.js",
+      "raw": 33038,
+      "gzip": 10583,
+      "brotli": 9901,
+      "packages": {
+        "workspace": 30729,
+        "@expo/vector-icons": 6467,
+        "@expo-google-fonts/inter": 5326,
+        "expo-splash-screen": 1325,
+        "@clerk/expo": 1973
+      },
+      "modules": [
+        {
+          "source": "/artifacts/uc-companion/app/_layout.tsx",
+          "sourceBytes": 8805
+        },
+        {
+          "source": "/artifacts/uc-companion/components/ErrorFallback.tsx",
+          "sourceBytes": 6841
+        },
+        {
+          "source": "@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Feather.json",
+          "sourceBytes": 6098
+        },
+        {
+          "source": "/artifacts/uc-companion/hooks/useNativeNotifications.ts",
+          "sourceBytes": 6006
+        },
+        {
+          "source": "/artifacts/uc-companion/hooks/usePublicWebDocument.ts",
+          "sourceBytes": 3848
+        },
+        {
+          "source": "@expo-google-fonts/inter/metadata.json",
+          "sourceBytes": 2805
+        },
+        {
+          "source": "@clerk/expo/dist/token-cache/index.js",
+          "sourceBytes": 1973
+        },
+        {
+          "source": "@expo-google-fonts/inter/index.js",
+          "sourceBytes": 1773
+        },
+        {
+          "source": "/artifacts/uc-companion/components/ErrorBoundary.tsx",
+          "sourceBytes": 1673
+        },
+        {
+          "source": "/artifacts/uc-companion/lib/nativeQueryRecovery.ts",
+          "sourceBytes": 1362
+        },
+        {
+          "source": "expo-splash-screen/build/SplashScreen.js",
+          "sourceBytes": 1260
+        },
+        {
+          "source": "/artifacts/uc-companion/lib/coldStartNotification.ts",
+          "sourceBytes": 1046
+        },
+        {
+          "source": "@expo-google-fonts/inter/useFonts.js",
+          "sourceBytes": 748
+        },
+        {
+          "source": "/artifacts/uc-companion/lib/customerScreenState.ts",
+          "sourceBytes": 375
+        },
+        {
+          "source": "/artifacts/uc-companion/lib/orderNotification.ts",
+          "sourceBytes": 355
+        },
+        {
+          "source": "@expo/vector-icons/build/Feather.js",
+          "sourceBytes": 306
+        },
+        {
+          "source": "/artifacts/uc-companion/lib/queryConnectivity.ts",
+          "sourceBytes": 244
+        },
+        {
+          "source": "/artifacts/uc-companion/lib/authSessionRedirect.ts",
+          "sourceBytes": 174
+        },
+        {
+          "source": "expo-splash-screen/build/index.js",
+          "sourceBytes": 65
+        },
+        {
+          "source": "@expo/vector-icons/Feather.js",
+          "sourceBytes": 63
+        }
+      ]
+    },
+    {
+      "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+      "raw": 26279,
+      "gzip": 9002,
+      "brotli": 8414,
+      "packages": {
+        "workspace": 38119
+      },
+      "modules": [
+        {
+          "source": "/artifacts/uc-companion/app/(tabs)/index.tsx",
+          "sourceBytes": 20103
+        },
+        {
+          "source": "/artifacts/uc-companion/components/RegisterFilterPrompt.tsx",
+          "sourceBytes": 13310
+        },
+        {
+          "source": "/artifacts/uc-companion/hooks/filterCandidateUtils.ts",
+          "sourceBytes": 3659
+        },
+        {
+          "source": "/artifacts/uc-companion/hooks/reminderOptInFlow.ts",
+          "sourceBytes": 1047
+        },
+        {
+          "source": "/artifacts/uc-companion/assets/headers/home-water.jpg",
+          "sourceBytes": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,9 +1,25 @@
 /** Minimal react-native stub for the Node.js test runner. */
 export const Platform: { OS: 'ios' | 'android' | 'web' } = { OS: 'ios' };
 export const Alert    = { alert: () => {} };
+export const Share = { share: async () => ({}) };
+export const PixelRatio = { get: () => 1 };
 export const Text = 'Text';
 export const TouchableOpacity = 'TouchableOpacity';
 export const View = 'View';
+export const Modal = 'Modal';
+export const ScrollView = 'ScrollView';
+export const TextInput = 'TextInput';
+export const KeyboardAvoidingView = 'KeyboardAvoidingView';
+export const Switch = 'Switch';
+export const ActivityIndicator = 'ActivityIndicator';
+export const Linking = { openURL: async (_url: string): Promise<void> => {} };
+let colorScheme: 'light' | 'dark' = 'light';
+export function __setColorScheme(next: 'light' | 'dark'): void {
+  colorScheme = next;
+}
+export function useColorScheme(): 'light' | 'dark' {
+  return colorScheme;
+}
 export const StyleSheet = {
   create: <T extends Record<string, unknown>>(styles: T): T => styles,
 };

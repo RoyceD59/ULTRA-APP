@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
@@ -138,7 +138,7 @@ export default function ProductCard({ product, onPress, layout = 'grid', isWishl
           <Text style={styles.saleBadgeText}>TOP</Text>
         </View>
       )}
-      <View style={[styles.imageWrap, { backgroundColor: colors.surface }]}>
+      <View pointerEvents="none" style={[styles.imageWrap, { backgroundColor: colors.surface }]}>
         {product.images[0] ? (
           <Image source={{ uri: resizedImageUrl(product.images[0].src, 200) }} style={styles.image} contentFit="contain" transition={120} recyclingKey={product.images[0].src} />
         ) : (
@@ -177,6 +177,7 @@ export default function ProductCard({ product, onPress, layout = 'grid', isWishl
               </View>
               {inStock ? (
                 <TouchableOpacity onPress={handleAddToCart} activeOpacity={0.8}
+                  accessibilityRole="button" accessibilityLabel={`Add ${product.name} to cart`}
                   style={[styles.cartBtn, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
                   <Ionicons name="cart-outline" size={14} color={colors.primary} />
                   <Text style={[styles.cartBtnText, { color: colors.primary }]}>Add to Cart</Text>
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
   },
   saleBadge: { position: 'absolute', top: 8, left: 8, zIndex: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   saleBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.5 },
-  imageWrap: { height: 140, alignItems: 'center', justifyContent: 'center' },
+  imageWrap: { aspectRatio: 1.25, maxHeight: 220, alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   info: { padding: 12, gap: 4 },
   category: { fontSize: 11, fontWeight: '600' as const, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -238,14 +239,14 @@ const styles = StyleSheet.create({
   tagline: { fontSize: 11, lineHeight: 15 },
   sku: { fontSize: 10, letterSpacing: 0.3 },
   listTagline: { fontSize: 12, lineHeight: 16, marginTop: 1 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  priceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   price: { fontSize: 15, fontWeight: '700' as const },
   oldPrice: { fontSize: 12, textDecorationLine: 'line-through' },
   enquireLabel: { fontSize: 12, fontStyle: 'italic' },
   enquirePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   enquirePillText: { fontSize: 11, fontWeight: '600' as const },
   cartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    borderWidth: 1, borderRadius: 8, paddingVertical: 6, marginTop: 4 },
+    minHeight: 44, flexWrap: 'wrap', borderWidth: 1, borderRadius: 8, paddingVertical: 8, marginTop: 4 },
   cartBtnText: { fontSize: 12, fontWeight: '600' as const },
   // List layout
   listCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1,
@@ -255,6 +256,6 @@ const styles = StyleSheet.create({
   listInfo: { flex: 1 },
   listName: { fontSize: 14, fontWeight: '600' as const, lineHeight: 18 },
   listCategory: { fontSize: 12, marginTop: 2 },
-  listPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  listPriceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 4 },
+  addBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

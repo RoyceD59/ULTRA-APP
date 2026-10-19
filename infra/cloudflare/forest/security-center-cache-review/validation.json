@@ -1,0 +1,146 @@
+{
+  "observedAt": "2026-10-09T14:48:43.657Z",
+  "candidate": {
+    "parentSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+    "candidateSha256": "d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+    "changedPaths": [
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "unchangedParentFiles": 1262,
+    "dependencyPins": {
+      "fast-copy": "4.1.0",
+      "postcss-selector-parser": "7.1.6",
+      "http-cache-semantics": "4.3.0"
+    },
+    "scopeSha256": "f2f190773180b02ec45fde79addbb39a48c9cdd5f583071b026892d20ef5b320",
+    "status": "dependency-only review; NOT SELECTED; NOT PUBLISHED",
+    "selectionApproved": false,
+    "publicationApproved": false,
+    "schemaApplied": false,
+    "clientAdvancement": false
+  },
+  "technicalInstallationBlockerResolved": true,
+  "notSelected": true,
+  "notPublished": true,
+  "mainRuntimePinsAndLockUnchanged": true,
+  "clientSelectorsUnchanged": true,
+  "sourceScope": {
+    "changedPaths": [
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "unchangedFilesAndModes": 1262,
+    "workspaceImportersUnchanged": 11,
+    "oldCacheGuardBytesUnchanged": true,
+    "loaderAndProductV24Imported": false
+  },
+  "fix": {
+    "reimport": "--frozen-lockfile --ignore-scripts --force --prod=false",
+    "cacheVersion": "4.3.0",
+    "cachePatchKey": "http-cache-semantics@4.3.0",
+    "retainedPatchSource": "patches/http-cache-semantics@4.2.0.patch",
+    "installedCodeNotManuallyEdited": true,
+    "exactInternalStoreCauseEstablished": false
+  },
+  "checks": {
+    "warmBackportCasesPassed": 7,
+    "warmRuntimeCasesPassed": 7,
+    "cleanExactArchiveBackportCasesPassed": 7,
+    "cleanExactArchiveRuntimeCasesPassed": 7,
+    "narrowLockAndPreparationPolicyCasesPassed": 15,
+    "sharedLibsApiHubCompanionTypechecks": "passed",
+    "apiAndHubProductionBuilds": "passed",
+    "compiledLoggingWorkerIncludesFastCopy410": true,
+    "manifestAndLockChecksumsUnchangedDuringBothInstalls": true,
+    "sourceScopeVerification": "passed",
+    "broaderPriorIntegrityMatrix": "timed out after six passing cases; incomplete, not claimed passed"
+  },
+  "audit": {
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 2,
+        "critical": 0
+      },
+      "dependencies": 1465,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 1465
+    },
+    "advisories": [
+      {
+        "name": "node-forge",
+        "severity": "high",
+        "id": "GHSA-86w9-cpqp-85rv"
+      },
+      {
+        "name": "braces",
+        "severity": "high",
+        "id": "GHSA-vfj7-8cjw-p6xm"
+      }
+    ]
+  },
+  "productionPreflight": {
+    "observedAt": "2026-10-09T14:42:28.682Z",
+    "deployment": {
+      "additionalUrls": [],
+      "deploymentType": "autoscale",
+      "hasSuccessfulBuild": true,
+      "isDeployed": true,
+      "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+      "success": true,
+      "visibility": "public"
+    },
+    "schemaDiff": {
+      "columnsToRemove": [],
+      "hasDiff": false,
+      "hasStructuralDataLoss": false,
+      "matViewsToRemove": [],
+      "maybeNonBackwardsCompatible": false,
+      "schemasToRemove": [],
+      "statementsToExecute": [],
+      "success": true,
+      "tablesToRemove": [],
+      "tablesToTruncate": [],
+      "warnings": []
+    },
+    "applied": false
+  },
+  "currentLiveSnapshots": {
+    "observedAt": "2026-10-09T14:45:16.964Z",
+    "snapshots": [
+      {
+        "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+        "adjustmentRevision": 1,
+        "calculatedAt": "2026-10-09T14:45:20.188Z",
+        "lifespanAvailable": true,
+        "totalUsers": 6,
+        "litresFiltered": 1550,
+        "plasticsAvoided": 3100,
+        "cleanWaterDays": 0
+      },
+      {
+        "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+        "adjustmentRevision": 1,
+        "calculatedAt": "2026-10-09T14:45:19.996Z",
+        "lifespanAvailable": true,
+        "totalUsers": 6,
+        "litresFiltered": 1550,
+        "plasticsAvoided": 3100,
+        "cleanWaterDays": 0
+      }
+    ],
+    "agreeingFresh": true,
+    "newCandidateLiveVerified": false
+  },
+  "requiredNextGates": [
+    "Approve exact-source selection and retained braces/node-forge backport risk exceptions",
+    "Align main runtime pins and selection verification, without advancing clients",
+    "Separate API publication approval after then-current full schema/target review",
+    "Verify matching new live API release",
+    "Repeat both fresh agreeing snapshots immediately before any client publication"
+  ]
+}

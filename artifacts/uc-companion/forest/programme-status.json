@@ -1,0 +1,28 @@
+{
+  "_howToUpdate": [
+    "This file feeds the 'Programme updates' section and the figures on forest.html.",
+    "Owner announcement gate: keep programme wording future-facing and all unannounced facts pending. The team is working on the evidence; it will be announced after the programme launches. Do not populate dates, partners, donation records, certificates, reports or verified outcomes before the owner approves the post-launch announcement.",
+    "Leave a value as null until it is confirmed; the page shows it as Pending.",
+    "Dates: use YYYY-MM-DD, e.g. 2026-10-09. Links: full https:// addresses, or a file uploaded next to forest.html such as certificates/donation-2026-10.pdf.",
+    "Once donation.madeOn is set, the headline switches from 'Estimated trees to be funded' to 'Trees funded by donation'.",
+    "To post news, add an entry to 'updates': {\"date\": \"2026-10-09\", \"title\": \"Donation made\", \"body\": \"Optional detail.\", \"url\": null}. Newest entries show first.",
+    "Lines starting with an underscore are notes for staff and are ignored by the page."
+  ],
+  "partner": null,
+  "figuresAsOf": null,
+  "donation": {
+    "scheduledFor": null,
+    "madeOn": null,
+    "amountKes": null
+  },
+  "certificate": {
+    "url": null,
+    "issuedOn": null,
+    "issuer": null
+  },
+  "fieldReport": {
+    "url": null,
+    "publishedOn": null
+  },
+  "updates": []
+}

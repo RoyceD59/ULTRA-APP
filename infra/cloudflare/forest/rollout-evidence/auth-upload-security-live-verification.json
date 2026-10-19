@@ -1,0 +1,95 @@
+{
+  "probedAt": "2026-10-08T15:20:09.993Z",
+  "phase": "read-only-verification-awaiting-publication-approval-and-source-evidence",
+  "candidateSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "retainedArchiveAndHandoffVerification": "passed",
+  "ownerApproval": {
+    "sourceSelectionApproved": true,
+    "publicationApprovedInSavedRecord": false,
+    "record": "../auth-upload-security/owner-approval.json"
+  },
+  "deploymentMetadata": {
+    "success": true,
+    "isDeployed": true,
+    "hasSuccessfulBuild": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "visibility": "public",
+    "deploymentType": "autoscale",
+    "candidatePublicationProven": false
+  },
+  "publicProbes": [
+    {
+      "origin": "https://api.ucfilters.com",
+      "versionRequest": {
+        "path": "/version.json",
+        "status": 404,
+        "contentType": "text/plain;charset=UTF-8",
+        "candidateIdentityVerified": false
+      },
+      "snapshotRequest": {
+        "path": "/api/uc/impact",
+        "status": 200,
+        "compatibleAndFreshAtProbe": true,
+        "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+        "adjustmentRevision": 1,
+        "calculatedAt": "2026-10-08T15:20:09.965Z",
+        "lifespanAvailable": true,
+        "totalUsers": 6,
+        "litresFiltered": 1550,
+        "plasticsAvoided": 3100,
+        "cleanWaterDays": 0
+      }
+    },
+    {
+      "origin": "https://team-horizon--jerryaroyce.replit.app",
+      "versionRequest": {
+        "path": "/version.json",
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "candidateIdentityVerified": false
+      },
+      "snapshotRequest": {
+        "path": "/api/uc/impact",
+        "status": 200,
+        "compatibleAndFreshAtProbe": true,
+        "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+        "adjustmentRevision": 1,
+        "calculatedAt": "2026-10-08T15:20:09.967Z",
+        "lifespanAvailable": true,
+        "totalUsers": 6,
+        "litresFiltered": 1550,
+        "plasticsAvoided": 3100,
+        "cleanWaterDays": 0
+      }
+    }
+  ],
+  "snapshotsAgreeAtProbe": true,
+  "publicationAndImageSize": {
+    "matchingDeploymentLogsAvailable": false,
+    "candidatePublishingSuccessVerified": false,
+    "finalImageLayerSizeVerified": false
+  },
+  "preserved": {
+    "clientPredecessorSelection": true,
+    "postBuildCleanup": true
+  },
+  "actionsPerformed": {
+    "publication": false,
+    "productionInitialization": false,
+    "schemaMutation": false,
+    "clientAdvancement": false,
+    "deploymentOutputCopy": false
+  },
+  "sessionNotice": "After API publication, old expiry-free sessions require one-time sign-in; newly issued sessions expire after eight hours.",
+  "completion": {
+    "complete": false,
+    "remaining": [
+      "Separate owner approval and API-first publication",
+      "Evidence that the actually served API uses the retained candidate",
+      "Candidate publishing success and final image-layer size",
+      "Repeat fresh agreeing snapshot checks after verified publication"
+    ],
+    "clientAdvancementAuthorized": false,
+    "productionInitializationAuthorized": false
+  }
+}

@@ -11,7 +11,7 @@ import { getAuthHeaders } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
 
 const base = () => API_ORIGIN;
-type PromotionType = "bonus_points" | "redemption_boost" | "checkout_discount";
+type PromotionType = "bonus_points" | "redemption_boost" | "checkout_discount" | "free_shipping" | "free_water_test";
 type ValueMode = "fixed" | "percentage";
 interface Promotion {
   id: number; code: string; type: PromotionType; effectMode: ValueMode; effectValue: number | string;
@@ -47,7 +47,8 @@ function formFor(p: Promotion): FormState {
 }
 function payload(form: FormState) {
   const numberOrUndefined = (value: string) => value.trim() ? Number(value) : undefined;
-  return { code: form.code.trim(), type: form.type, effectMode: form.valueMode, effectValue: Number(form.value), eligibleProductIds: form.products.split(",").map(x => x.trim()).filter(Boolean), startsAt: new Date(form.startsAt).toISOString(), endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null, globalUseLimit: numberOrUndefined(form.globalUseLimit), perUserUseLimit: numberOrUndefined(form.perCustomerUseLimit) };
+   const waived = form.type === "free_shipping" || form.type === "free_water_test";
+   return { code: form.code.trim(), type: form.type, effectMode: waived ? "fixed" : form.valueMode, effectValue: waived ? 0 : Number(form.value), eligibleProductIds: form.type === "free_water_test" ? [] : form.products.split(",").map(x => x.trim()).filter(Boolean), startsAt: new Date(form.startsAt).toISOString(), endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null, globalUseLimit: numberOrUndefined(form.globalUseLimit), perUserUseLimit: numberOrUndefined(form.perCustomerUseLimit) };
 }
 function PromotionForm({ initial, onDone }: { initial?: Promotion; onDone: () => void }) {
   const { toast } = useToast(); const qc = useQueryClient();
@@ -55,19 +56,21 @@ function PromotionForm({ initial, onDone }: { initial?: Promotion; onDone: () =>
   useEffect(() => setForm(initial ? formFor(initial) : emptyForm), [initial]);
   const update = (key: keyof FormState, value: string) => setForm(current => ({ ...current, [key]: value }));
   const mutation = useMutation({ mutationFn: () => initial ? request<{ promotion: Promotion }>(`/${initial.id}`, "PATCH", payload(form)) : request<{ promotion: Promotion }>("", "POST", payload(form)), onSuccess: () => { void qc.invalidateQueries({ queryKey: ["promotions"] }); toast({ title: initial ? "Promotion updated" : "Promotion created" }); onDone(); }, onError: (e: Error) => toast({ title: "Promotion could not be saved", description: e.message, variant: "destructive" }) });
-  const valid = form.code.trim() && Number(form.value) > 0 && form.startsAt && (!form.endsAt || new Date(form.endsAt) > new Date(form.startsAt));
+  const waived = form.type === "free_shipping" || form.type === "free_water_test";
+  const valid = form.code.trim() && (waived || Number(form.value) > 0) && form.startsAt && (!form.endsAt || new Date(form.endsAt) > new Date(form.startsAt));
   return <form onSubmit={e => { e.preventDefault(); mutation.mutate(); }} className="rounded-lg border bg-card p-4 space-y-4">
     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <div><Label htmlFor="promo-code">Code</Label><Input id="promo-code" value={form.code} onChange={e => update("code", e.target.value.toUpperCase())} placeholder="CLEAN10" /></div>
-      <div><Label>Promotion type</Label><Select value={form.type} onValueChange={v => update("type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="checkout_discount">Checkout discount</SelectItem><SelectItem value="bonus_points">Bonus points</SelectItem><SelectItem value="redemption_boost">Redemption boost</SelectItem></SelectContent></Select></div>
-      <div><Label>Value mode</Label><Select value={form.valueMode} onValueChange={v => update("valueMode", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fixed">Fixed</SelectItem><SelectItem value="percentage">Percentage</SelectItem></SelectContent></Select></div>
-      <div><Label htmlFor="promo-value">Value</Label><Input id="promo-value" type="number" min="0.01" max={form.valueMode === "percentage" ? 100 : undefined} step="0.01" value={form.value} onChange={e => update("value", e.target.value)} /></div>
+      <div><Label>Promotion type</Label><Select value={form.type} onValueChange={v => update("type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="checkout_discount">Checkout discount</SelectItem><SelectItem value="free_shipping">Free shipping</SelectItem><SelectItem value="free_water_test">Free water test</SelectItem><SelectItem value="bonus_points">Bonus points</SelectItem><SelectItem value="redemption_boost">Redemption boost</SelectItem></SelectContent></Select></div>
+      {!waived && <><div><Label>Value mode</Label><Select value={form.valueMode} onValueChange={v => update("valueMode", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fixed">Fixed</SelectItem><SelectItem value="percentage">Percentage</SelectItem></SelectContent></Select></div>
+      <div><Label htmlFor="promo-value">Value</Label><Input id="promo-value" type="number" min="0.01" max={form.valueMode === "percentage" ? 100 : undefined} step="0.01" value={form.value} onChange={e => update("value", e.target.value)} /></div></>}
       <div><Label htmlFor="promo-start">Starts</Label><Input id="promo-start" type="datetime-local" value={form.startsAt} onChange={e => update("startsAt", e.target.value)} /></div>
       <div><Label htmlFor="promo-end">Ends (optional)</Label><Input id="promo-end" type="datetime-local" value={form.endsAt} onChange={e => update("endsAt", e.target.value)} /></div>
       <div><Label htmlFor="promo-global-limit">Global use cap</Label><Input id="promo-global-limit" type="number" min="1" value={form.globalUseLimit} onChange={e => update("globalUseLimit", e.target.value)} /></div>
       <div><Label htmlFor="promo-user-limit">Per-customer cap</Label><Input id="promo-user-limit" type="number" min="1" value={form.perCustomerUseLimit} onChange={e => update("perCustomerUseLimit", e.target.value)} /></div>
     </div>
-    <div><Label htmlFor="promo-products">Eligible product IDs <span className="text-muted-foreground">(comma-separated; blank means all products)</span></Label><Input id="promo-products" value={form.products} onChange={e => update("products", e.target.value)} placeholder="101, 205" /></div>
+    {waived && <p className="text-sm text-muted-foreground">{form.type === "free_shipping" ? "Waives the delivery charge when the customer selects delivery. Collection is already free." : "Grants a free physical water test at booking. There is no payment or refund stage in this request flow."}</p>}
+    {form.type !== "free_water_test" && <div><Label htmlFor="promo-products">Eligible product IDs <span className="text-muted-foreground">(comma-separated; blank means all products)</span></Label><Input id="promo-products" value={form.products} onChange={e => update("products", e.target.value)} placeholder="101, 205" /></div>}
     <div className="grid grid-cols-2 sm:flex gap-2 sm:justify-end"><Button className="min-h-11" type="button" variant="ghost" onClick={onDone}>Cancel</Button><Button className="min-h-11" disabled={!valid || mutation.isPending}>{mutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{initial ? "Save changes" : "Create promotion"}</Button></div>
   </form>;
 }

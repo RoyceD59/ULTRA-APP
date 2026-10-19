@@ -27,4 +27,13 @@ describe('purchase-backed filter registration', () => {
     );
     assert.deepEqual(events, ['committed', 'scheduled', 'shown']);
   });
+  it('carries the server-owned cycle identity into the saved local activation', async () => {
+    let shown: { registeredFilterId: number } | undefined;
+    await commitPurchaseBackedRegistration(
+      async () => ({ registration: { id: 42 } }),
+      async committed => ({ registeredFilterId: committed.registration.id }),
+      activation => { shown = activation; },
+    );
+    assert.equal(shown?.registeredFilterId, 42);
+  });
 });

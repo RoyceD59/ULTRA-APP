@@ -1,10 +1,9 @@
 export const STORE_CATEGORIES = [
   'All',
-  'Bottles & Portable',
-  'Home Filters',
-  'Shower & Skin',
-  'Accessories',
-  'Solutions',
+  'Bottles & On-the-Go',
+  'Home & Kitchen',
+  'Skincare & Wellness',
+  'Business & Community',
 ] as const;
 
 export type StoreCategory = (typeof STORE_CATEGORIES)[number];
@@ -26,12 +25,13 @@ export function normalizeStoreCategory(value: string): string {
     .replace(/\s+/g, ' ');
 }
 
+// Legacy storefront labels stay as aliases so older links and cached category
+// names still land on the matching tab.
 const CATEGORY_ALIASES: Record<Exclude<StoreCategory, 'All'>, string[]> = {
-  'Bottles & Portable': ['bottle portable', 'bottle portable filter', 'portable filter', 'water bottle'],
-  'Home Filters': ['home filter', 'household filter', 'faucet filter', 'under sink'],
-  'Shower & Skin': ['shower skin', 'shower filter', 'skin filter', 'bathroom filter'],
-  Accessories: ['accessory', 'accessories'],
-  Solutions: ['solution', 'solutions', 'commercial', 'water treatment'],
+  'Bottles & On-the-Go': ['bottle portable', 'bottle portable filter', 'portable filter', 'water bottle'],
+  'Home & Kitchen': ['home filter', 'household filter', 'faucet filter', 'under sink'],
+  'Skincare & Wellness': ['shower skin', 'shower filter', 'skin filter', 'bathroom filter'],
+  'Business & Community': ['solution', 'solutions', 'commercial', 'water treatment'],
 };
 
 export function categoryAliases(category: Exclude<StoreCategory, 'All'>): string[] {

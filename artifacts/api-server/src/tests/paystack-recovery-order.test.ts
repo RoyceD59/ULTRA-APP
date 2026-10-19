@@ -12,6 +12,9 @@
  *      "paystack-webhook-recovery" as the userId.
  *   3. Paystack initialize endpoint returns 429 (Too Many Requests) →
  *      server responds 500 with { retryable: true }.
+ *   4. Existing pending orders advance to processing; processing, completed,
+ *      and paid orders remain unchanged across repeated signed webhooks.
+ *      None of these paths creates a recovery order or sends a recovery alert.
  *
  * Strategy:
  *   – PAYSTACK_SECRET_KEY is set to a known test value so:
@@ -26,16 +29,19 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { paymentCheckoutFixture } from "./helpers/payment-checkout.js";
 import http from "node:http";
 import { createHmac } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 
 import app from "../app.js";
-import { db, pool, ucOrdersTable } from "@workspace/db";
-import { eq, like } from "drizzle-orm";
+import { db, pool, ucOrdersTable, ucNotificationLogTable } from "@workspace/db";
+import { and, eq, like } from "drizzle-orm";
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
 let realFetch: typeof globalThis.fetch;
+let savedSuiteResendBaseUrl: string | undefined;
 let server: http.Server;
 let base: string;
 
@@ -119,6 +125,11 @@ function silentFetch(): typeof globalThis.fetch {
 before(
   async () => {
     realFetch = globalThis.fetch;
+    savedSuiteResendBaseUrl = process.env["RESEND_BASE_URL"];
+    // Keep every test's background email on the stubbed direct transport.
+    // Otherwise a send started by an earlier test can select the connector
+    // before a later test installs its own RESEND_BASE_URL.
+    process.env["RESEND_BASE_URL"] = "https://paystack-suite-resend.test.invalid";
 
     process.env["PAYSTACK_SECRET_KEY"] = TEST_SECRET;
     process.env["SESSION_SECRET"] ??= "test-secret-ps-recovery";
@@ -174,11 +185,102 @@ after(async () => {
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
   globalThis.fetch = realFetch;
+  if (savedSuiteResendBaseUrl === undefined) delete process.env["RESEND_BASE_URL"];
+  else process.env["RESEND_BASE_URL"] = savedSuiteResendBaseUrl;
 });
 
 // ── Suite ─────────────────────────────────────────────────────────────────────
 
 describe("Paystack webhook — recovery order correctness", () => {
+  it("emails the recovered order details exactly once when a signed webhook is delivered twice", async () => {
+    const reference = nextRef();
+    const customerEmail = `${reference.toLowerCase()}@example.com`;
+    const event = chargeSuccessEvent({
+      reference,
+      amountKobo: 350_000,
+      currency: "KES",
+      customerEmail,
+    });
+    const emails: Array<{ subject: string; text: string; to: string }> = [];
+    const savedFetch = globalThis.fetch;
+    const savedResendBaseUrl = process.env["RESEND_BASE_URL"];
+    const resendBaseUrl = "https://paystack-recovery-resend.test.invalid";
+    // Force the direct test transport, never the authenticated connector.
+    process.env["RESEND_BASE_URL"] = resendBaseUrl;
+    globalThis.fetch = async (url, init) => {
+      if (String(url) === `${resendBaseUrl}/emails`) {
+        assert.equal(init?.method, "POST");
+        assert.equal(typeof init?.body, "string");
+        emails.push(JSON.parse(init!.body as string));
+        return new Response(JSON.stringify({ id: `recovery-${reference}` }), { status: 200 });
+      }
+      // SMS and other outbound providers must also remain local stubs.
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+
+    let orderId: number | undefined;
+    try {
+      const existing = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
+        .where(eq(ucOrdersTable.paymentReference, reference));
+      assert.equal(existing.length, 0, "the webhook must start without a matching order");
+
+      const first = await postWebhook(event);
+      assert.equal(first.status, 200);
+      assert.equal(first.body["received"], true);
+      assert.equal(first.body["recovered"], true);
+      assert.ok(typeof first.body["orderId"] === "number" && first.body["orderId"] > 0);
+      orderId = first.body["orderId"];
+
+      // Email is fire-and-forget. Its audit row proves the background send
+      // finished, rather than assuming it finished with the webhook response.
+      const deadline = Date.now() + 5_000;
+      let sent = false;
+      while (Date.now() < deadline) {
+        const logs = await db.select({ id: ucNotificationLogTable.id })
+          .from(ucNotificationLogTable).where(and(
+            eq(ucNotificationLogTable.orderId, orderId),
+            eq(ucNotificationLogTable.template, "payment_recovery_alert"),
+            eq(ucNotificationLogTable.channel, "email"),
+            eq(ucNotificationLogTable.status, "sent"),
+          ));
+        if (logs.length > 0) {
+          sent = true;
+          break;
+        }
+        await delay(10);
+      }
+      assert.ok(sent, "the recovery alert must complete its email delivery");
+      assert.equal(emails.length, 1, "the first webhook must send one recovery email");
+      const alert = emails[0]!;
+      assert.equal(alert.subject, `⚠️ Webhook recovery order #${orderId} needs fulfilment`);
+      assert.ok(alert.to, "the recovery email must have a team recipient");
+      const lines = alert.text.split("\n");
+      assert.ok(lines.includes(`Order ID:   ${orderId}`), "alert must contain the recovered order ID");
+      assert.ok(lines.includes(`Reference:  ${reference}`), "alert must contain the Paystack reference");
+      assert.ok(lines.includes("Amount:     KES 3,500"), "alert must convert kobo to the correct amount and currency");
+      assert.ok(lines.includes(`Customer:   ${customerEmail}`), "alert must contain the paying customer's email");
+
+      const duplicate = await postWebhook(event);
+      assert.equal(duplicate.status, 200);
+      assert.equal(duplicate.body["received"], true);
+      assert.equal(duplicate.body["orderId"], orderId);
+      assert.notEqual(duplicate.body["recovered"], true);
+      // Let any accidentally scheduled background send reach the transport.
+      await delay(100);
+      assert.equal(emails.length, 1, "a duplicate webhook must not send a second recovery alert");
+      const orders = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
+        .where(eq(ucOrdersTable.paymentReference, reference));
+      assert.deepEqual(orders, [{ id: orderId }], "both deliveries must resolve to the same order");
+    } finally {
+      globalThis.fetch = savedFetch;
+      if (savedResendBaseUrl === undefined) delete process.env["RESEND_BASE_URL"];
+      else process.env["RESEND_BASE_URL"] = savedResendBaseUrl;
+      if (orderId !== undefined) {
+        await db.delete(ucNotificationLogTable).where(eq(ucNotificationLogTable.orderId, orderId));
+      }
+    }
+  });
+
   it(
     "charge.success with no existing order inserts recovery row with correct customer, amount, currency, and paymentMethod",
     async () => {
@@ -304,6 +406,91 @@ describe("Paystack webhook — recovery order correctness", () => {
       }
     },
   );
+});
+
+describe("Paystack webhook — existing orders", () => {
+  for (const status of ["pending", "processing", "completed", "paid"] as const) {
+    it(
+      status === "pending"
+        ? "advances a pending order to processing and absorbs a repeated signed webhook without recovery"
+        : `leaves an existing ${status} order unchanged across repeated signed webhooks without recovery`,
+      async () => {
+        const reference = nextRef();
+        const [order] = await db.insert(ucOrdersTable).values({
+          userId: `${reference.toLowerCase()}@example.com`,
+          status,
+          total: "3500",
+          currency: "KES",
+          paymentMethod: "paystack",
+          paymentReference: reference,
+          promoCode: "EXISTING",
+          discountPercent: 10,
+          discountAmount: 350,
+          shippingAddress: { city: "Nairobi", address1: "Existing delivery address" },
+          webhookRecovery: false,
+          paymentConfirmedAt: status === "pending" ? null : new Date("2026-01-01T12:00:00Z"),
+        }).returning();
+        assert.ok(order, "the existing order fixture must be inserted");
+
+        const event = chargeSuccessEvent({
+          reference,
+          amountKobo: 350_000,
+          customerEmail: order.userId,
+        });
+        const savedFetch = globalThis.fetch;
+        const savedResendBaseUrl = process.env["RESEND_BASE_URL"];
+        process.env["RESEND_BASE_URL"] = "https://paystack-existing-resend.test.invalid";
+        const recoveryAlertCalls: string[] = [];
+        globalThis.fetch = async (url, init) => {
+          // Earlier recovery tests can still have background sends in flight.
+          // Both the email text and SMS body carry the unique payment reference,
+          // so count only alerts belonging to this fixture.
+          if (typeof init?.body === "string" && init.body.includes(reference)) {
+            recoveryAlertCalls.push(String(url));
+          }
+          return new Response(JSON.stringify({ id: "unexpected-existing-order-alert" }), { status: 200 });
+        };
+
+        try {
+          let expectedOrder = order;
+          for (const delivery of ["first", "repeated"]) {
+            const response = await postWebhook(event);
+            assert.equal(response.status, 200, `${delivery} signed webhook must succeed`);
+            assert.deepEqual(response.body, { received: true, orderId: order.id },
+              `${delivery} webhook must return the existing ID without claiming recovery`);
+
+            const rows = await db.select().from(ucOrdersTable)
+              .where(eq(ucOrdersTable.paymentReference, reference));
+            assert.equal(rows.length, 1, `${delivery} webhook must not insert a recovery order`);
+            const row = rows[0]!;
+            if (status === "pending" && delivery === "first") {
+              assert.equal(row.status, "processing", "the pending order must advance to processing");
+              assert.ok(row.paymentConfirmedAt instanceof Date, "payment confirmation must be recorded");
+              expectedOrder = { ...order, status: "processing", paymentConfirmedAt: row.paymentConfirmedAt };
+            }
+            assert.deepEqual(row, expectedOrder,
+              `${delivery} webhook must preserve all existing fields except the initial pending transition`);
+
+            // Recovery alerts run in the background. Keep the isolated provider
+            // transport installed while allowing an accidental send to surface.
+            await delay(100);
+            assert.deepEqual(recoveryAlertCalls, [], `${delivery} webhook must not contact recovery-alert providers for this order`);
+            const alerts = await db.select({ id: ucNotificationLogTable.id })
+              .from(ucNotificationLogTable).where(and(
+                eq(ucNotificationLogTable.orderId, order.id),
+                eq(ucNotificationLogTable.template, "payment_recovery_alert"),
+              ));
+            assert.deepEqual(alerts, [], `${delivery} webhook must not log a recovery-alert attempt on any channel`);
+          }
+        } finally {
+          globalThis.fetch = savedFetch;
+          if (savedResendBaseUrl === undefined) delete process.env["RESEND_BASE_URL"];
+          else process.env["RESEND_BASE_URL"] = savedResendBaseUrl;
+          await db.delete(ucNotificationLogTable).where(eq(ucNotificationLogTable.orderId, order.id));
+        }
+      },
+    );
+  }
 });
 
 describe("Paystack webhook — concurrent duplicate charge.success", () => {
@@ -477,7 +664,7 @@ describe("Paystack initialize — transient outage signalling", () => {
         const res = await realFetch(`${base}/payments/paystack/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "buyer@example.com", amount: 1000 }),
+          body: JSON.stringify({ email: "buyer@example.com", amount: 1000, checkout: paymentCheckoutFixture() }),
         });
 
         const body = (await res.json()) as Record<string, unknown>;

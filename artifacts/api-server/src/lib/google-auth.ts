@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import { db, googleOAuthCredentialsTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { logger } from "./logger.js";
+import { needsGoogleReconnect, GOOGLE_RECONNECT_MESSAGE } from "./google-reconnect.js";
 
 // ─── CSRF state store ─────────────────────────────────────────────────────────
 // Short-lived (10 min) set of valid state tokens. Stored in process memory;
@@ -170,7 +171,10 @@ export async function getValidAccessToken(): Promise<string | null> {
   const client = createOAuth2Client();
   client.setCredentials({ refresh_token: credential.refreshToken });
 
-  const { credentials } = await client.refreshAccessToken();
+  const { credentials } = await client.refreshAccessToken().catch((err: unknown) => {
+    if (needsGoogleReconnect(err)) throw new Error(GOOGLE_RECONNECT_MESSAGE);
+    throw err;
+  });
 
   const newAccessToken = credentials.access_token;
   if (!newAccessToken) {

@@ -22,7 +22,7 @@ export function evaluateColdStart(data: Record<string, unknown> | undefined, isA
     return { type: 'ROUTE_AND_CLEAR', screen };
   }
 
-  if (screen === 'orders' || screen === 'filterTracker') {
+  if (screen === 'orders' || screen === 'filterTracker' || screen === 'hydration') {
     if (!isAuthenticated) return { type: 'PENDING' };
     return { type: 'ROUTE_AND_CLEAR', screen };
   }

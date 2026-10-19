@@ -11,4 +11,5 @@ export type PublicInstantWaterAssessmentResultRulesVersion = typeof PublicInstan
 
 export const PublicInstantWaterAssessmentResultRulesVersion = {
   'instant-water-check-v1': 'instant-water-check-v1',
+  'instant-water-check-v2': 'instant-water-check-v2',
 } as const;

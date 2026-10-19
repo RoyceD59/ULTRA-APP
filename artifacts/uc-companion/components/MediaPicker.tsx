@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, Image, StyleSheet,
   Modal, Alert, Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useColors } from '@/hooks/useColors';

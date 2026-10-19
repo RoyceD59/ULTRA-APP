@@ -28,6 +28,7 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { paymentCheckoutFixture } from "./helpers/payment-checkout.js";
 import http from "node:http";
 import { db, pool, ucOrdersTable, mpesaStkInitiationsTable } from "@workspace/db";
 import { invalidateMpesaSecretCache } from "../routes/payments.js";
@@ -171,6 +172,7 @@ async function cleanTestRows(): Promise<void> {
 
 before(async () => {
   realFetch = globalThis.fetch;
+  delete process.env.WC_CONSUMER_KEY; delete process.env.WC_CONSUMER_SECRET;
 
   // Clear MPESA_WEBHOOK_SECRET for the main test suite so the bulk of tests
   // run without the bearer-token guard.  The token-specific describe blocks
@@ -736,7 +738,7 @@ describe("M-Pesa initiation — CallBackURL per-push token embedding", () => {
         {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ phone: "0712345678", amount: 1000, orderId: "TOKEN-URL-TEST" }),
+          body:    JSON.stringify({ phone: "0712345678", amount: 1000, orderId: "TOKEN-URL-TEST", checkout: paymentCheckoutFixture() }),
         },
       );
       assert.equal(res.status, 200, "STK push endpoint must return 200");
@@ -821,7 +823,7 @@ describe("M-Pesa initiation — DB insert failure", () => {
         {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ phone: "0712300000", amount: 5000, orderId: "DB-FAIL-TEST" }),
+          body:    JSON.stringify({ phone: "0712300000", amount: 5000, orderId: "DB-FAIL-TEST", checkout: paymentCheckoutFixture() }),
         },
       );
       const body = await res.json() as Record<string, unknown>;
@@ -1074,12 +1076,12 @@ describe("M-Pesa callback — failed payment leaves no DB trace", () => {
 // ── (n) Full round-trip: POST /payments/mpesa → initiation stored → callback ─
 // This test exercises the real POST /payments/mpesa endpoint in sandbox mode
 // (no Daraja credentials active), verifies the initiation record is persisted,
-// then fires the callback and confirms a 'processing' recovery order is created.
+// then fires the callback and confirms the same reserved order becomes processing.
 // It validates the deployed schema path: the table must exist before any STK
 // push is accepted; if the migration was never applied this test will fail.
 
 describe("M-Pesa callback — full round-trip (sandbox)", () => {
-  it("POST /payments/mpesa stores initiation; callback creates recovery using initiation amount", async () => {
+  it("POST /payments/mpesa reserves authoritative cart money; matching callback confirms that same order", async () => {
     const restore = stubDaraja("0");
 
     // Ensure Daraja credentials are ABSENT so the endpoint uses sandbox mode.
@@ -1101,7 +1103,7 @@ describe("M-Pesa callback — full round-trip (sandbox)", () => {
         {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ phone: "0712345999", amount: 8800, orderId: "TEST-RT-1" }),
+          body:    JSON.stringify({ phone: "0712345999", amount: 8800, orderId: "TEST-RT-1", checkout: paymentCheckoutFixture("+254712345999") }),
         },
       );
       assert.equal(stkRes.status, 200, "STK initiation must return 200");
@@ -1115,7 +1117,7 @@ describe("M-Pesa callback — full round-trip (sandbox)", () => {
         .from(mpesaStkInitiationsTable)
         .where(eq(mpesaStkInitiationsTable.checkoutRequestId, checkoutRequestId));
       assert.equal(initiations.length, 1, "initiation record must be stored in DB immediately");
-      assert.equal(initiations[0]!.expectedAmount, 8800, "stored amount must match request");
+      assert.equal(initiations[0]!.expectedAmount, 3499, "stored amount must match the authoritative cart, not caller money");
       assert.ok(initiations[0]!.expiresAt > new Date(), "expiry must be in the future");
 
       // The sandbox endpoint stores a per-push callbackToken alongside the
@@ -1124,32 +1126,37 @@ describe("M-Pesa callback — full round-trip (sandbox)", () => {
       const callbackToken = initiations[0]!.callbackToken;
       assert.ok(callbackToken, "initiation record must include a callbackToken");
 
-      // ── Step 3: fire the callback and verify a recovery order is created ─
+      // ── Step 3: reject mismatched money, then confirm the original order ─
       // Restore Daraja env so verification runs (stubs handle the actual calls).
       process.env["MPESA_CONSUMER_KEY"]    = "test_key";
       process.env["MPESA_CONSUMER_SECRET"] = "test_secret";
       process.env["MPESA_SHORTCODE"]       = "174379";
       process.env["MPESA_PASSKEY"]         = "test_passkey";
 
-      const cbRes = await postCallback(
+      const mismatched = await postCallback(
         stkPayload(checkoutRequestId, 0, 9999, "254712345999", "LRT001"),
         server,
         { urlSuffix: `?token=${encodeURIComponent(callbackToken!)}` },
       );
+      assert.equal(mismatched.status, 503, "Mismatched callback must not confirm or replace the reserved checkout");
+      const cbRes = await postCallback(
+        stkPayload(checkoutRequestId, 0, 3499, "254712345999", "LRT001"), server,
+        {urlSuffix:`?token=${encodeURIComponent(callbackToken!)}`},
+      );
       assert.equal(cbRes.status, 200);
       assert.equal(cbRes.body["ResultCode"], 0);
       assert.ok(typeof cbRes.body["orderId"] === "number", "orderId must be returned");
-      assert.equal(cbRes.body["recovered"], true);
+      assert.equal(cbRes.body["recovered"], undefined, "Known prepared checkout is not a fabricated recovery order");
 
       // ── Step 4: verify the recovery order uses our initiated amount ───────
       const orders = await db
         .select()
         .from(ucOrdersTable)
         .where(eq(ucOrdersTable.paymentReference, checkoutRequestId));
-      assert.equal(orders.length, 1, "exactly one recovery order");
+      assert.equal(orders.length, 1, "exactly one reserved order, not a second recovery order");
       assert.equal(orders[0]!.status, "processing");
-      assert.equal(orders[0]!.total, "8800", "must use initiation amount (8800), not tampered callback amount (9999)");
-      assert.equal(orders[0]!.webhookRecovery, true);
+      assert.equal(orders[0]!.total, "3499", "must use authoritative initiation amount, not caller or tampered callback money");
+      assert.equal(orders[0]!.webhookRecovery, false);
     } finally {
       // Restore env vars
       if (savedKey)    process.env["MPESA_CONSUMER_KEY"]    = savedKey;

@@ -3,13 +3,29 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "generate:phone": "node scripts/generate-phone-runtime.mjs",
+    "check:phone": "node scripts/generate-phone-runtime.mjs --check",
+    "test:phone": "pnpm run check:phone && node --import tsx/esm --test tests/phone.test.ts",
+    "test:receipt": "node --import tsx/esm --test tests/order-receipt.test.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./instant-water-identity": "./src/instant-water-identity.ts",
-    "./phone": "./src/phone.ts"
+    "./phone": "./src/phone.ts",
+    "./customer-contact": "./src/customer-contact.ts",
+    "./order-receipt": "./src/order-receipt.ts",
+    "./blog-inline-links": "./src/blog-inline-links.ts",
+    "./blog-inline-links-core": "./src/blog-inline-links-core.cjs",
+    "./refill-readiness": "./src/refill-readiness.ts",
+    "./refill-governance": "./src/refill-governance.ts"
   },
   "dependencies": {
     "libphonenumber-js": "^1.13.13",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.8",
+    "tsx": "catalog:"
   }
 }

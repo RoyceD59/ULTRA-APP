@@ -1,5 +1,5 @@
 /**
- * Regression coverage for GET /uc/admin/customers name and email search.
+ * Regression coverage for GET /uc/admin/customers name, email and phone search.
  *
  * Run with:
  *   TEST_GLOB='src/tests/customer-search.test.ts' pnpm test
@@ -15,6 +15,7 @@ type Customer = {
   email: string;
   firstName: string;
   lastName: string;
+  name: string;
 };
 
 type CustomerSearchResponse = {
@@ -72,14 +73,27 @@ before(async () => {
     ["empty-last", `search-empty-${suffix}@test.internal`, "Johnny", ""],
     ["spaced", `search-spaced-${suffix}@test.internal`, "  John  ", "  Doe  "],
     ["email-only", `unique-email-${suffix}@test.internal`, "Unrelated", "Person"],
+    ["percent-name", `percent-name-${suffix}@test.internal`, "Rate%Name", "Person"],
+    ["percent-email", `literal%email-${suffix}@test.internal`, "Unrelated", "Person"],
+    ["underscore-name", `underscore-name-${suffix}@test.internal`, "Under", "Score_Name"],
+    ["underscore-email", `literal_email-${suffix}@test.internal`, "Unrelated", "Person"],
+    ["backslash-name", `backslash-name-${suffix}@test.internal`, "Back\\Slash", "Person"],
+    ["phone-only", `phone-only-${suffix}@test.internal`, "Unrelated", "Person", "+254712345678"],
+    ["percent-phone", `percent-phone-${suffix}@test.internal`, "Unrelated", "Person", "phone%value"],
+    ["underscore-phone", `underscore-phone-${suffix}@test.internal`, "Unrelated", "Person", "phone_value"],
+    ["irregular", `search-irregular-${suffix}@test.internal`, "\t  María\u00a0  José \n", "  O’Neill-\t李  "],
+    ["blank-first", `search-blank-first-${suffix}@test.internal`, " \t\n ", "  李  "],
+    ["blank-names", `search-blank-names-${suffix}@test.internal`, " \t ", "\n  "],
   ] as const;
 
-  for (const [key, email, firstName, lastName] of rows) {
+  for (const row of rows) {
+    const [key, email, firstName, lastName] = row;
+    const phone = row.length > 4 ? row[4] : "";
     const inserted = await pool.query<{ id: number }>(
       `INSERT INTO uc_users (email, password_hash, first_name, last_name, phone)
-       VALUES ($1, 'x', $2, $3, '')
+       VALUES ($1, 'x', $2, $3, $4)
        RETURNING id`,
-      [email, firstName, lastName],
+      [email, firstName, lastName, phone],
     );
     const id = inserted.rows[0]!.id;
     insertedIds.push(id);
@@ -127,5 +141,74 @@ describe("GET /uc/admin/customers — search", () => {
   it("searches email independently of unrelated name fields", async () => {
     const response = await search("unique-email-");
     assert.deepEqual(matchingTestCustomerKeys(response), ["email-only"]);
+  });
+
+  it("still matches a partial phone number", async () => {
+    const response = await search("712345");
+    assert.deepEqual(matchingTestCustomerKeys(response), ["phone-only"]);
+    assert.equal(response.total, 1);
+  });
+
+  for (const [character, keys] of [
+    ["%", ["percent-email", "percent-name", "percent-phone"]],
+    ["_", ["underscore-email", "underscore-name", "underscore-phone"]],
+  ] as const) {
+    it(`matches ${character} literally in names, emails and phones, not as a wildcard`, async () => {
+      const response = await search(character);
+      assert.deepEqual(matchingTestCustomerKeys(response), keys);
+      assert.equal(response.total, keys.length);
+    });
+  }
+
+  it("matches literal wildcard characters within partial queries", async () => {
+    for (const [query, key] of [
+      ["rate%na", "percent-name"],
+      ["literal%email-", "percent-email"],
+      ["score_na", "underscore-name"],
+      ["literal_email-", "underscore-email"],
+      ["phone%val", "percent-phone"],
+      ["phone_val", "underscore-phone"],
+    ]) {
+      const response = await search(query!);
+      assert.deepEqual(matchingTestCustomerKeys(response), [key], query);
+      assert.equal(response.total, 1, query);
+    }
+  });
+
+  it("treats backslash literally rather than as a pattern escape", async () => {
+    const response = await search("Back\\Slash");
+    assert.deepEqual(matchingTestCustomerKeys(response), ["backslash-name"]);
+    assert.equal(response.total, 1);
+  });
+  it("normalizes stored whitespace while preserving punctuation and non-ASCII names", async () => {
+    const response = await search("search-irregular-");
+    const customer = response.customers.find((row) => row.id === testCustomers.get("irregular"));
+    assert.ok(customer);
+    assert.equal(customer.firstName, "María José");
+    assert.equal(customer.lastName, "O’Neill- 李");
+    assert.equal(customer.name, "María José O’Neill- 李");
+
+    const stored = await pool.query<{ first_name: string; last_name: string }>(
+      "SELECT first_name, last_name FROM uc_users WHERE id = $1",
+      [customer.id],
+    );
+    assert.equal(stored.rows[0]!.first_name, "\t  María\u00a0  José \n");
+    assert.equal(stored.rows[0]!.last_name, "  O’Neill-\t李  ");
+  });
+
+  it("does not add spaces around empty or whitespace-only name fields", async () => {
+    for (const [key, query, firstName, lastName, name] of [
+      ["empty-last", "search-empty-", "Johnny", "", "Johnny"],
+      ["blank-first", "search-blank-first-", "", "李", "李"],
+      ["blank-names", "search-blank-names-", "", "", ""],
+      ["spaced", "search-spaced-", "John", "Doe", "John Doe"],
+    ]) {
+      const response = await search(query);
+      const customer = response.customers.find((row) => row.id === testCustomers.get(key));
+      assert.ok(customer);
+      assert.equal(customer.firstName, firstName);
+      assert.equal(customer.lastName, lastName);
+      assert.equal(customer.name, name);
+    }
   });
 });

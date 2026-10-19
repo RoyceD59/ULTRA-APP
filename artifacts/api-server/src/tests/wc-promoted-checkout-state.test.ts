@@ -51,7 +51,7 @@ describe("WC configured durable promoted checkout state machine", () => {
     process.env.WC_CONSUMER_KEY = "ck_test";
     process.env.WC_CONSUMER_SECRET = "cs_test";
     const hash = await bcrypt.hash("Test1234!", 4);
-    const [user] = await db.insert(ucUsersTable).values({ email: `${code}@test.invalid`, passwordHash: hash, firstName: "Amina", lastName: "Otieno", phone: "+254712345678", isAdmin: true }).returning();
+    const [user] = await db.insert(ucUsersTable).values({ email: `${code}@test.invalid`, passwordHash: hash, firstName: "Amina", lastName: "Otieno", phone: "+254712345678", address: "Test building, Nairobi", isAdmin: true }).returning();
     userId = user!.id;
     token = issueToken({ id: userId, email: user!.email, firstName: "Amina", lastName: "Otieno" });
     const promotion = await pool.query(`INSERT INTO uc_promotions(code,type,effect_mode,effect_value,starts_at,active,created_by,updated_by) VALUES($1,'checkout_discount','percentage',50,now(),true,'test','test') RETURNING id`, [code]);
@@ -68,6 +68,10 @@ describe("WC configured durable promoted checkout state machine", () => {
     mode = "success";
     globalThis.fetch = async (url: any, init?: RequestInit) => {
       const value = String(url);
+      if (value.includes("/wp-json/wc/v3/products")) return new Response(JSON.stringify([
+        { id: 22, name: "Live filter 22", price: "1099", stock_status: "instock", status: "publish" },
+        { id: 23, name: "Live filter 23", price: "1999", stock_status: "instock", status: "publish" },
+      ]));
       if (value.includes("/wp-json/wc/v3/orders")) {
         if ((init?.method ?? "GET").toUpperCase() === "POST") {
           const payload = JSON.parse(String(init?.body));
@@ -102,9 +106,10 @@ describe("WC configured durable promoted checkout state machine", () => {
     assert.equal(result.body.id, visibleOrders[0].id);
     assert.equal(wcPosts.length, 1);
     const payload = wcPosts[0];
-    assert.deepEqual(payload.line_items, [{ product_id: 22, quantity: 1 }, { product_id: 23, quantity: 1 }]);
+    assert.deepEqual(payload.line_items, [{ product_id: 22, quantity: 1, subtotal: "1099", total: "1099" }, { product_id: 23, quantity: 1, subtotal: "1999", total: "1999" }]);
     assert.equal(payload.fee_lines.length, 1);
-    assert.equal(payload.fee_lines[0].total, String(-Math.round(1099 * 0.5)));
+    assert.equal(payload.fee_lines[0].total, "-549.5");
+    assert.equal(payload.shipping_lines[0].total, "0");
     assert.equal(payload.fee_lines[0].taxable, false);
     assert.ok(payload.meta_data.some((m: any) => m.key === "uc_checkout_claim_id" && m.value));
     const rows = await pool.query("SELECT o.checkout_state,count(u.id)::int AS uses FROM uc_orders o JOIN uc_promotion_uses u ON u.operation_ref LIKE o.checkout_claim_id || ':%' WHERE o.user_id=$1 AND o.checkout_idempotency_key='success' GROUP BY o.checkout_state", [String(userId)]);

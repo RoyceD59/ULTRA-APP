@@ -248,6 +248,7 @@ const REASON_PRESETS = [
 ];
 
 function AwardForm() {
+  const qc = useQueryClient();
   const { toast } = useToast();
   const [lookup, setLookup]   = useState("");
   const [points, setPoints]   = useState("");
@@ -266,6 +267,8 @@ function AwardForm() {
     }),
     onSuccess: (data) => {
       setResult(data);
+      void qc.invalidateQueries({ queryKey: ["rewards-balances"] });
+      void qc.invalidateQueries({ queryKey: ["rewards-ledger"] });
       setLookup("");
       setPoints("");
       setReason("");
@@ -405,6 +408,8 @@ function ScannerWorkspace() {
   const scannerRef = useRef<QrScannerController | null>(null);
   const resolvingRef = useRef(false);
   const [lookup, setLookup] = useState("");
+  const lookupRef = useRef(lookup);
+  lookupRef.current = lookup;
   const [resolved, setResolved] = useState<ResolvedRewardsCustomer | null>(null);
   const [scannerState, setScannerState] = useState<"idle" | "starting" | "active" | "photo" | "unavailable">("idle");
   const [scannerRequested, setScannerRequested] = useState(false);
@@ -447,17 +452,25 @@ function ScannerWorkspace() {
 
   const resolveMutation = useMutation({
     mutationFn: (value: string) => rewardsRequest<ResolvedRewardsCustomer>("/resolve", "POST", { lookup: value }),
-    onSuccess: (data) => {
+    onSuccess: (data, value) => {
+      if (lookupRef.current.trim() !== value) {
+        setResolved(null);
+        setScanMessage("Lookup changed. Resolve the current customer before continuing.");
+        return;
+      }
       setResolved(data); setScanMessage(""); setAmount(""); setReason(""); setConfirmation(false); setTransactionResult("");
        const filters = data.impact?.filters ?? [];
       setFilterId(filters[0] ? String(filters[0].id) : "");
     },
-    onError: (error: Error) => setScanMessage(error.message),
+    onError: (error: Error) => { setResolved(null); setConfirmation(false); setScanMessage(error.message); },
     onSettled: () => { resolvingRef.current = false; },
   });
   const resolveLookup = (value = lookup) => {
     const trimmed = value.trim();
     if (trimmed && !resolvingRef.current) {
+      lookupRef.current = trimmed;
+      setResolved(null);
+      setConfirmation(false);
       resolvingRef.current = true;
       resolveMutation.mutate(trimmed);
     }
@@ -568,14 +581,15 @@ function ScannerWorkspace() {
   const canProceed = !!resolved && validAmount && reason.trim().length > 0;
   const endpoint = mode === "litres" ? "/impact" : "/transaction";
   const transaction = useMutation({
+    onMutate: () => resolved?.customer.id,
     mutationFn: () => rewardsRequest<{ newBalance?: number; balance?: number; lifetimeRedeemed?: number; impact?: ResolvedRewardsCustomer["impact"]; notification?: { status?: string; message?: string }; push?: { status?: string; message?: string } }>(
       endpoint, "POST",
       mode === "litres"
         ? { lookup, registeredFilterId: filterId, litres: numericAmount, reason: reason.trim(), idempotencyKey: crypto.randomUUID() }
         : { direction: mode, lookup, points: numericAmount, reason: reason.trim(), idempotencyKey: crypto.randomUUID() },
     ),
-    onSuccess: (data) => {
-      setResolved(previous => previous ? {
+    onSuccess: (data, _variables, customerId) => {
+      setResolved(previous => previous?.customer.id === customerId && previous ? {
         ...previous,
         balance: data.newBalance ?? data.balance ?? previous.balance,
         lifetimeRedeemed: data.lifetimeRedeemed ?? previous.lifetimeRedeemed,
@@ -628,7 +642,7 @@ function ScannerWorkspace() {
             </Button>
           </div>
         )}
-        <div className="flex flex-col sm:flex-row gap-2 max-w-2xl"><div className="flex-1"><Label htmlFor="customer-lookup">Phone, email, customer code, or QR value</Label><Input id="customer-lookup" value={lookup} onChange={event => setLookup(event.target.value)} onKeyDown={event => { if (event.key === "Enter") resolveLookup(); }} placeholder="Paste a QR value or enter phone/email" className="mt-1" /></div><Button className="sm:self-end" variant="outline" onClick={() => resolveLookup()} disabled={!lookup.trim() || resolveMutation.isPending}>{resolveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Find customer"}</Button></div>
+        <div className="flex flex-col sm:flex-row gap-2 max-w-2xl"><div className="flex-1"><Label htmlFor="customer-lookup">Phone, email, customer code, or QR value</Label><Input id="customer-lookup" value={lookup} onChange={event => { setLookup(event.target.value); setResolved(null); setConfirmation(false); }} onKeyDown={event => { if (event.key === "Enter") resolveLookup(); }} placeholder="Paste a QR value or enter phone/email" className="mt-1" /></div><Button className="sm:self-end" variant="outline" onClick={() => resolveLookup()} disabled={!lookup.trim() || resolveMutation.isPending}>{resolveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Find customer"}</Button></div>
         {scanMessage && <p className="text-sm text-destructive flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />{scanMessage}</p>}
         {resolved && <div className="rounded-lg border p-4 space-y-4">
           <div className="flex flex-wrap justify-between gap-3"><div><p className="font-semibold">{resolved.customer.firstName}</p><p className="text-sm text-muted-foreground">{resolved.customer.email || "No email"} · {resolved.customer.phone || "No phone"}</p></div><div className="text-right"><p className="text-xs uppercase tracking-wide text-muted-foreground">Spendable balance</p><p className="text-xl font-bold text-primary">{resolved.balance.toLocaleString()} pts</p><p className="text-xs text-muted-foreground">Lifetime redeemed: {(resolved.lifetimeRedeemed ?? 0).toLocaleString()} pts</p></div></div>
@@ -681,6 +695,9 @@ function LedgerDrawer({
 
   const { data: ledger = [], isLoading } = useQuery({
     queryKey: ["rewards-ledger", customer?.userId],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     queryFn: () => fetchLedger(customer!.userId),
     enabled: open && customer != null,
   });
@@ -826,6 +843,9 @@ function CustomerBalancesSection({ eventTypes }: { eventTypes: string[] }) {
 
   const { data: balanceData, isLoading } = useQuery({
     queryKey: ["rewards-balances", debouncedSearch],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     queryFn: () => fetchBalances(debouncedSearch),
   });
 

@@ -1,0 +1,1 @@
+ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS recovery_enriched_at timestamptz;

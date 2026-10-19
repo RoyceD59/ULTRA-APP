@@ -16,22 +16,30 @@ export function useNativeNotificationRouting(): void {
   const client = useQueryClient();
   const { token, user, isLoading: authLoading } = useAuth();
   const handledNotificationRef = useRef<string | null>(null);
+  const promptedLoginRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS === 'web' || authLoading) return;
     let active = true;
     let removeListeners: (() => void) | undefined;
 
-    void import('expo-notifications').then(Notifications => {
+    void import('@/lib/localNotifications').then(Notifications => {
       if (!active) return;
       const hasUser = !!user?.id;
       const userId = user?.id;
       Notifications.getLastNotificationResponseAsync().then(response => {
-        if (!active || !response || response.notification.request.identifier === handledNotificationRef.current) return;
+        if (!active || !response) return;
+        const responseKey = `${response.notification.request.identifier}:${response.notification.date}`;
+        if (responseKey === handledNotificationRef.current) return;
         const data = response.notification.request.content.data as Record<string, any> | undefined;
+        if (data?.screen === 'hydration' && userId && data.userId !== userId) {
+          handledNotificationRef.current = responseKey;
+          Notifications.clearLastNotificationResponseAsync().catch(() => {});
+          return;
+        }
         const action = evaluateColdStart(data, hasUser);
         if (action.type === 'ROUTE_AND_CLEAR') {
-          handledNotificationRef.current = response.notification.request.identifier;
+          handledNotificationRef.current = responseKey;
           if (action.screen === 'order-detail' && action.orderId) {
             if (userId) {
               client.invalidateQueries({ queryKey: ['customer', userId, 'orders'] });
@@ -43,19 +51,36 @@ export function useNativeNotificationRouting(): void {
             router.push('/(tabs)/products' as never);
           } else if (action.screen === 'orders' || action.screen === 'filterTracker') {
             router.push('/(tabs)/account' as never);
+          } else if (action.screen === 'hydration') {
+            router.push('/hydration' as never);
           }
           Notifications.clearLastNotificationResponseAsync().catch(() => {});
+        } else if (action.type === 'PENDING' && data?.screen === 'hydration') {
+          if (promptedLoginRef.current !== responseKey) {
+            promptedLoginRef.current = responseKey;
+            router.push({ pathname: '/auth/login', params: { returnTo: '/hydration' } } as never);
+          }
         } else if (action.type === 'CLEAR') {
-          handledNotificationRef.current = response.notification.request.identifier;
+          handledNotificationRef.current = responseKey;
           Notifications.clearLastNotificationResponseAsync().catch(() => {});
         }
       });
 
       const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
-        handledNotificationRef.current = response.notification.request.identifier;
+        handledNotificationRef.current = `${response.notification.request.identifier}:${response.notification.date}`;
         const data = response.notification.request.content.data as Record<string, any> | undefined;
         const screen = data?.['screen'];
-        if (screen === 'products' || screen === 'shop') router.push('/(tabs)/products' as never);
+        if (screen === 'hydration') {
+          if (userId && data?.userId !== userId) { Notifications.clearLastNotificationResponseAsync().catch(() => {}); return; }
+          if (!hasUser) {
+            // Keep the OS response pending so login replays it for the owner.
+            handledNotificationRef.current = null;
+            router.push({ pathname: '/auth/login', params: { returnTo: '/hydration' } } as never);
+            return;
+          }
+          router.push('/hydration' as never);
+          Notifications.clearLastNotificationResponseAsync().catch(() => {});
+        } else if (screen === 'products' || screen === 'shop') router.push('/(tabs)/products' as never);
         else if (screen === 'orders' || screen === 'filterTracker') router.push('/(tabs)/account' as never);
         else if (screen === 'order-detail') {
           const orderId = parseOrderNotificationId(data);

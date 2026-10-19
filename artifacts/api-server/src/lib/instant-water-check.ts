@@ -7,7 +7,7 @@
  * migration impossible.
  */
 
-export const INSTANT_WATER_CHECK_RULES_VERSION = "instant-water-check-v1" as const;
+export const INSTANT_WATER_CHECK_RULES_VERSION = "instant-water-check-v2" as const;
 
 export const WATER_SOURCES = [
   "municipal",
@@ -52,6 +52,9 @@ export type WaterBand = (typeof WATER_BANDS)[number];
 export interface InstantWaterCheckAnswers {
   source: WaterSource;
   concern: WaterConcern;
+  sources?: WaterSource[];
+  concerns?: WaterConcern[];
+  settings?: WaterSetting[];
   symptom?: WaterSymptom;
   useContext?: WaterUseContext;
   area: string;
@@ -88,6 +91,9 @@ export interface InstantWaterCheckResult {
   recommendation: {
     name: string;
     explanation: string;
+    productId?: number;
+    productName?: string;
+    action?: "product" | "enquiry";
   };
   disclaimer: string;
   provenance: InstantWaterCheckProvenance;
@@ -275,6 +281,7 @@ export function scoreInstantWaterCheck(
   answers: InstantWaterCheckAnswers,
   country = "Kenya",
 ): InstantWaterCheckResult {
+  answers = normalizeWaterSelections(answers);
   if (!WATER_SOURCES.includes(answers.source)) {
     throw new Error("Invalid water source");
   }
@@ -298,12 +305,22 @@ export function scoreInstantWaterCheck(
     throw new Error("Invalid service area");
   }
 
-  const levels = { ...BASE[answers.source] };
-  for (const [key, increment] of Object.entries(CONCERN_BUMP[answers.concern])) {
-    const scoreKey = key as keyof typeof levels;
-    levels[scoreKey] = Math.min(3, levels[scoreKey] + increment) as 1 | 2 | 3;
+  const sources = answers.sources!;
+  const concerns = answers.concerns!;
+  const settings = answers.settings!;
+  const levels = { ...BASE[sources[0]] };
+  for (const source of sources) {
+    for (const key of Object.keys(levels) as (keyof typeof levels)[]) {
+      levels[key] = Math.max(levels[key], BASE[source][key]) as 1 | 2 | 3;
+    }
   }
-  if (answers.symptom && answers.symptom !== answers.concern) {
+  for (const concern of concerns) {
+    for (const [key, increment] of Object.entries(CONCERN_BUMP[concern])) {
+      const scoreKey = key as keyof typeof levels;
+      levels[scoreKey] = Math.min(3, levels[scoreKey] + increment) as 1 | 2 | 3;
+    }
+  }
+  if (answers.symptom && !concerns.includes(answers.symptom as WaterConcern)) {
     for (const [key, increment] of Object.entries(SYMPTOM_BUMP[answers.symptom])) {
       const scoreKey = key as keyof typeof levels;
       levels[scoreKey] = Math.min(3, levels[scoreKey] + increment) as 1 | 2 | 3;
@@ -312,9 +329,11 @@ export function scoreInstantWaterCheck(
 
   const reviewedRegionalGuidance = REVIEWED_COUNTRIES.has(normalizeCountry(country));
   if (reviewedRegionalGuidance) {
-    for (const [key, increment] of Object.entries(REVIEWED_SOURCE_BUMP[answers.source] ?? {})) {
+    for (const source of sources) {
+    for (const [key, increment] of Object.entries(REVIEWED_SOURCE_BUMP[source] ?? {})) {
       const scoreKey = key as keyof typeof levels;
       levels[scoreKey] = Math.min(3, levels[scoreKey] + increment) as 1 | 2 | 3;
+    }
     }
   }
 
@@ -323,13 +342,18 @@ export function scoreInstantWaterCheck(
   const hardGroundwater = kenya && hasArea(answers.area, HARD_AREAS);
   if (
     hardGroundwater &&
-    (answers.source === "borehole" || answers.source === "municipal")
+    (sources.includes("borehole") || sources.includes("municipal"))
   ) {
     levels.hardness = 3;
   }
   const riftValleyFluoride =
-    kenya && answers.source === "borehole" && hasArea(answers.area, RIFT_AREAS);
-  const rec = recommendation(levels, answers.concern, answers.setting);
+    kenya && sources.includes("borehole") && hasArea(answers.area, RIFT_AREAS);
+  // Explicit precedence, independent of the order in which choices were tapped.
+  const setting = (["resell", "salon", "office", "hospitality", "school", "home", "rental"] as const)
+    .find(value => settings.includes(value))!;
+  const concern = (["skin", "cost", "safety", "scale", "taste", "cloudy"] as const)
+    .find(value => concerns.includes(value))!;
+  const rec = recommendation(levels, concern, setting);
 
   return {
     rulesVersion: INSTANT_WATER_CHECK_RULES_VERSION,
@@ -344,13 +368,37 @@ export function scoreInstantWaterCheck(
     // Keep this summary suitable for the redacted public-token response. The
     // area is retained in the assessment row for the owner/staff views, but a
     // bearer result token must not disclose location or contact details.
-    summary: `Based on ${SOURCE_LABEL[answers.source]} and the answers provided.`,
+    summary: `Based on ${sources.map(source => SOURCE_LABEL[source]).join(", ")} and the answers provided.`,
     recommendation: rec,
     disclaimer: reviewedRegionalGuidance
       ? "This is an indicative profile using reviewed, broad country-level source guidance and your answers. It is not a laboratory analysis and is not a health assessment."
       : "This is an indicative profile using general source-type rules and your answers. It is not a laboratory analysis and is not a health assessment.",
     provenance: reviewedRegionalGuidance ? "reviewed_regional_guidance" : "general_indicative",
   };
+}
+
+/** Canonical arrays and stable scalar summaries for old consumers. Reject mixed
+ * inputs whose scalar is not a selected value; do not silently discard choices. */
+export function normalizeWaterSelections<T extends Partial<InstantWaterCheckAnswers>>(input: T): T & InstantWaterCheckAnswers {
+  const output = { ...input };
+  const groups = [
+    ["source", "sources", WATER_SOURCES],
+    ["concern", "concerns", WATER_CONCERNS],
+    ["setting", "settings", WATER_SETTINGS],
+  ] as const;
+  for (const [scalar, plural, allowed] of groups) {
+    const legacy = input[scalar];
+    const selected = input[plural] ?? (legacy === undefined ? [] : [legacy]);
+    if (!Array.isArray(selected) || selected.length < 1 || selected.length > 3 ||
+        new Set(selected).size !== selected.length ||
+        selected.some(value => !(allowed as readonly unknown[]).includes(value)) ||
+        (legacy !== undefined && !selected.includes(legacy as never))) {
+      throw new Error(`Invalid water ${scalar}: INVALID_SELECTIONS`);
+    }
+    const canonical = allowed.filter(value => selected.includes(value as never));
+    Object.assign(output, { [plural]: canonical, [scalar]: canonical[0] });
+  }
+  return output as T & InstantWaterCheckAnswers;
 }
 
 /** Alias retained for callers that make the version explicit. */

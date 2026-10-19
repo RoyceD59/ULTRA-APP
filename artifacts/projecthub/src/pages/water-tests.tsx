@@ -153,8 +153,9 @@ function AssessmentDetailSheet({
                   <Activity className="w-4 h-4" /> Instant Check Results
                 </h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>Source: <span className="font-medium">{detail.source}</span></div>
-                  <div>Concern: <span className="font-medium">{detail.concern}</span></div>
+                  <div>Sources: <span className="font-medium">{detail.answers?.sources?.join(", ") ?? detail.source}</span></div>
+                  <div>Concerns: <span className="font-medium">{detail.answers?.concerns?.join(", ") ?? detail.concern}</span></div>
+                  <div>Settings: <span className="font-medium">{detail.answers?.settings?.join(", ") ?? detail.answers?.setting}</span></div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-2">
@@ -178,6 +179,7 @@ function AssessmentDetailSheet({
               </section>
 
               {/* Physical Test Info */}
+              {detail.freeWaterTest && <div className="rounded-md border p-3 text-sm"><strong>Free physical water test</strong> · Verified code: {detail.promoCode}. No payment or refund was processed.</div>}
               {(detail.serviceAddress || detail.preferredContactTime) && (
                 <section className="space-y-2 pb-4 border-b">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Physical Test Request</h3>

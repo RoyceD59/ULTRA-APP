@@ -1,0 +1,25 @@
+{
+  "version": "layered-product-pages-1",
+  "videoSlotsPerProduct": 2,
+  "referenceSha256": "305946cc540122c321fba03ca0cd5c658648af556d2db1b01e80df2dcc6f8a58",
+  "layers": [
+    "overview",
+    "benefits",
+    "suitability",
+    "evidence-and-limits",
+    "package-and-setup",
+    "ownership-costs",
+    "service",
+    "selection-summary",
+    "questions-and-specifications"
+  ],
+  "navigationGroups": ["bottles", "outdoor", "home", "shower", "business"],
+  "replacementNavigation": true,
+  "categoryLabels": [
+    "Bottles & On-the-Go",
+    "Home & Kitchen",
+    "Skincare & Wellness",
+    "Business & Community"
+  ],
+  "approvedPhotoCodes": ["FCT", "VDR", "GMB"]
+}

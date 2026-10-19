@@ -1,0 +1,92 @@
+{
+  "preparationDate": "2026-10-08",
+  "phase": "owner-approved-source-selection-only",
+  "candidateSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "scopeSha256": "77d02aaad9d235d01a87c3eeb4ba50f72f1d26c13ba145ac86717c4d7c443c0d",
+  "parentSecuritySha256": "b3a298f2e19090a5da3b98a0c0b320cde8afe733f80430af48bfc9a24183921c",
+  "retainedOriginalSha256": "db2ef861871dcff39cde08350d9374e9b8d1220409e2f506141cf9c4666cad59",
+  "retainedPredecessorSha256": "bdc71175d7f653c99d9d431770200915acd2e8333220c59b8b66a3d48e03d3b2",
+  "scope": {
+    "modifiedExistingFiles": 6,
+    "addedRegressionFiles": 4,
+    "unchangedParentRegularFiles": 1254,
+    "exactMergedSourceAndTestBytesVerified": true,
+    "customerRouteOnlyContainsReviewedSecurityHunks": true,
+    "lockfileSchemasAndClientsUnchanged": true,
+    "existingArchivesAndRollbackFilesPreserved": true
+  },
+  "selection": {
+    "ownerApproved": true,
+    "approvalRecord": "../auth-upload-security/owner-approval.json",
+    "mainHandoffUpdatedAfterApproval": true,
+    "apiProductionBuildUnchanged": "node infra/cloudflare/forest/build-approved-consistency.mjs api --copy-output",
+    "deploymentPostBuildCleanupUnchanged": "node scripts/prepare-deployment-image.mjs --post-build",
+    "clientSourceSelection": "retained predecessor; unchanged",
+    "candidateClientsStillRequire": "compatible live API and agreeing fresh snapshots on both public hosts"
+  },
+  "localValidation": {
+    "deterministicReconstructionPassed": true,
+    "scopeAndPackagingUniqueChecksPassed": 31,
+    "scopeAndPackagingChecksFailed": 0,
+    "transplantedSecurityFixturesPassed": 49,
+    "transplantedSecurityFixturesFailed": 0,
+    "frozenCustomerImpactContractsPassed": 4,
+    "frozenCustomerImpactContractsFailed": 0,
+    "dependencyBackportChecksPassed": 7,
+    "actualSelectedFrozenConsumerDependencyChecksPassed": 4,
+    "deploymentNonDatabaseSecurityChecksPassed": 34,
+    "deploymentSecurityChecksAreSubsetOfTransplantedChecks": true,
+    "sharedLibraryTypecheck": "passed",
+    "frozenApiTypecheck": "passed",
+    "frozenProjectHubTypecheck": "passed",
+    "frozenCompanionTypecheck": "passed",
+    "archiveApiCompilation": "passed",
+    "selectedBuilderApiLocalOnly": "passed",
+    "postCleanupServerAndLoggingWorkerChecks": "passed in isolated fixtures; no real stage cleanup performed",
+    "databaseTests": "existing per-run disposable test databases only; both dropped afterward",
+    "syntaxChecks": "passed",
+    "whitespaceCheck": "passed"
+  },
+  "publication": {
+    "performed": false,
+    "productionInitializationPerformed": false,
+    "developmentOrProductionSchemaMutationPerformed": false,
+    "clientAdvancementPerformed": false,
+    "copyDeploymentOutputsPerformed": false,
+    "providerChangesPerformed": false
+  },
+  "readOnlyDeploymentMetadata": {
+    "success": true,
+    "isDeployed": true,
+    "hasSuccessfulBuild": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "visibility": "public",
+    "deploymentType": "autoscale",
+    "meaning": "existing deployment only; not evidence this candidate is published"
+  },
+  "readOnlyPublicProbes": {
+    "recordedClock": "2026-10-07T21:09:57.699Z",
+    "hosts": [
+      {
+        "origin": "https://api.ucfilters.com",
+        "versionRequest": "unavailable from probe",
+        "snapshotRequest": "unavailable from probe"
+      },
+      {
+        "origin": "https://team-horizon--jerryaroyce.replit.app",
+        "versionRequest": "unavailable from probe",
+        "snapshotRequest": "unavailable from probe"
+      }
+    ],
+    "interpretation": "live source and snapshot compatibility unverified; not proof the services are down"
+  },
+  "limits": [
+    "Owner source-selection approval is not publication approval",
+    "API publication requires separate owner action and live source verification",
+    "Previously unbounded customer sessions will need one-time sign-in after publication",
+    "Fresh agreeing snapshots remain required before client advancement",
+    "No production initialization, schema mutation, signed-in browser or physical-device pass claimed",
+    "Retained dependency scanner/backport caveats are unchanged; no new security scan claimed",
+    "Actual final deployment image-layer size and publication success remain unverified"
+  ]
+}

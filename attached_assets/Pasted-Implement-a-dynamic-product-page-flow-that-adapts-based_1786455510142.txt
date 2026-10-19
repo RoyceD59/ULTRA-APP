@@ -1,0 +1,52 @@
+Implement a dynamic product page flow that adapts based on the user's basket (cart) state. 
+All changes apply to the main Product Listing / Catalog screen.
+
+ 1. Basket NOT Empty (User clicks "Products" while basket has items)
+ UI Components to Display:
+- Mini Basket Bar (sticky, top of screen)  
+  Shows item count, total amount, and two action bubbles/buttons:
+  - "Quick Checkout" → navigates to checkout page
+  - "Add More" → scrolls down to product list/add-on section
+- Add‑Ons Section (immediately below the mini basket)  
+  Title: "Recommended for Your System"  
+  - Display replacement filters compatible with items already in the basket
+  - Display related/compatible products as add‑on suggestions (e.g., O‑rings, pre‑filters, UV sleeves)
+  - Each add‑on has an "Add +" button that directly adds to basket without leaving the page
+- Full Product List (below the add‑ons)  
+  Standard catalog of all products, allowing further browsing
+
+ Chatbot Behaviour:
+- A non‑intrusive chatbot bubble appears with the message:  
+  "Need help adding to your order or choosing a water purification upgrade? I'm here."
+
+ 2. Basket Empty (User clicks "Products" with empty basket)
+ UI Components to Display:
+- Empty Basket State (centered)  
+  Icon + text: "Your basket is empty"  
+  Primary CTA button: "Browse Products" (scrolls to full list)
+- Full Product List (visible immediately below the empty state, all products in normal catalog view)
+- Chatbot Activation  
+  The chat assistant automatically opens (minimised or expanded with a welcome message):  
+  "Welcome! I can help you find the perfect water filtration solution for your home or business. What kind of water issue are you facing?"  
+  - The chatbot should proactively offer to guide product selection (quiz, quick questions, or direct recommendation).
+
+ 3. Transition Rules
+- Basket state is checked every time the Products page becomes visible (tab focus, navigation back).
+- If an item is added and basket transitions from empty → not empty, the mini basket bar and add‑ons section appear with a smooth animation, and the empty state + initial chatbot welcome dismiss.
+- If all items are removed (basket becomes empty again), the empty state immediately returns.
+
+ 4. Data Sources
+- Replacement filters and compatible add‑ons must be fetched from the e‑commerce product database, using a dedicated API endpoint that returns:
+  - For each current basket item: its compatible replacement SKUs and commonly paired accessories.
+  - Fallback: if no compatibility data, show generic best‑seller filters.
+- Chatbot messages and prompts use the Ultra Clear Behavioural Intelligence library (persona detection, cognitive framing).
+
+ 5. Acceptance Criteria
+- On entering Products page with items in basket, I see a mini basket bar with "Quick Checkout" and "Add More".
+- The add‑ons section correctly shows filters matching the brand/models in my basket.
+- Tapping "Quick Checkout" takes me to the checkout flow with all items preserved.
+- Empty basket shows the welcoming chatbot and a clear prompt to start shopping.
+- No empty state or add‑ons are visible when basket is not empty; no mini basket when basket is empty.
+
+
+
