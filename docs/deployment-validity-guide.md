@@ -98,7 +98,10 @@ an older release.
    production marker and supported web/Expo Go IDs. Compare them with the
    selected artifact. The production API origin must be
    `https://api.ucfilters.com`.
-2. Recheck the corresponding served HTML and bundle requests on both
+2. Use `https://team-horizon--jerryaroyce.replit.app/uc-companion/version.json`
+   for the registered Replit Companion version. Its root `/version.json` can
+   return 200 HTML, which is not valid metadata. Recheck the corresponding
+   served HTML and bundle requests on both
    `app.ucfilters.com` and `team-horizon--jerryaroyce.replit.app` using the client
    base path declared by the release. Compare downloaded bundle SHA-256 hashes;
    a successful HTTP status alone is insufficient. Every referenced asset must

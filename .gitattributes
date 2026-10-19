@@ -1,2 +1,2 @@
-# Source hashes, generated schema validators and shell scripts require stable bytes.
-* text=auto eol=lf
+# Generated validators hash the LF schema bytes. Preserve them on Windows too.
+artifacts/uc-companion/server/records/*.schema.json text eol=lf

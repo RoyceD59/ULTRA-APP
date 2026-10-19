@@ -9,7 +9,8 @@
   customer API export instead of the root barrel; the global-impact type import
   uses its existing domain-model export. The web-export chunk check and font
   consumer report normalize Windows path separators. Added LF checkout policy
-  in `.gitattributes` so Windows preserves source/schema checksum bytes. No
+  for checked schema JSON in `.gitattributes` so Windows preserves its checksum
+  bytes without changing retained release assets. No
   schema, generated client, validator, payment handler or loader asset changed.
 - **Test boundaries:** Route tests inject the persisted flag reader with
   `NODE_ENV=test`, reset it per test and verify that storage errors still return
@@ -33,13 +34,25 @@
   mocks include the current assignment-query hooks. Vitest selects its source
   test files and the Hub test command separately runs the existing Node photo
   ordering suite, so that suite is executed by its intended runner.
+  Inventory quantity checks locate their column by its header. The two order
+  enrichment integration tests retain all assertions with 20-second deadlines:
+  a successful isolated Windows run measured 6.1 seconds for the first test.
 - **Documents:** Added `deployment-validity-guide.md` and a timestamped public
   deployment review. The guide distinguishes Git commits, selected source
   archives, published build IDs, preview checks and actual account/device proof.
-- **Verification:** Companion typecheck and isolated refill routes (9/9) pass
-  locally. Full Companion, Hub and exact-head GitHub results are pending and
-  must be recorded before calling CI repaired. Public version/manifest/health
-  and fresh snapshot observations are recorded in the review document.
+- **Verification:** Full Windows Companion suite passes 984/984 with no skipped
+  tests; Companion typecheck and isolated refill routes (9/9) pass locally.
+  GitHub on `0160065` passes Companion (984), foundation (9 API tests, 38 Hub
+  Vitest files plus the Node photo-order test, then 984 Companion tests),
+  governance and isolated three-surface preview. A simultaneous local Hub
+  repeat was stopped after resource-related UI deadlines; the full Hub result
+  above is from the normal Ubuntu CI runner. This follow-up narrows the schema
+  attribute, bounds two UI-test deadlines and records completed public capture;
+  inspect the resulting exact-head checks on PR #7 before merging.
+  Public version/manifest/health/snapshot observations and the verified
+  62-file/60-asset capture with equal cross-host bundle hashes are recorded in
+  the deployment review. Captured files are local evidence, not a changed main
+  Replit publication selection.
 - **Ignore/dependency changes:** None. Lockfile unchanged; local tooling and
   test-browser downloads are outside the tracked source.
 - **Status:** Source and review evidence only; no publication, customer-data
