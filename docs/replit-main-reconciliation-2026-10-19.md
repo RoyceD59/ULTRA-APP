@@ -2,8 +2,8 @@
 
 ## Decision
 
-Source recovery and local Companion verification passed. Publication remains
-not cleared: Replit rollback installation, exact API/Hub release lineage,
+Source recovery, local Companion verification and Replit rollback installation
+passed. Publication remains not cleared: exact API/Hub release lineage,
 account comparisons and physical-phone evidence remain separate gates. No
 production publish, schema command, customer record change or Cloudflare
 activation was performed in this reconciliation.
@@ -43,7 +43,11 @@ skips. Browser emulation remains separate from actual iOS/Android evidence.
 A new isolated API integration workflow runs the complete existing API runner
 against a disposable PostgreSQL service using literal CI-only credentials and
 no repository secrets. Its runner creates a separate test database and removes
-it after execution. A pending CI result must not be described as passed.
+it after execution. Its first run exposed the optional AI client's import-time
+configuration requirement. CI now supplies a synthetic key and non-routable
+`.invalid` origin, without changing production initialization or using a live
+provider. A pending rerun must not be described as passed. Existing Companion,
+foundation, governance and Docker preview checks passed on the first PR head.
 
 The selected archive was inspected without extraction, installation, execution
 of its application code or database access. Candidate, parent and scope hashes
@@ -77,13 +81,18 @@ the existing Cloudflare worker; a Replit publish cannot activate it.
 
 1. Review the reconciliation PR and its exact-head checks, including the full
    isolated API result and existing Docker preview. Keep failures visible.
-2. Restore the authenticated Replit browser connection. It became unavailable
-   after the successful bundle download. Replit source remains preserved.
-3. Retain the actual served complete web/iOS/Android files in the publishing
-   environment using the existing capture/retention tools. The local verified
-   capture is available; installation in Replit was not completed. The initial
-   integrity assertion stopped before capture because a Windows CRLF copy had
-   a different byte hash; normalized LF matched the unchanged Git source.
+2. Replit browser access recovered through a fresh tab; no owner reconnect is
+   now needed. Replit source remains preserved.
+3. The actual served complete web/iOS/Android files were captured and installed
+   into Replit's `infra/cloudflare/forest/rollback-static/` using the unchanged
+   capture and collision-checking retention tools: 62 capture files, 60 asset
+   references, 63 retained files including evidence, build `1792278093274-833`.
+   Existing versions and selection pointers were not replaced. The earlier
+   integrity assertion had stopped before capture because a Windows CRLF copy
+   had a different byte hash; normalized LF matched the unchanged Git source.
+   The publishing environment's handoff verification passed for the `ee734…`
+   candidate. Its existing Companion build is `1792286812208-43226`, explicitly
+   `localOnly: true` and `compiled-not-published`, with the production API origin.
 4. Verify current selected archive, API/Hub lineage, approved schema delta and
    compiled stage before publication. Preserve the current database-backed
    adjustment row/audit and existing hosting, DNS, auth and distribution.

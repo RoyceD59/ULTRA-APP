@@ -40,4 +40,8 @@ jobs:
           TEST_CONCURRENCY: '4'
           GOMAXPROCS: '2'
           SESSION_SECRET: ci-isolated-api-only
+          # The optional AI client validates configuration during module import.
+          # Keep it non-routable and synthetic; never provision a live provider key.
+          AI_INTEGRATIONS_ANTHROPIC_BASE_URL: https://anthropic.invalid
+          AI_INTEGRATIONS_ANTHROPIC_API_KEY: ci-fixture-not-a-key
         run: pnpm test
