@@ -1,6 +1,5 @@
 import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
 import http from "node:http";
 
 import app from "../app.js";
@@ -31,18 +30,16 @@ async function createOrder(wcOrderId: number): Promise<number> {
   return id;
 }
 
-async function signedWooWebhook(body: Record<string, unknown>, deliveryId: string) {
-  const raw = JSON.stringify(body);
-  const signature = createHmac("sha256", wooSecret).update(raw).digest("base64");
-  return fetch(`${base}/uc/webhooks/woocommerce`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-wc-webhook-signature": signature,
-      "x-wc-webhook-delivery-id": deliveryId,
-    },
-    body: raw,
+async function reconcileHistoricalStatus(body: Record<string, unknown>, deliveryId: string) {
+  // Historical ordering/deduplication remains an internal reconciliation
+  // contract, not a live webhook. HTTP retirement is covered in woo-retirement.
+  const order = (await pool.query("SELECT id FROM uc_orders WHERE wc_order_id=$1", [body.id])).rows[0];
+  await transitionOrderStatus({
+    orderId: order.id, status: String(body.status),
+    modifiedAt: body.date_modified_gmt as string | undefined,
+    deliveryId, source: "reconciliation",
   });
+  return { status: 200 };
 }
 
 async function outboxFor(orderId: number) {
@@ -86,7 +83,7 @@ describe("reliable customer order-status pipeline", { concurrency: false }, () =
     orderIds.length = 0;
   });
 
-  it("accepts a signed Woo transition and exposes the account projection", async () => {
+  it("reconciles a retained historical transition and exposes the account projection", async () => {
     const orderId = await createOrder(41001);
     await pool.query("UPDATE uc_orders SET shipping_address=$2::jsonb WHERE id=$1", [
       orderId, JSON.stringify({ name: "Order Status", address: "Nairobi", city: "Nairobi", country: "KE" }),
@@ -97,7 +94,7 @@ describe("reliable customer order-status pipeline", { concurrency: false }, () =
       [orderId],
     );
     const modified = "2026-04-01T10:00:00";
-    const response = await signedWooWebhook(
+    const response = await reconcileHistoricalStatus(
       { id: 41001, status: "processing", date_modified_gmt: modified },
       "delivery-accepted-1",
     );
@@ -152,11 +149,11 @@ describe("reliable customer order-status pipeline", { concurrency: false }, () =
     assert.equal(contract.statusEvents.length, 1);
   });
 
-  it("deduplicates the same signed delivery and deterministic reconciliation key", async () => {
+  it("deduplicates a retained historical delivery and deterministic reconciliation key", async () => {
     const orderId = await createOrder(41002);
     const body = { id: 41002, status: "processing", date_modified_gmt: "2026-04-01T11:00:00" };
-    assert.equal((await signedWooWebhook(body, "delivery-replay-1")).status, 200);
-    assert.equal((await signedWooWebhook(body, "delivery-replay-1")).status, 200);
+    assert.equal((await reconcileHistoricalStatus(body, "delivery-replay-1")).status, 200);
+    assert.equal((await reconcileHistoricalStatus(body, "delivery-replay-1")).status, 200);
     const replay = await transitionOrderStatus({
       orderId,
       status: "processing",
@@ -203,17 +200,17 @@ describe("reliable customer order-status pipeline", { concurrency: false }, () =
     )).rows[0].customer_stage, "shipped");
   });
 
-  it("rejects an out-of-order Woo update without overwriting the newer projection", async () => {
+  it("rejects an out-of-order historical update without overwriting the newer projection", async () => {
     const orderId = await createOrder(41007);
-    assert.equal((await signedWooWebhook(
+    assert.equal((await reconcileHistoricalStatus(
       { id: 41007, status: "processing", date_modified_gmt: "2026-04-01T12:00:00" },
       "delivery-order-1",
     )).status, 200);
-    assert.equal((await signedWooWebhook(
+    assert.equal((await reconcileHistoricalStatus(
       { id: 41007, status: "shipped", date_modified_gmt: "2026-04-01T13:00:00" },
       "delivery-order-2",
     )).status, 200);
-    assert.equal((await signedWooWebhook(
+    assert.equal((await reconcileHistoricalStatus(
       { id: 41007, status: "cancelled", date_modified_gmt: "2026-04-01T12:30:00" },
       "delivery-order-old",
     )).status, 200);
@@ -230,17 +227,17 @@ describe("reliable customer order-status pipeline", { concurrency: false }, () =
     )).rows.map(row => row.status), ["processing", "shipped", "cancelled"]);
   });
 
-  it("records a timestamp-less signed Woo update without changing the projection", async () => {
+  it("records a timestamp-less historical update without changing the projection", async () => {
     const orderId = await createOrder(41010);
-    assert.equal((await signedWooWebhook(
+    assert.equal((await reconcileHistoricalStatus(
       { id: 41010, status: "processing", date_modified_gmt: "2026-04-01T15:00:00" },
       "delivery-timestamped-1",
     )).status, 200);
-    assert.equal((await signedWooWebhook(
+    assert.equal((await reconcileHistoricalStatus(
       { id: 41010, status: "shipped", date_modified_gmt: "2026-04-01T16:00:00" },
       "delivery-timestamped-2",
     )).status, 200);
-    assert.equal((await signedWooWebhook(
+    assert.equal((await reconcileHistoricalStatus(
       { id: 41010, status: "cancelled" },
       "delivery-timestampless-stale",
     )).status, 200);

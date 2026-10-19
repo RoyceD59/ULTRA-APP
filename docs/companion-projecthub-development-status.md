@@ -1,0 +1,239 @@
+# Companion and ProjectHub — development, architecture and failure-point review
+
+**Review date:** 17 October 2026  
+**Overall release decision:** **NOT READY to declare all platforms verified.**  
+**Scope:** Companion web/iOS/Android, ProjectHub, shared API/database, product media, commerce, integrations, build/publication and operations.
+
+## 1. What this review establishes
+
+This is a source, task-queue and existing-log review, not a production penetration test, disaster-recovery exercise or physical-phone certification. No production data, secrets, DNS, publication flags or payment configuration were changed. No deployment was performed.
+
+Evidence is distinguished below:
+
+- **Observed:** current source, queue or logs inspected in this review.
+- **Recorded:** existing handoff reports; not revalidated against production today.
+- **Unverified:** no adequate operational evidence found in the reviewed material.
+- **Required:** acceptance criteria for future work, not features implemented by this document.
+
+An upstream dependency is not necessarily an unmitigated single point of failure. This register identifies application-level common dependencies and recovery gaps; infrastructure replication and vendor service-level guarantees were not inspected.
+
+## 2. Current development status
+
+| Area | Status and evidence | Remaining requirement |
+|---|---|---|
+| Shared TypeScript libraries, API, Hub and Companion | Existing configured typecheck workflows finished without reported compiler errors. | Revalidate when their source changes; types do not prove runtime behavior. |
+| Startup fonts | Existing workflow finished; five tests passed and browser export/font-body checks completed. | Preserve the focused regression. |
+| API integration suite | Existing `api-tests` workflow failed. Examples include retired Woo transitions returning 410, inventory fixture 404s, Paystack expectation mismatches, and recovery lines rejected as unknown products. | Classify contract changes versus defects; repair valid fixtures and actual regressions without weakening payment/security checks. |
+| Expo SDK compatibility | Existing `expo-doctor-uc-companion` failed: 19/20 checks, **11 patch-version mismatches**. | Align the SDK-compatible package set through reviewed dependency work and rerun the gate. |
+| Development services | API, Hub and Expo workflows running. Android bundles produced. | Running development processes do not establish production health or phone interaction success. |
+| Expo development tooling | Logs report a missing `libglib-2.0.so.0` for React Native DevTools and an Expo state-file error; Metro continues. | Treat as development-tool issues, not proof that the app itself cannot launch. |
+| Layered product pages | Recorded as implemented in shared web/native content and frozen candidates, with structure-manifest checks. | Confirm the exact served release contains the authored layers, working navigation, categories, variant selection and media. |
+| Product catalogue images | Recorded deployed JPEG 404 root cause: paths depended on process working directory. Source and candidate fix use a module/bundle-relative directory with explicit missing-package failure. | Verify the fix in the actually published API and on each client; do not equate a local export with activation. |
+| Uploaded product galleries | Recorded HTTP 200 for approved Sweet Home, Viva Drop and Gym Buddy photos. Owner still reported missing detail-page photos. | Demonstrate rendering, not merely successful HTTP responses, on actual iOS and Android. |
+| ProjectHub media editing | Recorded display-name editing and gallery ordering; names do not rename stored files. **Two installation-video slots** retained. | Verify saved order/names, authorization, both video slots and playback through the released clients. |
+| Location reviews | Owner reported iPhone editable stars not selecting; no confirmed resolution. | Verify the actual editable rating form on iOS, submission, reopening and account ownership. |
+| Product lifecycle metadata | Current API logs repeatedly warn that trackable catalogue products lack `filter_lifespan_days`. | Audit authored metadata and projection before enabling associated reminders; never invent product lifespans. |
+| Guest payments | Main payment-verification task remains unfinished. Recorded fixture work is not full provider/callback/phone evidence. | Separate approved sandbox evidence from live credentials, mock responses and real funds. |
+| Analytics | Google collector verification returned to waiting for input during this review. | Explicit approved destination and observed safe event ingestion; do not silently activate tracking. |
+| GitHub | Prior verified report says ULTRA-APP `App` matched the development tip at that time; shell writes had authentication errors. | Verify the current remote tip after new changes; this report is not a new push or merge to `main`. |
+| Publication | Handoff records a compiled, unpublished image-fix candidate and unresolved native/release gates. | Recheck live identity and predecessor retention before any new publication decision. |
+
+### Release identity caution
+
+`docs/product-page-publication-handoff.md` records selected source
+`41d38f627258152d7cc7132b275f7c495e44e1ca1503391a165efed316e5212a`
+as locally compiled, not published, and preceding served source `59f5a238…`.
+Those are **recorded historical observations**, not a fresh version-endpoint check in this review.
+Older sections in that document describe older predecessors and must not override its current preparation section.
+
+Production logs retrieved today show successful health and some administrative requests. They do not establish that the latest product-page candidate is served, that all images render, or that checkout works.
+
+## 3. Queue recovery and priority order
+
+### Observed queue
+
+The initial complete accepted-unfinished query returned **54 tasks**:
+
+| Blockage | Count at initial query |
+|---|---:|
+| Waiting for background capacity | 31 |
+| Waiting for input | 9 |
+| Waiting for main-agent turn | 7 |
+| Waiting for prerequisite tasks | 5 |
+| Active without a recorded blocker | 2 |
+
+During the review, **Task #1027 (Confirm Google product events reach the explicitly approved collector)** returned to waiting for input. Therefore the later snapshot has **10 input holds and one active task without a recorded blocker**, with no observed capacity clearance.
+
+The available task controls expose inspection and task-content editing, but do not expose a scheduler pause/resume, reassignment or worker-slot management operation. Consequently **no worker slots were freed and no assignment switch was performed** by this review. Do not report the capacity incident as fixed.
+
+### Required execution order using existing work
+
+1. **Task #1068 (Products Banner Image Slideshow)**, then **Task #1069 (Ready New Product Page for Publishing)**. Keep the full layered product-page scope, media and categories; the publication preparation must identify the exact selected package.
+2. **Task #1070 (Companion web layout foundation)** before **Task #1071 (Companion web: shopping screens)** and **Task #1072 (Companion web: remaining screens)**. Preserve these real dependencies rather than clearing them to make the queue look shorter.
+3. Triage **Task #1067 (Fit photos on product pages)** and **Task #1059 (Fix Location Review Submission)** against the current source and owner failures. Do not duplicate work already included in a candidate.
+4. Reassess **Task #1073 (Fix Android Expo Go startup crash)** against the current guarded notification imports and Android-startup evidence before unlocking **Task #1074 (Full app publication readiness audit)**.
+5. Preserve **Task #1029 (Verify guest-payment recovery and private receipts in controlled provider sandboxes)** as incomplete when switching the main agent. Payment work must not be marked passed to enable unrelated product work.
+
+The product and foundation branches are separate priorities; the foundation is not an excuse to defer investigating missing product photos. When staff capacity allows, their non-overlapping preparation can proceed separately, with overlapping Products-screen edits serialized before merge.
+
+### Capacity incident procedure
+
+The task board operator should inspect each active task thread and any ready-to-apply work, identify which tasks actually occupy the available background slots, and use only the controls the board offers to defer lower-priority work or resume blocked work with sufficient input. Preserve any work before archiving or cancelling; an input hold alone does not prove its slot can be released safely.
+
+Select the existing product prerequisite or web foundation task for the main agent in the task board. Confirm the assignment change before starting its implementation. Do not create replacement tasks or mark incomplete tasks complete. After an operator action, re-query the queue and record whether a specific queued task actually starts. If the board still reports a limit despite available capacity, gather the task refs and state timestamps for a platform investigation; the current evidence does not identify a scheduler defect.
+
+### Input-hold review
+
+| Existing task | Assessment | Next action / owner |
+|---|---|---|
+| #97 — Confirm the production deployment has PAYSTACK_SECRET_KEY set before going live | Potentially stale wording: source now rejects missing-key webhooks with 503. Development secret availability is not production configuration evidence; startup/readiness behavior is a separate requirement. | Assigned executor should compare current startup/security checks with acceptance criteria, then request only missing production evidence. Never request or display the key value. |
+| #728 — Confirm deleted accounts return to sign-in once on real devices | Genuine device-evidence hold. | Device tester: one focused account-deletion/session-rejection check with an approved test account. |
+| #822 — Complete signed-in and physical-phone usability checks | Genuine broad verification hold. | Coordinate a single device evidence checklist with #995; avoid repeated generic retest requests. |
+| #852 — Confirm 5 am–8 pm hydration reminders arrive once and open Hydration on real phones | Scheduling/delivery cannot be established by a typecheck. | Device tester: timezone, foreground/background delivery, duplicates and destination evidence. |
+| #990 — Keep failed refill retries tied to the original filter | Task description is a code/test problem; it does not itself name missing owner input. | Assigned executor should explain the precise hold or resume scoped code/test investigation. Do not presume it is already fixed. |
+| #995 — Cross-Platform Functional Regression Recovery | Broad, overlapping device evidence requirements. | Consolidate with #822/#728/#852; distinguish automated browser checks, Expo Go and installed binaries. |
+| #1005 — Give installed Companion apps a verified update destination | Genuine native distribution/signing and destination evidence gate. | Owner/distribution lead supplies verified listing and binary identity. Website publication cannot update older incompatible binaries. |
+| #1006 — Publish verified forest evidence after launch and announcement approval | Genuine evidence/announcement approval hold. | Owner supplies supported post-launch evidence. Keep pending claims pending; unrelated to product-page implementation. |
+| #1007 — Publish the prepared consistency release from main and confirm live global totals | Candidate-specific historical approval; old plan references earlier source identities. | Release operator reconciles with current candidate and rollback evidence. Do not publish an obsolete package to clear the hold. |
+| #1027 — Confirm Google product events reach the explicitly approved collector | Returned to input hold; approved collector ingestion remains unproven here. | Assigned executor names missing destination/setup evidence. Keep disabled until authorized; do not block product layout work on analytics activation. |
+
+## 4. Current system architecture
+
+```text
+Companion browser / Expo Go / installed iOS and Android
+           | HTTPS API reads, authenticated writes and media URLs
+           v
+       Shared Express API <------ ProjectHub staff browser
+           |
+           +--- PostgreSQL / Drizzle: users, authored records, commerce,
+           |    maintenance, reviews, impact, settings and durable claims
+           |
+           +--- Packaged product images + uploaded object storage
+           |
+           +--- Payment providers and signed callbacks
+           +--- Email / SMS / WhatsApp / push delivery
+           +--- Maps, AI, external sync and analytics integrations
+           |
+           +--- In-process scheduler / review worker / settlement passes
+
+Frozen source selection + scoped build + rollback assets
+           |
+           +--- API / Hub build and Companion browser + native exports
+           +--- Served release identity / public rendering / native identity
+
+Cloudflare forest static publication and independent impact-monitor workflow
+           (separate scope; not a replacement for authenticated application API)
+```
+
+The repository is a pnpm TypeScript workspace. ProjectHub is the staff web interface; Companion uses React Native/Expo for native and web. Shared API contracts and validation sit in `lib/`. The Express API imports a PostgreSQL pool from `lib/db`, starts idempotent database migrations before listening, then starts scheduled and background work.
+
+The API source remains a shared operational dependency even where static pages stay readable during an outage. Public fallback content and caches are not authority to accept a payment, claim stock availability or change customer records.
+
+### Ownership and authority requirements
+
+- Keep product identities stable across Hub editing, Companion catalogue, variants, cart, saved orders and receipts.
+- The app-owned product authority is the intended current direction; do not reintroduce WooCommerce as a silent fallback to satisfy legacy tests.
+- Workbook-approved SKU/pricing information is not permission to import costs or infer missing stock/lifespans.
+- Keep customer identity separate from staff permissions. Recheck sensitive staff authority server-side.
+- Source, selected frozen source, compiled candidate, served API, browser build, Expo manifest and installed native binary are different identities and need separate evidence.
+- A staff media upload is not automatically approved public content. Preserve the approved product-photo scope and two-video-slot contract.
+
+## 5. Single-point-of-failure and common-dependency register
+
+**Priority:** P0 = money/data integrity or broad outage; P1 = major functional/release reliability; P2 = limited feature/operational degradation.
+
+| ID / priority | Dependency and failure effect | Existing mitigation / observed status | Required evidence or mitigation |
+|---|---|---|---|
+| F01 / P0 | Shared PostgreSQL authority: loss/unavailability affects both apps' authenticated and operational data. | One configured pool/connection authority in source. Infrastructure HA and tested restoration not established here. | Confirm managed backup/PITR coverage, restore drill, pool/connection limits and explicit recovery objectives. Do not change database providers without approval. |
+| F02 / P0 | Shared API process/deployment: failure affects both clients, callbacks and staff operations. | API running; health/readiness endpoints exist. Replica topology and failover unverified. | Monitor dependency readiness separately from process liveness; verify deployment capacity and failure recovery under load. |
+| F03 / P0 | Startup migration gate: migration/DB failure prevents the listener starting. | Startup explicitly fails on migration failure rather than serving incompatible code. | Bounded migration locks, safe additive changes, schema compatibility with old clients and a tested rollout/rollback procedure. |
+| F04 / P0 | Commerce/payment reconciliation authority: provider or callback failure can leave ambiguous payment state. | Source has signature checks and explicit unavailable responses; sandbox journey still incomplete. | Durable provider identities, amount/currency checks, duplicate callback tests and reconciliation without a second charge. No success inferred from order creation. |
+| F05 / P1 | Object storage and packaged product media: missing objects, bad paths or incorrect public delivery cause blank galleries. | Packaged-path root cause fixed in a candidate; uploaded-media metadata checks exist. Native display unresolved. | Check originals and derivatives after publish, gallery projection/order, content types, anonymous access only for approved media, video playback and range delivery where needed. |
+| F06 / P1 | Frozen selection, active release and rollback chain: a successful build may still serve older UI or block republication. | Scope/structure checks and predecessor retention tooling exist. Current handoff remains no-go. | Exact candidate-to-served identity checks; retain actual predecessor web/native assets; repeat-publication regression. Never replace the frozen archive wholesale with unrelated main changes. |
+| F07 / P1 | In-process scheduler and workers: stopping the API also stops timers, reminders and settlement passes. | Scheduler and worker start from API listener; durable claims/deduplication are part of existing design. Independent uptime/failover not established. | Monitor last successful jobs, restart recovery and duplicate protection across replicas. Consider separately managed workers only as approved architecture work. |
+| F08 / P0 | Authentication/configuration authority: invalid session signing, identity exchange or staff gates block access or risk privilege errors. | Separate team/customer auth and DB-backed administrative authority are documented. Development logs use Clerk development keys. | Verify production identity configuration independently; rotation/revocation drills and server-side permissions. Development-key warning does not establish production misconfiguration. |
+| F09 / P1 | Domain/edge routing/TLS: wrong origin/path breaks API calls, media or native manifests across clients. | Multiple public and artifact-routed entry paths exist; static/server fallback code is present. | Validate actual host/path mappings, TLS, trusted forwarding, asset prefixes and every served client identity. No DNS changes in this review. |
+| F10 / P1 | Native SDK/runtime/signing distribution: browser success cannot recover an incompatible installed binary. | Android bundles now produced; Expo Doctor fails on 11 package versions; verified update-destination task held. | Reviewed SDK pins, original-byte image fallback, physical-device proof, signing/listing evidence and valid native release destinations. |
+| F11 / P1 | Catalogue/editorial authority and metadata completeness: one projection defect propagates to Hub, catalogue, detail and checkout. | Shared product-record direction, structure manifests and media controls exist. Runtime missing-lifespan warnings observed. | Contract tests for categories, variants, media approval/order, authored layers, price and lifecycle metadata. Unknown must remain unknown. |
+| F12 / P1 | Email/SMS/WhatsApp/push providers: account recovery and operational notices can fail while the API looks healthy. | Notification dispatch, operational records and external WhatsApp session storage are documented. Actual delivery not established here. | Provider-level outcomes, bounded timeouts, safe retry policy, delivery proof and customer-visible unresolved status. Never resend ambiguous money-related actions blindly. |
+| F13 / P1 | Build environment, patched dependencies and disk/image budget: installation drift can repeatedly prevent publication. | Patch/stage/image-budget gates and prior fixes documented; current package compatibility gate fails. | Frozen-lock reproducibility, verified patched bytes, staged runtime assets, clean repeat build and deployment-size checks; no blanket deletion of runtime modules. |
+| F14 / P1 | Monitoring that depends on the failing application: an API outage can suppress its own alert. | Runtime observability and an independent public-impact workflow exist in source. Scheduled external delivery activation not proven. | Prove independent scheduling and team alert receipt; monitor API, media, product-page identity and critical jobs, not only static impact totals. |
+| F15 / P1 | Queue/main-agent concentration: one unfinished main assignment blocks dependent accepted work; capacity controls are external to code. | 31 queued for capacity; product/foundation chains blocked. No slot management performed. | Task-board operator resolves occupied slots, selects main priority and verifies actual start. Preserve unfinished evidence tasks. |
+| F16 / P1 | Git/provider write access: inability to publish source changes impedes review/recovery but is not a runtime outage. | Earlier remote-tip match recorded; direct shell push authentication previously failed. | Verify actual write access and remote tip after approved sync. Healthy connector status alone is insufficient; never force overwrite main. |
+| F17 / P2 | Maps/AI/external sync/analytics vendor availability: specific screens or assistance degrade. | Existing integrations and safeguards; collector evidence remains blocked. | Explicit feature-level unavailable states, timeout budgets, privacy-preserving telemetry and no fallback that silently invents authoritative data. |
+| F18 / P1 | Recovery knowledge concentrated in handoff history/operator actions: conflicting old release sections can select the wrong package. | Multiple runbooks and historical candidates exist. | One current release decision record with candidate, actual predecessor, rollout owner, rollback steps and exact outstanding evidence. |
+
+## 6. System architecture requirements and acceptance criteria
+
+These are requirements, not a claim they have all been implemented.
+
+### A. Release and environment isolation
+
+1. Separate development/test payment fixtures from production origins, databases and providers. Saved credentials must be checked for intended mode without exposing values.
+2. Record a compatibility matrix for API schema, product structure, browser assets, Expo manifests and native runtime/binary identity.
+3. Deploy compatible API/schema support before dependent clients. Preserve old-client compatibility and actual served rollback assets.
+4. Make release identity machine-readable and compare candidate manifests to what each platform actually receives.
+5. Run the normal build twice in a safe environment when verifying the recurring republication fix; one successful cold build is insufficient evidence for a repeat-publication defect.
+
+### B. Data integrity, resilience and recovery
+
+1. Durable database transactions, constraints, idempotency and monotonic event state protect checkout, ownership, rewards and maintenance.
+2. Do not queue/replay customer writes on reconnect. Reconcile uncertain writes using their original account-scoped intent and identity.
+3. Define backup scope for DB, uploaded media, release assets and external session state; source-control backups are not data backups.
+4. Assign recovery owners and test restoration into an isolated environment. Proposed objectives for owner review: transactional DB **RPO ≤15 minutes / RTO ≤4 hours**, product media **RPO ≤24 hours / RTO ≤8 hours**. These targets are **not current guarantees**.
+5. Bound database pool, external request timeouts and background work. Prove deduplication and claim behavior before adding replicas.
+
+### C. Product content and client rendering
+
+1. Preserve the supplied layered product-page structure, not a shortened buying/specification page.
+2. Verify names, categories, variants, approved photos, reordered display names and both installation videos from Hub write through API projection to browser/native display.
+3. Validate missing/invalid media explicitly; no permanent silent spinner. Keep image derivatives optional with original-byte fallback.
+4. Use the shared web-width foundation at 390/820/1440px; keep compact/native behavior and checkout business logic unchanged.
+5. Keep pending content/stock/lifecycle evidence visibly pending; never substitute successful demo data in production.
+
+### D. Security and privacy
+
+1. Enforce ownership and staff permissions on the server, not only in navigation.
+2. Verify payment signatures against original bodies and provider mode; absent secrets must fail closed.
+3. Validate uploaded metadata at attachment, approved public media access, file limits and safe content types.
+4. Redact tokens, guest payment URLs and personal details from operational evidence. Do not store secrets in reports, task plans, client bundles or Git.
+5. Approved analytics only, with safe product identity and no arbitrary URL/query/PII capture. Optional AI/analytics must not become checkout prerequisites.
+
+### E. Operations and observability
+
+1. Separate process liveness, dependency readiness, feature availability and user-journey correctness.
+2. Track request correlation, job success age, provider failures and unknown payment outcomes without exposing internals to customers.
+3. Prove that independent monitoring still alerts when the shared API is down. Route alerts only to approved staff recipients.
+4. Maintain bounded, documented retry/reconciliation policy for each provider and never replay ambiguous actions simply because a worker restarted.
+
+## 7. Concrete next actions and ownership
+
+| Order | Action | Responsible role | Completion evidence |
+|---|---|---|---|
+| 1 | Select existing priority task in the task board; inspect actual occupied background slots. | Task-board operator/owner | Main assignment changes; a named capacity-blocked task starts. |
+| 2 | Execute product prerequisite and foundation chains without creating duplicate work. | Assigned main agent/executors | Existing tasks deliver their acceptance criteria and preserve real dependency order. |
+| 3 | Resolve product media, iPhone stars and lifecycle metadata evidence. | Product/API executor + device tester | Authored data round-trip; released browser and real-phone observations; no invented lifespan values. |
+| 4 | Reconcile failing integration fixtures and Expo SDK package gate. | API/dependency executor | Relevant valid regressions and full configured release checks pass; no disabled security assertions. |
+| 5 | Prepare one exact current product-page release decision. | Release operator | Selected/source/compiled/served matrix, rollback retained, platform-specific go/no-go. |
+| 6 | Establish backup/restore and external monitor evidence. | Infrastructure/operations owner | Isolated restore record and actual independent alert receipt. |
+| 7 | Resume payment sandbox/distribution/collector verification only with their missing evidence. | Assigned executors + owner where required | Each evidence category separately established; no live-funds or tracking activation inferred. |
+
+## 8. Source and evidence index
+
+- `artifacts/api-server/src/index.ts` — database startup gate, listener and worker lifecycle.
+- `artifacts/api-server/src/routes/health.ts` — liveness/readiness endpoints.
+- `lib/db/src/index.ts` — configured PostgreSQL pool and shared DB.
+- `artifacts/api-server/src/routes/payments.ts` — explicit unavailable responses and missing-key webhook rejection.
+- `artifacts/api-server/src/lib/product-image-directory.ts` — packaged image-path resolver.
+- `artifacts/api-server/src/routes/storage.ts` — upload flow.
+- `artifacts/uc-companion/server/public-rendering.cjs` and `public-content.cjs` — public fallback and content-fetch boundary.
+- `infra/cloudflare/forest/companion-consistency-release.md` — coordinated release and native boundary.
+- `infra/cloudflare/forest/build-approved-consistency.mjs` — selected frozen build.
+- `.github/workflows/public-impact-monitor.yml` — independent monitoring workflow definition, not proof of activation.
+- `docs/product-page-publication-handoff.md` — historical product-page preparation/verification.
+- `docs/PREPRODUCTION-TEST-HARNESS.md` — staging isolation and unverified connected-environment caveats.
+- `docs/saved-order-guest-payment-readiness.md` — incomplete provider/device evidence.
+- `docs/development-change-log.md` — development history, not production activation authority.
+- Live task query and existing workflow/deployment logs retrieved during this review.
+
+**Review outcome:** documentation and triage completed; capacity clearance, main assignment switch, application fixes, deployment activation and physical-device verification remain separate unfinished actions.

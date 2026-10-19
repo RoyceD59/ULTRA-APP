@@ -5,6 +5,8 @@ import { createRequire } from "node:module";
 import { pool } from "@workspace/db";
 import { issueToken } from "../lib/jwt.js";
 import { ensureProductEditorialSchema, effectiveEditorial, validateEditorial, spreadsheetRetail } from "../lib/product-editorial.js";
+import { ensureCompanionCatalogueSchema } from "../lib/companion-catalogue.js";
+import { invalidateCatalogueCache } from "../routes/uc.js";
 
 const require = createRequire(import.meta.url);
 const { source, createRecordCollection } = require("../../../uc-companion/server/product-records.cjs");
@@ -13,18 +15,11 @@ seed.price_kes = spreadsheetRetail.prices[seed.parent_sku];
 seed.ownership.product_price_kes = seed.price_kes;
 const realFetch = globalThis.fetch;
 let server: http.Server, base: string, admin: number, token: string;
-let stock = "instock", price = seed.price_kes, duplicate = false;
 let outboundCalls = 0;
-let parentStatus = "publish";
-const productId = 810024;
-const variations = () => seed.variants.map((v: any, index: number) => ({
-  id: 810100 + index, parent_id: productId, sku: v.child_sku, status: "publish",
-  price: String(price), stock_status: stock, purchasable: true,
-}));
-const parent = () => ({ id: productId, sku: seed.parent_sku, name: seed.name, type: "variable",
-  status: parentStatus, price: String(price), stock_status: stock, categories: [], images: [
-    { id: 1001, src: "https://example.test/product-real.png", alt: "Real product front" },
-  ] });
+let productId: number;
+let variationIds: number[] = [];
+let originalEditorial: any;
+let originalInventory: any[];
 
 before(async () => {
   process.env.WC_CONSUMER_KEY = "fixture";
@@ -38,17 +33,23 @@ before(async () => {
     // fulfillment and money-provider calls are prohibited by this assertion.
     if (/\/wc\/v3\/(?:products|orders)(?:\/|$)/.test(path) ||
       /(?:paystack|safaricom|stripe)/.test(url.hostname)) outboundCalls++;
-    if (path.endsWith(`/products/${productId}/variations`)) {
-      const list = variations();
-      return Response.json(duplicate ? [...list, { ...list[0], id: 910100 }] : list);
-    }
-    const variation = path.match(/\/variations\/(\d+)$/);
-    if (variation) return Response.json(variations().find((v: any) => String(v.id) === variation[1]));
-    if (path.endsWith(`/products/${productId}`)) return Response.json(parent());
-    if (path.endsWith("/products")) return Response.json([parent()]);
     throw new Error(`Unexpected outbound fixture request: ${path}`);
   }) as typeof fetch;
   await ensureProductEditorialSchema();
+  await ensureCompanionCatalogueSchema();
+  originalEditorial = (await pool.query("SELECT * FROM uc_product_editorial WHERE code=$1", [seed.code])).rows[0];
+  originalInventory = (await pool.query("SELECT * FROM uc_catalogue_inventory WHERE code=$1 ORDER BY id", [seed.code])).rows;
+  productId = originalInventory.find(row => row.sku === seed.parent_sku).id;
+  variationIds = seed.variants.map((variant: any) => originalInventory.find(row => row.sku === variant.child_sku).id);
+  // App-owned media metadata replaces the retired remote image migration.
+  const image = { ...seed.images[0], file: "/api/uc/media/editorial-fixture", alt: "Real product front", approved: true };
+  seed.images[0] = image;
+  await pool.query(`UPDATE uc_product_editorial SET record=jsonb_set(record,'{images}',$2::jsonb),
+    gallery_mapped=true WHERE code=$1`, [seed.code, JSON.stringify(seed.images)]);
+  await pool.query("INSERT INTO uc_product_media(product_id,type,url,alt,position) VALUES($1,'photo',$2,$3,0)",
+    [productId, image.file, image.alt]);
+  await pool.query("UPDATE uc_catalogue_inventory SET stock_status='instock',manage_stock=false,archived=false WHERE code=$1", [seed.code]);
+  invalidateCatalogueCache();
   admin = (await pool.query(`INSERT INTO uc_users(email,password_hash,first_name,last_name,is_admin,phone,address)
     VALUES('editorial-admin@example.test','not-a-real-password','Fixture','Editor',true,'+254700000024','Fixture collection contact') RETURNING id`)).rows[0].id;
   token = issueToken({ id: admin, email: "editorial-admin@example.test", firstName: "Fixture" });
@@ -60,6 +61,12 @@ before(async () => {
 after(async () => {
   globalThis.fetch = realFetch;
   if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  await pool.query("DELETE FROM uc_product_media WHERE product_id=$1 AND url='/api/uc/media/editorial-fixture'", [productId]);
+  await pool.query("DELETE FROM uc_orders WHERE user_id=$1", [String(admin)]);
+  if (originalEditorial) await pool.query("UPDATE uc_product_editorial SET record=$2,revision=$3,gallery_mapped=$4 WHERE code=$1",
+    [seed.code, originalEditorial.record, originalEditorial.revision, originalEditorial.gallery_mapped]);
+  for (const row of originalInventory ?? []) await pool.query("UPDATE uc_catalogue_inventory SET stock_status=$2,stock_quantity=$3,manage_stock=$4,archived=$5 WHERE id=$1",
+    [row.id,row.stock_status,row.stock_quantity,row.manage_stock,row.archived]);
   if (admin) await pool.query("DELETE FROM uc_users WHERE id=$1", [admin]);
   await pool.end();
 });
@@ -71,15 +78,16 @@ async function request(path: string, method = "GET", body?: unknown, auth: strin
 }
 const adminPath = `/uc/admin/product-records/${seed.slug}`;
 
-test("fresh seed, live admin authorization, revocation, all-record listing and media migration", async () => {
+test("fresh seed, live admin authorization, revocation, all-record listing and app-owned media", async () => {
   assert.equal((await request(adminPath, "GET", undefined, null)).status, 403);
   assert.equal((await request(adminPath, "PUT", { revision: 1, record: seed }, null)).status, 403);
-  assert.equal((await request("/uc/admin/product-records")).body.records.length, 32);
+  const records = (await request("/uc/admin/product-records")).body.records;
+  assert.ok(source.products.every((product: any) => records.some((record: any) => record.code === product.code)));
   const a = await request(adminPath);
   assert.equal(a.status, 200);
   assert.equal(a.body.record.price_kes, 4199, "the uploaded Excel retail value wins over the earlier brief");
   assert.equal(a.body.record.ownership.product_price_kes, 4199);
-  assert.equal(a.body.record.images[0].file, "https://example.test/product-real.png");
+  assert.equal(a.body.record.images[0].file, "/api/uc/media/editorial-fixture");
   assert.equal(a.body.record.images[0].alt, "Real product front");
   const b = await request(adminPath);
   assert.equal(a.body.revision, b.body.revision, "migration is idempotent");
@@ -126,7 +134,7 @@ test("contract and identity rejection includes unsafe media, evidence, safety an
     (r: any) => { r.record.images[0].display_name = "x".repeat(81); },
     (r: any) => { r.record.price_kes = "not-a-price"; },
     (r: any) => { r.record.parent_sku = "different-parent"; },
-    (r: any) => { r.record.variants[0].child_sku = "different-child"; },
+    (r: any) => { r.record.variants[0].child_sku = r.record.variants[1].child_sku; },
     (r: any) => { r.record.opening.unapproved_field = "injection"; },
     (r: any) => { r.record.images[0].file = "https://evil.example.test/photo.png"; },
     (r: any) => { r.record.images[1] = { ...r.record.images[0], slot: 1 }; },
@@ -138,46 +146,47 @@ test("contract and identity rejection includes unsafe media, evidence, safety an
   }
   const { input } = await effectiveEditorial();
   const numberPrice = structuredClone(seed); numberPrice.price_kes = 0;
+  numberPrice.ownership.product_price_kes = 0;
   validateEditorial(numberPrice, seed, input);
 });
 
 test("verified variation identity, independent child pricing, stock, ambiguity and parent-only refresh gate", async () => {
   const { serverPricedLines } = await import("../routes/uc.js");
   const child = seed.variants[0].child_sku;
-  const lines = await serverPricedLines([{ productId, quantity: 2, variationId: 810100, childSku: child }]);
-  assert.equal(lines?.[0]?.variationId, 810100);
+  const lines = await serverPricedLines([{ productId, quantity: 2, variationId: variationIds[0], childSku: child }]);
+  assert.equal(lines?.[0]?.variationId, variationIds[0]);
   assert.equal(lines?.[0]?.childSku, child);
   assert.equal(lines?.[0]?.subtotal, seed.price_kes * 2);
   const quote = await request("/uc/checkout/quote", "POST", { fulfillment: "collection",
-    lineItems: [{ productId, quantity: 2, variationId: 810100, childSku: child }] });
+    lineItems: [{ productId, quantity: 2, variationId: variationIds[0], childSku: child }] });
   assert.equal(quote.status, 200, JSON.stringify(quote.body));
-  assert.equal(quote.body.lines[0].variationId, 810100);
+  assert.equal(quote.body.lines[0].variationId, variationIds[0]);
   assert.equal(quote.body.lines[0].childSku, child);
   assert.equal(await serverPricedLines([{ productId, quantity: 1 }]), null);
-  assert.equal(await serverPricedLines([{ productId, quantity: 1, variationId: 810100, childSku: seed.variants[1].child_sku }]), null);
-  stock = "outofstock";
-  assert.equal(await serverPricedLines([{ productId, quantity: 1, variationId: 810100, childSku: child }]), null);
-  stock = "instock"; price = 1;
-  assert.equal((await serverPricedLines([{ productId, quantity: 1, variationId: 810100, childSku: child }]))?.[0].subtotal, seed.price_kes,
-    "Excel-seeded approved price supersedes WooCommerce reference price");
+  assert.equal(await serverPricedLines([{ productId, quantity: 1, variationId: variationIds[0], childSku: seed.variants[1].child_sku }]), null);
+  await pool.query("UPDATE uc_catalogue_inventory SET stock_status='outofstock' WHERE id=$1", [variationIds[0]]);
+  assert.equal(await serverPricedLines([{ productId, quantity: 1, variationId: variationIds[0], childSku: child }]), null);
+  await pool.query("UPDATE uc_catalogue_inventory SET stock_status='instock' WHERE id=$1", [variationIds[0]]);
+  assert.equal((await serverPricedLines([{ productId, quantity: 1, variationId: variationIds[0], childSku: child }]))?.[0].subtotal, seed.price_kes,
+    "approved app-owned price is checkout authority");
   const approved = (await request(`/uc/product-records/${seed.slug}`)).body;
   assert.equal(approved.price, 4199);
   assert.equal(approved.priceAuthority, "companion");
-  assert.equal(approved.livePrice, 1, "raw Woo price remains truthful, not relabelled");
+  assert.equal(approved.livePrice, 4199);
   assert.equal(approved.variants[0].price, 4199);
-  assert.equal(approved.variants[0].commercePrice, 1);
-  assert.ok(approved.diagnostics.includes("commerce-price-differs-from-approved"));
-  price = seed.price_kes; duplicate = true;
-  assert.equal(await serverPricedLines([{ productId, quantity: 1, variationId: 810100, childSku: child }]), null);
-  duplicate = false;
+  assert.equal(approved.variants[0].commercePrice, 4199);
+  assert.ok(!approved.diagnostics.includes("commerce-price-differs-from-approved"));
+  await pool.query("UPDATE uc_catalogue_inventory SET archived=true WHERE id=$1", [variationIds[0]]);
+  assert.equal(await serverPricedLines([{ productId, quantity: 1, variationId: variationIds[0], childSku: child }]), null);
+  await pool.query("UPDATE uc_catalogue_inventory SET archived=false WHERE id=$1", [variationIds[0]]);
 });
 test("an unpublished parent with a published child cannot be quoted or prepared for payment", async () => {
   const { prepareCheckoutOrder } = await import("../lib/checkout-orders.js");
-  const lineItems = [{ productId, quantity: 1, variationId: 810100, childSku: seed.variants[0].child_sku }];
+  const lineItems = [{ productId, quantity: 1, variationId: variationIds[0], childSku: seed.variants[0].child_sku }];
   const before = Number((await pool.query("SELECT count(*) FROM uc_orders WHERE user_id=$1", [String(admin)])).rows[0].count);
-  parentStatus = "draft";
+  await pool.query("UPDATE uc_product_editorial SET record=jsonb_set(record,'{publishable}','false') WHERE code=$1", [seed.code]);
   try {
-    assert.equal(variations()[0].status, "publish");
+    assert.equal((await pool.query("SELECT archived FROM uc_catalogue_inventory WHERE id=$1", [variationIds[0]])).rows[0].archived, false);
     const quote = await request("/uc/checkout/quote", "POST", { fulfillment: "collection", lineItems });
     assert.equal(quote.status, 422);
     await assert.rejects(() => prepareCheckoutOrder({ fulfillment: "collection", lineItems,
@@ -185,11 +194,13 @@ test("an unpublished parent with a published child cannot be quoted or prepared 
       shippingAddress: { firstName: "Fixture", lastName: "Editor", phone: "+254700000024",
         address1: "Fixture collection contact", country: "KE", city: "Nairobi" } }, String(admin), "paystack"));
     assert.equal(Number((await pool.query("SELECT count(*) FROM uc_orders WHERE user_id=$1", [String(admin)])).rows[0].count), before);
-  } finally { parentStatus = "publish"; }
+  } finally {
+    await pool.query("UPDATE uc_product_editorial SET record=jsonb_set(record,'{publishable}','true') WHERE code=$1", [seed.code]);
+  }
 });
 test("the saved checkout stores each child identity separately without contacting a payment provider", async () => {
   const { prepareCheckoutOrder, checkoutOrderResponse } = await import("../lib/checkout-orders.js");
-  const lines = [0,1].map(index => ({ productId, quantity: 1, variationId: 810100 + index, childSku: seed.variants[index].child_sku }));
+  const lines = [0,1].map(index => ({ productId, quantity: 1, variationId: variationIds[index], childSku: seed.variants[index].child_sku }));
   const pending = await prepareCheckoutOrder({ lineItems: lines, fulfillment: "collection", idempotencyKey: "editorial-fixture-checkout",
     shippingAddress: { firstName: "Fixture", lastName: "Editor", phone: "+254700000024", address1: "Fixture collection contact", country: "KE", city: "Nairobi" } }, String(admin), "paystack");
   const response = await checkoutOrderResponse(pending);
@@ -201,7 +212,7 @@ test("legacy ordinary, promoted and repeated variant requests fail before remote
   const countOrders = async () => Number((await pool.query("SELECT count(*) FROM uc_orders WHERE user_id=$1", [String(admin)])).rows[0].count);
   const countItems = async () => Number((await pool.query("SELECT count(*) FROM uc_order_items WHERE order_id IN (SELECT id FROM uc_orders WHERE user_id=$1)", [String(admin)])).rows[0].count);
   const ordersBefore = await countOrders(), itemsBefore = await countItems(), callsBefore = outboundCalls;
-  const lineItems = [{ productId, quantity: 1, variationId: 810100, childSku: seed.variants[0].child_sku }];
+  const lineItems = [{ productId, quantity: 1, variationId: variationIds[0], childSku: seed.variants[0].child_sku }];
   const shippingAddress = { firstName: "Fixture", lastName: "Editor", phone: "+254700000024",
     address1: "Fixture collection contact", country: "KE", city: "Nairobi" };
   for (const promoCode of [undefined, "EDITORIAL-LEGACY-PROMO"]) {
@@ -209,8 +220,8 @@ test("legacy ordinary, promoted and repeated variant requests fail before remote
       const body = { lineItems, shippingAddress, paymentMethod, promoCode, idempotencyKey: "editorial-legacy-variant", paymentReference: "" };
       for (let retry = 0; retry < 2; retry++) {
         const response = await request("/uc/orders", "POST", body);
-        assert.equal(response.status, 422, JSON.stringify(response.body));
-        assert.equal(response.body.code, "VARIANT_CHECKOUT_REFRESH_REQUIRED");
+        assert.equal(response.status, 409, JSON.stringify(response.body));
+        assert.equal(response.body.code, "APP_CHECKOUT_REFRESH_REQUIRED");
         assert.equal(response.body.retryable, false);
       }
     }

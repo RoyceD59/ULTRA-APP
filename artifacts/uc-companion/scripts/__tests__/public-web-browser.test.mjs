@@ -80,6 +80,7 @@ test('desktop and phone browsers read public HTML without JavaScript', async () 
       const page = await context.newPage();
       await page.goto(`${server.base}/product/101`);
       assert.equal(await page.locator('h1').textContent(), 'Hydra Flux');
+      await page.getByText('Menu', { exact: true }).click();
       assert.ok(await page.getByRole('link', { name: 'Ultra Clear Support', exact: true }).isVisible());
       assert.equal(await page.locator('html').getAttribute('lang'), 'en');
       assert.equal(await page.locator('link[rel=canonical]').getAttribute('href'), 'https://public.example/product/hydra-flux');
@@ -120,8 +121,13 @@ test('actual web metadata hook hands off public HTML and removes stale public sc
       assert.equal(await page.locator('.uc-record-document').evaluate(node => getComputedStyle(node).overflow), 'visible');
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    const question = page.locator('.uc-record-document details summary').first();
-    assert.equal(await question.count(), 1, 'published product exposes a keyboard-operable accordion');
+    const specifications = page.getByText('Specifications', { exact: true });
+    await specifications.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await specifications.evaluate(node => node.parentElement.open), true);
+    assert.equal(await page.locator('details[open] dl').isVisible(), true);
+    const question = page.getByText('How long does the filter last?', { exact: true });
+    assert.equal(await question.count(), 1, 'the selected release retains authored product questions');
     await question.focus();
     await page.keyboard.press('Enter');
     assert.equal(await question.evaluate(node => node.parentElement.open), true);

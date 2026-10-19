@@ -41,3 +41,14 @@ successful staff changes, and preserve transaction-time verification. Local
 cache benchmarks and compressed-size estimates are not deployed or
 physical-phone improvement evidence; evaluate those separately with release
 approval.
+
+Replace retired WooCommerce success-path tests with explicit disconnection
+checks while preserving supported app-owned coverage.
+
+**Why:** The owner explicitly selected “Replace retired tests; preserve
+app-owned coverage” after learning that old tests required remote order
+creation, webhook ingestion and inventory writeback to succeed.
+
+**How to apply:** Do not reconnect WooCommerce or skip failing checks to make
+validation pass. Keep current local payment, receipt, ownership and recovery
+contracts tested; use no-contact/no-write checks for retired entry points.

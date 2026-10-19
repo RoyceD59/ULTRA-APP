@@ -66,6 +66,7 @@ export async function startFixture({ enabled = true, bundle = '', basePath = '/u
       res.setHeader('X-UC-Catalogue-Provenance', 'companion-published');
     }
     const values = {
+      '/api/uc/product-records': records,
       '/api/uc/products': fixtures.products,
       '/api/uc/products/101': fixtures.products[0],
       '/api/uc/blog': { articles: [fixtures.article], nextCursor: null },

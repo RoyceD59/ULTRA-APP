@@ -23,6 +23,7 @@ import { ensureRuntimeSchema, flushRuntimeMetrics } from "./lib/runtime-observab
 import { sampleOperationalHealth } from "./lib/runtime-health.js";
 import { ensureGlobalImpactSchema } from "./lib/global-impact-store.js";
 import { ensureProductEditorialSchema } from "./lib/product-editorial.js";
+import { ensureRestockRequestSchema, purgeResolvedRestockContacts } from "./lib/restock-requests.js";
 import { ensureCompanionCatalogueSchema } from "./lib/companion-catalogue.js";
 import { ensureSkuRegister } from "./lib/sku-master.js";
 import { ensureCompanionHistorySchema } from "./lib/companion-history-import.js";
@@ -66,6 +67,13 @@ async function applyStartupMigrations(): Promise<void> {
   await ensureRuntimeSchema();
   await ensureGlobalImpactSchema();
   await ensureProductEditorialSchema();
+  await ensureRestockRequestSchema();
+  await purgeResolvedRestockContacts();
+  if (process.env.PREVIEW_SAFE_MODE !== "1" && process.env.STARTUP_MIGRATIONS_ONLY !== "1") {
+    setInterval(() => {
+      void purgeResolvedRestockContacts().catch(() => logger.error("Restock contact retention cleanup failed"));
+    }, 24 * 60 * 60_000).unref();
+  }
   await ensureCompanionCatalogueSchema();
   await ensureSkuRegister();
   await ensureCompanionHistorySchema();

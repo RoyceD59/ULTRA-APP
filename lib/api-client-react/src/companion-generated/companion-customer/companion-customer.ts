@@ -64,6 +64,8 @@ import type {
   ProductEditorialPublic,
   QuotePhysicalTestPromotion200,
   RefillCapabilities,
+  RestockSubmissionInput,
+  RestockSubmissionReceipt,
   RewardsQrCandidate,
   RewardsQrInspection,
   RewardsQrRecovery,
@@ -1793,6 +1795,76 @@ export const useRequestUcUploadUrl = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRequestUcUploadUrlMutationOptions(options));
+    }
+    export const getSubmitUcRestockRequestUrl = () => {
+
+
+
+
+  return `/api/uc/restock-requests`
+}
+
+/**
+ * @summary Save a guest prospect or customer restock request, never a checkout order
+ */
+export const submitUcRestockRequest = async (restockSubmissionInput: RestockSubmissionInput, options?: RequestInit): Promise<RestockSubmissionReceipt> => {
+
+  return customFetch<RestockSubmissionReceipt>(getSubmitUcRestockRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(restockSubmissionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitUcRestockRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitUcRestockRequest>>, TError,{data: BodyType<RestockSubmissionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitUcRestockRequest>>, TError,{data: BodyType<RestockSubmissionInput>}, TContext> => {
+
+const mutationKey = ['submitUcRestockRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitUcRestockRequest>>, {data: BodyType<RestockSubmissionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitUcRestockRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitUcRestockRequestMutationResult = NonNullable<Awaited<ReturnType<typeof submitUcRestockRequest>>>
+    export type SubmitUcRestockRequestMutationBody = BodyType<RestockSubmissionInput>
+    export type SubmitUcRestockRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Save a guest prospect or customer restock request, never a checkout order
+ */
+export const useSubmitUcRestockRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitUcRestockRequest>>, TError,{data: BodyType<RestockSubmissionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitUcRestockRequest>>,
+        TError,
+        {data: BodyType<RestockSubmissionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitUcRestockRequestMutationOptions(options));
     }
     export const getGetUcLocationRatingAggregateUrl = (id: string,
     params?: GetUcLocationRatingAggregateParams,) => {

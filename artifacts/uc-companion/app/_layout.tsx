@@ -28,6 +28,8 @@ import { nativeRecoveryDefaults } from '@/lib/nativeQueryRecovery';
 import { installCompanionDiagnostics, setDiagnosticRoute } from '@/lib/runtimeDiagnostics';
 
 // Set API base URL before any component renders
+import CompanionMenu, { CompanionTabMenu } from '@/components/CompanionMenu';
+import { View } from 'react-native';
 import ConnectionStatusFrame from '@/components/ConnectionStatusFrame';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react/config';
 import { CheckoutReceiptProvider } from '@/context/CheckoutReceiptContext';
@@ -126,7 +128,8 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back', headerTintColor: '#0054A6' }}>
+    <>
+    <Stack screenOptions={{ headerBackTitle: 'Back', headerTintColor: '#0054A6', headerRight: () => <CompanionMenu /> }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="about" options={{ title: 'About Us', headerBackTitle: 'Back' }} />
       <Stack.Screen name="blog/[slug]" options={{ headerShown: false }} />
@@ -157,6 +160,8 @@ function RootLayoutNav() {
       <Stack.Screen name="auth/forgot-password" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="auth/change-password" options={{ title: '', headerTransparent: true }} />
     </Stack>
+    <CompanionTabMenu />
+    </>
   );
 }
 

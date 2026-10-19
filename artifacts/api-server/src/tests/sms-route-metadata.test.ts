@@ -9,6 +9,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import bcryptjs from "bcryptjs";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 import { eq, inArray } from "drizzle-orm";
 
 import app from "../app.js";
@@ -157,8 +158,9 @@ after(async () => {
 });
 
 describe("route handlers pass customer SMS metadata end-to-end", () => {
-  it("WooCommerce-created order logs its template, order ID, and E.164 recipient", async () => {
+  it("app-owned COD order logs its template, local order ID, and E.164 recipient", async () => {
     capturedNotifications = [];
+    const product = await appCatalogueFixture();
     const user = await createUser("order", "+254712345678");
     const wcOrderId = 987654;
 
@@ -193,15 +195,16 @@ describe("route handlers pass customer SMS metadata end-to-end", () => {
     };
 
     const result = await post("/uc/orders", {
-      lineItems: [{ productId: 1, quantity: 1 }],
-      paymentMethod: "paystack",
-       paymentReference: `SMS_ROUTE_${Date.now()}`,
+      fulfillment: "collection",
+      lineItems: [{ productId: product.id, quantity: 1 }],
+      paymentMethod: "cod",
        idempotencyKey: `sms-route-order-${Date.now()}`,
       shippingAddress: {
         firstName: "Route",
         lastName: "Test",
         address1: "1 Test Street",
         city: "Nairobi",
+        country: "KE",
          phone: "+254712345678",
       },
     }, bearerFor(user.id, user.email));
@@ -210,7 +213,7 @@ describe("route handlers pass customer SMS metadata end-to-end", () => {
 
     const row = await waitForNotification("order_confirmation");
     assert.equal(row["template"], "order_confirmation");
-    assert.equal(row["orderId"], wcOrderId);
+    assert.equal(row["orderId"], result.body["id"]);
     assert.equal(row["recipient"], "+254712345678");
 
     const anchors = await db.select({ id: ucOrdersTable.id })

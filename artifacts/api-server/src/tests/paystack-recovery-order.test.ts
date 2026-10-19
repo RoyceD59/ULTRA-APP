@@ -664,7 +664,7 @@ describe("Paystack initialize — transient outage signalling", () => {
         const res = await realFetch(`${base}/payments/paystack/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "buyer@example.com", amount: 1000, checkout: paymentCheckoutFixture() }),
+          body: JSON.stringify({ email: "buyer@example.com", amount: 1000, checkout: paymentCheckoutFixture(),callbackUrl:"https://checkout.test/paystack/callback" }),
         });
 
         const body = (await res.json()) as Record<string, unknown>;

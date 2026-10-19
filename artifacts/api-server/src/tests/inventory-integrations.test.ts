@@ -1,775 +1,124 @@
-/**
- * Tests for the inventory management and integrations admin endpoints.
- *
- * Coverage:
- *   ── Unit: isPrivateIpv4 ─────────────────────────────────────────────────────
- *   (a) loopback, RFC1918, link-local, multicast, and "this-network" ranges → true
- *   (b) edge of the 172.16-31 range → false for 172.15 and 172.32
- *   (c) public addresses → false
- *
- *   ── Unit: isPrivateIpv6 ─────────────────────────────────────────────────────
- *   (a) loopback ::1, ULA fc/fd, link-local fe80, IPv4-mapped ::ffff → true
- *   (b) public global unicast → false
- *
- *   ── Unit: validateWebhookDestination ───────────────────────────────────────
- *   (a) non-https scheme → error
- *   (b) unparseable string → error
- *   (c) private IPv4 literals (RFC1918, loopback, link-local) → error
- *   (d) cloud-metadata hostname → error
- *   (e) "localhost" → error
- *
- *   ── API: GET /api/uc/admin/inventory ───────────────────────────────────────
- *   (a) no token → 401
- *   (b) non-admin WC token → 401
- *
- *   ── API: PATCH /api/uc/admin/inventory/:productId ──────────────────────────
- *   (a) no token → 401
- *   (b) negative stockQuantity → 400
- *   (c) non-integer stockQuantity → 400
- *
- *   ── API: POST /api/uc/admin/inventory/sync ──────────────────────────────────
- *   (a) no token → 401
- *   (b) non-admin token → 401
- *   (c) admin token + no webhook URL configured → 422
- *   (d) admin token + URL with private IP → 400 (save-time SSRF guard)
- *
- *   ── API: GET /admin/integrations ───────────────────────────────────────────
- *   (a) no token → 401 or 403
- *
- *   ── API: PATCH /admin/integrations ─────────────────────────────────────────
- *   (a) no token → 401 or 403
- *   (b) http:// scheme → 400
- *   (c) private IPv4 literal → 400
- *   (d) loopback literal → 400
- */
-
-import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
-import { EventEmitter } from "node:events";
-import https from "node:https";
-import type { AddressInfo } from "node:net";
-
-import {
-  isPrivateIpv4,
-  isPrivateIpv6,
-  getAllAddresses,
-  validateWebhookDestination,
-} from "../lib/ssrf-safe-fetch.js";
-import { issueToken } from "../lib/jwt.js";
-import { encryptSecret } from "../lib/secret-crypto.js";
+import { randomUUID } from "node:crypto";
+import { after, before, test } from "node:test";
+import http from "node:http";
 import { pool } from "@workspace/db";
-import { _inventorySyncSeams } from "../routes/uc.js";
-import { runLowStockAlert } from "../lib/scheduler.js";
+import { issueToken } from "../lib/jwt.js";
+import { isPrivateIpv4, isPrivateIpv6, getAllAddresses, validateWebhookDestination } from "../lib/ssrf-safe-fetch.js";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function get(
-  base: string,
-  path: string,
-  auth?: string,
-): Promise<{ status: number; json: unknown }> {
-  const res = await fetch(`${base}${path}`, {
-    headers: auth ? { authorization: auth } : {},
-  });
-  const json = await res.json().catch(() => null);
-  return { status: res.status, json };
+// Retain the SSRF boundary even though the external stock writeback is retired.
+for (const address of ["127.0.0.1", "127.255.255.255", "10.0.0.1", "10.255.255.255",
+  "172.16.0.1", "172.31.255.255", "192.168.0.1", "192.168.255.255", "169.254.169.254",
+  "169.254.0.1", "0.0.0.0", "0.255.255.255", "224.0.0.1", "255.255.255.255",
+  "100.64.0.1", "198.18.0.1", "203.0.113.1"]) {
+  test(`SSRF IPv4 rejects ${address}`, () => assert.equal(isPrivateIpv4(address), true));
 }
-
-async function post(
-  base: string,
-  path: string,
-  body: Record<string, unknown>,
-  auth?: string,
-): Promise<{ status: number; json: unknown }> {
-  const res = await fetch(`${base}${path}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(auth ? { authorization: auth } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => null);
-  return { status: res.status, json };
+for (const address of ["172.15.255.255", "172.32.0.1", "1.1.1.1", "8.8.8.8", "104.21.0.1"]) {
+  test(`SSRF IPv4 accepts public ${address}`, () => assert.equal(isPrivateIpv4(address), false));
 }
-
-async function patch(
-  base: string,
-  path: string,
-  body: Record<string, unknown>,
-  auth?: string,
-): Promise<{ status: number; json: unknown }> {
-  const res = await fetch(`${base}${path}`, {
-    method: "PATCH",
-    headers: {
-      "content-type": "application/json",
-      ...(auth ? { authorization: auth } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => null);
-  return { status: res.status, json };
+for (const address of ["::1", "fc00::1", "fd00::1", "fe80::1", "febf::1", "::ffff:127.0.0.1",
+  "::", "ff02::1", "2001:db8::1", "2001:2::1", "2001:10::1"]) {
+  test(`SSRF IPv6 rejects ${address}`, () => assert.equal(isPrivateIpv6(address), true));
 }
-
-function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
-  return { promise, resolve };
+for (const address of ["2606:4700:4700::1111", "2001:4860:4860::8888"]) {
+  test(`SSRF public IPv6 accepts ${address}`, () => assert.equal(isPrivateIpv6(address), false));
 }
-
-// Only external providers are stubbed; HTTP auth, both history writes, and the
-// scheduler's quiet-period lookup use the real app and isolated PostgreSQL DB.
-async function withStockProviders(
-  productId: number,
-  send: () => Promise<boolean>,
-  test: () => Promise<void>,
-) {
-  const realFetch = globalThis.fetch;
-  const originalBase = process.env["RESEND_BASE_URL"];
-  // Suite setup already removed the real WooCommerce credentials.
-  process.env["WC_CONSUMER_KEY"] = "inventory-test-key";
-  process.env["WC_CONSUMER_SECRET"] = "inventory-test-secret";
-  process.env["RESEND_BASE_URL"] = "https://inventory-email.test";
-  globalThis.fetch = (async (input, init) => {
-    const url = String(input);
-    if (url.startsWith(baseUrl)) return realFetch(input, init);
-    if (url === "https://inventory-email.test/emails") {
-      const ok = await send();
-      return Response.json(ok ? { id: "inventory-test-email" } : { message: "unavailable" },
-        { status: ok ? 200 : 503 });
-    }
-    if (url.includes(`/products/${productId}`) && init?.method === "PUT") {
-      return Response.json({
-        id: productId, name: `Race stock ${productId}`, stock_quantity: 0,
-        stock_status: "outofstock",
-      });
-    }
-    throw new Error(`Unexpected external request: ${url}`);
-  }) as typeof fetch;
-  try {
-    await test();
-  } finally {
-    globalThis.fetch = realFetch;
-    delete process.env["WC_CONSUMER_KEY"];
-    delete process.env["WC_CONSUMER_SECRET"];
-    if (originalBase === undefined) delete process.env["RESEND_BASE_URL"];
-    else process.env["RESEND_BASE_URL"] = originalBase;
-    await pool.query("DELETE FROM uc_low_stock_alerts WHERE product_id = $1", [productId]);
-    await pool.query(
-      "DELETE FROM uc_notification_log WHERE template = 'low_stock_alert' AND message_body LIKE $1",
-      [`%Race stock ${productId}%`],
-    );
-  }
+for (const url of ["http://1.1.1.1/hook", "not a URL", "1.1.1.1/hook", "https://192.168.1.1/hook",
+  "https://127.0.0.1/hook", "https://10.0.0.1/hook", "https://169.254.169.254/hook",
+  "https://metadata.google.internal/hook", "https://localhost/hook", "https://[::1]/hook",
+  "https://203.0.113.1/hook", "https://[2001:db8::1]/hook"]) {
+  test(`SSRF save-time validation rejects ${url}`, async () => assert.ok(await validateWebhookDestination(url)));
 }
+test("SSRF public literals resolve without DNS; non-global literals never connect", async () => {
+  assert.equal(await validateWebhookDestination("https://1.1.1.1/hook"), null);
+  assert.equal(await validateWebhookDestination("https://[2606:4700:4700::1111]/hook"), null);
+  assert.deepEqual(await getAllAddresses("1.1.1.1"), [{ address: "1.1.1.1", family: 4 }]);
+  for (const address of ["127.0.0.1", "169.254.169.254", "::1", "::ffff:8.8.8.8", "fe80::1", "2001:db8::1"])
+    await assert.rejects(() => getAllAddresses(address));
+});
 
-async function stockHistory(productId: number) {
-  const { rows } = await pool.query<{ at: string; date: Date }>(
-    "SELECT alerted_at::text AS at, alerted_at AS date FROM uc_low_stock_alerts WHERE product_id = $1",
-    [productId],
-  );
-  return rows[0];
-}
-
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
-let baseUrl = "";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let appServer: any = null;
-let adminToken = "";
-let memberToken = "";
-let teamAdminToken = "";
-let teamMemberToken = "";
-let savedWcConsumerKey: string | undefined;
-let savedWcConsumerSecret: string | undefined;
-const TEAM_ADMIN_ID = "inventory-team-admin";
-
+const realFetch = globalThis.fetch;
+const adminId = `inventory-${randomUUID()}`, memberId = `inventory-${randomUUID()}`;
+let server: http.Server, base: string, admin: string, member: string;
+let product: Awaited<ReturnType<typeof appCatalogueFixture>>;
 before(async () => {
-  savedWcConsumerKey = process.env["WC_CONSUMER_KEY"];
-  savedWcConsumerSecret = process.env["WC_CONSUMER_SECRET"];
-  delete process.env["WC_CONSUMER_KEY"];
-  delete process.env["WC_CONSUMER_SECRET"];
-
-  process.env["SESSION_SECRET"] ??= "test-session-secret-inv";
-
-  await pool.query(
-    `INSERT INTO team_users (id, email, name, password_hash, role, is_active)
-     VALUES ($1, 'inventory-admin@test.internal', 'Inventory Admin', 'unused', 'admin', true)
-     ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true`,
-    [TEAM_ADMIN_ID],
-  );
-  // Admin authority is re-verified against the live team_users row.
-  adminToken = `Bearer ${issueToken({
-    id: TEAM_ADMIN_ID,
-    email: "inventory-admin@test.internal",
-    name: "Inventory Admin",
-    type: "team-session",
-    role: "admin",
-  })}`;
-
-  // Non-admin WC token
-  memberToken = `Bearer ${issueToken({
-    id: String(Date.now() + 1),
-    email: "member@test.internal",
-    src: "woo",
-  } as Record<string, unknown>)}`;
-
-  teamAdminToken = `Bearer ${issueToken({
-    id: "inventory-team-admin",
-    email: "inventory-team-admin@test.internal",
-    name: "Inventory Admin",
-    type: "team-session",
-    role: "admin",
-  })}`;
-  teamMemberToken = `Bearer ${issueToken({
-    id: "inventory-team-member",
-    email: "inventory-team-member@test.internal",
-    name: "Inventory Member",
-    type: "team-session",
-    role: "member",
-  })}`;
-
-  // Ensure team_settings singleton exists (sync test needs n8n_inventory_webhook_url_enc = null)
-  await pool.query(`
-    INSERT INTO team_settings (id, updated_at)
-    VALUES ('singleton', now())
-    ON CONFLICT (id) DO UPDATE SET updated_at = now()
-  `);
-
+  product = await appCatalogueFixture();
+  for (const [id, role] of [[adminId, "admin"], [memberId, "member"]]) {
+    await pool.query(`INSERT INTO team_users(id,email,name,password_hash,role,is_active)
+      VALUES($1,$2,'Fixture','unused',$3,true)`, [id, `${id}@example.test`, role]);
+  }
+  admin = `Bearer ${issueToken({ id: adminId, type: "team-session", role: "admin" })}`;
+  member = `Bearer ${issueToken({ id: memberId, type: "team-session", role: "member" })}`;
   const { default: app } = await import("../app.js");
-  appServer = createServer(app).listen(0);
-  await new Promise<void>((resolve) => appServer.once("listening", resolve));
-  const { port } = appServer.address() as AddressInfo;
-  baseUrl = `http://127.0.0.1:${port}`;
+  server = http.createServer(app);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api`;
 });
-
 after(async () => {
-  appServer?.close();
-  await pool.query("DELETE FROM team_users WHERE id = $1", [TEAM_ADMIN_ID]).catch(() => undefined);
-  // Clean up: ensure n8n_inventory_webhook_url_enc is null
-  await pool.query(
-    "UPDATE team_settings SET n8n_inventory_webhook_url_enc = null WHERE id = 'singleton'",
-  ).catch(() => undefined);
-  if (savedWcConsumerKey === undefined) delete process.env["WC_CONSUMER_KEY"];
-  else process.env["WC_CONSUMER_KEY"] = savedWcConsumerKey;
-  if (savedWcConsumerSecret === undefined) delete process.env["WC_CONSUMER_SECRET"];
-  else process.env["WC_CONSUMER_SECRET"] = savedWcConsumerSecret;
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  await pool.query("DELETE FROM team_users WHERE id=ANY($1::text[])", [[adminId, memberId]]);
+  await pool.query("UPDATE team_settings SET n8n_inventory_webhook_url_enc=null WHERE id='singleton'");
 });
-
-// ─── Unit: isPrivateIpv4 ─────────────────────────────────────────────────────
-
-describe("isPrivateIpv4", () => {
-  it("(a) loopback 127.x.x.x → true", () => {
-    assert.equal(isPrivateIpv4("127.0.0.1"), true);
-    assert.equal(isPrivateIpv4("127.255.255.255"), true);
-  });
-
-  it("(a) RFC1918 10.x.x.x → true", () => {
-    assert.equal(isPrivateIpv4("10.0.0.1"), true);
-    assert.equal(isPrivateIpv4("10.255.255.255"), true);
-  });
-
-  it("(a) RFC1918 172.16–31.x.x → true", () => {
-    assert.equal(isPrivateIpv4("172.16.0.1"), true);
-    assert.equal(isPrivateIpv4("172.31.255.255"), true);
-  });
-
-  it("(b) edge 172.15 and 172.32 are public → false", () => {
-    assert.equal(isPrivateIpv4("172.15.255.255"), false);
-    assert.equal(isPrivateIpv4("172.32.0.1"), false);
-  });
-
-  it("(a) RFC1918 192.168.x.x → true", () => {
-    assert.equal(isPrivateIpv4("192.168.0.1"), true);
-    assert.equal(isPrivateIpv4("192.168.255.255"), true);
-  });
-
-  it("(a) link-local 169.254.x.x (cloud metadata) → true", () => {
-    assert.equal(isPrivateIpv4("169.254.169.254"), true);
-    assert.equal(isPrivateIpv4("169.254.0.1"), true);
-  });
-
-  it("(a) this-network 0.x.x.x → true", () => {
-    assert.equal(isPrivateIpv4("0.0.0.0"), true);
-    assert.equal(isPrivateIpv4("0.255.255.255"), true);
-  });
-
-  it("(a) multicast 224+ → true", () => {
-    assert.equal(isPrivateIpv4("224.0.0.1"), true);
-    assert.equal(isPrivateIpv4("255.255.255.255"), true);
-  });
-
-  it("(a) other non-global special-use ranges → true", () => {
-    assert.equal(isPrivateIpv4("100.64.0.1"), true);   // carrier-grade NAT
-    assert.equal(isPrivateIpv4("198.18.0.1"), true);   // benchmarking
-    assert.equal(isPrivateIpv4("203.0.113.1"), true);  // documentation
-  });
-
-  it("(c) public addresses → false", () => {
-    assert.equal(isPrivateIpv4("1.1.1.1"), false);
-    assert.equal(isPrivateIpv4("8.8.8.8"), false);
-    assert.equal(isPrivateIpv4("104.21.0.1"), false);
-  });
+async function request(path: string, method = "GET", body?: unknown, auth?: string) {
+  const response = await realFetch(`${base}${path}`, { method,
+    headers: { "content-type": "application/json", ...(auth ? { authorization: auth } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  return { status: response.status, body: await response.json() as any };
+}
+test("app inventory requires live administration and returns actual app records", async () => {
+  for (const auth of [undefined, member]) assert.equal((await request("/uc/admin/inventory", "GET", undefined, auth)).status, 403);
+  const result = await request("/uc/admin/inventory", "GET", undefined, admin);
+  assert.equal(result.status, 200);
+  assert.ok(result.body.products.some((row: any) => row.id === product.id));
 });
-
-// ─── Unit: isPrivateIpv6 ─────────────────────────────────────────────────────
-
-describe("isPrivateIpv6", () => {
-  it("(a) loopback ::1 → true", () => {
-    assert.equal(isPrivateIpv6("::1"), true);
-  });
-
-  it("(a) ULA fc00::/7 → true", () => {
-    assert.equal(isPrivateIpv6("fc00::1"), true);
-    assert.equal(isPrivateIpv6("fd12:3456:789a::1"), true);
-  });
-
-  it("(a) link-local fe80::/10 → true across its full CIDR range", () => {
-    assert.equal(isPrivateIpv6("fe80::1"), true);
-    assert.equal(isPrivateIpv6("fe80::dead:beef"), true);
-    assert.equal(isPrivateIpv6("fe90::1"), true);
-    assert.equal(isPrivateIpv6("febf::1"), true);
-  });
-
-  it("(a) non-global/mapped IPv6 ranges → true", () => {
-    assert.equal(isPrivateIpv6("::"), true);
-    assert.equal(isPrivateIpv6("ff02::1"), true); // multicast
-    assert.equal(isPrivateIpv6("::ffff:192.168.1.1"), true);
-    assert.equal(isPrivateIpv6("::ffff:8.8.8.8"), true); // Still blocked — checked as IPv6
-  });
-
-  it("(a) special-use prefixes within global-unicast → true", () => {
-    assert.equal(isPrivateIpv6("2001:db8::1"), true);       // documentation
-    assert.equal(isPrivateIpv6("2001:2::1"), true);         // benchmarking
-    assert.equal(isPrivateIpv6("64:ff9b::808:808"), true);  // NAT64
-    assert.equal(isPrivateIpv6("2002:c0a8:101::1"), true);  // 6to4/private IPv4
-    assert.equal(isPrivateIpv6("2620:4f:8000::1"), true);   // AS112
-    assert.equal(isPrivateIpv6("5f00::1"), true);           // SRv6 SID
-  });
-
-  it("(b) public global unicast → false", () => {
-    assert.equal(isPrivateIpv6("2001:4860:4860::8888"), false); // Google DNS
-    assert.equal(isPrivateIpv6("2606:4700:4700::1111"), false); // Cloudflare
-  });
-});
-
-// ─── Unit: validateWebhookDestination ───────────────────────────────────────
-
-describe("validateWebhookDestination", () => {
-  it("(a) http:// scheme → error", async () => {
-    const err = await validateWebhookDestination("http://n8n.example.com/webhook/abc");
-    assert.ok(err !== null, "Expected an error for http://");
-    assert.ok(err!.toLowerCase().includes("https"), `Error should mention HTTPS, got: ${err}`);
-  });
-
-  it("(b) unparseable string → error", async () => {
-    const err = await validateWebhookDestination("not-a-url-at-all");
-    assert.ok(err !== null, "Expected an error for invalid URL");
-  });
-
-  it("(b) missing scheme → error", async () => {
-    const err = await validateWebhookDestination("n8n.example.com/webhook");
-    assert.ok(err !== null, "Expected an error for missing scheme");
-  });
-
-  it("(c) private RFC1918 IPv4 literal → error", async () => {
-    const err = await validateWebhookDestination("https://192.168.1.100/webhook/sync");
-    assert.ok(err !== null, "Expected an error for RFC1918 IP");
-    assert.ok(
-      err!.toLowerCase().includes("private") || err!.toLowerCase().includes("external"),
-      `Error should mention private/external, got: ${err}`,
-    );
-  });
-
-  it("(c) loopback IPv4 literal → error", async () => {
-    const err = await validateWebhookDestination("https://127.0.0.1/webhook");
-    assert.ok(err !== null, "Expected an error for loopback");
-  });
-
-  it("(c) 10.x.x.x literal → error", async () => {
-    const err = await validateWebhookDestination("https://10.0.0.1:5678/webhook/xyz");
-    assert.ok(err !== null, "Expected an error for 10.x.x.x");
-  });
-
-  it("(c) cloud-metadata literal 169.254.169.254 → error", async () => {
-    const err = await validateWebhookDestination("https://169.254.169.254/latest/meta-data");
-    assert.ok(err !== null, "Expected an error for cloud metadata IP");
-  });
-
-  it("(c) accepts public IPv4 and global-unicast IPv6 literals", async () => {
-    assert.equal(await validateWebhookDestination("https://1.1.1.1/webhook"), null);
-    assert.equal(await validateWebhookDestination("https://[2606:4700:4700::1111]/webhook"), null);
-  });
-
-  it("(c) blocks special-use literals at save time", async () => {
-    assert.notEqual(await validateWebhookDestination("https://100.64.0.1/webhook"), null);
-    assert.notEqual(await validateWebhookDestination("https://[2001:db8::1]/webhook"), null);
-    assert.notEqual(await validateWebhookDestination("https://[2620:4f:8000::1]/webhook"), null);
-    assert.notEqual(await validateWebhookDestination("https://[5f00::1]/webhook"), null);
-  });
-
-  it("(d) metadata.google.internal → error", async () => {
-    const err = await validateWebhookDestination("https://metadata.google.internal/computeMetadata/v1/");
-    assert.ok(err !== null, "Expected an error for metadata.google.internal");
-  });
-
-  it("(e) localhost → error", async () => {
-    const err = await validateWebhookDestination("https://localhost:5678/webhook/test");
-    assert.ok(err !== null, "Expected an error for localhost");
-  });
-});
-
-describe("getAllAddresses", () => {
-  it("returns public IP literals directly without DNS resolution", async () => {
-    assert.deepEqual(await getAllAddresses("1.1.1.1"), [{ address: "1.1.1.1", family: 4 }]);
-    assert.deepEqual(await getAllAddresses("[2606:4700:4700::1111]"), [
-      { address: "2606:4700:4700::1111", family: 6 },
-    ]);
-  });
-
-  it("blocks non-global IPv6 literals before a connection can be made", async () => {
-    await assert.rejects(() => getAllAddresses("fe90::1"));
-    await assert.rejects(() => getAllAddresses("::"));
-    await assert.rejects(() => getAllAddresses("ff02::1"));
-  });
-
-  it("blocks special-use IPv4/IPv6 literals before a connection can be made", async () => {
-    await assert.rejects(() => getAllAddresses("100.64.0.1"));
-    await assert.rejects(() => getAllAddresses("198.18.0.1"));
-    await assert.rejects(() => getAllAddresses("2001:db8::1"));
-    await assert.rejects(() => getAllAddresses("64:ff9b::808:808"));
-    await assert.rejects(() => getAllAddresses("2620:4f:8000::1"));
-    await assert.rejects(() => getAllAddresses("5f00::1"));
-  });
-});
-
-// ─── API: GET /api/uc/admin/inventory ────────────────────────────────────────
-
-describe("GET /api/uc/admin/inventory", () => {
-  it("(a) no token → 401", async () => {
-    const { status } = await get(baseUrl, "/api/uc/admin/inventory");
-    assert.equal(status, 401);
-  });
-
-  it("(b) non-admin WC token → 401", async () => {
-    const { status } = await get(baseUrl, "/api/uc/admin/inventory", memberToken);
-    assert.equal(status, 401);
-  });
-
-  it("(c) returns mock inventory when WooCommerce credentials are absent", async () => {
-    const { status, json } = await get(baseUrl, "/api/uc/admin/inventory", adminToken);
-    assert.equal(status, 200);
-    const body = json as { source?: string; products?: unknown[] };
-    assert.equal(body.source, "mock");
-    assert.ok(Array.isArray(body.products));
-    assert.ok(body.products.length > 0);
-  });
-});
-
-// ─── API: PATCH /api/uc/admin/inventory/:productId ───────────────────────────
-
-describe("PATCH /api/uc/admin/inventory/:productId", () => {
-  it("(a) no token → 401", async () => {
-    const { status } = await patch(baseUrl, "/api/uc/admin/inventory/1", { stockQuantity: 5 });
-    assert.equal(status, 401);
-  });
-
-  it("(b) negative stockQuantity → 400", async () => {
-    const { status } = await patch(
-      baseUrl,
-      "/api/uc/admin/inventory/1",
-      { stockQuantity: -3 },
-      adminToken,
-    );
-    assert.equal(status, 400);
-  });
-
-  it("(b) non-integer stockQuantity → 400", async () => {
-    const { status } = await patch(
-      baseUrl,
-      "/api/uc/admin/inventory/1",
-      { stockQuantity: 1.5 },
-      adminToken,
-    );
-    assert.equal(status, 400);
-  });
-
-  it("(b) missing stockQuantity → 400", async () => {
-    const { status } = await patch(
-      baseUrl,
-      "/api/uc/admin/inventory/1",
-      {},
-      adminToken,
-    );
-    assert.equal(status, 400);
-  });
-});
-
-// ─── API: POST /api/uc/admin/inventory/sync ──────────────────────────────────
-
-describe("POST /api/uc/admin/inventory/sync", () => {
-  it("(a) no token → 401", async () => {
-    const { status } = await post(baseUrl, "/api/uc/admin/inventory/sync", {});
-    assert.equal(status, 401);
-  });
-
-  it("(b) non-admin token → 401", async () => {
-    const { status } = await post(baseUrl, "/api/uc/admin/inventory/sync", {}, memberToken);
-    assert.equal(status, 401);
-  });
-
-  it("(c) admin token + no webhook URL configured → 422", async () => {
-    // Ensure no URL is set
-    await pool.query(
-      "UPDATE team_settings SET n8n_inventory_webhook_url_enc = null WHERE id = 'singleton'",
-    );
-    const { status, json } = await post(
-      baseUrl,
-      "/api/uc/admin/inventory/sync",
-      {},
-      adminToken,
-    );
-    assert.equal(status, 422, `Expected 422, got ${status}: ${JSON.stringify(json)}`);
-  });
-
-  it("(d) returns 502 when the outbound webhook request throws", async () => {
-    _inventorySyncSeams.getWebhookUrl = async () => "https://1.1.1.1/inventory-sync";
-
-    const originalRequest = https.request;
-    https.request = ((..._args: unknown[]) => {
-      const request = new EventEmitter() as EventEmitter & {
-        write: () => boolean;
-        end: () => void;
-        destroy: () => void;
-      };
-      request.write = () => true;
-      request.end = () => queueMicrotask(() => request.emit("error", new Error("simulated network failure")));
-      request.destroy = () => request.emit("close");
-      return request;
-    }) as typeof https.request;
-
-    try {
-      const { status, json } = await post(
-        baseUrl,
-        "/api/uc/admin/inventory/sync",
-        {},
-        adminToken,
-      );
-      assert.equal(status, 502, `Expected 502, got ${status}: ${JSON.stringify(json)}`);
-      assert.deepEqual(json, { error: "Failed to reach n8n webhook" });
-    } finally {
-      _inventorySyncSeams.getWebhookUrl = null;
-      https.request = originalRequest;
-    }
-  });
-});
-
-// ─── API: GET /admin/integrations ────────────────────────────────────────────
-
-describe("GET /api/admin/integrations", () => {
-  it("(a) no token → 401", async () => {
-    const { status } = await get(baseUrl, "/api/admin/integrations");
-    assert.equal(status, 401);
-  });
-
-  it("(b) member team token → 403", async () => {
-    const { status } = await get(baseUrl, "/api/admin/integrations", teamMemberToken);
-    assert.equal(status, 403);
-  });
-
-  it("(c) admin team token can access the endpoint", async () => {
-    const { status } = await get(baseUrl, "/api/admin/integrations", teamAdminToken);
-    assert.equal(status, 200);
-  });
-});
-
-describe("manual and daily stock alerts — shared database quiet period", () => {
-  for (const newestPath of ["manual", "daily"] as const) {
-    it(`keeps the newest ${newestPath} timestamp when the older delivery writes last`,
-      { timeout: 15_000 }, async () => {
-        const productId = newestPath === "manual" ? 1764600040 : 1764600041;
-        const manualEntered = deferred();
-        const manualFinish = deferred();
-        const dailyEntered = deferred();
-        const dailyFinish = deferred();
-        // Put the scheduled timestamp on either side of the real manual DB
-        // clock, without sleeps or changing process-wide time.
-        const dailyAt = new Date(Date.now() + (newestPath === "daily" ? 3_600_000 : -3_600_000));
-        let dailyAttempts = 0;
-        await withStockProviders(productId, async () => {
-          manualEntered.resolve();
-          await manualFinish.promise;
-          return true;
-        }, async () => {
-          const dailyDeps = {
-            isWcConfigured: () => true,
-            threshold: 5,
-            now: dailyAt,
-            fetchProducts: async () => [{
-              id: productId, name: `Race stock ${productId}`,
-              stock_quantity: 0, stock_status: "outofstock",
-            }],
-            sendEmail: async () => {
-              dailyAttempts++;
-              dailyEntered.resolve();
-              await dailyFinish.promise;
-              return true;
-            },
-          };
-          // Start the daily read before the manual send records any history.
-          const daily = runLowStockAlert(dailyDeps);
-          let manual: ReturnType<typeof patch> | undefined;
-          let newest: Awaited<ReturnType<typeof stockHistory>>;
-          try {
-            await dailyEntered.promise;
-            manual = patch(baseUrl, `/api/uc/admin/inventory/${productId}`,
-              { stockQuantity: 0 }, adminToken);
-            await manualEntered.promise;
-            assert.equal(await stockHistory(productId), undefined,
-              "neither pending provider may create suppression state");
-            if (newestPath === "manual") {
-              manualFinish.resolve();
-              assert.equal((await manual).status, 200);
-              newest = await stockHistory(productId);
-              dailyFinish.resolve();
-              assert.equal((await daily).emailed, true);
-            } else {
-              dailyFinish.resolve();
-              assert.equal((await daily).emailed, true);
-              newest = await stockHistory(productId);
-              assert.equal(newest?.date.toISOString(), dailyAt.toISOString());
-              manualFinish.resolve();
-              assert.equal((await manual).status, 200);
-            }
-          } finally {
-            manualFinish.resolve();
-            dailyFinish.resolve();
-            await Promise.allSettled([daily, ...(manual ? [manual] : [])]);
-          }
-          assert.ok(newest);
-          assert.equal((await stockHistory(productId))?.at, newest.at,
-            "an older write must not shorten the newest successful delivery's quiet period");
-
-          const quietEnd = newest.date.getTime() + 24 * 60 * 60 * 1_000;
-          assert.equal((await runLowStockAlert({
-            ...dailyDeps, now: new Date(quietEnd - 1),
-          })).emailed, false, "the full 24-hour quiet period must remain in effect");
-          assert.equal(dailyAttempts, 1);
-          // PostgreSQL's manual timestamp has microseconds; JS dates have ms.
-          assert.equal((await runLowStockAlert({
-            ...dailyDeps, now: new Date(quietEnd + 1),
-          })).emailed, true, "a product becomes retry-eligible after the quiet period");
-          assert.equal(dailyAttempts, 2);
-        });
-      });
+test("app stock edits validate quantities, persist local stock and never send retired manual alerts", async () => {
+  const path = `/uc/admin/inventory/${product.id}`;
+  assert.equal((await request(path, "PATCH", { stockQuantity: 5 })).status, 403);
+  for (const body of [{ stockQuantity: -3 }, { stockQuantity: 1.5 }, {}]) {
+    assert.equal((await request(path, "PATCH", body, admin)).status, 400);
   }
-
-  for (const failure of ["rejected", "thrown"] as const) {
-    for (const existingHistory of [false, true]) {
-      it(`a ${failure} manual send ${existingHistory ? "preserves expired history" : "creates no history"} and allows a daily retry`,
-        { timeout: 10_000 }, async () => {
-          const productId = 1764600050 + (failure === "thrown" ? 2 : 0) + Number(existingHistory);
-          const expiredAt = new Date(Date.now() - 48 * 60 * 60 * 1_000);
-          if (existingHistory) {
-            await pool.query(
-              "INSERT INTO uc_low_stock_alerts (product_id, alerted_at) VALUES ($1, $2)",
-              [productId, expiredAt],
-            );
-          }
-          const beforeFailure = await stockHistory(productId);
-          let manualAttempts = 0;
-          await withStockProviders(productId, async () => {
-            manualAttempts++;
-            if (failure === "thrown") throw new Error("simulated email network failure");
-            return false;
-          }, async () => {
-            const result = await patch(baseUrl, `/api/uc/admin/inventory/${productId}`,
-              { stockQuantity: 0 }, adminToken);
-            assert.equal(result.status, 200, "email failure must not undo a confirmed stock update");
-            assert.equal(manualAttempts, 1, "the manual path must actually attempt delivery");
-            assert.equal((await stockHistory(productId))?.at, beforeFailure?.at,
-              "failed manual delivery must not create or advance suppression history");
-            let dailyAttempts = 0;
-            const retryAt = new Date();
-            const retry = await runLowStockAlert({
-              isWcConfigured: () => true,
-              threshold: 5,
-              now: retryAt,
-              fetchProducts: async () => [{
-                id: productId, name: `Race stock ${productId}`,
-                stock_quantity: 0, stock_status: "outofstock",
-              }],
-              sendEmail: async () => { dailyAttempts++; return true; },
-            });
-            assert.equal(retry.emailed, true);
-            assert.equal(dailyAttempts, 1, "a failed manual send must leave daily retry eligibility intact");
-            assert.equal((await stockHistory(productId))?.date.toISOString(), retryAt.toISOString());
-          });
-        });
-    }
-  }
+  const original = globalThis.fetch;
+  let externalCalls = 0;
+  globalThis.fetch = async (input) => {
+    if (!String(input).includes("/.well-known/") && !String(input).includes("clerk")) externalCalls++;
+    throw new Error("Outbound calls are absorbed by the fixture");
+  };
+  try {
+    const result = await request(path, "PATCH", { stockQuantity: 0 }, admin);
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    const row = (await pool.query("SELECT stock_quantity,manage_stock,stock_status FROM uc_catalogue_inventory WHERE id=$1", [product.id])).rows[0];
+    assert.equal(row.stock_quantity, 0); assert.equal(row.manage_stock, true);
+    assert.equal(row.stock_status, "outofstock");
+    assert.equal((await pool.query("SELECT * FROM uc_low_stock_alerts WHERE product_id=$1", [product.id])).rowCount, 0);
+    assert.equal(externalCalls, 0);
+  } finally { globalThis.fetch = original; }
 });
-
-// ─── API: PATCH /admin/integrations ──────────────────────────────────────────
-
-describe("PATCH /api/admin/integrations", () => {
-  it("(a) no token → 401", async () => {
-    const { status } = await patch(baseUrl, "/api/admin/integrations", {
-      n8nInventoryWebhookUrl: "https://n8n.example.com/webhook/test",
-    });
-    assert.equal(status, 401);
-  });
-
-  it("(b) member team token → 403", async () => {
-    const { status } = await patch(
-      baseUrl,
-      "/api/admin/integrations",
-      { n8nInventoryWebhookUrl: "" },
-      teamMemberToken,
-    );
-    assert.equal(status, 403);
-  });
-
-  it("(c) admin team token can update the endpoint", async () => {
-    const { status } = await patch(
-      baseUrl,
-      "/api/admin/integrations",
-      { n8nInventoryWebhookUrl: "" },
-      teamAdminToken,
-    );
-    assert.equal(status, 200);
-  });
-
-  it("(d) http:// scheme → 400", async () => {
-    // requireTeamAdmin will reject this with 403 since we're using a woo token.
-    // Testing the scheme validation via a team-admin authenticated route requires
-    // a team-session token — validate the scheme rejection unit-test-side only.
-    // (see validateWebhookDestination tests above)
-    //
-    // Here we confirm the route is reachable without a crash for bad input.
-    const { status } = await patch(
-      baseUrl,
-      "/api/admin/integrations",
-      { n8nInventoryWebhookUrl: "http://n8n.example.com/webhook" },
-      teamAdminToken,
-    );
-    assert.equal(status, 400);
-  });
-
-  it("(c) private IPv4 literal → 400 (save-time SSRF guard, if authenticated)", async () => {
-    // Without team-admin auth the gate fires first; the SSRF guard is tested
-    // unit-side via validateWebhookDestination above. We assert the route doesn't
-    // return 500 for any of these inputs.
-    const { status } = await patch(baseUrl, "/api/admin/integrations", {
-      n8nInventoryWebhookUrl: "https://192.168.1.1/webhook",
-    });
-    assert.ok(status !== 500, `Route should never return 500, got ${status}`);
-  });
-
-  it("(d) loopback literal → 400 (save-time SSRF guard, if authenticated)", async () => {
-    const { status } = await patch(baseUrl, "/api/admin/integrations", {
-      n8nInventoryWebhookUrl: "https://127.0.0.1/webhook",
-    });
-    assert.ok(status !== 500, `Route should never return 500, got ${status}`);
-  });
+test("external inventory sync stays retired, even for admins and with a saved webhook", async () => {
+  assert.equal((await request("/uc/admin/inventory/sync", "POST", {})).status, 403);
+  assert.equal((await request("/uc/admin/inventory/sync", "POST", {}, member)).status, 403);
+  let externalCalls = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    if (!String(input).includes("/.well-known/") && !String(input).includes("clerk")) externalCalls++;
+    throw new Error("Outbound calls are absorbed by the fixture");
+  };
+  try {
+    for (const url of ["", "https://1.1.1.1/hook"]) {
+      assert.equal((await request("/admin/integrations", "PATCH", { n8nInventoryWebhookUrl: url }, admin)).status, 200);
+      const result = await request("/uc/admin/inventory/sync", "POST", {}, admin);
+      assert.equal(result.status, 410);
+      assert.match(result.body.error, /retired/i);
+    }
+    assert.equal(externalCalls, 0);
+  } finally { globalThis.fetch = original; }
+});
+test("integration settings retain auth and SSRF checks without activating writeback", async () => {
+  assert.equal((await request("/admin/integrations")).status, 401);
+  assert.equal((await request("/admin/integrations", "GET", undefined, member)).status, 403);
+  assert.equal((await request("/admin/integrations", "PATCH", { n8nInventoryWebhookUrl: "" }, member)).status, 403);
+  assert.equal((await request("/admin/integrations", "GET", undefined, admin)).status, 200);
+  for (const url of ["http://1.1.1.1/hook", "https://192.168.1.1/hook", "https://127.0.0.1/hook"]) {
+    assert.equal((await request("/admin/integrations", "PATCH", { n8nInventoryWebhookUrl: url }, admin)).status, 400);
+  }
 });

@@ -57,11 +57,11 @@ try {
 
   // Real client navigation must fetch the deferred route rather than reloading.
   await page.getByRole('tab', { name: /Products/ }).click();
-  await page.locator('img[src*="shop-filter"]').waitFor({ state: 'visible' });
+  await page.locator('img[src*="products-slide-shower"]').waitFor({ state: 'visible' });
   assert.ok(scripts.some(url => /\/products-/.test(url)));
   await page.getByRole('tab', { name: /Blog/ }).click();
   await page.locator('img[src*="blog-water"]').waitFor({ state: 'visible' });
-  for (const asset of ['shop-filter', 'blog-water']) {
+  for (const asset of ['products-slide-shower', 'blog-water']) {
     const image = page.locator(`img[src*="${asset}"]`);
     if (await image.count()) {
       assert.equal(await image.getAttribute('loading'), 'eager');

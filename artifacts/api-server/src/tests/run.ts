@@ -287,8 +287,15 @@ const SHARED_STATE_FILES = [
   "admin-recovery-status",
   "agent-oauth-routes",
   "blog-editorial",
-  "canonical-dual-write-routes",
+  // These suites edit catalogue-wide publication state or global retirement
+  // evidence. Run without other files' temporary catalogue/outbox fixtures.
+  "product-editorial",
+  "woo-retirement",
   "cod-order-validation",
+  // These mutate shared catalogue seed rows or assert a stable public-table
+  // query plan; concurrent fixture writes invalidate their assumptions.
+  "companion-commerce-owned",
+  "customer-count",
   "dual-failure-alert",
   // Both files exercise the same global stock-digest advisory lock. Keep
   // unrelated test workers from being mistaken for an overlapping cron run.

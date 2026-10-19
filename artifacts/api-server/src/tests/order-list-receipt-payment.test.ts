@@ -76,19 +76,20 @@ async function listedOrder() {
     status: string; paymentStatus: string; codCollectionStatus?: string | null;
   })[];
   assert.equal(orders.length, 1);
-  assert.equal(orders[0]!.id, wooId);
+  assert.equal(orders[0]!.id, orderId);
   return orders[0]!;
 }
 
-describe("Woo order-list projection to customer receipts", () => {
-  it("preserves Woo paid evidence when the local COD ledger still awaits collection", async () => {
+describe("app-owned order-list projection to customer receipts", () => {
+  it("uses explicit local payment evidence even when COD collection is not reconciled", async () => {
+    await pool.query("UPDATE uc_orders SET payment_confirmed_at=now() WHERE id=$1", [orderId]);
     const order = await listedOrder();
     assert.equal(order.paymentStatus, "paid");
     const local = (await pool.query(
       "SELECT cod_collection_status,payment_confirmed_at FROM uc_orders WHERE id=$1", [orderId],
     )).rows[0];
     assert.equal(local.cod_collection_status, "awaiting_collection");
-    assert.equal(local.payment_confirmed_at, null);
+    assert.ok(local.payment_confirmed_at);
     const receipt = buildCustomerReceipt({
       ...order, paymentStatus: receiptOrderPaymentStatus(order),
     });
@@ -110,6 +111,7 @@ describe("Woo order-list projection to customer receipts", () => {
 
   it("does not infer paid from fulfillment status without payment evidence", async () => {
     datePaid = null;
+    await pool.query("UPDATE uc_orders SET payment_confirmed_at=null WHERE id=$1", [orderId]);
     const order = await listedOrder();
     assert.equal(order.paymentStatus, "awaiting_collection");
     const receipt = buildCustomerReceipt({ ...order, paymentStatus: receiptOrderPaymentStatus(order) });

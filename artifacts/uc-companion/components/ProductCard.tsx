@@ -98,7 +98,7 @@ export default function ProductCard({ product, onPress, layout = 'grid', isWishl
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                onPress={onToggleWishlist}
+                onPress={isWishlisted ? onToggleWishlist : onPress}
                 activeOpacity={0.7}
                 disabled={wishlistPending}
                 accessibilityLabel={isWishlisted ? "Restock alert on" : "Notify me"}
@@ -184,7 +184,7 @@ export default function ProductCard({ product, onPress, layout = 'grid', isWishl
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  onPress={onToggleWishlist}
+                  onPress={isWishlisted ? onToggleWishlist : onPress}
                   activeOpacity={0.8}
                   disabled={wishlistPending}
                   accessibilityLabel={isWishlisted ? "Restock alert on" : "Notify me"}

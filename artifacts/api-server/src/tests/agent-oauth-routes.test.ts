@@ -3,13 +3,40 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db, agentOauthClientsTable, agentOauthTokensTable, agentOauthAuditTable, ucAlisonConversationsTable, ucAlisonTurnsTable } from "@workspace/db";
+import { db, agentOauthClientsTable, agentOauthTokensTable, agentOauthAuditTable, ucAlisonConversationsTable, ucAlisonTurnsTable, teamUsersTable } from "@workspace/db";
 import app from "../app.js";
 import { hasUnknownScope, parseExpiry, parseScopes } from "../routes/agent-oauth.js";
+import { issueToken } from "../lib/jwt.js";
 
 let server: http.Server;
 let baseUrl: string;
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+const teamIds: string[] = [];
+
+async function teamAuthorization(role: "admin" | "member" = "admin") {
+  const id = `oauth-team-${randomBytes(12).toString("hex")}`;
+  const email = `${id}@example.test`;
+  await db.insert(teamUsersTable).values({ id, email, name: "OAuth test admin", passwordHash: hash("unused"), role, isActive: true });
+  teamIds.push(id);
+  return {
+    id,
+    headers: {
+      authorization: `Bearer ${issueToken({ id, email, type: "team-session", role, exp: Math.floor(Date.now() / 1000) + 3600 })}`,
+      "content-type": "application/json",
+    },
+  };
+}
+
+async function exchange(id: string, secret: string, scope = "alison.read") {
+  return fetch(`${baseUrl}/oauth/token`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
+    },
+    body: new URLSearchParams({ grant_type: "client_credentials", scope }),
+  });
+}
 
 before(() => new Promise<void>((resolve, reject) => {
   server = http.createServer(app);
@@ -25,6 +52,7 @@ after(async () => {
   await db.delete(ucAlisonConversationsTable);
   await db.delete(agentOauthTokensTable);
   await db.delete(agentOauthClientsTable);
+  for (const id of teamIds) await db.delete(teamUsersTable).where(eq(teamUsersTable.id, id));
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
@@ -155,4 +183,111 @@ test("manage scopes are not registerable or issuable in read-only v1", async () 
   });
   assert.equal(response.status, 400);
   await db.delete(agentOauthClientsTable).where(eq(agentOauthClientsTable.id, id));
+});
+
+test("Alison viewer credentials work through create, rotation, suspension and deletion without losing audit", async () => {
+  const admin = await teamAuthorization();
+  const created = await fetch(`${baseUrl}/oauth/clients`, {
+    method: "POST", headers: admin.headers,
+    body: JSON.stringify({ name: "Alison conversation viewer", scopes: ["alison.read"] }),
+  });
+  assert.equal(created.status, 201);
+  const { client, clientSecret } = await created.json() as { client: { id: string }; clientSecret: string };
+  assert.match(client.id, /^agent_/);
+  assert.ok(clientSecret.length >= 32);
+  const [stored] = await db.select().from(agentOauthClientsTable).where(eq(agentOauthClientsTable.id, client.id));
+  assert.equal(stored?.secretHash, hash(clientSecret));
+  const listed = await fetch(`${baseUrl}/oauth/clients`, { headers: admin.headers });
+  const list = await listed.text();
+  assert.equal(list.includes(clientSecret), false);
+  assert.equal(list.includes("secretHash"), false);
+
+  assert.equal((await exchange(client.id, "wrong-secret")).status, 401);
+  const connected = await exchange(client.id, clientSecret);
+  assert.equal(connected.status, 200);
+  const firstToken = (await connected.json() as { access_token: string }).access_token;
+  assert.equal((await fetch(`${baseUrl}/integrations/v1/alison/chats`, { headers: { authorization: `Bearer ${firstToken}` } })).status, 200);
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${client.id}`, { method: "DELETE", headers: admin.headers })).status, 409);
+
+  const rotated = await fetch(`${baseUrl}/oauth/clients/${client.id}/rotate`, { method: "POST", headers: admin.headers, body: "{}" });
+  assert.equal(rotated.status, 200);
+  const replacement = (await rotated.json() as { clientSecret: string }).clientSecret;
+  assert.notEqual(replacement, clientSecret);
+  assert.equal((await exchange(client.id, clientSecret)).status, 401);
+  assert.equal((await fetch(`${baseUrl}/integrations/v1/alison/chats`, { headers: { authorization: `Bearer ${firstToken}` } })).status, 401);
+  const reconnected = await exchange(client.id, replacement);
+  assert.equal(reconnected.status, 200);
+  const token = (await reconnected.json() as { access_token: string }).access_token;
+
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${client.id}/suspend`, { method: "POST", headers: admin.headers, body: "{}" })).status, 200);
+  assert.equal((await exchange(client.id, replacement)).status, 401);
+  const deleted = await fetch(`${baseUrl}/oauth/clients/${client.id}`, { method: "DELETE", headers: admin.headers });
+  assert.equal(deleted.status, 204);
+  assert.equal(await deleted.text(), "");
+  assert.equal((await db.select().from(agentOauthClientsTable).where(eq(agentOauthClientsTable.id, client.id))).length, 0);
+  assert.equal((await db.select().from(agentOauthTokensTable).where(eq(agentOauthTokensTable.clientId, client.id))).length, 0);
+  const audits = await db.select().from(agentOauthAuditTable).where(eq(agentOauthAuditTable.clientId, client.id));
+  assert.ok(audits.some((row) => row.action === "client.create" && row.outcome === "success"));
+  assert.ok(audits.some((row) => row.action === "client.delete" && row.outcome === "success" && row.actorId === admin.id));
+  assert.equal((await exchange(client.id, replacement)).status, 401);
+  assert.equal((await fetch(`${baseUrl}/integrations/v1/alison/chats`, { headers: { authorization: `Bearer ${token}` } })).status, 401);
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${client.id}`, { method: "DELETE", headers: admin.headers })).status, 404);
+});
+
+test("Alison token exchange distinguishes missing scope from invalid, expired and suspended clients", async () => {
+  for (const scenario of ["scope", "expired", "suspended"] as const) {
+    const id = `test_exchange_${scenario}_${randomBytes(8).toString("hex")}`;
+    const secret = randomBytes(24).toString("base64url");
+    await db.insert(agentOauthClientsTable).values({
+      id, name: "Exchange guard fixture", secretHash: hash(secret), createdBy: "test",
+      scopes: scenario === "scope" ? ["companion.monitor.read"] : ["alison.read"],
+      status: scenario === "suspended" ? "suspended" : "active",
+      expiresAt: scenario === "expired" ? new Date(Date.now() - 60_000) : null,
+    });
+    const response = await exchange(id, secret);
+    assert.equal(response.status, scenario === "scope" ? 400 : 401);
+    assert.deepEqual(await response.json(), { error: scenario === "scope" ? "invalid_scope" : "invalid_client" });
+  }
+});
+
+test("client deletion independently rejects active clients and inactive clients with live tokens", async () => {
+  const admin = await teamAuthorization();
+  for (const status of ["active", "suspended", "revoked"] as const) {
+    const id = `test_delete_${status}_${randomBytes(8).toString("hex")}`;
+    await db.insert(agentOauthClientsTable).values({ id, name: "Delete guard fixture", secretHash: hash("unused"), scopes: ["alison.read"], status, createdBy: "test" });
+    await db.insert(agentOauthTokensTable).values({ clientId: id, tokenHash: hash(randomBytes(24).toString("hex")), scopes: ["alison.read"], expiresAt: new Date(Date.now() + 60_000) });
+    const response = await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE", headers: admin.headers });
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { error: status === "active" ? "client_must_be_inactive" : "client_in_use" });
+    assert.equal((await db.select().from(agentOauthClientsTable).where(eq(agentOauthClientsTable.id, id))).length, 1);
+    assert.equal((await db.select().from(agentOauthTokensTable).where(eq(agentOauthTokensTable.clientId, id))).length, 1);
+  }
+});
+
+test("expired and revoked tokens do not prevent deletion of an inactive client", async () => {
+  const admin = await teamAuthorization();
+  const id = `test_delete_old_${randomBytes(8).toString("hex")}`;
+  await db.insert(agentOauthClientsTable).values({ id, name: "Inactive fixture", secretHash: hash("unused"), scopes: ["alison.read"], status: "revoked", createdBy: "test" });
+  await db.insert(agentOauthTokensTable).values([
+    { clientId: id, tokenHash: hash(randomBytes(24).toString("hex")), scopes: ["alison.read"], expiresAt: new Date(Date.now() - 60_000) },
+    { clientId: id, tokenHash: hash(randomBytes(24).toString("hex")), scopes: ["alison.read"], expiresAt: new Date(Date.now() + 60_000), revokedAt: new Date() },
+  ]);
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE", headers: admin.headers })).status, 204);
+});
+
+test("client deletion requires a live active administrator, not a machine token or stale admin claim", async () => {
+  const admin = await teamAuthorization();
+  const member = await teamAuthorization("member");
+  const id = `test_delete_admin_${randomBytes(8).toString("hex")}`;
+  const machineToken = randomBytes(24).toString("base64url");
+  await db.insert(agentOauthClientsTable).values({ id, name: "Admin guard fixture", secretHash: hash("unused"), scopes: ["alison.read"], createdBy: "test" });
+  await db.insert(agentOauthTokensTable).values({ clientId: id, tokenHash: hash(machineToken), scopes: ["alison.read"], expiresAt: new Date(Date.now() + 60_000) });
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE" })).status, 401);
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE", headers: { authorization: `Bearer ${machineToken}` } })).status, 401);
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE", headers: member.headers })).status, 403);
+  await db.update(teamUsersTable).set({ role: "member" }).where(eq(teamUsersTable.id, admin.id));
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE", headers: admin.headers })).status, 403);
+  await db.update(teamUsersTable).set({ role: "admin", isActive: false }).where(eq(teamUsersTable.id, admin.id));
+  assert.equal((await fetch(`${baseUrl}/oauth/clients/${id}`, { method: "DELETE", headers: admin.headers })).status, 403);
+  assert.equal((await db.select().from(agentOauthClientsTable).where(eq(agentOauthClientsTable.id, id))).length, 1);
 });

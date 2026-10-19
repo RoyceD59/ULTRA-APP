@@ -1,0 +1,63 @@
+name: Isolated API integration checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  api-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ultra_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ultra_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4.4.0
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run typecheck:libs
+      - name: Create an offline Clerk verification fixture
+        run: |
+          node --input-type=module <<'NODE'
+          import { generateKeyPairSync, randomUUID } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          const { publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+          const delimiter = 'CLERK_CI_' + randomUUID();
+          const pem = publicKey.export({ type: 'spki', format: 'pem' });
+          appendFileSync(process.env.GITHUB_ENV, `CLERK_JWT_KEY<<${delimiter}\n${pem}\n${delimiter}\n`);
+          NODE
+      - name: Run the complete API suite against disposable PostgreSQL
+        working-directory: artifacts/api-server
+        env:
+          # Deliberately literal CI-only credentials; never use repository secrets.
+          # The existing runner creates and drops a separate test_api_* database.
+          DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ultra_ci
+          TEST_CONCURRENCY: '4'
+          GOMAXPROCS: '2'
+          SESSION_SECRET: ci-isolated-api-only
+          # The optional AI client validates configuration during module import.
+          # Keep it non-routable and synthetic; never provision a live provider key.
+          AI_INTEGRATIONS_ANTHROPIC_BASE_URL: https://anthropic.invalid
+          AI_INTEGRATIONS_ANTHROPIC_API_KEY: ci-fixture-not-a-key
+          # Keep Clerk middleware enabled with synthetic initialization. The suite
+          # still exercises real local customer/team JWT and database guards.
+          CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuaW52YWxpZCQ=
+          CLERK_SECRET_KEY: sk_test_ci_fixture_not_a_real_key
+          CLERK_API_URL: https://clerk.invalid
+          CLERK_TELEMETRY_DISABLED: '1'
+        run: pnpm test

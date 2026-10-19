@@ -62,6 +62,45 @@ describe("Alison conversation machine authorization", () => {
       "Authorization failed",
     );
     expect(localStorage.getItem("projecthub:token")).toBe("team-session-stays-active");
+    expect(screen.getByTestId("status-machine-authorization-error")).toHaveTextContent("matching pair");
+  });
+
+  it("explains missing scope without suggesting that rotation will add permissions", async () => {
+    issueAlisonMachineToken.mockRejectedValueOnce(new AlisonMachineApiError(400, "invalid_scope"));
+    renderPage();
+    enterMachineCredentials();
+    expect(await screen.findByTestId("status-machine-authorization-error")).toHaveTextContent("Create Alison viewer");
+    expect(screen.getByTestId("status-machine-authorization-error")).toHaveTextContent("Rotating the secret does not add scopes");
+  });
+
+  it("normalizes pasted credentials and clears the secret after connecting", async () => {
+    issueAlisonMachineToken.mockResolvedValueOnce({ access_token: "fixture-token", token_type: "Bearer", expires_in: 900, scope: "alison.read" });
+    listAlisonMachineChats.mockResolvedValue({ chats: [], nextCursor: null });
+    renderPage();
+    fireEvent.change(screen.getByTestId("input-alison-client-id"), { target: { value: " agent_fixture " } });
+    fireEvent.change(screen.getByTestId("input-alison-client-secret"), { target: { value: " fixture-secret " } });
+    fireEvent.click(screen.getByTestId("button-connect-alison-client"));
+    await screen.findByTestId("status-machine-session-active");
+    expect(issueAlisonMachineToken).toHaveBeenCalledWith("agent_fixture", "fixture-secret");
+    fireEvent.click(screen.getByTestId("button-disconnect-alison-client"));
+    expect(await screen.findByTestId("input-alison-client-secret")).toHaveValue("");
+    expect(localStorage.getItem("projecthub:token")).toBe("team-session-stays-active");
+  });
+
+  it("does not reuse cached transcripts when reconnecting with a different client", async () => {
+    issueAlisonMachineToken.mockResolvedValue({ access_token: "fixture-token", token_type: "Bearer", expires_in: 900, scope: "alison.read" });
+    listAlisonMachineChats.mockResolvedValueOnce({
+      chats: [{ conversationId: "previous-client-chat", createdAt: "2026-10-02T12:00:00Z", updatedAt: "2026-10-02T12:00:00Z", messages: [] }],
+      nextCursor: null,
+    });
+    renderPage();
+    enterMachineCredentials();
+    await screen.findByTestId("button-alison-conversation-previous-client-chat");
+    fireEvent.click(screen.getByTestId("button-disconnect-alison-client"));
+    listAlisonMachineChats.mockRejectedValueOnce(new AlisonMachineApiError(403, "insufficient_scope"));
+    enterMachineCredentials();
+    await screen.findByTestId("status-alison-conversations-error");
+    expect(screen.queryByTestId("button-alison-conversation-previous-client-chat")).not.toBeInTheDocument();
   });
 
   it("shows reconnect recovery when a machine token is revoked", async () => {

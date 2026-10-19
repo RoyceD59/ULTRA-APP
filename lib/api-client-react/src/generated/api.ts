@@ -172,6 +172,7 @@ import type {
   ListUcEnquiriesParams,
   ListUcOfflineClients200,
   ListUcProductsParams,
+  ListUcRestockRequestsParams,
   ListUnsyncedRegistrations200,
   LocationTierAnalyticsInput,
   Member,
@@ -208,6 +209,12 @@ import type {
   RefillFeatures,
   RefillFeaturesUpdate,
   RegisterUcContactAccountBody,
+  RegistrationRecordClearResult,
+  RegistrationRecordSelectionInput,
+  RestockStaffPage,
+  RestockStatusInput,
+  RestockSubmissionInput,
+  RestockSubmissionReceipt,
   RetryCustomerReviewAnalysis200,
   RetryUcOfflineClientDelivery200,
   RewardsQrCandidate,
@@ -5321,6 +5328,221 @@ export const useRequestUcUploadUrl = <TError = ErrorType<void>,
       return useMutation(getRequestUcUploadUrlMutationOptions(options));
     }
 
+export const getSubmitUcRestockRequestUrl = () => {
+
+
+
+
+  return `/api/uc/restock-requests`
+}
+
+/**
+ * @summary Save a guest prospect or customer restock request, never a checkout order
+ */
+export const submitUcRestockRequest = async (restockSubmissionInput: RestockSubmissionInput, options?: RequestInit): Promise<RestockSubmissionReceipt> => {
+
+  return customFetch<RestockSubmissionReceipt>(getSubmitUcRestockRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(restockSubmissionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitUcRestockRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitUcRestockRequest>>, TError,{data: BodyType<RestockSubmissionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitUcRestockRequest>>, TError,{data: BodyType<RestockSubmissionInput>}, TContext> => {
+
+const mutationKey = ['submitUcRestockRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitUcRestockRequest>>, {data: BodyType<RestockSubmissionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitUcRestockRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitUcRestockRequestMutationResult = NonNullable<Awaited<ReturnType<typeof submitUcRestockRequest>>>
+    export type SubmitUcRestockRequestMutationBody = BodyType<RestockSubmissionInput>
+    export type SubmitUcRestockRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Save a guest prospect or customer restock request, never a checkout order
+ */
+export const useSubmitUcRestockRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitUcRestockRequest>>, TError,{data: BodyType<RestockSubmissionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitUcRestockRequest>>,
+        TError,
+        {data: BodyType<RestockSubmissionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitUcRestockRequestMutationOptions(options));
+    }
+
+export const getListUcRestockRequestsUrl = (params?: ListUcRestockRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/uc/admin/restock-requests?${stringifiedParams}` : `/api/uc/admin/restock-requests`
+}
+
+export const listUcRestockRequests = async (params?: ListUcRestockRequestsParams, options?: RequestInit): Promise<RestockStaffPage> => {
+
+  return customFetch<RestockStaffPage>(getListUcRestockRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUcRestockRequestsQueryKey = (params?: ListUcRestockRequestsParams,) => {
+    return [
+    `/api/uc/admin/restock-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListUcRestockRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listUcRestockRequests>>, TError = ErrorType<void>>(params?: ListUcRestockRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcRestockRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUcRestockRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUcRestockRequests>>> = ({ signal }) => listUcRestockRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUcRestockRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUcRestockRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listUcRestockRequests>>>
+export type ListUcRestockRequestsQueryError = ErrorType<void>
+
+
+
+export function useListUcRestockRequests<TData = Awaited<ReturnType<typeof listUcRestockRequests>>, TError = ErrorType<void>>(
+ params?: ListUcRestockRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUcRestockRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUcRestockRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateUcRestockRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/uc/admin/restock-requests/${id}`
+}
+
+export const updateUcRestockRequest = async (id: number,
+    restockStatusInput: RestockStatusInput, options?: RequestInit): Promise<RestockSubmissionReceipt> => {
+
+  return customFetch<RestockSubmissionReceipt>(getUpdateUcRestockRequestUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(restockStatusInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateUcRestockRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcRestockRequest>>, TError,{id: number;data: BodyType<RestockStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUcRestockRequest>>, TError,{id: number;data: BodyType<RestockStatusInput>}, TContext> => {
+
+const mutationKey = ['updateUcRestockRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUcRestockRequest>>, {id: number;data: BodyType<RestockStatusInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUcRestockRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUcRestockRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateUcRestockRequest>>>
+    export type UpdateUcRestockRequestMutationBody = BodyType<RestockStatusInput>
+    export type UpdateUcRestockRequestMutationError = ErrorType<void>
+
+    export const useUpdateUcRestockRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUcRestockRequest>>, TError,{id: number;data: BodyType<RestockStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUcRestockRequest>>,
+        TError,
+        {id: number;data: BodyType<RestockStatusInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateUcRestockRequestMutationOptions(options));
+    }
+
 export const getListUcInventoryWishlistDemandUrl = () => {
 
 
@@ -6908,6 +7130,78 @@ export const useRecoverUnsyncedRegistration = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRecoverUnsyncedRegistrationMutationOptions(options));
+    }
+
+export const getClearSelectedRegistrationRecordsUrl = () => {
+
+
+
+
+  return `/api/admin/unsynced-registrations/clear-selected`
+}
+
+/**
+ * Removes only selected durable registration records. Customer accounts, assignments, orders, payments and customer history are not deleted. Selection keys identify exact record snapshots; stale or ambiguous selections fail without removing anything.
+ * @summary Clear explicitly selected test registration records in any recovery state
+ */
+export const clearSelectedRegistrationRecords = async (registrationRecordSelectionInput: RegistrationRecordSelectionInput, options?: RequestInit): Promise<RegistrationRecordClearResult> => {
+
+  return customFetch<RegistrationRecordClearResult>(getClearSelectedRegistrationRecordsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registrationRecordSelectionInput)
+  }
+);}
+
+
+
+
+
+export const getClearSelectedRegistrationRecordsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, TError,{data: BodyType<RegistrationRecordSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, TError,{data: BodyType<RegistrationRecordSelectionInput>}, TContext> => {
+
+const mutationKey = ['clearSelectedRegistrationRecords'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, {data: BodyType<RegistrationRecordSelectionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  clearSelectedRegistrationRecords(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearSelectedRegistrationRecordsMutationResult = NonNullable<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>>
+    export type ClearSelectedRegistrationRecordsMutationBody = BodyType<RegistrationRecordSelectionInput>
+    export type ClearSelectedRegistrationRecordsMutationError = ErrorType<void>
+
+    /**
+ * @summary Clear explicitly selected test registration records in any recovery state
+ */
+export const useClearSelectedRegistrationRecords = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>, TError,{data: BodyType<RegistrationRecordSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearSelectedRegistrationRecords>>,
+        TError,
+        {data: BodyType<RegistrationRecordSelectionInput>},
+        TContext
+      > => {
+      return useMutation(getClearSelectedRegistrationRecordsMutationOptions(options));
     }
 
 export const getClearResolvedRegistrationsUrl = () => {
@@ -12285,6 +12579,78 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateAgentOauthClientMutationOptions(options));
+    }
+
+export const getDeleteAgentOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/api/oauth/clients/${id}`
+}
+
+/**
+ * Requires a live ProjectHub administrator. Only suspended or revoked clients without unexpired, unrevoked tokens can be deleted. Removes client credentials and tokens; preserves audit history.
+ * @summary Permanently delete an inactive, unused machine client
+ */
+export const deleteAgentOauthClient = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteAgentOauthClientUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAgentOauthClientMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentOauthClient>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAgentOauthClient>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteAgentOauthClient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAgentOauthClient>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAgentOauthClient(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAgentOauthClientMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAgentOauthClient>>>
+
+    export type DeleteAgentOauthClientMutationError = ErrorType<void>
+
+    /**
+ * @summary Permanently delete an inactive, unused machine client
+ */
+export const useDeleteAgentOauthClient = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentOauthClient>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAgentOauthClient>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteAgentOauthClientMutationOptions(options));
     }
 
 export const getRotateAgentOauthClientUrl = (id: string,) => {

@@ -5,6 +5,129 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type RestockSubmissionInputContact = {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @minLength 7
+     * @maxLength 30
+     */
+  phone: string;
+  /**
+     * @minLength 2
+     * @maxLength 240
+     */
+  location: string;
+};
+
+export interface RestockSubmissionInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  productKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  variantSku?: string;
+  /**
+     * @minLength 16
+     * @maxLength 100
+     */
+  idempotencyKey: string;
+  contact: RestockSubmissionInputContact;
+}
+
+export type RestockSubmissionReceiptStatus = typeof RestockSubmissionReceiptStatus[keyof typeof RestockSubmissionReceiptStatus];
+
+
+export const RestockSubmissionReceiptStatus = {
+  pending: 'pending',
+  contacted: 'contacted',
+  resolved: 'resolved',
+} as const;
+
+export interface RestockSubmissionReceipt {
+  saved: boolean;
+  status: RestockSubmissionReceiptStatus;
+}
+
+export type RestockStatusInputStatus = typeof RestockStatusInputStatus[keyof typeof RestockStatusInputStatus];
+
+
+export const RestockStatusInputStatus = {
+  pending: 'pending',
+  contacted: 'contacted',
+  resolved: 'resolved',
+} as const;
+
+export interface RestockStatusInput {
+  status: RestockStatusInputStatus;
+}
+
+export type RestockStaffRequestKind = typeof RestockStaffRequestKind[keyof typeof RestockStaffRequestKind];
+
+
+export const RestockStaffRequestKind = {
+  guest: 'guest',
+  customer: 'customer',
+} as const;
+
+export type RestockStaffRequestStatus = typeof RestockStaffRequestStatus[keyof typeof RestockStaffRequestStatus];
+
+
+export const RestockStaffRequestStatus = {
+  pending: 'pending',
+  contacted: 'contacted',
+  resolved: 'resolved',
+} as const;
+
+export interface RestockStaffRequest {
+  id: number;
+  /** @nullable */
+  customerId: string | null;
+  kind: RestockStaffRequestKind;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  phone: string | null;
+  /** @nullable */
+  location: string | null;
+  productCode: string;
+  productName: string;
+  productSlug: string;
+  parentSku: string;
+  /** @nullable */
+  variantSku: string | null;
+  /** @nullable */
+  variantLabel: string | null;
+  status: RestockStaffRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RestockDemandCount {
+  productCode: string;
+  productName: string;
+  /** @nullable */
+  variantSku: string | null;
+  waitingCount: number;
+  guestCount: number;
+  customerCount: number;
+}
+
+export interface RestockStaffPage {
+  requests: RestockStaffRequest[];
+  demand: RestockDemandCount[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface ProductEditorialIdentity {
   code: string;
   slug: string;
@@ -3279,6 +3402,11 @@ export const UnsyncedRegistrationRecoveryReason = {
 } as const;
 
 export interface UnsyncedRegistration {
+  /**
+     * Opaque exact-snapshot key used for safe selected-record clearing
+     * @pattern ^[a-f0-9]{64}$
+     */
+  recordKey?: string;
   /** @nullable */
   id?: number | null;
   firstName?: string;
@@ -3293,6 +3421,21 @@ export interface UnsyncedRegistration {
   targetAccountId?: number;
   resolvedAt?: string;
   resolvedBy?: string;
+}
+
+export interface RegistrationRecordSelectionInput {
+  confirm: true;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     * @items.pattern ^[a-f0-9]{64}$
+     */
+  recordKeys: string[];
+}
+
+export interface RegistrationRecordClearResult {
+  /** @minimum 1 */
+  cleared: number;
 }
 
 export type UnsyncedRegistrationRecoveryInputTarget = {
@@ -4524,6 +4667,24 @@ export type GetCompanionCommerceStatus200 = {
 };
 
 export type GetCompanionCommerceMigrationReview200 = { [key: string]: unknown };
+
+export type ListUcRestockRequestsParams = {
+status?: ListUcRestockRequestsStatus;
+/**
+ * @minimum 1
+ */
+page?: number;
+};
+
+export type ListUcRestockRequestsStatus = typeof ListUcRestockRequestsStatus[keyof typeof ListUcRestockRequestsStatus];
+
+
+export const ListUcRestockRequestsStatus = {
+  pending: 'pending',
+  contacted: 'contacted',
+  resolved: 'resolved',
+  all: 'all',
+} as const;
 
 export type ListUcCustomersParams = {
 /**

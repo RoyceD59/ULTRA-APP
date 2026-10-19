@@ -6,10 +6,10 @@ const ALLOWED_API_ORIGINS = new Set([
 ]);
 
 addEventListener("fetch", (event) => {
-  event.respondWith(routeRequest(event.request));
+  event.respondWith(routeRequest(event.request, event));
 });
 
-async function routeRequest(request) {
+async function routeRequest(request, event) {
   const incoming = new URL(request.url);
   const upstream = new URL(request.url);
   upstream.protocol = "https:";
@@ -99,12 +99,27 @@ async function routeRequest(request) {
   upstreamRequest.headers.set("X-Forwarded-Proto", incoming.protocol.slice(0, -1));
   upstreamRequest.headers.set("X-UC-Public-Host", incoming.host);
 
-  const upstreamResponse = await fetch(upstreamRequest, {
+  const imageKey = publicImageCacheKey(request);
+  const imageCache = imageKey && typeof caches !== "undefined" ? caches.default : null;
+  let upstreamResponse = imageCache ? await imageCache.match(imageKey).catch(() => null) : null;
+  const imageHit = Boolean(upstreamResponse);
+  if (!upstreamResponse) upstreamResponse = await fetch(upstreamRequest, {
     cf: {
       cacheEverything: false,
       cacheTtl: 0,
     },
   });
+  const publicImage = Boolean(imageKey && upstreamResponse.status === 200
+    && /^image\//i.test(upstreamResponse.headers.get("Content-Type") || "")
+    && /(?:^|,)\s*public(?:,|$)/i.test(upstreamResponse.headers.get("Cache-Control") || "")
+    && !/(?:^|,)\s*(?:private|no-store)\b/i.test(upstreamResponse.headers.get("Cache-Control") || "")
+    && !upstreamResponse.headers.has("Set-Cookie"));
+  if (publicImage && imageCache && !imageHit) {
+    const cached = new Response(upstreamResponse.clone().body, upstreamResponse);
+    cached.headers.set("Cache-Control", "public, max-age=604800, immutable");
+    const storing = imageCache.put(imageKey, cached).catch(() => undefined);
+    if (event?.waitUntil) event.waitUntil(storing); else await storing;
+  }
 
   const headers = new Headers(upstreamResponse.headers);
   const isApiResponse =
@@ -112,10 +127,16 @@ async function routeRequest(request) {
     (isCompanionHost &&
       (incoming.pathname === "/api" || incoming.pathname.startsWith("/api/")));
 
-  if (isApiResponse) {
+  if (isApiResponse && !publicImage) {
     for (const [name, value] of apiNoStoreHeaders()) {
       headers.set(name, value);
     }
+  }
+  if (publicImage) {
+    headers.set("Cloudflare-CDN-Cache-Control", "public, max-age=604800");
+    headers.set("X-UC-Image-Cache", imageHit ? "hit" : imageCache ? "miss" : "bypass");
+    headers.delete("Pragma");
+    headers.delete("Expires");
   }
 
   if (isApiHost) {
@@ -167,6 +188,26 @@ async function routeRequest(request) {
     statusText: upstreamResponse.statusText,
     headers,
   });
+}
+
+// Only immutable public product files. Never cache OAuth, private APIs, HTML,
+// prospects, arbitrary remote URLs, errors, or requests carrying credentials.
+function publicImageCacheKey(request) {
+  if (request.method !== "GET" || request.headers.has("Authorization") || request.headers.has("Cookie")) return null;
+  const url = new URL(request.url);
+  if (!["api.ucfilters.com", "app.ucfilters.com"].includes(url.hostname)) return null;
+  if (!/^\/api\/storage\/objects\/uploads\/[a-f0-9-]{36}$/i.test(url.pathname)
+    && !/^\/api\/uc\/product-images\/[a-z0-9][a-z0-9._-]*\.(?:jpe?g|png)$/i.test(url.pathname)) return null;
+  for (const key of url.searchParams.keys()) if (!["w", "fmt"].includes(key) || url.searchParams.getAll(key).length !== 1) return null;
+  const width = url.searchParams.get("w");
+  if (width != null) {
+    if (!/^\d{1,4}$/.test(width) || Number(width) <= 0) return null;
+    url.searchParams.set("w", String([128, 256, 384, 512, 768].find(w => w >= Number(width)) || 768));
+  }
+  const format = url.searchParams.get("fmt");
+  if (format != null && format !== "webp") return null;
+  url.searchParams.sort();
+  return new Request(url.href, { method: "GET" });
 }
 
 function apiNoStoreHeaders() {

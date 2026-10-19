@@ -18,3 +18,13 @@ deep link, not just screenshots or forced browser clicks. Release fallback
 layout only when the interactive page is ready, not while the public-document
 fallback still owns the screen. Navigation groups must select a published
 record rather than assuming the first configured record is available.
+
+Natural-flow layout requires an actual public fallback, not merely a product
+URL. Readiness belongs to the current route, never a retained hidden screen.
+
+**Why:** React effects run in different phases, and navigation can retain
+previous screens. Document ownership must remain consistent across those
+lifecycle boundaries.
+
+**How to apply:** Treat fallback and interactive navigation as mutually
+exclusive layout owners, including loading and error states.

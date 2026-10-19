@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
 import {
   AlisonMachineApiError,
+  alisonConnectionHelp,
   issueAlisonMachineToken,
   listAlisonMachineChats,
 } from "@/lib/alison-machine-api";
@@ -53,6 +54,8 @@ function ConversationListSkeleton() {
 }
 
 export default function AlisonConversationsPage() {
+  const queryClient = useQueryClient();
+  const [connectionVersion, setConnectionVersion] = useState(0);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -69,11 +72,17 @@ export default function AlisonConversationsPage() {
       issueAlisonMachineToken(id, secret),
   });
   const chatsQuery = useQuery({
-    queryKey: ["alison-machine-chats", cursor],
+    queryKey: ["alison-machine-chats", connectionVersion, cursor],
     queryFn: ({ signal }) => listAlisonMachineChats(accessToken!, cursor, signal),
     enabled: connected,
     retry: false,
+    gcTime: 0,
   });
+
+  useEffect(() => () => {
+    void queryClient.cancelQueries({ queryKey: ["alison-machine-chats"] });
+    queryClient.removeQueries({ queryKey: ["alison-machine-chats"] });
+  }, [queryClient]);
 
   useEffect(() => {
     if (!expiresAt) return;
@@ -85,8 +94,11 @@ export default function AlisonConversationsPage() {
     if (tokenExpired) {
       setAccessToken(null);
       setSelectedId(null);
+      void queryClient.cancelQueries({ queryKey: ["alison-machine-chats"] });
+      queryClient.removeQueries({ queryKey: ["alison-machine-chats"] });
+      tokenMutation.reset();
     }
-  }, [tokenExpired]);
+  }, [tokenExpired, queryClient]);
 
   useEffect(() => {
     const first = chatsQuery.data?.chats[0];
@@ -117,9 +129,10 @@ export default function AlisonConversationsPage() {
 
   const connect = () => {
     tokenMutation.mutate(
-      { id: clientId, secret: clientSecret },
+      { id: clientId.trim(), secret: clientSecret.trim() },
       {
         onSuccess: (token) => {
+          setConnectionVersion((current) => current + 1);
           setAccessToken(token.access_token);
           setExpiresAt(Date.now() + token.expires_in * 1_000);
           setNow(Date.now());
@@ -133,6 +146,9 @@ export default function AlisonConversationsPage() {
   };
 
   const disconnect = () => {
+    void queryClient.cancelQueries({ queryKey: ["alison-machine-chats"] });
+    queryClient.removeQueries({ queryKey: ["alison-machine-chats"] });
+    tokenMutation.reset();
     setAccessToken(null);
     setExpiresAt(null);
     setCursor(undefined);
@@ -176,6 +192,11 @@ export default function AlisonConversationsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-2">
+              <p>Ask a ProjectHub administrator to open <strong>Agent operations</strong> and choose <strong>Create Alison viewer</strong>.</p>
+              <p>Copy the client ID and one-time secret from the same panel, in this environment. Your ProjectHub password or a provider API key will not work here.</p>
+              <p>If the secret is lost, the administrator can rotate it. Rotation replaces the old secret but does not add permissions or extend client expiry.</p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="alison-client-id">Client ID</Label>
               <Input
@@ -193,7 +214,7 @@ export default function AlisonConversationsPage() {
                 id="alison-client-secret"
                 data-testid="input-alison-client-secret"
                 type="password"
-                autoComplete="current-password"
+                autoComplete="off"
                 value={clientSecret}
                 onChange={(event) => setClientSecret(event.target.value)}
               />
@@ -203,14 +224,14 @@ export default function AlisonConversationsPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Authorization failed</AlertTitle>
                 <AlertDescription>
-                  Check that the client is active and includes the <code>alison.read</code> scope.
+                  {alisonConnectionHelp(tokenMutation.error)}
                 </AlertDescription>
               </Alert>
             )}
             <Button
               data-testid="button-connect-alison-client"
               className="w-full"
-              disabled={!clientId.trim() || !clientSecret || tokenMutation.isPending}
+              disabled={!clientId.trim() || !clientSecret.trim() || tokenMutation.isPending}
               onClick={connect}
             >
               {tokenMutation.isPending

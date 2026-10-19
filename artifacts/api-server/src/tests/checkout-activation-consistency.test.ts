@@ -12,13 +12,16 @@ import { registerOrderUnit } from "../lib/register-order-unit.js";
 import { checkoutDiagnostics } from "../lib/checkout-diagnostics.js";
 import { orderEvidence } from "../lib/order-evidence.js";
 import { prepareCheckoutOrder } from "../lib/checkout-orders.js";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 
 const realFetch = globalThis.fetch;
 let server: http.Server, base: string, owner: number, other: number, token: string, otherToken: string, adminToken: string;
 let accepted: number, unresolved: number, lineId: number, providerCalls = 0;
 let guestOrder: number | undefined;
+let productId: number;
 const phones = ["+254711893421", "+254711893422"];
 before(async () => {
+  productId = (await appCatalogueFixture()).id;
   process.env.SESSION_SECRET ??= "isolated-checkout-activation-test";
   for (const key of ["WC_BASE_URL", "WC_CONSUMER_KEY", "WC_CONSUMER_SECRET", "PAYSTACK_SECRET_KEY", "STRIPE_SECRET_KEY",
     "MPESA_CONSUMER_KEY", "MPESA_CONSUMER_SECRET", "MPESA_PASSKEY", "MPESA_SHORTCODE"]) delete process.env[key];
@@ -137,7 +140,7 @@ test("detail fetch and reload preserve reconciliation and COD evidence, independ
 test("guest confirmation accepts required contact and retries the same financial order without an account", async () => {
   const idempotencyKey = randomUUID();
   const payload = { idempotencyKey, fulfillment: "collection", paymentMethod: "cod",
-    paymentReference: `cod_${idempotencyKey}`, lineItems: [{ productId: 1, quantity: 1 }],
+    paymentReference: `cod_${idempotencyKey}`, lineItems: [{ productId, quantity: 1 }],
     shippingAddress: { firstName: "Avery", lastName: "Fixture", address1: "Guest contact building, Nairobi",
       phone: "+254712345678", country: "KE" } };
   const first = await request("/uc/orders", "POST", payload, "");
@@ -167,7 +170,7 @@ test("server recovery retains review until explicit confirmation and scopes reso
 
 test("invalid signed sessions cannot become guest checkout, payment, or retirement attempts", async () => {
   const key = randomUUID();
-  const input = {idempotencyKey:key,fulfillment:"collection",lineItems:[{productId:1,quantity:1}],
+  const input = {idempotencyKey:key,fulfillment:"collection",lineItems:[{productId,quantity:1}],
     shippingAddress:{firstName:"Amina",lastName:"Otieno",address1:"Test building",phone:phones[0],country:"KE"}};
   assert.equal((await request("/uc/orders","POST",{...input,paymentMethod:"cod"},"invalid-session")).status,401);
   assert.equal((await request("/payments/paystack/init","POST",{email:"fixture@test.invalid",checkout:input},"invalid-session")).status,401);
@@ -180,7 +183,7 @@ test("no-attempt cancellation is durable and rejects a delayed old request while
   const key = randomUUID();
   assert.equal((await request("/uc/checkout/cancel", "POST", {idempotencyKey:key})).status, 200);
   const input = { idempotencyKey:key, fulfillment:"collection" as const,
-    lineItems:[{productId:1,quantity:1}], shippingAddress:{firstName:"Avery",lastName:"Fixture",
+    lineItems:[{productId,quantity:1}], shippingAddress:{firstName:"Avery",lastName:"Fixture",
       address1:"Corrected contact building",phone:phones[0],country:"KE"} };
   await assert.rejects(prepareCheckoutOrder(input,String(owner),"cod"), /retired/);
   const corrected = await prepareCheckoutOrder({...input,idempotencyKey:randomUUID()},String(owner),"cod");

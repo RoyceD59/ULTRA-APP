@@ -27,6 +27,7 @@ import { eq } from "drizzle-orm";
 
 let wcStub: http.Server;
 let server: http.Server;
+let retiredStoreCalls = 0;
 
 const TEAM_ADMIN_ID = "test-reminder-gaps-team-admin";
 
@@ -46,6 +47,7 @@ before(async () => {
   // Stub store that is "down": every request gets a 500 with a non-JSON body,
   // so wcFetchArray → null → fetchAllPublishedProducts → null.
   wcStub = http.createServer((_req, res) => {
+    retiredStoreCalls++;
     res.statusCode = 500;
     res.end("<html>Service Unavailable</html>");
   });
@@ -119,18 +121,16 @@ describe("GET /api/uc/admin/orders/reminder-gaps — admin gating", () => {
   });
 });
 
-describe("GET /api/uc/admin/orders/reminder-gaps — unreachable store", () => {
-  it("returns 502 (never an empty all-clear) when the store can't be fetched", async () => {
+describe("GET /api/uc/admin/orders/reminder-gaps — app-owned catalogue", () => {
+  it("reports local gaps without depending on a retired, unreachable store", async () => {
     const r = await getReminderGaps(adminHeader());
     assert.equal(
-      r.status, 502,
-      `expected 502 when the WooCommerce catalogue is unreachable, got ${r.status}`,
+      r.status, 200,
+      `local report must not depend on WooCommerce, got ${r.status}`,
     );
     const body = r.body as { error?: string; orders?: unknown };
-    assert.ok(body?.error, "502 body must carry an error message");
-    assert.equal(
-      body.orders, undefined,
-      "an unreachable store must never return an orders array (false all-clear)",
-    );
+    assert.equal(body.error, undefined);
+    assert.ok(Array.isArray(body.orders));
+    assert.equal(retiredStoreCalls, 0);
   });
 });

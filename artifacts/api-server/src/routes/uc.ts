@@ -3450,6 +3450,9 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
           version: r.analysis.version,
         },
       })),
+      restockRequests: (await pool.query(`SELECT product_code,product_name,parent_sku,variant_sku,
+        variant_label,name,phone,location,status,created_at,updated_at,resolved_at
+        FROM uc_restock_requests WHERE customer_id=$1 ORDER BY created_at DESC`, [user.id])).rows,
       notificationPreferences: notifPrefRows.map(p => ({
         optOutOrderUpdates: p.optOutOrders,
         updatedAt:          p.updatedAt,
@@ -6197,7 +6200,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       const { paymentMethod, paymentReference = "", ...input } = req.body;
       const order = await prepareCheckoutOrder(input, orderUserId, paymentMethod);
       const verification = await verifyPaymentOnServer(paymentMethod, paymentReference);
-      if (!verification.ok) { res.status(verification.retryable ? 503 : 402).json({ error: verification.reason ?? "Payment not confirmed" }); return; }
+      if (!verification.ok) {
+        res.status(verification.retryable ? 503 : 402).json({
+          error: verification.reason ?? "Payment not confirmed",
+          retryable: verification.retryable === true,
+        });
+        return;
+      }
       if (verification.amount !== undefined && (!Number.isFinite(verification.amount) ||
           Math.abs(verification.amount - Number(order.total)) > 0.01 || verification.currency?.toUpperCase() !== "KES")) {
         res.status(402).json({ error: "Verified payment does not match this checkout total or currency" }); return;

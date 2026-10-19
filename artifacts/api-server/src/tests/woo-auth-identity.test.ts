@@ -83,15 +83,27 @@ describe("Woo verified identity gates", () => {
     assert.equal(await bcryptjs.compare(password, stored!.passwordHash), true);
   });
 
-  it("concurrent verified Woo logins converge to one database principal", async () => {
+  it("concurrent retired Woo logins cannot provision a database principal even with matching provider email", async () => {
     const email = `concurrent-${randomUUID()}@example.com`;
     wooResponse = { token: "woo-token", user_email: email };
     const results = await Promise.all([login(email), login(email)]);
-    assert.ok(results.every((result) => result.status === 200));
+    assert.ok(results.every((result) => result.status === 401 && !("token" in result.body)));
     const rows = await db.select({ id: ucUsersTable.id }).from(ucUsersTable)
       .where(and(eq(ucUsersTable.email, email), eq(ucUsersTable.authProvider, "woocommerce")));
-    assert.equal(rows.length, 1);
-    createdIds.push(rows[0]!.id);
-    await assertRewardsQrIdentity(app, results[0]!.body.token as string, rows[0]!.id);
+    assert.equal(rows.length, 0);
+  });
+
+  it("concurrent password logins retain one database principal and its rewards identity", async () => {
+    const email = `local-concurrent-${randomUUID()}@example.com`;
+    const [account] = await db.insert(ucUsersTable).values({
+      email, passwordHash: await bcryptjs.hash("woo-password", 4),
+      firstName: "Local", lastName: "Customer", authProvider: "password",
+    }).returning();
+    createdIds.push(account!.id);
+    const results = await Promise.all([login(email), login(email)]);
+    assert.ok(results.every(result => result.status === 200));
+    const rows = await db.select({ id: ucUsersTable.id }).from(ucUsersTable).where(eq(ucUsersTable.email,email));
+    assert.deepEqual(rows,[{id:account!.id}]);
+    await assertRewardsQrIdentity(app, results[0]!.body.token as string, account!.id);
   });
 });
