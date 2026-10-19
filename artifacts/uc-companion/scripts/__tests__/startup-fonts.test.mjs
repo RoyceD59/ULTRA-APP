@@ -98,7 +98,7 @@ test('browser guard counts delayed background bodies, MIME-only fonts, failures 
   try {
     await once(server, 'listening');
     browser = await chromium.launch({
-      executablePath: process.env.CHROMIUM_PATH || '/repl/tools/bin/chromium',
+      executablePath: browserExecutablePath(),
       headless: true, args: ['--no-sandbox'],
       env: { ...process.env, HOME: temporary, XDG_CONFIG_HOME: temporary, XDG_CACHE_HOME: temporary },
     });
@@ -125,3 +125,4 @@ test('browser guard counts delayed background bodies, MIME-only fonts, failures 
     fs.rmSync(temporary, { recursive: true, force: true });
   }
 });
+import { browserExecutablePath } from './fixtures/browser.mjs';

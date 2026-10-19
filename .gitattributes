@@ -1,0 +1,2 @@
+# Generated validators hash the LF schema bytes. Preserve them on Windows too.
+artifacts/uc-companion/server/records/*.schema.json text eol=lf

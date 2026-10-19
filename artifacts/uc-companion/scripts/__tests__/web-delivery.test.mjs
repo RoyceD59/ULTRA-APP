@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 
@@ -87,7 +88,7 @@ test('split web export and server preserve versions, deep links, compression and
   try {
     fixture(BUILD);
     writeFileSync(join(root, 'active-build.json'), JSON.stringify({ buildId: BUILD }));
-    child = spawn(process.execPath, [new URL('../../server/serve.js', import.meta.url).pathname], {
+    child = spawn(process.execPath, [fileURLToPath(new URL('../../server/serve.js', import.meta.url))], {
       env: { ...process.env, STATIC_ROOT: root, BASE_PATH: BASE, PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     const port = await new Promise((resolve, reject) => {

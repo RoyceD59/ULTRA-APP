@@ -1,31 +1,33 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FRAME_COUNT, renderDropletFrame } from '../generate-filter-loader.mjs';
+import { FRAME_COUNT, FRAME_DELAY_CS, renderDropletFrame, renderStillFrame } from '../generate-filter-loader.mjs';
 
-describe('single-droplet artwork generator', () => {
-  it('draws exactly one centred glossy droplet on the original transparent canvas', () => {
+// The retained owner-supplied artwork replaced the earlier stationary pulse.
+describe('supplied falling-droplet artwork generator', () => {
+  it('never draws more than one drop and preserves the transparent source canvas', () => {
+    let visibleFrames = 0;
     for (let frame = 0; frame < FRAME_COUNT; frame++) {
       const svg = renderDropletFrame(frame);
-      assert.equal((svg.match(/data-droplet="single"/g) ?? []).length, 1);
-      assert.equal((svg.match(/fill="url\(#water\)"/g) ?? []).length, 1);
-      assert.match(svg, /width="96" height="112" viewBox="0 0 96 112"/);
-      assert.match(svg, /translate\(48 56\)/);
-      assert.match(svg, /#52b6dc/);
-      assert.match(svg, /#005d8f/);
-      assert.match(svg, /stroke="white"/);
+      const drops = (svg.match(/fill="url\(#cw-glass\)"/g) ?? []).length;
+      assert.ok(drops <= 1, 'only one falling droplet at a time');
+      visibleFrames += drops;
+      assert.match(svg, /width="96" height="112" viewBox="0 -2 24 28"/);
+      assert.match(svg, /cw-reflection/);
       assert.doesNotMatch(svg, /<rect|<image|https?:\/\/(?!www.w3.org)/);
+      assert.equal(svg, renderDropletFrame(frame + FRAME_COUNT), 'loop repeats deterministically');
     }
+    assert.ok(visibleFrames > 1 && visibleFrames < FRAME_COUNT, 'drop falls, then leaves time for ripples');
   });
-  it('gently pulses without travel and seamlessly repeats the first still frame', () => {
-    assert.equal(FRAME_COUNT, 24);
-    assert.equal(renderDropletFrame(0), renderDropletFrame(FRAME_COUNT));
-    const scales = Array.from({ length: FRAME_COUNT }, (_, frame) =>
-      Number(renderDropletFrame(frame).match(/scale\(([\d.]+)\)/)[1]));
-    assert.ok(Math.max(...scales) / Math.min(...scales) < 1.065);
-    assert.ok(new Set(scales).size > 1, 'not a static loop');
-    for (let frame = 0; frame < FRAME_COUNT; frame++) {
-      assert.ok(Math.abs(scales[frame] - scales[(frame + 1) % FRAME_COUNT]) < 0.014,
-        'small adjacent changes, including the loop boundary');
-    }
+  it('uses the approved 1.5-second cadence, falling motion and a visible still fallback', () => {
+    assert.equal(FRAME_COUNT * FRAME_DELAY_CS, 150);
+    const positions = Array.from({ length: FRAME_COUNT }, (_, frame) =>
+      renderDropletFrame(frame).match(/translate\(12 ([\d.]+)\) scale\([\d.]+ [\d.]+\)/)?.[1])
+      .filter(Boolean).map(Number);
+    assert.ok(positions.length > 1);
+    assert.ok(positions.every((value, index) => index === 0 || value > positions[index - 1]));
+    const still = renderStillFrame();
+    assert.equal((still.match(/fill="url\(#water\)"/g) ?? []).length, 1);
+    assert.match(still, /width="96" height="112" viewBox="0 -2 24 28"/);
+    assert.doesNotMatch(still, /<rect|<image/);
   });
 });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
+import { editorialFixtureResponse } from './fixtures/public-web.mjs';
 
 const require = createRequire(import.meta.url);
 const { productModel, articleModel, guideModel, jsonLd, publicUrl } = require('../../server/public-schema.cjs');
@@ -23,8 +24,8 @@ const guide = { slug: 'installation', title: 'Install the filter', summary: 'Ins
     { heading: 'After installing', steps: ['Check for leaks'] },
   ] };
 
-async function publicPage(path, { apiOrigin = 'https://api.example.test', basePath = '', fetchImpl = async () =>
-  Response.json([], { headers: { 'x-uc-catalogue-provenance': 'woocommerce-published' } }) } = {}) {
+async function publicPage(path, { apiOrigin = 'https://api.example.test', basePath = '', fetchImpl = async url =>
+  await editorialFixtureResponse(url) ?? Response.json([], { headers: { 'x-uc-catalogue-provenance': 'companion-published' } }) } = {}) {
   if (classifyWebRoute(path) !== 'public') return null;
   const page = await createPublicRenderer({
     canonicalOrigin: 'https://app.ucfilters.com', basePath,
@@ -101,7 +102,9 @@ test('public HTML renders schema and the same visible data with matching real br
   ]) {
     const page = await publicPage(path, { apiOrigin, basePath: '/uc-companion', fetchImpl: async (_url, options) => {
       assert.deepEqual(options.headers, { Accept: 'application/json' });
-      return Response.json(type === 'Product' ? [payload] : payload, { headers: { 'x-uc-catalogue-provenance': 'woocommerce-published' } });
+      const editorial = await editorialFixtureResponse(_url, { inventory: type === 'Product' ? [payload] : undefined });
+      if (editorial) return editorial;
+      return Response.json(type === 'Product' ? [payload] : payload, { headers: { 'x-uc-catalogue-provenance': 'companion-published' } });
     } });
     const nodes = graph(page);
     assert.ok(nodes.some(node => node['@type'] === type));
@@ -119,31 +122,33 @@ test('public HTML renders schema and the same visible data with matching real br
 });
 
 test('lists contain only visible public entries and canonical links; no FAQ or location schemas', async () => {
-  const page = await publicPage('/blog', { fetchImpl: async () => Response.json({ articles: [article], nextCursor: null }) });
+  const page = await publicPage('/blog', { fetchImpl: async url => await editorialFixtureResponse(url) ?? Response.json({ articles: [article], nextCursor: null }) });
   const list = graph(page).find(node => node['@type'] === 'ItemList');
   assert.deepEqual(list.itemListElement, [{ '@type': 'ListItem', position: 1, name: article.title, url: 'https://app.ucfilters.com/blog/clean-water' }]);
   assert.match(page.body, /href="\/blog\/clean-water"/);
   assert.doesNotMatch(page.head, /FAQPage|LocalBusiness/);
-  const map = await publicPage('/map', { fetchImpl: async () => Response.json([]) });
+  const map = await publicPage('/map', { fetchImpl: async url => await editorialFixtureResponse(url) ?? Response.json([]) });
   assert.doesNotMatch(map.head, /LocalBusiness/);
 });
 
 test('shared identity IDs remain stable across public pages; private pages never fetch', async () => {
   const home = graph(await publicPage('/'));
-  const blog = graph(await publicPage('/blog', { fetchImpl: async () => Response.json({ articles: [], nextCursor: null }) }));
+  const blog = graph(await publicPage('/blog', { fetchImpl: async url => await editorialFixtureResponse(url) ?? Response.json({ articles: [], nextCursor: null }) }));
   for (const type of ['Organization', 'WebSite']) {
     assert.equal(home.find(node => node['@type'] === type)['@id'], blog.find(node => node['@type'] === type)['@id']);
   }
-  for (const path of ['/account', '/checkout', '/orders', '/admin/blog', '/auth/login', '/product/123abc', '/blog/%2fadmin']) {
+  for (const path of ['/account', '/checkout', '/orders', '/admin/blog', '/auth/login']) {
     const page = await publicPage(path, { fetchImpl: () => { throw new Error('must not fetch'); } });
     assert.ok(page === null || (page.status === 404 && page.schemas.length === 0));
   }
+  assert.equal((await publicPage('/product/123abc')).status, 404);
+  assert.equal((await publicPage('/blog/%2fadmin')).status, 404);
 });
 
 test('unverified/demo products and unpublished/API failures fail closed', async () => {
   for (const path of ['/product/123']) {
     assert.equal((await publicPage(path, { fetchImpl: async () => Response.json(product) })).status, 503);
   }
-  assert.equal((await publicPage('/guide/draft', { fetchImpl: async () => new Response('', { status: 404 }) })).status, 404);
+  assert.equal((await publicPage('/guide/draft', { fetchImpl: async url => await editorialFixtureResponse(url) ?? new Response('', { status: 404 }) })).status, 404);
   assert.equal((await publicPage('/blog/article', { fetchImpl: async () => { throw new Error('offline'); } })).status, 503);
 });

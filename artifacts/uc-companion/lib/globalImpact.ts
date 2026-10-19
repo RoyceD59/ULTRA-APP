@@ -1,4 +1,4 @@
-import type { GlobalImpactSnapshot } from '@workspace/api-client-react';
+import type { GlobalImpactSnapshot } from '@workspace/api-client-react/companion/models/globalImpactSnapshot';
 export type GlobalImpact = GlobalImpactSnapshot;
 
 /** Public read transport: no session headers, account token, or fallback totals. */

@@ -1,12 +1,24 @@
-import { test, afterEach } from 'node:test';
+import { test, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createRequire } from 'node:module';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { __testRender, useState } from '../../__mocks__/react.ts';
 import { _reset } from '../../__mocks__/@react-native-async-storage/async-storage.ts';
 import { readCheckoutRecovery } from '../../hooks/checkoutRecovery.ts';
 
-const url = (code: string) => 'data:text/javascript,' + encodeURIComponent(code);
+// File-backed ESM fixtures also work through Node/tsx's Windows CJS bridge.
+const fixtureRoot = mkdtempSync(join(tmpdir(), 'uc-checkout-rendered-'));
+let fixtureId = 0;
+const url = (code: string) => {
+  const file = join(fixtureRoot, `${fixtureId++}.mjs`);
+  writeFileSync(file, code);
+  return pathToFileURL(file).href;
+};
+after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
 const stateUrl = url(`
   export let user={id:41,firstName:'Amina',lastName:'Otieno',phone:'+254712345678',address:'Test building, Nairobi'};
   export let items=[{id:1,name:'Hydra Flux',price:3499,quantity:1}];
@@ -30,11 +42,12 @@ const empty = url('export default function Component(){return null;}');
 const mocks: Record<string,string> = {
   '@/context/AuthContext':stateUrl, '@/context/CartContext':stateUrl, '@/hooks/useApi':stateUrl,
   '@/hooks/useColors':url('export function useColors(){return {primary:"#0054A6",text:"#000",mutedForeground:"#666"};}'),
-  'expo-router':url('export function useRouter(){return {replace(){},push(){},back(){}};}'),
+  'expo-router':url('export function useRouter(){return {replace(){},push(){},back(){}};} export function useLocalSearchParams(){return {};}'),
   'react-native-safe-area-context':url('export function useSafeAreaInsets(){return {top:0,bottom:0};}'),
   '@tanstack/react-query':url('export function useQueryClient(){return {async invalidateQueries(){}};}'),
   'expo-haptics':url('export const ImpactFeedbackStyle={}; export function impactAsync(){}'),
   'expo-web-browser':url('export function openAuthSessionAsync(){} export function openBrowserAsync(){}'),
+  'expo-clipboard':url('export async function setStringAsync(){}'),
   '@/lib/analytics':url('export function trackEvent(){}'),
   '@/components/AlisonBubble':empty, '@/components/ContactCompletion':empty,
   '@/components/PaymentMethodPicker':empty,

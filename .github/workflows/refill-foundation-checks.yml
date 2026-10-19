@@ -32,8 +32,11 @@ jobs:
       - name: Check isolated API routes and refill economics
         working-directory: artifacts/api-server
         env:
+          NODE_ENV: test
           DATABASE_URL: postgres://localhost:1/refill_test_unused
           SESSION_SECRET: unit-test-only
         run: node --import tsx/esm --test src/tests/refill-readiness.test.ts
       - run: pnpm --filter @workspace/projecthub test
+      - name: Install pinned Companion test browser
+        run: pnpm exec playwright install --with-deps chromium
       - run: pnpm --filter @workspace/uc-companion test

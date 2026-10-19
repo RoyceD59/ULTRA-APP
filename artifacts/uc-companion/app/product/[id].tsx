@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useColors } from '@/hooks/useColors';
 import { useApi, resolveMediaUrl, resizedImageUrl, type UCReviewMedia, type UCProduct } from '@/hooks/useApi';
-import { getUcProduct } from '@workspace/api-client-react';
+import { getUcProduct } from '@workspace/api-client-react/companion/customer';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { visibleStoreCategory } from '@/lib/storeCategories';

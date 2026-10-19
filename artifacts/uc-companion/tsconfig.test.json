@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
+      "@/lib/localNotifications":                    ["./__mocks__/expo-notifications.ts"],
       "@/*": ["./*"],
       "react":                                     ["./__mocks__/react.ts"],
       "react/jsx-runtime":                         ["./__mocks__/react-jsx-runtime.ts"],

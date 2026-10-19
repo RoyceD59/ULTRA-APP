@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test, type TestContext } from 'node:test';
 import ts from 'typescript';
+import { checkoutBoundaries } from './fixtures/checkout-boundaries.mts';
 import { cancelMpesaPoll, isCancelledAttempt } from '../mpesaPollManager.js';
 import { classifyMpesaStatus, pollSettleClearsRef, type MpesaStatusResponse } from '../mpesaStatusClassifier.js';
 
@@ -56,6 +57,7 @@ function harness(t: TestContext) {
   let tick!: () => Promise<void>;
   let paystackStarts = 0;
   const state = {
+    ...checkoutBoundaries(),
     processing: true, mpesaWaiting: false, paymentMethod: 'mpesa',
     paymentFrozen: true,
     attemptRef: { current: 1 },
@@ -70,6 +72,11 @@ function harness(t: TestContext) {
     total: 100, fulfillment: 'collection', baseQuote: { total: 100 },
     quoteCurrent: true, quoteLoading: false, quoteError: '',
     validateAddress: () => true,
+    checkoutPaymentInput() {
+      state.orderIdentityRef.current ??= { idempotencyKey: 'new-checkout' };
+      state.paymentInputRef.current = { idempotencyKey: state.orderIdentityRef.current.idempotencyKey };
+      return state.paymentInputRef.current;
+    },
     setShowMpesaModal() {},
     clearMpesaRetryCheck() {},
     setProcessing(value: boolean) { state.processing = value; },

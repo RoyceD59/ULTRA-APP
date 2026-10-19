@@ -75,7 +75,7 @@ describe("recovery order enrichment UI contract", () => {
     view.unmount(); mount();
     await screen.findByText("dispatched", { exact: true });
     expect(screen.queryByRole("button", { name: "Mark dispatched", exact: true })).not.toBeInTheDocument();
-  });
+  }, 20_000); // Multiple real dialog/query cycles exceed 5 seconds on Windows.
   it("retains entered details and shows server errors until a retry succeeds", async () => {
     mount(); const dialog = await openAndFill();
     failNextSave = true;
@@ -86,5 +86,5 @@ describe("recovery order enrichment UI contract", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save enrichment", exact: true }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await screen.findByText(/ready to dispatch\./);
-  });
+  }, 20_000);
 });

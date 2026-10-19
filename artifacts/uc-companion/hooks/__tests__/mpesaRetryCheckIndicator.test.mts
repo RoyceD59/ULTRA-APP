@@ -46,7 +46,7 @@ test('checkout wires feedback only around the prior-status query and clears it s
   assert.match(source, /if \(processing \|\| mpesaCheckCleanupRef\.current\) return/);
   assert.match(source, /finally \{[\s\S]*?stopIndicator\(\);[\s\S]*?if \(mpesaCheckCleanupRef\.current === stopIndicator\) clearMpesaRetryCheck\(\)/);
   assert.match(source, /cancelMpesaPoll\(attemptRef, pollRef\);\s*clearMpesaRetryCheck\(\)/);
-  assert.match(source, /useEffect\(\(\) => \(\) => \{\s*mpesaCheckCleanupRef\.current\?\.\(\)/);
+  assert.match(source, /useEffect\(\(\) => \{[\s\S]*?return \(\) => \{[\s\S]*?mpesaCheckCleanupRef\.current\?\.\(\)/);
   assert.match(source, /mpesaCheckingPrevious \? \(\s*mpesaCheckVisible \?/);
   assert.match(source, /Checking your previous payment…/);
 });

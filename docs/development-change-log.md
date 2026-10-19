@@ -1,5 +1,66 @@
 # 13 October 2026 — Product clicks, restock action and gallery recovery
 
+## 19 October 2026 — Repair post-merge CI and document deployment validation
+
+- **Scope:** User approved a focused repair branch from merged `main` and a
+  practical deployment-validity guide. Base: PR #6 merge `3731f841…`; work is on
+  `codex/repair-merged-main-ci`.
+- **Runtime/build utilities:** Product requests use the existing Companion
+  customer API export instead of the root barrel; the global-impact type import
+  uses its existing domain-model export. The web-export chunk check and font
+  consumer report normalize Windows path separators. Added LF checkout policy
+  for checked schema JSON in `.gitattributes` so Windows preserves its checksum
+  bytes without changing retained release assets. No
+  schema, generated client, validator, payment handler or loader asset changed.
+- **Test boundaries:** Route tests inject the persisted flag reader with
+  `NODE_ENV=test`, reset it per test and verify that storage errors still return
+  503. Notification tests map the local-only facade to the stateful mock.
+  Rendered checkout fixtures provide current router/clipboard boundaries and
+  portable file-backed ESM modules. Extracted provider tests supply the added
+  account/recovery/storage boundaries; their production cancellation, retry and
+  stale-response handlers remain the code exercised.
+- **Current contracts:** Public-data fixtures require the API's actual
+  `companion-published` provenance while explicitly rejecting legacy/demo
+  provenance. Source guards recognize the added recovery/link state, unmounted
+  Alison guard, marker-event isolation and optional visible assessment label.
+  Artwork tests cover the retained owner-supplied single falling drop/ripples
+  and still fallback, superseding the earlier stationary-pulse expectation.
+  The payload fixture uses the platform temp directory.
+- **CI browser:** Both workflows that run Companion tests install the pinned
+  Playwright Chromium. Browser fixtures use an explicit override, provisioned
+  Replit browser, or Playwright's browser rather than a required Replit path.
+  No tests were skipped and no production capability was enabled.
+- **Hub tests:** Inventory mocks retain the real stock-label export; customer
+  mocks include the current assignment-query hooks. Vitest selects its source
+  test files and the Hub test command separately runs the existing Node photo
+  ordering suite, so that suite is executed by its intended runner.
+  Inventory quantity checks locate their column by its header. The two order
+  enrichment integration tests retain all assertions with 20-second deadlines:
+  a successful isolated Windows run measured 6.1 seconds for the first test.
+- **Documents:** Added `deployment-validity-guide.md` and a timestamped public
+  deployment review. The guide distinguishes Git commits, selected source
+  archives, published build IDs, preview checks and actual account/device proof.
+- **Verification:** Full Windows Companion suite passes 984/984 with no skipped
+  tests; Companion typecheck and isolated refill routes (9/9) pass locally.
+  GitHub on `0160065` passes Companion (984), foundation (9 API tests, 38 Hub
+  Vitest files plus the Node photo-order test, then 984 Companion tests),
+  governance and isolated three-surface preview. A simultaneous local Hub
+  repeat was stopped after resource-related UI deadlines; the full Hub result
+  above is from the normal Ubuntu CI runner. This follow-up narrows the schema
+  attribute, bounds two UI-test deadlines and records completed public capture;
+  inspect the resulting exact-head checks on PR #7 before merging.
+  Public version/manifest/health/snapshot observations and the verified
+  62-file/60-asset capture with equal cross-host bundle hashes are recorded in
+  the deployment review. Captured files are local evidence, not a changed main
+  Replit publication selection.
+- **Ignore/dependency changes:** None. Lockfile unchanged; local tooling and
+  test-browser downloads are outside the tracked source.
+- **Status:** Source and review evidence only; no publication, customer-data
+  write, database migration, DNS or repository-protection change.
+- **Next:** Finish checks, review the repair PR, complete served-asset/rollback
+  verification and obtain the existing secure-account/device evidence before
+  a separately selected publication.
+
 ## 19 October 2026 — GitHub main/App reconciliation prepared for review
 
 - GitHub `main` (`3f5da0c340471becf001ea384ff4e4356047181c`) and `App`

@@ -35,7 +35,7 @@ function fontFamilyConsumers(root) {
       } else if (/\.[jt]sx?$/.test(entry.name)) {
         fs.readFileSync(filename, 'utf8').split('\n').forEach((line, index) => {
           if (/\bfontFamily\b/.test(line)) matches.push({
-            file: path.relative(root, filename), line: index + 1, source: line.trim(),
+            file: path.relative(root, filename).split(path.sep).join('/'), line: index + 1, source: line.trim(),
           });
         });
       }

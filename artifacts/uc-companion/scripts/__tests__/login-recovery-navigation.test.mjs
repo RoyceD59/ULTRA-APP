@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { execFileSync } from 'node:child_process';
+import { browserExecutablePath } from './fixtures/browser.mjs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -72,6 +72,7 @@ async function screenBundle() {
             });
           `,
           'expo-haptics': 'export const ImpactFeedbackStyle = {Light: "light"}; export const impactAsync = async () => {};',
+          'expo-constants': 'export default {expoConfig:{extra:{}}};',
           '@expo/vector-icons/Ionicons': 'export default function Icon() { return null; }',
           '@/components/BrandLogo': 'export default function BrandLogo() { return null; }',
           '@/components/SocialAuthButtons': 'export default function SocialAuthButtons() { return null; }',
@@ -108,7 +109,7 @@ before(async () => {
   origin = `http://127.0.0.1:${server.address().port}`;
   browserHome = mkdtempSync(join(tmpdir(), 'uc-recovery-browser-'));
   browser = await chromium.launch({
-    executablePath: execFileSync('which', ['chromium'], { encoding: 'utf8' }).trim(),
+    executablePath: browserExecutablePath(),
     headless: true,
     args: ['--no-sandbox'],
     env: { ...process.env, HOME: browserHome, XDG_CONFIG_HOME: browserHome, XDG_CACHE_HOME: browserHome },

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import ts from 'typescript';
 import { createRequire } from 'node:module';
 
@@ -116,7 +117,7 @@ test('config and all public domains share one auth/base-URL state with the legac
 
 test('initial payload guard rejects the legacy graph and sums every requested script', () => {
   const { profilePayload, assertCompanionOnly } = require('../profile-web-payload.cjs');
-  const directory = fs.mkdtempSync('/tmp/uc-api-profile-test-');
+  const directory = fs.mkdtempSync(path.join(tmpdir(), 'uc-api-profile-test-'));
   try {
     const mapDir = path.join(directory, '_expo/static/js/web');
     fs.mkdirSync(mapDir, { recursive: true });

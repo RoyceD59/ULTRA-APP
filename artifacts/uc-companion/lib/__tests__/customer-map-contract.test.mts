@@ -14,7 +14,7 @@ describe('customer map city-tap contract', () => {
 
     assert.match(nativeMap, /visible\.map\(loc\s*=>\s*\(/);
     assert.match(nativeMap, /<Marker[\s\S]*coordinate=\{\{\s*latitude:\s*loc\.lat,\s*longitude:\s*loc\.lng\s*\}\}/);
-    assert.match(nativeMap, /onPress=\{\(\)\s*=>\s*handleMarkerPress\(loc\)\}/);
+    assert.match(nativeMap, /onPress=\{event => \{\s*event\.stopPropagation\(\);\s*handleMarkerPress\(loc\);/);
     assert.match(nativeMap, /setSelected\(loc\)/);
     assert.match(nativeMap, /<LocationDetailModal[\s\S]*location=\{selected\}/);
   });
