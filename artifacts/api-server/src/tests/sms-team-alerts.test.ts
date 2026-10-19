@@ -219,6 +219,8 @@ describe("alertTeamRecoveryOrder — configurable email recipient", () => {
 // ─── alertTeamRecoveryOrder ────────────────────────────────────────────────────
 
 describe("alertTeamRecoveryOrder — SMS team alerts", () => {
+  const previousResendBase = process.env["RESEND_BASE_URL"];
+
   before(() => {
     // AT credentials present so sendSms fires fetch (rather than no-oping)
     process.env["AT_API_KEY"]  = "test-at-key";
@@ -237,9 +239,15 @@ describe("alertTeamRecoveryOrder — SMS team alerts", () => {
     restoreSelect();
     restoreInsert();
     restoreFetch();
+    if (previousResendBase === undefined) delete process.env["RESEND_BASE_URL"];
+    else process.env["RESEND_BASE_URL"] = previousResendBase;
   });
 
   beforeEach(async () => {
+    // Every test owns an intercepted HTTP adapter. Without this override,
+    // earlier alerts use the unavailable Replit connector in plain CI and
+    // their delayed retries can be counted by the next test's outage stub.
+    process.env["RESEND_BASE_URL"] = "https://api.resend.com";
     capturedRequests = [];
     capturedInserts  = [];
     selectStub = []; // DB returns no team_settings row → env-var fallback

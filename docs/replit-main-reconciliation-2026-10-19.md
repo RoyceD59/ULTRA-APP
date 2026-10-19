@@ -62,6 +62,15 @@ Clerk API origin; the private key is not persisted. Local requests verify health
 200 anonymously and with a local team JWT, plus anonymous admin 401. These are
 provider-boundary fixtures, not production Clerk/session acceptance evidence.
 
+The next complete run reached 1758 API tests: 1755 passed, one failed and two
+existing skips, with no cancellations. The single failure was an SMS/email
+fixture leak: earlier alerts fell onto an unavailable Replit connector and
+their delayed retries entered the next test's HTTP outage stub. The SMS suite
+now selects its intercepted HTTP adapter before every test and restores the
+original environment afterward. The exact two-attempt assertion and production
+retry code remain unchanged. The focused local SMS run passed 23/23; final full
+CI completion must still be observed.
+
 The selected archive was inspected without extraction, installation, execution
 of its application code or database access. Candidate, parent and scope hashes
 match. The existing source validator accepted 1355 files, 1219 unchanged parent
