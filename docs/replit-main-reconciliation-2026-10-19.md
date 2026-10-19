@@ -54,6 +54,14 @@ the middleware and real local JWT/database guards; no preview bypass was added.
 A pending rerun must not be described as passed. Existing Companion,
 foundation, governance and Docker preview checks passed on the first PR head.
 
+Synthetic Clerk initialization alone still caused remote verification-key lookup
+when a request carried the application's local JWT. That diagnostic run was
+stopped after a local timeout reproduction. CI now generates a fresh public
+verification key for Clerk's supported offline setting and uses a non-routable
+Clerk API origin; the private key is not persisted. Local requests verify health
+200 anonymously and with a local team JWT, plus anonymous admin 401. These are
+provider-boundary fixtures, not production Clerk/session acceptance evidence.
+
 The selected archive was inspected without extraction, installation, execution
 of its application code or database access. Candidate, parent and scope hashes
 match. The existing source validator accepted 1355 files, 1219 unchanged parent

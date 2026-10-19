@@ -31,6 +31,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm run typecheck:libs
+      - name: Create an offline Clerk verification fixture
+        run: |
+          node --input-type=module <<'NODE'
+          import { generateKeyPairSync, randomUUID } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          const { publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+          const delimiter = 'CLERK_CI_' + randomUUID();
+          const pem = publicKey.export({ type: 'spki', format: 'pem' });
+          appendFileSync(process.env.GITHUB_ENV, `CLERK_JWT_KEY<<${delimiter}\n${pem}\n${delimiter}\n`);
+          NODE
       - name: Run the complete API suite against disposable PostgreSQL
         working-directory: artifacts/api-server
         env:
@@ -48,5 +58,6 @@ jobs:
           # still exercises real local customer/team JWT and database guards.
           CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuaW52YWxpZCQ=
           CLERK_SECRET_KEY: sk_test_ci_fixture_not_a_real_key
+          CLERK_API_URL: https://clerk.invalid
           CLERK_TELEMETRY_DISABLED: '1'
         run: pnpm test
