@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { simulateRefillEconomics, type RefillSimulationInput } from "@workspace/api-zod/refill-readiness";
@@ -14,6 +14,10 @@ const scenario = (): RefillSimulationInput => ({
 });
 
 describe("controlled refill foundation", () => {
+  beforeEach(() => {
+    setRefillFeaturesReaderForTests(async () => ({ careOverview: false, refillGovernance: false }));
+  });
+  afterEach(() => { setRefillFeaturesReaderForTests(null); });
   it("keeps every paid or posting capability off regardless of persisted feature values", () => {
     const flags = getRefillCapabilities({ careOverview: true, refillGovernance: true });
     assert.equal(flags.careOverview, true);
@@ -43,6 +47,13 @@ describe("controlled refill foundation", () => {
     assert.equal(result.contributionMinor, 798);
     assert.equal(result.promotionalMrrMinor, 0);
     assert.equal(result.activationAllowed, false);
+  });
+  it("fails closed when persisted feature capabilities cannot be read", async () => {
+    setRefillFeaturesReaderForTests(async () => { throw new Error("unavailable test store"); });
+    const app = express(); app.use('/api', router);
+    const response = await request(app).get('/api/uc/refill/capabilities').expect(503);
+    assert.equal(response.headers['cache-control'], 'no-store');
+    assert.deepEqual(response.body, { error: "Feature capabilities could not be loaded." });
   });
   it("does not treat a missing cost as zero or calculate contribution", () => {
     for (const name of Object.keys(scenario().costs) as (keyof RefillSimulationInput["costs"])[]) {

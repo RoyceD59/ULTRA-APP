@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { browserExecutablePath } from './fixtures/browser.mjs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,7 +16,7 @@ const { build } = createRequire(require.resolve('tsx/package.json'))('esbuild');
 const browserHome = mkdtempSync(join(tmpdir(), 'uc-browser-home-'));
 after(() => rmSync(browserHome, { recursive: true, force: true }));
 const launchBrowser = () => chromium.launch({
-  executablePath: execFileSync('which', ['chromium'], { encoding: 'utf8' }).trim(),
+  executablePath: browserExecutablePath(),
   headless: true, args: ['--no-sandbox'],
   env: { ...process.env, HOME: browserHome, XDG_CONFIG_HOME: browserHome, XDG_CACHE_HOME: browserHome },
 });
@@ -120,11 +120,12 @@ test('actual web metadata hook hands off public HTML and removes stale public sc
       assert.equal(await page.locator('.uc-record-document').evaluate(node => getComputedStyle(node).overflow), 'visible');
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    const question = page.getByText('Can I put hot drinks in it?', { exact: true });
+    const question = page.locator('.uc-record-document details summary').first();
+    assert.equal(await question.count(), 1, 'published product exposes a keyboard-operable accordion');
     await question.focus();
     await page.keyboard.press('Enter');
     assert.equal(await question.evaluate(node => node.parentElement.open), true);
-    await page.screenshot({ path: '/tmp/uc-record-enhanced-phone.jpg' });
+    await page.screenshot({ path: join(tmpdir(), 'uc-record-enhanced-phone.jpg') });
     await page.getByRole('button', { name: 'Topic', exact: true }).click();
     await page.getByRole('heading', { name: 'plastic waste', exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelector('meta[name=robots]')?.content === 'noindex, follow');

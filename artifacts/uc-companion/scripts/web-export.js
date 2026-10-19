@@ -27,7 +27,7 @@ function pairWebResources(directory, basePath, buildId) {
   if (!html.includes(`${resourcePrefix}/_expo/static/js/web/`)) {
     throw new Error('Web export did not produce version-paired entry scripts');
   }
-  const chunks = walkFiles(directory).filter(file => /\/_expo\/static\/js\/web\/.*\.js$/.test(file));
+  const chunks = walkFiles(directory).filter(file => /\/_expo\/static\/js\/web\/.*\.js$/.test(file.split(path.sep).join('/')));
   if (chunks.length < 2) throw new Error('Web export unexpectedly produced a monolithic bundle');
   console.log(`Exported ${chunks.length} web entry/route/shared chunks`);
 }

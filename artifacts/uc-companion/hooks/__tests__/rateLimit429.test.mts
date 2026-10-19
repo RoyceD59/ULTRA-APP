@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
+import { checkoutBoundaries } from './fixtures/checkout-boundaries.mts';
 import { ApiError } from '../apiError.js';
 import {
   RATE_LIMIT_MESSAGE,
@@ -146,6 +147,7 @@ describe('checkout handlers — Paystack verification 429 recovery', () => {
       let initializations = 0;
       let browserOpens = 0;
       const state = {
+        ...checkoutBoundaries(),
         processing: false, paymentMethod: 'paystack', total: 100,
         fulfillment: 'collection', baseQuote: { total: 100 }, quoteCurrent: true,
         quoteLoading: false, quoteError: '', user: { email: 'customer@example.test' },

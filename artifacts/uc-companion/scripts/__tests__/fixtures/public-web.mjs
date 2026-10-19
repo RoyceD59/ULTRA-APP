@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const { PublicDataError } = createRequire(import.meta.url)('../../../server/public-content.cjs');
+const { records } = createRequire(import.meta.url)('../../../server/product-records.cjs');
+const { recordOperation } = createRequire(import.meta.url)('../../../server/record-operations.cjs');
 
 export const fixtures = {
   products: [{ id: 101, name: 'Commerce wording must not leak', price: '4199', stockStatus: 'instock', shortDescription: 'Commerce summary must not leak',
@@ -31,19 +33,37 @@ export const data = {
   locations: async () => fixtures.locations,
 };
 
+/** Serve the current published-record contract using the real projection code. */
+export async function editorialFixtureResponse(url, { inventory = fixtures.products, provenance = true } = {}) {
+  const route = new URL(url, 'http://fixture').pathname;
+  if (route === '/api/uc/product-records') return Response.json(records);
+  if (!route.startsWith('/api/uc/product-records/')) return null;
+  const key = decodeURIComponent(route.slice('/api/uc/product-records/'.length));
+  const product = records.products.find(p => p.slug === key || p.code === key);
+  if (!product) return Response.json({}, { status: 404 });
+  const operation = await recordOperation(product, records.identities.find(i => i.code === product.code), {
+    mediaOrigin: 'https://media.example',
+    products: async () => { if (!provenance) throw new PublicDataError(); return inventory; },
+    productOperation: async id => inventory.find(p => p.id === id),
+  });
+  return Response.json(operation);
+}
+
 export async function startFixture({ enabled = true, bundle = '', basePath = '/uc-companion', noBundle = false, prepareBuild = null } = {}) {
   const requests = [];
   const state = { unavailable: false, catalogueProvenance: true };
-  const api = createServer((req, res) => {
+  const api = createServer(async (req, res) => {
     requests.push({ path: req.url, headers: req.headers });
     res.setHeader('content-type', 'application/json');
     if (state.unavailable) { res.writeHead(503); res.end('{}'); return; }
     const route = new URL(req.url, 'http://fixture').pathname;
+    const editorial = await editorialFixtureResponse(req.url, { provenance: state.catalogueProvenance });
+    if (editorial) { res.writeHead(editorial.status); res.end(await editorial.text()); return; }
     if (route === '/api/uc/products' && state.catalogueProvenance) {
-      res.setHeader('X-UC-Catalogue-Provenance', 'woocommerce-published');
+      res.setHeader('X-UC-Catalogue-Provenance', 'companion-published');
     }
     if (route === '/api/uc/products/101' && state.catalogueProvenance) {
-      res.setHeader('X-UC-Catalogue-Provenance', 'woocommerce-live');
+      res.setHeader('X-UC-Catalogue-Provenance', 'companion-published');
     }
     const values = {
       '/api/uc/products': fixtures.products,

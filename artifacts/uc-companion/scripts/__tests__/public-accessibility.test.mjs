@@ -38,11 +38,13 @@ test('every assessment, booking and verification TextInput has a persistent acce
   const inputs = elements('app/water-test.tsx', 'TextInput');
   assert.deepEqual(inputs.map((input) => input.attribute('accessibilityLabel')), [
     '"First name *"', '"WhatsApp *"', '"Town / area *"',
+    '"Free water test code"',
     '"Service Address *"', '"Preferred Contact Time *"', '"6-digit code"',
   ]);
   for (const input of inputs) {
     const label = JSON.parse(input.attribute('accessibilityLabel'));
-    assert.ok(source('app/water-test.tsx').includes(`>${label}</Text>`), `Visible label missing: ${label}`);
+    assert.ok(source('app/water-test.tsx').includes(`>${label}</Text>`)
+      || source('app/water-test.tsx').includes(`>${label} (optional)</Text>`), `Visible label missing: ${label}`);
   }
 });
 

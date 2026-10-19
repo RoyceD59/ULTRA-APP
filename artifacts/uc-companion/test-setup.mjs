@@ -23,6 +23,10 @@ const root     = path.dirname(fileURLToPath(import.meta.url));
 const mocks    = path.join(root, '__mocks__');
 
 const STUBS = {
+  // Keep the local-only facade on the same stateful notification test double.
+  // Re-exporting the real facade through CJS cannot enumerate tsx mock exports.
+  '@/lib/localNotifications':
+    path.join(mocks, 'expo-notifications.ts'),
   'react':
     path.join(mocks, 'react.ts'),
   'react/jsx-runtime':

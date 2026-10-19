@@ -21,6 +21,8 @@ jobs:
       - run: pnpm --filter @workspace/uc-companion... install --frozen-lockfile --ignore-scripts
       - run: pnpm exec tsc -b lib/api-client-react lib/api-zod
       - run: pnpm --filter @workspace/uc-companion typecheck
+      - name: Install pinned test browser
+        run: pnpm exec playwright install --with-deps chromium
       - run: pnpm --filter @workspace/uc-companion test
       - name: Export web preview with fixture configuration
         working-directory: artifacts/uc-companion

@@ -132,8 +132,8 @@ test('data adapter rejects repeated cursors, malformed inventories and provider 
   assert.throws(() => createPublicData('https://user:password@api.example'), /origin/);
   assert.throws(() => createPublicRenderer({ canonicalOrigin: 'http://public.example', data }), /HTTPS/);
 });
-test('publication-safe adapter requires positive WooCommerce provenance and never accepts mock-compatible 200s', async () => {
-  for (const provenance of [null, 'demo', 'woocommerce-published']) {
+test('publication-safe adapter requires published Companion provenance and rejects legacy or mock-compatible 200s', async () => {
+  for (const provenance of [null, 'demo', 'woocommerce-published', 'woocommerce-live', 'companion-published']) {
     const calls = [];
     const adapter = createPublicData('https://api.example', async url => {
       calls.push(url);
@@ -141,7 +141,7 @@ test('publication-safe adapter requires positive WooCommerce provenance and neve
         headers: provenance ? { 'X-UC-Catalogue-Provenance': provenance } : {},
       });
     });
-    if (provenance === 'woocommerce-published') {
+    if (provenance === 'companion-published') {
       assert.deepEqual(await adapter.products(), fixtures.products);
     } else {
       await assert.rejects(() => adapter.products(), error => error.status === 503);

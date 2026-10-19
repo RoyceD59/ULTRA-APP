@@ -9,7 +9,8 @@ vi.mock("@/lib/team-auth", () => ({
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/analytics", () => ({ trackEvent: vi.fn() }));
-vi.mock("@/hooks/use-products", () => ({
+vi.mock("@/hooks/use-products", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/hooks/use-products")>(),
   useProducts: () => ({ data: [] }),
   useUpdateProduct: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -195,7 +196,9 @@ describe("inventory filter freshness", () => {
     selectStatus(to);
     expectRows([name]);
     const updatedRow = screen.getByText(name, { exact: true }).closest("tr")!;
-    expect(within(updatedRow).getAllByRole("cell")[4]).toHaveTextContent(String(quantity));
+    const quantityHeader = screen.getByRole("columnheader", { name: "Stock qty", exact: true });
+    const quantityColumn = within(quantityHeader.closest("tr")!).getAllByRole("columnheader").indexOf(quantityHeader);
+    expect(within(updatedRow).getAllByRole("cell")[quantityColumn]).toHaveTextContent(String(quantity));
 
     const readsBeforeRefresh = inventoryReads;
     fireEvent.click(screen.getByRole("button", { name: "Refresh", exact: true }));
