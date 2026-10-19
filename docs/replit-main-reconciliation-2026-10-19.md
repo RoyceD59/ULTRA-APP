@@ -46,7 +46,12 @@ no repository secrets. Its runner creates a separate test database and removes
 it after execution. Its first run exposed the optional AI client's import-time
 configuration requirement. CI now supplies a synthetic key and non-routable
 `.invalid` origin, without changing production initialization or using a live
-provider. A pending rerun must not be described as passed. Existing Companion,
+provider. A second run exposed missing Clerk initialization, causing broad 500
+responses before route handlers. A local missing-key control reproduced both
+health/admin 500s; synthetic initialization restored health 200 and anonymous
+admin 401. CI now supplies fake Clerk values with telemetry disabled, retaining
+the middleware and real local JWT/database guards; no preview bypass was added.
+A pending rerun must not be described as passed. Existing Companion,
 foundation, governance and Docker preview checks passed on the first PR head.
 
 The selected archive was inspected without extraction, installation, execution

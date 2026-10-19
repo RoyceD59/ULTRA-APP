@@ -44,4 +44,9 @@ jobs:
           # Keep it non-routable and synthetic; never provision a live provider key.
           AI_INTEGRATIONS_ANTHROPIC_BASE_URL: https://anthropic.invalid
           AI_INTEGRATIONS_ANTHROPIC_API_KEY: ci-fixture-not-a-key
+          # Keep Clerk middleware enabled with synthetic initialization. The suite
+          # still exercises real local customer/team JWT and database guards.
+          CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuaW52YWxpZCQ=
+          CLERK_SECRET_KEY: sk_test_ci_fixture_not_a_real_key
+          CLERK_TELEMETRY_DISABLED: '1'
         run: pnpm test
