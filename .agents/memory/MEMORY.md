@@ -100,7 +100,7 @@
 - [Development change tracking](development-change-tracking.md) — user requests a tracked development log and ignore-rule record; distinguish preparation from publication.
 - [Customer receipt delivery](receipt-delivery-policy.md) — email and confirmation-page receipts support screenshots, WhatsApp and PDF saving; order confirmation is not proof of payment.
 - [Deployment image budget](deployment-image-budget.md) — trim stage dependencies after all builds, not whole runtime stages; keep static node_modules assets and baked worker paths.
-- [Product-page sharing and comparison](product-page-future-flows.md) — product links are not saved-order payment authority; guest payment has separate release/evidence gates.
+- [Product-page future flows](product-page-future-flows.md) — sharing is not payment authority; record-only comparisons and guest/customer restock requests retain separate safeguards.
 - [Deployment stage marker gate](deployment-stage-marker-gate.md) — unmarked/non-stage folders are scratch (deps stripped); wrong markers and symlinks still fail publish; image summary warns over 7 GiB.
 - [Master workbook SKU register](master-workbook-sku-register.md) — v7 workbook is price/SKU authority; stock snapshot applied only by explicit script to unknown rows; no cost data in repo.
 - [Patched install trust](patch-install-trust.md) — plain frozen installs keep inactive hash-qualified patch dirs; verify bytes, --force heals; cold reproductions hit disk quota.
@@ -108,3 +108,8 @@
 - [Product-page structure](product-page-structure-policy.md) — supplied HTML is the layered reference for both web and Expo; a reduced buying/specs page is not acceptable.
 - [Public record handoff](public-record-handoff.md) — visible React buttons can fail hit-testing while the server fallback retains layout ownership.
 - [GitHub development destination](github-development-destination.md) — owner chose ULTRA-APP, not Ultra-AI-Team, for this project's development syncs.
+- [Category banner image mapping](category-banner-image-mapping.md) — shower filters use the left image, household the middle image, bottles the third image.
+- [Companion fixture contracts](companion-fixture-contracts.md) — public editorial and operational fixtures are separate; payment handler tests need account/recovery scope, not weaker production guards.
+- [Alison client deletion](alison-client-deletion-policy.md) — owner approved explicit Alison-only setup and deletion only after suspension, with no live tokens and retained audit history.
+- [Test registration cleanup](test-registration-cleanup-policy.md) — owner chose selected recovery records only, resolved or unresolved; never imply customer-account deletion or successful syncing.
+- [Database pool ownership](database-pool-ownership.md) — resolve independent pool reads before reserving transaction connections; test at pool capacity with bounded deadlines.

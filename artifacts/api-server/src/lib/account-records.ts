@@ -14,7 +14,7 @@ import { appendFile as _appendFile, mkdir, readFile, rename as _rename, unlink a
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { db, ucUsersTable } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import bcryptjs from "bcryptjs";
@@ -226,11 +226,15 @@ async function readAllRecords(): Promise<AccountRecord[]> {
 }
 
 async function writeRecordsAtomically(records: AccountRecord[]): Promise<void> {
+  await writeAccountFileAtomically(records.map((record) => JSON.stringify(record)).join("\n") + "\n");
+}
+
+async function writeAccountFileAtomically(contents: string): Promise<void> {
   await mkdir(ACCOUNT_DATA_DIR, { recursive: true });
   const destination = join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE);
   const temp = join(ACCOUNT_DATA_DIR, `.${ACCOUNTS_FILE}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`);
   try {
-    await _ioSeams.writeFile(temp, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+    await _ioSeams.writeFile(temp, contents, "utf8");
     await _ioSeams.rename(temp, destination);
   } finally {
     await _ioSeams.unlink(temp).catch(() => undefined);
@@ -507,7 +511,15 @@ export async function recoverUnsyncedRegistrations(limit = 25): Promise<{ attemp
 }
 
 /** Return all folder records that were never persisted to the database. */
-export async function listUnsyncedRegistrations(): Promise<AccountRecord[]> {
+function registrationRecordKey(record: AccountRecord): string {
+  return createHash("sha256").update(JSON.stringify(record)).digest("hex");
+}
+
+function selectableRecords(records: AccountRecord[]): Array<AccountRecord & { recordKey: string }> {
+  return records.map((record) => ({ ...record, recordKey: registrationRecordKey(record) }));
+}
+
+export async function listUnsyncedRegistrations(): Promise<Array<AccountRecord & { recordKey: string }>> {
   const all = await readAllRecords();
   try {
     const rows = await db.select({ email: ucUsersTable.email }).from(ucUsersTable);
@@ -515,20 +527,20 @@ export async function listUnsyncedRegistrations(): Promise<AccountRecord[]> {
     // Keep every folder-only row, plus any row carrying an explicit recovery
     // state (including a database-persisted resolution) visible for audit.
     // Ordinary successfully persisted registration backups remain hidden.
-    return all.filter((record) =>
+    return selectableRecords(all.filter((record) =>
       !record.dbPersisted
       || record.recoveryStatus !== undefined
       || !persisted.has(normalizeEmail(record.email))
-    );
+    ));
   } catch {
     // A database outage must not hide persisted recovery audit rows. They are
     // still actionable/visible until the explicit clear operation rewrites the
     // ledger, even though ordinary persisted registration backups stay hidden.
-    return all.filter((record) =>
+    return selectableRecords(all.filter((record) =>
       !record.dbPersisted
       || record.recoveryStatus !== undefined
       || record.followUpStatus === "resolved"
-    );
+    ));
   }
 }
 
@@ -573,6 +585,52 @@ export async function clearResolvedRegistrations(): Promise<number> {
     const cleared = records.length - retained.length;
     if (cleared > 0) await writeRecordsAtomically(retained);
     return cleared;
+  });
+}
+
+export class RegistrationSelectionChangedError extends Error {
+  constructor() {
+    super("Selected registration records changed. Refresh and select them again.");
+    this.name = "RegistrationSelectionChangedError";
+  }
+}
+
+/** Clear exact selected snapshots only; never mutate customer database data. */
+export async function clearSelectedRegistrationRecords(recordKeys: string[]): Promise<number> {
+  if (!recordKeys.length || recordKeys.length > 100 || new Set(recordKeys).size !== recordKeys.length
+    || recordKeys.some((key) => !/^[a-f0-9]{64}$/.test(key))) {
+    throw new Error("Between 1 and 100 unique registration record keys are required");
+  }
+  return withWriteLock(async () => {
+    let raw: string;
+    try {
+      raw = await readFile(join(ACCOUNT_DATA_DIR, ACCOUNTS_FILE), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new RegistrationSelectionChangedError();
+      throw error;
+    }
+    const selected = new Set(recordKeys);
+    const matches = new Map<string, number>();
+    // Preserve every unselected line verbatim, including malformed records.
+    // Re-serializing readAllRecords() would silently discard malformed lines.
+    const lines = raw.split("\n").map((line) => {
+      try {
+        const record = JSON.parse(line) as AccountRecord;
+        if (!record || typeof record.email !== "string" || typeof record.recordedAt !== "string"
+          || typeof record.dbPersisted !== "boolean") return { line, remove: false };
+        const key = registrationRecordKey(record);
+        if (!selected.has(key)) return { line, remove: false };
+        matches.set(key, (matches.get(key) ?? 0) + 1);
+        return { line, remove: true };
+      } catch {
+        return { line, remove: false };
+      }
+    });
+    // All-or-nothing: never silently clear a subset after recovery, another
+    // administrator's edit, or a duplicate indistinguishable ledger entry.
+    if (recordKeys.some((key) => matches.get(key) !== 1)) throw new RegistrationSelectionChangedError();
+    await writeAccountFileAtomically(lines.filter(({ remove }) => !remove).map(({ line }) => line).join("\n"));
+    return recordKeys.length;
   });
 }
 

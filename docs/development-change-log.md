@@ -1,3 +1,151 @@
+# 19 October 2026 — Preserve pending Replit work and reconcile tested main
+
+- Recovered the clean Replit tip 5e632ed16cbbda73f0f26f0c92a2d4924f375017 (13 unpushed commits) through a verified Git bundle after Replit GitHub authentication failed. Preserved the original history on codex/replit-preserved-2026-10-19; main and the live selection were not overwritten.
+- Integrated those commits with tested main 7b392e75b800ad99aaf96a7e070a89e5230a8e7e. Resolved 18 overlapping test/fixture conflicts while retaining main account/recovery, mounted analytics, provenance and portable browser guards.
+- Reconciled stale Companion expectations with the selected release: native derivatives fall back to original photos and stop loading after success; Notify me opens the restock form while existing alerts keep scoped toggles; collapsed HTML menus are opened before navigation; authored questions/details remain visible without inventing FAQ search markup. Added the clipboard boundary to the recovered physical ESM checkout fixture. No production authorization or payment guard was relaxed.
+- Added the complete API integration CI workflow against disposable PostgreSQL, with literal CI-only connection details and no production secrets. The existing runner creates/removes an isolated test database. Its result remains pending until observed.
+- Verification: initial Companion run 995/1001; repaired six stale assertions, focused recheck 16/16, final full Companion suite 1001/1001 with no skips. Frozen archive ee734d2d0e4d0fbb890900b694809b552e409e21a57e0fb8b53d3732dda75c7f passed existing source/scope validation: 1355 files, 1219 unchanged, 136 allowlisted changes, parent lock unchanged. This is not a compiled-stage or live-publication result.
+- Reviewed the new restock table/index/erasure-trigger migration and explicit inventory SKU constraint naming. Executed no production DDL, imports, stock initialization, account writes, publish or Cloudflare activation. Replit rollback installation remains incomplete after the browser connection dropped; customer/phone/binary gates remain open. See docs/replit-main-reconciliation-2026-10-19.md for identities and next actions.
+
+# 17 October 2026 — Product browser navigation and restock follow-up
+
+- Repaired public-document/interactive-page layout ownership. A parent effect
+  cannot restore zero-height record layout after the current route is ready;
+  client-side loading/error screens without a fallback keep their viewport.
+- Added an accessible menu on stack and tab screens, including product loading
+  and error states, Escape/focus return on web, and scrolling on short screens.
+  Fixed Expo Router's wrapped-child style-array rendering error.
+- Kept category-specific authored layers in both interactive and initial HTML
+  product pages; activated safe related-product, topic, enquiry and explicit
+  authored links. Public pages retain two installation-video slots.
+- Added guest/customer restock requests with name, international phone, typed
+  location and exact product/variant identity. Requests are prospects/pending
+  restock demand, never accounts, unpaid orders, reservations or payments.
+- Added ProjectHub stock follow-up filters, demand counts and status updates,
+  with live-admin checks, bounded pagination, private/no-store responses and
+  no contact or credential logging.
+- Added transactional duplicate protection, stale/deleted-account rejection,
+  customer export/erasure support and 180-day resolved-guest contact retention.
+  Erased contacts cannot be reopened into active demand.
+- Completion review found and corrected nested-pool acquisition starvation:
+  editorial reads now precede transaction-client reservation. A bounded test
+  exceeds pool capacity; the related customer-count test no longer depends on
+  concurrent fixture visibility-map/planner costs. Production count SQL is unchanged.
+- Product photos use bounded derivative widths, cached web images, original
+  fallback and deferred thumbnails. Prepared an explicit Cloudflare cache for
+  public image files only; private requests, HTML and errors remain uncached.
+- Prepared a bounded release archive over the previously selected product
+  release, preserving its security/dependency and catalogue/cart prerequisites.
+  The new preparer fails on ambiguous backports. No stock initialization,
+  payment activation, DNS change or production publication is implied.
+- Ignore rules were not changed. Dependency and build outputs continue to use
+  the existing ignored staging directories; small reviewed release-source
+  archives follow the existing release convention.
+- Verification and activation details: `docs/product-browser-restock-release.md`.
+
+# 17 October 2026 — Selected test registration record cleanup
+
+- Added individual selection and confirmed clearing on Unsynced Registrations
+  for recovered/resolved, pending, conflicted, retryable and contacted records.
+  Administrators choose which records are tests; there is no name/email-based
+  automatic classification or newly added clear-all-unresolved operation.
+- Customer accounts, assignments, orders, payments and customer history are
+  outside the approved removal scope. The empty state no longer incorrectly
+  claims every registration synced after records have been cleared.
+- Added a live-admin-gated API accepting explicit confirmation and at most
+  100 unique opaque snapshot keys. Changed/missing/ambiguous selections fail
+  all-or-nothing. Removal shares the existing registration/recovery write
+  queue, uses atomic replacement and retains unselected/malformed lines.
+- Logs record administrator identifier/action/count, not registration contents.
+  Storage errors produce safe user messages and never report false success.
+- API contract/codegen and shared-library, ProjectHub and API typechecks passed.
+  Focused checks: **17 API + 4 ProjectHub tests passed**, no failures. Coverage
+  includes cancellation, mixed-state selection, stale selections, permissions,
+  duplicate identities, concurrent appends, write failure and retained accounts.
+- Restarted the API and ProjectHub successfully. Mocked browser checks at
+  390/768/1440 pixels confirmed selection/confirmation/removal, retained
+  unselected rows, no page overflow, fitting dialogs and no browser page errors.
+  The unsigned screenshot showed sign-in, not the authenticated screen.
+- Added `docs/projecthub-registration-record-cleanup.md`. **Development only:**
+  no publication or GitHub push; no real test/customer records cleared and no
+  unrelated payment-task completion. API tests used a disposable database and
+  temporary ledger files; browser checks intercepted API requests with fixtures.
+
+# 17 October 2026 — Alison viewer access and guarded client deletion
+
+- Added an explicit Alison viewer quick-create option with only `alison.read`.
+  The matching client ID and one-time secret are now displayed together for
+  both creation and rotation; copying failures are reported rather than hidden.
+- Corrected pasted credential whitespace handling and distinguish missing
+  scope, rejected credentials, throttling and API/connectivity errors.
+  Unexpected success responses cannot establish a false connected state.
+- Clear anonymous conversation query caches on disconnect/expiry/unmount and
+  isolate each connection's cached pages. Credentials remain memory-only;
+  existing server-side secret hashing and team-session separation are retained.
+- Added administrator-only client deletion with permanent-removal confirmation.
+  Only suspended/revoked clients without live unrevoked tokens may be deleted.
+  Token cleanup and retained audit entries are transactional. Token issuance
+  rechecks locked client state to serialize with rotation/suspension/deletion.
+- Regenerated the API contract. Shared-library, ProjectHub and API typechecks
+  passed. Focused tests: **23 ProjectHub + 12 API passed**, no failures.
+  API checks used a disposable database and fixture credentials, not saved keys.
+- Restarted the API and ProjectHub successfully. Checked both updated screens
+  and the deletion dialog at 390, 768 and 1440 pixels with mocked browser
+  fixtures: no horizontal overflow or browser page errors. The unsigned
+  screenshot correctly displayed sign-in; it did not validate authenticated UI.
+- Added `docs/alison-client-access.md` with setup, recovery and removal steps.
+  **Development only:** no publication, GitHub push, production credential
+  changes or unrelated payment-task completion. Existing live credentials
+  were not inspected or verified.
+
+# 18 October 2026 — Companion regression suite repaired
+
+- Resolved the previously reported 52 Companion test failures. The final full
+  suite reports **990 passed, 0 failed, 0 skipped**. The count increased because
+  the previously failing rendered-checkout file now executes its three tests,
+  and the loader artwork has a separate static-frame assertion.
+- Repaired extracted payment-handler fixtures to supply ready account/recovery
+  state and the mounted checkout's navigation, receipt and sharing boundaries.
+  Plain ESM fixtures avoid Node/tsx treating data URLs as filesystem paths.
+  Cancellation, retry identity and server-refusal assertions remain enforced;
+  no live provider or payment credentials were used.
+- Public-rendering fixtures now expose the current editorial list/detail API
+  and Companion catalogue provenance. Retired WooCommerce/demo provenance is
+  still rejected, and unavailable editorial data still fails closed. Updated
+  canonical-product identity and keyboard accordion checks to the current
+  structured-fields-only public page; did not restore retired FAQ prose.
+- Fixed the product detail's eager root API import and moved the impact type
+  import to its public model entry point. Matched the optional water-test
+  field's accessible name to its visible label.
+- Updated stale loader-artwork, map event, analytics and hydration assertions
+  to current behavior without disabling their safety checks. The recovery
+  browser fixture now stubs native Expo constants instead of bundling native
+  module internals through React Native Web.
+- Shared-library and Companion typechecks passed; diff whitespace check passed.
+  Restarted Expo and confirmed the phone-width Products preview renders with
+  no browser page errors after Metro startup. The immediate screenshot was
+  blank during loading; a settled browser check confirmed visible content.
+- **Source/development only:** no frozen-package selection, publication,
+  GitHub push, physical-device certification or live-payment verification.
+  This does not certify the separate API suite or Expo Doctor checks.
+
+# 17 October 2026 — project-wide architecture and queue recovery review
+
+- Added `docs/companion-projecthub-development-status.md`: current development
+  status, full-system dependency map, 18 failure/common-dependency risks,
+  architecture requirements, evidence gaps and ordered ownership/actions.
+- Rechecked all 54 accepted unfinished tasks and stale input holds. Capacity
+  still blocks 31 tasks. Google collector verification returned to an input
+  hold during this review; no capacity or main-assignment change was made.
+- Existing workflow evidence: typechecks and startup-font checks finished;
+  API suite failed; Expo Doctor reports 11 SDK patch mismatches (19/20 checks).
+  Running API logs also warn of missing trackable-product lifespan metadata.
+- Preserved product/publication and web-foundation dependency chains and the
+  incomplete payment verification. No tasks falsely completed, no new tasks
+  created, no production changes and no fresh device verification.
+- Documentation is not a release approval or a new GitHub sync. Main priority
+  selection and worker capacity management require the task-board controls.
+
 # 13 October 2026 — Product clicks, restock action and gallery recovery
 
 ## 19 October 2026 — Repair post-merge CI and document deployment validation
@@ -1574,6 +1722,69 @@ initialization, then client delivery and exact live snapshot comparisons.
   sandbox/physical-device/notification/collector/ingress release gates
   before any later approved activation.
 
+
+### 2026-10-16 — Approved Google product-event debug transport check
+
+- **Scope/approval:** Owner supplied `G-K224XGM5KB`, Google Analytics collection,
+  and debug markers for a bounded development check, not permanent activation.
+- **Changes:** Recorded approved destination, sanitized per-event network
+  evidence and its limits in
+  [Google product-event debug verification](google-product-events-debug-verification.md);
+  linked it from the original product-page verification record. No runtime
+  source, app flags, payment configuration, hosting or dependencies changed.
+- **Verification:** Six existing focused product-selection tests passed.
+  Six synthetic non-purchase debug events left an isolated browser once each;
+  two Google collector requests returned HTTP 204. No real payment or external
+  purchase event. The owner separately confirmed all six in DebugView and
+  clarified that they appeared after the supplied empty-state screenshot.
+  Final report visibility is owner-attested, not agent-observed.
+- **Ignore changes:** None. Disposable diagnostic stayed under already-ignored
+  `.cache/`; no raw browser/session identifiers or customer data retained.
+- **Status:** Approved development ingestion check complete; not activated or
+  published. No additional events sent after owner confirmation. Task completion
+  is blocked by configured project-wide validation: `cd artifacts/uc-companion
+  && npx expo-doctor` reported 11 SDK patch mismatches, and `cd artifacts/api-server
+  && pnpm test` failed across existing API flows. All typechecks, startup-fonts
+  and completion code review passed. Checks were not bypassed.
+- **Remaining:** Any positive external purchase check requires separate
+  verified-paid setup/authorization. The downloaded tag omitted item context
+  for share/compare and attempted extra collection during preliminary blocked
+  checks; permanent-loader privacy and report completeness need separate work,
+  and no broad rollout is approved.
+
+
+### 2026-10-17 — Owner-approved Expo and API validation repairs
+
+- Aligned eleven Expo SDK patch versions and the lockfile. Expo Doctor now
+  passes 20/20; no version/age gates or activation settings were disabled.
+- Replaced demo-product assumptions with isolated app-catalogue fixtures in
+  supported checkout tests. Preserved local identity, administration checks,
+  payment recovery, guest-payment safety, promotions and repeat-confirmation
+  assertions without enabling WooCommerce.
+- Fixed missing per-field checkout errors and explicit payment-verification
+  retryability. No payment approval rules, collector flags or production data
+  changed.
+- The repaired focused batch passes 235/235, with no skips/cancellations.
+  Shared-library, API and Companion typechecks pass. API health and signed-out
+  Companion rendering were confirmed after workflow restarts.
+- Existing dependency backport regressions pass 7/7. Upstream-version audit
+  still flags two high advisories; those warnings are not described as a clean
+  audit.
+- The owner additionally approved replacing retired Woo success-path tests
+  while preserving app-owned coverage. Consolidated explicit disconnection
+  checks and retained local payment/receipt/ownership/export/inventory and
+  editorial assertions; see the [coverage transfer](api-retirement-validation.md).
+  No dormant integration was enabled and no new test was skipped.
+- Startup-fonts passes with the aligned packages. Project-wide validation
+  remains the final completion gate; focused runs and the earlier review are
+  not substitutes for that gate.
+- The full repair check exposed three remaining test-isolation failures:
+  shared-seed price pollution and a customer-count plan under concurrent
+  fixture writes. Added cleanup/serial execution rather than relaxing prices
+  or the index-only assertion.
+- No publication, payment execution, additional Google debug events or ignore
+  changes. Details: [verification and repair record](google-product-events-debug-verification.md).
+
 ### 2026-10-10 — Fail-safe publish scratch folders
 
 - **Scope/approval:** Task: stop leftover build folders from failing a publish after every build step passed. No publication, API or client behavior, or database change.
@@ -1733,6 +1944,42 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Ignore changes:** None.
 - **Status:** Assets only; not published.
 - **Remaining:** Each publish changes the served build, so the build then being served must be captured before the following publish.
+
+### 2026-10-17 — Repair inventory schema reconciliation after merge
+
+- **Scope:** Repair the failed post-merge setup without deleting inventory.
+- **Root cause:** Startup SQL created `UNIQUE (sku)` under PostgreSQL's name
+  `uc_catalogue_inventory_sku_key`; the unnamed Drizzle declaration expected a
+  different constraint name and triggered a populated-table truncation prompt.
+- **Change:** Declare the existing constraint name explicitly. Keep the setup
+  script's non-interactive prompt-failure protection unchanged.
+- **Verification:** Read-only development constraint inspection confirmed the
+  existing unique SKU constraint. Full post-merge setup then succeeded in
+  28 seconds, including schema reconciliation, codegen and library typecheck.
+  API and ProjectHub workflows were restarted after reconciliation.
+- **Ignore changes:** None.
+- **Status:** Development repair only; no production publication, credential
+  access or intentional inventory data change. Payment and product-page
+  verification tasks remain incomplete.
+
+### 2026-10-18 — Products banner slideshow implemented in main
+
+- **Scope:** Owner explicitly requested execution of the attached specification
+  here. Use first/left artwork for shower filters, middle for household systems,
+  and third for bottles. No publication or payment-task completion.
+- **Changes:** Bundled three compressed 1200×600 images; excluded poster
+  headlines/contact/footer content and preserved photographed products. Added
+  three-second slideshow, all-image readiness gate, motion/focus/visibility
+  pauses, first-frame reset, animation cleanup and accessible cart overlay.
+  Preserved search/categories/list/Alison and Home/Blog/detail pages.
+- **Verification:** Companion typecheck passed. Full Companion tests:
+  987 total, 935 passed, 52 failed outside the banner checks. Banner/loading
+  checks passed. Chromium confirmed image decoding, 390/820/1440 layouts
+  without horizontal overflow, cycling, reduced-motion reset and tab navigation.
+  Screenshots were visually inspected at phone and desktop widths.
+- **Ignore changes:** None. Three new image files total about 122 KB.
+- **Status:** Main source only; frozen candidate and publication not changed.
+  Physical native verification and unrelated suite failures remain open.
 
 ### YYYY-MM-DD — Change title
 

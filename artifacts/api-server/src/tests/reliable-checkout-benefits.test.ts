@@ -13,6 +13,7 @@ import { recoverSnapshotCheckout } from "../routes/payments.js";
 import { reconcileAbandonedCheckouts } from "../lib/abandoned-checkouts.js";
 import { releaseUnsuccessfulCheckout, type PaymentVerifier } from "../lib/checkout-cancellation.js";
 import { verifyPaymentOnServer } from "../routes/uc.js";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 
 describe("authoritative checkout and managed waived-service benefits", () => {
   let server: http.Server, base = "", uid = 0, otherId = 0, token = "";
@@ -38,7 +39,9 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     const result = await realFetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json",
       "X-Forwarded-For": `198.51.100.${paymentWindow}`,
       ...(signed ? { Authorization: `Bearer ${token}` } : {}), ...headers }, body: JSON.stringify(body) });
-    return { status: result.status, body: await result.json() as any };
+    const text = await result.text();
+    assert.ok(result.headers.get("content-type")?.includes("application/json"), `Non-JSON response (${result.status}) for ${path}: ${text}`);
+    return { status: result.status, body: JSON.parse(text) as any };
   }
   async function promo(kind: string, value = 0, cap?: number) {
     const code = `${prefix}_${randomUUID().slice(0,8)}`.toUpperCase();
@@ -52,9 +55,12 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     app.set("trust proxy", "loopback"); // Test-only, so each scenario has its own payment allowance.
     for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY","MPESA_SHORTCODE","PAYSTACK_SECRET_KEY","STRIPE_SECRET_KEY"]) delete process.env[key];
     process.env.SESSION_SECRET ??= "isolated-benefits-test";
+    process.env.UC_GUEST_PAY_PUBLIC_ORIGIN = "https://benefits-checkout.test";
     process.env.WC_BASE_URL = "https://benefits-shop.test";
     process.env.WC_CONSUMER_KEY = "fixture";
     process.env.WC_CONSUMER_SECRET = "fixture";
+    cart[0]!.productId = (await appCatalogueFixture(1400)).id;
+    cart[1]!.productId = (await appCatalogueFixture(300)).id;
     const users = await pool.query(`INSERT INTO uc_users(email,password_hash,first_name,last_name,phone,is_admin,address)
       VALUES($1,'unused','Amina','Otieno','+254712345678',true,'Fixture address'),($2,'unused','Mary','Otieno','+254712345679',false,'Fixture address') RETURNING id,email`,
       [`${prefix}@test.invalid`,`${prefix}-other@test.invalid`]);
@@ -63,7 +69,7 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     codes.ship = await promo("free_shipping");
     codes.test = await promo("free_water_test");
     codes.discount = await promo("checkout_discount", 500);
-    await pool.query("INSERT INTO uc_promotion_products(promotion_id,product_id) SELECT id,10001 FROM uc_promotions WHERE code=$1", [codes.discount]);
+    await pool.query("INSERT INTO uc_promotion_products(promotion_id,product_id) SELECT id,$2 FROM uc_promotions WHERE code=$1", [codes.discount, cart[0]!.productId]);
     globalThis.fetch = async (url: any, init?: RequestInit) => {
       const target = String(url);
       if (target.includes("safaricom.co.ke/oauth/")) return new Response(JSON.stringify({access_token:"fixture-token"}));
@@ -111,6 +117,7 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     globalThis.fetch = realFetch;
     await new Promise<void>(resolve => server.close(() => resolve()));
     delete process.env.WC_BASE_URL; delete process.env.WC_CONSUMER_KEY; delete process.env.WC_CONSUMER_SECRET; delete process.env.PAYSTACK_SECRET_KEY;
+    delete process.env.UC_GUEST_PAY_PUBLIC_ORIGIN;
     for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY","MPESA_SHORTCODE"]) delete process.env[key];
     await pool.query("DELETE FROM mpesa_stk_initiations WHERE checkout_request_id=ANY($1::text[])",[mpesaRefs]);
     await pool.query("DELETE FROM instant_water_assessments WHERE customer_user_id=ANY($1::text[])", [[String(uid),String(otherId)]]);
@@ -156,13 +163,16 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     assert.equal(settled.checkout_state,"confirmed");
     for (const key of ["MPESA_CONSUMER_KEY","MPESA_CONSUMER_SECRET","MPESA_PASSKEY","MPESA_SHORTCODE"]) delete process.env[key];
   });
-  it("keeps new authenticated Woo checkouts visible only to their verified account",async()=>{
+  it("keeps app-owned checkouts visible only to their verified account",async()=>{
     const ownerEmail=(await pool.query("SELECT email FROM uc_users WHERE id=$1",[uid])).rows[0].email;
     const other=(await pool.query("SELECT email FROM uc_users WHERE id=$1",[otherId])).rows[0];
     const input=fixture(randomUUID(),{shippingAddress:{...address,email:other.email}});
     const response=await api("/uc/orders",{...input,paymentMethod:"cod"});
     assert.equal(response.status,200);
-    assert.equal(remotePosts.at(-1).billing.email,ownerEmail,"untrusted checkout email is never the ownership identity");
+    const persisted = (await pool.query("SELECT user_id FROM uc_orders WHERE id=$1", [response.body.id])).rows[0];
+    assert.equal(persisted.user_id,String(uid),"untrusted checkout email is never the ownership identity");
+    assert.equal(remotePosts.length,0,"retired Woo authority must not be contacted");
+    assert.ok(ownerEmail);
     const mine=await realFetch(`${base}/uc/orders`,{headers:{Authorization:`Bearer ${token}`}});
     assert.equal(mine.status,200);
     assert.ok((await mine.json() as any[]).some(o=>o.id===response.body.id));
@@ -176,11 +186,11 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     assert.equal(bare.status,200); assert.equal(bare.body.subtotal,2000); assert.equal(bare.body.total,2000); assert.equal(bare.body.delivery,0);
     const restricted = await api("/uc/checkout/quote", { lineItems: cart, fulfillment: "delivery", code: codes.discount });
     assert.equal(restricted.status,200); assert.equal(restricted.body.discountAmount,500); assert.equal(restricted.body.total,2000);
-    const changed = await api("/uc/checkout/quote", { lineItems: [{productId:10001,quantity:2}], fulfillment:"collection",code:codes.discount });
+    const changed = await api("/uc/checkout/quote", { lineItems: [{productId:cart[0]!.productId,quantity:2}], fulfillment:"collection",code:codes.discount });
     assert.equal(changed.body.total,2300);
-    const ineligible = await api("/uc/checkout/quote", {lineItems:[{productId:10002,quantity:1}],fulfillment:"collection",code:codes.discount});
+    const ineligible = await api("/uc/checkout/quote", {lineItems:[{productId:cart[1]!.productId,quantity:1}],fulfillment:"collection",code:codes.discount});
     assert.equal(ineligible.status,422);
-    for (const lineItems of [[],[{productId:10001,quantity:0}],[{productId:10001,quantity:1.5}],[{productId:10001,quantity:"1"}],[{productId:99999,quantity:1}]]) {
+    for (const lineItems of [[],[{productId:cart[0]!.productId,quantity:0}],[{productId:cart[0]!.productId,quantity:1.5}],[{productId:cart[0]!.productId,quantity:"1"}],[{productId:99999,quantity:1}]]) {
       assert.equal((await api("/uc/checkout/quote",{lineItems,fulfillment:"collection"})).status,422);
     }
     catalogueDown = true;
@@ -192,7 +202,7 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     const input = {lineItems:cart,fulfillment:"collection",applyReferralDiscount:false};
     assert.equal(quoteMatchesCheckout(quote,input),true);
     assert.equal(quoteMatchesCheckout(quote,{...input,fulfillment:"delivery"}),false);
-    assert.equal(quoteMatchesCheckout(quote,{...input,lineItems:[{productId:10001,quantity:2}]}),false);
+    assert.equal(quoteMatchesCheckout(quote,{...input,lineItems:[{productId:cart[0]!.productId,quantity:2}]}),false);
     assert.equal(quoteMatchesCheckout(quote,{...input,code:"CHANGED"}),false);
     const code = await promo("free_shipping",0,1);
     const checkout = fixture(randomUUID(),{fulfillment:"delivery",shippingAddress:{...address,address1:"A road",city:"Nairobi"},promoCode:code});
@@ -420,7 +430,7 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     await pool.query("UPDATE uc_promotions SET ends_at=now()-interval '1 second' WHERE id=$1",[id]);
     assert.equal((await api("/uc/checkout/quote",{lineItems:cart,fulfillment:"delivery",code})).status,422);
   });
-  it("persists collection and selected shipping with explicit Woo amounts and replay-safe uses", async () => {
+  it("persists collection and selected shipping with app-owned amounts and replay-safe uses", async () => {
     const key = randomUUID();
     const body = { ...fixture(key,{fulfillment:"delivery",shippingAddress:{...address,address1:"1 Test Road",city:"Nairobi"},promoCode:codes.ship}),paymentMethod:"cod",paymentReference:"" };
     const first = await api("/uc/orders",body);
@@ -428,8 +438,8 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     const posts = remotePosts.length;
     await pool.query("UPDATE uc_promotions SET active=false WHERE code=$1",[codes.ship]);
     const replay = await api("/uc/orders",body); assert.equal(replay.status,200); assert.equal(replay.body.id,first.body.id); assert.equal(remotePosts.length,posts);
-    const payload = remotePosts.at(-1);
-    assert.equal(payload.shipping_lines[0].total,"0"); assert.deepEqual(payload.coupon_lines,[]);
+    assert.equal(first.body.shippingAddress.shippingAmount,"0");
+    assert.equal(remotePosts.length,0);
     const use = await pool.query("SELECT * FROM uc_promotion_uses WHERE user_id=$1 AND idempotency_key=$2",[uid,`checkout:${key}`]);
     assert.equal(use.rows.length,1);
     const collection = await api("/uc/orders",{...fixture(),paymentMethod:"cod"});
@@ -462,7 +472,7 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     const calls = providerCalls;
     const repeated = await api("/payments/paystack/init",{email:`${prefix}@test.invalid`,amount:99999,checkout:input});
     assert.equal(repeated.body.reference,init.body.reference); assert.equal(providerCalls,calls);
-    const changed = await api("/uc/orders",{...input,lineItems:[{productId:10001,quantity:2}],paymentMethod:"paystack",paymentReference:init.body.reference});
+    const changed = await api("/uc/orders",{...input,lineItems:[{productId:cart[0]!.productId,quantity:2}],paymentMethod:"paystack",paymentReference:init.body.reference});
     assert.equal(changed.status,422);
     const event = {event:"charge.success",data:{reference:init.body.reference,amount:250000,currency:"KES"}};
     const signature = createHmac("sha512","fixture-key").update(JSON.stringify(event)).digest("hex");
@@ -478,19 +488,22 @@ describe("authoritative checkout and managed waived-service benefits", () => {
     assert.equal((await api("/uc/orders",{...wrong,paymentMethod:"paystack",paymentReference:"wrong-amount"})).status,402);
     delete process.env.PAYSTACK_SECRET_KEY;
   });
-  it("creates zero-payable orders without a provider and reconciles uncertain Woo acceptance without duplicates", async () => {
+  it("creates zero-payable app orders without a provider and confirms retries without retired Woo writes", async () => {
     const code = await promo("checkout_discount",2000);
     const free = await api("/uc/orders",{...fixture(randomUUID(),{promoCode:code}),paymentMethod:"free",paymentReference:""});
     assert.equal(free.status,200); assert.equal(free.body.total,"0");
     assert.equal((await api("/uc/orders",{...fixture(),paymentMethod:"free"})).status,422);
     const pending = await prepareCheckoutOrder(fixture() as any,String(uid),"cod");
     failRemote = true;
-    const uncertain = await confirmCheckoutOrder(pending.id,"");
-    assert.equal(uncertain.reconciliationRequired,true);
+    const confirmed = await confirmCheckoutOrder(pending.id,"");
+    assert.equal(confirmed.order.checkout_state,"confirmed");
+    assert.notEqual(confirmed.reconciliationRequired,true);
     const calls = remotePosts.length;
     failRemote = false;
     const recovered = await confirmCheckoutOrder(pending.id,"");
     assert.equal(recovered.order.checkout_state,"confirmed"); assert.equal(remotePosts.length,calls);
+    assert.equal(recovered.order.id,confirmed.order.id);
+    assert.equal(remotePosts.length,0);
   });
   it("saves free-test entitlements atomically, replays safely and preserves ordinary bookings and notification jobs", async () => {
     const notifications: PhysicalTestNotification[] = [];

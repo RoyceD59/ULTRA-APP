@@ -9,6 +9,7 @@ import { pool } from "@workspace/db";
 import { issueToken } from "../lib/jwt.js";
 import { ensureCustomerAssignmentTables } from "../lib/customer-assignment-rollout.js";
 import { assignedPrimaryActivation } from "../../../uc-companion/lib/assignedFilterHydration.js";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 
 delete process.env["WC_CONSUMER_KEY"];
 delete process.env["WC_CONSUMER_SECRET"];
@@ -24,6 +25,7 @@ const { default: app } = await import("../app.js");
 const ids = { users: [] as number[], orders: [] as number[] };
 const teamId = `assignment-admin-${randomUUID()}`;
 let server: http.Server, base: string;
+let productId: number;
 let phoneSequence = 10000000;
 function contacts() { return { customerName: "Assignment Test", email: `assignment-${randomUUID()}@example.test`, phone: `+2547${phoneSequence++}` }; }
 async function fixture(owner = "") {
@@ -31,8 +33,8 @@ async function fixture(owner = "") {
     VALUES($1,'processing','3499','cod','awaiting_collection') RETURNING id`, [owner])).rows[0]!.id;
   ids.orders.push(order);
   const item = (await pool.query<{ id: number }>(
-    "INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,1,'Hydra Flux',1,'3499') RETURNING id", [order])).rows[0]!.id;
-  return { ...contacts(), idempotencyKey: randomUUID(), productId: 1, installationDate: "2026-01-05", orderId: order, orderItemId: item };
+    "INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,$2,'Hydra Flux',1,'3499') RETURNING id", [order, productId])).rows[0]!.id;
+  return { ...contacts(), idempotencyKey: randomUUID(), productId, installationDate: "2026-01-05", orderId: order, orderItemId: item };
 }
 async function account(contact: { email: string; phone: string }, verified = false) {
   const id = (await pool.query<{ id: number }>(`INSERT INTO uc_users(email,phone,password_hash,first_name,email_verified,phone_verified)
@@ -50,6 +52,7 @@ async function api(path: string, body?: unknown, token?: string) {
 }
 before(async () => {
   await ensureCustomerAssignmentTables();
+  productId = (await appCatalogueFixture()).id;
   await pool.query("INSERT INTO team_users(id,email,name,password_hash,role) VALUES($1,$2,'Assignment admin','unused','admin')", [teamId,`${teamId}@example.test`]);
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => server.once("listening", resolve));
@@ -274,7 +277,7 @@ describe("durable customer assignments", () => {
     await pool.query("UPDATE uc_orders SET user_id=$1 WHERE id=$2", [String(userId),input.orderId]);
     const filterId = (await pool.query<{ id: number }>(`INSERT INTO uc_registered_filters
       (user_id,product_id,product_name,rated_capacity_litres,activated_at,source_order_id,source,maintenance_count)
-      VALUES($1,1,'Hydra Flux',150,'2025-12-01',$2,'app',8) RETURNING id`, [userId,input.orderId])).rows[0]!.id;
+      VALUES($1,$3,'Hydra Flux',150,'2025-12-01',$2,'app',8) RETURNING id`, [userId,input.orderId,productId])).rows[0]!.id;
     const id = await createAssignment({ ...input,targetAccountId:userId },teamId);
     await linkAssignment(id,userId,teamId,true);
     const row = await getAssignment(id);

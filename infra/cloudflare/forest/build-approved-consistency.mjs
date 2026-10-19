@@ -10,7 +10,7 @@ import { here } from './consistency-handoff.mjs';
 import { AUTH_UPLOAD_CANDIDATE, DEPENDENCY_CANDIDATE } from './auth-upload-security.mjs';
 import { SECURITY_DEPENDENCY_CANDIDATE } from './security-dependency-selection.mjs';
 import { SECURITY_CENTER_CANDIDATE, verifyMainSecurityCenterRuntimePins } from './security-center-selection.mjs';
-import { verifyProductPageStage, PRODUCT_PAGE_PREDECESSOR } from './product-page-selection.mjs';
+import { verifyProductPageStage, PRODUCT_PAGE_PREDECESSOR, PRODUCT_PAGE_BROWSER_PREDECESSOR } from './product-page-selection.mjs';
 import { captureLiveClient } from './capture-live-client.mjs';
 import { verifyInstalledBackports } from './security-patch-installation.mjs';
 
@@ -45,7 +45,8 @@ if (!localOnly && mode !== 'serve-companion') {
   if (![frozen.liveBaseRevision, frozen.integrationRevision,
     frozen.previousIntegrationRevision, `consistency-${DEPENDENCY_CANDIDATE}`,
     `consistency-${AUTH_UPLOAD_CANDIDATE}`, `consistency-${SECURITY_DEPENDENCY_CANDIDATE}`,
-    `consistency-${SECURITY_CENTER_CANDIDATE}`, `consistency-${PRODUCT_PAGE_PREDECESSOR}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
+    `consistency-${SECURITY_CENTER_CANDIDATE}`, `consistency-${PRODUCT_PAGE_PREDECESSOR}`,
+    `consistency-${PRODUCT_PAGE_BROWSER_PREDECESSOR}`, SOURCE_IDENTITY].filter(Boolean).includes(live.revision)) {
     throw new Error('Live source baseline changed; reconcile before preparing deployment outputs');
   }
 }

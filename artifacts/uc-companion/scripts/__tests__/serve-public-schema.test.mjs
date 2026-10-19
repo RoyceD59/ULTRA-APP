@@ -6,17 +6,20 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { editorialFixtureResponse } from './fixtures/public-web.mjs';
+import { records, editorialProduct } from './fixtures/editorial-records.mjs';
 
 test('production response exposes valid public JSON-LD without running any JavaScript', async () => {
-  const inventory = [{ id: 123, name: 'Public filter', price: '2500', sku: 'UC-BOG-SSB-008', stockStatus: 'instock' }];
   const fixture = http.createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
     res.setHeader('x-uc-catalogue-provenance', 'companion-published');
-    const editorial = await editorialFixtureResponse(req.url, { inventory });
-    if (editorial) { res.writeHead(editorial.status); res.end(await editorial.text()); return; }
-    if (req.url === '/api/uc/products?publicationSafe=true') {
-      res.end(JSON.stringify(inventory));
+    if (req.url === '/api/uc/product-records') {
+      res.end(JSON.stringify(records));
+    } else if (req.url.startsWith('/api/uc/product-records/')) {
+      const product = await editorialProduct(req.url.split('/').at(-1), []);
+      res.writeHead(product ? 200 : 404);
+      res.end(JSON.stringify(product || {}));
+    } else if (req.url === '/api/uc/products?publicationSafe=true') {
+      res.end(JSON.stringify([{ id: 123, name: 'Public filter', price: '4199', sku: 'UC-BOG-SSB-008', stockStatus: 'instock' }]));
     } else if (req.url === '/api/uc/blog/published') {
       res.end(JSON.stringify({ article: { slug: 'published', title: 'Published article', summary: 'Summary', body: 'Real body', publishedAt: '2026-09-01T00:00:00Z' } }));
     } else if (req.url === '/api/uc/guides/steps') {

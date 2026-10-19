@@ -37,13 +37,13 @@ export async function prepareCheckoutOrder(input: CheckoutInput, userId: string,
       input.idempotencyKey.length > 200) throw new Error("A checkout retry key is required");
   const address = input.shippingAddress;
   const contact = validateCustomerContact({ phone: address?.phone, address: address?.address1, country: address?.country });
-  if (!contact.ok) throw Object.assign(new Error(Object.values(contact.fields).join(" ")), {
-    fields: { ...contact.fields, ...(contact.fields.address ? { address1: contact.fields.address } : {}) },
-  });
-  if (!address || typeof address.firstName !== "string" || !address.firstName.trim() ||
-      typeof address.phone !== "string" || !validatePhone(address.phone, address.country).valid) throw new Error("A name and valid contact phone are required");
+  const cod = method === "cod" ? validateCodShipping(address) : undefined;
+  const fields: Record<string,string> = { ...contact.fields, ...(contact.fields.address ? { address1: contact.fields.address } : {}),
+    ...cod?.fields };
+  if (typeof address?.firstName !== "string" || !address.firstName.trim()) fields.firstName = "A contact name is required.";
+  if (typeof address?.phone !== "string" || !validatePhone(address.phone, address.country).valid) fields.phone ??= "A valid contact phone is required.";
+  if (Object.keys(fields).length) throw Object.assign(new Error(Object.values(fields).join(" ")), { fields });
   if (input.fulfillment === "delivery" && (!address.address1?.trim() || !address.city?.trim())) throw new Error("Delivery address and city are required");
-  if (method === "cod" && !validateCodShipping(address).ok) throw new Error("Please check your contact details");
   if (!["cod", "free", "paystack", "mpesa", "stripe"].includes(method)) throw new Error("Unsupported payment method");
   input = { ...input, shippingAddress: { ...address, address1: contact.address, phone: contact.phone! } };
   const hash = fingerprint(input, method);

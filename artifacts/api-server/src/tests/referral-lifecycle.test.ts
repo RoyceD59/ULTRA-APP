@@ -7,6 +7,7 @@ import { db, pool, teamUsersTable, ucUsersTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import app from "../app.js";
 import { issueToken } from "../lib/jwt.js";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 import {
   qualifyReferralSuccessfulPayment, registerReferralAtSignup,
   consumeReferralDiscount, reverseReferralForRefund, enqueueReferralSettlement,
@@ -417,6 +418,7 @@ describe("durable referral lifecycle", { concurrency: false }, () => {
   });
 
   it("finalizes a webhook recovery, reopens settlement, and qualifies exactly once", async () => {
+    const product = await appCatalogueFixture(1099);
     const r = await user("recovery-referrer"), i = await user("recovery-invitee"); await attribute(r.id, i.id);
     const recovery = await pool.query(`INSERT INTO uc_orders
       (user_id,status,total,currency,payment_method,payment_reference,webhook_recovery,payment_confirmed_at)
@@ -427,7 +429,7 @@ describe("durable referral lifecycle", { concurrency: false }, () => {
       VALUES($1,'completed',now())`, [recoveryId]);
     await finalizeRecoveryOrder({
       orderId: recoveryId, accountId: i.id,
-      lineItems: [{ productId: 22, quantity: 1 }],
+      lineItems: [{ productId: product.id, quantity: 1 }],
       shippingAddress: { address1: "1 Test Road", city: "Nairobi", fulfillment: "delivery" },
     });
     const finalized = await pool.query("SELECT user_id,webhook_recovery FROM uc_orders WHERE id=$1", [recoveryId]);

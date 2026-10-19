@@ -3,6 +3,7 @@ const { PublicDataError } = require('./public-content.cjs');
 const { articleInlineLinks } = require('@workspace/api-zod/blog-inline-links-core');
 const { identity, breadcrumbs, recordProductModel, articleModel, guideModel, itemList } = require('./public-schema.cjs');
 const { resolveIdentity, recordOperation } = require('./record-operations.cjs');
+const { renderRecordDetails } = require('./record-details.cjs');
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -27,9 +28,10 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
   };
   const local = route => `${basePath}${route}`;
   const link = (route, label) => `<a href="${escapeHtml(local(route))}">${escapeHtml(label)}</a>`;
-  const nav = `<nav aria-label="Public pages">${Object.entries(pages)
-    .map(([route, page]) => link(route, page.title)).join(' · ')}</nav>`;
-  const paragraph = value => `<p>${escapeHtml(value)}</p>`;
+  const nav = `<details class="uc-public-menu"><summary>Menu</summary><nav aria-label="Public pages">${Object.entries(pages)
+    .map(([route, page]) => link(route, page.title)).join(' · ')}</nav></details>`;
+  const paragraph = value => `<p>${articleInlineLinks(String(value ?? '')).map(part =>
+    part.kind === 'link' ? `<a href="${escapeHtml(part.url)}">${escapeHtml(part.text)}</a>` : escapeHtml(part.text)).join('')}</p>`;
   const safeUrl = value => {
     if (typeof value !== 'string' || !value.trim()) return null;
     try {
@@ -37,9 +39,15 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
       return url.protocol === 'https:' && !url.username && !url.password ? url.href : null;
     } catch { return null; }
   };
-  const image = (src, alt) => {
+  const image = (src, alt, priority = false) => {
     const url = safeUrl(src);
-    return url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" width="400" style="max-width:100%;height:auto">` : '';
+    if (!url) return '';
+    const candidate = new URL(url);
+    if (/^\/api\/(?:storage\/objects\/uploads\/|uc\/product-images\/)/.test(candidate.pathname)) {
+      candidate.searchParams.set('w', '768');
+      if (candidate.pathname.startsWith('/api/uc/product-images/')) candidate.searchParams.set('fmt', 'webp');
+    }
+    return `<img src="${escapeHtml(candidate.href)}" alt="${escapeHtml(alt)}" width="400" height="400" loading="${priority ? 'eager' : 'lazy'}" fetchpriority="${priority ? 'high' : 'low'}" decoding="async" style="max-width:100%;height:auto;aspect-ratio:1;object-fit:contain">`;
   };
 
   function metadata(route, title, description, type = 'website', imageUrl = absolute('/favicon.png')) {
@@ -133,7 +141,7 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
           + (product.category ? paragraph(product.category) : '')
           + (product.opening.warning ? `<p class="uc-warning">${escapeHtml(product.opening.warning)}</p>` : '')
           + paragraph(operation.availability ? { InStock: 'In stock', OutOfStock: 'Out of stock', BackOrder: 'Available on back-order' }[operation.availability] : 'Live stock unavailable — please enquire before ordering.')
-          + `<div class="uc-gallery">${operation.images.map(photo => `<figure data-slot="${photo.slot}">${image(photo.src, photo.alt)}<figcaption>${escapeHtml(photo.displayName || slots[photo.slot - 1])}</figcaption></figure>`).join('')}</div>`
+          + `<div class="uc-gallery">${operation.images.map((photo, i) => `<figure data-slot="${photo.slot}">${image(photo.src, photo.alt, i === 0)}<figcaption>${escapeHtml(photo.displayName || slots[photo.slot - 1])}</figcaption></figure>`).join('')}</div>`
           + (!operation.images.length ? paragraph('Product photo unavailable.') : '')
           + paragraph(`SKU: ${product.parentSku}`)
           + `<section><h2>Related topics</h2><ul>${product.topics.map(t => `<li>${link(`/topic/${t.slug}`, t.name)}</li>`).join('')}</ul></section>`
@@ -146,11 +154,18 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
         }).join('')}</div>` : '';
         const accordion = (heading, content) => content ? `<details><summary>${escapeHtml(heading)}</summary>${content}</details>` : '';
         const pkg = product.package || {};
+        const installationVideos = (operation.videos?.length ? operation.videos
+          : operation.videoUrl ? [{ slot: 1, url: operation.videoUrl }] : []).slice(0, 2).map(clip => {
+          const url = safeUrl(new URL(clip.url, data.mediaOrigin || origin.href).href);
+          return url ? `<figure><video controls preload="none" src="${escapeHtml(url)}" aria-label="Installation video ${escapeHtml(clip.slot)}" style="max-width:100%"></video><figcaption>Installation video ${escapeHtml(clip.slot)}</figcaption></figure>` : '';
+        }).join('');
         body = `<section class="uc-choose" aria-label="Choose">${body}</section>`
           + '<section class="uc-understand" aria-label="Details">'
           + accordion('Specifications', `<dl>${Object.entries(product.specs || {}).map(([k,v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`)
           + accordion(pkg.heading || 'What is included', list(pkg.included) + paragraph(pkg.dimensions))
           + accordion(product.fitPhotos?.heading || 'Compatible fittings', fitPhotos(product.fitPhotos))
+          + (installationVideos ? `<section><h2>Installation videos</h2>${installationVideos}</section>` : '')
+          + renderRecordDetails(product, escapeHtml)
           + '</section><section class="uc-decide" aria-label="Decide">'
           + `<article class="uc-product-card"><h2>${escapeHtml(product.summary?.heading || 'Review your selection')}</h2>`
           + paragraph(product.name)
@@ -225,7 +240,7 @@ function createPublicRenderer({ canonicalOrigin, basePath = '', data, records = 
         const { '@context': _context, ...node } = schema;
         return node;
       })] }];
-      return { status: 200, meta, body: `<header><a href="https://ucfilters.com/">Ultra Clear</a></header><h1>${escapeHtml(page.title)}</h1>${body}${nav}`, schemas,
+      return { status: 200, meta, body: `<header><a href="https://ucfilters.com/">Ultra Clear</a>${nav}</header><h1>${escapeHtml(page.title)}</h1>${body}`, schemas,
         documentKind, publicRecord };
     } catch (error) {
       if (!(error instanceof PublicDataError)) console.error('Public rendering failed:', error.message);

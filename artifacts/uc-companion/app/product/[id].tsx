@@ -57,7 +57,12 @@ export default function ProductDetailScreen() {
   if (record.data) {
     // The mounted page owns the document handoff; do not mutate DOM in render.
     return (
-      <ScrollView style={{ flex: 1, backgroundColor: '#FBFDFE' }} contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView
+        {...(Platform.OS === 'web' ? {
+          'data-uc-interactive-record-ready': `/product/${key}`,
+          'data-uc-record-ready': 'true',
+        } : {})}
+        style={{ flex: 1, backgroundColor: '#FBFDFE' }} contentContainerStyle={{ paddingBottom: 60 }}>
         <ProductRecordPage key={record.data.slug} record={record.data} initialSku={sku ? String(sku) : undefined} topicsRow />
       </ScrollView>
     );

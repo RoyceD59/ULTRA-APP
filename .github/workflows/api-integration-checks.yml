@@ -1,0 +1,43 @@
+name: Isolated API integration checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  api-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ultra_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ultra_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4.4.0
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run typecheck:libs
+      - name: Run the complete API suite against disposable PostgreSQL
+        working-directory: artifacts/api-server
+        env:
+          # Deliberately literal CI-only credentials; never use repository secrets.
+          # The existing runner creates and drops a separate test_api_* database.
+          DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ultra_ci
+          TEST_CONCURRENCY: '4'
+          GOMAXPROCS: '2'
+          SESSION_SECRET: ci-isolated-api-only
+        run: pnpm test

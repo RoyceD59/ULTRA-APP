@@ -1485,6 +1485,89 @@ paths:
         "403": { description: Assessment owner required }
         "500": { description: Failed to generate upload URL }
 
+  /uc/restock-requests:
+    post:
+      operationId: submitUcRestockRequest
+      tags: [uc]
+      summary: Save a guest prospect or customer restock request, never a checkout order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestockSubmissionInput"
+      responses:
+        "202":
+          description: Request durably accepted, including safe duplicate submissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockSubmissionReceipt"
+        "400": { description: "Invalid product, variant or contact details" }
+        "401": { description: Supplied customer session is invalid }
+        "404": { description: Published product not found }
+        "429": { description: Too many requests }
+        "503": { description: Request could not be saved; retry explicitly }
+
+  /uc/admin/restock-requests:
+    get:
+      operationId: listUcRestockRequests
+      tags: [uc-admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, contacted, resolved, all]
+            default: pending
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        "200":
+          description: Authorized staff request list and active product demand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockStaffPage"
+        "400": { description: Invalid filter or page }
+        "401": { description: Staff authentication required }
+        "403": { description: Staff administration required }
+        "503": { description: Requests temporarily unavailable }
+
+  /uc/admin/restock-requests/{id}:
+    patch:
+      operationId: updateUcRestockRequest
+      tags: [uc-admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestockStatusInput"
+      responses:
+        "200":
+          description: Updated follow-up status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockSubmissionReceipt"
+        "400": { description: Invalid request or status }
+        "401": { description: Staff authentication required }
+        "403": { description: Staff administration required }
+        "404": { description: Request not found }
+        "409": { description: A newer pending request exists for this customer and product }
+        "503": { description: Request could not be updated }
+
   /uc/admin/inventory/wishlist-demand:
     get:
       operationId: listUcInventoryWishlistDemand
@@ -2040,6 +2123,30 @@ paths:
         "403": { description: Admin access required }
         "404": { description: Ledger record not found }
         "409": { description: Identity conflict }
+
+  /admin/unsynced-registrations/clear-selected:
+    post:
+      operationId: clearSelectedRegistrationRecords
+      tags: [uc-admin]
+      summary: Clear explicitly selected test registration records in any recovery state
+      description: Removes only selected durable registration records. Customer accounts, assignments, orders, payments and customer history are not deleted. Selection keys identify exact record snapshots; stale or ambiguous selections fail without removing anything.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationRecordSelectionInput" }
+      responses:
+        "200":
+          description: Selected records cleared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationRecordClearResult" }
+        "400": { description: Explicit confirmation and 1 to 100 unique selection keys required }
+        "401": { description: Authentication required }
+        "403": { description: Active administrator required }
+        "409": { description: Selected records changed or no longer exist; refresh and select again }
+        "500": { description: Records could not be cleared; no success is reported }
 
   /admin/unsynced-registrations/clear-resolved:
     post:
@@ -3426,6 +3533,20 @@ paths:
         "201": { description: Client and one-time secret }
         "400": { description: Invalid scope list }
         "403": { description: Active ProjectHub administrator required }
+  /oauth/clients/{id}:
+    delete:
+      operationId: deleteAgentOauthClient
+      tags: [agent-oauth]
+      summary: Permanently delete an inactive, unused machine client
+      description: Requires a live ProjectHub administrator. Only suspended or revoked clients without unexpired, unrevoked tokens can be deleted. Removes client credentials and tokens; preserves audit history.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "204": { description: Client deleted; audit history retained }
+        "401": { description: ProjectHub authentication required }
+        "403": { description: Active ProjectHub administrator required }
+        "404": { description: Client not found }
+        "409": { description: "Suspend the client first, or revoke its active tokens before deletion" }
   /oauth/clients/{id}/rotate:
     post:
       operationId: rotateAgentOauthClient
@@ -4257,6 +4378,73 @@ components:
       bearerFormat: opaque
 
   schemas:
+    RestockSubmissionInput:
+      type: object
+      required: [productKey, contact, idempotencyKey]
+      properties:
+        productKey: { type: string, minLength: 1, maxLength: 160 }
+        variantSku: { type: string, minLength: 1, maxLength: 100 }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+        contact:
+          type: object
+          required: [name, phone, location]
+          properties:
+            name: { type: string, minLength: 2, maxLength: 120 }
+            phone: { type: string, minLength: 7, maxLength: 30 }
+            location: { type: string, minLength: 2, maxLength: 240 }
+    RestockSubmissionReceipt:
+      type: object
+      required: [saved, status]
+      properties:
+        saved: { type: boolean }
+        status: { type: string, enum: [pending, contacted, resolved] }
+    RestockStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, contacted, resolved] }
+    RestockStaffRequest:
+      type: object
+      required: [id, customerId, kind, name, phone, location, productCode, productName, productSlug, parentSku, variantSku, variantLabel, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: [string, "null"] }
+        kind: { type: string, enum: [guest, customer] }
+        name: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        location: { type: [string, "null"] }
+        productCode: { type: string }
+        productName: { type: string }
+        productSlug: { type: string }
+        parentSku: { type: string }
+        variantSku: { type: [string, "null"] }
+        variantLabel: { type: [string, "null"] }
+        status: { type: string, enum: [pending, contacted, resolved] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    RestockDemandCount:
+      type: object
+      required: [productCode, productName, variantSku, waitingCount, guestCount, customerCount]
+      properties:
+        productCode: { type: string }
+        productName: { type: string }
+        variantSku: { type: [string, "null"] }
+        waitingCount: { type: integer }
+        guestCount: { type: integer }
+        customerCount: { type: integer }
+    RestockStaffPage:
+      type: object
+      required: [requests, demand, total, page, pageSize]
+      properties:
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/RestockStaffRequest" }
+        demand:
+          type: array
+          items: { $ref: "#/components/schemas/RestockDemandCount" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
     ProductEditorialIdentity:
       type: object
       required: [code, slug, name, parent_sku, publishable]
@@ -6771,6 +6959,10 @@ components:
       type: object
       required: [email, phone, recordedAt, dbPersisted]
       properties:
+        recordKey:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: Opaque exact-snapshot key used for safe selected-record clearing
         id: { type: [integer, "null"] }
         firstName: { type: string }
         lastName: { type: string }
@@ -6784,6 +6976,23 @@ components:
         targetAccountId: { type: integer }
         resolvedAt: { type: string, format: date-time }
         resolvedBy: { type: string }
+
+    RegistrationRecordSelectionInput:
+      type: object
+      required: [confirm, recordKeys]
+      properties:
+        confirm: { type: boolean, enum: [true] }
+        recordKeys:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, pattern: "^[a-f0-9]{64}$" }
+    RegistrationRecordClearResult:
+      type: object
+      required: [cleared]
+      properties:
+        cleared: { type: integer, minimum: 1 }
 
     UnsyncedRegistrationRecoveryInput:
       type: object

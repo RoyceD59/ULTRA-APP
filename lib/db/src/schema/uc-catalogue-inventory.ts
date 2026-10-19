@@ -9,7 +9,9 @@ export const ucCatalogueIdSequence = pgSequence("uc_catalogue_id_seq", { startWi
 export const ucCatalogueInventoryTable = pgTable("uc_catalogue_inventory", {
   id: integer("id").primaryKey().default(sql`nextval('uc_catalogue_id_seq')`),
   code: text("code").notNull(),
-  sku: text("sku").notNull().unique(),
+  // Startup SQL uses PostgreSQL's inline UNIQUE name. Preserve it so Drizzle
+  // does not propose a second constraint and ask to truncate populated stock.
+  sku: text("sku").notNull().unique("uc_catalogue_inventory_sku_key"),
   parentSku: text("parent_sku"),
   stockStatus: text("stock_status").notNull().default("unknown"),
   stockQuantity: integer("stock_quantity"),

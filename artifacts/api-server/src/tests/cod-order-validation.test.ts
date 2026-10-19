@@ -18,6 +18,9 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import bcryptjs from "bcryptjs";
+import { randomUUID } from "node:crypto";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
+import { prepareCheckoutOrder, bindCheckoutPayment } from "../lib/checkout-orders.js";
 
 import app from "../app.js";
 import {
@@ -35,6 +38,8 @@ import { looksLikeRealName, validatePhone } from "../lib/order-validation.js";
 let realFetch: typeof globalThis.fetch;
 let server: http.Server;
 let base: string;
+let productId: number;
+let customerId: number;
 
 const createdUserIds: number[] = [];
 const createdOrderIds: number[] = [];
@@ -51,7 +56,7 @@ async function postOrders(
       "Content-Type": "application/json",
       ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ fulfillment:"collection", idempotencyKey:randomUUID(), ...(body as Record<string,unknown>) }),
   });
   let parsed: Record<string, unknown> = {};
   try {
@@ -107,7 +112,7 @@ function codPayload(shippingOverrides: Record<string, string | undefined> = {}) 
     else shippingAddress[k] = v;
   }
   return {
-    lineItems: [{ productId: 22, quantity: 1 }],
+    lineItems: [{ productId, quantity: 1 }],
     paymentMethod: "cod",
     shippingAddress,
   };
@@ -120,6 +125,7 @@ describe("COD order input validation", () => {
 
   before(async () => {
     realFetch = globalThis.fetch;
+    productId = (await appCatalogueFixture(1099)).id;
 
     // Mirror the mpesa-idempotency harness: with M-Pesa credentials absent
     // the server verifies mpesa references in mock mode, and with WC
@@ -137,7 +143,7 @@ describe("COD order input validation", () => {
     const addr = server.address();
     if (!addr || typeof addr === "string") throw new Error("no server address");
     base = `http://127.0.0.1:${addr.port}/api`;
-    ({ jwt } = await createTestUser("main"));
+    ({ jwt, id:customerId } = await createTestUser("main"));
 
     // Silence outbound calls for every test in this file. Safaricom (Daraja)
     // endpoints get well-formed success payloads so the mpesa control test
@@ -189,53 +195,53 @@ describe("COD order input validation", () => {
 
   it("rejects a keyboard-mash first name (no vowels)", async () => {
     const { status, body } = await postOrders(codPayload({ firstName: "hjkhjk" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     const fields = body["fields"] as Record<string, string>;
     assert.ok(fields["firstName"], "must name the firstName field");
   });
 
   it("rejects a keyboard-row run as a name (asdf…)", async () => {
     const { status, body } = await postOrders(codPayload({ firstName: "Asdfgh" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok((body["fields"] as Record<string, string>)["firstName"]);
   });
 
   it("rejects a numeric first name", async () => {
     const { status } = await postOrders(codPayload({ firstName: "12345" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
   });
 
   it("rejects a single repeated character name (aaaa)", async () => {
     const { status } = await postOrders(codPayload({ firstName: "aaaa" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
   });
 
   it("rejects a missing first name", async () => {
     const { status, body } = await postOrders(codPayload({ firstName: undefined }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok((body["fields"] as Record<string, string>)["firstName"]);
   });
 
   it("rejects a gibberish last name when one is provided", async () => {
     const { status, body } = await postOrders(codPayload({ lastName: "zxzxzx" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok((body["fields"] as Record<string, string>)["lastName"]);
   });
 
   it("rejects a missing phone number", async () => {
     const { status, body } = await postOrders(codPayload({ phone: undefined }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok((body["fields"] as Record<string, string>)["phone"]);
   });
 
   it("rejects a too-short phone number", async () => {
     const { status } = await postOrders(codPayload({ phone: "0712" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
   });
 
   it("rejects a phone number with letters", async () => {
     const { status } = await postOrders(codPayload({ phone: "07abc45678" }), jwt);
-    assert.equal(status, 400);
+    assert.equal(status, 422);
   });
 
   it("rejects a COD order with no shippingAddress at all", async () => {
@@ -243,11 +249,11 @@ describe("COD order input validation", () => {
       { lineItems: [{ productId: 22, quantity: 1 }], paymentMethod: "cod" },
       jwt,
     );
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok(body["fields"], "must return field errors");
   });
 
-  it("returns a controlled 400 (not a crash) for non-string shipping fields", async () => {
+  it("returns a controlled 422 (not a crash) for non-string shipping fields", async () => {
     const { status, body } = await postOrders(
       {
         lineItems: [{ productId: 22, quantity: 1 }],
@@ -256,18 +262,18 @@ describe("COD order input validation", () => {
       },
       jwt,
     );
-    assert.equal(status, 400, `expected controlled 400, got ${status}: ${JSON.stringify(body)}`);
+    assert.equal(status, 422, `expected controlled 422, got ${status}: ${JSON.stringify(body)}`);
     const fields = body["fields"] as Record<string, string>;
     assert.ok(fields["firstName"], "non-string firstName must be treated as missing");
     assert.ok(fields["phone"], "non-string phone must be treated as missing");
   });
 
-  it("returns a controlled 400 when shippingAddress is an array", async () => {
+  it("returns a controlled 422 when shippingAddress is an array", async () => {
     const { status, body } = await postOrders(
       { lineItems: [{ productId: 22, quantity: 1 }], paymentMethod: "cod", shippingAddress: ["junk"] },
       jwt,
     );
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok(body["fields"], "must return field errors");
   });
 
@@ -276,7 +282,7 @@ describe("COD order input validation", () => {
       codPayload({ firstName: "xzxz", phone: "123" }),
       jwt,
     );
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     const fields = body["fields"] as Record<string, string>;
     assert.ok(fields["firstName"] && fields["phone"], "both fields must be reported");
   });
@@ -327,7 +333,7 @@ describe("COD order input validation", () => {
     track(body);
   });
 
-  it("returns retryable 503 and creates no local order when WooCommerce is unavailable", async () => {
+  it("confirms and replays app-owned COD orders independently of retired WooCommerce availability", async () => {
     const previousKey = process.env["WC_CONSUMER_KEY"];
     const previousSecret = process.env["WC_CONSUMER_SECRET"];
     process.env["WC_CONSUMER_KEY"] = "ck_cod_outage_test";
@@ -351,22 +357,18 @@ describe("COD order input validation", () => {
       const retry = await postOrders(firstPayload);
       const independentCheckout = await postOrders(secondPayload);
 
-      assert.equal(first.status, 503);
-      assert.equal(first.body["retryable"], true);
-      assert.equal(retry.status, 503);
-      assert.equal(retry.body["retryable"], true);
-      assert.equal(independentCheckout.status, 503);
-      assert.equal(independentCheckout.body["retryable"], true);
+      assert.equal(first.status, 200,JSON.stringify(first.body));
+      assert.equal(retry.status, 200,JSON.stringify(retry.body));
+      assert.equal(independentCheckout.status, 200,JSON.stringify(independentCheckout.body));
+      assert.equal(retry.body.id,first.body.id);
+      assert.notEqual(independentCheckout.body.id,first.body.id);
+      track(first.body); track(independentCheckout.body);
 
       const pendingAnchors = await db
-        .select({ paymentReference: ucOrdersTable.paymentReference })
+        .select({ id: ucOrdersTable.id })
         .from(ucOrdersTable)
-        .where(inArray(ucOrdersTable.paymentReference, [firstReference, secondReference]));
-      assert.deepEqual(
-        pendingAnchors.map(row => row.paymentReference).sort(),
-        [firstReference, secondReference].sort(),
-        "a retry must reuse one anchor while an independent checkout gets its own",
-      );
+        .where(inArray(ucOrdersTable.id, [first.body.id as number, independentCheckout.body.id as number]));
+      assert.equal(pendingAnchors.length,2,"a retry must reuse one app order while an independent checkout gets its own");
     } finally {
       const anchors = await db
         .select({ id: ucOrdersTable.id })
@@ -396,16 +398,22 @@ describe("COD order input validation", () => {
       },
       jwt,
     );
-    assert.equal(status, 400, `invalid phone must be rejected: ${JSON.stringify(body)}`);
+    assert.equal(status, 422, `invalid phone must be rejected: ${JSON.stringify(body)}`);
     assert.ok((body["fields"] as Record<string, string>)["phone"]);
   });
 
   it("normalizes a non-Kenyan local phone before paid-order persistence", async () => {
+    const checkout = {...codPayload(),shippingAddress:{firstName:"Amina",country:"GH",phone:"+233241234567",address1:"Test collection contact, Accra"},
+      fulfillment:"collection" as const,idempotencyKey:randomUUID()};
+    const reference = `ws_GH_${randomUUID()}`;
+    const pending = await prepareCheckoutOrder(checkout,String(customerId),"mpesa");
+    await bindCheckoutPayment(pending.id,reference,{checkoutRequestId:reference});
+    createdOrderIds.push(pending.id);
     const { status, body } = await postOrders(
       {
-        lineItems: [{ productId: 22, quantity: 1 }],
+        ...checkout,
         paymentMethod: "mpesa",
-        paymentReference: `ws_GH_${Date.now()}`,
+        paymentReference: reference,
         shippingAddress: {
           firstName: "Amina",
           country: "GH",
@@ -431,7 +439,7 @@ describe("COD order input validation", () => {
       },
       jwt,
     );
-    assert.equal(status, 400);
+    assert.equal(status, 422);
     assert.ok((body["fields"] as Record<string, string>)["phone"]);
   });
 });

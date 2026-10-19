@@ -92,13 +92,22 @@ router.post("/oauth/token", async (req, res): Promise<void> => {
   clientRate.set(client.id, current && current.window > now - 60_000
     ? { window: current.window, count: current.count + 1 } : { window: now, count: 1 });
   const plaintext = randomBytes(32).toString("base64url");
-  await db.transaction(async (tx) => {
+  const issued = await db.transaction(async (tx) => {
+    // Serialize with suspension, rotation and deletion. Credentials validated
+    // above may have changed while this request waited for the row lock.
+    const [currentClient] = await tx.select().from(agentOauthClientsTable)
+      .where(eq(agentOauthClientsTable.id, client.id)).limit(1).for("update");
+    if (!currentClient || currentClient.status !== "active"
+      || currentClient.secretHash !== client.secretHash
+      || (currentClient.expiresAt && currentClient.expiresAt <= new Date())) return false;
     await tx.insert(agentOauthTokensTable).values({
       clientId: client.id, tokenHash: hash(plaintext), scopes, expiresAt: new Date(Date.now() + TOKEN_TTL_SECONDS * 1000),
     });
     await tx.update(agentOauthClientsTable).set({ lastUsedAt: new Date(), updatedAt: new Date() }).where(eq(agentOauthClientsTable.id, client.id));
     await audit(tx, client.id, null, "token.issue", null, scopes, "success");
+    return true;
   });
+  if (!issued) { res.status(401).json({ error: "invalid_client" }); return; }
   res.json({ access_token: plaintext, token_type: "Bearer", expires_in: TOKEN_TTL_SECONDS, scope: scopes.join(" ") });
 });
 
@@ -177,6 +186,40 @@ router.post("/oauth/clients/:id/suspend", requireTeamAdmin, async (req, res): Pr
   });
   if (!client) { res.status(404).json({ error: "Client not found" }); return; }
   res.json({ client });
+});
+
+router.delete("/oauth/clients/:id", requireTeamAdmin, async (req, res): Promise<void> => {
+  const id = String(req.params.id);
+  const actor = (req as Request & { teamUser?: { id: string } }).teamUser?.id ?? null;
+  const result = await db.transaction(async (tx) => {
+    const [client] = await tx.select().from(agentOauthClientsTable)
+      .where(eq(agentOauthClientsTable.id, id)).limit(1).for("update");
+    if (!client) return "not_found";
+    if (client.status !== "suspended" && client.status !== "revoked") {
+      await audit(tx, id, actor, "client.delete", id, [], "denied");
+      return "client_must_be_inactive";
+    }
+    const [liveToken] = await tx.select({ id: agentOauthTokensTable.id })
+      .from(agentOauthTokensTable).where(and(
+        eq(agentOauthTokensTable.clientId, id),
+        isNull(agentOauthTokensTable.revokedAt),
+        gt(agentOauthTokensTable.expiresAt, new Date()),
+      )).limit(1);
+    if (liveToken) {
+      await audit(tx, id, actor, "client.delete", id, [], "denied");
+      return "client_in_use";
+    }
+    // Audit is deliberately not cascade-deleted. Explicit token cleanup also
+    // supports databases created from the schema without the startup FK.
+    await audit(tx, id, actor, "client.delete", id, client.scopes, "success");
+    await tx.delete(agentOauthTokensTable).where(eq(agentOauthTokensTable.clientId, id));
+    await tx.delete(agentOauthClientsTable).where(eq(agentOauthClientsTable.id, id));
+    return "deleted";
+  });
+  if (result === "not_found") { res.status(404).json({ error: "Client not found" }); return; }
+  if (result !== "deleted") { res.status(409).json({ error: result }); return; }
+  clientRate.delete(id);
+  res.status(204).end();
 });
 
 router.get("/oauth/audit", requireTeamAdmin, async (req, res): Promise<void> => {

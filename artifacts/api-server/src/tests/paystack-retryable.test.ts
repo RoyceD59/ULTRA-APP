@@ -24,8 +24,16 @@
 import { describe, it, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
+import { paymentCheckoutFixture } from "./helpers/payment-checkout.js";
+import { prepareCheckoutOrder, bindCheckoutPayment } from "../lib/checkout-orders.js";
+
+async function pendingCheckout(reference: string) {
+  const checkout = paymentCheckoutFixture();
+  const order = await prepareCheckoutOrder(checkout,"anonymous","paystack");
+  await bindCheckoutPayment(order.id,reference,{ reference });
+  return {...checkout,paymentMethod:"paystack",paymentReference:reference};
+}
 
 // ── Real fetch reference — saved before any mock can replace it ───────────────
 // Typed explicitly so TypeScript does not widen the cast.
@@ -85,12 +93,8 @@ async function postPaystackInit(srv: http.Server) {
     server: srv,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "test@example.com", amount: 1000, checkout: {
-      idempotencyKey: `retryable-init-${randomUUID()}`, fulfillment: "collection",
-      lineItems: [{ productId: 1, quantity: 1 }],
-      shippingAddress: { firstName: "Avery", lastName: "Fixture", address1: "Test building, Nairobi",
-        phone: "+254712345678", country: "KE" },
-    } }),
+    body: JSON.stringify({ email:"test@example.com",amount:1000,checkout:paymentCheckoutFixture(),
+      callbackUrl:"https://checkout.test/paystack/callback" }),
   });
 }
 
@@ -260,16 +264,7 @@ describe("Paystack retryable error signalling", () => {
         server,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lineItems: [{ productId: 1, quantity: 1 }],
-          paymentMethod: "paystack",
-          paymentReference: "ps_ref_upstream_5xx_order_test",
-          shippingAddress: {
-            firstName: "Test", lastName: "User",
-            address1: "1 Test St", city: "Nairobi",
-            country: "KE", phone: "+254700000000",
-          },
-        }),
+        body: JSON.stringify(await pendingCheckout("ps_ref_upstream_5xx_order_test")),
       });
       assert.equal(status, 503, "should be HTTP 503 for a retryable Paystack verify 5xx during order creation");
       assert.equal(body["retryable"], true, "retryable must be true");
@@ -291,16 +286,7 @@ describe("Paystack retryable error signalling", () => {
         server,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lineItems: [{ productId: 1, quantity: 1 }],
-          paymentMethod: "paystack",
-          paymentReference: "ps_ref_order_outage_test",
-          shippingAddress: {
-            firstName: "Test", lastName: "User",
-            address1: "1 Test St", city: "Nairobi",
-            country: "KE", phone: "+254700000000",
-          },
-        }),
+        body: JSON.stringify(await pendingCheckout("ps_ref_order_outage_test")),
       });
 
       // 503 signals a transient failure (not 402 which would look like a decline)
@@ -319,7 +305,7 @@ describe("Paystack retryable error signalling", () => {
     }
   });
 
-  it("WooCommerce outage after Paystack verification → retryable 503 on repeated order confirmation", async () => {
+  it("a retired WooCommerce outage cannot block verified app-order confirmation or duplicate its retry", async () => {
     const previousKey = process.env["WC_CONSUMER_KEY"];
     const previousSecret = process.env["WC_CONSUMER_SECRET"];
     process.env["WC_CONSUMER_KEY"] = "ck_paystack_wc_outage_test";
@@ -334,7 +320,7 @@ describe("Paystack retryable error signalling", () => {
       if (url.includes("api.paystack.co/transaction/verify/")) {
         return new Response(JSON.stringify({
           status: true,
-          data: { status: "success", amount: 150000 },
+          data: { status: "success", amount: 349900, currency:"KES" },
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       if (url.includes("/wp-json/wc/v3/orders") && (init?.method ?? "GET").toUpperCase() === "GET") {
@@ -349,19 +335,10 @@ describe("Paystack retryable error signalling", () => {
       return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
-    const payload = {
-      lineItems: [{ productId: 1, quantity: 1 }],
-      paymentMethod: "paystack",
-      paymentReference: "ps_ref_wc_outage_retry_test",
-      idempotencyKey: "checkout-wc-outage-retry-test",
-      shippingAddress: {
-        firstName: "Test", lastName: "User",
-        address1: "1 Test St", city: "Nairobi",
-        country: "KE", phone: "+254700000000",
-      },
-    };
+    const payload = await pendingCheckout("ps_ref_wc_outage_retry_test");
 
     try {
+      let orderId: unknown;
       for (let attempt = 0; attempt < 2; attempt++) {
         const { status, body } = await apiFetch("/api/uc/orders", {
           server,
@@ -369,8 +346,9 @@ describe("Paystack retryable error signalling", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        assert.equal(status, 503);
-        assert.equal(body["retryable"], true);
+        assert.equal(status, 200,JSON.stringify(body));
+        if (orderId !== undefined) assert.equal(body.id,orderId);
+        orderId=body.id;
       }
     } finally {
       fetchMock.mock.restore();

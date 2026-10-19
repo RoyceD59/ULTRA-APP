@@ -1,6 +1,6 @@
 /**
  * Tests for PATCH /api/uc/admin/products/:id — the admin "Edit product
- * details" endpoint that forwards a partial update to WooCommerce.
+ * details" endpoint backed by the shared app-owned catalogue.
  *
  * Covers:
  *   - Admin gate: rejected with no token and with a non-admin token.
@@ -8,20 +8,15 @@
  *   - Per-field validation errors (name, description, shortDescription,
  *     regularPrice, salePrice, stockStatus, stockQuantity) and the
  *     "no editable fields" case.
- *   - Mock-mode acknowledgement when WC credentials are absent.
- *   - Partial-update forwarding to WooCommerce (mocked fetch): only the
- *     supplied fields are sent, camelCase -> WC snake_case mapping is
- *     correct, and upstream failure/network-error paths surface as 502.
+ *   - Durable partial updates independent of retired Woo credentials,
+ *     including a provider outage, and no phantom success for unknown IDs.
  *
  * Strategy: real Express app + real DB-anchored admin user (isAdminRequest's
  * "uc_users account" path), matching push-token-rotation.test.ts. WooCommerce
  * is either absent (mock mode) or stubbed via globalThis.fetch (forwarding
  * mode) — never hits the real network.
  *
- * Note: this route uses `res.status(401).json({ error: "Unauthorized" })`
- * for a failed admin check (like the neighbouring inventory/media routes in
- * this file), not the 403 used by some other admin routes elsewhere in
- * uc.ts — these tests assert the endpoint's actual documented behaviour.
+ * The app-owned management route denies non-admin access with HTTP 403.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -30,13 +25,14 @@ import bcryptjs from "bcryptjs";
 import { eq } from "drizzle-orm";
 
 import { issueToken } from "../lib/jwt.js";
-import { db, ucUsersTable } from "@workspace/db";
+import { db, pool, ucUsersTable } from "@workspace/db";
+import { appCatalogueFixture } from "./helpers/app-catalogue.js";
 
 let server: http.Server;
 let base: string;
 let realFetch: typeof globalThis.fetch;
 
-const TEST_PRODUCT_ID = 55501;
+let TEST_PRODUCT_ID: number;
 
 const ADMIN_EMAIL    = "admin-product-edit-test@ucfilters-test.internal";
 const NON_ADMIN_EMAIL = "nonadmin-product-edit-test@ucfilters-test.internal";
@@ -63,6 +59,7 @@ async function patch(path: string, body: unknown, auth?: string) {
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-admin-product-edit-tests";
+  TEST_PRODUCT_ID = (await appCatalogueFixture()).id;
 
   // WC credentials are present in this dev/test environment via secrets —
   // strip them so the default state is "mock mode" and individual tests can
@@ -104,7 +101,7 @@ after(async () => {
 describe("PATCH /api/uc/admin/products/:id — admin gate", () => {
   it("rejects a request with no auth token", async () => {
     const { status } = await patch(`/uc/admin/products/${TEST_PRODUCT_ID}`, { name: "New name" });
-    assert.equal(status, 401);
+    assert.equal(status, 403);
   });
 
   it("rejects a request from an authenticated non-admin user", async () => {
@@ -113,7 +110,7 @@ describe("PATCH /api/uc/admin/products/:id — admin gate", () => {
       { name: "New name" },
       bearerFor(nonAdminUserId, NON_ADMIN_EMAIL),
     );
-    assert.equal(status, 401);
+    assert.equal(status, 403);
   });
 
   it("rejects an invalid product id", async () => {
@@ -123,7 +120,7 @@ describe("PATCH /api/uc/admin/products/:id — admin gate", () => {
       bearerFor(adminUserId, ADMIN_EMAIL),
     );
     assert.equal(status, 400);
-    assert.match((json as { error: string }).error, /Invalid product id/);
+    assert.match((json as { error: string }).error, /Invalid product update/);
   });
 });
 
@@ -133,7 +130,7 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
   it("rejects an empty body (no editable fields)", async () => {
     const { status, json } = await patch(`/uc/admin/products/${TEST_PRODUCT_ID}`, {}, adminAuth());
     assert.equal(status, 400);
-    assert.match((json as { error: string }).error, /No editable fields/);
+    assert.match((json as { error: string }).error, /Invalid product update/);
   });
 
   it("rejects a blank name", async () => {
@@ -165,7 +162,7 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
       adminAuth(),
     );
     assert.equal(status, 400);
-    assert.match((json as { error: string }).error, /regularPrice/);
+    assert.match((json as { error: string }).error, /Price/);
   });
 
   it("rejects a negative regularPrice", async () => {
@@ -180,7 +177,7 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
       adminAuth(),
     );
     assert.equal(status, 400);
-    assert.match((json as { error: string }).error, /salePrice/);
+    assert.match((json as { error: string }).error, /managed promotions/);
   });
 
   it("accepts an empty-string salePrice as 'clear the sale price'", async () => {
@@ -192,7 +189,7 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
     assert.equal(status, 200);
     // `updated` reports the WooCommerce-mapped (snake_case) keys that were
     // actually sent upstream, not the caller's camelCase field names.
-    assert.deepEqual((json as { updated: string[] }).updated, ["sale_price"]);
+    assert.deepEqual((json as { updated: string[] }).updated, ["salePrice"]);
   });
 
   it("rejects an invalid stockStatus value", async () => {
@@ -202,7 +199,7 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
       adminAuth(),
     );
     assert.equal(status, 400);
-    assert.match((json as { error: string }).error, /stockStatus/);
+    assert.match((json as { error: string }).error, /stock status/i);
   });
 
   it("rejects a negative stockQuantity", async () => {
@@ -212,7 +209,7 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
       adminAuth(),
     );
     assert.equal(status, 400);
-    assert.match((json as { error: string }).error, /stockQuantity/);
+    assert.match((json as { error: string }).error, /Stock/);
   });
 
   it("rejects a non-integer stockQuantity", async () => {
@@ -221,8 +218,8 @@ describe("PATCH /api/uc/admin/products/:id — validation", () => {
   });
 });
 
-describe("PATCH /api/uc/admin/products/:id — mock mode (no WC credentials)", () => {
-  it("acknowledges the update without contacting WooCommerce", async () => {
+describe("PATCH /api/uc/admin/products/:id — app-owned persistence", () => {
+  it("persists the update without contacting WooCommerce", async () => {
     const { status, json } = await patch(
       `/uc/admin/products/${TEST_PRODUCT_ID}`,
       { name: "Mock Mode Filter", stockQuantity: 12 },
@@ -232,14 +229,16 @@ describe("PATCH /api/uc/admin/products/:id — mock mode (no WC credentials)", (
     const body = json as { ok: boolean; productId: number; updated: string[]; source: string };
     assert.equal(body.ok, true);
     assert.equal(body.productId, TEST_PRODUCT_ID);
-    assert.equal(body.source, "mock");
+    assert.equal(body.source, "companion");
     // `updated` reports the WooCommerce-mapped (snake_case) keys, and
     // stockQuantity implicitly turns on manage_stock as a second key.
-    assert.deepEqual(body.updated.sort(), ["manage_stock", "name", "stock_quantity"].sort());
+    assert.deepEqual(body.updated.sort(), ["name", "stockQuantity"].sort());
+    const row = (await pool.query("SELECT stock_quantity,manage_stock FROM uc_catalogue_inventory WHERE id=$1", [TEST_PRODUCT_ID])).rows[0];
+    assert.equal(row.stock_quantity,12); assert.equal(row.manage_stock,true);
   });
 });
 
-describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
+describe("PATCH /api/uc/admin/products/:id — retired Woo independence", () => {
   const adminAuth = () => bearerFor(adminUserId, ADMIN_EMAIL);
 
   before(() => {
@@ -255,12 +254,13 @@ describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
     globalThis.fetch = realFetch;
   });
 
-  it("forwards only the supplied fields, mapped to WooCommerce's snake_case shape", async () => {
+  it("writes only supplied app fields without forwarding to WooCommerce", async () => {
     let capturedUrl = "";
     let capturedMethod = "";
     let capturedBody: Record<string, unknown> | null = null;
 
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (!String(input).includes("/wp-json/wc/")) return Response.json({ keys: [] });
       capturedUrl = String(input);
       capturedMethod = init?.method ?? "";
       capturedBody = JSON.parse(String(init?.body ?? "{}"));
@@ -278,19 +278,21 @@ describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
     assert.equal(status, 200);
     const body = json as { ok: boolean; source: string; updated: string[] };
     assert.equal(body.ok, true);
-    assert.equal(body.source, "woocommerce");
+    assert.equal(body.source, "companion");
     // stockQuantity implicitly forwards manage_stock as a second WC key.
-    assert.deepEqual(body.updated.sort(), ["manage_stock", "stock_quantity"].sort());
+    assert.deepEqual(body.updated, ["stockQuantity"]);
 
-    assert.equal(capturedMethod, "PUT");
-    assert.ok(capturedUrl.includes(`/products/${TEST_PRODUCT_ID}`));
-    assert.deepEqual(capturedBody, { stock_quantity: 7, manage_stock: true });
+    assert.equal(capturedMethod, "");
+    assert.equal(capturedUrl, "");
+    assert.equal(capturedBody, null);
+    assert.equal((await pool.query("SELECT stock_quantity FROM uc_catalogue_inventory WHERE id=$1", [TEST_PRODUCT_ID])).rows[0].stock_quantity,7);
   });
 
-  it("forwards multiple fields together with correct key mapping", async () => {
+  it("persists multiple fields together in the shared authored record", async () => {
     let capturedBody: Record<string, unknown> | null = null;
 
     globalThis.fetch = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (!String(_input).includes("/wp-json/wc/")) return Response.json({ keys: [] });
       capturedBody = JSON.parse(String(init?.body ?? "{}"));
       return new Response(JSON.stringify({ id: TEST_PRODUCT_ID }), {
         status: 200,
@@ -310,15 +312,16 @@ describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
     );
 
     assert.equal(status, 200);
-    assert.deepEqual(capturedBody, {
-      name: "Renamed Filter",
-      short_description: "Short blurb",
-      regular_price: "19.99",
-      stock_status: "onbackorder",
-    });
+    assert.equal(capturedBody,null);
+    const record = (await pool.query(`SELECT p.record FROM uc_product_editorial p
+      JOIN uc_catalogue_inventory i USING(code) WHERE i.id=$1`, [TEST_PRODUCT_ID])).rows[0].record;
+    assert.equal(record.name,"Renamed Filter");
+    assert.equal(record.seo.h1_sub,"Short blurb");
+    assert.equal(record.price_kes,19.99);
+    assert.equal(record.ownership.product_price_kes,19.99);
   });
 
-  it("returns 502 when WooCommerce responds with a failure status", async () => {
+  it("still saves app-owned content when WooCommerce would return a failure", async () => {
     globalThis.fetch = (async () => {
       return new Response(JSON.stringify({ message: "Invalid product ID." }), {
         status: 404,
@@ -332,22 +335,22 @@ describe("PATCH /api/uc/admin/products/:id — WooCommerce forwarding", () => {
       adminAuth(),
     );
 
-    assert.equal(status, 502);
-    assert.match((json as { error: string }).error, /WooCommerce update failed/);
+    assert.equal(status, 200);
+    assert.equal((json as { source: string }).source,"companion");
   });
 
-  it("returns 502 when WooCommerce is unreachable", async () => {
+  it("returns 404 for an unknown app product without trying an external fallback", async () => {
     globalThis.fetch = (async () => {
       throw new Error("ECONNREFUSED (test)");
     }) as typeof fetch;
 
     const { status, json } = await patch(
-      `/uc/admin/products/${TEST_PRODUCT_ID}`,
+      `/uc/admin/products/987654321`,
       { name: "Doesn't matter" },
       adminAuth(),
     );
 
-    assert.equal(status, 502);
-    assert.match((json as { error: string }).error, /Failed to reach WooCommerce/);
+    assert.equal(status, 404);
+    assert.match((json as { error: string }).error, /App product not found/);
   });
 });

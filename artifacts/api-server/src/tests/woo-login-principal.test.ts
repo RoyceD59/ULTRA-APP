@@ -6,12 +6,9 @@
  * with uc_users serial id 1 (identity confusion / potential privilege
  * escalation via the DB-anchored admin check).
  *
- * Each verified Woo login now provisions or reuses a canonical database
- * customer instead of assigning a synthetic principal. Verifies:
- *   1. Two distinct Woo users get distinct database-backed principal ids.
- *   2. The same Woo user gets the SAME id across logins (stable identity).
- *   3. A Woo-authenticated token is denied on /uc/admin/* routes.
- *   4. Profile resolution for a Woo token never reports isAdmin: true.
+ * Woo authentication is now retired. Password customers retain distinct,
+ * stable database identities without any request to a configured Woo host;
+ * ordinary customer sessions cannot acquire administration through provenance.
  *
  * Run with: pnpm --filter @workspace/api-server test
  */
@@ -48,6 +45,10 @@ beforeEach(() => {
 
 before(async () => {
   process.env["SESSION_SECRET"] ??= "test-secret-for-woo-principal-tests";
+  const passwordHash = await bcryptjs.hash("woo-account-password",4);
+  await db.insert(ucUsersTable).values(Object.entries(wooEmails)
+    .filter(([name]) => name !== "password")
+    .map(([,email]) => ({email,passwordHash,firstName:"Local",lastName:"Customer",authProvider:"password"})));
 
   wooStub = http.createServer((req, res) => {
     if (req.method === "POST" && req.url === "/wp-json/jwt-auth/v1/token") {
@@ -109,12 +110,13 @@ async function wooLogin(email: string): Promise<{ token: string; user: { id: num
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password: "woo-account-password" }),
   });
-  assert.equal(r.status, 200, `login should succeed via Woo stub, got ${r.status}`);
+  assert.equal(r.status, 200, `database password login should succeed, got ${r.status}`);
+  assert.equal(wooRequests,0,"configured retired Woo host must not be contacted");
   return r.body as { token: string; user: { id: number; email: string } };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
-describe("WooCommerce login principal identity", () => {
+describe("App-owned principal identity with retired Woo credentials configured", () => {
   it("rejects a Woo password for an existing password account without changing its identity", async () => {
     const password = "companion-only-password";
     const [account] = await db.insert(ucUsersTable).values({
@@ -150,7 +152,7 @@ describe("WooCommerce login principal identity", () => {
     assert.equal(wooRequests, 0);
   });
 
-  it("provisions distinct DB-backed Companion identities for Woo users", async () => {
+  it("issues distinct database-backed Companion identities to password customers", async () => {
     const a = await wooLogin(wooEmails.alice);
     const b = await wooLogin(wooEmails.bob);
     assert.notEqual(a.user.id, b.user.id, "distinct users must not share a principal id");
@@ -158,25 +160,25 @@ describe("WooCommerce login principal identity", () => {
     assert.ok(b.user.id > 0 && b.user.id < 1_000_000_000);
   });
 
-  it("gives the same Woo user the same principal id across logins", async () => {
+  it("gives the same password customer the same principal id across logins", async () => {
     const first = await wooLogin(wooEmails.stable);
     const second = await wooLogin(wooEmails.stable);
     assert.equal(first.user.id, second.user.id, "principal id must be stable per email");
-    assert.equal(wooRequests, 2, "each Woo login must verify provider credentials again");
+    assert.equal(wooRequests, 0, "password login must not consult retired Woo credentials");
     const rows = await db.select().from(ucUsersTable)
       .where(eq(ucUsersTable.email, wooEmails.stable));
     assert.equal(rows.length, 1);
     assert.equal(rows[0]!.id, first.user.id);
-    assert.equal(rows[0]!.authProvider, "woocommerce");
+    assert.equal(rows[0]!.authProvider, "password");
     assert.equal(rows[0]!.clerkUserId, null);
     for (const login of [first, second]) {
       const claims = verifyToken(`Bearer ${login.token}`);
       assert.equal(claims?.id, first.user.id);
-      assert.equal(claims?.src, "woo");
+      assert.notEqual(claims?.src, "woo");
     }
   });
 
-  it("denies a Woo-authenticated token on /uc/admin/* routes", async () => {
+  it("denies an ordinary password customer on /uc/admin/* routes", async () => {
     const { token } = await wooLogin(wooEmails.nonadmin);
     const r = await apiFetch("/api/uc/admin/products/1/media", {
       method: "POST",
@@ -189,7 +191,7 @@ describe("WooCommerce login principal identity", () => {
     );
   });
 
-  it("never reports isAdmin: true for a Woo-authenticated profile", async () => {
+  it("never reports isAdmin: true for an ordinary password customer", async () => {
     const { token } = await wooLogin(wooEmails.profile);
     const r = await apiFetch("/api/uc/customer/profile", {
       headers: { Authorization: `Bearer ${token}` },
@@ -199,7 +201,7 @@ describe("WooCommerce login principal identity", () => {
     assert.notEqual(profile.isAdmin, true, "Woo principal must never resolve as admin");
   });
 
-  it("lets a provisioned Woo customer explicitly create and then read a stable QR token", async () => {
+  it("lets a password customer explicitly create and then read a stable QR token", async () => {
     const { token, user } = await wooLogin(wooEmails.alice);
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     const first = await apiFetch("/api/uc/customer/rewards", {

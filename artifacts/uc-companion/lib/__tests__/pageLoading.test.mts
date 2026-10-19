@@ -129,7 +129,7 @@ describe('local media and non-blocking fallback contracts', () => {
     assert.match(source, /priority=\{initialView \? 'high' : 'low'\}/);
     assert.match(source, /loading=\{initialView \? 'eager' : 'lazy'\}/);
     assert.match(source, /height: photoHeight/);
-    for (const route of ['index', 'products', 'blog']) {
+    for (const route of ['index', 'blog']) {
       const page = readFileSync(new URL(`app/(tabs)/${route}.tsx`, base), 'utf8');
       assert.match(page, /<PhotoHeader initialView /);
     }

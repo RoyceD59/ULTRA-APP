@@ -16,7 +16,7 @@ import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCompanionLayout } from '@/hooks/useCompanionLayout';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
-import PhotoHeader from '@/components/PhotoHeader';
+import ProductsBannerSlideshow from '@/components/ProductsBannerSlideshow';
 import ProductCard from '@/components/ProductCard';
 import PageDataLoader from '@/components/PageDataLoader';
 import PageDataError from '@/components/PageDataError';
@@ -415,20 +415,15 @@ function ProductsScreenContent() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
 
       {/* ── Branded header bar ── */}
-      <PhotoHeader initialView source={require('@/assets/headers/shop-filter.jpg')} photoHeight={104} position="center">
-      <View style={[styles.brandHeader, { paddingTop: headerTop + 10 }]}>
-        <View style={[styles.brandHeaderInner, contentBound]}>
-          <Image
-            source={require('@/assets/images/logo-lockup-white.png')}
-            style={styles.brandLogo}
-            contentFit="contain"
-          />
+      <ProductsBannerSlideshow maxHeight={220}>
+        <View style={[styles.cartOverlay, { top: headerTop + 10 }]}>
           <TouchableOpacity
             onPress={() => router.push('/cart' as never)}
             activeOpacity={0.8}
             style={styles.cartIconBtn}
+            accessibilityRole="button"
             accessibilityLabel={`Cart, ${items.length} items`}>
-            <Ionicons name="cart-outline" size={24} color="#fff" />
+            <Ionicons name="cart-outline" size={22} color="#fff" />
             {cartHydrated && totalItems > 0 && (
               <View style={styles.cartBadge}>
                 <Text style={styles.cartBadgeText}>{totalItems > 9 ? '9+' : totalItems}</Text>
@@ -436,8 +431,7 @@ function ProductsScreenContent() {
             )}
           </TouchableOpacity>
         </View>
-      </View>
-      </PhotoHeader>
+      </ProductsBannerSlideshow>
 
       {/* ── Sticky search + category chips ── */}
       <View style={[styles.stickyControls, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
@@ -566,23 +560,15 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
 
   // ── Branded header ────────────────────────────────────────────────────────────
-  brandHeader: {
-    backgroundColor: '#005d8f',
-    paddingBottom: 10,
-  },
-  brandHeaderInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-  brandLogo: {
-    width: 120,
-    height: 36,
+  cartOverlay: {
+    position: 'absolute',
+    right: 12,
   },
   cartIconBtn: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 93, 143, 0.88)',
     alignItems: 'center',
     justifyContent: 'center',
   },

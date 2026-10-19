@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 describe('Wishlist out-of-stock action selection and state scoping', () => {
-  it('ProductCard triggers onToggleWishlist without propagating up to the card onPress', async () => {
+  it('ProductCard opens request details for new interest and preserves existing account-scoped wishlist toggles', async () => {
     const source = await readFile(new URL('../../components/ProductCard.tsx', import.meta.url), 'utf8');
     
-    // Check that grid layout Notify me button triggers onToggleWishlist
-    assert.match(source, /<TouchableOpacity[^>]*onPress=\{onToggleWishlist\}[^>]*>/);
+    // Both layouts open the product's validated restock form for new interest.
+    // An existing alert retains its account-scoped toggle and pending guard.
+    const buttons = source.match(/<TouchableOpacity\s+onPress=\{isWishlisted \? onToggleWishlist : onPress\}[^>]*>/g) ?? [];
+    assert.equal(buttons.length, 2);
+    for (const button of buttons) assert.match(button, /disabled=\{wishlistPending\}/);
     // Check accessibility label semantic is mapped correctly
     assert.match(source, /accessibilityLabel=\{isWishlisted \? "Restock alert on" : "Notify me"\}/);
   });
